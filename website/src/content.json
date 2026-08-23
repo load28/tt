@@ -5,7 +5,8 @@
       "en": "Start",
       "ko": "시작",
       "topics": [
-        "overview"
+        "overview",
+        "rlx"
       ]
     },
     {
@@ -80,6 +81,47 @@
           "완전히 파싱된 rl 구문만 변환합니다.",
           ".rlx는 JSX를 보존하고 expression container 안의 rl 구문을 컴파일합니다.",
           "일반 TypeScript의 타입 오류는 TypeScript가 담당합니다."
+        ]
+      }
+    },
+    "rlx": {
+      "nav": {
+        "en": "React / .rlx",
+        "ko": "React / .rlx"
+      },
+      "title": {
+        "en": "React, with exhaustive JSX.",
+        "ko": "React JSX를 소진적으로 작성합니다."
+      },
+      "summary": {
+        "en": ".rlx is TSX plus rl. JSX stays intact, while rl constructs inside expression containers compile with the same diagnostics and evaluation guarantees as ordinary expressions.",
+        "ko": ".rlx는 TSX에 rl을 더한 소스 형식입니다. JSX는 그대로 보존하고 expression container 안의 rl 구문은 일반 식과 같은 진단·평가 순서 계약으로 컴파일합니다."
+      },
+      "code": "import { useState } from \"react\";\n\nenum LoadState {\n  Ready(message: string),\n  Empty,\n  Failed(message: string),\n}\n\nexport const Status = () => {\n  const [state] = useState<LoadState>(LoadState.Ready(\"Hello rlx\"));\n\n  return (\n    <section data-state={match (state) {\n      Ready => \"ready\",\n      Empty => \"empty\",\n      Failed => \"failed\",\n    }}>\n      {match (state) {\n        Ready(message) => <strong>{message}</strong>,\n        Empty => <span>Nothing here</span>,\n        Failed(message) => <mark>{message}</mark>,\n      }}\n    </section>\n  );\n};",
+      "works": {
+        "en": [
+          "Every valid TSX file passes through a .rlx file byte for byte.",
+          "rl constructs work inside JSX children and attribute expression containers.",
+          "Concise arrow components preserve lexical scope and JSX evaluation order.",
+          "Relative .rlx imports work through the CLI, editor, and unplugin-rl."
+        ],
+        "ko": [
+          "모든 유효한 TSX 파일은 .rlx에서 바이트 그대로 통과합니다.",
+          "JSX 자식과 속성 expression container 안에서 rl 구문을 사용할 수 있습니다.",
+          "concise arrow 컴포넌트의 렉시컬 범위와 JSX 평가 순서를 보존합니다.",
+          "상대 .rlx import는 CLI, 에디터, unplugin-rl에서 동일하게 동작합니다."
+        ]
+      },
+      "limits": {
+        "en": [
+          ".rlx emits .tsx; your TypeScript project still chooses the jsx compiler option.",
+          "React, Preact, and other JSX runtimes remain application dependencies, not rl dependencies.",
+          "Use unplugin-rl when a bundler imports .rlx files directly."
+        ],
+        "ko": [
+          ".rlx는 .tsx를 방출하며 jsx 컴파일러 옵션은 TypeScript 프로젝트가 선택합니다.",
+          "React·Preact 같은 JSX 런타임은 rl이 아니라 애플리케이션 의존성입니다.",
+          "번들러가 .rlx를 직접 import할 때는 unplugin-rl을 사용합니다."
         ]
       }
     },

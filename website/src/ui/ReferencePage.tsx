@@ -46,7 +46,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
       <header className="topbar">
         <Link className="brand" to={topicPath(language, 'overview')} aria-label={language === 'ko' ? 'rl 홈' : 'rl home'}>
           <span className="brand__mark">rl</span>
-          <span className="brand__tag">{language === 'ko' ? 'TypeScript를 위한 작은 언어' : 'a small language for TypeScript'}</span>
+          <span className="brand__tag">{language === 'ko' ? 'TypeScript와 TSX를 위한 작은 언어' : 'a small language for TypeScript and TSX'}</span>
         </Link>
         <div className="topbar__actions">
           <Link className="language-toggle" to={topicPath(otherLanguage, topic)} aria-label={language === 'ko' ? '영어로 보기' : 'View in Korean'}>
@@ -83,7 +83,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
             {topic === 'overview' && <InstallCommand language={language} />}
 
             <div className="code-block">
-              <span className="code-block__label">{topic === 'cli' ? 'shell' : 'example.rl'}</span>
+              <span className="code-block__label">{topic === 'cli' ? 'shell' : topic === 'rlx' ? 'example.rlx' : 'example.rl'}</span>
               <pre tabIndex={0} role="region" aria-label={language === 'ko' ? '코드 예제' : 'Code example'}>
                 <code dangerouslySetInnerHTML={{ __html: highlighted[topic] }} />
               </pre>

@@ -3,9 +3,11 @@ import { createHighlighter } from 'shiki'
 import content from '../src/content.json'
 
 const grammarUrl = new URL('../../editors/vscode/syntaxes/rl.tmLanguage.json', import.meta.url)
+const rlxGrammarUrl = new URL('../../editors/vscode/syntaxes/rlx.tmLanguage.json', import.meta.url)
 const grammar = JSON.parse(await readFile(grammarUrl, 'utf8'))
+const rlxGrammar = JSON.parse(await readFile(rlxGrammarUrl, 'utf8'))
 const highlighter = await createHighlighter({
-  langs: [grammar, 'shellscript'],
+  langs: [grammar, rlxGrammar, 'shellscript'],
   themes: ['github-dark-default'],
 })
 
@@ -13,7 +15,7 @@ const highlighted = Object.fromEntries(
   Object.entries(content.topics).map(([id, topic]) => [
     id,
     highlighter.codeToHtml(topic.code, {
-      lang: id === 'cli' ? 'shellscript' : 'rl',
+      lang: id === 'cli' ? 'shellscript' : id === 'rlx' ? 'rlx' : 'rl',
       theme: 'github-dark-default',
       structure: 'inline',
     }),
