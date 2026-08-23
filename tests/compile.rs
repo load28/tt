@@ -1268,6 +1268,111 @@ fn let_else_divergence_is_a_flow_answer_not_a_last_keyword_check() {
 }
 
 #[test]
+fn let_else_divergence_covers_every_statement_form() {
+    // TASK-172: the graph models the whole statement grammar, so a form
+    // it once approximated as fall-through now answers precisely.
+    for body in [
+        // A `switch` with a `default` whose every clause leaves.
+        "switch (k) { case \"a\": return 1; default: throw new Error(\"x\"); }",
+        // Clauses fall through to the next one.
+        "switch (k) { case \"a\": case \"b\": return 1; default: return 2; }",
+        // A loop with no normal exit is left only by `break`/`return`/`throw`.
+        "while (true) { log(\"x\"); }",
+        "for (;;) { log(\"x\"); }",
+        // `do … while` runs its body before the test.
+        "do { return 1; } while (c);",
+        // A `try` diverges when every half that can complete does not.
+        "try { return 1; } catch (e) { throw e; }",
+        "try { return 1; } finally { log(\"x\"); }",
+        "try { log(\"x\"); } finally { return 1; }",
+        // A labeled block's `break` lands after it, on a `return`.
+        "outer: { break outer; } return 0;",
+        // A `break` naming an outer loop leaves the inner one only.
+        "outer: while (true) { while (true) { break outer; } } return 0;",
+        // Statement boundaries do not need semicolons.
+        "log(\"x\")\n    return 0",
+    ] {
+        ok(&format!(
+            "function f(): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
+        ));
+    }
+}
+
+#[test]
+fn let_else_divergence_still_rejects_every_normal_exit() {
+    // The other half of the same precision: a form the graph now enters
+    // must not be able to claim a divergence it does not have.
+    for body in [
+        // No `default` — an unmatched discriminant walks past the switch.
+        "switch (k) { case \"a\": return 1; }",
+        // A `break` targets the switch, not the else block.
+        "switch (k) { case \"a\": break; default: return 1; }",
+        // A test that can fail is a normal exit.
+        "while (c) { return 1; }",
+        "do { log(\"x\"); } while (c);",
+        // A loop is left by its own `break`.
+        "while (true) { break; }",
+        "for (;;) { if (c) break; }",
+        "outer: while (true) { break outer; }",
+        // The handler can run in place of the guarded block.
+        "try { return 1; } catch (e) { log(e); }",
+        "try { log(\"x\"); } finally { log(\"x\"); }",
+        // A labeled block's `break` lands after it, and nothing follows.
+        "outer: { break outer; }",
+        // A nested function body is opaque across a line break too.
+        "const g = () => { return 1 }\n    log(g())",
+    ] {
+        let e = err(&format!(
+            "function f(): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
+        ));
+        assert!(e.message.contains("must diverge"), "{body}: {}", e.message);
+    }
+}
+
+#[test]
+fn let_else_divergence_sees_an_inline_if_let() {
+    // TASK-172: an `if let` body and its `else` are inline, so an exit
+    // written in either leaves the enclosing function — the statement
+    // carries the block's divergence exactly as an `if` does.
+    for body in [
+        "if let Ok(value) = r { return value; } else { return 1; }",
+        "if let Ok(value) = r { return value; } else { throw new Error(\"x\"); }",
+        "if let Ok(value) = r { return value; } else if let Err(error) = r { throw new Error(error); } else { return 0; }",
+        "if let Ok(value) = r { if let Ok(inner) = r { return inner; } else { return value; } } else { return 1; }",
+        "if let Ok(value) = r { while (true) { return value; } } else { return 1; }",
+    ] {
+        ok(&format!(
+            "enum Res {{ Ok(value: number), Err(error: string) }}\n\
+             function f(r: Res): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
+        ));
+    }
+}
+
+#[test]
+fn let_else_divergence_stops_at_an_isolated_value_region() {
+    // The other half: a match arm, a `result` block and a `try` statement
+    // are not approximations left as fall-through — an exit written in an
+    // isolated value region belongs to the construct's value and can never
+    // leave the block, and a `try` statement's early return is
+    // conditional. An `if let` missing either half falls through too.
+    for body in [
+        "if let Ok(value) = r { return value; }",
+        "if let Ok(value) = r { log(value); } else { return 1; }",
+        "if let Ok(value) = r { return value; } else { log(\"x\"); }",
+        "const x = match (r) { Ok(value) => value, Err(error) => 0 }; log(x);",
+        "const y = result { const a <- find(); a }; log(y);",
+        "try find();",
+        "const Ok(value) = r else { return 1; }; log(value);",
+    ] {
+        let e = err(&format!(
+            "enum Res {{ Ok(value: number), Err(error: string) }}\n\
+             function f(r: Res): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
+        ));
+        assert!(e.message.contains("must diverge"), "{body}: {}", e.message);
+    }
+}
+
+#[test]
 fn let_else_non_diverging_else_is_error() {
     let e =
         err("function f(): number {\n  const Some(v) = find() else { log(); };\n  return v;\n}\n");

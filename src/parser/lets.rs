@@ -15,9 +15,9 @@
 //! that deviates passes through verbatim, as always.
 //!
 //! The "else block must diverge" rule is *computed* by the flow layer
-//! ([`crate::flow::block_diverges`] — a real CFG answer, `if`/`else` and
-//! unreachable code included) as a bool on the AST node, and *enforced* by
-//! [`crate::sema`] — the parser stays infallible.
+//! ([`crate::flow::program_diverges`] — a real CFG answer over the whole
+//! statement grammar, tt's own `if let` included) as a bool on the AST
+//! node, and *enforced* by [`crate::sema`] — the parser stays infallible.
 
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{LetElseStmt, Span};
@@ -92,6 +92,13 @@ pub(super) fn parse_let_else<'t>(
         cur.tokens[body_close].span.start,
     );
     let body_tokens = &cur.tokens[body_open + 1..body_close];
+    // The block is parsed first so the flow layer sees its tt constructs:
+    // an `if let` written here is inline, so its exits are the block's
+    // (`crate::flow::program_diverges`).
+    let else_body = cur
+        .parser
+        .parse_tokens(body_tokens, body_range.0, body_range.1);
+    let diverges = crate::flow::program_diverges(cur.parser.src, body_tokens, &else_body);
     Some((
         cur,
         semi.end,
@@ -106,11 +113,9 @@ pub(super) fn parse_let_else<'t>(
             expr: cur
                 .parser
                 .parse_tokens(&cur.tokens[expr_from..else_idx], expr_start, expr_end),
-            else_body: cur
-                .parser
-                .parse_tokens(body_tokens, body_range.0, body_range.1),
+            else_body,
             else_off,
-            diverges: crate::flow::block_diverges(cur.parser.src, body_tokens),
+            diverges,
             // Filled by the caller, which knows the statement's token
             // index in the parse region.
             in_function: false,

@@ -348,10 +348,12 @@ pub struct LetElseStmt {
     pub binding_mode: BindingMode,
     /// The `else { ... }` block's statements.
     pub else_body: BodyId,
-    /// The parser's syntactic divergence hint (last statement starts with
-    /// `return`/`throw`/`break`/`continue`). The flow pass (Phase 5)
-    /// upgrades this to a real CFG answer.
-    pub else_diverges_hint: bool,
+    /// Whether every path through the `else` block leaves it, answered on
+    /// the flow graph ([`crate::flow`]) over the block's token stream —
+    /// not a syntactic guess at its last statement. What the graph leaves
+    /// out is tt's own constructs, whose bodies only this layer holds; a
+    /// flow pass over [`Self::else_body`] is what would settle those.
+    pub else_diverges: bool,
 }
 
 /// See [`Stmt::IfLet`].

@@ -231,13 +231,42 @@ differences, span }`으로 정규화한다. TypeScript 진단 문자열을 다�
 
 ## 9. Flow IR (Phase 5)
 
-전체 TypeScript MIR를 만들지 않는다. tt 고유 제어 흐름 검증에 필요한 최소
-IR(`FlowBody`/`BasicBlock`/`Terminator{Goto,Branch,Return,Throw,Match,End}`)
-만 만들어 다음을 판정한다: let-else else의 실제 divergence, `try`가 반환
+전체 TypeScript MIR를 만들지 않는다. tt 고유 제어 흐름 검증에 필요한
+IR(`FlowBody`/`BasicBlock`/`Terminator{Goto,Branch,Return,Jump,End}`)만
+만들어 다음을 판정한다: let-else else의 실제 divergence, `try`가 반환
 가능한 body 안인지, `result` 바인딩의 early-return 범위, 분기별 초기화,
 `val` 파생 mutation access path, unreachable branch. 함수 호출의 임의
 effect는 추론하지 않는다 — built-in mutator 정책 + symbol identity의 현행
 `val` 정책을 유지한다.
+
+IR은 최소지만 **문 문법의 커버리지는 완전하다**(TASK-172): 네 발산문(레이블
+해석 포함), `if`/`else`, 바레 블록, 레이블 문, 모든 iteration 문(`while`,
+`do`-`while`, C 스타일 `for`, `for`-`in`/`of`, `for await`), `switch`(clause
+fall-through·`default`·`break` 타깃), `try`/`catch`/`finally`를 모두 그래프로
+낮춘다. 문 경계는 `;`·문 본문의 닫는 중괄호·제한된 자동 세미콜론 규칙을
+따르므로 세미콜론 없는 소스도 같게 읽힌다. `Terminator`에 `Throw`와 `Match`가
+없는 것은 누락이 아니라 모델링 결정이다 — `throw`는 `return`과 같이 함수를
+떠나고 guarded block→handler 간선은 `Try` lowering이 직접 그리며, `switch`
+dispatch는 case를 순서대로 시험하는 2-way `Branch` 사슬 그 자체다.
+
+tt 자신의 구문도 근사가 아니라 **정확히** 답한다(TASK-173). 판정 기준은
+§10.2의 배치 사실 그대로다 — `if let`의 body와 else는 **inline**이라 거기 쓴
+exit이 바깥 함수를 떠나므로, 양쪽이 모두 발산하면 그 문이 블록의 발산을
+나른다(`else`가 없거나 한쪽만 발산하면 통과). 반면 match arm·`result`
+블록·그 밖의 모든 값 region은 **isolated**라 거기 쓴 exit이 구문 값에 속하고
+블록을 떠날 수 없으며, `try` 문의 early return은 조건부다 — 셋 다 "발산하지
+않는다"가 보수적 근사가 아니라 **정답**이다. 스트림 안에 쓰인 함수 본문도
+마찬가지다(그 `return`은 그 함수를 떠난다).
+
+`if let`의 경계(패턴이 어디서 끝나고 어느 `{`가 then-block을 여는지)는
+`parser::iflets`가 이미 내린 결정이므로 flow가 다시 판정하지 않는다 —
+파서가 head의 끝을 넘겨주고 flow는 "여기서 tt 문이 시작하는가"만 묻는다.
+한 규칙에 구현이 둘 생겨 서로 어긋나는 일을 막는다.
+
+따라서 이 계층에 남은 근사는 **조건의 상수성 판정** 하나다: 리터럴 `true`와
+생략된 조건만 "실패할 수 없는 시험"으로 보고, 그 밖의 식은 실패 가능으로
+본다(tsc binder와 같은 기준). 이 방향의 오차는 "발산하지 않는다"로만
+기울어 계약상 안전하다.
 
 ## 10. Codegen 경계 (Phase 7)
 
@@ -299,6 +328,11 @@ INDEX 상태에 따라 조정될 수 있다 — 확정 번호는 INDEX가 진실
   (TASK-123 정산), Table 구축이 resolver 위로 이동한 지금(TASK-129)은
   identity 표현만 남은 정리다.
 - **Phase 5 잔여** — flow의 HIR body 연동(`Branch { condition: ExprId }`).
+  문 문법 커버리지는 TASK-172로, tt 구문의 발산은 TASK-173으로 완결됐다.
+  남은 `Branch { condition: ExprId }`는 **소비 구문이 없어 보류**다 — 발산
+  판정은 모든 분기를 도달 가능으로 보는 쪽이 보수적으로 옳아 조건 식별이
+  필요 없고, 조건을 들 이유인 분기별 초기화는 아래 적힌 대로 새 언어 표면
+  제안이 선행돼야 한다. 소비자 없이 IR만 넓히지 않는다.
   배치 판정은 TASK-131·134·135로 완결(세 문 모두 flow 사실
   `in_function_body` + sema의 `Place` 상속 — 인라인/IIFE/모듈 구분);
   `result` 바인딩의 early-return 범위는 TASK-132로 확정. **분기별

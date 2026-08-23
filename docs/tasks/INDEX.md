@@ -179,7 +179,9 @@
 | TASK-169 | rl을 tt로 전면 개명 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-169](./TASK-169-rename-rl-to-tt.md) |
 | TASK-170 | 로컬 저장소와 Git 원격을 tt로 전환 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-170](./TASK-170-local-repository-rename.md) |
 | TASK-171 | TT 로고 자산 교정 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-171](./TASK-171-correct-tt-logo-assets.md) |
+| TASK-172 | flow CFG 완성 — 모든 TypeScript 문 형태의 정확한 발산 판정 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-172](./TASK-172-complete-flow-cfg.md) |
+| TASK-173 | tt 구문의 발산 판정 — flow의 마지막 근사 제거 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-173](./TASK-173-tt-construct-divergence.md) |
 
 ## 다음 태스크 번호
 
-**TASK-172**
+**TASK-174**
