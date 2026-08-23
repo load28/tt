@@ -7,7 +7,7 @@ export const Route = createRootRoute({
       { rel: 'stylesheet', href: appCss },
       {
         rel: 'icon',
-        href: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23151310'/%3E%3Ctext x='50' y='68' text-anchor='middle' font-family='monospace' font-size='58' font-weight='700' fill='%23d8ff63'%3Erl%3C/text%3E%3C/svg%3E",
+        href: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23151310'/%3E%3Ctext x='50' y='68' text-anchor='middle' font-family='monospace' font-size='58' font-weight='700' fill='%23d8ff63'%3Ett%3C/text%3E%3C/svg%3E",
       },
     ],
     meta: [

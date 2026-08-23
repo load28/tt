@@ -178,7 +178,8 @@
 | TASK-168 | README와 웹사이트 개발 단계 안내 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-168](./TASK-168-development-status-notice.md) |
 | TASK-169 | rl을 tt로 전면 개명 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-169](./TASK-169-rename-rl-to-tt.md) |
 | TASK-170 | 로컬 저장소와 Git 원격을 tt로 전환 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-170](./TASK-170-local-repository-rename.md) |
+| TASK-171 | TT 로고 자산 교정 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-171](./TASK-171-correct-tt-logo-assets.md) |
 
 ## 다음 태스크 번호
 
-**TASK-171**
+**TASK-172**
