@@ -1,5 +1,5 @@
 # Development release — publish timestamped npm packages and attach a VSIX to
-# a GitHub pre-release after a version bump on main passes CI.
+# a GitHub pre-release after an X.Y.Z-dev.N bump on main passes CI.
 #
 # Required repository secrets:
 #   NPM_TOKEN — npm automation token for tt-lang, its platform packages,
@@ -26,7 +26,7 @@ env:
 
 jobs:
   prepare:
-    name: detect version bump and derive versions
+    name: detect development version bump and derive versions
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
@@ -59,24 +59,14 @@ jobs:
 
           if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
             PREVIOUS_VERSION="$(git show HEAD^:Cargo.toml | sed -n 's/^version = "\([^"]*\)"/\1/p' | head -1)"
-            if [ "$PREVIOUS_VERSION" = "$BASE_VERSION" ]; then
+            CHANNEL="$(node npm/scripts/release-channel.mjs "$PREVIOUS_VERSION" "$BASE_VERSION")"
+            if [ "$CHANNEL" != "development" ]; then
               echo "publish=false" >> "$GITHUB_OUTPUT"
-              echo "Cargo.toml version is unchanged; no development release"
+              echo "release channel is $CHANNEL; no development release"
               exit 0
             fi
-            node -e '
-              const parse = (value) => {
-                const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(value);
-                if (!match) throw new Error(`invalid release version: ${value}`);
-                return match.slice(1).map(Number);
-              };
-              const previous = parse(process.argv[1]);
-              const current = parse(process.argv[2]);
-              const greater = current.some((part, index) =>
-                part > previous[index] && current.slice(0, index).every((value, i) => value === previous[i]),
-              );
-              if (!greater) throw new Error(`${process.argv[2]} does not increase ${process.argv[1]}`);
-            ' "$PREVIOUS_VERSION" "$BASE_VERSION"
+          else
+            node npm/scripts/release-channel.mjs --manual-dev "$BASE_VERSION" >/dev/null
           fi
 
           EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"

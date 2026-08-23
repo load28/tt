@@ -1,11 +1,11 @@
 # Release — build prebuilt ttc binaries and publish the npm packages.
 #
-# Trigger: push a tag `vX.Y.Z` (from a commit whose Cargo.toml version is
-# X.Y.Z — the verify job enforces the match). Publishing needs the NPM_TOKEN
+# Trigger: a stable Cargo.toml version bump on main after CI, or a matching
+# `vX.Y.Z` tag. Publishing needs the NPM_TOKEN
 # repository secret (an npm automation token with publish rights to tt-lang,
 # tt-lang-* platform packages, unplugin-tt, and create-tt).
 #
-# Pipeline: verify tag ↔ Cargo.toml → build 5 targets → assemble npm
+# Pipeline: classify/verify Cargo.toml version → build 5 targets → assemble npm
 # platform packages + stamp versions → publish (platform packages first,
 # then tt-lang and create-tt, so neither points at missing dependencies) →
 # GitHub Release with binary archives.
@@ -14,6 +14,10 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
 
 permissions:
   contents: write # create the GitHub Release
@@ -24,28 +28,55 @@ env:
 
 jobs:
   verify:
-    name: verify tag matches Cargo.toml
+    name: detect production version bump
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      source_sha: ${{ steps.version.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
 
-      - name: Extract and compare versions
+      - name: Detect and verify production version
         id: version
+        shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#v}"
-          CARGO_VERSION="$(grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)"/\1/')"
-          echo "tag: $TAG_VERSION / Cargo.toml: $CARGO_VERSION"
-          if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
-            echo "::error::tag v$TAG_VERSION does not match Cargo.toml version $CARGO_VERSION"
-            exit 1
+          CARGO_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
+            PREVIOUS_VERSION="$(git show HEAD^:Cargo.toml | sed -n 's/^version = "\([^"]*\)"/\1/p' | head -1)"
+            CHANNEL="$(node npm/scripts/release-channel.mjs "$PREVIOUS_VERSION" "$CARGO_VERSION")"
+            if [ "$CHANNEL" != "production" ]; then
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "release channel is $CHANNEL; no production release"
+              exit 0
+            fi
+          else
+            TAG_VERSION="${GITHUB_REF_NAME#v}"
+            echo "tag: $TAG_VERSION / Cargo.toml: $CARGO_VERSION"
+            if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
+              echo "::error::tag v$TAG_VERSION does not match Cargo.toml version $CARGO_VERSION"
+              exit 1
+            fi
+            node npm/scripts/release-channel.mjs --production "$CARGO_VERSION" >/dev/null
           fi
-          echo "version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
 
   build:
     name: build ${{ matrix.key }}
     needs: verify
+    if: needs.verify.outputs.publish == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -68,6 +99,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.source_sha }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -103,11 +136,14 @@ jobs:
   publish:
     name: publish npm packages + GitHub Release
     needs: [verify, build]
+    if: needs.verify.outputs.publish == 'true'
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.verify.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.source_sha }}
 
       - name: Install Node.js
         uses: actions/setup-node@v4
@@ -183,5 +219,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ needs.verify.outputs.version }}
+          target_commitish: ${{ needs.verify.outputs.source_sha }}
           files: dist/assets/*
           generate_release_notes: true

@@ -2,7 +2,7 @@
  * dev-versions.mjs — derive immutable registry versions for a development run.
  *
  *   node dev-versions.mjs \
- *     <compiler-base> <extension-base> <unplugin-base> \
+ *     <compiler-dev-version> <extension-base> <unplugin-base> \
  *     <YYYYMMDDHHMMSS> <run-number> <run-attempt>
  *
  * Prints GitHub Actions output lines. npm accepts prerelease identifiers, while
@@ -13,6 +13,7 @@
 import { pathToFileURL } from "node:url";
 
 const RELEASE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+const DEVELOPMENT = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-dev\.([1-9]\d*)$/;
 const STAMP = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
 
@@ -24,7 +25,10 @@ export function devVersions({
   runNumber,
   runAttempt,
 }) {
-  requireRelease("compiler", compilerBase);
+  const compiler = DEVELOPMENT.exec(compilerBase);
+  if (!compiler) {
+    throw new Error(`compiler version must be major.minor.patch-dev.N: ${compilerBase}`);
+  }
   const extension = requireRelease("extension", extensionBase);
   requireRelease("unplugin", unpluginBase);
 
@@ -39,12 +43,13 @@ export function devVersions({
   const [, year, month, day, hour, minute, second] = stamp;
   const date = `${year}${month}${day}`;
   const time = `${hour}${minute}${second}`;
-  const suffix = `dev.${date}.${time}.${runNumber}.${runAttempt}`;
+  const runSuffix = `${date}.${time}.${runNumber}.${runAttempt}`;
+  const dependentSuffix = `dev.${compiler[4]}.${runSuffix}`;
 
   return {
     timestamp,
-    npmVersion: `${compilerBase}-${suffix}`,
-    unpluginVersion: `${unpluginBase}-${suffix}`,
+    npmVersion: `${compilerBase}.${runSuffix}`,
+    unpluginVersion: `${unpluginBase}-${dependentSuffix}`,
     // Keep the VSIX manifest version numeric and place the channel in GitHub.
     vscodeVersion: `${extension[1]}.${year.slice(2)}${month}${day}.${time}`,
   };
@@ -65,7 +70,7 @@ function isUtcTimestamp(match) {
 function main(args) {
   if (args.length !== 6) {
     throw new Error(
-      "usage: dev-versions.mjs <compiler-base> <extension-base> " +
+      "usage: dev-versions.mjs <compiler-dev-version> <extension-base> " +
         "<unplugin-base> <YYYYMMDDHHMMSS> <run-number> <run-attempt>",
     );
   }

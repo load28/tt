@@ -87,15 +87,20 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
 
 ## 개발 버전 배포
 
-`main`에서 `Cargo.toml`의 기준 버전이 올라가고 `CI`가 성공하면
-[`Dev Release`](./.github/workflows/dev-release.yml)가 자동으로 개발 빌드를
-배포합니다. 같은 기준 버전을 다시 배포할 때는 GitHub Actions에서 이 워크플로를
-수동 실행합니다. 저장소에는 npm 게시 권한의 `NPM_TOKEN` secret이 필요합니다.
+`Cargo.toml` 버전을 `X.Y.Z-dev.N` 형식으로 올려 `main`에 push하고 `CI`가
+성공하면 [`Dev Release`](./.github/workflows/dev-release.yml)가 자동으로 개발
+빌드를 배포합니다. `N`이 같은 일반 코드 push는 배포하지 않습니다. 수동 실행도
+현재 Cargo 버전이 `X.Y.Z-dev.N`일 때만 허용합니다.
 
-npm 버전은 `<기준버전>-dev.<UTC 날짜>.<UTC 시간>.<run>.<attempt>`이며 모두
-`dev` dist-tag로 격리됩니다. 확장은 `0.<YYMMDD>.<HHMMSS>` 버전의 VSIX로
-패키징해 같은 실행의 GitHub pre-release에 첨부합니다. GitHub Releases에서
-VSIX를 내려받아 VS Code의 `Extensions: Install from VSIX...`로 설치합니다.
+npm 버전은 `<개발버전>.<UTC 날짜>.<UTC 시간>.<run>.<attempt>`이며 모두 `dev`
+dist-tag로 격리됩니다. 확장은 `0.<YYMMDD>.<HHMMSS>` 버전의 VSIX로 패키징해
+같은 실행의 GitHub pre-release에 첨부합니다. GitHub Releases에서 VSIX를
+내려받아 VS Code의 `Extensions: Install from VSIX...`로 설치합니다.
+
+`Cargo.toml` 버전을 선행 식별자 없는 `X.Y.Z`로 올리면 `CI` 성공 뒤
+[`Release`](./.github/workflows/release.yml)가 production npm 패키지와 GitHub
+Release를 배포합니다. 저장소에는 대상 패키지 게시 권한의 `NPM_TOKEN` secret이
+필요합니다.
 
 ```sh
 bun add -d tt-lang@dev unplugin-tt@dev

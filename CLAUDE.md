@@ -157,7 +157,8 @@ TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아
 단위로 올립니다.** TypeScript가 커밋/기능마다 버전을 올리지 않고 여러 변경을
 하나의 릴리스로 묶어서만 올리듯, 이 저장소도 태스크 완료는 버전과 무관합니다.
 
-- **기준 버전은 `Cargo.toml`의 `version` 하나다.** npm 메인 패키지
+- **기준 버전은 `Cargo.toml`의 `version` 하나다.** 개발 배포는
+  `X.Y.Z-dev.N`, 정식 배포는 `X.Y.Z`로 채널을 표현한다. npm 메인 패키지
   (`npm/tt-lang`)와 설치기(`packages/create-tt`)는 저장소에서 `0.0.0-dev`로
   두고 배포 시점에 `npm/scripts/stamp-version.mjs`가 Cargo.toml 버전을
   스탬프한다 — 저장소에서 직접 올리지 않는다. 부속 패키지
@@ -166,7 +167,11 @@ TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아
 - **태스크 완료 ≠ 버전 올림.** 기능 추가·버그 수정·리팩토링은 버전을 건드리지
   않고 커밋한다. 버전을 올리는 유일한 시점은 "릴리스를 자른다"는 명시적
   결정이 있을 때이고, 그 버전 올림 자체를 별도 태스크로 등록한다
-  (예: `TASK-NNN: release 0.4.0`).
+  (예: `TASK-NNN: release 0.4.0-dev.1`, `TASK-NNN: release 0.4.0`).
+- **배포 채널은 버전 형태로 자동 결정한다.** `main`에서 CI가 성공한 뒤
+  `X.Y.Z-dev.N`이 직전 버전보다 증가했으면 npm `dev`와 GitHub VSIX
+  pre-release를 배포한다. `X.Y.Z`가 증가했으면 production npm과 GitHub
+  Release를 배포한다. 같은 버전의 일반 push는 배포하지 않는다.
 - **정식 출시 전에는 `0.MINOR.PATCH`를 유지한다.**
   - `0.MINOR` +1: 누적된 변경을 묶어 릴리스를 자를 때만.
   - `PATCH` +1: 이미 릴리스된 버전의 심각한 버그 수정만.
