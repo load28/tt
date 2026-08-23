@@ -1,9 +1,9 @@
 # TASK-182: Windows npm 패키지의 고유 이름 적용
 
-- **상태**: 진행 중
+- **상태**: 완료
 - **시작일**: 2026-08-23
-- **완료일**: —
-- **커밋**: —
+- **완료일**: 2026-08-23
+- **커밋**: d6f27a5
 
 ## 목적
 
@@ -46,10 +46,12 @@ npm 스팸 탐지에 두 차례 차단된 Windows 바이너리 패키지에 프�
 
 ## 검증
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
 
 ## 결과
 
-작업 중.
+Windows 런타임 키와 Rust target은 유지하면서 npm 게시 이름만
+`ttlang-native-msvc`로 교체했다. 플랫폼 manifest를 소비하는 생성기와 런처가
+같은 이름을 사용하며 Node 회귀 테스트 10건과 세 검증 게이트를 통과했다.

@@ -189,8 +189,9 @@
 | TASK-179 | release 0.3.0-dev.1 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-179](./TASK-179-release-0.3.0-dev.1.md) |
 | TASK-180 | malformed projection의 codegen 진입 차단 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-180](./TASK-180-lsp-test-notification-race.md) |
 | TASK-181 | release 0.3.0-dev.2 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-181](./TASK-181-release-0.3.0-dev.2.md) |
-| TASK-182 | Windows npm 패키지의 고유 이름 적용 | 진행 중 | 2026-08-23 | — | [TASK-182-unique-windows-npm-package.md](./TASK-182-unique-windows-npm-package.md) |
+| TASK-182 | Windows npm 패키지의 고유 이름 적용 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-182-unique-windows-npm-package.md](./TASK-182-unique-windows-npm-package.md) |
+| TASK-183 | release 0.3.0-dev.3 | 진행 중 | 2026-08-23 | — | [TASK-183-release-0.3.0-dev.3.md](./TASK-183-release-0.3.0-dev.3.md) |
 
 ## 다음 태스크 번호
 
-**TASK-183**
+**TASK-184**
