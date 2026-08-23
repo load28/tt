@@ -3,6 +3,7 @@ import { useState } from 'react'
 import {
   content,
   highlighted,
+  highlightedSections,
   topicIds,
   topicPath,
   type Language,
@@ -100,7 +101,13 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
               <DetailList title={language === 'ko' ? '기능' : 'Features'} items={item.works[language]} />
             </div>
 
-            {'sections' in item && <GuideSections sections={item.sections} language={language} />}
+            {'sections' in item && (
+              <GuideSections
+                sections={item.sections}
+                highlightedCode={highlightedSections[topic]}
+                language={language}
+              />
+            )}
 
             {nextTopic && (
               <Link className="next-topic" to={topicPath(language, nextTopic)}>
@@ -135,29 +142,34 @@ function InstallCommand({ language }: { language: Language }) {
   )
 }
 
-function GuideSections({ sections, language }: {
+function GuideSections({ sections, highlightedCode, language }: {
   sections: Array<{
     title: Record<Language, string>
     body: Record<Language, string>
     code: string
     link?: { href: string; en: string; ko: string }
   }>
+  highlightedCode: string[] | undefined
   language: Language
 }) {
   return (
     <div className="guide-sections">
-      {sections.map((section) => (
-        <section className="guide-section" key={section.title.en}>
-          <h2>{section.title[language]}</h2>
-          <p>{section.body[language]}</p>
-          {section.link && (
-            <a className="guide-section__link" href={section.link.href} target="_blank" rel="noreferrer">
-              {section.link[language]}
-            </a>
-          )}
-          <pre><code>{section.code}</code></pre>
-        </section>
-      ))}
+      {sections.map((section, index) => {
+        const code = highlightedCode?.[index]
+        if (code === undefined) throw new Error(`Missing highlighted code for ${section.title.en}`)
+        return (
+          <section className="guide-section" key={section.title.en}>
+            <h2>{section.title[language]}</h2>
+            <p>{section.body[language]}</p>
+            {section.link && (
+              <a className="guide-section__link" href={section.link.href} target="_blank" rel="noreferrer">
+                {section.link[language]}
+              </a>
+            )}
+            <pre><code dangerouslySetInnerHTML={{ __html: code }} /></pre>
+          </section>
+        )
+      })}
     </div>
   )
 }

@@ -1,11 +1,13 @@
 import rawContent from './content.json'
 import rawHighlighted from './highlighted.json'
+import rawHighlightedSections from './highlighted-sections.json'
 
 export type Language = 'en' | 'ko'
 export type TopicId = keyof typeof rawContent.topics
 
 export const content = rawContent
 export const highlighted = rawHighlighted as Record<TopicId, string>
+export const highlightedSections = rawHighlightedSections as Partial<Record<TopicId, string[]>>
 export const topicIds = Object.keys(content.topics) as TopicId[]
 
 export function isTopic(value: string): value is TopicId {

@@ -11,11 +11,15 @@ const highlighter = await createHighlighter({
   themes: ['github-dark-default'],
 })
 
+function topicLanguage(id: string) {
+  return id === 'cli' || id === 'install' ? 'shellscript' : id === 'ttx' ? 'ttx' : 'tt'
+}
+
 const highlighted = Object.fromEntries(
   Object.entries(content.topics).map(([id, topic]) => [
     id,
     highlighter.codeToHtml(topic.code, {
-      lang: id === 'cli' || id === 'install' ? 'shellscript' : id === 'ttx' ? 'ttx' : 'tt',
+      lang: topicLanguage(id),
       theme: 'github-dark-default',
       structure: 'inline',
     }),
@@ -23,6 +27,21 @@ const highlighted = Object.fromEntries(
 )
 
 await writeFile(new URL('../src/highlighted.json', import.meta.url), `${JSON.stringify(highlighted, null, 2)}\n`)
+
+const highlightedSections = Object.fromEntries(
+  Object.entries(content.topics).flatMap(([id, topic]) => 'sections' in topic
+    ? [[id, topic.sections.map((section) => highlighter.codeToHtml(section.code, {
+        lang: topicLanguage(id),
+        theme: 'github-dark-default',
+        structure: 'inline',
+      }))]]
+    : []),
+)
+
+await writeFile(
+  new URL('../src/highlighted-sections.json', import.meta.url),
+  `${JSON.stringify(highlightedSections, null, 2)}\n`,
+)
 
 const origin = 'https://load28.github.io/tt'
 const paths = Object.keys(content.topics).flatMap((topic) => [
