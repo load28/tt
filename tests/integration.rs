@@ -902,6 +902,109 @@ console.log(double("x"));
 }
 
 #[test]
+fn runtime_let_else_diverges_through_every_statement_form() {
+    require_toolchain!();
+    // TASK-172: the flow graph accepts a `switch`, a loop with no normal
+    // exit, a `try`/`catch`, and a labeled `break` as diverging. Each
+    // else block here really does leave the function on every path, so
+    // the emitted narrowing must hold for `tsc --strict` and the values
+    // must come out right at run time.
+    let lines = run_with_std(
+        r#"
+import type { TOption } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+
+function findUser(id: number): TOption<string> {
+  return id === 1 ? Option.Some("amy") : Option.None;
+}
+
+// Every clause leaves, and a `default` catches what no case matched.
+function bySwitch(id: number, kind: string): string {
+  const Some(value: user) = findUser(id) else {
+    switch (kind) {
+      case "quiet": return "";
+      default: return "who?";
+    }
+  };
+  return "hello, " + user;
+}
+
+// A guarded block and its handler both leave.
+function byTry(id: number): string {
+  const Some(value: user) = findUser(id) else {
+    try {
+      return "missing " + id;
+    } catch (e) {
+      throw e;
+    }
+  };
+  return "hello, " + user;
+}
+
+// Everything leaving normally runs the `finally` first.
+function byFinally(id: number): string {
+  const Some(value: user) = findUser(id) else {
+    try {
+      log("looking");
+    } finally {
+      return "gone";
+    }
+  };
+  return "hello, " + user;
+}
+
+// A labeled `break` lands after the block, on the `return`.
+function byLabel(id: number): string {
+  const Some(value: user) = findUser(id) else {
+    search: {
+      if (id < 0) { break search; }
+      return "unknown " + id;
+    }
+    return "negative";
+  };
+  return "hello, " + user;
+}
+
+// A loop with no normal exit is left only by `return`.
+function byLoop(id: number): string {
+  const Some(value: user) = findUser(id) else {
+    while (true) {
+      return "spun " + id;
+    }
+  };
+  return "hello, " + user;
+}
+
+function log(_m: string): void {}
+
+console.log(bySwitch(1, "loud"));
+console.log(bySwitch(2, "loud"));
+console.log(bySwitch(2, "quiet"));
+console.log(byTry(1));
+console.log(byTry(2));
+console.log(byFinally(2));
+console.log(byLabel(2));
+console.log(byLabel(-1));
+console.log(byLoop(2));
+"#,
+    );
+    assert_eq!(
+        lines,
+        vec![
+            "hello, amy",
+            "who?",
+            "",
+            "hello, amy",
+            "missing 2",
+            "gone",
+            "unknown 2",
+            "negative",
+            "spun 2",
+        ]
+    );
+}
+
+#[test]
 fn runtime_let_else_else_block_returns_an_object_literal() {
     require_toolchain!();
     // The natural shape for a `Result`-returning function: the else block

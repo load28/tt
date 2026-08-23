@@ -473,7 +473,7 @@ impl Lower {
             site,
             binding_mode: Self::binding_mode(&stmt.kw),
             else_body,
-            else_diverges_hint: stmt.diverges,
+            else_diverges: stmt.diverges,
         }
     }
 

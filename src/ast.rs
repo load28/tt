@@ -280,10 +280,10 @@ pub(crate) struct LetElseStmt {
     pub else_body: Program,
     /// Byte offset of the `else` keyword, for error reporting.
     pub else_off: usize,
-    /// Whether the else block's last top-level statement starts with
-    /// `return`, `throw`, `break`, or `continue` — the syntactic stand-in
-    /// for Rust's "the else block must diverge" rule. Computed by the
-    /// parser (which stays infallible), enforced by sema.
+    /// Whether every path through the else block leaves it — Rust's "the
+    /// else block must diverge" rule, answered on the flow graph
+    /// ([`crate::flow`]) rather than by the shape of the last statement.
+    /// Computed by the parser (which stays infallible), enforced by sema.
     pub diverges: bool,
     /// Whether the statement sits inside a function body written in the
     /// same parse region — same fact as [`TryStmt::in_function`]. Inside
