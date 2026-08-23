@@ -786,7 +786,10 @@ impl Project {
         // fallback. Do not trust TypeScript's recovery from that malformed
         // document; parser-owned recoveries have already made ordinary edit
         // states valid before this point.
-        if !projection_accepts_diagnostics(&doc.code) {
+        if !projection_accepts_diagnostics(
+            &doc.code,
+            crate::SourceKind::from_path(&path).unwrap_or_default(),
+        ) {
             return Ok(Vec::new());
         }
         let session = self.session();
@@ -959,13 +962,14 @@ impl Project {
     }
 }
 
-fn projection_accepts_diagnostics(code: &str) -> bool {
-    crate::verify::verify_output(code).is_ok()
+fn projection_accepts_diagnostics(code: &str, source_kind: crate::SourceKind) -> bool {
+    crate::verify::verify_output(code, source_kind).is_ok()
 }
 
 fn service_doc(path: &Path, text: String) -> ServiceDoc {
     let options = crate::Options {
         filename: Some(path.to_str().unwrap_or("<input>")),
+        source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
         defer_to_checker: true,
         rewrite_imports: crate::ImportRewrite::Off,
         ..crate::Options::default()
@@ -973,7 +977,13 @@ fn service_doc(path: &Path, text: String) -> ServiceDoc {
     let report = crate::compile_projection_report(&text, &options);
     let (emit, recovered) = match report.emit {
         Some(emit) => (emit, report.recovered),
-        None => (crate::emit_mapped(&text), Vec::new()),
+        None => (
+            crate::emit_mapped_with_kind(
+                &text,
+                crate::SourceKind::from_path(path).unwrap_or_default(),
+            ),
+            Vec::new(),
+        ),
     };
     ServiceDoc {
         source: text,
@@ -1096,15 +1106,25 @@ pub(super) fn externs_of(
     source: &str,
     read: &dyn Fn(&Path) -> Option<String>,
 ) -> Vec<crate::EnumSymbol> {
-    externs_from(path, &crate::rl_imports(source), &|target| {
-        let text = read(target)?;
-        Some(
-            crate::enum_symbols(&text)
+    externs_from(
+        path,
+        &crate::rl_imports_with_kind(
+            source,
+            crate::SourceKind::from_path(path).unwrap_or_default(),
+        ),
+        &|target| {
+            let text = read(target)?;
+            Some(
+                crate::enum_symbols_with_kind(
+                    &text,
+                    crate::SourceKind::from_path(target).unwrap_or_default(),
+                )
                 .into_iter()
                 .filter(|d| d.exported)
                 .collect(),
-        )
-    })
+            )
+        },
+    )
 }
 
 /// [`externs_of`] over already-parsed pieces: the file's imports and a
@@ -1234,7 +1254,11 @@ fn map_target(
         end: position_of(&range["end"]),
     };
     let name = path.to_string_lossy();
-    if let Some(rl) = name.strip_suffix(".ts").filter(|n| n.ends_with(".rl")) {
+    let source_name = name
+        .strip_suffix(".tsx")
+        .filter(|n| n.ends_with(".rlx"))
+        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".rl")));
+    if let Some(rl) = source_name {
         let rl_path = PathBuf::from(rl);
         let doc = serve_doc_only(session, overlays, &rl_path)?;
         let start = u16_offset(&doc.code, lsp_range.start);
@@ -1541,9 +1565,13 @@ mod tests {
     #[test]
     fn diagnostic_projection_depends_on_parseability_not_diagnostic_numbers() {
         assert!(projection_accepts_diagnostics(
-            "const value = { A: 1, A: 2 };"
+            "const value = { A: 1, A: 2 };",
+            crate::SourceKind::TypeScript,
         ));
-        assert!(!projection_accepts_diagnostics("const = ;"));
+        assert!(!projection_accepts_diagnostics(
+            "const = ;",
+            crate::SourceKind::TypeScript,
+        ));
     }
 
     #[test]
@@ -1551,7 +1579,11 @@ mod tests {
         let source = "function f(value: number) { const n = try value; return n; }\n\
             const broken = 1 |> ;\n";
         let doc = service_doc(Path::new("/p/src/a.rl"), source.to_string());
-        assert!(projection_accepts_diagnostics(&doc.code), "{}", doc.code);
+        assert!(
+            projection_accepts_diagnostics(&doc.code, crate::SourceKind::TypeScript),
+            "{}",
+            doc.code
+        );
         assert_eq!(doc.recovered.len(), 1);
         assert!(doc.code.contains("$rl_t0.kind"), "{}", doc.code);
         assert!(doc.code.contains("const broken = 0"), "{}", doc.code);

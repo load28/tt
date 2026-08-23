@@ -1,7 +1,7 @@
 {
   "name": "unplugin-rl",
   "version": "0.1.0",
-  "description": "Compile .rl modules with rlc in Vite, Rollup, webpack, Rspack, esbuild and Farm",
+  "description": "Compile .rl and .rlx modules with rlc in Vite, Rollup, webpack, Rspack, esbuild and Farm",
   "license": "MIT",
   "type": "module",
   "main": "./index.js",

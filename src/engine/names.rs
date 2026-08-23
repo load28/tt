@@ -71,7 +71,10 @@ pub struct RlSymbol {
 /// last saved) and to name the file a definition lives in.
 pub fn rl_symbol_at(path: &Path, source: &str, position: Position) -> Option<RlSymbol> {
     let offset = super::language::source_byte(source, position);
-    let locals = crate::enum_symbols(source);
+    let locals = crate::enum_symbols_with_kind(
+        source,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
     let analyses = super::language::analyses_for(path, source);
 
     // 1. Inside an enum declaration: the name, a case tag, a field name.
@@ -310,14 +313,20 @@ fn imported_declaration(
         .to_string();
     let dir = path.parent().unwrap_or(Path::new("."));
     let source = std::fs::read_to_string(path).ok()?;
-    for import in crate::rl_imports(&source) {
+    for import in crate::rl_imports_with_kind(
+        &source,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    ) {
         let target = dir.join(&import.specifier).canonicalize().ok()?;
         let Ok(text) = std::fs::read_to_string(&target) else {
             continue;
         };
-        if let Some(found) = crate::enum_symbols(&text)
-            .into_iter()
-            .find(|d| d.exported && (d.name == own || d.name == declared.name))
+        if let Some(found) = crate::enum_symbols_with_kind(
+            &text,
+            crate::SourceKind::from_path(&target).unwrap_or_default(),
+        )
+        .into_iter()
+        .find(|d| d.exported && (d.name == own || d.name == declared.name))
         {
             return Some((target, text, found));
         }

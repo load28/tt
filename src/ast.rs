@@ -232,8 +232,8 @@ pub(crate) struct RlImportDecl {
 /// The two specifiers rlc understands beyond plain passthrough.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RlSpecifier {
-    /// A relative path ending in `.rl` — another module of this project.
-    Relative,
+    /// A relative path ending in `.rl` or `.rlx` — another project module.
+    Relative(crate::SourceKind),
     /// One standard-library package module supplied by rlc.
     Std(crate::stdlib::StdModule),
 }

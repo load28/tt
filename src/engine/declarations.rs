@@ -100,7 +100,10 @@ pub struct RlMatchSite {
 /// its relative `.rl` imports — from disk; an editor passes the buffer's
 /// text for the file itself).
 pub fn rl_declarations(path: &Path, source: &str) -> RlDeclarations {
-    let program = crate::parser::parse(source);
+    let program = crate::parser::parse_with_kind(
+        source,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
     let externs: Vec<resolve::ExternDecl> =
         super::language::externs_of(path, source, &|target| std::fs::read_to_string(target).ok())
             .iter()

@@ -1,14 +1,14 @@
 # rl — AI context
 
-rl = TypeScript + 7 constructs + 1 binding modifier; `rlc` compiles `.rl` → plain TS. Write normal TS everywhere; rl syntax only for: enum (tagged union), match, try, let-else, if let, `|>` (+ `flow` composition), `result` block, `val` (mutation-free binding).
+rl = TypeScript/TSX + 7 constructs + 1 binding modifier; `rlc` compiles `.rl` → `.ts`, `.rlx` → `.tsx`. Write normal TS/TSX everywhere; rl syntax only for: enum (tagged union), match, try, let-else, if let, `|>` (+ `flow` composition), `result` block, `val` (mutation-free binding).
 
 CONTRACTS:
-- Every valid TS file is a valid `.rl` file. rlc transforms only text parsing COMPLETELY as an rl construct; all else passes through byte-for-byte.
+- Every valid TS file is a valid `.rl` file; every valid TSX file is a valid `.rlx` file. rlc transforms only text parsing COMPLETELY as an rl construct; all else passes through byte-for-byte. JSX tags/text stay opaque; rl constructs work in `{...}` expression containers. JSX transform/runtime selection remains the project's TypeScript `jsx` option.
 - Output is plain TS (`kind`-tagged unions, switch/if chains), no runtime lib, no type tricks. rl-level errors: `rlc: file:line:col: msg` (the position is the construct's start; diagnostics also carry the end, which is what an editor underlines — `try <expr>`, `match (scrutinee)`). One run reports **every** diagnostic in file/source order (each rl rule has a stable code, e.g. `match-not-exhaustive`); identical position/range/message duplicates are merged, and a recoverable rl error doesn't hide the file's type diagnostics on the typed path. Type errors in pass-through code: tsc's job.
 - Assignability errors are rendered from checker facts, not by rewriting TypeScript prose: ``type mismatch: expected `InputError`, found `RangeError` `` plus ``required type: `TResult<number, InputError>` `` when the surrounding obligation helps. The same syntax-neutral rule covers return values, annotations, call arguments, and lowered RL constructs. A checker span maps exactly only when one verbatim source mapping owns the whole span; spans crossing generated glue use the lowering anchor's primary source range (`match (subject)`, `binding <- expression`). Anchors separately retain the complete syntax owner, so one proven RL/type cause suppresses only checker consequences owned by the same lowering. The editor's quick provisional checker path applies the same RL-cause ownership before publishing. RL enum cases use declaration names when uniquely identifiable; otherwise checker structural names remain. CLI, server, and the editor consume this same range, message, and `ts<code>` identity. Non-assignability diagnostics still use the construct-specific translation table or raw checker fallback.
 - Semantic pattern errors carry the parser AST's complete primary span, not a start offset whose width the editor guesses. A mixed-pattern error covers the first pattern of the other kind; tuple arity covers the complete parenthesized tuple pattern. `Arm` and `TupleArm` keep `pattern_span` as their stage contract, so future pattern diagnostics inherit the same source-range path.
 - TRAP: once `match`/`enum` is distinguishable from valid TS, malformed syntax is a located ``rl `<construct>` could not be parsed`` error. `if let`, `|>`, and claimed `result` blocks likewise error at their construct. Unclaimed lookalikes remain byte-exact TypeScript passthrough.
-- Identifiers inside rl constructs: ASCII `[A-Za-z_$][A-Za-z0-9_$]*` only. TS reserved words (new, default, if, in, of, static, class, ...) can't be tags/fields/bindings — construct silently passes through. `.tsx` unsupported.
+- Identifiers inside rl constructs: ASCII `[A-Za-z_$][A-Za-z0-9_$]*` only. TS reserved words (new, default, if, in, of, static, class, ...) can't be tags/fields/bindings — construct silently passes through.
 
 ## enum
 
@@ -164,8 +164,8 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 
 ## Modules
 
-- Import `.rl` files by relative path WITH extension: `import { Token } from "./token.rl";` → rewritten on emit to `./token.js` (default; `--rewrite-imports ts|off`; `ts` needs tsconfig `allowImportingTsExtensions` + `rewriteRelativeImportExtensions`).
-- Exhaustiveness sees exported enums from DIRECT (1-hop) relative `.rl` imports (named/aliased/`* as ns`); re-export chains & package paths NOT collected → those matches compile unchecked.
+- Import `.rl`/`.rlx` files by relative path WITH extension: `./token.rl` → `./token.js`, `./view.rlx` → `./view.jsx` by default (`--rewrite-imports ts` emits `.ts`/`.tsx`; `off` preserves source specifiers).
+- Exhaustiveness sees exported enums from DIRECT (1-hop) relative `.rl`/`.rlx` imports (named/aliased/`* as ns`); re-export chains & package paths NOT collected → those matches compile unchecked.
 - Dynamic `import()` specifiers not rewritten.
 
 ## Install
@@ -177,21 +177,21 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 
 ## Setup
 
-New project: `npm init -y && npm i -D rl-lang typescript`; sources in `src/**/*.rl` (hand-written `.ts` alongside is fine); gitignore `.rl-types/` and the out dir.
+New project: `npm init -y && npm i -D rl-lang typescript`; sources in `src/**/*.rl` or React/JSX sources in `src/**/*.rlx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.rl-types/` and the out dir.
 ```jsonc
 // package.json
 "scripts": { "build": "rlc -o build src && tsc", "types": "rlc --types src", "check": "rlc --check-types src" }
 // tsconfig.json — resolve "./x.rl" and "@rl/std":
 "compilerOptions": { "rootDirs": ["./src", "./.rl-types"], "paths": { "@rl/std": ["./.rl-types/rl/index.d.ts"], "@rl/std/*": ["./.rl-types/rl/*.d.ts"] } }
 ```
-Bundler alternative: `unplugin-rl` (`import rl from "unplugin-rl/vite"`, also `/rollup` `/webpack` `/esbuild`) — bundler reads `.rl` directly, no rlc build step; types still via `rlc --types`.
+Bundler alternative: `unplugin-rl` (`import rl from "unplugin-rl/vite"`, also `/rollup` `/webpack` `/esbuild`) — bundler reads `.rl`/`.rlx` directly, no rlc build step; types still via `rlc --types`.
 
 ## Workflow
 
 - Edit loop: change `.rl` → `npx rlc --check src` (fast rl-level, no TypeScript) → `npx rlc --check-types src` (types, exhaustiveness by narrowed type, `val`). Keep `npx rlc --types -w src` running so editor/tsc resolve `./x.rl` + `@rl/std`; if not watching, re-run `--types` after enum changes.
 - Build: `npm run build` (rlc emits TS tree then tsc) or bundler build. CI: `rlc --check src && tsc --noEmit` + tests.
-- `rlc <dir>`: `.rl`→`.ts`, hand-written `.ts` passthrough; `-o <dir>` separate tree (in-place overwrite refused); `@rl/std` auto-materialized when imported. `rlc -w` watches and also recompiles importers of changed files (cross-file exhaustiveness). Files compile in parallel (one per core) with identical output/diagnostics either way; `-j <n>` sets the count, `-j 1` = sequential.
-- Emitted `.ts` starts with `// @generated` — NEVER edit output or `.rl-types/`; edit the `.rl` source.
+- `rlc <dir>`: `.rl`→`.ts`, `.rlx`→`.tsx`, hand-written `.ts`/`.tsx` passthrough; `-o <dir>` separate tree (in-place overwrite refused); `@rl/std` auto-materialized when imported. `rlc -w` watches and also recompiles importers of changed files (cross-file exhaustiveness). Files compile in parallel (one per core) with identical output/diagnostics either way; `-j <n>` sets the count, `-j 1` = sequential.
+- Emitted `.ts`/`.tsx` starts with `// @generated` — NEVER edit output or `.rl-types/`; edit the `.rl`/`.rlx` source.
 - Offline docs: `npx rlc help` lists topics; `npx rlc help <topic>` (e.g. `match`, `try`, `install`) prints that section of this guide; `npx rlc help all` prints it whole. `npx rlc -h` = CLI options.
 
 ## Errors

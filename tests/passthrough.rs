@@ -1,11 +1,37 @@
 //! Every valid TypeScript file is a valid .rl file and must compile to
 //! itself, byte for byte.
 
-use rlc::{Options, compile};
+use rlc::{Options, SourceKind, compile};
 
 fn assert_passthrough(src: &str) {
     let out = compile(src, &Options::default()).expect("compile failed");
     assert_eq!(out, src);
+}
+
+fn assert_tsx_passthrough(src: &str) {
+    let out = compile(
+        src,
+        &Options {
+            source_kind: SourceKind::Tsx,
+            ..Options::default()
+        },
+    )
+    .expect("compile failed");
+    assert_eq!(out, src);
+}
+
+#[test]
+fn valid_tsx_is_byte_identical() {
+    assert_tsx_passthrough(
+        r#"type Props<T> = { value: T; render(value: T): React.ReactNode };
+const Item = <T,>({ value, render }: Props<T>) => (
+  <article data-label="match (x) { A => 1 }">
+    <header>{render(value)}</header>
+    <>enum Result and result blocks are ordinary JSX text</>
+  </article>
+);
+"#,
+    );
 }
 
 #[test]

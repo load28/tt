@@ -65,7 +65,7 @@ pub use project::{Blocked, CheckRequest, Project, collect_sources};
 pub use projection::ProjectedDocument;
 pub use semantics::{Checked, Declarations, Diagnostic, ModuleDeclaration};
 pub use snapshot::Snapshot;
-pub use tokens::{SemanticToken, SemanticTokenKind, semantic_tokens};
+pub use tokens::{SemanticToken, SemanticTokenKind, semantic_tokens, semantic_tokens_with_kind};
 
 use std::path::PathBuf;
 
@@ -115,7 +115,7 @@ impl Engine {
         options: &ProjectOptions,
     ) -> Result<Project, String> {
         let collected = match project::collect_rl(inputs) {
-            Ok(files) if files.is_empty() => return Err("no .rl sources found".to_string()),
+            Ok(files) if files.is_empty() => return Err("no .rl or .rlx sources found".to_string()),
             Ok(files) => files,
             Err(e) => return Err(e.to_string()),
         };
@@ -123,11 +123,12 @@ impl Engine {
         // The graph is the project's, not the command line's: every `.rl`
         // file under the project root joins the first pass, because a named
         // input may import one that was not named.
-        let initial = match project::project_sources(&root, options.out_dir.as_deref(), &["rl"]) {
-            Ok(all) if !all.is_empty() => all,
-            Ok(_) => collected.clone(),
-            Err(e) => return Err(e.to_string()),
-        };
+        let initial =
+            match project::project_sources(&root, options.out_dir.as_deref(), &["rl", "rlx"]) {
+                Ok(all) if !all.is_empty() => all,
+                Ok(_) => collected.clone(),
+                Err(e) => return Err(e.to_string()),
+            };
         // No toolchain is not "no project": the rl layer answers without
         // one, and the missing backend is carried as the typed layer's
         // failure instead ([`Checked::backend_error`]).
@@ -137,10 +138,12 @@ impl Engine {
         // be listed or a `.ts` nothing imports is never checked.
         let sources = match tsconfig {
             Some(_) => Vec::new(),
-            None => {
-                project::project_sources(&root, options.out_dir.as_deref(), &["ts", "mts", "cts"])
-                    .unwrap_or_default()
-            }
+            None => project::project_sources(
+                &root,
+                options.out_dir.as_deref(),
+                &["ts", "tsx", "mts", "cts"],
+            )
+            .unwrap_or_default(),
         };
         Ok(Project::new(
             root,
@@ -161,7 +164,7 @@ impl Engine {
         options: &ProjectOptions,
     ) -> Result<(Option<PathBuf>, PathBuf), String> {
         let collected = match project::collect_rl(inputs) {
-            Ok(files) if files.is_empty() => return Err("no .rl sources found".to_string()),
+            Ok(files) if files.is_empty() => return Err("no .rl or .rlx sources found".to_string()),
             Ok(files) => files,
             Err(e) => return Err(e.to_string()),
         };

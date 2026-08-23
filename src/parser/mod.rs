@@ -157,15 +157,26 @@ pub(crate) fn parse(src: &str) -> Program {
     lex_and_parse(src).0
 }
 
+pub(crate) fn parse_with_kind(src: &str, source_kind: crate::SourceKind) -> Program {
+    lex_and_parse_with_kind(src, source_kind).0
+}
+
 /// [`parse`], also returning the file's token stream — the `val` analysis
 /// ([`crate::val::check`]) reads the same tokens, and lexing twice is the
 /// compiler's most expensive avoidable work.
 pub(crate) fn lex_and_parse(src: &str) -> (Program, Vec<Token>) {
+    lex_and_parse_with_kind(src, crate::SourceKind::TypeScript)
+}
+
+pub(crate) fn lex_and_parse_with_kind(
+    src: &str,
+    source_kind: crate::SourceKind,
+) -> (Program, Vec<Token>) {
     let parser = Parser {
         src,
         bytes: src.as_bytes(),
     };
-    let tokens = lexer::lex(src, 0, src.len());
+    let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
     let program = parser.parse_tokens(&tokens, 0, src.len());
     (program, tokens)
 }
@@ -781,6 +792,7 @@ impl Parser<'_> {
                     matches!(&self.src[t.span.start..t.span.end], "instanceof" | "in")
                 }
                 TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex => false,
+                TokenKind::JsxRaw => true,
                 TokenKind::Punct(c) => {
                     !matches!(c, b'(' | b'[' | b'{' | b'!' | b'~') && !c.is_ascii_digit()
                 }

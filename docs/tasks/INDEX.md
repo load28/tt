@@ -170,7 +170,8 @@
 | TASK-160 | SWC whole-owner 기반 RL→TS 최적 lowering | 진행 중 | 2026-08-22 | — | [TASK-160](./TASK-160-whole-owner-ast-lowering.md) |
 | TASK-161 | SWC와 TypeScript 7 책임 경계 주석 | 완료 | 2026-08-22 | 2026-08-22 | [TASK-161](./TASK-161-swc-ts7-responsibility-comments.md) |
 | TASK-162 | 사용된 표준 라이브러리 멤버만 방출 | 완료 | 2026-08-22 | 2026-08-23 | [TASK-162](./TASK-162-stdlib-member-pruning.md) |
+| TASK-163 | `.rlx` — TSX 위의 rl 문법과 React 도구 체인 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-163](./TASK-163-rlx-tsx-support.md) |
 
 ## 다음 태스크 번호
 
-**TASK-163**
+**TASK-164**

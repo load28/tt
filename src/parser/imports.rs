@@ -193,7 +193,9 @@ fn rl_spec_span(cur: &Cursor, span: Span) -> Option<(Span, RlSpecifier)> {
     }
     let relative = spec.starts_with(b"./") || spec.starts_with(b"../");
     if relative && spec.ends_with(b".rl") {
-        Some((span, RlSpecifier::Relative))
+        Some((span, RlSpecifier::Relative(crate::SourceKind::TypeScript)))
+    } else if relative && spec.ends_with(b".rlx") {
+        Some((span, RlSpecifier::Relative(crate::SourceKind::Tsx)))
     } else {
         None
     }

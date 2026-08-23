@@ -24,7 +24,8 @@ use swc_common::sync::Lrc;
 use swc_common::{FileName, SourceMap, Spanned};
 use swc_ecma_ast::{
     ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, CallExpr, CondExpr, Constructor,
-    Function, Ident, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall, Prop,
+    Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild, JSXExpr,
+    JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall, Prop,
     PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, UnaryExpr, YieldExpr,
 };
 use swc_ecma_parser::lexer::Lexer;
@@ -152,6 +153,7 @@ pub(crate) enum EagerPosition {
     CallArgument(u32),
     ConstructArgument(u32),
     TemplateInterpolation(u32),
+    JsxExpression(u32),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -195,6 +197,9 @@ pub(crate) struct HostOwner {
 pub(crate) enum HostOwnerKind {
     Statement,
     ModuleItem,
+    /// The expression body of a concise arrow function. Lowering rewrites
+    /// this expression to a block when a nested rl value needs statements.
+    ArrowExpression,
 }
 
 /// The Core IR node that owns one TypeScript host placeholder.
@@ -427,9 +432,10 @@ impl ProgramSyntax {
         semantic: &SemanticFile,
         core: &CoreFile,
         source: &str,
+        source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
         let projection = ProjectionBuilder::new(semantic, core, source).build()?;
-        let parsed = parse_module(&projection.code)?;
+        let parsed = parse_module(&projection.code, source_kind)?;
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -874,13 +880,16 @@ struct ParsedModule {
     start: u32,
 }
 
-fn parse_module(code: &str) -> Result<ParsedModule, ProgramSyntaxError> {
+fn parse_module(
+    code: &str,
+    source_kind: crate::SourceKind,
+) -> Result<ParsedModule, ProgramSyntaxError> {
     let source_map: Lrc<SourceMap> = Default::default();
     let file = source_map.new_source_file(Lrc::new(FileName::Anon), code.to_string());
     let start = file.start_pos.0;
     let lexer = Lexer::new(
         Syntax::Typescript(TsSyntax {
-            tsx: false,
+            tsx: source_kind.is_tsx(),
             decorators: true,
             ..Default::default()
         }),
@@ -992,6 +1001,10 @@ enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         expressions: Vec<ProjectedSpan>,
     },
+    Jsx {
+        parent: ProjectedSpan,
+        expressions: Vec<ProjectedSpan>,
+    },
     Suspend {
         parent: ProjectedSpan,
         kind: SuspensionKind,
@@ -1051,6 +1064,70 @@ fn push_computed_property(positions: &mut Vec<ProjectedSpan>, name: &PropName, s
     if let PropName::Computed(computed) = name {
         positions.push(projected_span(computed.expr.span(), source_start));
     }
+}
+
+fn jsx_expression_span(expression: &JSXExpr, source_start: u32) -> Option<ProjectedSpan> {
+    match expression {
+        JSXExpr::Expr(expression) => Some(projected_span(expression.span(), source_start)),
+        JSXExpr::JSXEmptyExpr(_) => None,
+    }
+}
+
+fn jsx_evaluation_positions(node: &JSXElement, source_start: u32) -> Vec<ProjectedSpan> {
+    let attributes = node
+        .opening
+        .attrs
+        .iter()
+        .filter_map(|attribute| match attribute {
+            JSXAttrOrSpread::SpreadElement(spread) => {
+                Some(projected_span(spread.expr.span(), source_start))
+            }
+            JSXAttrOrSpread::JSXAttr(attribute) => match attribute.value.as_ref()? {
+                JSXAttrValue::JSXExprContainer(container) => {
+                    jsx_expression_span(&container.expr, source_start)
+                }
+                JSXAttrValue::JSXElement(element) => {
+                    Some(projected_span(element.span, source_start))
+                }
+                JSXAttrValue::JSXFragment(fragment) => {
+                    Some(projected_span(fragment.span, source_start))
+                }
+                JSXAttrValue::Str(_) => None,
+            },
+        });
+    let children = node.children.iter().filter_map(|child| match child {
+        JSXElementChild::JSXExprContainer(container) => {
+            jsx_expression_span(&container.expr, source_start)
+        }
+        JSXElementChild::JSXSpreadChild(spread) => {
+            Some(projected_span(spread.expr.span(), source_start))
+        }
+        JSXElementChild::JSXElement(element) => Some(projected_span(element.span, source_start)),
+        JSXElementChild::JSXFragment(fragment) => Some(projected_span(fragment.span, source_start)),
+        JSXElementChild::JSXText(_) => None,
+    });
+    attributes.chain(children).collect()
+}
+
+fn jsx_fragment_positions(node: &JSXFragment, source_start: u32) -> Vec<ProjectedSpan> {
+    node.children
+        .iter()
+        .filter_map(|child| match child {
+            JSXElementChild::JSXExprContainer(container) => {
+                jsx_expression_span(&container.expr, source_start)
+            }
+            JSXElementChild::JSXSpreadChild(spread) => {
+                Some(projected_span(spread.expr.span(), source_start))
+            }
+            JSXElementChild::JSXElement(element) => {
+                Some(projected_span(element.span, source_start))
+            }
+            JSXElementChild::JSXFragment(fragment) => {
+                Some(projected_span(fragment.span, source_start))
+            }
+            JSXElementChild::JSXText(_) => None,
+        })
+        .collect()
 }
 
 impl ParentCollector {
@@ -1132,6 +1209,10 @@ impl ParentCollector {
                 .host_owners
                 .iter()
                 .rev()
+                .filter(|owner| {
+                    owner.span.start <= entry.projected.start
+                        && entry.projected.end <= owner.span.end
+                })
                 .find_map(|owner| {
                     source_span_for_projection(&self.source_segments, owner.span)
                         .map(|span| (*owner, owner.kind, span))
@@ -1362,7 +1443,12 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
+        self.host_owners.push(ProjectedHostOwner {
+            kind: HostOwnerKind::ArrowExpression,
+            span: projected_span(node.body.span(), self.source_start),
+        });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.host_owners.pop();
         self.function_depth -= 1;
     }
 
@@ -1492,6 +1578,32 @@ impl VisitAstPath for ParentCollector {
                 .collect(),
         });
         <Tpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.protocol_frames.pop();
+    }
+
+    fn visit_jsx_element<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast JSXElement,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
+            parent: projected_span(node.span, self.source_start),
+            expressions: jsx_evaluation_positions(node, self.source_start),
+        });
+        <JSXElement as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.protocol_frames.pop();
+    }
+
+    fn visit_jsx_fragment<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast JSXFragment,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
+            parent: projected_span(node.span, self.source_start),
+            expressions: jsx_fragment_positions(node, self.source_start),
+        });
+        <JSXFragment as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }
 
@@ -1795,6 +1907,26 @@ fn protocol_step(
                 inputs,
             )
         }
+        ProjectedProtocolFrame::Jsx {
+            parent,
+            expressions,
+        } => {
+            let Some(position) = child_index(expressions, value) else {
+                return Ok(None);
+            };
+            let index =
+                u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
+            let inputs = expressions[..position]
+                .iter()
+                .copied()
+                .map(|expression| (expression, EvaluationInputMode::Value, None))
+                .collect();
+            (
+                *parent,
+                HostEvaluationOperation::Eager(EagerPosition::JsxExpression(index)),
+                inputs,
+            )
+        }
         ProjectedProtocolFrame::Suspend {
             parent,
             kind,
@@ -1934,7 +2066,8 @@ mod tests {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(&program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
-        ProgramSyntax::build(&semantic, &core, source).expect("projection should parse")
+        ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
+            .expect("projection should parse")
     }
 
     #[test]

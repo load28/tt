@@ -118,6 +118,7 @@ fn project(files: &[(&str, &str)]) -> PathBuf {
     "target": "es2022",
     "module": "preserve",
     "moduleResolution": "bundler",
+    "jsx": "preserve",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true
@@ -305,6 +306,32 @@ fn a_hand_written_ts_file_imports_an_rl_file_by_the_specifier_it_writes() {
         !out.contains("2307") && !out.contains("Cannot find module"),
         "and nothing failed to resolve: {out}"
     );
+}
+
+#[test]
+fn a_hand_written_tsx_file_imports_an_rlx_file_by_its_specifier() {
+    let root = require_tsgo!();
+    let dir = project(&[
+        (
+            "src/view.rlx",
+            "export enum State { Ready(value: string), Empty }\n\
+             export const render = (state: State) => <main>{match (state) {\n\
+             Ready(value) => <b>{value}</b>, Empty => null\n\
+             }}</main>;\n",
+        ),
+        (
+            "src/use.tsx",
+            "import { State, render } from \"./view.rlx\";\n\
+             declare global { namespace JSX { interface IntrinsicElements { main: {}; b: {}; } } }\n\
+             export const value = render(State.Ready(\"ok\"));\n",
+        ),
+    ]);
+    let out = check(&dir, &root);
+    assert!(
+        !out.contains("2307") && !out.contains("Cannot find module"),
+        "{out}"
+    );
+    assert!(!out.contains("view.rlx"), "{out}");
 }
 
 #[test]

@@ -186,7 +186,7 @@ impl Lower {
         self.hir.items.push(Item::Import(ImportItem {
             node,
             kind: match decl.kind {
-                ast::RlSpecifier::Relative => ImportKind::Relative,
+                ast::RlSpecifier::Relative(kind) => ImportKind::Relative(kind),
                 ast::RlSpecifier::Std(module) => ImportKind::Std(module),
             },
             names: match &decl.names {

@@ -254,8 +254,8 @@ pub struct ImportItem {
 /// The two specifiers rlc understands beyond plain passthrough.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportKind {
-    /// A relative path ending in `.rl`.
-    Relative,
+    /// A relative rl source, carrying the target's TypeScript surface.
+    Relative(crate::SourceKind),
     /// One module of the standard-library package.
     Std(crate::StdModule),
 }

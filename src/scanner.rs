@@ -85,6 +85,32 @@ pub(crate) fn scan_string(src: &[u8], mut i: usize, end: usize) -> usize {
     i.min(end)
 }
 
+/// Whether a slash after the preceding significant token begins a regular
+/// expression literal. Both the lexer and balanced-region scanner use this
+/// policy so delimiters inside regex literals never affect structural scans.
+pub(crate) fn regex_allowed(prev_sig: u8, prev_word: &str) -> bool {
+    if !prev_word.is_empty() {
+        return matches!(
+            prev_word,
+            "return"
+                | "typeof"
+                | "instanceof"
+                | "in"
+                | "of"
+                | "new"
+                | "delete"
+                | "void"
+                | "throw"
+                | "case"
+                | "do"
+                | "else"
+                | "yield"
+                | "await"
+        );
+    }
+    prev_sig == 0 || b"(,=:[!&|?{};~+-*%^<>".contains(&prev_sig)
+}
+
 /// `src[i]` is a backtick — returns the index just past the closing backtick.
 pub(crate) fn skip_template(src: &[u8], mut i: usize, end: usize) -> usize {
     i += 1;
@@ -117,6 +143,8 @@ pub(crate) fn find_matching(src: &[u8], mut i: usize, end: usize) -> Option<usiz
         _ => return None,
     };
     let mut depth = 0usize;
+    let mut prev_word = "";
+    let mut prev_sig = 0;
     while i < end {
         let c = src[i];
         if c == b'/' && at(src, i + 1, end) == Some(b'/') {
@@ -132,14 +160,36 @@ pub(crate) fn find_matching(src: &[u8], mut i: usize, end: usize) -> Option<usiz
         }
         if c == b'"' || c == b'\'' {
             i = scan_string(src, i, end);
+            prev_word = "";
+            prev_sig = c;
             continue;
         }
         if c == b'`' {
             i = skip_template(src, i, end);
+            prev_word = "";
+            prev_sig = b'`';
+            continue;
+        }
+        if c == b'/'
+            && regex_allowed(prev_sig, prev_word)
+            && let Some(regex_end) = scan_regex(src, i, end)
+        {
+            i = regex_end;
+            prev_word = "";
+            prev_sig = b'/';
+            continue;
+        }
+        if is_ident_start(c) {
+            let word_end = ident_end(src, i, end);
+            prev_word = std::str::from_utf8(&src[i..word_end]).unwrap_or("");
+            prev_sig = src[word_end - 1];
+            i = word_end;
             continue;
         }
         if open == b'<' && c == b'=' && at(src, i + 1, end) == Some(b'>') {
             i += 2;
+            prev_word = "";
+            prev_sig = b'>';
             continue;
         }
         if c == open {
@@ -150,6 +200,8 @@ pub(crate) fn find_matching(src: &[u8], mut i: usize, end: usize) -> Option<usiz
                 return Some(i);
             }
         }
+        prev_word = "";
+        prev_sig = c;
         i += 1;
     }
     None

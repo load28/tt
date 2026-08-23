@@ -42,7 +42,9 @@ export async function refreshSidecar(
   outDir?: string,
 ): Promise<SidecarResult> {
   if (mode === "off") return { kind: "skipped", reason: "disabled" };
-  if (!rlPath.endsWith(".rl")) return { kind: "skipped", reason: "not an .rl file" };
+  if (!rlPath.endsWith(".rl") && !rlPath.endsWith(".rlx")) {
+    return { kind: "skipped", reason: "not an rl source" };
+  }
 
   // Declarations either sit next to the source or in their own tree (which
   // TypeScript merges back with `rootDirs`); the refresh has to look where

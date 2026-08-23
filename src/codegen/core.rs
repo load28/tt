@@ -17,23 +17,27 @@ use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
 use crate::program_syntax::{
     ConditionalBranch, EvaluationFrequency, EvaluationInputMode, EvaluationOwner, HostContinuation,
-    HostEvaluationOperation, HostExit, SourceSpan,
+    HostEvaluationOperation, HostExit, HostOwnerKind, SourceSpan,
 };
 use crate::scanner::{at, ident_end, is_ident_start, scan_type_end, skip_ws_comments};
-use crate::{AnchorKind, ImportRewrite, StdImports};
+use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 
 pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
     source: &'a str,
+    source_kind: SourceKind,
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
     let lowering_plan = if core.requires_host_lowering() {
-        let syntax = crate::program_syntax::ProgramSyntax::build(semantic, core, source)
-            .unwrap_or_else(|error| {
-                panic!("internal compiler error: TypeScript owner construction failed: {error:?}")
-            });
+        let syntax =
+            crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind)
+                .unwrap_or_else(|error| {
+                    panic!(
+                        "internal compiler error: TypeScript owner construction failed: {error:?}"
+                    )
+                });
         let evaluation =
             crate::evaluation_ir::EvaluationFile::build(&syntax, core).unwrap_or_else(|error| {
                 panic!("internal compiler error: Evaluation IR construction failed: {error:?}")
@@ -119,6 +123,7 @@ struct ArrowReturnRewrite {
 #[derive(Debug, Clone)]
 struct ComposeRewrite {
     owner: SourceSpan,
+    owner_kind: HostOwnerKind,
     values: Vec<ComposeValue>,
 }
 
@@ -201,6 +206,7 @@ impl TargetRewritePlan {
                     });
                 can_compose.then(|| ComposeRewrite {
                     owner: rewrite.owner.span,
+                    owner_kind: rewrite.owner.kind,
                     values: rewrite
                         .values
                         .iter()
@@ -494,8 +500,21 @@ impl<'a> Emitter<'a> {
             .iter()
             .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
             .peekable();
+        let mut compose_endings = self
+            .compose_rewrites
+            .iter()
+            .filter(|rewrite| {
+                rewrite.owner_kind == HostOwnerKind::ArrowExpression
+                    && span.start < rewrite.owner.end
+                    && rewrite.owner.end <= span.end
+            })
+            .peekable();
         let mut cursor = span.start;
         while cursor < span.end {
+            while let Some(rewrite) = compose_endings.next_if(|rewrite| rewrite.owner.end == cursor)
+            {
+                rope.append(self.emit_compose_suffix(rewrite));
+            }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
                 rope.append(self.emit_owner_slot_rewrite(rewrite));
             }
@@ -519,6 +538,9 @@ impl<'a> Emitter<'a> {
             let next_compose = compose_insertions
                 .peek()
                 .map_or(span.end, |rewrite| rewrite.owner.start);
+            let next_compose_end = compose_endings
+                .peek()
+                .map_or(span.end, |rewrite| rewrite.owner.end);
             let next_replacement = self
                 .source_replacements
                 .iter()
@@ -530,12 +552,16 @@ impl<'a> Emitter<'a> {
                 .unwrap_or(span.end);
             let next = next_insertion
                 .min(next_compose)
+                .min(next_compose_end)
                 .min(next_replacement)
                 .min(span.end);
             if cursor < next {
                 rope.push_src(&self.source[cursor..next], cursor);
                 cursor = next;
             }
+        }
+        while let Some(rewrite) = compose_endings.next_if(|rewrite| rewrite.owner.end == span.end) {
+            rope.append(self.emit_compose_suffix(rewrite));
         }
         rope
     }
@@ -698,6 +724,9 @@ impl<'a> Emitter<'a> {
 
     fn emit_compose_rewrite(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         let mut out = Rope::new();
+        if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
+            out.push_lit("{\n");
+        }
         for value in &rewrite.values {
             out.push_lit(format!("let {};\n", value.slot));
         }
@@ -713,7 +742,18 @@ impl<'a> Emitter<'a> {
             }
             out.append(action);
         }
-        out.push_lit("\n");
+        if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
+            out.push_lit("\nreturn ");
+        } else {
+            out.push_lit("\n");
+        }
+        out
+    }
+
+    fn emit_compose_suffix(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
+        debug_assert_eq!(rewrite.owner_kind, HostOwnerKind::ArrowExpression);
+        let mut out = Rope::new();
+        out.push_lit(";\n}");
         out
     }
 
@@ -1203,12 +1243,22 @@ impl<'a> Emitter<'a> {
         match self.rewrite_imports {
             ImportRewrite::Off => out.push_src(specifier, at),
             ImportRewrite::Js => {
-                out.push_src(&specifier[..specifier.len() - 4], at);
-                out.push_lit(format!(".js{}", &specifier[specifier.len() - 1..]));
+                let hir::ImportKind::Relative(kind) = import.kind else {
+                    unreachable!("standard-library imports returned above")
+                };
+                let extension = if kind.is_tsx() { "jsx" } else { "js" };
+                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
+                out.push_src(&specifier[..specifier.len() - suffix_len], at);
+                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
             }
             ImportRewrite::Ts => {
-                out.push_src(&specifier[..specifier.len() - 4], at);
-                out.push_lit(format!(".ts{}", &specifier[specifier.len() - 1..]));
+                let hir::ImportKind::Relative(kind) = import.kind else {
+                    unreachable!("standard-library imports returned above")
+                };
+                let extension = kind.output_extension();
+                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
+                out.push_src(&specifier[..specifier.len() - suffix_len], at);
+                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
             }
         }
     }

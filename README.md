@@ -19,7 +19,7 @@ export const area = (shape: Shape): number =>
   };
 ```
 
-Every valid TypeScript file is also a valid `.rl` file. rl only transforms syntax it owns, reports language errors such as non-exhaustive matches itself, and emits readable TypeScript without a runtime dependency.
+Every valid TypeScript file is also a valid `.rl` file, and every valid TSX file is a valid `.rlx` file. rl only transforms syntax it owns, reports language errors such as non-exhaustive matches itself, and emits readable TypeScript or TSX without a runtime dependency.
 
 ## Install and use
 
@@ -37,7 +37,7 @@ npx rlc --check src
 npx rlc --check-types src
 ```
 
-`rlc` emits TypeScript. Continue with your existing TypeScript compiler or bundler to produce JavaScript. For direct `.rl` imports, use [`unplugin-rl`](./integrations/unplugin) with Vite, Rollup, webpack, Rspack, esbuild, or Farm.
+`rlc` emits `.ts` from `.rl` and `.tsx` from `.rlx`. JSX is preserved, so React projects keep using their existing `jsx` compiler option and JSX runtime. For direct `.rl` or `.rlx` imports, use [`unplugin-rl`](./integrations/unplugin) with Vite, Rollup, webpack, Rspack, esbuild, or Farm.
 
 Prebuilt binaries are available for Linux x64/arm64, macOS x64/arm64, and Windows x64. On another platform, build from source:
 

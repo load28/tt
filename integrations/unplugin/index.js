@@ -42,8 +42,18 @@ function defaultCompiler() {
   }
 }
 
-/** Virtual suffix that marks a compiled `.rl` module as TypeScript. */
+/** Virtual suffix for ordinary `.rl` modules. */
 const TS_SUFFIX = ".ts";
+/** Virtual suffix for JSX-bearing `.rlx` modules. */
+const TSX_SUFFIX = ".tsx";
+
+const sourceSuffix = (file) => (file.endsWith(".rlx") ? TSX_SUFFIX : TS_SUFFIX);
+
+const sourceFileOfId = (id) => {
+  if (id.endsWith(`.rlx${TSX_SUFFIX}`)) return id.slice(0, -TSX_SUFFIX.length);
+  if (id.endsWith(`.rl${TS_SUFFIX}`)) return id.slice(0, -TS_SUFFIX.length);
+  return null;
+};
 
 /** The bare specifier rl sources use for the standard library. */
 const STD_MODULES = new Map([
@@ -94,14 +104,14 @@ export const unpluginFactory = (options = {}) => {
           if (source === "./result.js") return stdId("result");
         }
       }
-      if (!source.endsWith(".rl")) return null;
+      if (!source.endsWith(".rl") && !source.endsWith(".rlx")) return null;
 
       const file = path.isAbsolute(source)
         ? source
         : importer === undefined || importer === null
           ? null
           : path.resolve(path.dirname(importer), source);
-      return file === null ? null : `${file}${TS_SUFFIX}`;
+      return file === null ? null : `${file}${sourceSuffix(file)}`;
     },
 
     async load(id) {
@@ -112,8 +122,8 @@ export const unpluginFactory = (options = {}) => {
         });
         return { code: stdout, map: null };
       }
-      if (!id.endsWith(`.rl${TS_SUFFIX}`)) return null;
-      const file = id.slice(0, -TS_SUFFIX.length);
+      const file = sourceFileOfId(id);
+      if (file === null) return null;
 
       const args = ["-p", "--rewrite-imports", "off"];
       if (!verify) args.push("--no-verify");
@@ -136,9 +146,9 @@ export const unpluginFactory = (options = {}) => {
       // esbuild resolves and loads through its own filters, and its `load`
       // may only return JavaScript — so narrow the filters to our ids and
       // name the loader for the TypeScript rlc emits.
-      onResolveFilter: /(\.rl|^@rl\/std(?:\/(?:option|result))?$|\.\/(?:option|result)\.js$)/,
-      onLoadFilter: /(\.rl\.ts|__rl_std__\/(?:types|option|result)\.ts)$/,
-      loader: "ts",
+      onResolveFilter: /(\.rlx?|^@rl\/std(?:\/(?:option|result))?$|\.\/(?:option|result)\.js$)/,
+      onLoadFilter: /(\.rl\.ts|\.rlx\.tsx|__rl_std__\/(?:types|option|result)\.ts)$/,
+      loader: (_code, id) => (id.endsWith(TSX_SUFFIX) ? "tsx" : "ts"),
     },
   };
 };

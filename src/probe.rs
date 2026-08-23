@@ -105,7 +105,12 @@ pub struct PayloadProbe {
 /// assert_eq!((probes[0].tag.as_str(), probes[0].field.as_str()), ("Ok", "value"));
 /// ```
 pub fn payload_probes(source: &str) -> Vec<PayloadProbe> {
-    let program = crate::parser::parse(source);
+    payload_probes_with_kind(source, crate::SourceKind::TypeScript)
+}
+
+/// [`payload_probes`] under an explicit TypeScript surface kind.
+pub fn payload_probes_with_kind(source: &str, source_kind: crate::SourceKind) -> Vec<PayloadProbe> {
+    let program = crate::parser::parse_with_kind(source, source_kind);
     let mut out = Vec::new();
     payload_walk(&program, &mut out);
     out.sort_by_key(|p| p.offset);
@@ -234,7 +239,12 @@ fn payload_of(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
 /// assert!(rlc::tag_matches("const v = match (s) { Circle(r) => r, _ => 0 };\n").is_empty());
 /// ```
 pub fn tag_matches(source: &str) -> Vec<TagMatch> {
-    let program = crate::parser::parse(source);
+    tag_matches_with_kind(source, crate::SourceKind::TypeScript)
+}
+
+/// [`tag_matches`] under an explicit TypeScript surface kind.
+pub fn tag_matches_with_kind(source: &str, source_kind: crate::SourceKind) -> Vec<TagMatch> {
+    let program = crate::parser::parse_with_kind(source, source_kind);
     let mut out = Probes::default();
     walk(&program, source, &mut out);
     out.tags
@@ -258,7 +268,15 @@ pub fn tag_matches(source: &str) -> Vec<TagMatch> {
 /// assert!(rlc::literal_matches("const s = match (d) { \"n\" => 1, _ => 2 };\n").is_empty());
 /// ```
 pub fn literal_matches(source: &str) -> Vec<LiteralMatch> {
-    let program = crate::parser::parse(source);
+    literal_matches_with_kind(source, crate::SourceKind::TypeScript)
+}
+
+/// [`literal_matches`] under an explicit TypeScript surface kind.
+pub fn literal_matches_with_kind(
+    source: &str,
+    source_kind: crate::SourceKind,
+) -> Vec<LiteralMatch> {
+    let program = crate::parser::parse_with_kind(source, source_kind);
     let mut out = Probes::default();
     walk(&program, source, &mut out);
     out.literals

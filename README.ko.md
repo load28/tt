@@ -19,7 +19,7 @@ export const area = (shape: Shape): number =>
   };
 ```
 
-모든 유효한 TypeScript 파일은 그대로 유효한 `.rl` 파일입니다. rl은 자신이 소유한 구문만 변환하고, 소진되지 않은 match 같은 언어 오류를 직접 보고하며, 런타임 의존성 없는 읽기 쉬운 TypeScript를 방출합니다.
+모든 유효한 TypeScript 파일은 그대로 유효한 `.rl` 파일이고, 모든 유효한 TSX 파일은 유효한 `.rlx` 파일입니다. rl은 자신이 소유한 구문만 변환하고, 소진되지 않은 match 같은 언어 오류를 직접 보고하며, 런타임 의존성 없는 읽기 쉬운 TypeScript 또는 TSX를 방출합니다.
 
 ## 설치와 사용
 
@@ -37,7 +37,7 @@ npx rlc --check src
 npx rlc --check-types src
 ```
 
-`rlc`의 출력은 TypeScript입니다. 기존 TypeScript 컴파일러나 번들러로 JavaScript를 만드세요. `.rl` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`unplugin-rl`](./integrations/unplugin)을 사용하세요.
+`rlc`는 `.rl`을 `.ts`로, `.rlx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.rl` 또는 `.rlx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`unplugin-rl`](./integrations/unplugin)을 사용하세요.
 
 프리빌트 바이너리는 Linux x64/arm64, macOS x64/arm64, Windows x64를 지원합니다. 다른 플랫폼에서는 소스에서 빌드하세요.
 

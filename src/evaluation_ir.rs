@@ -1025,7 +1025,8 @@ mod tests {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(&program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
-        let syntax = ProgramSyntax::build(&semantic, &core, source).expect("program syntax");
+        let syntax = ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
+            .expect("program syntax");
         EvaluationFile::build(&syntax, &core).expect("evaluation ir")
     }
 

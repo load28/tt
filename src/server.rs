@@ -345,6 +345,9 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     let filename = params["filename"].as_str();
     let options = rlc::Options {
         filename,
+        source_kind: filename
+            .and_then(|name| rlc::SourceKind::from_path(std::path::Path::new(name)))
+            .unwrap_or_default(),
         verify: params["verify"].as_bool().unwrap_or(true),
         ..rlc::Options::default()
     };
@@ -536,7 +539,11 @@ fn rl_hints(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 
 fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let tokens: Vec<_> = rlc::engine::semantic_tokens(text_param(params)?)
+    let source_kind = params["filename"]
+        .as_str()
+        .and_then(|name| rlc::SourceKind::from_path(std::path::Path::new(name)))
+        .unwrap_or_default();
+    let tokens: Vec<_> = rlc::engine::semantic_tokens_with_kind(text_param(params)?, source_kind)
         .into_iter()
         .map(|token| {
             json!({

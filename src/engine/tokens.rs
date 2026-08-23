@@ -72,9 +72,8 @@ pub struct SemanticToken {
     pub kind: SemanticTokenKind,
 }
 
-/// Classifies `source` — one structural parse, byte offsets out. Sorted by
-/// start; single-line by construction (identifiers and fixed operators).
-pub(crate) fn scan(source: &str) -> Vec<(usize, usize, SemanticTokenKind)> {
+#[cfg(test)]
+fn scan(source: &str) -> Vec<(usize, usize, SemanticTokenKind)> {
     let program = crate::parser::parse(source);
     let mut out = Vec::new();
     walk(source, &program, &mut out);
@@ -88,8 +87,20 @@ pub(crate) fn scan(source: &str) -> Vec<(usize, usize, SemanticTokenKind)> {
 /// consumer can ask on every pause, for any buffer, in any environment
 /// (the same availability the grammar itself has).
 pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
+    semantic_tokens_with_kind(source, crate::SourceKind::TypeScript)
+}
+
+/// [`semantic_tokens`] under an explicit TypeScript surface kind.
+pub fn semantic_tokens_with_kind(
+    source: &str,
+    source_kind: crate::SourceKind,
+) -> Vec<SemanticToken> {
     let lines = LineIndex::new(source);
-    scan(source)
+    let program = crate::parser::parse_with_kind(source, source_kind);
+    let mut scanned = Vec::new();
+    walk(source, &program, &mut scanned);
+    scanned.sort_by_key(|&(start, _, _)| start);
+    scanned
         .into_iter()
         .map(|(start, len, kind)| SemanticToken {
             range: Range {

@@ -1366,6 +1366,9 @@ connection.languages.semanticTokens.on(async (params) => {
   const tokens = await engine.semanticTokens(
     currentCompiler(),
     doc.getText(),
+    URI.parse(doc.uri).scheme === "file"
+      ? URI.parse(doc.uri).fsPath
+      : `buffer.${doc.languageId === "rlx" ? "rlx" : "rl"}`,
     logEngine,
   );
   // Engine unavailable: no answer beats a wrong empty one — the grammar's

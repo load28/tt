@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use rlc::{Options, compile};
+use rlc::{Options, SourceKind, compile};
 
 const TSC_FLAGS: &[&str] = &[
     "--strict",
@@ -73,6 +73,46 @@ fn typecheck(src: &str) -> (bool, String) {
         out.status.success(),
         format!("{text}\n---compiled---\n{code}"),
     )
+}
+
+#[test]
+fn rlx_output_typechecks_as_tsx() {
+    if !have("tsc") {
+        return;
+    }
+    let source = r#"declare global {
+  namespace JSX { interface IntrinsicElements { main: {}; b: {}; } }
+}
+enum State { Ready(value: string), Empty }
+export const render = (state: State) => <main>{match (state) {
+  Ready(value) => <b>{value}</b>,
+  Empty => null,
+}}</main>;
+"#;
+    let code = compile(
+        source,
+        &Options {
+            source_kind: SourceKind::Tsx,
+            ..Options::default()
+        },
+    )
+    .expect("rlx compile failed");
+    let dir = tmpdir();
+    let tsx = dir.join("main.tsx");
+    fs::write(&tsx, &code).unwrap();
+    let out = Command::new("tsc")
+        .arg(&tsx)
+        .arg("--noEmit")
+        .arg("--jsx")
+        .arg("preserve")
+        .args(TSC_FLAGS)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        out.status.success(),
+        "{}\n---compiled---\n{code}",
+        String::from_utf8_lossy(&out.stdout)
+    );
 }
 
 /// Type-check code emitted despite recoverable rl diagnostics.

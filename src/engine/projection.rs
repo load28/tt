@@ -69,13 +69,23 @@ impl ProjectedDocument {
     /// The file's enum declaration symbols (exported or not), computed on
     /// first use and pinned to this projection's content version.
     pub(crate) fn enum_symbols(&self) -> &[crate::EnumSymbol] {
-        self.enum_symbols
-            .get_or_init(|| crate::enum_symbols(&self.source))
+        self.enum_symbols.get_or_init(|| {
+            crate::enum_symbols_with_kind(
+                &self.source,
+                crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
+            )
+        })
     }
 
     /// The file's relative `.rl` imports, computed on first use.
     pub(crate) fn rl_imports(&self) -> &[crate::RlImport] {
-        self.imports.get_or_init(|| crate::rl_imports(&self.source))
+        self.imports.get_or_init(|| {
+            crate::scan_module_with_kind(
+                &self.source,
+                crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
+            )
+            .imports
+        })
     }
 }
 
@@ -108,6 +118,7 @@ impl ProjectedDocument {
     ) -> Result<ProjectedDocument, BlockedFile> {
         let options = Options {
             filename: Some(source_path.to_str().unwrap_or("<input>")),
+            source_kind: crate::SourceKind::from_path(source_path).unwrap_or_default(),
             // Exhaustiveness and `val`'s pairing are the checker's answers
             // here — see `Options::defer_to_checker`.
             defer_to_checker: true,
@@ -119,6 +130,7 @@ impl ProjectedDocument {
             rewrite_imports: crate::ImportRewrite::Off,
             ..Options::default()
         };
+        let source_kind = options.source_kind;
         let report = crate::compile_projection_report(&source, &options);
         let Some(emit) = report.emit else {
             return Err(BlockedFile::new(
@@ -129,11 +141,11 @@ impl ProjectedDocument {
         };
         Ok(ProjectedDocument {
             module_path: module_path_of(source_path),
-            imports_std: crate::imports_std(&source),
-            literal_probes: crate::literal_matches(&source),
-            tag_probes: crate::tag_matches(&source),
-            payload_probes: crate::payload_probes(&source),
-            val: crate::val_probes(&source),
+            imports_std: crate::scan_module_with_kind(&source, source_kind).imports_std,
+            literal_probes: crate::literal_matches_with_kind(&source, source_kind),
+            tag_probes: crate::tag_matches_with_kind(&source, source_kind),
+            payload_probes: crate::payload_probes_with_kind(&source, source_kind),
+            val: crate::val_probes_with_kind(&source, source_kind),
             source_path: source_path.to_path_buf(),
             source,
             emit,
@@ -157,7 +169,8 @@ impl ProjectedDocument {
 /// same specifier resolves to when no compiler is running.
 pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
     let mut name = source_path.as_os_str().to_os_string();
-    name.push(".ts");
+    let kind = crate::SourceKind::from_path(source_path).unwrap_or_default();
+    name.push(format!(".{}", kind.output_extension()));
     PathBuf::from(name)
 }
 

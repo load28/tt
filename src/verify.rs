@@ -33,9 +33,9 @@ use swc_common::{FileName, SourceMap, Spanned};
 use swc_ecma_parser::lexer::Lexer;
 use swc_ecma_parser::{Parser, Syntax, TsSyntax};
 
-fn ts_syntax() -> Syntax {
+fn ts_syntax(source_kind: crate::SourceKind) -> Syntax {
     Syntax::Typescript(TsSyntax {
-        tsx: false,
+        tsx: source_kind.is_tsx(),
         decorators: true,
         ..Default::default()
     })
@@ -43,11 +43,14 @@ fn ts_syntax() -> Syntax {
 
 /// Parses `code` as a TypeScript module; returns the first syntax error as
 /// `(message, line, col)` (1-based, positions in `code`).
-fn parse_ts_module(code: &str) -> Result<(), (String, usize, usize)> {
+fn parse_ts_module(
+    code: &str,
+    source_kind: crate::SourceKind,
+) -> Result<(), (String, usize, usize)> {
     let cm: Lrc<SourceMap> = Default::default();
     let fm = cm.new_source_file(Lrc::new(FileName::Anon), code.to_string());
     let lexer = Lexer::new(
-        ts_syntax(),
+        ts_syntax(source_kind),
         Default::default(),
         StringInput::from(&*fm),
         None,
@@ -71,7 +74,7 @@ fn parse_ts_module(code: &str) -> Result<(), (String, usize, usize)> {
 /// Validates a variant field's type annotation. Returns a plain message on error.
 pub(crate) fn check_type_fragment(ty: &str) -> Result<(), String> {
     let wrapped = format!("type __Rl = {};", ty);
-    parse_ts_module(&wrapped).map_err(|(msg, _, _)| msg)
+    parse_ts_module(&wrapped, crate::SourceKind::TypeScript).map_err(|(msg, _, _)| msg)
 }
 
 /// A failed self-check: swc's message and where it stopped in the
@@ -83,8 +86,12 @@ pub(crate) struct Failure {
 }
 
 /// Validates the final generated TypeScript.
-pub(crate) fn verify_output(code: &str) -> Result<(), Failure> {
-    parse_ts_module(code).map_err(|(message, line, col)| Failure { message, line, col })
+pub(crate) fn verify_output(code: &str, source_kind: crate::SourceKind) -> Result<(), Failure> {
+    parse_ts_module(code, source_kind).map_err(|(message, line, col)| Failure {
+        message,
+        line,
+        col,
+    })
 }
 
 /// The self-check's failure as an error in the `.rl` file the user has

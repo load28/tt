@@ -60,12 +60,12 @@
       "code": "import * as Result from \"@rl/std/result\";\n\nconst message = input\n  |> parse\n  |> Result.mapP(format)\n  |> (result => match (result) {\n    Ok(value) => value,\n    Err(error) => `Error: ${error}`,\n  });",
       "works": {
         "en": [
-          "Every valid TypeScript file remains a valid .rl file.",
+          "Every valid TypeScript or TSX file remains a valid .rl or .rlx file.",
           "rl-level diagnostics come from rlc at the original source range.",
           "The output is plain TypeScript with no runtime library."
         ],
         "ko": [
-          "모든 유효한 TypeScript 파일은 그대로 유효한 .rl 파일입니다.",
+          "모든 유효한 TypeScript·TSX 파일은 그대로 유효한 .rl·.rlx 파일입니다.",
           "rl 수준 진단은 rlc가 원본 소스 범위에 직접 보고합니다.",
           "출력은 런타임 라이브러리가 필요 없는 순수 TypeScript입니다."
         ]
@@ -73,12 +73,12 @@
       "limits": {
         "en": [
           "Only completely parsed rl constructs are transformed.",
-          "TSX is not supported.",
+          ".rlx preserves JSX while rl constructs inside expression containers are compiled.",
           "Type errors in ordinary TypeScript remain TypeScript's responsibility."
         ],
         "ko": [
           "완전히 파싱된 rl 구문만 변환합니다.",
-          "TSX는 지원하지 않습니다.",
+          ".rlx는 JSX를 보존하고 expression container 안의 rl 구문을 컴파일합니다.",
           "일반 TypeScript의 타입 오류는 TypeScript가 담당합니다."
         ]
       }
@@ -530,30 +530,30 @@
         "ko": "모듈"
       },
       "summary": {
-        "en": "Keep .rl on source imports and let rlc rewrite emitted specifiers.",
-        "ko": "소스 import에는 .rl을 유지하고 방출 지정자는 rlc가 재작성합니다."
+        "en": "Keep .rl or .rlx on source imports and let rlc rewrite emitted specifiers.",
+        "ko": "소스 import에는 .rl 또는 .rlx를 유지하고 방출 지정자는 rlc가 재작성합니다."
       },
       "code": "import { Token } from \"./token.rl\";\nimport type { TOption, TResult } from \"@rl/std\";\nimport * as Option from \"@rl/std/option\";\nimport * as Result from \"@rl/std/result\";\n\nexport { Parser } from \"./parser.rl\";",
       "works": {
         "en": [
-          "Relative .rl imports emit as .js by default.",
+          "Relative .rl and .rlx imports emit as .js and .jsx by default.",
           "Use --rewrite-imports ts or off for TypeScript-extension or bundler workflows.",
           "Direct relative imports participate in exported-enum exhaustiveness."
         ],
         "ko": [
-          "상대 .rl import는 기본적으로 .js로 방출됩니다.",
+          "상대 .rl과 .rlx import는 기본적으로 .js와 .jsx로 방출됩니다.",
           "TypeScript 확장자나 번들러 흐름에는 --rewrite-imports ts 또는 off를 사용합니다.",
           "직접 상대 import의 export enum은 소진성 검사에 참여합니다."
         ]
       },
       "limits": {
         "en": [
-          "Write the .rl extension in source imports.",
+          "Write the .rl or .rlx extension in source imports.",
           "Re-export chains and package paths are not collected for exhaustiveness.",
           "Dynamic import() specifiers are not rewritten."
         ],
         "ko": [
-          "소스 import에는 .rl 확장자를 적어야 합니다.",
+          "소스 import에는 .rl 또는 .rlx 확장자를 적어야 합니다.",
           "재-export 체인과 패키지 경로는 소진성 정보로 수집하지 않습니다.",
           "동적 import() 지정자는 재작성하지 않습니다."
         ]
@@ -578,23 +578,23 @@
           "--check runs rl-level checks without TypeScript.",
           "--check-types adds TypeScript-backed checks at .rl source positions.",
           "--types writes declaration sidecars; -w watches files and importers.",
-          "Directories preserve the source tree and pass handwritten .ts through."
+          "Directories preserve the source tree and pass handwritten .ts and .tsx through."
         ],
         "ko": [
           "--check는 TypeScript 없이 rl 수준 검사만 실행합니다.",
           "--check-types는 .rl 원본 위치에 TypeScript 기반 검사를 추가합니다.",
           "--types는 선언 사이드카를 쓰며 -w는 파일과 import 사용처를 감시합니다.",
-          "디렉터리 구조를 유지하고 직접 작성한 .ts는 그대로 통과시킵니다."
+          "디렉터리 구조를 유지하고 직접 작성한 .ts와 .tsx는 그대로 통과시킵니다."
         ]
       },
       "limits": {
         "en": [
-          "Never edit generated .ts or .rl-types output.",
+          "Never edit generated .ts/.tsx or .rl-types output.",
           "Typed modes require a supported TypeScript 7 toolchain.",
           "The compiler refuses in-place overwrites of input trees."
         ],
         "ko": [
-          "생성된 .ts와 .rl-types 출력은 수정하면 안 됩니다.",
+          "생성된 .ts/.tsx와 .rl-types 출력은 수정하면 안 됩니다.",
           "typed 모드는 지원되는 TypeScript 7 도구 체인이 필요합니다.",
           "컴파일러는 입력 트리를 제자리에서 덮어쓰지 않습니다."
         ]

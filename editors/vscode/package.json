@@ -16,7 +16,8 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onLanguage:rl"
+    "onLanguage:rl",
+    "onLanguage:rlx"
   ],
   "main": "./client/out/extension",
   "contributes": {
@@ -34,6 +35,20 @@
           "light": "./icons/rl-file-light.svg",
           "dark": "./icons/rl-file-dark.svg"
         }
+      },
+      {
+        "id": "rlx",
+        "aliases": [
+          "rlx"
+        ],
+        "extensions": [
+          ".rlx"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./icons/rl-file-light.svg",
+          "dark": "./icons/rl-file-dark.svg"
+        }
       }
     ],
     "grammars": [
@@ -41,6 +56,11 @@
         "language": "rl",
         "scopeName": "source.rl",
         "path": "./syntaxes/rl.tmLanguage.json"
+      },
+      {
+        "language": "rlx",
+        "scopeName": "source.rlx",
+        "path": "./syntaxes/rlx.tmLanguage.json"
       },
       {
         "scopeName": "markdown.rl.codeblock",
@@ -57,15 +77,20 @@
     "configurationDefaults": {
       "explorer.fileNesting.enabled": true,
       "explorer.fileNesting.patterns": {
-        "*.rl": "${capture}.rl.d.ts, ${capture}.rl.d.ts.map"
+        "*.rl": "${capture}.rl.d.ts, ${capture}.rl.d.ts.map",
+        "*.rlx": "${capture}.rlx.d.ts, ${capture}.rlx.d.ts.map"
       },
       "search.exclude": {
         "**/*.rl.d.ts": true,
-        "**/*.rl.d.ts.map": true
+        "**/*.rl.d.ts.map": true,
+        "**/*.rlx.d.ts": true,
+        "**/*.rlx.d.ts.map": true
       },
       "files.readonlyInclude": {
         "**/*.rl.d.ts": true,
-        "**/*.rl.d.ts.map": true
+        "**/*.rl.d.ts.map": true,
+        "**/*.rlx.d.ts": true,
+        "**/*.rlx.d.ts.map": true
       }
     },
     "configuration": {

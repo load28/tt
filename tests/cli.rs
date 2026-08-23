@@ -26,6 +26,47 @@ fn tmpdir() -> PathBuf {
     dir
 }
 
+#[test]
+fn rlx_builds_to_tsx_and_keeps_jsx() {
+    let dir = tmpdir();
+    let source = dir.join("view.rlx");
+    let out_dir = dir.join("out");
+    fs::write(
+        &source,
+        "enum State { Ready(value: string), Empty }\n\
+         declare const state: State;\n\
+         export const view = <main>{match (state) { Ready(value) => <b>{value}</b>, Empty => null }}</main>;\n",
+    )
+    .unwrap();
+    let output = rlc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted = fs::read_to_string(out_dir.join("view.tsx")).unwrap();
+    assert!(emitted.contains("<main>{"), "{emitted}");
+    assert!(emitted.contains("switch ($rl_m.kind)"), "{emitted}");
+}
+
+#[test]
+fn handwritten_tsx_is_checked_in_tsx_mode_and_keeps_its_extension() {
+    let dir = tmpdir();
+    let source = dir.join("main.tsx");
+    let out_dir = dir.join("out");
+    let text = "export const view = <main>plain TSX</main>;\n";
+    fs::write(&source, text).unwrap();
+
+    let output = rlc(&["-o", out_dir.to_str().unwrap(), dir.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted = fs::read_to_string(out_dir.join("main.tsx")).unwrap();
+    assert!(emitted.ends_with(text), "{emitted}");
+}
+
 /// A small project: one shared module every other file imports (the shape
 /// that exercises the imported-declaration cache), plus a file that fails
 /// to compile so diagnostics are part of what must stay ordered.

@@ -1,8 +1,8 @@
-//! rlc — compile .rl sources into a complete TypeScript tree.
+//! rlc — compile .rl/.rlx sources into a complete TypeScript tree.
 //!
-//!   rlc -o build src/              builds src/ under build/: .rl files are
-//!                                  compiled, hand-written .ts files pass
-//!                                  through (with .rl import specifiers
+//!   rlc -o build src/              builds src/ under build/: .rl/.rlx files
+//!                                  are compiled, hand-written .ts/.tsx files
+//!                                  pass through (with .rl/.rlx specifiers
 //!                                  rewritten), and the standard library is
 //!                                  materialized when something imports it
 //!   rlc --check-types src/         type-checks the tree with the real
@@ -40,8 +40,8 @@ fn usage() {
 Usage: rlc [options] <file | dir> ...
        rlc help [topic]      language & workflow reference (topics: rlc help)
 
-Builds a complete TypeScript tree: .rl files are compiled, hand-written
-.ts files pass through byte-for-byte (with relative .rl import specifiers
+Builds a complete TypeScript tree: .rl/.rlx files are compiled, hand-written
+.ts/.tsx files pass through byte-for-byte (with relative .rl/.rlx specifiers
 rewritten), and the standard library is materialized when an input
 imports \"@rl/std\". Types come from the same sources via --types.
 
@@ -73,8 +73,9 @@ Tooling options (bundler plugins, editors):
   --no-banner           omit the \"generated\" banner comment
   --no-verify           skip swc validation of types and generated output
   --rewrite-imports <js|ts|off>
-                        how relative .rl import specifiers are emitted:
-                        js = ./x.js (default), ts = ./x.ts, off = untouched
+                        how relative .rl/.rlx specifiers are emitted:
+                        js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
+                        off = untouched
   --sidecar <dir>       write <name>.rl.d.ts and .map next to each input from
                         <dir>/<name>.d.ts (tsc --emitDeclarationOnly output);
                         compiles nothing (--types runs this step for you)
@@ -522,10 +523,11 @@ impl<'a> ExternCache<'a> {
         // Parsed outside the lock: a slow miss must not stall other jobs.
         // Two jobs racing on the same module both parse it once; the first
         // insertion wins and both see the same table.
+        let source_kind = rlc::SourceKind::from_path(path).unwrap_or_default();
         let decls = Arc::new(match self.inputs.get(path) {
-            Some(source) => rlc::exported_enums(source),
+            Some(source) => rlc::exported_enums_with_kind(source, source_kind),
             None => match fs::read_to_string(path) {
-                Ok(source) => rlc::exported_enums(&source),
+                Ok(source) => rlc::exported_enums_with_kind(&source, source_kind),
                 Err(_) => Vec::new(),
             },
         });
@@ -591,7 +593,10 @@ fn load_jobs(jobs: &[Job], jobs_limit: Option<usize>) -> Vec<Result<Loaded, Stri
     par_map(jobs, jobs_limit, |job| {
         let source =
             fs::read_to_string(&job.file).map_err(|e| format!("{}: {e}", job.file.display()))?;
-        let scan = rlc::scan_module(&source);
+        let scan = rlc::scan_module_with_kind(
+            &source,
+            rlc::SourceKind::from_path(&job.file).unwrap_or_default(),
+        );
         Ok(Loaded { source, scan })
     })
 }
@@ -1308,8 +1313,8 @@ fn std_specifier(
     })
 }
 
-/// Expands the command line's inputs into one job per source file. `.rl`
-/// files compile to a `.ts` of the same stem; hand-written TypeScript
+/// Expands the command line's inputs into one job per source file. `.rl` and
+/// `.rlx` files compile to `.ts` and `.tsx`; hand-written TypeScript/TSX
 /// (collected when `include_ts` is set) keeps its file name and passes
 /// through with its `.rl` import specifiers rewritten.
 fn build_jobs(
@@ -1331,8 +1336,8 @@ fn build_jobs(
             return Err(ExitCode::FAILURE);
         }
         for file in files {
-            let out_name = if file.extension().is_some_and(|e| e == "rl") {
-                file.with_extension("ts")
+            let out_name = if let Some(kind) = rlc::SourceKind::from_rl_path(&file) {
+                file.with_extension(kind.output_extension())
             } else {
                 file.clone()
             };
@@ -1484,6 +1489,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             };
             let options = Options {
                 filename: Some(&filename),
+                source_kind: rlc::SourceKind::from_path(&job.file).unwrap_or_default(),
                 verify: opts.verify,
                 rewrite_imports: opts.rewrite_imports,
                 extern_enums: &extern_enums,

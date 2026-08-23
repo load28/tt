@@ -137,7 +137,7 @@ function layeredFileSystem(files, dirs) {
       }
       // The sources rlc lowered are not TypeScript; hide them so no tool
       // tries to read `.rl` as TypeScript.
-      real.files = real.files.filter((f) => !f.endsWith(".rl"));
+      real.files = real.files.filter((f) => !f.endsWith(".rl") && !f.endsWith(".rlx"));
       return real;
     },
   };

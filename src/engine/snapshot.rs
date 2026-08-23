@@ -37,8 +37,12 @@ impl BlockedFile {
     }
 
     pub(crate) fn enum_symbols(&self) -> &[crate::EnumSymbol] {
-        self.enum_symbols
-            .get_or_init(|| crate::enum_symbols(&self.source))
+        self.enum_symbols.get_or_init(|| {
+            crate::enum_symbols_with_kind(
+                &self.source,
+                crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
+            )
+        })
     }
 }
 

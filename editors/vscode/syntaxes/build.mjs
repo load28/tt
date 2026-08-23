@@ -1,17 +1,19 @@
 #!/usr/bin/env node
 /* --------------------------------------------------------------------------
- * rl.tmLanguage.json 생성기 — TSX 방식(완전 문법 확장)의 유지비를 흡수한다.
+ * rl/rlx TextMate 생성기 — 완전 문법 확장의 유지비를 흡수한다.
  *
  * 입력:
  *   src/typescript.tmLanguage.json  업스트림 TypeScript 문법, 무수정 vendoring
  *                                   (tm-grammars 1.32.5의 typescript.json —
  *                                   microsoft/TypeScript-TmLanguage 파생, MIT)
+ *   src/typescriptreact.tmLanguage.json  업스트림 TSX 문법, 무수정 vendoring
  *   src/rl.rules.json               rl 규칙(repository)과 접합 명세(splices)
  *
  * 출력:
  *   rl.tmLanguage.json              scopeName source.rl의 독립 문법.
  *                                   TS repository 전체 + rl 규칙, 접합 지점의
  *                                   patterns 맨 앞에 rl include를 삽입.
+ *   rlx.tmLanguage.json             scopeName source.rlx의 독립 TSX 문법.
  *
  * 업스트림 갱신 = src/typescript.tmLanguage.json 교체 후 재생성.
  * 새 rl 구문 = src/rl.rules.json에 규칙과 접합 지점 추가 후 재생성.
@@ -27,15 +29,24 @@ const here = dirname(fileURLToPath(import.meta.url));
 const tsGrammar = JSON.parse(
   readFileSync(join(here, "src", "typescript.tmLanguage.json"), "utf8"),
 );
+const tsxGrammar = JSON.parse(
+  readFileSync(join(here, "src", "typescriptreact.tmLanguage.json"), "utf8"),
+);
 const rl = JSON.parse(readFileSync(join(here, "src", "rl.rules.json"), "utf8"));
+const grammars = [
+  { base: tsGrammar, name: "rl", scopeName: "source.rl", file: "rl.tmLanguage.json" },
+  { base: tsxGrammar, name: "rlx", scopeName: "source.rlx", file: "rlx.tmLanguage.json" },
+];
 
 // --- 검증: rl 규칙 이름은 rl- 접두사, TS repository와 충돌 금지 -----------
 for (const name of Object.keys(rl.repository)) {
   if (!name.startsWith("rl-")) {
     throw new Error(`rl rule "${name}" must be prefixed with "rl-"`);
   }
-  if (name in tsGrammar.repository) {
-    throw new Error(`rl rule "${name}" collides with a TypeScript rule`);
+  for (const { base } of grammars) {
+    if (name in base.repository) {
+      throw new Error(`rl rule "${name}" collides with an upstream rule`);
+    }
   }
 }
 
@@ -60,63 +71,70 @@ const resolveSpliceTarget = (repository, target) => {
   }
   return entry;
 };
-for (const [target, includes] of Object.entries(rl.splices)) {
-  resolveSpliceTarget(tsGrammar.repository, target);
-  for (const inc of includes) {
-    if (!(inc.slice(1) in rl.repository)) {
-      throw new Error(`splice "${inc}" into "${target}" names no rl rule`);
+for (const { base } of grammars) {
+  for (const [target, includes] of Object.entries(rl.splices)) {
+    resolveSpliceTarget(base.repository, target);
+    for (const inc of includes) {
+      if (!(inc.slice(1) in rl.repository)) {
+        throw new Error(`splice "${inc}" into "${target}" names no rl rule`);
+      }
     }
   }
 }
 
 // --- 검증: rl 규칙이 참조하는 include가 전부 해석돼야 한다 -----------------
-const known = new Set([
-  ...Object.keys(tsGrammar.repository),
-  ...Object.keys(rl.repository),
-]);
-const walk = (node, where) => {
-  if (Array.isArray(node)) return node.forEach((n) => walk(n, where));
+const walk = (node, where, known) => {
+  if (Array.isArray(node)) return node.forEach((n) => walk(n, where, known));
   if (node && typeof node === "object") {
     if (typeof node.include === "string" && node.include.startsWith("#")) {
       if (!known.has(node.include.slice(1))) {
         throw new Error(`unresolved include "${node.include}" in ${where}`);
       }
     }
-    for (const v of Object.values(node)) walk(v, where);
+    for (const v of Object.values(node)) walk(v, where, known);
   }
 };
-for (const [name, rule] of Object.entries(rl.repository)) walk(rule, `rl rule "${name}"`);
-
-// --- 합성 ------------------------------------------------------------------
-const out = {
-  name: "rl",
-  scopeName: "source.rl",
-  patterns: tsGrammar.patterns,
-  repository: { ...tsGrammar.repository, ...rl.repository },
-};
-for (const [target, includes] of Object.entries(rl.splices)) {
-  const entry = resolveSpliceTarget(out.repository, target);
-  entry.patterns = [...includes.map((include) => ({ include })), ...entry.patterns];
+for (const { base } of grammars) {
+  const known = new Set([...Object.keys(base.repository), ...Object.keys(rl.repository)]);
+  for (const [name, rule] of Object.entries(rl.repository)) {
+    walk(rule, `rl rule "${name}"`, known);
+  }
 }
 
-const rendered = JSON.stringify(out, null, 2) + "\n";
-const outPath = join(here, "rl.tmLanguage.json");
+// --- 합성 ------------------------------------------------------------------
+const outputs = grammars.map(({ base, name, scopeName, file }) => {
+  const out = {
+    name,
+    scopeName,
+    patterns: base.patterns,
+    repository: { ...base.repository, ...rl.repository },
+  };
+  for (const [target, includes] of Object.entries(rl.splices)) {
+    const entry = resolveSpliceTarget(out.repository, target);
+    entry.patterns = [...includes.map((include) => ({ include })), ...entry.patterns];
+  }
+  return { rendered: JSON.stringify(out, null, 2) + "\n", outPath: join(here, file) };
+});
 
 if (process.argv.includes("--check")) {
-  let existing = "";
-  try {
-    existing = readFileSync(outPath, "utf8");
-  } catch {
-    /* 파일 없음 = 불일치 */
+  for (const { rendered, outPath } of outputs) {
+    let existing = "";
+    try {
+      existing = readFileSync(outPath, "utf8");
+    } catch {
+      /* 파일 없음 = 불일치 */
+    }
+    if (existing !== rendered) {
+      console.error(
+        `${outPath} is stale — run \`node syntaxes/build.mjs\` and commit the result`,
+      );
+      process.exit(1);
+    }
   }
-  if (existing !== rendered) {
-    console.error(
-      "rl.tmLanguage.json is stale — run `node syntaxes/build.mjs` and commit the result",
-    );
-    process.exit(1);
-  }
-  console.log("rl.tmLanguage.json is up to date");
+  console.log("rl and rlx TextMate grammars are up to date");
 } else {
-  writeFileSync(outPath, rendered);
-  console.log(`wrote ${outPath}`);
+  for (const { rendered, outPath } of outputs) {
+    writeFileSync(outPath, rendered);
+    console.log(`wrote ${outPath}`);
+  }
 }

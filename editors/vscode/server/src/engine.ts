@@ -420,12 +420,13 @@ export function signatureHelp(
 export async function semanticTokens(
   compiler: string,
   text: string,
+  filename: string,
   onError?: (message: string) => void,
 ): Promise<EngineSemanticToken[] | null> {
   const result = await semantic<{ tokens: EngineSemanticToken[] }>(
     compiler,
     "semanticTokens",
-    { text },
+    { text, filename },
     onError,
   );
   return result?.tokens ?? null;

@@ -1,6 +1,6 @@
 # rl Language — VSCode 확장
 
-rl(`.rl`) 파일을 위한 VSCode 언어 서비스입니다. VSCode 공식
+rl(`.rl`)과 rlx(`.rlx`) 파일을 위한 VSCode 언어 서비스입니다. VSCode 공식
 [LSP 확장 패턴](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide)
 (lsp-sample 구조)을 따릅니다: `client/`는 `vscode-languageclient`로 서버를
 띄우고, `server/`는 `vscode-languageserver`로 LSP를 구현합니다.
@@ -9,10 +9,10 @@ rl(`.rl`) 파일을 위한 VSCode 언어 서비스입니다. VSCode 공식
 
 | 기능 | 설명 |
 |------|------|
-| 문법 하이라이팅 | TypeScript 문법의 **완전 확장**(TSX 방식) — 업스트림 TS 문법 전체에 rl 규칙(enum·match·try·let-else·if let·`\|>`·`result`·`val`)을 짜 넣은 독립 문법이라, 함수 본문·초기화식 등 **모든 중첩 위치**에서 rl 구문이 칠해지고 순수 TS는 TS 문법과 동일하게 칠해진다. `syntaxes/rl.tmLanguage.json`은 생성물 — `syntaxes/src/`(vendored TS 문법 + rl 규칙)에서 `npm run grammar`로 재생성한다 |
+| 문법 하이라이팅 | `.rl`은 업스트림 TypeScript, `.rlx`는 업스트림 TSX 문법을 각각 완전히 확장합니다. 두 생성 문법은 `syntaxes/src/`의 vendored 문법과 공용 rl 규칙에서 `npm run grammar`로 재생성합니다 |
 | 마크다운 코드 펜스 | 마크다운·MDX 문서의 ` ```rl `(또는 `~~~rl`) 펜스 안을 rl 문법으로 하이라이팅 — `syntaxes/rl.markdown.tmLanguage.json`이 내장 마크다운 문법(`text.html.markdown`)과 MDX 문법(`source.mdx`)에 주입되어 펜스 내용을 `source.rl`로 임베드한다 (Svelte 확장의 `markdown.svelte.codeblock`과 같은 구조) |
 | semantic 하이라이팅 | 문법(정규식)이 판별할 수 없는 것을 **파서의 분류**로 덮어쓴다 — LSP `semanticTokens` 표준: 파서가 청구한 `match`/`result`/`flow`/패턴 태그·바인딩은 확정 색으로, 청구하지 않은 look-alike(`match(...)`라는 이름의 함수 호출 등)는 평범한 식별자로 되돌린다. 엔진 쪽은 파스 전용·무상태라 TypeScript 툴체인 없이도 동작 |
-| 파일 아이콘 | 탐색기·탭에서 `.rl` 파일에 "RL" 배지 아이콘 표시 (라이트/다크 테마별). 언어 기본 아이콘을 지원하는 파일 아이콘 테마(기본 Seti 포함)에서 보이며, 자체 `.rl` 아이콘을 정의한 테마가 있으면 그쪽이 우선 |
+| 파일 아이콘 | 탐색기·탭에서 `.rl`·`.rlx` 파일에 "RL" 배지 아이콘 표시 (라이트/다크 테마별). 언어 기본 아이콘을 지원하는 파일 아이콘 테마(기본 Seti 포함)에서 보이며, 자체 아이콘을 정의한 테마가 있으면 그쪽이 우선 |
 | 진단 (rl) | 편집할 때마다 **실제 컴파일러**(`rlc --check`)를 실행해 에러를 표시 — 에디터의 에러는 항상 컴파일러와 일치 |
 | 진단 (타입) | 버퍼가 컴파일된 TypeScript를 타입 검사해 `match` 암·`\|>` 파이프라인 **안의 타입 에러까지** 원본 위치에 표시 (`source: ts`). `rl.typeDiagnostics`로 끌 수 있음 |
 | 진단 (타입 기반 rl) | 타입이 있어야 판정되는 **rl 에러** — `val` 바인딩을 통한 변경, 스크루티니의 실제 타입 기준 소진성 — 을 편집 중에 표시. 서버가 버퍼를 자기 프로젝트의 일부로 두고 `rlc --check-types`를 돌리므로 문안은 컴파일러의 것 그대로. `rl.typedChecks`로 끌 수 있음 |
@@ -160,17 +160,17 @@ npm 모드(`--tsgo-npm`)면 아무것도 주입하지 않고 위 순서 그대�
 |------|--------|------|
 | `rl.compilerPath` | `""` | 진단에 사용할 rlc 경로 |
 | `rl.verify` | `true` | `false`면 `rlc --check`에 `--no-verify` 전달 |
-| `rl.typeDiagnostics` | `true` | `.rl` 파일에 TypeScript 타입 에러 표시 (위 "타입 진단") |
+| `rl.typeDiagnostics` | `true` | `.rl`·`.rlx` 파일에 TypeScript 타입 에러 표시 (위 "타입 진단") |
 | `rl.typedChecks` | `true` | 타입이 있어야 판정되는 rl 진단 표시 (위 "타입 기반 rl 진단") |
 | `rl.sidecar` | `refresh` | 저장 시 에디터 사이드카 갱신 — `refresh`(이미 있는 것만) / `always`(없으면 생성) / `off` |
-| `rl.sidecarDir` | `""` | 사이드카를 쓸 디렉터리(워크스페이스 기준). 비우면 `.rl` 옆 |
+| `rl.sidecarDir` | `""` | 사이드카를 쓸 디렉터리(워크스페이스 기준). 비우면 `.rl`·`.rlx` 옆 |
 | `rl.trace.server` | `off` | LSP 통신 트레이스 |
 
-## `.ts`에서 `.rl` 가져다 쓰기
+## `.ts`·`.tsx`에서 `.rl`·`.rlx` 가져다 쓰기
 
-`.ts` 파일은 tsserver가 담당하는데 tsserver는 `.rl` 확장자를 모르므로,
+`.ts`·`.tsx` 파일은 tsserver가 담당하는데 tsserver는 `.rl`·`.rlx` 확장자를 모르므로,
 `import { Notice } from "./notice.rl"`은 그대로 두면 `TS2307`이 됩니다.
-`.rl` 옆에 **사이드카**(`notice.rl.d.ts` + `notice.rl.d.ts.map`)를 두면
+소스 옆에 **사이드카**(`notice.rl.d.ts` 또는 `view.rlx.d.ts`와 map)를 두면
 해결됩니다 — 에러가 사라지고, 정의 이동이 `.d.ts`가 아니라 **원본 `.rl`의
 해당 줄**로 갑니다.
 
@@ -214,13 +214,15 @@ npm 모드(`--tsgo-npm`)면 아무것도 주입하지 않고 위 순서 그대�
 
 파일 자체도 `// @generated ... do not edit.` 배너로 시작합니다. 셋 다
 사용자 설정으로 덮어쓸 수 있고, 아예 숨기려면 `files.exclude`에
-`**/*.rl.d.ts`와 `**/*.rl.d.ts.map`을 추가하세요.
+`**/*.rl.d.ts`, `**/*.rlx.d.ts`와 각각의 map을 추가하세요.
 
 생성물이므로 `.gitignore`에 넣는 것을 권합니다.
 
 ```gitignore
 *.rl.d.ts
 *.rl.d.ts.map
+*.rlx.d.ts
+*.rlx.d.ts.map
 ```
 
 ## 개발

@@ -1,6 +1,6 @@
 //! Emitted-code and error-reporting tests for the rl → TypeScript transform.
 
-use rlc::{Options, compile};
+use rlc::{Options, SourceKind, compile};
 
 fn ok(src: &str) -> String {
     compile(src, &Options::default()).expect("compile failed")
@@ -8,6 +8,91 @@ fn ok(src: &str) -> String {
 
 fn err(src: &str) -> rlc::CompileError {
     compile(src, &Options::default()).expect_err("expected a compile error")
+}
+
+fn ok_tsx(src: &str) -> String {
+    compile(
+        src,
+        &Options {
+            source_kind: SourceKind::Tsx,
+            ..Options::default()
+        },
+    )
+    .expect("rlx compile failed")
+}
+
+#[test]
+fn rlx_lowers_constructs_in_jsx_children_and_attributes() {
+    let source = r#"enum State { Ready(value: string), Empty }
+declare const state: State;
+const child = <section>{match (state) {
+  Ready(value) => <strong>{value}</strong>,
+  Empty => <span>empty</span>,
+}}</section>;
+const prop = <Panel before={mark("before")} render={() => match (state) {
+  Ready(value) => <strong>{value}</strong>,
+  Empty => null,
+}} after={mark("after")} />;
+const ordered = (state: State) => <Panel before={mark("first")} value={match (state) {
+  Ready(value) => value,
+  Empty => "",
+}} after={mark("last")} />;
+"#;
+    let output = ok_tsx(source);
+    assert!(output.contains("const child = <section>{"), "{output}");
+    assert!(output.contains("<strong>{value}</strong>"), "{output}");
+    assert!(output.contains("const prop = <Panel"), "{output}");
+    assert_eq!(output.matches("switch ($rl_m.kind)").count(), 3, "{output}");
+    let prop_start = output.find("const prop").unwrap();
+    let before = output[prop_start..].find("mark(\"before\")").unwrap() + prop_start;
+    let decision = output[prop_start..].find("switch ($rl_m.kind)").unwrap() + prop_start;
+    let after = output[prop_start..].find("mark(\"after\")").unwrap() + prop_start;
+    assert!(before < decision && decision < after, "{output}");
+    let ordered_start = output.find("const ordered").unwrap();
+    let first = output[ordered_start..].find("mark(\"first\")").unwrap() + ordered_start;
+    let ordered_decision =
+        output[ordered_start..].find("switch ($rl_m.kind)").unwrap() + ordered_start;
+    let last = output[ordered_start..].find("mark(\"last\")").unwrap() + ordered_start;
+    assert!(
+        first < ordered_decision && ordered_decision < last,
+        "{output}"
+    );
+    assert!(
+        output[ordered_start..].contains("return <Panel"),
+        "{output}"
+    );
+}
+
+#[test]
+fn rlx_rewrites_rlx_imports_for_each_target_surface() {
+    let source = "import { View } from \"./view.rlx\";\nexport { View };\n";
+    let js = ok_tsx(source);
+    assert!(js.contains("from \"./view.jsx\""), "{js}");
+    let ts = compile(
+        source,
+        &Options {
+            source_kind: SourceKind::Tsx,
+            rewrite_imports: rlc::ImportRewrite::Ts,
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert!(ts.contains("from \"./view.tsx\""), "{ts}");
+}
+
+#[test]
+fn rlx_expression_boundaries_ignore_delimiters_inside_regex_literals() {
+    let output = ok_tsx(
+        r#"enum State { Ready(value: string), Empty }
+declare const state: State;
+const view = <Panel visible={/}/.test("}")} value={match (state) {
+  Ready(value) => value,
+  Empty => "",
+}} />;
+"#,
+    );
+    assert!(output.contains("(/}/.test(\"}\"))"), "{output}");
+    assert!(output.contains("switch ($rl_m.kind)"), "{output}");
 }
 
 /* ------------------------------------------------------------------ */

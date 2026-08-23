@@ -28,8 +28,8 @@ use crate::typescript::backend::TypeScriptBackend;
 use crate::typescript::native::NativeBackend;
 
 /// What counts as an rl source, and what counts as hand-written TypeScript.
-const RL_EXTENSIONS: &[&str] = &["rl"];
-const TS_EXTENSIONS: &[&str] = &["ts", "mts", "cts"];
+const RL_EXTENSIONS: &[&str] = &["rl", "rlx"];
+const TS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts"];
 
 /// A snapshot could not be taken because a source could not be read.
 /// Lowering failures are recoverable snapshot data; an I/O failure has no
@@ -287,29 +287,39 @@ impl Project {
     /// projection cache (an unchanged import target is not re-parsed), then
     /// from disk.
     pub(crate) fn semantic_analyses(&self, path: &Path, source: &str) -> Arc<FileSemantics> {
-        let externs = super::language::externs_from(path, &crate::rl_imports(source), &|target| {
-            let text = match self.overlays.get(target) {
-                Some(text) => text.clone(),
-                None => std::fs::read_to_string(target).ok()?,
-            };
-            if let Some(doc) = self.cache.get(target)
-                && doc.source == text
-            {
-                return Some(
-                    doc.enum_symbols()
-                        .iter()
-                        .filter(|d| d.exported)
-                        .cloned()
-                        .collect(),
-                );
-            }
-            Some(
-                crate::enum_symbols(&text)
+        let externs = super::language::externs_from(
+            path,
+            &crate::rl_imports_with_kind(
+                source,
+                crate::SourceKind::from_path(path).unwrap_or_default(),
+            ),
+            &|target| {
+                let text = match self.overlays.get(target) {
+                    Some(text) => text.clone(),
+                    None => std::fs::read_to_string(target).ok()?,
+                };
+                if let Some(doc) = self.cache.get(target)
+                    && doc.source == text
+                {
+                    return Some(
+                        doc.enum_symbols()
+                            .iter()
+                            .filter(|d| d.exported)
+                            .cloned()
+                            .collect(),
+                    );
+                }
+                Some(
+                    crate::enum_symbols_with_kind(
+                        &text,
+                        crate::SourceKind::from_path(target).unwrap_or_default(),
+                    )
                     .into_iter()
                     .filter(|d| d.exported)
                     .collect(),
-            )
-        });
+                )
+            },
+        );
         self.cached_semantics(path, source, externs)
     }
 
@@ -443,7 +453,8 @@ pub fn collect_sources(
                 }
             } else if meta.is_file()
                 && child.extension().is_some_and(|e| {
-                    e == "rl" || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
+                    RL_EXTENSIONS.iter().any(|rl| *rl == e)
+                        || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
                 })
             {
                 out.push(child);
@@ -461,7 +472,7 @@ pub(crate) fn collect_rl(inputs: &[String]) -> std::io::Result<Vec<PathBuf>> {
     }
     files
         .into_iter()
-        .filter(|f| f.extension().is_some_and(|e| e == "rl"))
+        .filter(|f| crate::SourceKind::from_rl_path(f).is_some())
         .map(|f| f.canonicalize())
         .collect()
 }

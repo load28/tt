@@ -45,8 +45,12 @@ function registry(): Promise<vsctm.Registry> {
         const file =
           scopeName === "source.rl"
             ? path.join(syntaxesDir, "rl.tmLanguage.json")
+            : scopeName === "source.rlx"
+              ? path.join(syntaxesDir, "rlx.tmLanguage.json")
             : scopeName === "source.ts"
               ? path.join(syntaxesDir, "src", "typescript.tmLanguage.json")
+              : scopeName === "source.tsx"
+                ? path.join(syntaxesDir, "src", "typescriptreact.tmLanguage.json")
               : scopeName === "markdown.rl.codeblock"
                 ? path.join(syntaxesDir, "rl.markdown.tmLanguage.json")
                 : undefined;
@@ -308,6 +312,34 @@ test("pure TypeScript tokenizes identically to the TypeScript grammar", async ()
       line.map((t) => ({ text: t.text, scopes: t.scopes.slice(1).join(" ") })),
     );
   assert.deepEqual(strip(rl), strip(ts));
+});
+
+const PURE_TSX = `type Props<T> = { value: T };
+export const Item = <T,>({ value }: Props<T>) => (
+  <main data-kind="item"><strong>{String(value)}</strong></main>
+);
+`;
+
+test("pure TSX tokenizes identically to the TypeScript React grammar", async () => {
+  const rlx = await tokenize("source.rlx", PURE_TSX);
+  const tsx = await tokenize("source.tsx", PURE_TSX);
+  const strip = (lines: Token[][]) =>
+    lines.map((line) =>
+      line.map((t) => ({ text: t.text, scopes: t.scopes.slice(1).join(" ") })),
+    );
+  assert.deepEqual(strip(rlx), strip(tsx));
+});
+
+test("rl constructs inside JSX expression containers keep rl scopes", async () => {
+  const lines = await tokenize(
+    "source.rlx",
+    `enum State { Ready(value: string), Empty }
+export const View = ({ state }: { state: State }) => (
+  <main>{match (state) { Ready(value) => <b>{value}</b>, Empty => null }}</main>
+);`,
+  );
+  assertScope(lines, 3, "main", "entity.name.tag.tsx");
+  assertScope(lines, 3, "match", "keyword.control.match.rl");
 });
 
 // 마크다운 injection 문법 — ```rl 펜스 안을 source.rl로 칠한다.

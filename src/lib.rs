@@ -1,13 +1,14 @@
-//! rl — a tiny preprocessor language that compiles to TypeScript.
+//! rl — a tiny preprocessor language that compiles to TypeScript and TSX.
 //!
-//! Every valid TypeScript file is a valid `.rl` file and compiles to itself
-//! byte for byte; the compiler only rewrites the constructs rl adds —
+//! Every valid TypeScript file is a valid `.rl` file, and every valid TSX file
+//! is a valid `.rlx` file. Both compile to themselves byte for byte; the
+//! compiler only rewrites the constructs rl adds —
 //! Rust-style `enum` declarations (plain TypeScript enums pass through
 //! untouched), `match` expressions (literal, tuple and nested patterns
 //! included), `try` statements (Rust-`?`-style error propagation over
 //! `Result`), let-else and `if let` statements, and the pipeline operator
 //! `|>` — plus the `val` binding modifier, which is erased, and relative
-//! `.rl` import specifiers, which are rewritten to a consumable form (see
+//! `.rl`/`.rlx` import specifiers, which are rewritten to a consumable form (see
 //! [`ImportRewrite`]). rl-level errors — duplicate cases, non-exhaustive
 //! matches, bad field types, misplaced `try`, mutation through a `val`
 //! binding — are rlc compile errors with exact positions; the emitted
@@ -82,7 +83,8 @@ pub use analysis::{
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Severity};
 pub use error::CompileError;
 pub use probe::{
-    Literal, LiteralMatch, PayloadProbe, TagMatch, literal_matches, payload_probes, tag_matches,
+    Literal, LiteralMatch, PayloadProbe, TagMatch, literal_matches, literal_matches_with_kind,
+    payload_probes, payload_probes_with_kind, tag_matches, tag_matches_with_kind,
 };
 pub use sidecar::{Sidecar, build_sidecar};
 pub use stdlib::{
@@ -92,32 +94,79 @@ pub use val::{Mutation, ValBinding, ValFn, ValParam, ValPass, ValProbes, is_buil
 
 use error::RlError;
 
-/// How relative `.rl` import specifiers are rewritten in the emitted
-/// TypeScript. Applies to static `import` declarations and
+/// How relative `.rl`/`.rlx` import specifiers are rewritten in emitted
+/// TypeScript/TSX. Applies to static `import` declarations and
 /// `export ... from` re-exports whose specifier is a relative path ending
-/// in `.rl`; every other specifier — and dynamic `import(...)` — passes
+/// in `.rl` or `.rlx`; every other specifier — and dynamic `import(...)` — passes
 /// through untouched. Corresponds to the CLI's `--rewrite-imports` flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ImportRewrite {
-    /// `"./x.rl"` → `"./x.js"` — works under both `moduleResolution:
+    /// `"./x.rl"` → `"./x.js"`, `"./x.rlx"` → `"./x.jsx"` — works under both `moduleResolution:
     /// nodenext` (Node ESM requires the extension) and `bundler` (tsc maps
     /// `.js` to `.ts`). The default.
     #[default]
     Js,
-    /// `"./x.rl"` → `"./x.ts"` — points at the file rlc actually emits.
+    /// `"./x.rl"` → `"./x.ts"`, `"./x.rlx"` → `"./x.tsx"` — points at the emitted file.
     /// Requires the consumer to enable TypeScript's
     /// `allowImportingTsExtensions` *and* `rewriteRelativeImportExtensions`
     /// (TypeScript 5.7+), which turn `.ts` specifiers into `.js` on emit.
     Ts,
-    /// Leave `.rl` specifiers untouched (byte-for-byte passthrough).
+    /// Leave `.rl`/`.rlx` specifiers untouched (byte-for-byte passthrough).
     Off,
+}
+
+/// The TypeScript surface accepted by one rl source file.
+///
+/// This is an explicit compiler input rather than a filename heuristic:
+/// embedders often compile buffers without paths, while filesystem clients
+/// map TypeScript-family extensions to these two kinds at their boundary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SourceKind {
+    /// TypeScript without JSX (`.rl` → `.ts`).
+    #[default]
+    TypeScript,
+    /// TypeScript with JSX (`.rlx` → `.tsx`).
+    Tsx,
+}
+
+impl SourceKind {
+    /// Whether this source kind admits JSX syntax.
+    pub const fn is_tsx(self) -> bool {
+        matches!(self, Self::Tsx)
+    }
+
+    /// Maps an rl or TypeScript-family source path to its language kind.
+    pub fn from_path(path: &std::path::Path) -> Option<Self> {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("rl" | "ts" | "mts" | "cts") => Some(Self::TypeScript),
+            Some("rlx" | "tsx") => Some(Self::Tsx),
+            _ => None,
+        }
+    }
+
+    /// Maps only compiler-owned rl source extensions to their language kind.
+    pub fn from_rl_path(path: &std::path::Path) -> Option<Self> {
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some("rl") => Some(Self::TypeScript),
+            Some("rlx") => Some(Self::Tsx),
+            _ => None,
+        }
+    }
+
+    /// Extension of the TypeScript source emitted for this kind.
+    pub const fn output_extension(self) -> &'static str {
+        match self {
+            Self::TypeScript => "ts",
+            Self::Tsx => "tsx",
+        }
+    }
 }
 
 /// An enum declaration from another module, made available to [`compile`]'s
 /// exhaustiveness checking via [`Options::extern_enums`].
 ///
 /// Collected by build tools (the `rlc` CLI does this for direct relative
-/// `.rl` imports) with [`exported_enums`] over the imported file's source,
+/// `.rl`/`.rlx` imports) with [`exported_enums`] over the imported file's source,
 /// filtered through the importing file's clause ([`rl_imports`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternEnum {
@@ -133,7 +182,7 @@ pub struct ExternEnum {
     pub from: Option<String>,
 }
 
-/// One static relative `.rl` import (or re-export) of a source file, in
+/// One static relative `.rl`/`.rlx` import (or re-export) of a source file, in
 /// source order — the file's outgoing module-graph edges.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RlImport {
@@ -169,7 +218,12 @@ pub enum RlImportNames {
 /// assert_eq!(decls[0].tags, ["Num", "Eof"]);
 /// ```
 pub fn exported_enums(source: &str) -> Vec<ExternEnum> {
-    let program = parser::parse(source);
+    exported_enums_with_kind(source, SourceKind::TypeScript)
+}
+
+/// [`exported_enums`] under an explicit TypeScript surface kind.
+pub fn exported_enums_with_kind(source: &str, source_kind: SourceKind) -> Vec<ExternEnum> {
+    let program = parser::parse_with_kind(source, source_kind);
     program
         .segments
         .iter()
@@ -184,7 +238,7 @@ pub fn exported_enums(source: &str) -> Vec<ExternEnum> {
         .collect()
 }
 
-/// Lists a source file's static relative `.rl` imports and re-exports, in
+/// Lists a source file's static relative `.rl`/`.rlx` imports and re-exports, in
 /// source order — the edges a build tool follows to collect declarations
 /// with [`exported_enums`].
 ///
@@ -198,6 +252,11 @@ pub fn exported_enums(source: &str) -> Vec<ExternEnum> {
 /// ```
 pub fn rl_imports(source: &str) -> Vec<RlImport> {
     scan_module(source).imports
+}
+
+/// [`rl_imports`] under an explicit TypeScript surface kind.
+pub fn rl_imports_with_kind(source: &str, source_kind: SourceKind) -> Vec<RlImport> {
+    scan_module_with_kind(source, source_kind).imports
 }
 
 /// Whether a source file imports any standard-library module.
@@ -215,7 +274,7 @@ pub fn imports_std(source: &str) -> bool {
 }
 
 /// A source file's module-level facts, gathered in a **single** parse:
-/// its static relative `.rl` imports ([`rl_imports`]) and whether it
+/// its static relative `.rl`/`.rlx` imports ([`rl_imports`]) and whether it
 /// imports the standard library ([`imports_std`]).
 ///
 /// A build tool walking a whole project needs both of a file, and parsing
@@ -224,7 +283,7 @@ pub fn imports_std(source: &str) -> bool {
 /// scans every input through this.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ModuleScan {
-    /// The file's static relative `.rl` imports and re-exports, in source
+    /// The file's static relative `.rl`/`.rlx` imports and re-exports, in source
     /// order — see [`rl_imports`].
     pub imports: Vec<RlImport>,
     /// Whether the file imports [`STD_SPECIFIER`] — see [`imports_std`].
@@ -242,7 +301,12 @@ pub struct ModuleScan {
 /// assert_eq!(scan.imports[0].specifier, "./t.rl");
 /// ```
 pub fn scan_module(source: &str) -> ModuleScan {
-    let program = parser::parse(source);
+    scan_module_with_kind(source, SourceKind::TypeScript)
+}
+
+/// [`scan_module`] under an explicit TypeScript surface kind.
+pub fn scan_module_with_kind(source: &str, source_kind: SourceKind) -> ModuleScan {
+    let program = parser::parse_with_kind(source, source_kind);
     let mut scan = ModuleScan::default();
     for segment in &program.segments {
         let ast::Segment::RlImport(decl) = segment else {
@@ -252,7 +316,7 @@ pub fn scan_module(source: &str) -> ModuleScan {
             // The standard library is not a project module — nothing to
             // resolve or collect declarations from.
             ast::RlSpecifier::Std(_) => scan.imports_std = true,
-            ast::RlSpecifier::Relative => scan.imports.push(RlImport {
+            ast::RlSpecifier::Relative(_) => scan.imports.push(RlImport {
                 specifier: source[decl.spec.start + 1..decl.spec.end - 1].to_string(),
                 names: match &decl.names {
                     ast::RlImportNames::Namespace(ns) => RlImportNames::Namespace(ns.clone()),
@@ -321,7 +385,12 @@ pub struct FieldSymbol {
 /// assert_eq!(syms[0].cases[1].fields, None);
 /// ```
 pub fn enum_symbols(source: &str) -> Vec<EnumSymbol> {
-    let program = parser::parse(source);
+    enum_symbols_with_kind(source, SourceKind::TypeScript)
+}
+
+/// [`enum_symbols`] under an explicit TypeScript surface kind.
+pub fn enum_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<EnumSymbol> {
+    let program = parser::parse_with_kind(source, source_kind);
     program
         .segments
         .iter()
@@ -509,7 +578,7 @@ impl MappedEmit {
 /// Unlike [`compile`] this is **infallible**: semantic checks and output
 /// verification are skipped, so a buffer mid-edit (with, say, a
 /// non-exhaustive match) still emits — diagnostics remain [`compile`]/`rlc
-/// --check`'s job. Relative `.rl` import specifiers and `@rl/std` entries
+/// --check`'s job. Relative `.rl`/`.rlx` import specifiers and `@rl/std` entries
 /// are left untouched ([`ImportRewrite::Off`] semantics): the consumer — an
 /// editor serving the output as a virtual TypeScript document — resolves
 /// them itself. Corresponds to the CLI's `--emit-map`.
@@ -520,13 +589,19 @@ impl MappedEmit {
 /// assert_eq!(m.mappings, [rlc::EmitMapping { src: 0, out: 0, len: 21 }]);
 /// ```
 pub fn emit_mapped(source: &str) -> MappedEmit {
-    let program = parser::parse(source);
+    emit_mapped_with_kind(source, SourceKind::TypeScript)
+}
+
+/// [`emit_mapped`] under an explicit TypeScript surface kind.
+pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
+    let program = parser::parse_with_kind(source, source_kind);
     let semantics = analysis::coverage_semantics(&program, &[]);
     let core = core_ir::lower_semantic(&semantics, source);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
         source,
+        source_kind,
         ImportRewrite::Off,
         StdImports::default(),
     );
@@ -569,7 +644,12 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 /// assert_eq!(probes.mutations[0].method.as_ref().unwrap().0, "at");
 /// ```
 pub fn val_probes(source: &str) -> ValProbes {
-    let tokens = lexer::lex(source, 0, source.len());
+    val_probes_with_kind(source, SourceKind::TypeScript)
+}
+
+/// [`val_probes`] under an explicit TypeScript surface kind.
+pub fn val_probes_with_kind(source: &str, source_kind: SourceKind) -> ValProbes {
+    let tokens = lexer::lex_with_kind(source, 0, source.len(), source_kind);
     val::probes(source, &tokens)
 }
 
@@ -582,7 +662,7 @@ pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
 
 /// Compilation options for [`compile`].
 ///
-/// The default is no filename, verification enabled, `.rl` import
+/// The default is no filename, TypeScript source, verification enabled, `.rl` import
 /// specifiers rewritten to `.js`, and no imported declarations:
 ///
 /// ```
@@ -597,17 +677,19 @@ pub struct Options<'a> {
     /// Filename reported in [`CompileError`]s (and their `Display` output).
     /// `None` renders as `<input>`.
     pub filename: Option<&'a str>,
+    /// Whether the source surface is TypeScript or TSX.
+    pub source_kind: SourceKind,
     /// Validate enum field types and the generated output with swc.
     /// Corresponds to the CLI's `--no-verify` escape hatch when `false`;
     /// disabling it lets syntactically bad field types flow into the output
     /// (where tsc will report them) and skips the emitted-code self-check.
     pub verify: bool,
-    /// How relative `.rl` import specifiers are rewritten in the output.
+    /// How relative `.rl`/`.rlx` import specifiers are rewritten in the output.
     pub rewrite_imports: ImportRewrite,
     /// Enum declarations imported from other modules, included in
     /// exhaustiveness checking (shadowed by local declarations; shadowing
     /// built-ins of the same name). The `rlc` CLI fills this from the
-    /// file's direct relative `.rl` imports.
+    /// file's direct relative `.rl`/`.rlx` imports.
     pub extern_enums: &'a [ExternEnum],
     /// Leave the two judgments a TypeScript checker makes better to a
     /// TypeScript checker: match exhaustiveness, and which binding a
@@ -637,6 +719,7 @@ impl Default for Options<'_> {
     fn default() -> Self {
         Options {
             filename: None,
+            source_kind: SourceKind::TypeScript,
             verify: true,
             rewrite_imports: ImportRewrite::default(),
             extern_enums: &[],
@@ -646,10 +729,10 @@ impl Default for Options<'_> {
     }
 }
 
-/// Compile rl source text to TypeScript source text.
+/// Compile rl source text to TypeScript or TSX source text.
 ///
 /// Only rl constructs (`enum` declarations, `match` expressions, `try` and
-/// let-else statements) and relative `.rl` import specifiers (per
+/// let-else statements) and relative `.rl`/`.rlx` import specifiers (per
 /// [`Options::rewrite_imports`]) are rewritten; everything else — including
 /// all plain TypeScript `enum` forms — passes through byte for byte. A
 /// candidate construct that does not fully parse as rl syntax is passed
@@ -709,7 +792,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     // it all); this entry point keeps its historical contract — code, or
     // the first error in source order — and skips emission when the checks
     // already failed.
-    let (program, tokens) = parser::lex_and_parse(source);
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
     let semantics = analysis::coverage_semantics(&program, options.extern_enums);
     let core = core_ir::lower_semantic(&semantics, source);
     if let Some(first) = rl_errors(source, &program, &tokens, options, &semantics)
@@ -724,11 +807,12 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         &semantics,
         &core,
         source,
+        options.source_kind,
         options.rewrite_imports,
         options.std_imports,
     );
     if options.verify
-        && let Err(failure) = verify::verify_output(&flat.code)
+        && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)
     {
         // The self-check reads the *generated* module, but the user only
         // has the `.rl` file open. A position in a file no one wrote is
@@ -795,7 +879,7 @@ fn rl_errors(
 /// assert!(diagnostics.iter().all(|d| d.code == rlc::DiagnosticCode::MatchNotExhaustive));
 /// ```
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
-    let (program, tokens) = parser::lex_and_parse(source);
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
     let semantics = analysis::coverage_semantics(&program, options.extern_enums);
     rl_errors(source, &program, &tokens, options, &semantics)
         .into_iter()
@@ -855,7 +939,7 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
         };
     }
 
-    let program = parser::parse(source);
+    let program = parser::parse_with_kind(source, options.source_kind);
     let mut nodes = parser::projection_recoveries(&program);
     for diagnostic in &ordinary.diagnostics {
         let (Some(start), Some(end)) = (diagnostic.start, diagnostic.end) else {
@@ -944,7 +1028,7 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
 /// Compiles `source` and reports everything — the multi-diagnostic,
 /// still-emitting form of [`compile_mapped`]. See [`CompileReport`].
 pub fn compile_report(source: &str, options: &Options) -> CompileReport {
-    let (program, tokens) = parser::lex_and_parse(source);
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
     let semantics = analysis::coverage_semantics(&program, options.extern_enums);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = rl_errors(source, &program, &tokens, options, &semantics);
@@ -961,6 +1045,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         &semantics,
         &core,
         source,
+        options.source_kind,
         options.rewrite_imports,
         options.std_imports,
     );
@@ -973,7 +1058,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     });
     if options.verify
         && let Some(flat) = &emit
-        && let Err(failure) = verify::verify_output(&flat.code)
+        && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)
     {
         // A failed self-check *with rl errors already reported* is the
         // effect, not a second cause — the emitted text reflects the

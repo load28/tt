@@ -21,6 +21,7 @@
 //! TypeScript). Everything else significant is a one-byte
 //! [`TokenKind::Punct`].
 
+use crate::SourceKind;
 use crate::ast::Span;
 use crate::scanner::*;
 
@@ -46,6 +47,10 @@ pub(crate) enum TokenKind {
     Template(Box<[TplPart]>),
     /// A regex literal, decided by the preceding-token heuristic.
     Regex,
+    /// A raw JSX run. Its bytes are opaque to the rl parser; JSX expression
+    /// containers are lexed recursively and appear as ordinary tokens between
+    /// these runs.
+    JsxRaw,
     /// `=>`
     Arrow,
     /// `||`
@@ -70,42 +75,18 @@ pub(crate) enum TplPart {
     Interp { span: Span, tokens: Vec<Token> },
 }
 
-/// After one of these words, a `/` starts a regex literal, not division.
-/// Written as a `match` rather than a slice scan: rustc turns it into a
-/// length switch plus a few comparisons, where `[&str]::contains` walks
-/// every entry.
-fn regex_preceding_word(word: &str) -> bool {
-    matches!(
-        word,
-        "return"
-            | "typeof"
-            | "instanceof"
-            | "in"
-            | "of"
-            | "new"
-            | "delete"
-            | "void"
-            | "throw"
-            | "case"
-            | "do"
-            | "else"
-            | "yield"
-            | "await"
-    )
-}
-
-fn regex_allowed(prev_sig: u8, prev_word: &str) -> bool {
-    if !prev_word.is_empty() {
-        return regex_preceding_word(prev_word);
-    }
-    if prev_sig == 0 {
-        return true;
-    }
-    b"(,=:[!&|?{};~+-*%^<>".contains(&prev_sig)
-}
-
 /// Lexes `src[start..end]` into significant tokens.
 pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
+    lex_with_kind(src_str, start, end, SourceKind::TypeScript)
+}
+
+/// Lexes a source range under its TypeScript surface kind.
+pub(crate) fn lex_with_kind(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+) -> Vec<Token> {
     let src = src_str.as_bytes();
     // Significant tokens run about one per six source bytes across real
     // TypeScript, so sizing up front spares the repeated doubling that
@@ -153,7 +134,7 @@ pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
         }
 
         if c == b'`' {
-            let (e, parts) = lex_template(src_str, i, end);
+            let (e, parts) = lex_template(src_str, i, end, source_kind);
             tokens.push(Token {
                 kind: TokenKind::Template(parts.into_boxed_slice()),
                 span: span(i, e),
@@ -161,6 +142,18 @@ pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
             prev_sig = b'`';
             prev_word = "";
             i = e;
+            continue;
+        }
+
+        if source_kind.is_tsx()
+            && c == b'<'
+            && jsx_allowed(prev_sig, prev_word)
+            && let Some(jsx) = scan_jsx(src_str, i, end, source_kind)
+        {
+            tokens.extend(jsx.tokens);
+            prev_sig = b'>';
+            prev_word = "";
+            i = jsx.end;
             continue;
         }
 
@@ -212,7 +205,12 @@ pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
 /// `src[start]` is a backtick — lexes the template into raw chunks and
 /// recursively lexed `${ }` interpolations. Returns the index just past
 /// the closing backtick (or `end` if unterminated).
-fn lex_template(src_str: &str, start: usize, end: usize) -> (usize, Vec<TplPart>) {
+fn lex_template(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+) -> (usize, Vec<TplPart>) {
     let src = src_str.as_bytes();
     let mut parts: Vec<TplPart> = Vec::new();
     let mut raw_start = start; // includes the opening backtick
@@ -241,7 +239,7 @@ fn lex_template(src_str: &str, start: usize, end: usize) -> (usize, Vec<TplPart>
                     start: i + 2,
                     end: close,
                 },
-                tokens: lex(src_str, i + 2, close),
+                tokens: lex_with_kind(src_str, i + 2, close, source_kind),
             });
             i = (close + 1).min(end);
             raw_start = i;
@@ -251,4 +249,265 @@ fn lex_template(src_str: &str, start: usize, end: usize) -> (usize, Vec<TplPart>
     }
     push_raw(&mut parts, raw_start, end);
     (end, parts)
+}
+
+fn jsx_allowed(prev_sig: u8, prev_word: &str) -> bool {
+    if prev_sig == 0 {
+        return true;
+    }
+    if matches!(prev_word, "return" | "throw" | "yield" | "await" | "case") {
+        return true;
+    }
+    b"([{,:;=!?&|+-*%^~>".contains(&prev_sig)
+}
+
+struct ScannedJsx {
+    end: usize,
+    tokens: Vec<Token>,
+}
+
+/// Parses one complete JSX element or fragment and exposes only its
+/// JavaScript expression containers to the rl lexer. Every tag, attribute,
+/// and text run becomes an opaque token, so words in JSX text can never be
+/// claimed as rl syntax.
+fn scan_jsx(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+) -> Option<ScannedJsx> {
+    let src = src_str.as_bytes();
+    let opening = scan_jsx_opening(src, start, end)?;
+    let mut tokens = jsx_region_tokens(
+        src_str,
+        start,
+        opening.end,
+        &opening.expressions,
+        source_kind,
+    );
+    let mut i = opening.end;
+    if opening.self_closing {
+        return Some(ScannedJsx { end: i, tokens });
+    }
+    let mut raw_start = i;
+
+    loop {
+        if i >= end {
+            return None;
+        }
+        if src[i] == b'<' && at(src, i + 1, end) == Some(b'/') {
+            let close_end = scan_jsx_closing(src, i, end, opening.name.as_deref())?;
+            tokens.push(Token {
+                kind: TokenKind::JsxRaw,
+                span: Span {
+                    start: raw_start,
+                    end: close_end,
+                },
+            });
+            return Some(ScannedJsx {
+                end: close_end,
+                tokens,
+            });
+        }
+        if src[i] == b'<' {
+            let child = scan_jsx(src_str, i, end, source_kind)?;
+            if raw_start < i {
+                tokens.push(Token {
+                    kind: TokenKind::JsxRaw,
+                    span: Span {
+                        start: raw_start,
+                        end: i,
+                    },
+                });
+            }
+            tokens.extend(child.tokens);
+            i = child.end;
+            raw_start = i;
+            continue;
+        }
+        if src[i] == b'{' {
+            let close = find_matching(src, i, end)?;
+            if raw_start < i + 1 {
+                tokens.push(Token {
+                    kind: TokenKind::JsxRaw,
+                    span: Span {
+                        start: raw_start,
+                        end: i + 1,
+                    },
+                });
+            }
+            tokens.extend(lex_with_kind(src_str, i + 1, close, source_kind));
+            tokens.push(Token {
+                kind: TokenKind::JsxRaw,
+                span: Span {
+                    start: close,
+                    end: close + 1,
+                },
+            });
+            i = close + 1;
+            raw_start = i;
+            continue;
+        }
+        i += 1;
+    }
+}
+
+fn jsx_region_tokens(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    expressions: &[(usize, usize)],
+    source_kind: SourceKind,
+) -> Vec<Token> {
+    let mut tokens = Vec::new();
+    let mut raw_start = start;
+    for &(open, close) in expressions {
+        tokens.push(Token {
+            kind: TokenKind::JsxRaw,
+            span: Span {
+                start: raw_start,
+                end: open + 1,
+            },
+        });
+        tokens.extend(lex_with_kind(src_str, open + 1, close, source_kind));
+        tokens.push(Token {
+            kind: TokenKind::JsxRaw,
+            span: Span {
+                start: close,
+                end: close + 1,
+            },
+        });
+        raw_start = close + 1;
+    }
+    if raw_start < end {
+        tokens.push(Token {
+            kind: TokenKind::JsxRaw,
+            span: Span {
+                start: raw_start,
+                end,
+            },
+        });
+    }
+    tokens
+}
+
+struct JsxOpening {
+    end: usize,
+    name: Option<String>,
+    self_closing: bool,
+    expressions: Vec<(usize, usize)>,
+}
+
+/// Returns `(end, opening_name, self_closing)`. `None` means the `<` starts
+/// ordinary TypeScript syntax, not a complete JSX opening construct.
+fn scan_jsx_opening(src: &[u8], start: usize, end: usize) -> Option<JsxOpening> {
+    let mut i = start + 1;
+    if at(src, i, end) == Some(b'>') {
+        return Some(JsxOpening {
+            end: i + 1,
+            name: None,
+            self_closing: false,
+            expressions: Vec::new(),
+        });
+    }
+    let name_start = i;
+    i = scan_jsx_name(src, i, end)?;
+    let name = String::from_utf8(src[name_start..i].to_vec()).ok()?;
+    let mut expressions = Vec::new();
+    if at(src, i, end) == Some(b'<') {
+        i = find_matching(src, i, end)? + 1;
+    }
+    loop {
+        while i < end && is_ws(src[i]) {
+            i += 1;
+        }
+        match (at(src, i, end), at(src, i + 1, end)) {
+            (Some(b'/'), Some(b'>')) => {
+                return Some(JsxOpening {
+                    end: i + 2,
+                    name: Some(name),
+                    self_closing: true,
+                    expressions,
+                });
+            }
+            (Some(b'>'), _) => {
+                return Some(JsxOpening {
+                    end: i + 1,
+                    name: Some(name),
+                    self_closing: false,
+                    expressions,
+                });
+            }
+            (Some(b'{'), _) => {
+                let close = find_matching(src, i, end)?;
+                expressions.push((i, close));
+                i = close + 1;
+            }
+            (Some(b), _) if b == b'"' || b == b'\'' => i = scan_string(src, i, end),
+            (Some(b), _) if is_jsx_name_start(b) => {
+                i = scan_jsx_name(src, i, end)?;
+                while i < end && is_ws(src[i]) {
+                    i += 1;
+                }
+                if at(src, i, end) == Some(b'=') {
+                    i += 1;
+                    while i < end && is_ws(src[i]) {
+                        i += 1;
+                    }
+                    match at(src, i, end)? {
+                        b'"' | b'\'' => i = scan_string(src, i, end),
+                        b'{' => {
+                            let close = find_matching(src, i, end)?;
+                            expressions.push((i, close));
+                            i = close + 1;
+                        }
+                        _ => return None,
+                    }
+                }
+            }
+            _ => return None,
+        }
+    }
+}
+
+fn scan_jsx_closing(src: &[u8], start: usize, end: usize, opening: Option<&str>) -> Option<usize> {
+    let mut i = start + 2;
+    match opening {
+        None => {
+            if at(src, i, end) != Some(b'>') {
+                return None;
+            }
+            Some(i + 1)
+        }
+        Some(opening) => {
+            let name_start = i;
+            i = scan_jsx_name(src, i, end)?;
+            if &src[name_start..i] != opening.as_bytes() {
+                return None;
+            }
+            while i < end && is_ws(src[i]) {
+                i += 1;
+            }
+            (at(src, i, end) == Some(b'>')).then_some(i + 1)
+        }
+    }
+}
+
+fn is_jsx_name_start(b: u8) -> bool {
+    is_ident_start(b) || b >= 0x80
+}
+
+fn is_jsx_name_char(b: u8) -> bool {
+    is_ident_char(b) || matches!(b, b'-' | b'.' | b':') || b >= 0x80
+}
+
+fn scan_jsx_name(src: &[u8], mut i: usize, end: usize) -> Option<usize> {
+    if !is_jsx_name_start(at(src, i, end)?) {
+        return None;
+    }
+    i += 1;
+    while i < end && is_jsx_name_char(src[i]) {
+        i += 1;
+    }
+    Some(i)
 }

@@ -31,6 +31,8 @@ export function activate(context: ExtensionContext): void {
     documentSelector: [
       { scheme: "file", language: "rl" },
       { scheme: "untitled", language: "rl" },
+      { scheme: "file", language: "rlx" },
+      { scheme: "untitled", language: "rlx" },
     ],
     synchronize: {
       // Re-validate when the locally built compiler appears or changes.

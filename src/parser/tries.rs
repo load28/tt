@@ -157,7 +157,11 @@ fn parse_try_tail<'t>(mut cur: Cursor<'t>) -> Option<(Cursor<'t>, usize, Span, &
 /// `{`, ...) is excluded too.
 fn is_expr_start(t: &Token) -> bool {
     match t.kind {
-        TokenKind::Ident | TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex => true,
+        TokenKind::Ident
+        | TokenKind::Str
+        | TokenKind::Template(_)
+        | TokenKind::Regex
+        | TokenKind::JsxRaw => true,
         TokenKind::Punct(c) => {
             c.is_ascii_digit() || matches!(c, b'[' | b'!' | b'~' | b'+' | b'-' | b'/')
         }

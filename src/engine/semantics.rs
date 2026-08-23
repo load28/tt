@@ -1118,10 +1118,13 @@ pub(crate) fn externs_of(snapshot: &Snapshot, file: &ProjectedDocument) -> Vec<c
             .or_else(|| {
                 let text = std::fs::read_to_string(target).ok()?;
                 Some(
-                    crate::enum_symbols(&text)
-                        .into_iter()
-                        .filter(|d| d.exported)
-                        .collect(),
+                    crate::enum_symbols_with_kind(
+                        &text,
+                        crate::SourceKind::from_path(target).unwrap_or_default(),
+                    )
+                    .into_iter()
+                    .filter(|d| d.exported)
+                    .collect(),
                 )
             })
     })

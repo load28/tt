@@ -163,7 +163,9 @@ function runCheckOnce(
   verify: boolean,
 ): Promise<RlcResult> {
   const rawBase = path.basename(docName).replace(/[^\w.-]/g, "_") || "buffer";
-  const base = rawBase.endsWith(".rl") ? rawBase : `${rawBase}.rl`;
+  const base = rawBase.endsWith(".rl") || rawBase.endsWith(".rlx")
+    ? rawBase
+    : `${rawBase}.rl`;
   const hash = crypto.createHash("sha1").update(docName).digest("hex");
   const file = path.join(tempDir(), `${hash.slice(0, 8)}-${base}`);
 

@@ -21,7 +21,7 @@ swc 스타일의 단계 분리 파이프라인으로 재구성했고, TASK-021�
 
 ```
 소스 텍스트
-   │  lexer::lex             — 유의 토큰 스트림 (트리비아 제외, 스팬 보존)
+   │  lexer::lex_with_kind   — 유의 토큰 스트림 (트리비아 제외, 스팬 보존)
    ▼
 Vec<Token>
    │  parser::parse          — 무오류(infallible) 구조 파싱
@@ -66,6 +66,13 @@ swc가 TypeScript를 렉서 → 파서로 처리하듯, 소스는 먼저 **유�
 연산자만 융합 토큰이고 나머지 유의 바이트는 1바이트 `Punct`다. 바이트
 프리미티브(문자열/정규식 스캔, 괄호 매칭)는 `scanner.rs`가 계속 담당하며
 렉서와 codegen(`contains_await` 등)이 공유한다.
+
+파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
+단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로
+스캔한다. 태그·속성 이름·텍스트는 `JsxRaw`로 불투명하게 보존하고 `{...}`
+expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍스트의 rl
+키워드는 후보가 되지 않지만 expression container 안의 rl 구문은 일반 식과
+같이 AST로 올라간다. SWC 입력·출력 검증도 같은 `SourceKind`를 사용한다.
 
 ### 3. `parser` — 무오류 구조 파싱
 
@@ -135,7 +142,10 @@ AST 노드 위에서 표현되면 sema, 통과 영역의 토큰 위에서 표현
 sema를 통과한 AST에서 텍스트로의 순수 매핑이다. verbatim 구간은 원본
 바이트를 그대로 복사하고, enum은 유니언 `type` + 생성자 `const`로 방출한다.
 값을 만드는 match는 ProgramSyntax와 Evaluation IR이 정한 owner continuation에
-따라 statement slot + `switch` 또는 expression-boundary intrinsic으로 방출한다(코드 형태의 규범은
+따라 statement slot + `switch` 또는 expression-boundary intrinsic으로 방출한다. JSX
+속성·자식 expression은 `Jsx` protocol frame의 순서 있는 eager position이며,
+concise arrow의 expression body는 이름 있는 `ArrowExpression` host owner다. 이
+두 모델이 JSX 속성의 부작용 순서와 화살표 함수의 렉시컬 범위를 보존한다(코드 형태의 규범은
 [`../reference/language.md`](../reference/language.md)). `await` 감지는
 AST에 남긴 원시 Span 위로 `scanner::contains_await`를 돌려 수행한다.
 
