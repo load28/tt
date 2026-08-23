@@ -71,7 +71,7 @@ pub struct BasicBlock {
 /// against each `case` in source order *is* a chain of two-way branches,
 /// so the graph states the dispatch exactly. `throw` needs none either —
 /// it leaves the enclosing function like `return`, and a guarded block's
-/// transfer to its handler is an edge the [`Stmt::Try`] lowering draws.
+/// transfer to its handler is an edge the `try` lowering draws.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Terminator {
     /// Fall through to another block.
@@ -1522,6 +1522,34 @@ mod tests {
         ));
         // tt's `try` statement has neither tail, so it stays opaque.
         assert!(!check("try load();"));
+    }
+
+    #[test]
+    fn a_brace_on_its_own_line_does_not_start_a_statement() {
+        // Allman braces are why the automatic-semicolon rule splits only
+        // before the statement *keywords* and never before `{`: after
+        // `function g()` or `= function ()` a newline and a brace still
+        // open that function's body, and splitting there would let its
+        // `return` escape into the analyzed block.
+        assert!(!check("function g()\n{\n  return 1;\n}"));
+        assert!(!check("const g = function ()\n{\n  return 1;\n};"));
+        assert!(!check("const g = () =>\n{\n  return 1;\n};"));
+        assert!(!check("const o =\n{\n  n: 1\n};"));
+        // Control-flow bodies are found structurally, so Allman braces
+        // read the same there.
+        assert!(check("if (c)\n{\n  return 1;\n}\nelse\n{\n  return 2;\n}"));
+        assert!(check("while (true)\n{\n  log(\"x\");\n}"));
+        assert!(check(
+            "switch (k)\n{\n  case \"a\": return 1;\n  default: throw e;\n}"
+        ));
+    }
+
+    #[test]
+    fn a_labeled_statement_carries_its_bodys_flow() {
+        assert!(check("label: return 1;"));
+        assert!(check("label: { return 1; }"));
+        assert!(!check("label: { break label; }"));
+        assert!(!check("label: log(\"x\");"));
     }
 
     #[test]

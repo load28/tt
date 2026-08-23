@@ -15,9 +15,9 @@
 //! that deviates passes through verbatim, as always.
 //!
 //! The "else block must diverge" rule is *computed* by the flow layer
-//! ([`crate::flow::block_diverges`] — a real CFG answer, `if`/`else` and
-//! unreachable code included) as a bool on the AST node, and *enforced* by
-//! [`crate::sema`] — the parser stays infallible.
+//! ([`crate::flow::program_diverges`] — a real CFG answer over the whole
+//! statement grammar, tt's own `if let` included) as a bool on the AST
+//! node, and *enforced* by [`crate::sema`] — the parser stays infallible.
 
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{LetElseStmt, Span};

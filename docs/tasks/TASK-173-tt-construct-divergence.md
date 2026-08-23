@@ -152,11 +152,92 @@ TASK-172가 flow CFG의 TypeScript 문 커버리지를 완성했지만, tt 자�
   같은 경로를 타게 되고, 그 덕분에 `if let` 테스트를 `flow` 단위 테스트에서
   바로 쓸 수 있게 됐다.
 
+## 회귀 검증 (TASK-172·173 합산)
+
+두 태스크가 `src/flow`를 사실상 재작성했으므로, 기존 동작에 영향이 있는지
+별도로 감사했다.
+
+### 1. 소비자 표면 — 변경이 닿는 범위
+
+`flow` 밖으로 나가는 것은 `program_diverges`(`parser/lets.rs`)와
+`in_function_body`(`parser/mod.rs`) 둘뿐이다.
+
+- `in_function_body`와 그 헬퍼(`function_body_brace`/`paren_heads_function`/
+  `find_open`)는 **한 줄도 바뀌지 않았다**
+  (`git diff e1adda8 -- src/flow/mod.rs`로 확인).
+- `brace_opens_statement`는 `pub(crate)`지만 실제 소비자는 flow 내부 하나뿐.
+- `parse_tokens`는 `&self`(불변 참조)라 `parser/lets.rs`에서 호출 순서를
+  바꾼 것이 부작용을 낳을 수 없다.
+
+### 2. 통과 계약 (절대 원칙 1) — 실제 TypeScript 1194개 차등 비교
+
+`microsoft/typescript-go` 체크아웃의 `.ts`/`.tsx` 1194개(테스트 픽스처와
+`node_modules` 포함 — 손으로 만든 예제가 아닌 실제 코드)를 변경 전
+커밋(`e1adda8`)의 ttc와 현재 ttc로 각각 컴파일해 **출력과 진단 로그를 바이트
+단위로 비교**했다.
+
+```
+1194 SAME / 0 DIVERGED
+```
+
+일반 TypeScript에 대한 동작 변화는 0이다.
+
+### 3. 발산 판정 차등 — 2162개 조합 케이스
+
+`else` 블록 본문 조각 45종(네 발산문, if/else 체인, 모든 loop 형태, switch
+5종, try 5종, 레이블, 내부 함수, 객체 리터럴, 세미콜론 없는 변형)을 단독과
+2개 조합으로 2162개 생성해 두 바이너리의 판정을 비교했다.
+
+| 전이 | 건수 | 뜻 |
+|------|------|-----|
+| N→Y | 1022 | 이전에 **잘못 거부**하던 것을 받아들임 (개선) |
+| Y→Y | 632 | 동일 |
+| N→N | 508 | 동일 |
+| **Y→N** | **0** | **이전에 통과하던 것이 거부되는 회귀 — 없음** |
+
+변화는 전부 한 방향이다.
+
+### 4. 불건전성 — tsc를 정답지로 대조
+
+"더 받아들인다"가 안전한지는 차등만으로 알 수 없으므로, **TypeScript
+자신의 제어 흐름 분석**을 정답지로 삼았다. 각 본문을
+`function probe(): number { <본문> }`에 넣고 `tsc --strict --noEmit`을
+돌리면, 발산하지 않는 본문에만 TS2355/TS2366/TS7030이 나온다. 구문 오류
+(TS1xxx)가 난 함수는 tsc의 CFG 판정이 무의미하므로 제외했다.
+
+```
+대조한 케이스                        : 1980
+불건전 (tt=발산, tsc=발산 아님)      : 0
+놓침   (tt=발산 아님, tsc=발산)      : 3
+```
+
+**tt가 "발산한다"고 답한 것 중 tsc가 반박한 것은 하나도 없다.**
+
+### 5. 놓침 3건 — 모두 안전한 방향이고, 둘은 의도된 설계
+
+1. `switch (k) { case "a": break; default: return 1; }` 뒤에
+   `switch (k) { case "a": return 1; }` — tsc는 첫 switch의 `case "a"` 경로에서
+   `k`가 `"a"`로 **타입 narrowing**됨을 알아 두 번째 switch가 소진적이라고
+   판정한다. flow는 조건·판별자를 평가하지 않으므로(설계 결정) 범위 밖이다.
+2·3. 세미콜론 없는 코드에서 `{ … }` 블록 문과 라벨 문이 앞 문에 붙는 경우.
+   **`{` 앞에서 자르지 않는 것은 의도적으로 옳다** — 자르면 Allman 스타일
+   `function g()\n{ return 1; }`에서 내부 함수의 `return`이 블록으로 새어나와
+   **불건전**해진다. 프로브로 확인했고
+   (`a_brace_on_its_own_line_does_not_start_a_statement`), 회귀 테스트로
+   고정했다.
+
+### 6. 그 밖
+
+- **TSX/JSX**: `JsxRaw`가 단일 토큰이라 JSX 안의 `"return 1;"` 같은 텍스트가
+  문으로 오독되지 않는다. `.ttx` 양방향 프로브로 확인.
+- **성능**: 80KB 이상 대용량 파일 10개 기준 base 0.336s / new 0.318s — 차이 없음.
+- **전체 스위트**: 746개 통과.
+
 ## 검증
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test` — 744개 통과 (직접 빌드한 typescript-go 백엔드 연동 상태)
+- [x] `cargo test` — 746개 통과 (직접 빌드한 typescript-go 백엔드 연동 상태)
 
 ## 결과
 
