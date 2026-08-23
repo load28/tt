@@ -1,15 +1,33 @@
 # Install tt
 
-You need [Bun](https://bun.sh/) to run the recommended setup command. The
-generated project installs the prebuilt `ttc` compiler and TypeScript 7, so
-Rust, Go, and a separate typescript-go checkout are not required.
+You need [Bun](https://bun.sh/) to run the recommended setup command. TT
+packages and the prebuilt `ttc` compiler are installed from npm.
+
+During early development, the published TypeScript 7 package does not yet
+expose the sync API used by `ttc`. Build only that toolchain from the current
+[typescript-go source](https://github.com/microsoft/typescript-go); TT itself
+still comes from npm:
+
+```sh
+git clone https://github.com/microsoft/typescript-go.git
+cd typescript-go
+npm ci
+mkdir -p built/local
+go build -o built/local/tsgo ./cmd/tsgo
+npx tsc -b _packages/native-preview
+export TTC_TSGO_ROOT="$PWD"
+```
+
+Keep `TTC_TSGO_ROOT` in every shell that runs `ttc`. Launch VS Code from the
+same shell when using TT editor services. The executable and API client must
+come from the same checkout because their protocol is not version-negotiated.
 
 ## Automatic setup
 
 Create a Vite + TypeScript project with a starter `.tt` module:
 
 ```sh
-bunx @load28/create-tt@latest my-app
+bunx @load28/create-tt@dev my-app
 cd my-app
 bun run dev
 ```
@@ -18,12 +36,13 @@ Add tt to an existing TypeScript project:
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@latest init
+bunx @load28/create-tt@dev init
 bun run tt:check
 ```
 
 `init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
-`package.json`. It adds `@load28/tt-lang`, TypeScript 7, `@load28/unplugin-tt`, and TT scripts.
+`package.json`. The `@dev` initializer adds the `dev` channel of
+`@load28/tt-lang` and `@load28/unplugin-tt`, TypeScript 7, and TT scripts.
 For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
 that composes the existing config; it never rewrites the user's config source.
 Run `bun run tt:dev` or `bun run tt:build` to use that wrapper. esbuild build
@@ -33,16 +52,16 @@ line that must be added instead.
 Useful non-interactive options:
 
 ```sh
-bunx @load28/create-tt@latest init --bundler vite
-bunx @load28/create-tt@latest init --bundler none
-bunx @load28/create-tt@latest init --no-install
-bunx @load28/create-tt@latest init --package-manager bun
+bunx @load28/create-tt@dev init --bundler vite
+bunx @load28/create-tt@dev init --bundler none
+bunx @load28/create-tt@dev init --no-install
+bunx @load28/create-tt@dev init --package-manager bun
 ```
 
 New projects always use Bun. An existing project keeps the package manager in
 its `packageManager` field or lockfile unless `--package-manager` is passed.
 
-### Install locally built packages through a registry
+## Repository development: install locally built packages through a registry
 
 For compiler development, run a real npm-compatible registry instead of
 replacing dependencies with `file:` paths. Start Verdaccio in one terminal:
@@ -74,7 +93,7 @@ proxies third-party packages such as Vite and TypeScript.
 Install the compiler and the TypeScript version it drives:
 
 ```sh
-bun add -d @load28/tt-lang typescript@7
+bun add -d @load28/tt-lang@dev typescript@7
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
@@ -97,7 +116,7 @@ to `.gitignore`. Do not edit generated files.
 Install the direct-source plugin in addition to the compiler:
 
 ```sh
-bun add -d @load28/tt-lang typescript@7 @load28/unplugin-tt
+bun add -d @load28/tt-lang@dev typescript@7 @load28/unplugin-tt@dev
 ```
 
 Put `tt()` first in the bundler's plugins array:
@@ -152,4 +171,12 @@ import { render } from "./notice.tt";
 ```
 
 Run `bunx ttc --check-types src` before the normal build. For editor diagnostics
-and navigation, install the TT VS Code extension and open the project root.
+and navigation, download `tt-language-<version>.vsix` from the newest
+[GitHub Releases](https://github.com/load28/tt/releases) pre-release. Install it
+with **Extensions: Install from VSIX...** in the VS Code Command Palette, or:
+
+```sh
+code --install-extension ./tt-language-<version>.vsix
+```
+
+Open the project root from the shell that provides `TTC_TSGO_ROOT`.

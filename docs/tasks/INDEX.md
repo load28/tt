@@ -195,7 +195,9 @@
 | TASK-185 | release 0.3.0-dev.4 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-185-release-0.3.0-dev.4.md](./TASK-185-release-0.3.0-dev.4.md) |
 | TASK-186 | npm 패키지를 `@load28` 스코프로 통일 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-186-unique-user-package-names.md](./TASK-186-unique-user-package-names.md) |
 | TASK-187 | release 0.3.0-dev.5 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-187-release-0.3.0-dev.5.md](./TASK-187-release-0.3.0-dev.5.md) |
+| TASK-188 | 설치 문서 역할 분리와 typescript-go 소스 연동 안내 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-188-installation-document-boundaries.md](./TASK-188-installation-document-boundaries.md) |
+| TASK-189 | GitHub VSIX 확장 설치 안내 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-189-github-vsix-installation-guide.md](./TASK-189-github-vsix-installation-guide.md) |
 
 ## 다음 태스크 번호
 
-**TASK-188**
+**TASK-190**

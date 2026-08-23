@@ -12,13 +12,19 @@ For a complete Bun + Vite project, or to add tt to an existing TypeScript
 project, use the initializer instead:
 
 ```sh
-bunx @load28/create-tt@latest my-app
-bunx @load28/create-tt@latest init
+bunx @load28/create-tt@dev my-app
+bunx @load28/create-tt@dev init
 ```
 
 ```sh
-bun add -d @load28/tt-lang typescript@7
+bun add -d @load28/tt-lang@dev typescript@7
 ```
+
+The published TypeScript 7 package does not yet expose the sync API used by
+`ttc`. During early development, build a current
+[typescript-go](https://github.com/microsoft/typescript-go) checkout and set
+`TTC_TSGO_ROOT` as described in the
+[installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md).
 
 ```sh
 bunx ttc -o build src/     # compile a source tree to TypeScript
@@ -29,6 +35,10 @@ bunx ttc --types src/      # editor/typecheck declarations
 Using a bundler? [`@load28/unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
 reads `.tt` files directly in Vite, Rollup, webpack, Rspack, esbuild and
 Farm, and finds this package's binary automatically.
+
+For editor support, download `tt-language-<version>.vsix` from the newest
+[GitHub Releases](https://github.com/load28/tt/releases) pre-release and use
+**Extensions: Install from VSIX...** in VS Code.
 
 ## Supported platforms
 
@@ -60,7 +70,7 @@ binaryPath(); // absolute path to the ttc binary for this platform
 ## Local development install
 
 In a checkout of the [tt repository](https://github.com/load28/tt),
-`./scripts/setup` stamps this directory for local installs. A project can
+`./scripts/setup --tsgo-root /path/to/typescript-go` stamps this directory for local installs. A project can
 then use the work-in-progress compiler like any other dependency:
 
 ```sh

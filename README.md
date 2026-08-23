@@ -26,20 +26,46 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 
 ## Install and use
 
-Install the prebuilt compiler from npm. Rust is not required on supported platforms.
+Install TT's official development packages from npm. Rust is not required on
+supported platforms. The one source-built prerequisite is typescript-go:
+the published TypeScript 7 package does not yet expose the sync API used by
+`ttc`.
 
 ```sh
-bunx @load28/create-tt@latest my-app
-bunx @load28/create-tt@latest init       # in an existing TypeScript project
+git clone https://github.com/microsoft/typescript-go.git
+cd typescript-go
+npm ci
+mkdir -p built/local
+go build -o built/local/tsgo ./cmd/tsgo
+npx tsc -b _packages/native-preview
+export TTC_TSGO_ROOT="$PWD"
+```
+
+Keep `TTC_TSGO_ROOT` in the environment that runs `ttc`, and launch VS Code
+from the same shell. The executable and API client must come from the same
+checkout.
+
+```sh
+bunx @load28/create-tt@dev my-app
+bunx @load28/create-tt@dev init       # in an existing TypeScript project
 ```
 
 The automatic installer uses Bun for new projects. The complete automatic and
 manual paths are in the [installation guide](./docs/getting-started.md).
 
+The development VS Code extension is not published to the Marketplace.
+Download `tt-language-<version>.vsix` from the newest pre-release on
+[GitHub Releases](https://github.com/load28/tt/releases), then run
+**Extensions: Install from VSIX...** from the Command Palette or:
+
+```sh
+code --install-extension ./tt-language-<version>.vsix
+```
+
 For a manual compiler-only install:
 
 ```sh
-bun add -d @load28/tt-lang typescript@7
+bun add -d @load28/tt-lang@dev typescript@7
 ```
 
 Compile a file or source tree, or check it without writing output:
@@ -71,14 +97,31 @@ The rest of the file is ordinary TypeScript. Existing TypeScript types, modules,
 
 ## Develop tt
 
-The compiler is a Rust crate with a small public API and an `ttc` CLI. Rust 1.88 or newer is required. Node.js and TypeScript are needed for the full integration suite.
+The compiler is a Rust crate with a small public API and an `ttc` CLI. Rust
+1.88 or newer is required. The complete local environment also needs Bun,
+Node.js, Go, and a typescript-go checkout.
 
 ```sh
 git clone https://github.com/load28/tt.git
+git clone https://github.com/microsoft/typescript-go.git
 cd tt
-cargo build
-cargo test
+./scripts/setup --tsgo-root ../typescript-go
 ```
+
+`scripts/setup` builds the current typescript-go checkout, a release `ttc`,
+and the VS Code extension. Later runs reuse `.tt-dev/toolchain.json`; the
+script never updates either Git checkout.
+
+To test exactly what package consumers receive, publish the local TT packages
+to an npm-compatible registry:
+
+```sh
+bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
+bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
+```
+
+The second command prints the matching `create-tt` bootstrap command. Full
+contributor setup details are in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 Before submitting a change, run the repository gates:
 
@@ -87,8 +130,6 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
-
-For local compiler, TypeScript, and VS Code extension setup, run `./scripts/setup --tsgo-npm`. Contribution workflow and project rules are in [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 The compiler can also be embedded as a Rust library:
 

@@ -26,20 +26,44 @@ export const area = (shape: Shape): number =>
 
 ## 설치와 사용
 
-npm에서 프리빌트 컴파일러를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지 않습니다.
+npm에서 TT의 공식 개발 패키지를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지
+않습니다. 단, 현재 npm의 TypeScript 7에는 `ttc`가 사용하는 sync API가 아직
+없으므로 typescript-go만 최신 소스에서 빌드합니다.
 
 ```sh
-bunx @load28/create-tt@latest my-app
-bunx @load28/create-tt@latest init       # 기존 TypeScript 프로젝트에서 실행
+git clone https://github.com/microsoft/typescript-go.git
+cd typescript-go
+npm ci
+mkdir -p built/local
+go build -o built/local/tsgo ./cmd/tsgo
+npx tsc -b _packages/native-preview
+export TTC_TSGO_ROOT="$PWD"
+```
+
+`ttc`를 실행하는 환경에 `TTC_TSGO_ROOT`를 유지하고 같은 셸에서 VS Code를
+실행합니다. 실행 파일과 API 클라이언트는 같은 체크아웃에서 빌드해야 합니다.
+
+```sh
+bunx @load28/create-tt@dev my-app
+bunx @load28/create-tt@dev init       # 기존 TypeScript 프로젝트에서 실행
 ```
 
 새 프로젝트의 자동 설치에는 Bun을 사용합니다. 자동 설치와 번들러별 수동 절차는
 [설치 가이드](./docs/getting-started.ko.md)에 정리되어 있습니다.
 
+개발용 VS Code 확장은 Marketplace에 게시하지 않습니다. 최신
+[GitHub Releases](https://github.com/load28/tt/releases) pre-release에서
+`tt-language-<버전>.vsix`를 내려받고 명령 팔레트에서
+**Extensions: Install from VSIX...**를 실행하거나 다음 명령으로 설치합니다.
+
+```sh
+code --install-extension ./tt-language-<버전>.vsix
+```
+
 컴파일러만 수동으로 설치하려면 다음 명령을 사용합니다.
 
 ```sh
-bun add -d @load28/tt-lang typescript@7
+bun add -d @load28/tt-lang@dev typescript@7
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
@@ -71,14 +95,31 @@ cargo install --git https://github.com/load28/tt
 
 ## tt 개발하기
 
-컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.88 이상이 필요합니다. 전체 통합 테스트에는 Node.js와 TypeScript도 필요합니다.
+컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.88
+이상이 필요합니다. 전체 로컬 환경에는 Bun, Node.js, Go, typescript-go
+체크아웃도 필요합니다.
 
 ```sh
 git clone https://github.com/load28/tt.git
+git clone https://github.com/microsoft/typescript-go.git
 cd tt
-cargo build
-cargo test
+./scripts/setup --tsgo-root ../typescript-go
 ```
+
+`scripts/setup`은 현재 typescript-go 체크아웃, release `ttc`, VS Code 확장을
+빌드합니다. 이후 실행은 `.tt-dev/toolchain.json`의 설정을 재사용하며 두 Git
+체크아웃을 자동으로 갱신하지 않습니다.
+
+패키지 사용자가 받는 형태를 그대로 시험하려면 로컬 TT 패키지를 npm 호환
+레지스트리에 게시합니다.
+
+```sh
+bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
+bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
+```
+
+두 번째 명령이 같은 레지스트리를 사용하는 `create-tt` 실행 명령을 출력합니다.
+전체 기여자 설정은 [CONTRIBUTING.md](./CONTRIBUTING.md)에 있습니다.
 
 변경을 제출하기 전에 저장소 검증 게이트를 실행합니다.
 
@@ -87,8 +128,6 @@ cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
-
-로컬 컴파일러, TypeScript, VS Code 확장을 함께 설정하려면 `./scripts/setup --tsgo-npm`을 실행하세요. 기여 절차와 프로젝트 규칙은 [CONTRIBUTING.md](./CONTRIBUTING.md)에 있습니다.
 
 컴파일러는 Rust 라이브러리로도 포함할 수 있습니다.
 

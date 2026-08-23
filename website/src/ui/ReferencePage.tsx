@@ -116,7 +116,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
 }
 
 function InstallCommand({ language }: { language: Language }) {
-  const command = 'bunx @load28/create-tt@latest my-app'
+  const command = 'bunx @load28/create-tt@dev my-app'
   const [copied, setCopied] = useState(false)
   return (
     <div className="install-command">
@@ -136,7 +136,12 @@ function InstallCommand({ language }: { language: Language }) {
 }
 
 function GuideSections({ sections, language }: {
-  sections: Array<{ title: Record<Language, string>; body: Record<Language, string>; code: string }>
+  sections: Array<{
+    title: Record<Language, string>
+    body: Record<Language, string>
+    code: string
+    link?: { href: string; en: string; ko: string }
+  }>
   language: Language
 }) {
   return (
@@ -145,6 +150,11 @@ function GuideSections({ sections, language }: {
         <section className="guide-section" key={section.title.en}>
           <h2>{section.title[language]}</h2>
           <p>{section.body[language]}</p>
+          {section.link && (
+            <a className="guide-section__link" href={section.link.href} target="_blank" rel="noreferrer">
+              {section.link[language]}
+            </a>
+          )}
           <pre><code>{section.code}</code></pre>
         </section>
       ))}
