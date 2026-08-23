@@ -38,6 +38,6 @@
     "tt-lang-linux-arm64": "0.0.0-dev",
     "tt-lang-darwin-x64": "0.0.0-dev",
     "tt-lang-darwin-arm64": "0.0.0-dev",
-    "tt-lang-win32-x64-msvc": "0.0.0-dev"
+    "ttlang-native-msvc": "0.0.0-dev"
   }
 }
