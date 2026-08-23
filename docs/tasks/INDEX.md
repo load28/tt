@@ -194,7 +194,7 @@
 | TASK-184 | npm publish 로컬 경로 명시 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-184-explicit-npm-publish-paths.md](./TASK-184-explicit-npm-publish-paths.md) |
 | TASK-185 | release 0.3.0-dev.4 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-185-release-0.3.0-dev.4.md](./TASK-185-release-0.3.0-dev.4.md) |
 | TASK-186 | npm 패키지를 `@load28` 스코프로 통일 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-186-unique-user-package-names.md](./TASK-186-unique-user-package-names.md) |
-| TASK-187 | release 0.3.0-dev.5 | 진행 중 | 2026-08-23 | — | [TASK-187-release-0.3.0-dev.5.md](./TASK-187-release-0.3.0-dev.5.md) |
+| TASK-187 | release 0.3.0-dev.5 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-187-release-0.3.0-dev.5.md](./TASK-187-release-0.3.0-dev.5.md) |
 
 ## 다음 태스크 번호
 
