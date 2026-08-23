@@ -3,11 +3,17 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { basename, join, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
+const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+const ttChannel = dependencyChannel(ownManifest.version)
 const versions = {
-  'tt-lang': 'latest',
-  'unplugin-tt': 'latest',
+  'tt-lang': ttChannel,
+  'unplugin-tt': ttChannel,
   typescript: '^7.0.0',
   vite: '^8.0.0',
+}
+
+export function dependencyChannel(packageVersion) {
+  return /-dev\./.test(packageVersion) ? 'dev' : 'latest'
 }
 
 const bundlers = {

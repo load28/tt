@@ -252,6 +252,11 @@ npm ci && npx tsc -b
 npx @vscode/vsce package --no-dependencies
 ```
 
+개발 배포는 Marketplace를 사용하지 않습니다. `main`의 기준 버전 상승이 CI를
+통과하면 GitHub Releases에 pre-release와 `.vsix`가 생성됩니다. 파일을 내려받은
+뒤 VSCode 명령 팔레트에서 **Extensions: Install from VSIX...**를 실행해
+설치합니다.
+
 확장은 TypeScript를 번들하지 않습니다 — 타입은 tt 엔진이 프로젝트의
 TypeScript 7(`tsgo`)로 검사하고, `tsgo`는 표준 라이브러리 선언을 실행
 파일 안에 갖고 있습니다. vsix에 담기는 것은 컴파일된 서버/클라이언트와

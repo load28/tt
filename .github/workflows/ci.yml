@@ -57,8 +57,8 @@ jobs:
       - name: Test
         run: cargo test
 
-      - name: Test project initializer
-        run: node --test packages/create-tt/test/*.test.mjs
+      - name: Test npm release tooling and project initializer
+        run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
 
       # A skipped suite is green in every other way, so the suite itself
       # has to go red: `TTC_REQUIRE_TSGO` turns "no toolchain found" from a

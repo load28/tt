@@ -4,7 +4,13 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import test from 'node:test'
 
-import { createProject, detectBundler, initializeExisting, run } from '../src/installer.js'
+import { createProject, dependencyChannel, detectBundler, initializeExisting, run } from '../src/installer.js'
+
+test('keeps dependencies on the installer release channel', () => {
+  assert.equal(dependencyChannel('0.3.0-dev.20260823.143015.42.1'), 'dev')
+  assert.equal(dependencyChannel('0.3.0'), 'latest')
+  assert.equal(dependencyChannel('0.0.0-dev'), 'latest')
+})
 
 test('creates a complete Vite project without installing', async () => {
   const parent = await mkdtemp(join(tmpdir(), 'create-tt-new-'))

@@ -84,3 +84,20 @@ CI가 동일한 게이트를 강제합니다. 새 기능에는 반드시 테스�
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가
 처음 접하는 기능이면 영문·한글 README에도 반영하세요. 공개 Rust API를 바꾸면
 rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실행됩니다.
+
+## 개발 버전 배포
+
+`main`에서 `Cargo.toml`의 기준 버전이 올라가고 `CI`가 성공하면
+[`Dev Release`](./.github/workflows/dev-release.yml)가 자동으로 개발 빌드를
+배포합니다. 같은 기준 버전을 다시 배포할 때는 GitHub Actions에서 이 워크플로를
+수동 실행합니다. 저장소에는 npm 게시 권한의 `NPM_TOKEN` secret이 필요합니다.
+
+npm 버전은 `<기준버전>-dev.<UTC 날짜>.<UTC 시간>.<run>.<attempt>`이며 모두
+`dev` dist-tag로 격리됩니다. 확장은 `0.<YYMMDD>.<HHMMSS>` 버전의 VSIX로
+패키징해 같은 실행의 GitHub pre-release에 첨부합니다. GitHub Releases에서
+VSIX를 내려받아 VS Code의 `Extensions: Install from VSIX...`로 설치합니다.
+
+```sh
+bun add -d tt-lang@dev unplugin-tt@dev
+bunx create-tt@dev my-app
+```
