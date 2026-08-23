@@ -119,10 +119,10 @@ function connect(): Client {
   };
 }
 
-/** A server with `source` open as an .rl document, ready to be asked. */
-async function open(source: string) {
+/** A server with `source` open as an rl-family document, ready to be asked. */
+async function open(source: string, languageId: "rl" | "rlx" = "rl") {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rl-server-test-"));
-  const file = path.join(dir, "main.rl");
+  const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
   const uri = pathToFileURL(file).toString();
   const client = connect();
@@ -136,7 +136,7 @@ async function open(source: string) {
   });
   client.notify("initialized", {});
   client.notify("textDocument/didOpen", {
-    textDocument: { uri, languageId: "rl", version: 1, text: source },
+    textDocument: { uri, languageId, version: 1, text: source },
   });
 
   /** Completion at the end of `marker`'s first occurrence. */
@@ -173,6 +173,63 @@ async function open(source: string) {
 
   return { client, uri, completion, stop: () => client.stop() };
 }
+
+const RLX_EDITOR_SOURCE = [
+  "declare global {",
+  "  namespace JSX { interface IntrinsicElements { main: { children?: unknown } } }",
+  "}",
+  "enum State { Ready(value: string), Empty }",
+  "declare const state: State;",
+  "export const View = () => {",
+  "  const label = match (state) {",
+  "    Ready(value) => value,",
+  '    Empty => "empty",',
+  "  };",
+  "  const bad: number = label;",
+  "  return <main>{label.toUpperCase()}</main>;",
+  "};",
+  "",
+].join("\n");
+
+test(
+  "rlx documents receive completion, hover, diagnostics, and semantic tokens",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, completion, stop } = await open(RLX_EDITOR_SOURCE, "rlx");
+    try {
+      const diagnosticPromise = client.waitFor(
+        "textDocument/publishDiagnostics",
+        (params) =>
+          params.uri === uri &&
+          params.diagnostics.some((diagnostic: any) => diagnostic.code === "ts2322"),
+      );
+      const members = await completion("label.");
+      assert.ok(
+        members.labels.includes("toUpperCase"),
+        `missing toUpperCase in: ${members.labels}`,
+      );
+
+      const hover = await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionOf(RLX_EDITOR_SOURCE, "const lab"),
+      });
+      assert.match(String(hover.result?.contents?.value ?? ""), /label: string/);
+
+      const published = await diagnosticPromise;
+      const mismatch = published.diagnostics.find(
+        (diagnostic: any) => diagnostic.code === "ts2322",
+      );
+      assert.equal(covered(RLX_EDITOR_SOURCE, mismatch.range), "label");
+
+      const semantic = await client.request("textDocument/semanticTokens/full", {
+        textDocument: { uri },
+      });
+      assert.ok(semantic.result?.data?.length > 0, JSON.stringify(semantic.result));
+    } finally {
+      stop();
+    }
+  },
+);
 
 const STD_SOURCE = [
   'import type { TOption, TResult } from "@rl/std";',

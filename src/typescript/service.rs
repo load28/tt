@@ -144,7 +144,7 @@ impl Service {
                 "textDocument/didOpen",
                 serde_json::json!({
                     "textDocument": {
-                        "uri": uri, "languageId": "typescript",
+                        "uri": uri, "languageId": language_id(uri),
                         "version": version, "text": text,
                     },
                 }),
@@ -219,6 +219,16 @@ impl Service {
                 self.alive = false;
                 format!("the TypeScript server is gone: {e}")
             })
+    }
+}
+
+/// LSP document kind for a lowered TypeScript-family module. The projected
+/// URI owns this decision: `.rl` is served as `.rl.ts`, `.rlx` as `.rlx.tsx`.
+fn language_id(uri: &str) -> &'static str {
+    if uri.ends_with(".tsx") {
+        "typescriptreact"
+    } else {
+        "typescript"
     }
 }
 
@@ -412,4 +422,18 @@ fn env_path(var: &str) -> Option<PathBuf> {
     std::env::var_os(var)
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::language_id;
+
+    #[test]
+    fn projected_rlx_documents_open_as_typescript_react() {
+        assert_eq!(
+            language_id("file:///project/view.rlx.tsx"),
+            "typescriptreact"
+        );
+        assert_eq!(language_id("file:///project/model.rl.ts"), "typescript");
+    }
 }

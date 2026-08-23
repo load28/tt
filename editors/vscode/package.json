@@ -46,8 +46,8 @@
         ],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./icons/rl-file-light.svg",
-          "dark": "./icons/rl-file-dark.svg"
+          "light": "./icons/rlx-file-light.svg",
+          "dark": "./icons/rlx-file-dark.svg"
         }
       }
     ],
@@ -113,7 +113,7 @@
           "scope": "resource",
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Report TypeScript type errors in `.rl` files. The language server type-checks the TypeScript each buffer compiles to and maps the errors back onto the source, so a type error inside a `match` arm or a `|>` pipeline is reported where you wrote it. rl-level errors always come from `rlc` and are unaffected."
+          "markdownDescription": "Report TypeScript type errors in `.rl` and `.rlx` files. The language server type-checks the TypeScript or TSX each buffer compiles to and maps the errors back onto the source, so a type error inside a `match` arm, JSX expression, or a `|>` pipeline is reported where you wrote it. rl-level errors always come from `rlc` and are unaffected."
         },
         "rl.typedChecks": {
           "scope": "resource",
@@ -130,13 +130,13 @@
             "off"
           ],
           "default": "refresh",
-          "markdownDescription": "Rebuild a file's editor sidecar (`x.rl.d.ts` and its declaration map) when it is saved, so `.ts` files importing it keep type-checking and \"go to definition\" lands in the `.rl` source. `refresh` only rewrites sidecars that already exist (a project opts in by running `rlc --sidecar` once); `always` creates them on first save; `off` disables it."
+          "markdownDescription": "Rebuild a file's editor sidecar (`x.rl.d.ts` or `x.rlx.d.ts` and its declaration map) when it is saved, so TypeScript-family files importing it keep type-checking and \"go to definition\" lands in the original source. `refresh` only rewrites sidecars that already exist (a project opts in by running `rlc --sidecar` once); `always` creates them on first save; `off` disables it."
         },
         "rl.sidecarDir": {
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.rl` file; set it to a directory such as `.rl-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves `./x.rl`."
+          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.rl` or `.rlx` file; set it to a directory such as `.rl-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports."
         },
         "rl.trace.server": {
           "scope": "window",

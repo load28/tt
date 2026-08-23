@@ -172,7 +172,8 @@
 | TASK-162 | 사용된 표준 라이브러리 멤버만 방출 | 완료 | 2026-08-22 | 2026-08-23 | [TASK-162](./TASK-162-stdlib-member-pruning.md) |
 | TASK-163 | `.rlx` — TSX 위의 rl 문법과 React 도구 체인 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-163](./TASK-163-rlx-tsx-support.md) |
 | TASK-164 | 웹사이트 `.rlx` React 가이드 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-164](./TASK-164-website-rlx-guide.md) |
+| TASK-165 | `.rlx` 에디터 기능 parity | 완료 | 2026-08-23 | 2026-08-23 | [TASK-165](./TASK-165-rlx-editor-parity.md) |
 
 ## 다음 태스크 번호
 
-**TASK-165**
+**TASK-166**

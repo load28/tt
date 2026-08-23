@@ -342,6 +342,35 @@ export const View = ({ state }: { state: State }) => (
   assertScope(lines, 3, "match", "keyword.control.match.rl");
 });
 
+test("the extension registers rlx with its grammar and dedicated icons", () => {
+  const extensionDir = path.join(syntaxesDir, "..");
+  const pkg = JSON.parse(
+    fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"),
+  );
+  assert.ok(pkg.activationEvents.includes("onLanguage:rlx"));
+
+  const language = pkg.contributes.languages.find(
+    (entry: { id: string }) => entry.id === "rlx",
+  );
+  assert.ok(language, "package.json contributes no rlx language");
+  assert.deepEqual(language.extensions, [".rlx"]);
+  assert.deepEqual(language.icon, {
+    light: "./icons/rlx-file-light.svg",
+    dark: "./icons/rlx-file-dark.svg",
+  });
+  assert.ok(fs.existsSync(path.join(extensionDir, language.icon.light)));
+  assert.ok(fs.existsSync(path.join(extensionDir, language.icon.dark)));
+
+  const grammar = pkg.contributes.grammars.find(
+    (entry: { language?: string }) => entry.language === "rlx",
+  );
+  assert.deepEqual(grammar, {
+    language: "rlx",
+    scopeName: "source.rlx",
+    path: "./syntaxes/rlx.tmLanguage.json",
+  });
+});
+
 // 마크다운 injection 문법 — ```rl 펜스 안을 source.rl로 칠한다.
 // 호스트(내장 마크다운 문법)를 vendoring하지 않고 injection 문법을 루트로
 // 직접 토크나이즈한다 — 펜스 인식·source.rl 임베드·펜스 종료·타 언어 펜스

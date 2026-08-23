@@ -6,6 +6,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`.rlx`가 `.rl`과 같은 수준의 VS Code 언어 기능을 제공한다** (TASK-165).
+  TSX 기반 하이라이팅과 전용 `RLX` 파일 아이콘을 등록하고, native TypeScript
+  service에는 projection을 `typescriptreact` 문서로 연다. 진단·완성·hover·정의·
+  참조·rename·signature help·semantic token·sidecar가 `.rlx` 원본 좌표에서
+  동작하는 계약을 에디터 회귀 테스트로 고정했다.
+
 ### Changed
 
 - **표준 라이브러리가 멤버 단위로 트리셰이킹된다** (TASK-162). 타입은

@@ -12,16 +12,16 @@ rl(`.rl`)과 rlx(`.rlx`) 파일을 위한 VSCode 언어 서비스입니다. VSCo
 | 문법 하이라이팅 | `.rl`은 업스트림 TypeScript, `.rlx`는 업스트림 TSX 문법을 각각 완전히 확장합니다. 두 생성 문법은 `syntaxes/src/`의 vendored 문법과 공용 rl 규칙에서 `npm run grammar`로 재생성합니다 |
 | 마크다운 코드 펜스 | 마크다운·MDX 문서의 ` ```rl `(또는 `~~~rl`) 펜스 안을 rl 문법으로 하이라이팅 — `syntaxes/rl.markdown.tmLanguage.json`이 내장 마크다운 문법(`text.html.markdown`)과 MDX 문법(`source.mdx`)에 주입되어 펜스 내용을 `source.rl`로 임베드한다 (Svelte 확장의 `markdown.svelte.codeblock`과 같은 구조) |
 | semantic 하이라이팅 | 문법(정규식)이 판별할 수 없는 것을 **파서의 분류**로 덮어쓴다 — LSP `semanticTokens` 표준: 파서가 청구한 `match`/`result`/`flow`/패턴 태그·바인딩은 확정 색으로, 청구하지 않은 look-alike(`match(...)`라는 이름의 함수 호출 등)는 평범한 식별자로 되돌린다. 엔진 쪽은 파스 전용·무상태라 TypeScript 툴체인 없이도 동작 |
-| 파일 아이콘 | 탐색기·탭에서 `.rl`·`.rlx` 파일에 "RL" 배지 아이콘 표시 (라이트/다크 테마별). 언어 기본 아이콘을 지원하는 파일 아이콘 테마(기본 Seti 포함)에서 보이며, 자체 아이콘을 정의한 테마가 있으면 그쪽이 우선 |
+| 파일 아이콘 | 탐색기·탭에서 `.rl`은 "RL", `.rlx`는 "RLX" 배지 아이콘 표시 (라이트/다크 테마별). 언어 기본 아이콘을 지원하는 파일 아이콘 테마(기본 Seti 포함)에서 보이며, 자체 아이콘을 정의한 테마가 있으면 그쪽이 우선 |
 | 진단 (rl) | 편집할 때마다 **실제 컴파일러**(`rlc --check`)를 실행해 에러를 표시 — 에디터의 에러는 항상 컴파일러와 일치 |
 | 진단 (타입) | 버퍼가 컴파일된 TypeScript를 타입 검사해 `match` 암·`\|>` 파이프라인 **안의 타입 에러까지** 원본 위치에 표시 (`source: ts`). `rl.typeDiagnostics`로 끌 수 있음 |
 | 진단 (타입 기반 rl) | 타입이 있어야 판정되는 **rl 에러** — `val` 바인딩을 통한 변경, 스크루티니의 실제 타입 기준 소진성 — 을 편집 중에 표시. 서버가 버퍼를 자기 프로젝트의 일부로 두고 `rlc --check-types`를 돌리므로 문안은 컴파일러의 것 그대로. `rl.typedChecks`로 끌 수 있음 |
 | 자동완성 | match 암 위치의 케이스 태그(이미 덮은 태그 제외 — 대상 enum은 구조적 추론, 실패 시 보이는 enum 전체), `Enum.` 뒤 생성자(필드 탭스톱 스니펫)**와 그 객체의 TS 멤버**(`Result.map`·`Option.unwrapOrElse` 등 표준 라이브러리 콤비네이터), `Tag(` 안의 필드 바인딩, `enum`/`match`/`try`/`flow`/`result`/`let-else` 스니펫. 그 외 위치·`obj.` 멤버 접근은 TypeScript 언어 서비스의 완성 목록(rl 항목이 위). 항목을 고르면 그 항목의 **타입 시그니처와 JSDoc**을 채워서 보여줌 |
 | 시그니처 헬프 | 호출을 쓰는 동안 파라미터 힌트 — TypeScript 언어 서비스 위임이라 match 암·`\|>` 파이프라인 안에서도 동작 |
-| 참조 찾기 | TypeScript 언어 서비스 위임 — `.rl` import 너머 선언·사용처 포함 |
+| 참조 찾기 | TypeScript 언어 서비스 위임 — `.rl`·`.rlx` import 너머 선언·사용처 포함 |
 | 이름 변경 | 일반 TS 심볼은 TypeScript 언어 서비스 위임. rl 심볼(enum·케이스 태그)은 방출물의 `kind` 문자열과 연동되므로 거부(안전) |
 | 호버 | enum·케이스 선언 시그니처와 컴파일 형태 설명 (내장 `Option`/`Result`·import한 enum 포함). 그 외 심볼은 TypeScript 언어 서비스의 quick info |
-| 정의로 이동 | rl 심볼(케이스 태그·enum 이름)은 선언 위치로 — **`.rl` import 너머까지**. **그 외 모든 심볼(변수·함수·타입·import된 값)은 TypeScript 언어 서비스에 위임** — `.ts` 파일에서처럼 동작하고, `./x.rl` import도 따라간다 |
+| 정의로 이동 | rl 심볼(케이스 태그·enum 이름)은 선언 위치로 — **`.rl`·`.rlx` import 너머까지**. **그 외 모든 심볼(변수·함수·타입·import된 값)은 TypeScript 언어 서비스에 위임** — `.ts`·`.tsx` 파일에서처럼 동작하고 source-extension import도 따라간다 |
 | 문서 심볼 | Outline에 enum과 케이스 트리 표시 |
 | 빠른 수정 | 소진되지 않은 match에 "빠진 암 추가" / "와일드카드 `_` 암 추가" (import한 enum 포함) |
 
@@ -34,7 +34,7 @@ import 줄을 편집한 직후에는 저장 전까지 한 박자 늦을 수 있�
 
 rl 해석이 답하지 못하는 나머지 심볼은 **rl 엔진**(`rlc --server`)이
 맡습니다. 서버는 열린 버퍼를 엔진에 전달하고(didOpen/didChange/didClose),
-질문을 `.rl` 위치로 보내면 답도 `.rl` 위치로 돌아옵니다 — projection
+질문을 `.rl`·`.rlx` 위치로 보내면 답도 같은 원본 위치로 돌아옵니다 — projection
 (원본↔방출 TS 매핑), TypeScript 세션, 프로브까지 전부 엔진 안의 일입니다
 ([`lsp-architecture.md`](../../docs/design/lsp-architecture.md)). 방출물이
 순수 TS이므로 match 암 본문·스크루티니·`try`/`let-else`/`if let` 식·
@@ -48,7 +48,7 @@ rl 해석이 답하지 못하는 나머지 심볼은 **rl 엔진**(`rlc --server
   `paths` 등) 그쪽이 우선이고, 아니면 엔진이 표준 라이브러리 모듈을
   대신 넣어 둡니다. 설정이 없다고 `Option`/`Result`가 `any`가 되지
   않습니다.
-- **import한 `.rl` 모듈도 방출물로 서빙됩니다.** 디스크의 `.rl`은 열려
+- **import한 `.rl`·`.rlx` 모듈도 방출물로 서빙됩니다.** 디스크의 소스는 열려
   있지 않아도 엔진이 projection해서 넘깁니다(재-export 포함, 내용 기준
   캐시) — 원문을 넘기면 rl `enum`이 TS `enum`으로 잘못 파싱되어 그
   import를 건너온 값의 타입이 전부 무너집니다.
@@ -65,7 +65,7 @@ rl 해석이 답하지 못하는 나머지 심볼은 **rl 엔진**(`rlc --server
 ### 타입 진단
 
 TypeScript 언어 서비스가 보는 것이 방출물이므로, **그 타입 에러를 원본
-`.rl` 위치로 되돌려 표시합니다**(`rl.typeDiagnostics`, 기본 켜짐). rl
+`.rl`·`.rlx` 위치로 되돌려 표시합니다**(`rl.typeDiagnostics`, 기본 켜짐). rl
 구문 안에서만 드러나는 타입 에러 — 예를 들어 `|>` 스텝의 인자 타입이
 head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되는 경우 — 도
 이제 편집기에서 바로 보입니다.
@@ -171,7 +171,7 @@ npm 모드(`--tsgo-npm`)면 아무것도 주입하지 않고 위 순서 그대�
 `.ts`·`.tsx` 파일은 tsserver가 담당하는데 tsserver는 `.rl`·`.rlx` 확장자를 모르므로,
 `import { Notice } from "./notice.rl"`은 그대로 두면 `TS2307`이 됩니다.
 소스 옆에 **사이드카**(`notice.rl.d.ts` 또는 `view.rlx.d.ts`와 map)를 두면
-해결됩니다 — 에러가 사라지고, 정의 이동이 `.d.ts`가 아니라 **원본 `.rl`의
+해결됩니다 — 에러가 사라지고, 정의 이동이 `.d.ts`가 아니라 **원본 `.rl`·`.rlx`의
 해당 줄**로 갑니다.
 
 사이드카는 `rlc --sidecar`가 만들고, 이 확장이 **저장할 때마다 갱신**합니다.
@@ -235,7 +235,7 @@ npm test           # 서버 분석 로직 단위 테스트 (node --test)
 ```
 
 VSCode에서 `editors/vscode` 폴더를 열고 **F5** (Launch Extension)를 누르면
-확장 개발 호스트가 뜹니다. `.rl` 파일을 열어 확인하세요.
+확장 개발 호스트가 뜹니다. `.rl` 또는 `.rlx` 파일을 열어 확인하세요.
 
 저장소 루트의 `./scripts/setup`은 이 확장을 빌드해 vsix로 만들고 실제
 VSCode에 설치까지 합니다 — 업데이트는 항상 기존 설치를 삭제한 뒤 새로

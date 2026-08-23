@@ -100,6 +100,45 @@ test("always mode writes both sidecar files", { skip }, async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("rlx saves refresh TSX declarations and map back to the rlx source", { skip }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rlx-sidecar-test-"));
+  const rlx = path.join(dir, "view.rlx");
+  fs.writeFileSync(
+    path.join(dir, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        strict: true,
+        declaration: true,
+        jsx: "preserve",
+      },
+    }),
+  );
+  fs.writeFileSync(
+    rlx,
+    [
+      "declare namespace JSX { interface IntrinsicElements { main: {} } }",
+      "export enum State { Ready(label: string), Empty }",
+      "export const View = ({ state }: { state: State }) => (",
+      "  <main>{match (state) { Ready(label) => label, Empty => null }}</main>",
+      ");",
+      "",
+    ].join("\n"),
+  );
+
+  const result = await refreshSidecar(COMPILER, rlx, "always");
+  assert.equal(result.kind, "written", JSON.stringify(result));
+  const declaration = fs.readFileSync(`${rlx}.d.ts`, "utf8");
+  assert.match(declaration, /export type State/);
+  assert.match(declaration, /export declare const View/);
+  assert.match(declaration, /sourceMappingURL=view\.rlx\.d\.ts\.map/);
+  const map = JSON.parse(fs.readFileSync(`${rlx}.d.ts.map`, "utf8")) as {
+    sources: string[];
+  };
+  assert.deepEqual(map.sources, ["view.rlx"]);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test("declarations can live in their own tree", { skip }, async () => {
   const dir = workspace();
   const rl = path.join(dir, "notice.rl");

@@ -67,6 +67,137 @@ function workspace(): { dir: string; rl: string } {
   return { dir, rl };
 }
 
+const RLX_SOURCE = [
+  'import { format } from "./format";',
+  "declare global {",
+  "  namespace JSX { interface IntrinsicElements { main: { children?: unknown } } }",
+  "}",
+  "export enum State { Ready(value: number), Empty }",
+  "declare const state: State;",
+  "export const View = () => {",
+  "  const label = match (state) {",
+  "    Ready(value) => format(value),",
+  '    Empty => "empty",',
+  "  };",
+  "  const bad: number = label;",
+  "  return <main>{label.toUpperCase()}</main>;",
+  "};",
+  "",
+].join("\n");
+
+function rlxWorkspace(): { dir: string; rlx: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rlx-engine-test-"));
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(
+    path.join(dir, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        strict: true,
+        target: "es2022",
+        module: "preserve",
+        moduleResolution: "bundler",
+        jsx: "preserve",
+        skipLibCheck: true,
+        noEmit: true,
+      },
+      include: ["src"],
+    }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "src/format.tsx"),
+    "export function format(value: number): string { return value.toFixed(1); }\n",
+  );
+  const rlx = path.join(dir, "src/view.rlx");
+  fs.writeFileSync(rlx, RLX_SOURCE);
+  return { dir, rlx };
+}
+
+test("rlx receives the complete TypeScript and rl semantic surface", { skip }, async () => {
+  const { dir, rlx } = rlxWorkspace();
+
+  const diagnostics = await engine.tsDiagnostics(COMPILER, rlx);
+  const mismatch = diagnostics.find((diagnostic) => diagnostic.code === 2322);
+  assert.ok(mismatch, JSON.stringify(diagnostics));
+  assert.equal(sliceOf(RLX_SOURCE, mismatch!.range), "bad");
+
+  const hover = await engine.hover(
+    COMPILER,
+    rlx,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("label = match")),
+  );
+  assert.ok(hover, "hover has an answer in rlx");
+  assert.match(hover!.signature, /label: string/);
+
+  const completion = await engine.completion(
+    COMPILER,
+    rlx,
+    positionAt(
+      RLX_SOURCE,
+      RLX_SOURCE.indexOf("label.toUpperCase") + "label.".length,
+    ),
+    true,
+  );
+  assert.ok(
+    completion?.items.some((item) => item.label === "toUpperCase"),
+    JSON.stringify(completion),
+  );
+
+  const definition = await engine.definition(
+    COMPILER,
+    rlx,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("format(value)")),
+  );
+  assert.equal(definition.length, 1, JSON.stringify(definition));
+  assert.equal(
+    fs.realpathSync(definition[0].path),
+    fs.realpathSync(path.join(dir, "src/format.tsx")),
+  );
+
+  const references = await engine.references(
+    COMPILER,
+    rlx,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("label = match")),
+  );
+  assert.equal(references.length, 3, JSON.stringify(references));
+  for (const reference of references) {
+    assert.equal(fs.realpathSync(reference.path), fs.realpathSync(rlx));
+    assert.equal(sliceOf(RLX_SOURCE, reference.range), "label");
+  }
+
+  const edits = await engine.rename(
+    COMPILER,
+    rlx,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("label = match")),
+  );
+  assert.equal(edits?.length, 3, JSON.stringify(edits));
+
+  const signature = await engine.signatureHelp(
+    COMPILER,
+    rlx,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("format(value)") + "format(".length),
+  );
+  assert.ok(signature, "signature help has an answer in rlx");
+  assert.match(signature!.signatures[0].label, /format/);
+
+  const symbol = await engine.rlSymbol(
+    COMPILER,
+    rlx,
+    RLX_SOURCE,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("Ready(value) =>")),
+  );
+  assert.equal(symbol?.name, "Ready");
+  const rlCompletions = await engine.rlCompletions(
+    COMPILER,
+    rlx,
+    RLX_SOURCE,
+    positionAt(RLX_SOURCE, RLX_SOURCE.indexOf("Ready(value) =>")),
+  );
+  assert.ok(rlCompletions.some((item) => item.label === "Ready"));
+
+  const tokens = await engine.semanticTokens(COMPILER, RLX_SOURCE, rlx);
+  assert.ok(tokens?.some((token) => token.kind === "keyword"));
+});
+
 test("hover answers for a buffer the disk never saw", { skip }, async () => {
   const { rl } = workspace();
   // The disk copy never sees this text; the engine's overlay is the truth.
