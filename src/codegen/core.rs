@@ -22,33 +22,68 @@ use crate::program_syntax::{
 use crate::scanner::{at, ident_end, is_ident_start, scan_type_end, skip_ws_comments};
 use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 
+/// The one host-lowering failure the *input* can cause: the TypeScript in
+/// the file does not parse, so there is no TypeScript owner model to lower
+/// tt values against.
+///
+/// It is not an internal error and not codegen's to report — the phase that
+/// owns diagnostics turns it into a located one ([`crate::verify::in_source`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SourceNotTypeScript {
+    /// The syntax substrate's message.
+    pub(crate) message: String,
+    /// The source byte the parse stopped at.
+    pub(crate) source: usize,
+}
+
+/// Builds the host-lowering plan for a file, ahead of emission.
+///
+/// Emission is infallible by contract (`docs/design/compiler-architecture.md`),
+/// so the fallible half — projecting the file to TypeScript, joining every tt
+/// value to its owner, and planning the rewrites — is this separate step, run
+/// by the phase that can report. Every failure but
+/// [`SourceNotTypeScript`] is a broken compiler invariant and fails the
+/// build immediately (`docs/design/program-lowering.md` §11).
+pub(crate) fn lowering_plan(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> Result<LoweringPlan, SourceNotTypeScript> {
+    if !core.requires_host_lowering() {
+        return Ok(LoweringPlan::default());
+    }
+    let syntax =
+        match crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind) {
+            Ok(syntax) => syntax,
+            Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript {
+                message,
+                source,
+            }) => {
+                return Err(SourceNotTypeScript { message, source });
+            }
+            Err(error) => {
+                panic!("internal compiler error: TypeScript owner construction failed: {error:?}")
+            }
+        };
+    let evaluation =
+        crate::evaluation_ir::EvaluationFile::build(&syntax, core).unwrap_or_else(|error| {
+            panic!("internal compiler error: Evaluation IR construction failed: {error:?}")
+        });
+    Ok(evaluation.lowering_plan().unwrap_or_else(|error| {
+        panic!("internal compiler error: owner lowering plan failed: {error:?}")
+    }))
+}
+
 pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
     source: &'a str,
-    source_kind: SourceKind,
+    lowering_plan: &LoweringPlan,
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
-    let lowering_plan = if core.requires_host_lowering() {
-        let syntax =
-            crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind)
-                .unwrap_or_else(|error| {
-                    panic!(
-                        "internal compiler error: TypeScript owner construction failed: {error:?}"
-                    )
-                });
-        let evaluation =
-            crate::evaluation_ir::EvaluationFile::build(&syntax, core).unwrap_or_else(|error| {
-                panic!("internal compiler error: Evaluation IR construction failed: {error:?}")
-            });
-        evaluation.lowering_plan().unwrap_or_else(|error| {
-            panic!("internal compiler error: owner lowering plan failed: {error:?}")
-        })
-    } else {
-        crate::evaluation_ir::LoweringPlan::default()
-    };
-    let target = TargetRewritePlan::build(&lowering_plan, core);
+    let target = TargetRewritePlan::build(lowering_plan, core);
     let emitter = Emitter {
         semantic,
         core,

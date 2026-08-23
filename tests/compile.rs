@@ -1436,6 +1436,102 @@ fn let_else_requires_parens_on_the_pattern() {
 }
 
 /* ------------------------------------------------------------------ */
+/* source TypeScript that does not parse                               */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn invalid_typescript_inside_a_claimed_construct_is_a_located_error() {
+    // Host lowering models the file's TypeScript, so it needs the file to
+    // *be* TypeScript. When it is not, that is a fact about the input
+    // reported at the byte the parse stopped on — not an internal error
+    // out of emission.
+    let e = err("const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n");
+    assert_eq!((e.line, e.col), (3, 13), "{}", e.message);
+    assert!(
+        e.message.contains("the TypeScript here does not parse"),
+        "{}",
+        e.message
+    );
+}
+
+#[test]
+fn invalid_typescript_in_a_match_arm_body_reports_the_byte_not_the_construct() {
+    // The `match` on this line parsed as tt perfectly well; only the arm
+    // body's TypeScript did not. The report names the failing byte and
+    // makes no claim about the construct around it.
+    let src = "const x = match (s) { A(v) => { const q = ; return q; }, _ => 0 };\n";
+    let report = ttc::compile_report(src, &Options::default());
+    assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
+    assert_eq!(
+        report.diagnostics[0].code,
+        ttc::DiagnosticCode::SourceNotTypeScript
+    );
+    assert_eq!(
+        report.diagnostics[0].start,
+        Some(42),
+        "{:#?}",
+        report.diagnostics[0]
+    );
+    assert!(
+        !report.diagnostics[0]
+            .message
+            .contains("did not parse as a tt"),
+        "{}",
+        report.diagnostics[0].message
+    );
+    assert!(
+        report.emit.is_none(),
+        "a file with no owner model emits nothing"
+    );
+}
+
+#[test]
+fn every_other_diagnostic_is_still_reported_with_it() {
+    // The precondition failing does not swallow what the semantic passes
+    // already found: one run reports everything.
+    let src = "enum E { A(x: number), A(y: number) }\nconst v = match (E.A(1)) { A(x) => { const q = ; return q; }, _ => 0 };\n";
+    let report = ttc::compile_report(src, &Options::default());
+    let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
+    assert!(
+        codes.contains(&ttc::DiagnosticCode::EnumDuplicateCase)
+            && codes.contains(&ttc::DiagnosticCode::SourceNotTypeScript),
+        "{codes:?}"
+    );
+}
+
+#[test]
+fn no_verify_does_not_bypass_the_lowering_precondition() {
+    // `--no-verify` skips the *output* self-check. This is not that check:
+    // without the owner model there is nothing to emit, so the error stands.
+    let opts = Options {
+        verify: false,
+        ..Options::default()
+    };
+    let e = compile(
+        "const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n",
+        &opts,
+    )
+    .expect_err("expected a compile error");
+    assert!(
+        e.message.contains("the TypeScript here does not parse"),
+        "{}",
+        e.message
+    );
+}
+
+#[test]
+fn a_file_without_tt_constructs_still_reports_through_the_output_self_check() {
+    // Nothing to lower ⇒ no projection is built, and the backstop that
+    // owned this case keeps owning it.
+    let e = err("const q = ;\n");
+    assert!(
+        e.message.contains("generated TypeScript failed to parse"),
+        "{}",
+        e.message
+    );
+}
+
+/* ------------------------------------------------------------------ */
 /* swc output verification                                             */
 /* ------------------------------------------------------------------ */
 

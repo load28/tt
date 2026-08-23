@@ -190,6 +190,36 @@ fn byte_of(text: &str, line: usize, col: usize) -> usize {
 /// standing on its own — a `match` in `dispatch.match(x)` or a string is
 /// not one. Nothing found means the text is ordinary TypeScript that
 /// simply does not parse, and the message stays as it is.
+/// The file's TypeScript, at byte `at`, is not TypeScript — established
+/// before host lowering rather than after emission.
+///
+/// The projection built for target lowering is the source with tt values
+/// replaced by placeholders, so a parse failure inside text copied from the
+/// source is the user's own syntax error, at a source byte with no mapping
+/// hops in between ([`crate::codegen::lowering_plan`]). Emission cannot run
+/// without the owner model that parse would have produced, so this is not a
+/// bypassable self-check but the reason the file has no output.
+///
+/// The message states only what the projection proves: which byte stopped
+/// the parse, and why that ends the compile. It does not guess at a tt
+/// construct nearby the way [`at_source`] does — at this boundary the
+/// claimed constructs are known, so a keyword on the failing line is just as
+/// likely to be one that parsed perfectly well, and the constructs that
+/// failed to claim have diagnostics of their own
+/// ([`crate::DiagnosticCode::blocks_projection`]).
+pub(crate) fn in_source(
+    source: &str,
+    failure: &crate::codegen::SourceNotTypeScript,
+) -> crate::error::TtError {
+    let at = failure.source.min(source.len());
+    let message = format!(
+        "the TypeScript here does not parse: {}. tt lowering models this file's TypeScript, \
+         so no output is emitted (`--no-verify` does not apply).",
+        failure.message,
+    );
+    crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
+}
+
 fn tt_construct_at(source: &str, at: usize) -> Option<(&'static str, usize)> {
     let at = at.min(source.len());
     let line_start = source[..at].rfind('\n').map_or(0, |p| p + 1);
