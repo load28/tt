@@ -1330,6 +1330,49 @@ fn let_else_divergence_still_rejects_every_normal_exit() {
 }
 
 #[test]
+fn let_else_divergence_sees_an_inline_if_let() {
+    // TASK-172: an `if let` body and its `else` are inline, so an exit
+    // written in either leaves the enclosing function — the statement
+    // carries the block's divergence exactly as an `if` does.
+    for body in [
+        "if let Ok(value) = r { return value; } else { return 1; }",
+        "if let Ok(value) = r { return value; } else { throw new Error(\"x\"); }",
+        "if let Ok(value) = r { return value; } else if let Err(error) = r { throw new Error(error); } else { return 0; }",
+        "if let Ok(value) = r { if let Ok(inner) = r { return inner; } else { return value; } } else { return 1; }",
+        "if let Ok(value) = r { while (true) { return value; } } else { return 1; }",
+    ] {
+        ok(&format!(
+            "enum Res {{ Ok(value: number), Err(error: string) }}\n\
+             function f(r: Res): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
+        ));
+    }
+}
+
+#[test]
+fn let_else_divergence_stops_at_an_isolated_value_region() {
+    // The other half: a match arm, a `result` block and a `try` statement
+    // are not approximations left as fall-through — an exit written in an
+    // isolated value region belongs to the construct's value and can never
+    // leave the block, and a `try` statement's early return is
+    // conditional. An `if let` missing either half falls through too.
+    for body in [
+        "if let Ok(value) = r { return value; }",
+        "if let Ok(value) = r { log(value); } else { return 1; }",
+        "if let Ok(value) = r { return value; } else { log(\"x\"); }",
+        "const x = match (r) { Ok(value) => value, Err(error) => 0 }; log(x);",
+        "const y = result { const a <- find(); a }; log(y);",
+        "try find();",
+        "const Ok(value) = r else { return 1; }; log(value);",
+    ] {
+        let e = err(&format!(
+            "enum Res {{ Ok(value: number), Err(error: string) }}\n\
+             function f(r: Res): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
+        ));
+        assert!(e.message.contains("must diverge"), "{body}: {}", e.message);
+    }
+}
+
+#[test]
 fn let_else_non_diverging_else_is_error() {
     let e =
         err("function f(): number {\n  const Some(v) = find() else { log(); };\n  return v;\n}\n");

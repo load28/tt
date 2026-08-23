@@ -33,6 +33,9 @@
 //! statement) lives here too, moved from the let-else parser — one
 //! implementation, shared by statement splitting wherever flow looks.
 
+use std::collections::HashMap;
+
+use crate::ast::{IfLetElse, IfLetStmt, Program, Segment};
 use crate::lexer::{Token, TokenKind};
 
 /// One body's control-flow graph.
@@ -117,21 +120,72 @@ pub fn diverges(body: &FlowBody) -> bool {
     true
 }
 
-/// Lowers one statement stream (a let-else `else` block's tokens) and
-/// answers whether it diverges.
-pub(crate) fn block_diverges(src: &str, tokens: &[Token]) -> bool {
-    diverges(&lower_block(src, tokens))
+/// Lowers a *parsed* statement stream — a let-else `else` block, whose tt
+/// constructs the parser has already claimed — and answers whether it
+/// diverges.
+///
+/// Of tt's constructs only `if let` can carry a region's divergence, and
+/// that is a fact about placement rather than a limit of this layer: an
+/// `if let` body and a let-else `else` block are **inline**, so an exit
+/// written there leaves the enclosing function, while a match arm, a
+/// `result` block and every other value region are isolated — an exit
+/// written in one belongs to the construct's value and can never leave
+/// the region it sits in (`crate::sema`'s `Place`). Treating them as
+/// fall-through is therefore the exact answer, not an approximation.
+pub(crate) fn program_diverges(src: &str, tokens: &[Token], program: &Program) -> bool {
+    let mut heads = IfLetHeads::new();
+    collect_if_let_heads(program, &mut heads);
+    diverges(&lower_region(src, tokens, &heads))
 }
 
 /// Builds the CFG of one token stream treated as a statement sequence.
-pub(crate) fn lower_block(src: &str, tokens: &[Token]) -> FlowBody {
-    let statements = Scanner { src, tokens }.statements(0, tokens.len());
+fn lower_region(src: &str, tokens: &[Token], if_lets: &IfLetHeads) -> FlowBody {
+    let statements = Scanner {
+        src,
+        tokens,
+        if_lets,
+    }
+    .statements(0, tokens.len());
     let mut builder = Builder { blocks: Vec::new() };
     let end = builder.block(Terminator::End);
     let entry = builder.seq(&statements, end, &mut Vec::new());
     FlowBody {
         blocks: builder.blocks,
         entry,
+    }
+}
+
+/// Where each tt `if let` statement's head ends, keyed by the byte offset
+/// of its `if`.
+///
+/// The scanner recognizes every TypeScript statement form from its own
+/// shape, but `if let` is tt syntax: where its pattern ends, where the
+/// scrutinee ends, and which `{` opens the then-block are decisions
+/// [`crate::parser::iflets`] already made. Re-deciding them here would be
+/// a second implementation of one rule, free to drift from the first — so
+/// the parser's answer is handed in and the scanner asks it only "does a
+/// tt statement start at this token, and where does its head end".
+type IfLetHeads = HashMap<usize, usize>;
+
+/// Every `if let` the scanner can reach: the region's own, and those
+/// nested in one's then-block or `else` continuation. Constructs the
+/// scanner never enters (a match arm, a `result` block) are not walked —
+/// missing one could only cost a divergence, never invent one.
+fn collect_if_let_heads(program: &Program, out: &mut IfLetHeads) {
+    for segment in &program.segments {
+        if let Segment::IfLet(stmt) = segment {
+            collect_if_let(stmt, out);
+        }
+    }
+}
+
+fn collect_if_let(stmt: &IfLetStmt, out: &mut IfLetHeads) {
+    out.insert(stmt.keyword_off, stmt.head_span.end);
+    collect_if_let_heads(&stmt.body, out);
+    match &stmt.else_part {
+        Some(IfLetElse::Block(program)) => collect_if_let_heads(program, out),
+        Some(IfLetElse::IfLet(chained)) => collect_if_let(chained, out),
+        None => {}
     }
 }
 
@@ -455,6 +509,10 @@ impl Builder {
 struct Scanner<'a> {
     src: &'a str,
     tokens: &'a [Token],
+    /// The tt parser's answer for the `if let` statements in this region
+    /// ([`IfLetHeads`]). Empty when the region has not been parsed, which
+    /// leaves every `if let` an opaque [`Stmt::Other`].
+    if_lets: &'a IfLetHeads,
 }
 
 impl<'a> Scanner<'a> {
@@ -497,7 +555,10 @@ impl<'a> Scanner<'a> {
                 };
                 (stmt, self.statement_end(at, end))
             }
-            Some("if") => self.if_statement(at, end),
+            Some("if") => match self.if_let_head(at) {
+                Some(head_end) => self.if_let_statement(at, end, head_end),
+                None => self.if_statement(at, end),
+            },
             Some("while") => self.while_statement(at, end),
             Some("do") => self.do_statement(at, end),
             Some("for") => self.for_statement(at, end),
@@ -532,6 +593,40 @@ impl<'a> Scanner<'a> {
         (
             Stmt::If {
                 then: Box::new(then),
+                else_,
+            },
+            next,
+        )
+    }
+
+    /// The end of the `if let` head starting at token `at`, when the tt
+    /// parser claimed one there.
+    fn if_let_head(&self, at: usize) -> Option<usize> {
+        self.if_lets.get(&self.tokens.get(at)?.span.start).copied()
+    }
+
+    /// `if let <pattern> = <scrutinee> { … } [else <embedded>]`, whose
+    /// head ends at `head_end`. From the block on, the shape *and* the
+    /// control flow are an `if`'s: the binding either matches and the
+    /// then-block runs, or it does not and the `else` continuation does
+    /// (a chained `else if let` among them). Both halves are inline, so
+    /// an exit written in either leaves the enclosing function — which is
+    /// what lets the statement carry a region's divergence at all.
+    fn if_let_statement(&self, at: usize, end: usize, head_end: usize) -> (Stmt<'a>, usize) {
+        let block =
+            (at..end).find(|&k| self.tokens[k].span.start >= head_end && self.is_punct(k, b'{'));
+        let Some((then, after)) = block.and_then(|block| self.braced(block, end)) else {
+            return (Stmt::Other, self.statement_end(at, end));
+        };
+        let (else_, next) = if self.word(after) == Some("else") {
+            let (branch, next) = self.statement(after + 1, end);
+            (Some(Box::new(branch)), next)
+        } else {
+            (None, after)
+        };
+        (
+            Stmt::If {
+                then: Box::new(Stmt::Block(then)),
                 else_,
             },
             next,
@@ -1261,9 +1356,11 @@ pub(crate) fn brace_opens_statement(src: &str, tokens: &[Token], last: usize, k:
 mod tests {
     use super::*;
 
+    /// Answers the divergence question the way the compiler asks it: the
+    /// region is parsed first, so tt's own constructs reach the graph.
     fn check(body: &str) -> bool {
         let tokens = crate::lexer::lex(body, 0, body.len());
-        block_diverges(body, &tokens)
+        program_diverges(body, &tokens, &crate::parser::parse(body))
     }
 
     #[test]
@@ -1425,6 +1522,60 @@ mod tests {
         ));
         // tt's `try` statement has neither tail, so it stays opaque.
         assert!(!check("try load();"));
+    }
+
+    #[test]
+    fn an_if_let_diverges_when_both_of_its_inline_halves_do() {
+        // An `if let` body and its `else` are inline — an exit written in
+        // either leaves the enclosing function — so the statement carries
+        // divergence exactly as an `if` does.
+        assert!(check(
+            "if let Ok(value) = r { return value; } else { return 1; }"
+        ));
+        assert!(check(
+            "if let Ok(value) = r { return value; } else { throw e; }"
+        ));
+        // A chained `else if let` is walked like an `else if`.
+        assert!(check(
+            "if let Ok(value) = r { return value; } else if let Err(error) = r { throw error; } else { return 0; }"
+        ));
+        // Nested in either half.
+        assert!(check(
+            "if let Ok(value) = r { if let Ok(inner) = r { return inner; } else { return value; } } else { return 1; }"
+        ));
+        // Without an `else` the unmatched pattern walks past the statement.
+        assert!(!check("if let Ok(value) = r { return value; }"));
+        assert!(!check(
+            "if let Ok(value) = r { log(value); } else { return 1; }"
+        ));
+        assert!(!check(
+            "if let Ok(value) = r { return value; } else { log(\"x\"); }"
+        ));
+        assert!(!check(
+            "if let Ok(value) = r { return value; } else if let Err(error) = r { throw error; }"
+        ));
+    }
+
+    #[test]
+    fn an_isolated_value_region_cannot_carry_the_blocks_divergence() {
+        // A match arm, a `result` block and a `try` statement are not
+        // approximations left as fall-through: an exit written in an
+        // isolated value region belongs to the construct's value and can
+        // never leave the block, and a `try` statement's early return is
+        // conditional. "Does not diverge" is the exact answer.
+        assert!(!check(
+            "const x = match (o) { Some(n) => n, None => 0 }; log(x);"
+        ));
+        assert!(!check("const y = result { const a <- load(); a }; log(y);"));
+        assert!(!check("try load();"));
+        assert!(!check(
+            "const Ok(value) = r else { return 1; }; log(value);"
+        ));
+        // …and a let-else whose own block diverges still falls through to
+        // the statement after it.
+        assert!(check(
+            "const Ok(value) = r else { return 1; }; return value;"
+        ));
     }
 
     #[test]

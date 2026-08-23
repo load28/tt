@@ -1005,6 +1005,80 @@ console.log(byLoop(2));
 }
 
 #[test]
+fn runtime_let_else_diverges_through_an_inline_if_let() {
+    require_toolchain!();
+    // TASK-172: `if let` is the one tt construct that can carry a block's
+    // divergence — its body and `else` are inline, so an exit written in
+    // either leaves `classify`, not the construct. tsc --strict must
+    // accept the narrowing that follows, and the values must come out
+    // right at run time.
+    let lines = run_with_std(
+        r#"
+import type { TOption, TResult } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+import * as Result from "./tt/result.js";
+
+function findUser(id: number): TOption<string> {
+  return id === 1 ? Option.Some("amy") : Option.None;
+}
+
+function backup(id: number): TResult<string, string> {
+  return id === 2 ? Result.Ok("bob") : Result.Err("none for " + id);
+}
+
+function classify(id: number): string {
+  const Some(value: user) = findUser(id) else {
+    if let Ok(value: fallback) = backup(id) {
+      return "backup " + fallback;
+    } else {
+      return "nobody " + id;
+    }
+  };
+  return "hello, " + user;
+}
+
+// A chained `else if let`, and a nested one in the then-half.
+function chained(id: number): string {
+  const Some(value: user) = findUser(id) else {
+    if let Ok(value: fallback) = backup(id) {
+      if let Some(value: again) = findUser(id) {
+        return "both " + again;
+      } else {
+        return "backup " + fallback;
+      }
+    } else if let Err(error) = backup(id) {
+      throw new Error(error);
+    } else {
+      return "unreachable";
+    }
+  };
+  return "hello, " + user;
+}
+
+console.log(classify(1));
+console.log(classify(2));
+console.log(classify(3));
+console.log(chained(2));
+try {
+  chained(3);
+} catch (e) {
+  console.log("threw " + (e as Error).message);
+}
+"#,
+    );
+    assert_eq!(
+        lines,
+        vec![
+            "hello, amy",
+            "backup bob",
+            "nobody 3",
+            "backup bob",
+            "threw none for 3",
+        ]
+    );
+}
+
+#[test]
 fn runtime_let_else_else_block_returns_an_object_literal() {
     require_toolchain!();
     // The natural shape for a `Result`-returning function: the else block

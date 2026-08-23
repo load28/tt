@@ -271,12 +271,13 @@
 | `docs/design/compiler-core.md` | §9와 Phase 5 잔여 갱신 |
 | `docs/ai/tt.md` | 발산 규칙 문단 갱신 |
 
-후속으로 등록할 만한 것(이번 범위 밖):
+후속(이번 범위 밖) — **TASK-173에서 전부 정산했다**:
 
-- **tt 고유 구문의 발산** — `else` 블록 안의 `match`/`if let`/`try`/`result`는
-  여전히 fall-through다. 이 계층은 구문 파싱 이전의 토큰 스트림 위에서 돌아
-  순환 의존 없이 판정할 수 없다. `HIR::LetElseStmt::else_body`(이미 lowered
-  body를 들고 있다) 위의 flow 패스가 제자리이며, 이는 설계 문서가 말하는
-  Phase 5 잔여(`Branch { condition: ExprId }`)와 같은 작업이다.
-- **도달 불가 코드 진단** — 그래프는 이미 도달 불가 블록을 알지만
-  (`return` 뒤의 문) 진단으로 표면화하지 않는다.
+- **tt 고유 구문의 발산** → TASK-173에서 구현. 이 태스크가 "fall-through"라고
+  적은 넷(`match`/`try`/`result`/중첩 let-else)은 사실 근사가 아니라 **정답**
+  이었고(배치가 isolated이거나 early return이 조건부라 발산할 수 없다),
+  실제로 갭이었던 것은 `if let` 하나였다 — 그 서술은 부정확했다.
+- **도달 불가 코드 진단** → TASK-173 결정 5에서 **내지 않기로** 확정했다.
+  문 수준 도달 불가는 tsc가 `allowUnreachableCode`로 소유한 진단이고
+  (원칙 2), tt가 소유하는 패턴 arm의 도달 불가는 `analysis/usefulness.rs`에
+  이미 구현되어 있다.
