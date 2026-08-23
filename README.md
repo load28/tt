@@ -4,6 +4,9 @@
 
 rl is a small language that adds expressive data and control-flow features to TypeScript, then compiles back to plain TypeScript.
 
+> [!WARNING]
+> **Early development:** rl is not yet recommended for production use. APIs and language behavior may change between releases.
+
 ```rl
 export enum Shape {
   Circle(radius: number),

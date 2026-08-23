@@ -56,6 +56,13 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
         </div>
       </header>
 
+      <aside className="development-notice" aria-label={language === 'ko' ? '개발 상태' : 'Development status'}>
+        <strong className="development-notice__label">{language === 'ko' ? '개발 중' : 'Early development'}</strong>
+        <span>{language === 'ko'
+          ? '아직 프로덕션 사용을 권장하지 않습니다. 릴리스 사이에 API와 언어 동작이 바뀔 수 있습니다.'
+          : 'Not yet recommended for production use. APIs and language behavior may change between releases.'}</span>
+      </aside>
+
       <div className="reference-layout">
         <aside className="reference-nav" aria-label={language === 'ko' ? '언어 API 목록' : 'Language API list'}>
           {content.groups.map((navGroup) => (

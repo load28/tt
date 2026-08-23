@@ -4,6 +4,9 @@
 
 rl은 TypeScript에 표현력 높은 데이터·제어 흐름 기능을 더하고, 다시 순수 TypeScript로 컴파일하는 작은 언어입니다.
 
+> [!WARNING]
+> **개발 중:** rl은 아직 프로덕션 사용을 권장하지 않습니다. 릴리스 사이에 API와 언어 동작이 바뀔 수 있습니다.
+
 ```rl
 export enum Shape {
   Circle(radius: number),

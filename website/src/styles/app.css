@@ -38,6 +38,15 @@ button:focus-visible, a:focus-visible { outline: 3px solid #6b7f18; outline-offs
   background: var(--surface); color: var(--ink); font-size: 13px; font-weight: 650; text-decoration: none; cursor: pointer;
 }
 .github-link { display: inline-flex; align-items: center; }
+.development-notice {
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  padding: 10px 24px; border-bottom: 1px solid #d7bd72; background: #fff1bd;
+  color: #5c4311; font-size: 13px; line-height: 1.5; text-align: center;
+}
+.development-notice__label {
+  flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; background: #5c4311;
+  color: #fff8df; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+}
 .reference-layout { display: grid; grid-template-columns: 244px minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
 .reference-nav {
   position: sticky; top: 72px; align-self: start; height: calc(100vh - 72px); overflow-y: auto;
@@ -81,6 +90,7 @@ pre { margin: 0; padding: 24px; overflow-x: auto; color: var(--code-ink); font-f
 @media (max-width: 800px) {
   .topbar { min-height: 64px; padding: 0 18px; }
   .brand__tag { display: none; }
+  .development-notice { align-items: flex-start; justify-content: flex-start; padding: 10px 18px; text-align: left; }
   .reference-layout { display: block; }
   .reference-nav {
     position: sticky; top: 64px; z-index: 10; display: flex; gap: 8px; width: 100%; height: auto;
