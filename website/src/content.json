@@ -147,12 +147,12 @@
         },
         {
           "title": { "en": "Manual compiler", "ko": "컴파일러 수동 설치" },
-          "body": { "en": "Install the published compiler and TypeScript 7 packages from npm. ttc uses the typescript-go checkout selected by TTC_TSGO_ROOT for its current API path.", "ko": "npm에서 공식 배포된 컴파일러와 TypeScript 7 패키지를 설치합니다. 현재 API 경로에서는 ttc가 TTC_TSGO_ROOT로 지정한 typescript-go 체크아웃을 사용합니다." },
-          "code": "bun add -d @load28/tt-lang@dev typescript@7\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "body": { "en": "Prerequisite: complete Current TypeScript prerequisite above and keep TTC_TSGO_ROOT exported before using this path. Then install the published compiler and TypeScript 7 project dependency from npm; typescript@7 does not replace the source-built toolchain used by ttc.", "ko": "선행 조건: 먼저 위의 현재 TypeScript 사전 준비를 완료하고 TTC_TSGO_ROOT를 설정한 상태여야 합니다. 그다음 npm에서 공식 컴파일러와 프로젝트 의존성인 TypeScript 7을 설치합니다. typescript@7은 ttc가 사용하는 소스 빌드 도구 체인을 대신하지 않습니다." },
+          "code": "# Requires the typescript-go build and TTC_TSGO_ROOT from above.\nbun add -d @load28/tt-lang@dev typescript@7\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
           "title": { "en": "Manual bundlers", "ko": "번들러 수동 설정" },
-          "body": { "en": "Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "@load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
+          "body": { "en": "This path has the same source-built typescript-go prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript-go 소스 빌드 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
           "code": "bun add -d @load28/tt-lang@dev typescript@7 @load28/unplugin-tt@dev\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]

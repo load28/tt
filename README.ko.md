@@ -60,7 +60,9 @@ bunx @load28/create-tt@dev init       # 기존 TypeScript 프로젝트에서 실
 code --install-extension ./tt-language-<버전>.vsix
 ```
 
-컴파일러만 수동으로 설치하려면 다음 명령을 사용합니다.
+컴파일러만 수동으로 설치할 때도 먼저 위의 typescript-go 빌드를 완료하고
+`TTC_TSGO_ROOT`를 설정한 상태로 유지해야 합니다. 다음 명령의 `typescript@7`은
+필수 소스 빌드 도구 체인을 대신하지 않습니다.
 
 ```sh
 bun add -d @load28/tt-lang@dev typescript@7

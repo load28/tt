@@ -90,7 +90,12 @@ proxies third-party packages such as Vite and TypeScript.
 
 ## Manual compiler setup
 
-Install the compiler and the TypeScript version it drives:
+Before using this path, complete the typescript-go source build at the top of
+this guide and keep `TTC_TSGO_ROOT` exported. This is required: installing
+`typescript@7` below adds the project's TypeScript dependency but does not
+provide the sync API toolchain that `ttc` uses.
+
+Then install the compiler and TypeScript project dependency:
 
 ```sh
 bun add -d @load28/tt-lang@dev typescript@7
@@ -113,7 +118,8 @@ to `.gitignore`. Do not edit generated files.
 
 ## Manual bundler setup
 
-Install the direct-source plugin in addition to the compiler:
+The same built typescript-go checkout and `TTC_TSGO_ROOT` are required for this
+path. Install the direct-source plugin in addition to the compiler:
 
 ```sh
 bun add -d @load28/tt-lang@dev typescript@7 @load28/unplugin-tt@dev

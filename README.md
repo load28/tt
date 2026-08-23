@@ -62,7 +62,9 @@ Download `tt-language-<version>.vsix` from the newest pre-release on
 code --install-extension ./tt-language-<version>.vsix
 ```
 
-For a manual compiler-only install:
+For a manual compiler-only install, first complete the typescript-go build
+above and keep `TTC_TSGO_ROOT` exported. The `typescript@7` dependency in this
+command does not replace that required source-built toolchain:
 
 ```sh
 bun add -d @load28/tt-lang@dev typescript@7

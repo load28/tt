@@ -89,7 +89,12 @@ Vite와 TypeScript 같은 외부 패키지는 프록시합니다.
 
 ## 컴파일러 수동 설치
 
-컴파일러와 컴파일러가 구동하는 TypeScript를 설치합니다.
+이 절차를 사용하기 전에 이 문서 상단의 typescript-go 소스 빌드를 완료하고
+`TTC_TSGO_ROOT`가 설정된 상태를 유지해야 합니다. 이는 필수 조건입니다. 아래의
+`typescript@7`은 프로젝트의 TypeScript 의존성을 추가하지만 `ttc`가 사용하는
+sync API 도구 체인을 제공하지 않습니다.
+
+그다음 컴파일러와 TypeScript 프로젝트 의존성을 설치합니다.
 
 ```sh
 bun add -d @load28/tt-lang@dev typescript@7
@@ -112,6 +117,7 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 
 ## 번들러 수동 설치
 
+이 절차에도 빌드된 typescript-go 체크아웃과 `TTC_TSGO_ROOT`가 필요합니다.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
