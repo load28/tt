@@ -368,6 +368,27 @@ validator 실패는 사용자 오류가 아니라 internal compiler error다. re
 실패시킨다. 순수 TypeScript 또는 host lowering이 필요 없는 source edit만 타입화된
 capability 판정으로 분석 대상에서 제외한다.
 
+### 11.1 projection parse는 validator가 아니다 (TASK-194)
+
+projection은 "원문에서 tt 값만 placeholder로 바꾼 TypeScript"다. 따라서 그 **parse**는
+컴파일러 불변식이 아니라 **입력에 대한 전제**이고, 실패 원인이 두 가지다. 원인은
+추측하지 않고 projection이 이미 가진 segment 표에서 조회한다 — parser가 멈춘 바이트가
+어느 종류의 segment에 속하는지가 곧 원인이다.
+
+| 멈춘 바이트 | 원인 | 처리 |
+|---|---|---|
+| `Copied` segment (원문에서 복사한 텍스트) | 사용자가 쓴 TypeScript가 TypeScript가 아니다 | `.tt` 좌표 진단(`source-not-typescript`), emission 없음 |
+| placeholder (컴파일러가 쓴 텍스트) | 컴파일러 불변식 위반 | internal compiler error |
+
+이 전제는 host lowering plan을 만드는 단계(`codegen::lowering_plan`)가 확인하고,
+진단을 소유한 단계가 보고한다. emission 자체는 계약대로 무오류다 — 실패할 수 있는
+절반(projection·owner join·plan)이 emission 앞의 별도 단계이기 때문이다. 무오류
+소비자(`emit_mapped`, 에디터 문서)는 plan 없이 host lowering을 생략한 최선 노력
+출력으로 강등하고, 보고는 `compile`/`compile_report`에 맡긴다.
+
+`verify_output`은 그대로 **출력**의 자가 검사로 남는다. tt 구문이 없어 projection을
+만들지 않는 파일의 잘못된 TypeScript는 계속 이 backstop이 잡는다.
+
 ## 12. TypeScript 엔진의 역할
 
 SWC와 tsgo의 책임을 섞지 않는다.

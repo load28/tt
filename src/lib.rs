@@ -597,11 +597,16 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
     let program = parser::parse_with_kind(source, source_kind);
     let semantics = analysis::coverage_semantics(&program, &[]);
     let core = core_ir::lower_semantic(&semantics, source);
+    // A buffer mid-edit is routinely not TypeScript yet, and this entry
+    // point is infallible by contract: with no owner model there are no
+    // host rewrites to plan, so the emit degrades to the same shape a file
+    // needing no host lowering gets. Reporting stays [`compile`]'s job.
+    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind).unwrap_or_default();
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
         source,
-        source_kind,
+        &plan,
         ImportRewrite::Off,
         StdImports::default(),
     );
@@ -803,11 +808,23 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
+    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+        Ok(plan) => plan,
+        // The file's own TypeScript does not parse, so no owner model
+        // exists to lower against. Reported where the source says it, not
+        // as a panic out of emission.
+        Err(failure) => {
+            return Err(
+                diagnostics::Diagnostic::from_tt(verify::in_source(source, &failure))
+                    .to_compile_error(source, options.filename),
+            );
+        }
+    };
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
         source,
-        options.source_kind,
+        &plan,
         options.rewrite_imports,
         options.std_imports,
     );
@@ -1041,11 +1058,27 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
                 .collect(),
         };
     }
+    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+        Ok(plan) => plan,
+        // Same class as a projection-blocking tt diagnostic: the file has
+        // no emittable form, and the cause is reported with everything
+        // else already found.
+        Err(failure) => {
+            errors.push(verify::in_source(source, &failure));
+            return CompileReport {
+                emit: None,
+                diagnostics: errors
+                    .into_iter()
+                    .map(diagnostics::Diagnostic::from_tt)
+                    .collect(),
+            };
+        }
+    };
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
         source,
-        options.source_kind,
+        &plan,
         options.rewrite_imports,
         options.std_imports,
     );

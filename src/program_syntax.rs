@@ -415,15 +415,47 @@ pub(crate) struct HostOwnerSyntax {
     pub(crate) roots: Vec<TtNodeId>,
 }
 
+/// Why a shadow program model could not be built.
+///
+/// Every variant but [`ProgramSyntaxError::SourceNotTypeScript`] is a broken
+/// compiler invariant — a validator failure in the sense of
+/// `docs/design/program-lowering.md` §11, and therefore an internal compiler
+/// error. The projection's *parse*, though, is not a validator: the
+/// projection is TypeScript the user wrote with tt values replaced by
+/// placeholders, so it can also fail because that TypeScript is not
+/// TypeScript. That cause is a fact about the input and carries the source
+/// byte to report it at.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ProgramSyntaxError {
-    MissingSourceSpan { node: NodeId },
-    InvalidSourceSpan { start: SourceByte, end: SourceByte },
+    MissingSourceSpan {
+        node: NodeId,
+    },
+    InvalidSourceSpan {
+        start: SourceByte,
+        end: SourceByte,
+    },
     NodeCountOverflow,
-    Parse { message: String, projection: String },
-    MissingOverlay { id: TtNodeId },
-    DuplicateOverlay { id: TtNodeId },
-    UnmappedEvaluationSpan { start: usize, end: usize },
+    /// The projection stopped parsing at a byte copied verbatim from the
+    /// source: the user's own TypeScript does not parse.
+    SourceNotTypeScript {
+        message: String,
+        source: usize,
+    },
+    /// The projection stopped parsing at a byte this compiler generated.
+    Parse {
+        message: String,
+        projection: String,
+    },
+    MissingOverlay {
+        id: TtNodeId,
+    },
+    DuplicateOverlay {
+        id: TtNodeId,
+    },
+    UnmappedEvaluationSpan {
+        start: usize,
+        end: usize,
+    },
 }
 
 impl ProgramSyntax {
@@ -435,7 +467,7 @@ impl ProgramSyntax {
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
         let projection = ProjectionBuilder::new(semantic, core, source).build()?;
-        let parsed = parse_module(&projection.code, source_kind)?;
+        let parsed = parse_module(&projection.code, &projection.source_segments, source_kind)?;
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -882,6 +914,7 @@ struct ParsedModule {
 
 fn parse_module(
     code: &str,
+    segments: &[ProjectionSourceSegment],
     source_kind: crate::SourceKind,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
     let source_map: Lrc<SourceMap> = Default::default();
@@ -904,19 +937,39 @@ fn parse_module(
         Ok(module) => module,
         Err(error) => {
             errors.push(error);
-            return Err(ProgramSyntaxError::Parse {
-                message: errors[0].kind().msg().to_string(),
-                projection: code.to_owned(),
-            });
+            return Err(parse_failure(code, segments, start, &errors[0]));
         }
     };
     if let Some(error) = errors.into_iter().next() {
-        return Err(ProgramSyntaxError::Parse {
-            message: error.kind().msg().to_string(),
-            projection: code.to_owned(),
-        });
+        return Err(parse_failure(code, segments, start, &error));
     }
     Ok(ParsedModule { module, start })
+}
+
+/// Classifies a projection parse failure by the byte it stopped at.
+///
+/// The projection is a sequence of two kinds of bytes: text copied from the
+/// source, and placeholders this compiler wrote. Which kind the parser
+/// stopped on *is* the cause, so the classification is a lookup in the
+/// projection's own segment table rather than a guess about the message.
+fn parse_failure(
+    code: &str,
+    segments: &[ProjectionSourceSegment],
+    start: u32,
+    error: &swc_ecma_parser::error::Error,
+) -> ProgramSyntaxError {
+    let message = error.kind().msg().to_string();
+    // A parser can stop one byte past the end (`<eof>` expectations); that
+    // byte belongs to the segment it ends.
+    let at = usize::try_from(error.span().lo().0.saturating_sub(start)).unwrap_or(0);
+    let at = ProjectedByte(at.min(code.len().saturating_sub(1)));
+    match source_byte_for_projection(segments, at) {
+        Some(source) => ProgramSyntaxError::SourceNotTypeScript { message, source },
+        None => ProgramSyntaxError::Parse {
+            message,
+            projection: code.to_owned(),
+        },
+    }
 }
 
 struct ParentCollector {
@@ -2027,6 +2080,20 @@ fn projected_span(span: swc_common::Span, source_start: u32) -> ProjectedSpan {
     }
 }
 
+/// The source byte a projected byte was copied from, or `None` when no
+/// copied segment owns it — a byte of a placeholder this compiler wrote.
+fn source_byte_for_projection(
+    segments: &[ProjectionSourceSegment],
+    projected: ProjectedByte,
+) -> Option<usize> {
+    segments.iter().find_map(|segment| {
+        (segment.kind == ProjectionSegmentKind::Copied
+            && segment.projected.start <= projected
+            && projected < segment.projected.end)
+            .then(|| segment.source.start + projected.0 - segment.projected.start.0)
+    })
+}
+
 fn source_span_for_projection(
     segments: &[ProjectionSourceSegment],
     projected: ProjectedSpan,
@@ -2068,6 +2135,57 @@ mod tests {
         let core = crate::core_ir::lower_semantic(&semantic, source);
         ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
             .expect("projection should parse")
+    }
+
+    fn build_error(source: &str) -> ProgramSyntaxError {
+        let program = crate::parser::parse(source);
+        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let core = crate::core_ir::lower_semantic(&semantic, source);
+        ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
+            .expect_err("projection should not parse")
+    }
+
+    #[test]
+    fn a_parse_failure_in_copied_text_is_the_source_not_an_internal_error() {
+        // The byte the parse stopped on was copied from the source, so the
+        // cause is the user's TypeScript — carried with the source byte it
+        // is reported at.
+        let source = "const x = match (s) { A(v) => { const q = ; return q; }, _ => 0 };\n";
+        let error = build_error(source);
+        let ProgramSyntaxError::SourceNotTypeScript { source: at, .. } = error else {
+            panic!("expected a source-caused failure, got {error:?}");
+        };
+        assert_eq!(&source[at..at + 1], ";");
+    }
+
+    #[test]
+    fn a_projected_byte_maps_only_through_copied_segments() {
+        // A placeholder's bytes are the compiler's own text and belong to no
+        // source byte: that is what separates an input fact from a broken
+        // invariant.
+        let source = "const value = match (s) { A(v) => v, _ => 0 };\n";
+        let program = crate::parser::parse(source);
+        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let core = crate::core_ir::lower_semantic(&semantic, source);
+        let projection = ProjectionBuilder::new(&semantic, &core, source)
+            .build()
+            .expect("projection");
+        let segments = &projection.source_segments;
+        let placeholder = segments
+            .iter()
+            .find(|segment| segment.kind == ProjectionSegmentKind::Placeholder)
+            .expect("a placeholder segment");
+        let inside = ProjectedByte(placeholder.projected.start.0 + 1);
+        assert_eq!(source_byte_for_projection(segments, inside), None);
+
+        let copied = segments
+            .iter()
+            .find(|segment| segment.kind == ProjectionSegmentKind::Copied)
+            .expect("a copied segment");
+        assert_eq!(
+            source_byte_for_projection(segments, copied.projected.start),
+            Some(copied.source.start)
+        );
     }
 
     #[test]

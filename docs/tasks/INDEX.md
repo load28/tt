@@ -201,7 +201,8 @@
 | TASK-191 | 설치 페이지 셸 명령어 하이라이팅 | 완료 | 2026-08-23 | 2026-08-24 | [TASK-191-install-section-shell-highlighting.md](./TASK-191-install-section-shell-highlighting.md) |
 | TASK-192 | 소비자 설치를 소스 빌드 tsgo로 단일화 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-192-source-only-tsgo-consumer-setup.md](./TASK-192-source-only-tsgo-consumer-setup.md) |
 | TASK-193 | release 0.3.0-dev.6 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-193-release-0.3.0-dev.6.md](./TASK-193-release-0.3.0-dev.6.md) |
+| TASK-194 | projection parse 실패의 원인 분류 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-194-projection-parse-source-cause.md](./TASK-194-projection-parse-source-cause.md) |
 
 ## 다음 태스크 번호
 
-**TASK-194**
+**TASK-195**

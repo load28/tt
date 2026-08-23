@@ -94,6 +94,9 @@ pub enum DiagnosticCode {
     ValPass,
     /// The emitted output failed the TypeScript self-check.
     VerifyFailed,
+    /// The TypeScript written in the file does not parse, so there is no
+    /// TypeScript owner model to lower tt values against.
+    SourceNotTypeScript,
     /// A diagnostic no specific rule claims. Reporting sites should not
     /// produce this — it exists so an unclassified error still has a code.
     Other,
@@ -131,6 +134,7 @@ impl DiagnosticCode {
             DiagnosticCode::ValMutation => "val-mutation",
             DiagnosticCode::ValPass => "val-pass",
             DiagnosticCode::VerifyFailed => "verify-failed",
+            DiagnosticCode::SourceNotTypeScript => "source-not-typescript",
             DiagnosticCode::Other => "other",
         }
     }
@@ -161,6 +165,7 @@ impl DiagnosticCode {
                 | DiagnosticCode::ResultNestedBinding
                 | DiagnosticCode::EnumInvalidFieldType
                 | DiagnosticCode::VerifyFailed
+                | DiagnosticCode::SourceNotTypeScript
         )
     }
 }

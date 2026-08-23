@@ -422,3 +422,16 @@ function f() {
     .expect("compiles");
     assert_eq!(mapped.code, compiled);
 }
+
+#[test]
+fn a_buffer_whose_typescript_does_not_parse_still_emits() {
+    // `emit_mapped` is infallible by contract: a buffer mid-edit is
+    // routinely not TypeScript yet, and the editor still needs a document.
+    // Without an owner model there are no host rewrites to plan, so the
+    // emit degrades to the shape a file needing no host lowering gets —
+    // and the diagnostic stays `compile`'s to report.
+    let src = "const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n";
+    let m = emit_mapped(src);
+    assert!(!m.code.is_empty());
+    assert_mapping_invariants(src, &m);
+}
