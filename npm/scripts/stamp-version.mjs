@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * stamp-version.mjs — write the release version into npm/rl-lang.
+ * stamp-version.mjs — write the release version into published RL packages.
  *
  *   node stamp-version.mjs <version>
  *
@@ -26,3 +26,16 @@ for (const dep of Object.keys(pkg.optionalDependencies)) {
 }
 fs.writeFileSync(manifest, JSON.stringify(pkg, null, 2) + "\n");
 console.log(`stamped ${version} into ${manifest}`);
+
+const initializerManifest = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "packages",
+  "create-rl",
+  "package.json",
+);
+const initializer = JSON.parse(fs.readFileSync(initializerManifest, "utf8"));
+initializer.version = version;
+fs.writeFileSync(initializerManifest, JSON.stringify(initializer, null, 2) + "\n");
+console.log(`stamped ${version} into ${initializerManifest}`);

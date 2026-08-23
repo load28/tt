@@ -6,6 +6,7 @@
       "ko": "시작",
       "topics": [
         "overview",
+        "install",
         "rlx"
       ]
     },
@@ -83,6 +84,68 @@
           "일반 TypeScript의 타입 오류는 TypeScript가 담당합니다."
         ]
       }
+    },
+    "install": {
+      "nav": { "en": "Install", "ko": "설치" },
+      "title": { "en": "Start without building the toolchain.", "ko": "도구 체인 빌드 없이 시작합니다." },
+      "summary": {
+        "en": "Use Bun to create a ready-to-run project or migrate an existing TypeScript project. The same page also gives the complete manual compiler and bundler setup.",
+        "ko": "Bun으로 바로 실행할 프로젝트를 만들거나 기존 TypeScript 프로젝트를 마이그레이션합니다. 컴파일러와 번들러를 직접 설정하는 전체 절차도 함께 제공합니다."
+      },
+      "code": "bun create rl@latest my-app\n\n# Or, inside an existing TypeScript project:\nbun create rl@latest init\nbun run rl:check",
+      "works": {
+        "en": [
+          "New projects use Bun, Vite, TypeScript 7, and a prebuilt rlc binary.",
+          "Existing projects keep their config source and receive a composable RL wrapper.",
+          "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm are detected.",
+          "Every generated change is reproducible with the manual instructions below."
+        ],
+        "ko": [
+          "새 프로젝트는 Bun, Vite, TypeScript 7, 프리빌트 rlc를 사용합니다.",
+          "기존 프로젝트의 설정 소스는 유지하고 합성 가능한 RL 래퍼를 추가합니다.",
+          "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 감지합니다.",
+          "자동 생성되는 모든 변경을 아래 수동 절차로 재현할 수 있습니다."
+        ]
+      },
+      "limits": {
+        "en": [
+          "The initializer does not rewrite arbitrary JavaScript config source.",
+          "esbuild scripts need the printed plugin line because they have no standard config shape.",
+          "A bundler transpiles sources; keep rlc --check-types as a separate type-check step."
+        ],
+        "ko": [
+          "설치기는 임의 형태의 JavaScript 설정 소스를 재작성하지 않습니다.",
+          "esbuild 스크립트에는 표준 설정 형태가 없어 출력된 플러그인 줄을 직접 추가합니다.",
+          "번들러는 소스를 변환할 뿐이므로 rlc --check-types 검사를 별도로 유지합니다."
+        ]
+      },
+      "sections": [
+        {
+          "title": { "en": "New project", "ko": "새 프로젝트" },
+          "body": { "en": "The command creates src/main.ts with a starter src/app.rl module, installs with Bun, and adds dev, build, and check scripts.", "ko": "src/main.ts와 첫 src/app.rl 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다." },
+          "code": "bun create rl@latest my-app\ncd my-app\nbun run dev"
+        },
+        {
+          "title": { "en": "Existing project", "ko": "기존 프로젝트" },
+          "body": { "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.", "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다." },
+          "code": "bun create rl@latest init\nbun create rl@latest init --bundler vite --no-install"
+        },
+        {
+          "title": { "en": "Local registry", "ko": "로컬 레지스트리" },
+          "body": { "en": "Compiler contributors can publish the locally built binary and all RL npm packages to Verdaccio, then bootstrap through that registry without file dependencies.", "ko": "컴파일러 기여자는 로컬 빌드 바이너리와 모든 RL npm 패키지를 Verdaccio에 게시하고 file 의존성 없이 해당 레지스트리에서 생성할 수 있습니다." },
+          "code": "bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873\nbun scripts/publish-local-registry.mjs http://127.0.0.1:4873\nBUN_CONFIG_REGISTRY=http://127.0.0.1:4873 bunx create-rl@latest my-app --registry http://127.0.0.1:4873"
+        },
+        {
+          "title": { "en": "Manual compiler", "ko": "컴파일러 수동 설치" },
+          "body": { "en": "Install the compiler and TypeScript 7, then compile to an ordinary TypeScript tree or check without writing output.", "ko": "컴파일러와 TypeScript 7을 설치한 뒤 일반 TypeScript 트리로 컴파일하거나 출력 없이 검사합니다." },
+          "code": "bun add -d rl-lang typescript@7\nbunx rlc -o .rl-build src\nbunx rlc --check-types src"
+        },
+        {
+          "title": { "en": "Manual bundlers", "ko": "번들러 수동 설정" },
+          "body": { "en": "Install unplugin-rl and add rl() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "unplugin-rl을 설치하고 plugins 배열 맨 앞에 rl()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
+          "code": "bun add -d rl-lang typescript@7 unplugin-rl\n\nimport rl from \"unplugin-rl/vite\";\nexport default { plugins: [rl()] };"
+        }
+      ]
     },
     "rlx": {
       "nav": {

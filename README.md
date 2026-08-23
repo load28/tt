@@ -29,15 +29,25 @@ Every valid TypeScript file is also a valid `.rl` file, and every valid TSX file
 Install the prebuilt compiler from npm. Rust is not required on supported platforms.
 
 ```sh
-npm install --save-dev rl-lang typescript
+bun create rl@latest my-app
+bun create rl@latest init       # in an existing TypeScript project
+```
+
+The automatic installer uses Bun for new projects. The complete automatic and
+manual paths are in the [installation guide](./docs/getting-started.md).
+
+For a manual compiler-only install:
+
+```sh
+bun add -d rl-lang typescript@7
 ```
 
 Compile a file or source tree, or check it without writing output:
 
 ```sh
-npx rlc -o build src
-npx rlc --check src
-npx rlc --check-types src
+bunx rlc -o build src
+bunx rlc --check src
+bunx rlc --check-types src
 ```
 
 `rlc` emits `.ts` from `.rl` and `.tsx` from `.rlx`. JSX is preserved, so React projects keep using their existing `jsx` compiler option and JSX runtime. For direct `.rl` or `.rlx` imports, use [`unplugin-rl`](./integrations/unplugin) with Vite, Rollup, webpack, Rspack, esbuild, or Farm.

@@ -174,6 +174,7 @@
 | TASK-164 | 웹사이트 `.rlx` React 가이드 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-164](./TASK-164-website-rlx-guide.md) |
 | TASK-165 | `.rlx` 에디터 기능 parity | 완료 | 2026-08-23 | 2026-08-23 | [TASK-165](./TASK-165-rlx-editor-parity.md) |
 | TASK-166 | 에디터 파일 아이콘을 웹사이트 로고로 통일 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-166](./TASK-166-editor-file-icon-refresh.md) |
+| TASK-167 | 프로젝트 설치 CLI와 통합 가이드 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-167](./TASK-167-project-installer-and-guides.md) |
 | TASK-168 | README와 웹사이트 개발 단계 안내 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-168](./TASK-168-development-status-notice.md) |
 
 ## 다음 태스크 번호

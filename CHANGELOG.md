@@ -8,6 +8,12 @@
 
 ### Added
 
+- **Bun 기반 프로젝트 설치기와 로컬 레지스트리 개발 흐름을 제공한다**
+  (TASK-167). `bun create rl@latest`로 Vite 프로젝트를 만들고 `init`으로 기존
+  TypeScript 프로젝트의 번들러를 감지해 RL 설정을 합성한다. 자동·수동 설치법은
+  영문·한글 가이드와 공식 웹사이트에서 제공하며, 공개 전 패키지는 Verdaccio에
+  현재 플랫폼 빌드를 게시해 같은 설치 프로토콜로 검증할 수 있다.
+
 - **`.rlx`가 `.rl`과 같은 수준의 VS Code 언어 기능을 제공한다** (TASK-165).
   TSX 기반 하이라이팅과 전용 `RLX` 파일 아이콘을 등록하고, native TypeScript
   service에는 projection을 `typescriptreact` 문서로 연다. 진단·완성·hover·정의·

@@ -15,7 +15,7 @@ const highlighted = Object.fromEntries(
   Object.entries(content.topics).map(([id, topic]) => [
     id,
     highlighter.codeToHtml(topic.code, {
-      lang: id === 'cli' ? 'shellscript' : id === 'rlx' ? 'rlx' : 'rl',
+      lang: id === 'cli' || id === 'install' ? 'shellscript' : id === 'rlx' ? 'rlx' : 'rl',
       theme: 'github-dark-default',
       structure: 'inline',
     }),

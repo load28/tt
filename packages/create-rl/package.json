@@ -1,0 +1,32 @@
+{
+  "name": "create-rl",
+  "version": "0.0.0-dev",
+  "description": "Create a new rl project or add rl to an existing TypeScript project",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-rl": "bin/create-rl.js"
+  },
+  "files": [
+    "bin/create-rl.js",
+    "src/installer.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/load28/rl",
+    "directory": "packages/create-rl"
+  },
+  "keywords": [
+    "rl",
+    "typescript",
+    "scaffold",
+    "vite"
+  ]
+}

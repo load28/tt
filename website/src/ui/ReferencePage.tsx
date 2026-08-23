@@ -90,7 +90,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
             {topic === 'overview' && <InstallCommand language={language} />}
 
             <div className="code-block">
-              <span className="code-block__label">{topic === 'cli' ? 'shell' : topic === 'rlx' ? 'example.rlx' : 'example.rl'}</span>
+              <span className="code-block__label">{topic === 'cli' || topic === 'install' ? 'shell' : topic === 'rlx' ? 'example.rlx' : 'example.rl'}</span>
               <pre tabIndex={0} role="region" aria-label={language === 'ko' ? '코드 예제' : 'Code example'}>
                 <code dangerouslySetInnerHTML={{ __html: highlighted[topic] }} />
               </pre>
@@ -100,6 +100,8 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
               <DetailList kind="works" title={language === 'ko' ? '지원 범위' : 'Supported'} items={item.works[language]} />
               <DetailList kind="limits" title={language === 'ko' ? '사용 시 주의사항' : 'Things to know'} items={item.limits[language]} />
             </div>
+
+            {'sections' in item && <GuideSections sections={item.sections} language={language} />}
 
             {nextTopic && (
               <Link className="next-topic" to={topicPath(language, nextTopic)}>
@@ -115,7 +117,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
 }
 
 function InstallCommand({ language }: { language: Language }) {
-  const command = 'npm i -D rl-lang typescript@7'
+  const command = 'bun create rl@latest my-app'
   const [copied, setCopied] = useState(false)
   return (
     <div className="install-command">
@@ -130,6 +132,23 @@ function InstallCommand({ language }: { language: Language }) {
       >
         {copied ? (language === 'ko' ? '복사됨' : 'Copied') : (language === 'ko' ? '복사' : 'Copy')}
       </button>
+    </div>
+  )
+}
+
+function GuideSections({ sections, language }: {
+  sections: Array<{ title: Record<Language, string>; body: Record<Language, string>; code: string }>
+  language: Language
+}) {
+  return (
+    <div className="guide-sections">
+      {sections.map((section) => (
+        <section className="guide-section" key={section.title.en}>
+          <h2>{section.title[language]}</h2>
+          <p>{section.body[language]}</p>
+          <pre><code>{section.code}</code></pre>
+        </section>
+      ))}
     </div>
   )
 }

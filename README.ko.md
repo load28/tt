@@ -29,15 +29,25 @@ export const area = (shape: Shape): number =>
 npm에서 프리빌트 컴파일러를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지 않습니다.
 
 ```sh
-npm install --save-dev rl-lang typescript
+bun create rl@latest my-app
+bun create rl@latest init       # 기존 TypeScript 프로젝트에서 실행
+```
+
+새 프로젝트의 자동 설치에는 Bun을 사용합니다. 자동 설치와 번들러별 수동 절차는
+[설치 가이드](./docs/getting-started.ko.md)에 정리되어 있습니다.
+
+컴파일러만 수동으로 설치하려면 다음 명령을 사용합니다.
+
+```sh
+bun add -d rl-lang typescript@7
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
 
 ```sh
-npx rlc -o build src
-npx rlc --check src
-npx rlc --check-types src
+bunx rlc -o build src
+bunx rlc --check src
+bunx rlc --check-types src
 ```
 
 `rlc`는 `.rl`을 `.ts`로, `.rlx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.rl` 또는 `.rlx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`unplugin-rl`](./integrations/unplugin)을 사용하세요.

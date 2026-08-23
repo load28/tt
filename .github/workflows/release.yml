@@ -2,12 +2,12 @@
 #
 # Trigger: push a tag `vX.Y.Z` (from a commit whose Cargo.toml version is
 # X.Y.Z — the verify job enforces the match). Publishing needs the NPM_TOKEN
-# repository secret (an npm automation token with publish rights to rl-lang
-# and the rl-lang-* platform packages).
+# repository secret (an npm automation token with publish rights to rl-lang,
+# rl-lang-* platform packages, unplugin-rl, and create-rl).
 #
 # Pipeline: verify tag ↔ Cargo.toml → build 5 targets → assemble npm
 # platform packages + stamp versions → publish (platform packages first,
-# main package last, so rl-lang never points at missing optional deps) →
+# then rl-lang and create-rl, so neither points at missing dependencies) →
 # GitHub Release with binary archives.
 name: Release
 
@@ -158,6 +158,25 @@ jobs:
 
       - name: Publish rl-lang
         run: npm publish npm/rl-lang --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # unplugin-rl has an independent version. Publish it only when that
+      # exact version is not already present, so compiler-only releases do
+      # not try to overwrite an immutable npm version.
+      - name: Publish unplugin-rl when needed
+        run: |
+          UNPLUGIN_VERSION="$(node -p "require('./integrations/unplugin/package.json').version")"
+          if npm view "unplugin-rl@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
+            echo "unplugin-rl@$UNPLUGIN_VERSION is already published"
+          else
+            npm publish integrations/unplugin --provenance --access public
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish create-rl
+        run: npm publish packages/create-rl --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

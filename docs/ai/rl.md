@@ -170,14 +170,16 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 
 ## Install
 
-- `npm i -D rl-lang typescript@7` → prebuilt `rlc` binary (linux-x64/arm64, darwin-x64/arm64, win32-x64), run via `npx rlc`. `--check-types`/`--types` drive TypeScript 7's own compiler; writing sidecars (`--types`) additionally needs declaration emit, which the released package does not expose yet — point `RLC_TSGO_ROOT` at a built typescript-go for that.
+- `bun create rl@latest app` → new Bun + Vite + TypeScript 7 project; `bun create rl@latest init` → structurally adds rl to an existing TS project, detects Vite/Rollup/Rolldown/webpack/Rspack/esbuild/Farm, and preserves existing config through a generated wrapper where possible. New projects use Bun; existing projects retain their declared/locked package manager unless overridden.
+- Local built packages through a real registry: run Verdaccio with `scripts/verdaccio.local.yaml`, then `bun scripts/publish-local-registry.mjs http://127.0.0.1:4873`; use the printed `BUN_CONFIG_REGISTRY=... bunx create-rl@latest ... --registry ...` command. This publishes the current platform binary and RL packages rather than substituting `file:` dependencies.
+- Manual: `bun add -d rl-lang typescript@7` → prebuilt `rlc` binary (linux-x64/arm64, darwin-x64/arm64, win32-x64), run via `bunx rlc`. Direct bundler imports additionally need `unplugin-rl`. `--check-types`/`--types` drive TypeScript 7's own compiler; writing sidecars (`--types`) additionally needs declaration emit, which the released package does not expose yet — point `RLC_TSGO_ROOT` at a built typescript-go for that.
 - Other platforms / no npm: `cargo install --git https://github.com/load28/rl`; to keep using the npm launcher, set env `RLC_BINARY=/path/to/rlc`.
 - Update: `npm i -D rl-lang@latest` (binary follows package version); verify `npx rlc -v`; then re-run `npx rlc --types src` and rebuild.
 - Editor: VSCode extension in the rl repo `editors/vscode` (highlighting, rl + type diagnostics — including the typed-only ones: `val` built-in mutators and typed exhaustiveness — completion incl. std combinators, signature help, go-to-def). Everything TypeScript answers comes from the compiler's own language server (`tsgo --lsp`); the extension bundles no TypeScript, so install `typescript@7` in the project (or point `RLC_TSGO_ROOT` at a built typescript-go) or those features go quiet.
 
 ## Setup
 
-New project: `npm init -y && npm i -D rl-lang typescript`; sources in `src/**/*.rl` or React/JSX sources in `src/**/*.rlx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.rl-types/` and the out dir.
+New project: `bun create rl@latest app`; sources in `src/**/*.rl` or React/JSX sources in `src/**/*.rlx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.rl-types/` and the out dir. Full manual paths: `docs/getting-started.md` / `docs/getting-started.ko.md`.
 ```jsonc
 // package.json
 "scripts": { "build": "rlc -o build src && tsc", "types": "rlc --types src", "check": "rlc --check-types src" }

@@ -8,14 +8,22 @@ TypeScript valid.
 This package installs `rlc`, the rl compiler, as a prebuilt native binary —
 no Rust toolchain required.
 
+For a complete Bun + Vite project, or to add rl to an existing TypeScript
+project, use the initializer instead:
+
 ```sh
-npm install --save-dev rl-lang
+bun create rl@latest my-app
+bun create rl@latest init
 ```
 
 ```sh
-npx rlc -o build src/     # compile a source tree to TypeScript
-npx rlc --check src/      # check without writing anything
-npx rlc --types src/      # editor/typecheck declarations
+bun add -d rl-lang typescript@7
+```
+
+```sh
+bunx rlc -o build src/     # compile a source tree to TypeScript
+bunx rlc --check src/      # check without writing anything
+bunx rlc --types src/      # editor/typecheck declarations
 ```
 
 Using a bundler? [`unplugin-rl`](https://github.com/load28/rl/tree/main/integrations/unplugin)

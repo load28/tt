@@ -1,0 +1,24 @@
+storage: ../.rl-dev/local-registry/storage
+
+auth:
+  htpasswd:
+    file: ../.rl-dev/local-registry/htpasswd
+    max_users: -1
+
+uplinks:
+  npmjs:
+    url: https://registry.npmjs.org/
+
+packages:
+  '@*/*':
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: npmjs
+  '**':
+    access: $all
+    publish: $all
+    unpublish: $all
+    proxy: npmjs
+
+log: { type: stdout, format: pretty, level: warn }

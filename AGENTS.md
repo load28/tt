@@ -118,9 +118,10 @@ TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아
 하나의 릴리스로 묶어서만 올리듯, 이 저장소도 태스크 완료는 버전과 무관합니다.
 
 - **기준 버전은 `Cargo.toml`의 `version` 하나다.** npm 메인 패키지
-  (`npm/rl-lang`)는 저장소에서 `0.0.0-dev`로 두고 배포 시점에
-  `npm/scripts/stamp-version.mjs`가 Cargo.toml 버전을 스탬프한다 — 저장소에서
-  직접 올리지 않는다. 부속 패키지(`editors/vscode`, `integrations/unplugin`)는
+  (`npm/rl-lang`)와 설치기(`packages/create-rl`)는 저장소에서 `0.0.0-dev`로
+  두고 배포 시점에 `npm/scripts/stamp-version.mjs`가 Cargo.toml 버전을
+  스탬프한다 — 저장소에서 직접 올리지 않는다. 부속 패키지
+  (`editors/vscode`, `integrations/unplugin`)는
   독립 버전이며 마찬가지로 각자 배포할 때만 올린다.
 - **태스크 완료 ≠ 버전 올림.** 기능 추가·버그 수정·리팩토링은 버전을 건드리지
   않고 커밋한다. 버전을 올리는 유일한 시점은 "릴리스를 자른다"는 명시적
