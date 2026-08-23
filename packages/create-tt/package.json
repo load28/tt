@@ -1,8 +1,12 @@
 {
-  "name": "create-tt",
+  "name": "@load28/create-tt",
   "version": "0.0.0-dev",
   "description": "Create a new tt project or add tt to an existing TypeScript project",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "bin": {
     "create-tt": "bin/create-tt.js"

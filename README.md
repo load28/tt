@@ -29,8 +29,8 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 Install the prebuilt compiler from npm. Rust is not required on supported platforms.
 
 ```sh
-bun create tt@latest my-app
-bun create tt@latest init       # in an existing TypeScript project
+bunx @load28/create-tt@latest my-app
+bunx @load28/create-tt@latest init       # in an existing TypeScript project
 ```
 
 The automatic installer uses Bun for new projects. The complete automatic and
@@ -39,7 +39,7 @@ manual paths are in the [installation guide](./docs/getting-started.md).
 For a manual compiler-only install:
 
 ```sh
-bun add -d tt-lang typescript@7
+bun add -d @load28/tt-lang typescript@7
 ```
 
 Compile a file or source tree, or check it without writing output:
@@ -50,7 +50,7 @@ bunx ttc --check src
 bunx ttc --check-types src
 ```
 
-`ttc` emits `.ts` from `.tt` and `.tsx` from `.ttx`. JSX is preserved, so React projects keep using their existing `jsx` compiler option and JSX runtime. For direct `.tt` or `.ttx` imports, use [`unplugin-tt`](./integrations/unplugin) with Vite, Rollup, webpack, Rspack, esbuild, or Farm.
+`ttc` emits `.ts` from `.tt` and `.tsx` from `.ttx`. JSX is preserved, so React projects keep using their existing `jsx` compiler option and JSX runtime. For direct `.tt` or `.ttx` imports, use [`@load28/unplugin-tt`](./integrations/unplugin) with Vite, Rollup, webpack, Rspack, esbuild, or Farm.
 
 Prebuilt binaries are available for Linux x64/arm64, macOS x64/arm64, and Windows x64. On another platform, build from source:
 

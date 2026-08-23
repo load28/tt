@@ -170,23 +170,23 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 
 ## Install
 
-- `bun create tt@latest app` → new Bun + Vite + TypeScript 7 project; `bun create tt@latest init` → structurally adds tt to an existing TS project, detects Vite/Rollup/Rolldown/webpack/Rspack/esbuild/Farm, and preserves existing config through a generated wrapper where possible. New projects use Bun; existing projects retain their declared/locked package manager unless overridden.
-- Local built packages through a real registry: run Verdaccio with `scripts/verdaccio.local.yaml`, then `bun scripts/publish-local-registry.mjs http://127.0.0.1:4873`; use the printed `BUN_CONFIG_REGISTRY=... bunx create-tt@latest ... --registry ...` command. This publishes the current platform binary and TT packages rather than substituting `file:` dependencies.
-- Manual: `bun add -d tt-lang typescript@7` → prebuilt `ttc` binary (linux-x64/arm64, darwin-x64/arm64, win32-x64), run via `bunx ttc`. Direct bundler imports additionally need `unplugin-tt`. `--check-types`/`--types` drive TypeScript 7's own compiler; writing sidecars (`--types`) additionally needs declaration emit, which the released package does not expose yet — point `TTC_TSGO_ROOT` at a built typescript-go for that.
+- `bunx @load28/create-tt@latest app` → new Bun + Vite + TypeScript 7 project; `bunx @load28/create-tt@latest init` → structurally adds tt to an existing TS project, detects Vite/Rollup/Rolldown/webpack/Rspack/esbuild/Farm, and preserves existing config through a generated wrapper where possible. New projects use Bun; existing projects retain their declared/locked package manager unless overridden.
+- Local built packages through a real registry: run Verdaccio with `scripts/verdaccio.local.yaml`, then `bun scripts/publish-local-registry.mjs http://127.0.0.1:4873`; use the printed `BUN_CONFIG_REGISTRY=... bunx @load28/create-tt@latest ... --registry ...` command. This publishes the current platform binary and TT packages rather than substituting `file:` dependencies.
+- Manual: `bun add -d @load28/tt-lang typescript@7` → prebuilt `ttc` binary (linux-x64/arm64, darwin-x64/arm64, win32-x64), run via `bunx ttc`. Direct bundler imports additionally need `@load28/unplugin-tt`. `--check-types`/`--types` drive TypeScript 7's own compiler; writing sidecars (`--types`) additionally needs declaration emit, which the released package does not expose yet — point `TTC_TSGO_ROOT` at a built typescript-go for that.
 - Other platforms / no npm: `cargo install --git https://github.com/load28/tt`; to keep using the npm launcher, set env `TTC_BINARY=/path/to/ttc`.
-- Update: `npm i -D tt-lang@latest` (binary follows package version); verify `npx ttc -v`; then re-run `npx ttc --types src` and rebuild.
+- Update: `npm i -D @load28/tt-lang@latest` (binary follows package version); verify `npx ttc -v`; then re-run `npx ttc --types src` and rebuild.
 - Editor: VSCode extension in the tt repo `editors/vscode` (highlighting, tt + type diagnostics — including the typed-only ones: `val` built-in mutators and typed exhaustiveness — completion incl. std combinators, signature help, go-to-def). Everything TypeScript answers comes from the compiler's own language server (`tsgo --lsp`); the extension bundles no TypeScript, so install `typescript@7` in the project (or point `TTC_TSGO_ROOT` at a built typescript-go) or those features go quiet.
 
 ## Setup
 
-New project: `bun create tt@latest app`; sources in `src/**/*.tt` or React/JSX sources in `src/**/*.ttx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.tt-types/` and the out dir. Full manual paths: `docs/getting-started.md` / `docs/getting-started.ko.md`.
+New project: `bunx @load28/create-tt@latest app`; sources in `src/**/*.tt` or React/JSX sources in `src/**/*.ttx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.tt-types/` and the out dir. Full manual paths: `docs/getting-started.md` / `docs/getting-started.ko.md`.
 ```jsonc
 // package.json
 "scripts": { "build": "ttc -o build src && tsc", "types": "ttc --types src", "check": "ttc --check-types src" }
 // tsconfig.json — resolve "./x.tt" and "@tt/std":
 "compilerOptions": { "rootDirs": ["./src", "./.tt-types"], "paths": { "@tt/std": ["./.tt-types/tt/index.d.ts"], "@tt/std/*": ["./.tt-types/tt/*.d.ts"] } }
 ```
-Bundler alternative: `unplugin-tt` (`import tt from "unplugin-tt/vite"`, also `/rollup` `/webpack` `/esbuild`) — bundler reads `.tt`/`.ttx` directly, no ttc build step; types still via `ttc --types`.
+Bundler alternative: `@load28/unplugin-tt` (`import tt from "@load28/unplugin-tt/vite"`, also `/rollup` `/webpack` `/esbuild`) — bundler reads `.tt`/`.ttx` directly, no ttc build step; types still via `ttc --types`.
 
 ## Workflow
 

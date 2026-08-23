@@ -14,7 +14,7 @@
  *   (TypeScript 7 from the project's node_modules) or an unbuilt checkout
  *   add nothing — ttc then resolves TypeScript by its own documented order.
  * - `devPackageCompiler(roots)` finds the ttc of a `file:`-installed local
- *   tt-lang package (its setup-written `tt-dev.local.json` names the TT
+ *   @load28/tt-lang package (its setup-written `tt-dev.local.json` names the TT
  *   repository), so the extension works in a test project that installed
  *   `file:.../npm/tt-lang` without any `tt.compilerPath` configuration.
  *
@@ -89,15 +89,15 @@ export function ttcSpawnEnv(compiler: string): NodeJS.ProcessEnv | undefined {
 }
 
 /**
- * The release ttc of a local-development tt-lang package installed in one of
- * the workspace roots (`node_modules/tt-lang/tt-dev.local.json` names the TT
+ * The release ttc of a local-development @load28/tt-lang package installed in one of
+ * the workspace roots (`node_modules/@load28/tt-lang/tt-dev.local.json` names the TT
  * repository), or "" when there is none. Mirrors npm/tt-lang/dev.js.
  */
 export function devPackageCompiler(workspaceRoots: string[]): string {
   const exe = process.platform === "win32" ? "ttc.exe" : "ttc";
   for (const root of workspaceRoots) {
     const config = readConfig(
-      path.join(root, "node_modules", "tt-lang", "tt-dev.local.json"),
+      path.join(root, "node_modules", "@load28", "tt-lang", "tt-dev.local.json"),
     );
     const ttRoot = config && typeof config.root === "string" ? config.root : null;
     if (ttRoot === null) continue;

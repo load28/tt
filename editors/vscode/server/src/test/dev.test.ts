@@ -93,7 +93,7 @@ test("devPackageCompiler finds the ttc of a file:-installed dev package", () => 
   fs.writeFileSync(path.join(tt, "target", "release", exe), "");
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "tt-ws-test-"));
-  const pkg = path.join(workspace, "node_modules", "tt-lang");
+  const pkg = path.join(workspace, "node_modules", "@load28", "tt-lang");
   fs.mkdirSync(pkg, { recursive: true });
   fs.writeFileSync(
     path.join(pkg, "tt-dev.local.json"),

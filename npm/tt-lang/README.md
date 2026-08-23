@@ -1,4 +1,4 @@
-# tt-lang
+# @load28/tt-lang
 
 **tt** is a tiny preprocessor language that compiles to TypeScript. It adds
 Rust-style tagged unions and pattern matching, concise `Option`/`Result`
@@ -12,12 +12,12 @@ For a complete Bun + Vite project, or to add tt to an existing TypeScript
 project, use the initializer instead:
 
 ```sh
-bun create tt@latest my-app
-bun create tt@latest init
+bunx @load28/create-tt@latest my-app
+bunx @load28/create-tt@latest init
 ```
 
 ```sh
-bun add -d tt-lang typescript@7
+bun add -d @load28/tt-lang typescript@7
 ```
 
 ```sh
@@ -26,7 +26,7 @@ bunx ttc --check src/      # check without writing anything
 bunx ttc --types src/      # editor/typecheck declarations
 ```
 
-Using a bundler? [`unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
+Using a bundler? [`@load28/unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
 reads `.tt` files directly in Vite, Rollup, webpack, Rspack, esbuild and
 Farm, and finds this package's binary automatically.
 
@@ -37,11 +37,11 @@ matching your machine.
 
 | Package | OS | CPU |
 |---------|----|----|
-| `tt-lang-linux-x64` | Linux | x64 (static musl build) |
-| `tt-lang-linux-arm64` | Linux | arm64 (static musl build) |
-| `tt-lang-darwin-x64` | macOS | x64 |
-| `tt-lang-darwin-arm64` | macOS | arm64 |
-| `ttlang-native-msvc` | Windows | x64 (MSVC) |
+| `@load28/tt-lang-linux-x64` | Linux | x64 (static musl build) |
+| `@load28/tt-lang-linux-arm64` | Linux | arm64 (static musl build) |
+| `@load28/tt-lang-darwin-x64` | macOS | x64 |
+| `@load28/tt-lang-darwin-arm64` | macOS | arm64 |
+| `@load28/tt-lang-win32-x64-msvc` | Windows | x64 (MSVC) |
 
 On other platforms, build from source
 (`cargo install --git https://github.com/load28/tt`) and set the
@@ -53,7 +53,7 @@ The package exports one helper for tools that want to spawn the compiler
 directly:
 
 ```js
-const { binaryPath } = require("tt-lang");
+const { binaryPath } = require("@load28/tt-lang");
 binaryPath(); // absolute path to the ttc binary for this platform
 ```
 

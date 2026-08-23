@@ -21,7 +21,7 @@ test("the main package depends on every declared platform package", () => {
 });
 
 test("the Windows runtime key resolves to the available MSVC package name", () => {
-  assert.equal(platformPackageName("win32-x64"), "ttlang-native-msvc");
+  assert.equal(platformPackageName("win32-x64"), "@load28/tt-lang-win32-x64-msvc");
   assert.equal(platformPackageName("freebsd-x64"), undefined);
 });
 
@@ -45,11 +45,15 @@ test("the package assembler keeps the build key but stamps the mapped npm name",
     );
 
     const generated = JSON.parse(
-      readFileSync(join(output, "ttlang-native-msvc", "package.json"), "utf8"),
+      readFileSync(join(output, "@load28", "tt-lang-win32-x64-msvc", "package.json"), "utf8"),
     );
-    assert.equal(generated.name, "ttlang-native-msvc");
+    assert.equal(generated.name, "@load28/tt-lang-win32-x64-msvc");
     assert.deepEqual(generated.os, ["win32"]);
     assert.deepEqual(generated.cpu, ["x64"]);
+    assert.deepEqual(generated.publishConfig, {
+      access: "public",
+      registry: "https://registry.npmjs.org/",
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

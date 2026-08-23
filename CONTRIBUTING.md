@@ -103,6 +103,6 @@ Release를 배포합니다. 저장소에는 대상 패키지 게시 권한의 `N
 필요합니다.
 
 ```sh
-bun add -d tt-lang@dev unplugin-tt@dev
-bunx create-tt@dev my-app
+bun add -d @load28/tt-lang@dev @load28/unplugin-tt@dev
+bunx @load28/create-tt@dev my-app
 ```

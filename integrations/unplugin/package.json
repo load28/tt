@@ -1,8 +1,12 @@
 {
-  "name": "unplugin-tt",
+  "name": "@load28/unplugin-tt",
   "version": "0.1.0",
   "description": "Compile .tt and .ttx modules with ttc in Vite, Rollup, webpack, Rspack, esbuild and Farm",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "type": "module",
   "main": "./index.js",
   "exports": {

@@ -1,8 +1,8 @@
 import type { UnpluginFactory, UnpluginInstance } from "unplugin";
 
-/** Options accepted by every `unplugin-tt` entry. */
+/** Options accepted by every `@load28/unplugin-tt` entry. */
 export interface Options {
-  /** Path to the ttc binary (default: the installed `tt-lang`, else `"ttc"`). */
+  /** Path to the ttc binary (default: the installed `@load28/tt-lang`, else `"ttc"`). */
   compiler?: string;
   /** Run ttc's output self-check (default: true). */
   verify?: boolean;

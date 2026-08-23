@@ -2,8 +2,8 @@
 #
 # Trigger: a stable Cargo.toml version bump on main after CI, or a matching
 # `vX.Y.Z` tag. Publishing needs the NPM_TOKEN
-# repository secret (an npm automation token with publish rights to tt-lang,
-# tt-lang-* platform packages, unplugin-tt, and create-tt).
+# repository secret (an npm automation token with publish rights to the
+# @load28 scope).
 #
 # Pipeline: classify/verify Cargo.toml version → build 5 targets → assemble npm
 # platform packages + stamp versions → publish (platform packages first,
@@ -173,11 +173,11 @@ jobs:
 
       - name: Smoke-test the linux-x64 binary
         run: |
-          dist/packages/tt-lang-linux-x64/bin/ttc --version
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version
           # A tt-only enum (fields), so the output proves actual compilation
           # rather than TS passthrough.
           printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/smoke.tt
-          dist/packages/tt-lang-linux-x64/bin/ttc -p /tmp/smoke.tt | grep -q 'kind: "A"'
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/smoke.tt | grep -q 'kind: "A"'
 
       - name: Stamp version into tt-lang
         run: node npm/scripts/stamp-version.mjs "$VERSION"
@@ -186,7 +186,7 @@ jobs:
       # must be resolvable the moment tt-lang@VERSION appears.
       - name: Publish platform packages
         run: |
-          for package_dir in dist/packages/tt-lang-*; do
+          for package_dir in dist/packages/@load28/tt-lang-*; do
             npm publish "$package_dir" --provenance --access public
           done
         env:
@@ -203,8 +203,8 @@ jobs:
       - name: Publish unplugin-tt when needed
         run: |
           UNPLUGIN_VERSION="$(node -p "require('./integrations/unplugin/package.json').version")"
-          if npm view "unplugin-tt@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
-            echo "unplugin-tt@$UNPLUGIN_VERSION is already published"
+          if npm view "@load28/unplugin-tt@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
+            echo "@load28/unplugin-tt@$UNPLUGIN_VERSION is already published"
           else
             npm publish ./integrations/unplugin --provenance --access public
           fi

@@ -118,7 +118,7 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
 
 1. `tt.compilerPath` 설정
 2. 워크스페이스의 `target/release/ttc` → `target/debug/ttc`
-3. 워크스페이스에 `file:`로 설치된 로컬 개발용 `tt-lang` 패키지의 ttc
+3. 워크스페이스에 `file:`로 설치된 로컬 개발용 `@load28/tt-lang` 패키지의 ttc
    (TT 저장소에서 `scripts/setup`을 돌린 경우 — `server/src/dev.ts`)
 4. PATH의 `ttc`
 

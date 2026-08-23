@@ -16,7 +16,7 @@ const compilerVersion = `${baseVersion}-local.${stamp}`
 const packageKey = platformKey()
 const platformPackages = JSON.parse(await readFile(join(root, 'npm/tt-lang/platforms.json'), 'utf8'))
 const platformPackage = platformPackages[packageKey]?.package
-if (!platformPackage) fail(`no prebuilt tt-lang package target for ${packageKey}`)
+if (!platformPackage) fail(`no prebuilt @load28/tt-lang package target for ${packageKey}`)
 const executable = platform() === 'win32' ? 'ttc.exe' : 'ttc'
 const binary = join(root, 'target', 'release', executable)
 const staging = await mkdtemp(join(tmpdir(), 'tt-local-registry-'))
@@ -65,7 +65,7 @@ for (const directory of [join(packages, platformPackage), ttLang, unplugin, init
 }
 
 console.log(`\nPublished local TT toolchain ${compilerVersion} to ${registry}`)
-console.log(`BUN_CONFIG_REGISTRY=${registry} bunx create-tt@latest my-app --registry ${registry}`)
+console.log(`BUN_CONFIG_REGISTRY=${registry} bunx @load28/create-tt@latest my-app --registry ${registry}`)
 
 function run(command, args, cwd, environment = {}) {
   const result = spawnSync(command, args, {
@@ -96,7 +96,7 @@ function platformKey() {
   const os = { linux: 'linux', darwin: 'darwin', win32: 'win32' }[platform()]
   const cpu = { x64: 'x64', arm64: 'arm64' }[arch()]
   if (!os || !cpu || (os === 'win32' && cpu !== 'x64')) {
-    fail(`no prebuilt tt-lang package target for ${platform()}-${arch()}`)
+    fail(`no prebuilt @load28/tt-lang package target for ${platform()}-${arch()}`)
   }
   return `${os}-${cpu}`
 }

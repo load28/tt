@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * unplugin-tt — `.tt` modules for every bundler unplugin supports.
+ * @load28/unplugin-tt — `.tt` modules for every bundler unplugin supports.
  *
  * The plugin resolves `.tt` specifiers itself and compiles each file with
  * `ttc` on the way in, so a project needs no intermediate `.ts` tree: the
@@ -29,14 +29,14 @@ import { createUnplugin } from "unplugin";
 const run = promisify(execFile);
 
 /**
- * Default compiler: the prebuilt binary from an installed `tt-lang` npm
+ * Default compiler: the prebuilt binary from an installed `@load28/tt-lang` npm
  * package when present (spawned directly — no per-call node launcher),
  * otherwise `ttc` from PATH as before.
  */
 function defaultCompiler() {
   try {
     const require = createRequire(import.meta.url);
-    return require("tt-lang").binaryPath();
+    return require("@load28/tt-lang").binaryPath();
   } catch {
     return "ttc";
   }
@@ -76,7 +76,7 @@ const stdModuleOfId = (id) => {
 /**
  * @typedef {object} Options
  * @property {string} [compiler] Path to the ttc binary (default: the
- *   installed `tt-lang` package's binary, falling back to `"ttc"` on PATH).
+ *   installed `@load28/tt-lang` package's binary, falling back to `"ttc"` on PATH).
  * @property {boolean} [verify] Run ttc's output self-check (default: true).
  */
 
@@ -86,7 +86,7 @@ export const unpluginFactory = (options = {}) => {
   const verify = options.verify ?? true;
 
   return {
-    name: "unplugin-tt",
+    name: "@load28/unplugin-tt",
     // Ahead of the host's own resolution: `.tt` is not an extension it
     // knows. Rollup and esbuild ignore `enforce`, where plugin order is the
     // author's responsibility instead.

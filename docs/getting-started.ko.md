@@ -9,7 +9,7 @@ typescript-go 체크아웃은 필요하지 않습니다.
 첫 `.tt` 모듈이 포함된 Vite + TypeScript 프로젝트를 만듭니다.
 
 ```sh
-bun create tt@latest my-app
+bunx @load28/create-tt@latest my-app
 cd my-app
 bun run dev
 ```
@@ -18,12 +18,12 @@ bun run dev
 
 ```sh
 cd existing-project
-bun create tt@latest init
+bunx @load28/create-tt@latest init
 bun run tt:check
 ```
 
 `init`은 `package.json`에서 Vite, Rollup, Rolldown, webpack, Rspack,
-esbuild, Farm을 감지합니다. `tt-lang`, TypeScript 7, `unplugin-tt`과 TT용
+esbuild, Farm을 감지합니다. `@load28/tt-lang`, TypeScript 7, `@load28/unplugin-tt`과 TT용
 스크립트를 추가합니다. 선언형 설정을 쓰는 번들러에는 기존 설정을 합성하는
 `tt.*.config.mjs` 래퍼를 생성하며 사용자 설정 소스는 고치지 않습니다. 생성된
 래퍼는 `bun run tt:dev` 또는 `bun run tt:build`로 사용합니다. esbuild 빌드
@@ -33,10 +33,10 @@ esbuild, Farm을 감지합니다. `tt-lang`, TypeScript 7, `unplugin-tt`과 TT�
 비대화형 실행 옵션은 다음과 같습니다.
 
 ```sh
-bun create tt@latest init --bundler vite
-bun create tt@latest init --bundler none
-bun create tt@latest init --no-install
-bun create tt@latest init --package-manager bun
+bunx @load28/create-tt@latest init --bundler vite
+bunx @load28/create-tt@latest init --bundler none
+bunx @load28/create-tt@latest init --no-install
+bunx @load28/create-tt@latest init --package-manager bun
 ```
 
 새 프로젝트는 항상 Bun을 사용합니다. 기존 프로젝트는 `--package-manager`를
@@ -51,8 +51,8 @@ bun create tt@latest init --package-manager bun
 bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
 ```
 
-현재 OS와 CPU용 `ttc`를 빌드하고 `tt-lang`, 플랫폼 바이너리, `unplugin-tt`,
-`create-tt`을 로컬 레지스트리에 게시합니다.
+현재 OS와 CPU용 `ttc`를 빌드하고 `@load28/tt-lang`, 플랫폼 바이너리, `@load28/unplugin-tt`,
+`@load28/create-tt`을 로컬 레지스트리에 게시합니다.
 
 ```sh
 bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
@@ -62,7 +62,7 @@ bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
 
 ```sh
 BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
-  bunx create-tt@latest my-app --registry http://127.0.0.1:4873
+  bunx @load28/create-tt@latest my-app --registry http://127.0.0.1:4873
 ```
 
 `--registry`는 같은 레지스트리를 `bun install`에 넘기고 새 프로젝트의
@@ -74,7 +74,7 @@ Vite와 TypeScript 같은 외부 패키지는 프록시합니다.
 컴파일러와 컴파일러가 구동하는 TypeScript를 설치합니다.
 
 ```sh
-bun add -d tt-lang typescript@7
+bun add -d @load28/tt-lang typescript@7
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.
@@ -97,34 +97,34 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
-bun add -d tt-lang typescript@7 unplugin-tt
+bun add -d @load28/tt-lang typescript@7 @load28/unplugin-tt
 ```
 
 각 번들러의 plugins 배열 맨 앞에 `tt()`을 넣습니다.
 
 ```ts
 // Vite: vite.config.ts
-import tt from "unplugin-tt/vite";
+import tt from "@load28/unplugin-tt/vite";
 export default { plugins: [tt()] };
 
 // Rollup: rollup.config.js
-import tt from "unplugin-tt/rollup";
+import tt from "@load28/unplugin-tt/rollup";
 export default { plugins: [tt()] };
 
 // Rolldown: rolldown.config.js
-import tt from "unplugin-tt/rolldown";
+import tt from "@load28/unplugin-tt/rolldown";
 export default { plugins: [tt()] };
 
 // webpack: webpack.config.mjs
-import tt from "unplugin-tt/webpack";
+import tt from "@load28/unplugin-tt/webpack";
 export default { plugins: [tt()] };
 
 // Rspack: rspack.config.mjs
-import tt from "unplugin-tt/rspack";
+import tt from "@load28/unplugin-tt/rspack";
 export default { plugins: [tt()] };
 
 // Farm: farm.config.ts
-import tt from "unplugin-tt/farm";
+import tt from "@load28/unplugin-tt/farm";
 export default { plugins: [tt()] };
 ```
 
@@ -132,7 +132,7 @@ esbuild는 JavaScript API에서 연결합니다.
 
 ```js
 import { build } from "esbuild";
-import tt from "unplugin-tt/esbuild";
+import tt from "@load28/unplugin-tt/esbuild";
 
 await build({ entryPoints: ["src/main.tt"], bundle: true, plugins: [tt()] });
 ```

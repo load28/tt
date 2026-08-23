@@ -94,7 +94,7 @@
         "en": "Use Bun to create a ready-to-run project or migrate an existing TypeScript project. The same page also gives the complete manual compiler and bundler setup.",
         "ko": "Bun으로 바로 실행할 프로젝트를 만들거나 기존 TypeScript 프로젝트를 마이그레이션합니다. 컴파일러와 번들러를 직접 설정하는 전체 절차도 함께 제공합니다."
       },
-      "code": "bun create tt@latest my-app\n\n# Or, inside an existing TypeScript project:\nbun create tt@latest init\nbun run tt:check",
+      "code": "bunx @load28/create-tt@latest my-app\n\n# Or, inside an existing TypeScript project:\nbunx @load28/create-tt@latest init\nbun run tt:check",
       "works": {
         "en": [
           "New projects use Bun, Vite, TypeScript 7, and a prebuilt ttc binary.",
@@ -125,27 +125,27 @@
         {
           "title": { "en": "New project", "ko": "새 프로젝트" },
           "body": { "en": "The command creates src/main.ts with a starter src/app.tt module, installs with Bun, and adds dev, build, and check scripts.", "ko": "src/main.ts와 첫 src/app.tt 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다." },
-          "code": "bun create tt@latest my-app\ncd my-app\nbun run dev"
+          "code": "bunx @load28/create-tt@latest my-app\ncd my-app\nbun run dev"
         },
         {
           "title": { "en": "Existing project", "ko": "기존 프로젝트" },
           "body": { "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.", "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다." },
-          "code": "bun create tt@latest init\nbun create tt@latest init --bundler vite --no-install"
+          "code": "bunx @load28/create-tt@latest init\nbunx @load28/create-tt@latest init --bundler vite --no-install"
         },
         {
           "title": { "en": "Local registry", "ko": "로컬 레지스트리" },
           "body": { "en": "Compiler contributors can publish the locally built binary and all TT npm packages to Verdaccio, then bootstrap through that registry without file dependencies.", "ko": "컴파일러 기여자는 로컬 빌드 바이너리와 모든 TT npm 패키지를 Verdaccio에 게시하고 file 의존성 없이 해당 레지스트리에서 생성할 수 있습니다." },
-          "code": "bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873\nbun scripts/publish-local-registry.mjs http://127.0.0.1:4873\nBUN_CONFIG_REGISTRY=http://127.0.0.1:4873 bunx create-tt@latest my-app --registry http://127.0.0.1:4873"
+          "code": "bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873\nbun scripts/publish-local-registry.mjs http://127.0.0.1:4873\nBUN_CONFIG_REGISTRY=http://127.0.0.1:4873 bunx @load28/create-tt@latest my-app --registry http://127.0.0.1:4873"
         },
         {
           "title": { "en": "Manual compiler", "ko": "컴파일러 수동 설치" },
           "body": { "en": "Install the compiler and TypeScript 7, then compile to an ordinary TypeScript tree or check without writing output.", "ko": "컴파일러와 TypeScript 7을 설치한 뒤 일반 TypeScript 트리로 컴파일하거나 출력 없이 검사합니다." },
-          "code": "bun add -d tt-lang typescript@7\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "code": "bun add -d @load28/tt-lang typescript@7\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
           "title": { "en": "Manual bundlers", "ko": "번들러 수동 설정" },
-          "body": { "en": "Install unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
-          "code": "bun add -d tt-lang typescript@7 unplugin-tt\n\nimport tt from \"unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
+          "body": { "en": "Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "@load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
+          "code": "bun add -d @load28/tt-lang typescript@7 @load28/unplugin-tt\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]
     },
@@ -168,25 +168,25 @@
           "Ordinary TSX remains valid in .ttx; JSX tags and text pass through byte for byte.",
           "tt constructs work inside JSX children and attribute expression containers.",
           "Concise arrow components preserve lexical scope and JSX evaluation order.",
-          "Relative .ttx imports work through the CLI, editor, and unplugin-tt."
+          "Relative .ttx imports work through the CLI, editor, and @load28/unplugin-tt."
         ],
         "ko": [
           "일반 TSX는 .ttx에서도 유효하며 JSX 태그와 텍스트는 바이트 그대로 통과합니다.",
           "JSX 자식과 속성 expression container 안에서 tt 구문을 사용할 수 있습니다.",
           "concise arrow 컴포넌트의 렉시컬 범위와 JSX 평가 순서를 보존합니다.",
-          "상대 .ttx import는 CLI, 에디터, unplugin-tt에서 동일하게 동작합니다."
+          "상대 .ttx import는 CLI, 에디터, @load28/unplugin-tt에서 동일하게 동작합니다."
         ]
       },
       "limits": {
         "en": [
           ".ttx emits .tsx; your TypeScript project still chooses the jsx compiler option.",
           "React, Preact, and other JSX runtimes remain application dependencies, not tt dependencies.",
-          "Use unplugin-tt when a bundler imports .ttx files directly."
+          "Use @load28/unplugin-tt when a bundler imports .ttx files directly."
         ],
         "ko": [
           ".ttx는 .tsx를 방출하며 jsx 컴파일러 옵션은 TypeScript 프로젝트가 선택합니다.",
           "React·Preact 같은 JSX 런타임은 tt이 아니라 애플리케이션 의존성입니다.",
-          "번들러가 .ttx를 직접 import할 때는 unplugin-tt을 사용합니다."
+          "번들러가 .ttx를 직접 import할 때는 @load28/unplugin-tt을 사용합니다."
         ]
       }
     },

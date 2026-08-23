@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * tt-lang local development mode — created by `scripts/setup` in the TT
+ * @load28/tt-lang local development mode — created by `scripts/setup` in the TT
  * repository, absent from published installs.
  *
  * `tt-dev.local.json` beside this file (written by setup, gitignored) marks
@@ -59,7 +59,7 @@ function devEnvironment() {
   const binary = path.join(root, "target", "release", exe);
   if (!fs.existsSync(binary)) {
     throw new Error(
-      `tt-lang: this is a local development install (${DEV_CONFIG}), ` +
+      `@load28/tt-lang: this is a local development install (${DEV_CONFIG}), ` +
         `but ${binary} does not exist. Run ./scripts/setup in ${root}, ` +
         `then reinstall this package.`,
     );

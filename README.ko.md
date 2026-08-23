@@ -29,8 +29,8 @@ export const area = (shape: Shape): number =>
 npm에서 프리빌트 컴파일러를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지 않습니다.
 
 ```sh
-bun create tt@latest my-app
-bun create tt@latest init       # 기존 TypeScript 프로젝트에서 실행
+bunx @load28/create-tt@latest my-app
+bunx @load28/create-tt@latest init       # 기존 TypeScript 프로젝트에서 실행
 ```
 
 새 프로젝트의 자동 설치에는 Bun을 사용합니다. 자동 설치와 번들러별 수동 절차는
@@ -39,7 +39,7 @@ bun create tt@latest init       # 기존 TypeScript 프로젝트에서 실행
 컴파일러만 수동으로 설치하려면 다음 명령을 사용합니다.
 
 ```sh
-bun add -d tt-lang typescript@7
+bun add -d @load28/tt-lang typescript@7
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
@@ -50,7 +50,7 @@ bunx ttc --check src
 bunx ttc --check-types src
 ```
 
-`ttc`는 `.tt`을 `.ts`로, `.ttx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.tt` 또는 `.ttx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`unplugin-tt`](./integrations/unplugin)을 사용하세요.
+`ttc`는 `.tt`을 `.ts`로, `.ttx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.tt` 또는 `.ttx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`@load28/unplugin-tt`](./integrations/unplugin)을 사용하세요.
 
 프리빌트 바이너리는 Linux x64/arm64, macOS x64/arm64, Windows x64를 지원합니다. 다른 플랫폼에서는 소스에서 빌드하세요.
 

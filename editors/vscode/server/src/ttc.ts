@@ -59,7 +59,7 @@ const CANDIDATE_PATHS = [
 
 /**
  * Resolve the compiler to run: explicit setting > locally built binary in a
- * workspace root > the ttc of a `file:`-installed local tt-lang package
+ * workspace root > the ttc of a `file:`-installed local @load28/tt-lang package
  * (a test project set up via `scripts/setup`, see dev.ts) > `ttc` on PATH.
  */
 export function findCompiler(

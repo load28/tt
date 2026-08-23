@@ -116,7 +116,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
 }
 
 function InstallCommand({ language }: { language: Language }) {
-  const command = 'bun create tt@latest my-app'
+  const command = 'bunx @load28/create-tt@latest my-app'
   const [copied, setCopied] = useState(false)
   return (
     <div className="install-command">

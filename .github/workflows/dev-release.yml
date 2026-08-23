@@ -2,8 +2,7 @@
 # a GitHub pre-release after an X.Y.Z-dev.N bump on main passes CI.
 #
 # Required repository secrets:
-#   NPM_TOKEN — npm automation token for tt-lang, its platform packages,
-#               create-tt, and unplugin-tt
+#   NPM_TOKEN — npm automation token with publish rights to the @load28 scope
 name: Dev Release
 
 on:
@@ -174,13 +173,13 @@ jobs:
 
       - name: Smoke-test linux-x64 package
         run: |
-          dist/packages/tt-lang-linux-x64/bin/ttc --version
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version
           printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/dev-smoke.tt
-          dist/packages/tt-lang-linux-x64/bin/ttc -p /tmp/dev-smoke.tt | grep -q 'kind: "A"'
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/dev-smoke.tt | grep -q 'kind: "A"'
 
       - name: Publish platform packages
         run: |
-          for package_dir in dist/packages/tt-lang-*; do
+          for package_dir in dist/packages/@load28/tt-lang-*; do
             npm publish "$package_dir" --tag dev --provenance --access public
           done
         env:
@@ -236,6 +235,6 @@ jobs:
           body: |
             Development build from `${{ needs.prepare.outputs.source_sha }}`.
 
-            npm: `npm install --save-dev tt-lang@dev unplugin-tt@dev`
+            npm: `npm install --save-dev @load28/tt-lang@dev @load28/unplugin-tt@dev`
 
             VS Code: download the `.vsix`, then run **Extensions: Install from VSIX...**.
