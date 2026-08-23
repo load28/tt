@@ -1,9 +1,9 @@
-/* Tests for completion over rl buffers (TASK-062), through the engine
+/* Tests for completion over tt buffers (TASK-062), through the engine
  * session. Two halves, both of which the editor used to lose:
  *
  *  - the standard library's combinators behind `Result.`/`Option.`, which
  *    the language service types perfectly well;
- *  - members at a `.` the user has just typed inside rl syntax, where no
+ *  - members at a `.` the user has just typed inside tt syntax, where no
  *    compiled form of the buffer exists yet and the engine's probe mends
  *    one.
  *
@@ -20,7 +20,7 @@ import { positionAt } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 
 const skip = !compilerAvailable()
-  ? "rlc not on PATH"
+  ? "ttc not on PATH"
   : findTsgo() === null
     ? "no tsgo executable"
     : false;
@@ -29,16 +29,16 @@ after(() => engine.shutdownEngineServer());
 
 /** A buffer in a workspace of its own, open in the engine. */
 function project(source: string): { file: string; done: () => void } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rl-completion-"));
-  const file = path.join(dir, "main.rl");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-completion-"));
+  const file = path.join(dir, "main.tt");
   fs.writeFileSync(file, source);
   engine.openDocument(COMPILER, file, source);
   return { file, done: () => engine.closeDocument(COMPILER, file) };
 }
 
 const STD_SOURCE = [
-  'import type { TResult } from "@rl/std";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TResult } from "@tt/std";',
+  'import * as Result from "@tt/std/result";',
   "",
   "declare const r: TResult<number, string>;",
   "const doubled = Result.map(r, (n) => n * 2);",
@@ -176,8 +176,8 @@ test("a pipeline step's members need a probe", { skip }, async () => {
 });
 
 const PIPE_STD_SOURCE = [
-  'import type { TResult } from "@rl/std";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TResult } from "@tt/std";',
+  'import * as Result from "@tt/std/result";',
   "",
   "declare const r: TResult<number, string>;",
   "const out = r",
@@ -225,7 +225,7 @@ test("a match arm binding's members come from the emit", { skip }, async () => {
 test("a probe answers nothing for an unmendable buffer", { skip }, async () => {
   // A `match` with no closing brace is not a whole construct with the
   // placeholder either: the compiler passes the file through, so the probe
-  // is still raw rl text. The point is that this degrades to no answer —
+  // is still raw tt text. The point is that this degrades to no answer —
   // never to members of something else.
   const broken = [
     "declare const shape: { kind: string };",

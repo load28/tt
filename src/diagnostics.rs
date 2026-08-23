@@ -1,6 +1,6 @@
 //! Structured diagnostics — the compiler's report vocabulary.
 //!
-//! Every rl-level problem is reported as a [`Diagnostic`]: a stable
+//! Every tt-level problem is reported as a [`Diagnostic`]: a stable
 //! [`DiagnosticCode`], a [`Severity`], a message, and a byte span in the
 //! source. One file can carry many of them — the semantic passes accumulate
 //! and keep checking the next independent node instead of stopping at the
@@ -11,23 +11,23 @@
 //! rule, and the typed and untyped pipelines share one message renderer
 //! ([`non_exhaustive_message`]) so their wording cannot drift apart.
 
-use crate::error::{RlError, line_col};
+use crate::error::{TtError, line_col};
 
 /// How serious a [`Diagnostic`] is.
 ///
-/// Every current rl rule is an error; the variant space leaves room for
+/// Every current tt rule is an error; the variant space leaves room for
 /// warnings (e.g. unreachable arms, today an editor hint) without another
 /// migration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Severity {
-    /// The program violates an rl rule; compilation does not produce output.
+    /// The program violates a tt rule; compilation does not produce output.
     Error,
     /// Suspicious but not fatal; compilation proceeds.
     Warning,
 }
 
-/// The stable identity of an rl rule — what makes the same violation the
+/// The stable identity of a tt rule — what makes the same violation the
 /// same diagnostic in every pipeline and every consumer.
 ///
 /// Codes are per *rule*, not per message: the wording may name the enum or
@@ -43,9 +43,9 @@ pub enum DiagnosticCode {
     StrayIfLet,
     /// A `result` block the parser could not claim.
     StrayResult,
-    /// An `enum` committed to rl syntax but not fully parsed.
+    /// An `enum` committed to tt syntax but not fully parsed.
     MalformedEnum,
-    /// A `match` committed to rl syntax but not fully parsed.
+    /// A `match` committed to tt syntax but not fully parsed.
     MalformedMatch,
     /// A `result` binding missing its declaration keyword.
     ResultMissingKeyword,
@@ -138,9 +138,9 @@ impl DiagnosticCode {
     /// Whether a diagnostic with this code leaves the file impossible to
     /// project into the TypeScript program.
     ///
-    /// Most rl errors are *recoverable*: the emitter still produces plain
+    /// Most tt errors are *recoverable*: the emitter still produces plain
     /// TypeScript for the file (codegen is infallible), so the typed pass
-    /// can run and its diagnostics are reported **alongside** the rl ones —
+    /// can run and its diagnostics are reported **alongside** the tt ones —
     /// a duplicate arm no longer hides the file's other exhaustiveness
     /// holes, type errors and `val` violations (TASK-117 symptom 3).
     ///
@@ -218,7 +218,7 @@ impl Diagnostic {
         }
     }
 
-    pub(crate) fn from_rl(error: RlError) -> Diagnostic {
+    pub(crate) fn from_tt(error: TtError) -> Diagnostic {
         Diagnostic {
             code: error.code,
             severity: Severity::Error,
@@ -307,8 +307,8 @@ mod tests {
             end: Some(6),
             owner: None,
         };
-        let e = d.to_compile_error("abc\ndef\n", Some("x.rl"));
+        let e = d.to_compile_error("abc\ndef\n", Some("x.tt"));
         assert_eq!((e.line, e.col), (2, 2));
-        assert_eq!(e.to_string(), "x.rl:2:2: match: duplicate arm \"A\"");
+        assert_eq!(e.to_string(), "x.tt:2:2: match: duplicate arm \"A\"");
     }
 }

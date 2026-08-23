@@ -1,20 +1,20 @@
-//! Structural parsing of rl source into the AST.
+//! Structural parsing of tt source into the AST.
 //!
 //! The parser is **infallible**: it never reports an error. The source is
 //! first lexed into a significant-token stream ([`crate::lexer`]); the
 //! parser walks that stream and lifts every construct that *fully* parses
-//! as rl syntax — an `enum` declaration, a `match` expression, a `try` or
-//! let-else statement, a `val` binding modifier, a relative `.rl` import
+//! as tt syntax — an `enum` declaration, a `match` expression, a `try` or
+//! let-else statement, a `val` binding modifier, a relative `.tt` import
 //! specifier — into a typed AST node; everything else, including any candidate that deviates even
-//! slightly from rl syntax, is left as a verbatim byte range. This is how
-//! the "every valid TypeScript file is a valid .rl file" contract is
+//! slightly from tt syntax, is left as a verbatim byte range. This is how
+//! the "every valid TypeScript file is a valid .tt file" contract is
 //! implemented: construct-hood is a purely structural decision made here,
-//! and all rl-level *errors* (duplicate cases, misplaced wildcard,
+//! and all tt-level *errors* (duplicate cases, misplaced wildcard,
 //! non-exhaustive match, bad field types) are the semantic phase's job
 //! ([`crate::sema`]).
 //!
 //! Plain TypeScript enums keep working: an `enum` declaration is treated as
-//! an rl enum only when at least one case carries a payload `(...)` or the
+//! a tt enum only when at least one case carries a payload `(...)` or the
 //! declaration has generics — neither is valid TypeScript enum syntax, so no
 //! valid TS enum is ever lifted.
 //!
@@ -24,10 +24,10 @@
 //!
 //! Module layout: this file owns the main token loop and shared token
 //! rules; [`cursor`] is the token cursor sub-parsers consume; [`enums`]
-//! parses rl `enum` declarations; [`matches`] parses `match` expressions;
+//! parses tt `enum` declarations; [`matches`] parses `match` expressions;
 //! [`tries`] parses `try` statements; [`lets`] parses let-else statements;
 //! [`results`] parses `result { ... }` computation blocks;
-//! [`imports`] lifts relative `.rl` module specifiers out of static
+//! [`imports`] lifts relative `.tt` module specifiers out of static
 //! import/re-export statements. The `val` binding modifier is recognized
 //! here too, through the shared structural rule in [`crate::val`].
 
@@ -51,15 +51,15 @@ pub(crate) use cursor::{dotted_at, find_close_at};
 
 pub(super) enum Claim<T> {
     Parsed(T),
-    NotRl,
+    NotTt,
     Malformed {
-        error: crate::error::RlError,
+        error: crate::error::TtError,
         recovery: RecoveryNode,
     },
 }
 
 // Words that can never be a variant tag, match pattern tag, or binding name.
-// Meeting one of these while trying to parse an rl construct aborts the
+// Meeting one of these while trying to parse a tt construct aborts the
 // attempt, so ordinary TypeScript (e.g. a class method named `match`) is
 // left untouched.
 //
@@ -189,7 +189,7 @@ pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
             match segment {
                 Segment::Verbatim(_)
                 | Segment::Enum(_)
-                | Segment::RlImport(_)
+                | Segment::TtImport(_)
                 | Segment::ValModifier(_) => {}
                 Segment::Match(expr) => {
                     visit(&expr.scrutinee, out);
@@ -293,7 +293,7 @@ fn segment_start(seg: &Segment) -> usize {
         Segment::Try(t) => t.keyword_off,
         Segment::LetElse(l) => l.keyword_off,
         Segment::IfLet(s) => s.keyword_off,
-        Segment::RlImport(d) => d.spec.start,
+        Segment::TtImport(d) => d.spec.start,
         Segment::Template(t) => match t.chunks.first() {
             Some(TemplateChunk::Raw(span)) => span.start,
             Some(TemplateChunk::Interp(_)) | None => 0, // first chunk is always Raw
@@ -500,7 +500,7 @@ impl Parser<'_> {
                 _ => "",
             };
 
-            // `const enum` / `declare enum` are TypeScript-only forms — never rl.
+            // `const enum` / `declare enum` are TypeScript-only forms — never tt.
             let ts_enum_prefix = prev_word == "const" || prev_word == "declare";
             if !dotted && !ts_enum_prefix && (word == "enum" || word == "export") {
                 let (kw_idx, exported) = if word == "enum" {
@@ -530,22 +530,22 @@ impl Parser<'_> {
                             malformed.push(error);
                             recoveries.push(recovery);
                         }
-                        Claim::NotRl => {}
+                        Claim::NotTt => {}
                     }
                 }
             }
 
-            // Static import / re-export of a relative `.rl` path — only
+            // Static import / re-export of a relative `.tt` path — only
             // the specifier string is lifted; the clause before it and
             // the rest of the statement stay verbatim.
             if !dotted
                 && (word == "import" || word == "export")
                 && let Some((cur, decl)) =
-                    imports::parse_rl_import(Cursor::new(self, tokens, i + 1, end), word)
+                    imports::parse_tt_import(Cursor::new(self, tokens, i + 1, end), word)
             {
                 flush_verbatim(&mut segments, seg_start, decl.spec.start);
                 seg_start = decl.spec.end;
-                segments.push(Segment::RlImport(decl));
+                segments.push(Segment::TtImport(decl));
                 i = cur.idx;
                 expr = (i, false);
                 continue;
@@ -567,7 +567,7 @@ impl Parser<'_> {
                         malformed.push(error);
                         recoveries.push(recovery);
                     }
-                    Claim::NotRl => {}
+                    Claim::NotTt => {}
                 }
             }
 
@@ -581,7 +581,7 @@ impl Parser<'_> {
             {
                 if !starts_statement(self.src, tokens, i, expr.1) {
                     malformed.push(
-                        crate::error::RlError::span(
+                        crate::error::TtError::span(
                             stmt.span.start,
                             stmt.span.end,
                             "`try` is a statement, not an expression — bind its value first with \

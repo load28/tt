@@ -4,10 +4,10 @@
  * answered nothing. */
 import { execFileSync } from "node:child_process";
 
-import { findTsgo as resolveTsgo } from "../rlc";
+import { findTsgo as resolveTsgo } from "../ttc";
 
 /** The compiler, as the extension invokes it. */
-export const COMPILER = "rlc";
+export const COMPILER = "ttc";
 
 export function compilerAvailable(): boolean {
   try {

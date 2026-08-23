@@ -1,7 +1,7 @@
-//! The seam: what rl asks TypeScript, in rl's terms.
+//! The seam: what tt asks TypeScript, in tt's terms.
 //!
 //! Nothing here mentions a process, a protocol, or a compiler version — that
-//! is [`super::native`]'s business. rl features build a [`Query`] and read an
+//! is [`super::native`]'s business. tt features build a [`Query`] and read an
 //! [`Answers`]; swapping how the compiler is reached changes neither.
 //!
 //! A query is a **batch**. One round trip carries every question about a
@@ -11,13 +11,13 @@
 //! In the compiler core's vocabulary (`docs/design/compiler-core.md` §7)
 //! [`Query`] **is** the type-request set and [`Answers`] **is** the typed
 //! facts: the snapshot's questions are collected first (the engine's
-//! `projection::assemble`), sent as one batch, and the answers are rl-owned
+//! `projection::assemble`), sent as one batch, and the answers are tt-owned
 //! — constructor domains as tag lists ([`TagMembers`]), symbol identity as
 //! a snapshot-wide id ([`Resolution`]), mutation verdicts as the `builtin`
 //! flag the `val` report interprets. There is deliberately no per-expression
 //! oracle: a chatty ask-per-node interface would put a round trip inside
 //! every analysis loop. A backend that cannot run degrades every typed fact
-//! to unknown ([`Answers::default`]) — it never takes the rl layer down
+//! to unknown ([`Answers::default`]) — it never takes the tt layer down
 //! with it (`engine::Project::check`).
 //!
 //! The port is intentionally semantic-only. SWC owns TypeScript parsing,
@@ -29,7 +29,7 @@
 use std::path::PathBuf;
 
 /// One module of the project as TypeScript should see it: the ordinary
-/// TypeScript an `.rl` file lowers to, at the path that `.rl` file occupies
+/// TypeScript an `.tt` file lowers to, at the path that `.tt` file occupies
 /// with a `.ts` extension.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Module {
@@ -44,7 +44,7 @@ pub(crate) struct Module {
 ///
 /// The position names the scrutinee **as it appears in the emitted module**,
 /// so the answer reflects the type TypeScript computes at that point,
-/// narrowing included. rlc never reconstructs the declared type.
+/// narrowing included. ttc never reconstructs the declared type.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LiteralQuery {
     /// The module the scrutinee lives in.
@@ -56,7 +56,7 @@ pub(crate) struct LiteralQuery {
 }
 
 /// "Which case tags does the scrutinee's type still allow?" — the same
-/// question as [`LiteralQuery`], for an rl enum. The enum lowers to a
+/// question as [`LiteralQuery`], for a tt enum. The enum lowers to a
 /// discriminated union, so the answer is the `kind` literals of the type's
 /// constituents at that point.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -74,7 +74,7 @@ pub(crate) struct TagQuery {
 /// Two identifiers name the same binding when they resolve to the same
 /// symbol, and a method is a built-in when its symbol is declared in
 /// TypeScript's own lib files. Both are questions about resolution, so both
-/// are asked as one, and rl does the interpreting.
+/// are asked as one, and tt does the interpreting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SymbolQuery {
     /// The module the identifier lives in.
@@ -86,7 +86,7 @@ pub(crate) struct SymbolQuery {
 /// Everything asked of one project graph, in one round trip.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Query {
-    /// The lowered `.rl` modules. Their text is served from memory —
+    /// The lowered `.tt` modules. Their text is served from memory —
     /// nothing is written to disk.
     pub modules: Vec<Module>,
     /// Hand-written `.ts` files of the project, by path: the compiler reads
@@ -99,14 +99,14 @@ pub(crate) struct Query {
     pub literals: Vec<LiteralQuery>,
     pub tags: Vec<TagQuery>,
     pub symbols: Vec<SymbolQuery>,
-    /// Ask the compiler to emit the lowered modules' `.d.ts` as well. rlc
+    /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.
     pub emit_declarations: bool,
 }
 
 /// One TypeScript diagnostic, in TypeScript's coordinates. Mapping it back
-/// to a position in the `.rl` source is [`super::mapper`]'s job.
+/// to a position in the `.tt` source is [`super::mapper`]'s job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Diagnostic {
     /// The file TypeScript reported it in.
@@ -168,7 +168,7 @@ pub(crate) struct TagMissing {
 /// certainty rule as [`LiteralMissing`] — the *members*, not what the arms
 /// left out.
 ///
-/// This is the checker as an **oracle for one column**: rl runs its own
+/// This is the checker as an **oracle for one column**: tt runs its own
 /// exhaustiveness algorithm over the answer, which is how a hole inside a
 /// payload gets seen at all (`docs/design/rust-parity-analysis.md` §10.3).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -182,7 +182,7 @@ pub(crate) struct TagMembers {
 
 /// What a [`SymbolQuery`] resolved to. A position that resolved to nothing
 /// — an `any` receiver, an unresolved name — has no entry at all, and an
-/// unresolved question never becomes an rl error.
+/// unresolved question never becomes a tt error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Resolution {
     /// Index into [`Query::symbols`].
@@ -220,7 +220,7 @@ pub(crate) struct Answers {
 /// A source of TypeScript semantics for one project.
 ///
 /// The project is named by its `tsconfig.json`: the compiler owns
-/// configuration, module resolution and the file list, and rlc only adds the
+/// configuration, module resolution and the file list, and ttc only adds the
 /// modules it lowered.
 pub(crate) trait TypeScriptBackend {
     /// Answers every question of `query` against the project `tsconfig`

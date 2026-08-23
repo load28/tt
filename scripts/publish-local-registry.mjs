@@ -14,9 +14,9 @@ if (!baseVersion) fail('Cargo.toml has no package version')
 const stamp = Date.now()
 const compilerVersion = `${baseVersion}-local.${stamp}`
 const packageKey = platformKey()
-const executable = platform() === 'win32' ? 'rlc.exe' : 'rlc'
+const executable = platform() === 'win32' ? 'ttc.exe' : 'ttc'
 const binary = join(root, 'target', 'release', executable)
-const staging = await mkdtemp(join(tmpdir(), 'rl-local-registry-'))
+const staging = await mkdtemp(join(tmpdir(), 'tt-local-registry-'))
 const packages = join(staging, 'packages')
 
 await requireRegistry(registry)
@@ -29,17 +29,17 @@ run('node', [
   compilerVersion,
 ], root)
 
-const rlLang = join(packages, 'rl-lang')
-await cp(join(root, 'npm/rl-lang'), rlLang, {
+const ttLang = join(packages, 'tt-lang')
+await cp(join(root, 'npm/tt-lang'), ttLang, {
   recursive: true,
-  filter: (source) => !source.endsWith('rl-dev.local.json'),
+  filter: (source) => !source.endsWith('tt-dev.local.json'),
 })
-await updateManifest(rlLang, (manifest) => {
+await updateManifest(ttLang, (manifest) => {
   manifest.version = compilerVersion
-  manifest.optionalDependencies = { [`rl-lang-${packageKey}`]: compilerVersion }
+  manifest.optionalDependencies = { [`tt-lang-${packageKey}`]: compilerVersion }
 })
 
-const unplugin = join(packages, 'unplugin-rl')
+const unplugin = join(packages, 'unplugin-tt')
 await cp(join(root, 'integrations/unplugin'), unplugin, {
   recursive: true,
   filter: (source) => !source.endsWith('node_modules'),
@@ -49,20 +49,20 @@ await updateManifest(unplugin, (manifest) => {
   manifest.version = `${unpluginBase}-local.${stamp}`
 })
 
-const initializer = join(packages, 'create-rl')
-await cp(join(root, 'packages/create-rl'), initializer, { recursive: true })
+const initializer = join(packages, 'create-tt')
+await cp(join(root, 'packages/create-tt'), initializer, { recursive: true })
 await updateManifest(initializer, (manifest) => {
   manifest.version = compilerVersion
 })
 
-for (const directory of [join(packages, `rl-lang-${packageKey}`), rlLang, unplugin, initializer]) {
+for (const directory of [join(packages, `tt-lang-${packageKey}`), ttLang, unplugin, initializer]) {
   run('bun', ['publish', '--registry', registry, '--tag', 'latest'], directory, {
     BUN_CONFIG_REGISTRY: registry,
   })
 }
 
-console.log(`\nPublished local RL toolchain ${compilerVersion} to ${registry}`)
-console.log(`BUN_CONFIG_REGISTRY=${registry} bunx create-rl@latest my-app --registry ${registry}`)
+console.log(`\nPublished local TT toolchain ${compilerVersion} to ${registry}`)
+console.log(`BUN_CONFIG_REGISTRY=${registry} bunx create-tt@latest my-app --registry ${registry}`)
 
 function run(command, args, cwd, environment = {}) {
   const result = spawnSync(command, args, {
@@ -93,7 +93,7 @@ function platformKey() {
   const os = { linux: 'linux', darwin: 'darwin', win32: 'win32' }[platform()]
   const cpu = { x64: 'x64', arm64: 'arm64' }[arch()]
   if (!os || !cpu || (os === 'win32' && cpu !== 'x64')) {
-    fail(`no prebuilt rl-lang package target for ${platform()}-${arch()}`)
+    fail(`no prebuilt tt-lang package target for ${platform()}-${arch()}`)
   }
   return `${os}-${cpu}`
 }

@@ -1,10 +1,10 @@
 //! Standard-library package contracts.
 
-use rlc::{Options, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_TYPES_SOURCE, compile};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+use ttc::{Options, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_TYPES_SOURCE, compile};
 
 #[test]
 fn std_modules_are_plain_typescript_and_pass_through() {
@@ -72,7 +72,7 @@ fn namespace_import_is_pruned_by_a_real_bundler() {
         .duration_since(UNIX_EPOCH)
         .expect("system clock predates Unix epoch")
         .as_nanos();
-    let root = std::env::temp_dir().join(format!("rl-stdlib-tree-shaking-{nonce}"));
+    let root = std::env::temp_dir().join(format!("tt-stdlib-tree-shaking-{nonce}"));
     fs::create_dir_all(&root).expect("failed to create bundle fixture directory");
     fs::write(root.join("option.ts"), STD_OPTION_SOURCE).expect("failed to write option module");
     fs::write(root.join("result.ts"), STD_RESULT_SOURCE).expect("failed to write result module");

@@ -1,4 +1,4 @@
-//! Surface-independent IR for rl-owned semantics.
+//! Surface-independent IR for tt-owned semantics.
 //!
 //! Pattern-bearing syntax is normalized to [`Decision`]; Result propagation
 //! is normalized to [`Propagate`]. The IR refers to HIR and resolution by ID,
@@ -80,13 +80,13 @@ pub(crate) enum Expr {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum TempId {
-    /// File-unique `$rl_tN`, shared by `try` and statement decisions.
+    /// File-unique `$tt_tN`, shared by `try` and statement decisions.
     Statement(u32),
-    /// File-unique `$rl_rN`, sharing the same ordinal space.
+    /// File-unique `$tt_rN`, sharing the same ordinal space.
     Result(u32),
-    /// A single-subject decision's local (`$rl_m`).
+    /// A single-subject decision's local (`$tt_m`).
     Decision,
-    /// One position of a tuple decision (`$rl_mN`).
+    /// One position of a tuple decision (`$tt_mN`).
     DecisionElement(u32),
 }
 

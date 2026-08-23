@@ -1,8 +1,8 @@
-//! Structural parsing of rl `enum` declarations.
+//! Structural parsing of tt `enum` declarations.
 //!
-//! Purely structural: returns `None` for anything that is not an rl enum
+//! Purely structural: returns `None` for anything that is not a tt enum
 //! (including every valid plain TypeScript enum), so it passes through
-//! verbatim. rl-level errors — duplicate cases, bad field types — are the
+//! verbatim. tt-level errors — duplicate cases, bad field types — are the
 //! semantic phase's job.
 
 use super::Claim;
@@ -39,17 +39,17 @@ pub(super) fn parse_enum<'t>(
             .tokens
             .get(cur.idx)
             .map(|token| cur.text(token).to_string())
-            .unwrap_or_else(|| "$rl_invalid_enum".to_string());
+            .unwrap_or_else(|| "$tt_invalid_enum".to_string());
         let end = (cur.idx + 1..cur.tokens.len())
             .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
             .map_or(cur.range_end, |token| token.span.end);
         return Claim::Malformed {
-            error: crate::error::RlError::span(
+            error: crate::error::TtError::span(
                 keyword,
                 keyword + "enum".len(),
-                "rl `enum` could not be parsed (cases are `Case` or `Case(field: Type)`)"
+                "tt `enum` could not be parsed (cases are `Case` or `Case(field: Type)`)"
                     .to_string(),
             )
             .code(crate::DiagnosticCode::MalformedEnum),
@@ -59,7 +59,7 @@ pub(super) fn parse_enum<'t>(
             },
         };
     }
-    Claim::NotRl
+    Claim::NotTt
 }
 
 fn enum_committed(cur: Cursor<'_>) -> bool {
@@ -143,8 +143,8 @@ fn parse_enum_complete<'t>(
     // TypeScript enum — pass it through untouched. (TS enum members can
     // never look like `Tag(...)`, and TS enums can never have generics, so
     // this rule never captures valid TypeScript.)
-    let is_rl_enum = !generics.is_empty() || cases.iter().any(|c| c.fields.is_some());
-    if !is_rl_enum {
+    let is_tt_enum = !generics.is_empty() || cases.iter().any(|c| c.fields.is_some());
+    if !is_tt_enum {
         return None;
     }
 

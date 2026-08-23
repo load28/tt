@@ -1,5 +1,5 @@
 /* The local-development toolchain resolution (dev.ts): what `scripts/setup`
- * writes is what the server hands to every rlc it spawns — and nothing is
+ * writes is what the server hands to every ttc it spawns — and nothing is
  * handed over when the setup is absent, chose npm, or went stale. All on
  * temp directories; no real toolchain is involved. */
 import * as assert from "node:assert/strict";
@@ -8,16 +8,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { devPackageCompiler, rlcSpawnEnv, toolchainEnv } from "../dev";
+import { devPackageCompiler, ttcSpawnEnv, toolchainEnv } from "../dev";
 
-/** A fake RL repository whose setup chose the given toolchain config. */
-function rlRepo(toolchain: object | null): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "rl-dev-test-"));
+/** A fake TT repository whose setup chose the given toolchain config. */
+function ttRepo(toolchain: object | null): string {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-dev-test-"));
   fs.mkdirSync(path.join(root, "target", "release"), { recursive: true });
   if (toolchain !== null) {
-    fs.mkdirSync(path.join(root, ".rl-dev"));
+    fs.mkdirSync(path.join(root, ".tt-dev"));
     fs.writeFileSync(
-      path.join(root, ".rl-dev", "toolchain.json"),
+      path.join(root, ".tt-dev", "toolchain.json"),
       JSON.stringify(toolchain),
     );
   }
@@ -26,7 +26,7 @@ function rlRepo(toolchain: object | null): string {
 
 /** A fake built typescript-go checkout (both artifacts present). */
 function builtTsgo(): string {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "rl-tsgo-test-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-tsgo-test-"));
   fs.mkdirSync(path.join(root, "built", "local"), { recursive: true });
   fs.writeFileSync(path.join(root, "built", "local", "tsgo"), "");
   const api = path.join(root, "_packages", "native-preview", "dist", "api", "sync");
@@ -35,14 +35,14 @@ function builtTsgo(): string {
   return root;
 }
 
-test("a checkout toolchain above the compiler becomes RLC_TSGO_* variables", () => {
+test("a checkout toolchain above the compiler becomes TTC_TSGO_* variables", () => {
   const tsgo = builtTsgo();
-  const rl = rlRepo({ kind: "checkout", root: tsgo });
-  const env = toolchainEnv(path.join(rl, "target", "release", "rlc"));
+  const tt = ttRepo({ kind: "checkout", root: tsgo });
+  const env = toolchainEnv(path.join(tt, "target", "release", "ttc"));
   assert.deepEqual(env, {
-    RLC_TSGO_ROOT: tsgo,
-    RLC_TSGO_BIN: path.join(tsgo, "built", "local", "tsgo"),
-    RLC_TSGO_API: path.join(
+    TTC_TSGO_ROOT: tsgo,
+    TTC_TSGO_BIN: path.join(tsgo, "built", "local", "tsgo"),
+    TTC_TSGO_API: path.join(
       tsgo,
       "_packages",
       "native-preview",
@@ -56,56 +56,56 @@ test("a checkout toolchain above the compiler becomes RLC_TSGO_* variables", () 
 
 test("a pre-'kind' config (root only) still reads as a checkout", () => {
   const tsgo = builtTsgo();
-  const rl = rlRepo({ root: tsgo });
-  const env = toolchainEnv(path.join(rl, "target", "release", "rlc"));
-  assert.equal(env?.RLC_TSGO_ROOT, tsgo);
+  const tt = ttRepo({ root: tsgo });
+  const env = toolchainEnv(path.join(tt, "target", "release", "ttc"));
+  assert.equal(env?.TTC_TSGO_ROOT, tsgo);
 });
 
-test("the npm toolchain adds nothing — rlc resolves the project's own", () => {
-  const rl = rlRepo({ kind: "npm" });
-  assert.equal(toolchainEnv(path.join(rl, "target", "release", "rlc")), null);
+test("the npm toolchain adds nothing — ttc resolves the project's own", () => {
+  const tt = ttRepo({ kind: "npm" });
+  assert.equal(toolchainEnv(path.join(tt, "target", "release", "ttc")), null);
 });
 
-test("an unbuilt checkout adds nothing rather than a broken RLC_TSGO_ROOT", () => {
-  const tsgo = fs.mkdtempSync(path.join(os.tmpdir(), "rl-tsgo-test-"));
-  const rl = rlRepo({ kind: "checkout", root: tsgo });
-  assert.equal(toolchainEnv(path.join(rl, "target", "release", "rlc")), null);
+test("an unbuilt checkout adds nothing rather than a broken TTC_TSGO_ROOT", () => {
+  const tsgo = fs.mkdtempSync(path.join(os.tmpdir(), "tt-tsgo-test-"));
+  const tt = ttRepo({ kind: "checkout", root: tsgo });
+  assert.equal(toolchainEnv(path.join(tt, "target", "release", "ttc")), null);
 });
 
 test("no config, a bare PATH compiler: inherit the environment untouched", () => {
-  const rl = rlRepo(null);
-  assert.equal(toolchainEnv(path.join(rl, "target", "release", "rlc")), null);
-  assert.equal(toolchainEnv("rlc"), null);
-  assert.equal(rlcSpawnEnv("rlc"), undefined);
+  const tt = ttRepo(null);
+  assert.equal(toolchainEnv(path.join(tt, "target", "release", "ttc")), null);
+  assert.equal(toolchainEnv("ttc"), null);
+  assert.equal(ttcSpawnEnv("ttc"), undefined);
 });
 
-test("rlcSpawnEnv layers the toolchain over the process environment", () => {
+test("ttcSpawnEnv layers the toolchain over the process environment", () => {
   const tsgo = builtTsgo();
-  const rl = rlRepo({ kind: "checkout", root: tsgo });
-  const env = rlcSpawnEnv(path.join(rl, "target", "release", "rlc"));
-  assert.equal(env?.RLC_TSGO_ROOT, tsgo);
+  const tt = ttRepo({ kind: "checkout", root: tsgo });
+  const env = ttcSpawnEnv(path.join(tt, "target", "release", "ttc"));
+  assert.equal(env?.TTC_TSGO_ROOT, tsgo);
   assert.equal(env?.PATH, process.env.PATH);
 });
 
-test("devPackageCompiler finds the rlc of a file:-installed dev package", () => {
-  const rl = rlRepo(null);
-  const exe = process.platform === "win32" ? "rlc.exe" : "rlc";
-  fs.writeFileSync(path.join(rl, "target", "release", exe), "");
+test("devPackageCompiler finds the ttc of a file:-installed dev package", () => {
+  const tt = ttRepo(null);
+  const exe = process.platform === "win32" ? "ttc.exe" : "ttc";
+  fs.writeFileSync(path.join(tt, "target", "release", exe), "");
 
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "rl-ws-test-"));
-  const pkg = path.join(workspace, "node_modules", "rl-lang");
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "tt-ws-test-"));
+  const pkg = path.join(workspace, "node_modules", "tt-lang");
   fs.mkdirSync(pkg, { recursive: true });
   fs.writeFileSync(
-    path.join(pkg, "rl-dev.local.json"),
-    JSON.stringify({ root: rl }),
+    path.join(pkg, "tt-dev.local.json"),
+    JSON.stringify({ root: tt }),
   );
 
   assert.equal(
     devPackageCompiler([workspace]),
-    path.join(rl, "target", "release", exe),
+    path.join(tt, "target", "release", exe),
   );
 
   // A stale stamp (binary gone) resolves to nothing, not to a dead path.
-  fs.rmSync(path.join(rl, "target", "release", exe));
+  fs.rmSync(path.join(tt, "target", "release", exe));
   assert.equal(devPackageCompiler([workspace]), "");
 });

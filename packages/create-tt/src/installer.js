@@ -4,8 +4,8 @@ import { basename, join, relative, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const versions = {
-  'rl-lang': 'latest',
-  'unplugin-rl': 'latest',
+  'tt-lang': 'latest',
+  'unplugin-tt': 'latest',
   typescript: '^7.0.0',
   vite: '^8.0.0',
 }
@@ -14,49 +14,49 @@ const bundlers = {
   vite: {
     packages: ['vite'],
     configs: ['vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs'],
-    module: 'unplugin-rl/vite',
-    wrapper: 'rl.vite.config.mjs',
+    module: 'unplugin-tt/vite',
+    wrapper: 'tt.vite.config.mjs',
     commands: { dev: 'vite', build: 'vite build' },
   },
   rollup: {
     packages: ['rollup'],
     configs: ['rollup.config.ts', 'rollup.config.js', 'rollup.config.mjs'],
-    module: 'unplugin-rl/rollup',
-    wrapper: 'rl.rollup.config.mjs',
+    module: 'unplugin-tt/rollup',
+    wrapper: 'tt.rollup.config.mjs',
     commands: { dev: 'rollup --watch', build: 'rollup' },
   },
   rolldown: {
     packages: ['rolldown'],
     configs: ['rolldown.config.ts', 'rolldown.config.js', 'rolldown.config.mjs'],
-    module: 'unplugin-rl/rolldown',
-    wrapper: 'rl.rolldown.config.mjs',
+    module: 'unplugin-tt/rolldown',
+    wrapper: 'tt.rolldown.config.mjs',
     commands: { dev: 'rolldown --watch', build: 'rolldown' },
   },
   webpack: {
     packages: ['webpack'],
     configs: ['webpack.config.ts', 'webpack.config.js', 'webpack.config.cjs', 'webpack.config.mjs'],
-    module: 'unplugin-rl/webpack',
-    wrapper: 'rl.webpack.config.mjs',
+    module: 'unplugin-tt/webpack',
+    wrapper: 'tt.webpack.config.mjs',
     commands: { dev: 'webpack serve', build: 'webpack' },
   },
   rspack: {
     packages: ['@rspack/core'],
     configs: ['rspack.config.ts', 'rspack.config.js', 'rspack.config.mjs'],
-    module: 'unplugin-rl/rspack',
-    wrapper: 'rl.rspack.config.mjs',
+    module: 'unplugin-tt/rspack',
+    wrapper: 'tt.rspack.config.mjs',
     commands: { dev: 'rspack serve', build: 'rspack build' },
   },
   farm: {
     packages: ['@farmfe/core'],
     configs: ['farm.config.ts', 'farm.config.js', 'farm.config.mjs'],
-    module: 'unplugin-rl/farm',
-    wrapper: 'rl.farm.config.mjs',
+    module: 'unplugin-tt/farm',
+    wrapper: 'tt.farm.config.mjs',
     commands: { dev: 'farm start', build: 'farm build' },
   },
   esbuild: {
     packages: ['esbuild'],
     configs: [],
-    module: 'unplugin-rl/esbuild',
+    module: 'unplugin-tt/esbuild',
   },
 }
 
@@ -75,7 +75,7 @@ export async function run(argv, io = console) {
 }
 
 export async function createProject(options) {
-  const root = resolve(options.directory ?? 'my-rl-app')
+  const root = resolve(options.directory ?? 'my-tt-app')
   if (existsSync(root) && (await readdir(root)).length > 0) {
     throw new Error(`target directory is not empty: ${root}`)
   }
@@ -89,12 +89,12 @@ export async function createProject(options) {
     type: 'module',
     scripts: {
       dev: 'vite',
-      build: 'rlc --check-types src && vite build',
-      check: 'rlc --check-types src',
+      build: 'ttc --check-types src && vite build',
+      check: 'ttc --check-types src',
     },
     devDependencies: {
-      'rl-lang': versions['rl-lang'],
-      'unplugin-rl': versions['unplugin-rl'],
+      'tt-lang': versions['tt-lang'],
+      'unplugin-tt': versions['unplugin-tt'],
       typescript: versions.typescript,
       vite: versions.vite,
     },
@@ -103,13 +103,13 @@ export async function createProject(options) {
   await writeJson(join(root, 'tsconfig.json'), tsconfig())
   await writeFile(join(root, 'vite.config.ts'), viteConfig)
   await writeFile(join(root, 'index.html'), indexHtml)
-  await writeFile(join(root, 'src/main.ts'), "import './app.rl'\n")
-  await writeFile(join(root, 'src/app.rl'), starterSource)
-  await writeFile(join(root, '.gitignore'), 'node_modules/\ndist/\n.rl-types/\n')
+  await writeFile(join(root, 'src/main.ts'), "import './app.tt'\n")
+  await writeFile(join(root, 'src/app.tt'), starterSource)
+  await writeFile(join(root, '.gitignore'), 'node_modules/\ndist/\n.tt-types/\n')
   if (options.registry) {
     await writeFile(join(root, 'bunfig.toml'), `[install]\nregistry = ${JSON.stringify(options.registry)}\n`)
   }
-  return { root, packageManager, mode: 'create', bundler: 'vite', files: ['src/main.ts', 'src/app.rl', 'vite.config.ts'] }
+  return { root, packageManager, mode: 'create', bundler: 'vite', files: ['src/main.ts', 'src/app.tt', 'vite.config.ts'] }
 }
 
 export async function initializeExisting(options) {
@@ -122,16 +122,16 @@ export async function initializeExisting(options) {
   const packageManager = options.packageManager ?? detectPackageManager(root, manifest)
   const bundler = options.bundler === 'auto' ? detectBundler(manifest) : options.bundler
   const devDependencies = manifest.devDependencies ?? {}
-  devDependencies['rl-lang'] ??= versions['rl-lang']
+  devDependencies['tt-lang'] ??= versions['tt-lang']
   devDependencies.typescript ??= versions.typescript
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
-  manifest.scripts['rl:check'] ??= 'rlc --check-types src'
+  manifest.scripts['tt:check'] ??= 'ttc --check-types src'
 
   const files = []
   let manualModule
   if (bundler && bundler !== 'none') {
-    devDependencies['unplugin-rl'] ??= versions['unplugin-rl']
+    devDependencies['unplugin-tt'] ??= versions['unplugin-tt']
     const adapter = bundlers[bundler]
     if (!adapter) throw new Error(`unsupported bundler: ${bundler}`)
     const base = adapter.configs.find((file) => existsSync(join(root, file)))
@@ -140,11 +140,11 @@ export async function initializeExisting(options) {
     } else {
       await writeFile(join(root, adapter.wrapper), wrapperConfig(adapter.module, base))
       files.push(adapter.wrapper)
-      manifest.scripts['rl:dev'] ??= `${adapter.commands.dev} --config ${adapter.wrapper}`
-      manifest.scripts['rl:build'] ??= `rlc --check-types src && ${adapter.commands.build} --config ${adapter.wrapper}`
+      manifest.scripts['tt:dev'] ??= `${adapter.commands.dev} --config ${adapter.wrapper}`
+      manifest.scripts['tt:build'] ??= `ttc --check-types src && ${adapter.commands.build} --config ${adapter.wrapper}`
     }
   } else {
-    manifest.scripts['rl:build'] ??= 'rlc -o .rl-build src'
+    manifest.scripts['tt:build'] ??= 'ttc -o .tt-build src'
   }
 
   await writeJson(manifestPath, manifest, indentation(source))
@@ -226,12 +226,12 @@ function registryUrl(value) {
 
 function printResult(result, io) {
   const location = relative(process.cwd(), result.root) || '.'
-  io.log(result.mode === 'create' ? `Created an rl project in ${location}.` : `Added rl to ${location}.`)
+  io.log(result.mode === 'create' ? `Created a tt project in ${location}.` : `Added tt to ${location}.`)
   if (result.files.length) io.log(`Generated: ${result.files.join(', ')}`)
   if (result.manualModule) {
-    io.log(`Add rl() from ${result.manualModule} to your esbuild plugins array.`)
+    io.log(`Add tt() from ${result.manualModule} to your esbuild plugins array.`)
   }
-  io.log(result.mode === 'create' ? `Run: cd ${location} && ${runScript(result.packageManager, 'dev')}` : `Run: ${runScript(result.packageManager, 'rl:check')}`)
+  io.log(result.mode === 'create' ? `Run: cd ${location} && ${runScript(result.packageManager, 'dev')}` : `Run: ${runScript(result.packageManager, 'tt:check')}`)
 }
 
 function runScript(packageManager, script) {
@@ -240,10 +240,10 @@ function runScript(packageManager, script) {
 
 function wrapperConfig(moduleName, base) {
   const baseImport = base ? `import base from './${base}'\n` : 'const base = {}\n'
-  return `import rl from '${moduleName}'\n${baseImport}
+  return `import tt from '${moduleName}'\n${baseImport}
 const addRl = (config = {}) => Array.isArray(config)
   ? config.map(addRl)
-  : { ...config, plugins: [rl(), ...(config.plugins ?? [])] }
+  : { ...config, plugins: [tt(), ...(config.plugins ?? [])] }
 
 export default typeof base === 'function'
   ? async (...args) => addRl(await base(...args))
@@ -267,7 +267,7 @@ function tsconfig() {
 
 function packageName(value) {
   const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
-  return normalized || 'my-rl-app'
+  return normalized || 'my-tt-app'
 }
 
 function indentation(source) {
@@ -279,16 +279,16 @@ async function writeJson(path, value, space = '  ') {
 }
 
 const viteConfig = `import { defineConfig } from 'vite'
-import rl from 'unplugin-rl/vite'
+import tt from 'unplugin-tt/vite'
 
 export default defineConfig({
-  plugins: [rl()],
+  plugins: [tt()],
 })
 `
 
 const indexHtml = `<!doctype html>
 <html lang="en">
-  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>rl app</title></head>
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>tt app</title></head>
   <body><main id="app"></main><script type="module" src="/src/main.ts"></script></body>
 </html>
 `
@@ -298,18 +298,18 @@ const starterSource = `enum Greeting {
   Welcome,
 }
 
-const greeting = Greeting.Hello('rl')
+const greeting = Greeting.Hello('tt')
 document.querySelector<HTMLDivElement>('#app')!.textContent = match (greeting) {
   Hello(name) => \`Hello, \${name}!\`,
   Welcome => 'Welcome!',
 }
 `
 
-const help = `Create a new rl project or add rl to an existing TypeScript project.
+const help = `Create a new tt project or add tt to an existing TypeScript project.
 
 Usage:
-  bun create rl@latest [directory] [--no-install]
-  bun create rl@latest init [directory] [--bundler vite]
+  bun create tt@latest [directory] [--no-install]
+  bun create tt@latest init [directory] [--bundler vite]
 
 Options:
   --bundler <auto|none|vite|rollup|rolldown|webpack|rspack|esbuild|farm>

@@ -1,14 +1,14 @@
-//! Editor sidecars: `x.rl.d.ts` + `x.rl.d.ts.map`.
+//! Editor sidecars: `x.tt.d.ts` + `x.tt.d.ts.map`.
 //!
-//! A `.ts` file that imports `"./x.rl"` gets `TS2307` from tsserver, which
+//! A `.ts` file that imports `"./x.tt"` gets `TS2307` from tsserver, which
 //! does not know the extension. TypeScript's own escape hatch is in that
 //! error text — "or its corresponding type declarations" — so placing a
 //! declaration file next to the module resolves it.
 //!
 //! The declaration *body* needs type inference, which is tsc's job (run it
-//! with `--emitDeclarationOnly` over rlc's output). What tsc cannot know is
-//! where each declaration lives in the original `.rl`; this module supplies
-//! that as a declaration map whose `sources` points at the `.rl` file, which
+//! with `--emitDeclarationOnly` over ttc's output). What tsc cannot know is
+//! where each declaration lives in the original `.tt`; this module supplies
+//! that as a declaration map whose `sources` points at the `.tt` file, which
 //! is what sends "go to definition" to the original instead of the `.d.ts`.
 
 use crate::enum_symbols;
@@ -20,31 +20,31 @@ pub struct Sidecar {
     /// `sourceMappingURL` comment.
     pub declarations: String,
     /// Contents of `<name>.d.ts.map` — a source map v3 document whose
-    /// `sources` is the original `.rl` file.
+    /// `sources` is the original `.tt` file.
     pub map: String,
 }
 
 /// Builds the sidecar for one module.
 ///
-/// `source` is the original `.rl` text, `declarations` is what tsc emitted
-/// for rlc's output of that module, and `rl_path` is the path to the `.rl`
-/// file **relative to where the sidecar will be written** — `"notice.rl"`
-/// when the two sit together, `"../src/notice.rl"` when declarations live
+/// `source` is the original `.tt` text, `declarations` is what tsc emitted
+/// for ttc's output of that module, and `tt_path` is the path to the `.tt`
+/// file **relative to where the sidecar will be written** — `"notice.tt"`
+/// when the two sit together, `"../src/notice.tt"` when declarations live
 /// in their own tree (which TypeScript merges back with `rootDirs`). It
 /// becomes the map's `sources`, and its file name becomes the stem of the
-/// written files (`notice.rl.d.ts`).
+/// written files (`notice.tt.d.ts`).
 ///
 /// Every exported declaration that can be located in the source gets two
 /// mapping segments: one at column 0 and one at the column where its name
 /// starts. The second is the one that matters — "go to definition" asks
 /// about the name's position, and without a segment there the editor stops
 /// at the `.d.ts`.
-pub fn build_sidecar(source: &str, declarations: &str, rl_path: &str) -> Sidecar {
-    let rl_file_name = rl_path
+pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar {
+    let tt_file_name = tt_path
         .rsplit(['/', '\\'])
         .next()
         .filter(|name| !name.is_empty())
-        .unwrap_or(rl_path);
+        .unwrap_or(tt_path);
     let source_lines: Vec<&str> = source.lines().collect();
     let enums = enum_symbols(source);
 
@@ -66,12 +66,12 @@ pub fn build_sidecar(source: &str, declarations: &str, rl_path: &str) -> Sidecar
         })
         .collect();
 
-    let map_name = format!("{rl_file_name}.d.ts.map");
+    let map_name = format!("{tt_file_name}.d.ts.map");
     let body = decl_lines.join("\n");
     // The banner costs one generated line, so the mappings are shifted by
     // one (the leading `;` below).
     let declarations = format!(
-        "// @generated from {rl_file_name} by rlc --sidecar — do not edit.\n{}\n//# sourceMappingURL={}\n",
+        "// @generated from {tt_file_name} by ttc --sidecar — do not edit.\n{}\n//# sourceMappingURL={}\n",
         body.trim_end(),
         map_name.as_str()
     );
@@ -79,8 +79,8 @@ pub fn build_sidecar(source: &str, declarations: &str, rl_path: &str) -> Sidecar
     let mappings = format!(";{}", encode_mappings(&hits));
     let map = format!(
         "{{\"version\":3,\"file\":{},\"sourceRoot\":\"\",\"sources\":[{}],\"names\":[],\"mappings\":\"{}\"}}\n",
-        json_string(&format!("{rl_file_name}.d.ts")),
-        json_string(rl_path),
+        json_string(&format!("{tt_file_name}.d.ts")),
+        json_string(tt_path),
         mappings,
     );
 
@@ -126,7 +126,7 @@ fn identifier_prefix(text: &str) -> &str {
 
 /// Where `name` is declared in the source, as a zero-based (line, column).
 ///
-/// rl enums come from the parsed declarations, so their positions are exact.
+/// tt enums come from the parsed declarations, so their positions are exact.
 /// Everything else lives in a passthrough region and is found by scanning
 /// for its declaration keyword; the first match wins.
 fn locate(

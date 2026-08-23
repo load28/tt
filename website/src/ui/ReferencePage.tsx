@@ -12,10 +12,10 @@ import {
 export function pageHead(language: Language, topic: TopicId) {
   const item = content.topics[topic]
   const title = topic === 'overview'
-    ? 'rl — TypeScript, with better control flow'
-    : `${item.nav[language]} — rl`
+    ? 'tt — TypeScript, with better control flow'
+    : `${item.nav[language]} — tt`
   const description = item.summary[language]
-  const origin = 'https://load28.github.io/rl'
+  const origin = 'https://load28.github.io/tt'
   const canonical = `${origin}${topicPath(language, topic)}`
   return {
     meta: [
@@ -44,15 +44,15 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
   return (
     <div className="site-shell">
       <header className="topbar">
-        <Link className="brand" to={topicPath(language, 'overview')} aria-label={language === 'ko' ? 'rl 홈' : 'rl home'}>
-          <span className="brand__mark">rl</span>
+        <Link className="brand" to={topicPath(language, 'overview')} aria-label={language === 'ko' ? 'tt 홈' : 'tt home'}>
+          <span className="brand__mark">tt</span>
           <span className="brand__tag">{language === 'ko' ? 'TypeScript와 TSX를 위한 작은 언어' : 'a small language for TypeScript and TSX'}</span>
         </Link>
         <div className="topbar__actions">
           <Link className="language-toggle" to={topicPath(otherLanguage, topic)} aria-label={language === 'ko' ? '영어로 보기' : 'View in Korean'}>
             {language === 'ko' ? 'EN' : '한국어'}
           </Link>
-          <a className="github-link" href="https://github.com/load28/rl" target="_blank" rel="noreferrer">GitHub ↗</a>
+          <a className="github-link" href="https://github.com/load28/tt" target="_blank" rel="noreferrer">GitHub ↗</a>
         </div>
       </header>
 
@@ -90,7 +90,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
             {topic === 'overview' && <InstallCommand language={language} />}
 
             <div className="code-block">
-              <span className="code-block__label">{topic === 'cli' || topic === 'install' ? 'shell' : topic === 'rlx' ? 'example.rlx' : 'example.rl'}</span>
+              <span className="code-block__label">{topic === 'cli' || topic === 'install' ? 'shell' : topic === 'ttx' ? 'example.ttx' : 'example.tt'}</span>
               <pre tabIndex={0} role="region" aria-label={language === 'ko' ? '코드 예제' : 'Code example'}>
                 <code dangerouslySetInnerHTML={{ __html: highlighted[topic] }} />
               </pre>
@@ -117,7 +117,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
 }
 
 function InstallCommand({ language }: { language: Language }) {
-  const command = 'bun create rl@latest my-app'
+  const command = 'bun create tt@latest my-app'
   const [copied, setCopied] = useState(false)
   return (
     <div className="install-command">

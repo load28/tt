@@ -1,7 +1,7 @@
 //! `val` — the binding modifier and its compile-time mutation analysis.
 //!
 //! `val` marks a binding (a `const`/`let`/`var` declaration or a function
-//! parameter) as **read-only through that binding**: rlc rejects every
+//! parameter) as **read-only through that binding**: ttc rejects every
 //! mutation whose access path is rooted at it. It is not deep immutability
 //! and not ownership — the same object reached through another, unmarked
 //! binding stays mutable, exactly as in TypeScript. Nothing about `val`
@@ -31,18 +31,18 @@
 //!   redeclaration are where an approximation quietly differs. So this half
 //!   collects the `val` bindings and the mutations **without pairing
 //!   them**, and a caller with a checker pairs them by symbol identity
-//!   ([`crate::val_probes`], `rlc --check-types`). What counts as a
-//!   mutation is still syntax, and still rl's own.
+//!   ([`crate::val_probes`], `ttc --check-types`). What counts as a
+//!   mutation is still syntax, and still tt's own.
 //!
 //! What it does *not* do is inference: no effect system, no borrow
 //! checker, no analysis of what an arbitrary imported function does with
 //! its argument, and no verdict on a method call it cannot resolve to a
-//! built-in. Run `rlc help val` for the user-facing limits.
+//! built-in. Run `ttc help val` for the user-facing limits.
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::error::RlError;
+use crate::error::TtError;
 use crate::lexer::{Token, TokenKind, TplPart};
 use crate::parser::{dotted_at, find_close_at, is_reserved};
 
@@ -95,7 +95,7 @@ fn same_line(src: &str, from: usize, to: usize) -> bool {
 }
 
 /// Whether the identifier token at `idx` (which the caller has checked is
-/// the word `val`) is an rl binding modifier — see the module docs for the
+/// the word `val`) is a tt binding modifier — see the module docs for the
 /// contract argument behind the two accepted shapes.
 pub(crate) fn modifier_at(src: &str, tokens: &[Token], idx: usize) -> Option<ValModifier> {
     if dotted_at(tokens, 0, idx) {
@@ -152,15 +152,15 @@ pub(crate) fn modifier_end(src: &str, keyword_end: usize) -> usize {
     end
 }
 
-/// Whether `name` is a method rl treats as **mutating when it is a
+/// Whether `name` is a method tt treats as **mutating when it is a
 /// built-in's** — half of the typed verdict on a method call through a
 /// `val` path.
 ///
 /// TypeScript has no effect system, so which of its own methods mutate is
-/// rl's policy, and this list is that policy (`Array#push`, `Map#set`, ...).
+/// tt's policy, and this list is that policy (`Array#push`, `Map#set`, ...).
 /// The other half is the checker's:
 /// whether the method's symbol is declared entirely in TypeScript's own
-/// lib files. `rlc --check-types` reports a call only when **both** hold,
+/// lib files. `ttc --check-types` reports a call only when **both** hold,
 /// so a user-defined `set` is never a mutation and a built-in `get` never
 /// becomes one.
 ///
@@ -264,7 +264,7 @@ struct Path<'a> {
     steps: usize,
     /// The last `.p` / `?.p` property name, for the method-call probe.
     last_prop: Option<&'a str>,
-    /// The token index that name sits at — the node `rlc --types` asks the
+    /// The token index that name sits at — the node `ttc --types` asks the
     /// checker to resolve.
     last_prop_tok: Option<usize>,
 }
@@ -367,13 +367,13 @@ pub struct Mutation {
     pub name: String,
     /// For a method call, the method and the byte offset of its name; the
     /// call mutates only if the name resolves to a built-in's method **and**
-    /// is one rl's policy treats as mutating ([`is_builtin_mutator_name`]).
+    /// is one tt's policy treats as mutating ([`is_builtin_mutator_name`]).
     /// `None` for an assignment, an increment or a `delete`, which mutate on
     /// syntax alone.
     pub method: Option<(String, usize)>,
 }
 
-/// One named function declaration of the file, as rl's syntax reads it:
+/// One named function declaration of the file, as tt's syntax reads it:
 /// the declared name's identifier and the parameter list. The callee half
 /// of the delegated call-capability check — which call names which
 /// declaration is symbol identity, so a caller with a checker pairs a
@@ -404,7 +404,7 @@ pub struct ValParam {
 /// Every `val` binding of a file and every mutation in it, with the two
 /// left unmatched.
 ///
-/// rlc's own analysis ([`check`]) pairs them with a lexical scope model of
+/// ttc's own analysis ([`check`]) pairs them with a lexical scope model of
 /// its own. That model is an approximation of TypeScript's, and the places
 /// it can drift — shadowing, redeclaration, destructuring, a binding
 /// captured across a boundary — are exactly the places a mistake is
@@ -461,14 +461,14 @@ fn offset_in(src: &str, part: &str) -> usize {
 enum Sink<'a> {
     /// Report every violation (the compile path) — the walk keeps going
     /// after each one, like sema's (TASK-120).
-    Report(&'a RefCell<Vec<RlError>>),
+    Report(&'a RefCell<Vec<TtError>>),
     /// Collect bindings and mutations without pairing them ([`probes`]).
     Probes(&'a RefCell<ValProbes>),
 }
 
 /// Runs the `val` analysis over a whole file's token stream and returns
 /// **every** violation, in walk order (statement order).
-pub(crate) fn check_all(src: &str, tokens: &[Token]) -> Vec<RlError> {
+pub(crate) fn check_all(src: &str, tokens: &[Token]) -> Vec<TtError> {
     let sink = RefCell::new(Vec::new());
     run(src, tokens, Sink::Report(&sink));
     sink.into_inner()
@@ -779,7 +779,7 @@ fn parse_params(src: &str, tokens: &[Token], open: usize) -> Vec<ParamSig> {
 
 /// Every name a binding target introduces, collected into `out`. Handles
 /// plain identifiers, destructuring patterns (`{ a, b: c, d = 1, ...r }`,
-/// `[x, , y]`) and rl let-else patterns (`Tag(a, b: c)`), and returns the
+/// `[x, , y]`) and tt let-else patterns (`Tag(a, b: c)`), and returns the
 /// token index just past the target.
 fn collect_pattern_names<'a>(
     src: &'a str,
@@ -788,7 +788,7 @@ fn collect_pattern_names<'a>(
     out: &mut Vec<&'a str>,
 ) -> usize {
     match tokens.get(start).map(|t| &t.kind) {
-        // an rl let-else pattern (`const Tag(a, b: c) = ...`) binds the
+        // a tt let-else pattern (`const Tag(a, b: c) = ...`) binds the
         // names inside its parens, not the tag
         Some(TokenKind::Ident) if punct_at(tokens, start + 1, b'(') => {
             for (from, to) in list_entries(tokens, start + 1) {
@@ -1142,7 +1142,7 @@ impl<'a> Checker<'a> {
         if open > 0
             && let TokenKind::Ident = tokens[open - 1].kind
         {
-            // A control-flow head (`if (c) { ... }`) or an rl `match` is
+            // A control-flow head (`if (c) { ... }`) or a tt `match` is
             // not a parameter list even though a block follows it.
             // `function`/`async` do introduce one, and `catch (e)` really
             // is a binding form, so those three stay in.
@@ -1251,7 +1251,7 @@ impl<'a> Checker<'a> {
                     method: None,
                 }),
                 Sink::Report(sink) => sink.borrow_mut().push(
-                    RlError::span(
+                    TtError::span(
                         offset,
                         offset + name.len(),
                         format!(
@@ -1266,8 +1266,8 @@ impl<'a> Checker<'a> {
         }
         // A method call is a *question*: `q.set(k)` mutates only if `q` is
         // a built-in with a mutating `set`, which needs the receiver's
-        // type. rlc never answers it from the name — it records the call
-        // for `rlc --types`, where the real checker decides.
+        // type. ttc never answers it from the name — it records the call
+        // for `ttc --types`, where the real checker decides.
         if let (Some(method), Some(tok)) = (path.last_prop, path.last_prop_tok)
             && punct_at(tokens, path.end, b'(')
         {
@@ -1324,7 +1324,7 @@ impl<'a> Checker<'a> {
                 None => format!("#{}", idx + 1),
             };
             report.borrow_mut().push(
-                RlError::span(
+                TtError::span(
                     tokens[start].span.start,
                     tokens[start].span.end,
                     format!(

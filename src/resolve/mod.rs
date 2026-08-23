@@ -1,4 +1,4 @@
-//! Name resolution — rl names bound to declarations, by identity.
+//! Name resolution — tt names bound to declarations, by identity.
 //!
 //! This is the resolve phase of the compiler core
 //! (`docs/design/compiler-core.md` §5): declaration collection builds the
@@ -9,12 +9,12 @@
 //! may both declare a `Circle`, and the two `Circle`s are different
 //! definitions.
 //!
-//! rl-specific shape: rustc's resolver knows the scrutinee's type before
-//! it resolves a pattern's path; rlc does not (types are TypeScript's).
+//! tt-specific shape: rustc's resolver knows the scrutinee's type before
+//! it resolves a pattern's path; ttc does not (types are TypeScript's).
 //! So resolution here starts with **subject identification** — which enum
 //! a site's tags collectively name (all-tags candidate first, then the
 //! unique best-overlap holder; silence on a tie or no overlap, because tag
-//! patterns legitimately match hand-written unions rl has no declaration
+//! patterns legitimately match hand-written unions tt has no declaration
 //! for). This is the *only* implementation of those rules: [`crate::analysis`]
 //! consumes this resolution — its declaration table, subjects and
 //! unresolved reports are all views of it (Phase 3, TASK-123·129).
@@ -107,7 +107,7 @@ pub struct Resolution {
     pub defs: Arena<DefId, Definition>,
     /// The type namespace after shadowing: name → definition.
     pub type_ns: HashMap<String, DefId>,
-    /// The value namespace after shadowing: name → definition (an rl enum
+    /// The value namespace after shadowing: name → definition (a tt enum
     /// contributes its constructor object here).
     pub value_ns: HashMap<String, DefId>,
     /// Each pattern site's identified subject, one per scrutinee position
@@ -158,7 +158,7 @@ impl Resolution {
     }
 }
 
-/// The namespaces rl names live in. Pattern binding locals get their own
+/// The namespaces tt names live in. Pattern binding locals get their own
 /// space when the resolver takes over local scopes (Phase 5's flow work
 /// feeds it); enum variants and payload fields are addressed through their
 /// owner, not by bare name, so they need no top-level namespace.
@@ -180,7 +180,7 @@ pub struct Definition {
     pub kind: DefKind,
 }
 
-/// What a definition is. An rl enum mints two: the type ([`DefKind::Enum`])
+/// What a definition is. A tt enum mints two: the type ([`DefKind::Enum`])
 /// and the constructor object ([`DefKind::EnumValue`]), one per namespace —
 /// variants and fields hang off the enum and are addressed by
 /// [`VariantRef`]/[`FieldRef`], which keeps their identity tied to their
@@ -216,7 +216,7 @@ pub enum DeclOrigin {
     Local(NodeId),
     /// Imported (the specifier, when the collector recorded it).
     Imported {
-        /// The import specifier as written, e.g. `./token.rl`.
+        /// The import specifier as written, e.g. `./token.tt`.
         from: Option<String>,
     },
     /// A built-in (`Option`, `Result`) — declaration identity without a
@@ -869,7 +869,7 @@ fn builtin_enums() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
 /// The declared name `written` looks like a misspelling of, if any — the
 /// analysis' **licence to report** an unresolved name.
 ///
-/// rlc does not know the scrutinee's type, so a name that resolves to
+/// ttc does not know the scrutinee's type, so a name that resolves to
 /// nothing is not by itself wrong: tag patterns match hand-written tagged
 /// unions too, and their names are in no declaration table. What makes a
 /// report safe is being able to say what to write instead, so this is the
@@ -879,7 +879,7 @@ fn builtin_enums() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
 /// // a real typo resolves; an unrelated name does not
 /// let src = "enum Shape { Circle(radius: number), Empty }\n\
 ///            const v = match (s) { Circel(radius) => radius, Empty => 0 };\n";
-/// let found = rlc::pattern_analyses(src, &[]);
+/// let found = ttc::pattern_analyses(src, &[]);
 /// assert_eq!(found.unresolved[0].name, "Circel");
 /// assert_eq!(found.unresolved[0].suggestion, "Circle");
 /// ```

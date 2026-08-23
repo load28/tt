@@ -148,7 +148,7 @@ pub(crate) fn dotted_at(tokens: &[Token], from: usize, k: usize) -> bool {
 /// The index just past a construct that carries its own top-level braces
 /// — `match ( ... ) { ... }` or `result { ... }` — when `tokens[k]` is its
 /// undotted keyword `word`. Expression scanners step over the whole shape
-/// so their bare-`{` abort does not reject it; whether it really is an rl
+/// so their bare-`{` abort does not reject it; whether it really is a tt
 /// construct is the recursive parse's decision.
 pub(super) fn skip_braced_construct(tokens: &[Token], word: &str, k: usize) -> Option<usize> {
     match word {

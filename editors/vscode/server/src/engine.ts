@@ -1,30 +1,30 @@
 /* --------------------------------------------------------------------------
- * The engine session — one persistent `rlc --server` conversation.
+ * The engine session — one persistent `ttc --server` conversation.
  *
- * The language server is a protocol adapter; the language engine is rlc's
+ * The language server is a protocol adapter; the language engine is ttc's
  * (docs/design/lsp-architecture.md). This module is the client half of that
  * split: it holds the one child process, forwards the editor's document
  * lifecycle (open/change/close) so the engine's project state is the
  * authoritative one, and asks the engine's semantic API — hover, definition,
  * references, completion (probe included), rename, signature help, type
- * diagnostics — all answered in `.rl` coordinates. No projection, mapping,
+ * diagnostics — all answered in `.tt` coordinates. No projection, mapping,
  * TypeScript project or probe logic lives on this side of the pipe.
  *
  * Every caller degrades gracefully: when the server is unavailable (an
- * older rlc, a crash), requests resolve to null and the feature simply has
+ * older ttc, a crash), requests resolve to null and the feature simply has
  * no answer — exactly how a missing TypeScript toolchain has always
  * behaved. Two consecutive losses without a single answer disable the
- * server for the process (an rlc without `--server` is not going to grow
- * one), and `rlc.ts`'s check/typedCheck callers then fall back to their
+ * server for the process (a ttc without `--server` is not going to grow
+ * one), and `ttc.ts`'s check/typedCheck callers then fall back to their
  * one-shot commands.
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
 
-import { rlcSpawnEnv } from "./dev";
+import { ttcSpawnEnv } from "./dev";
 
 /** The name a rename asks the engine for, standing in for the new name in
  * every edit's `newText` (see `onRenameRequest`). */
-export const RENAME_PLACEHOLDER = "rlRenamePlaceholder";
+export const RENAME_PLACEHOLDER = "ttRenamePlaceholder";
 
 /** A position/range as both LSP and the engine protocol speak them. */
 export interface EnginePosition {
@@ -91,27 +91,27 @@ export interface EngineDiagnostic {
   warning: boolean;
 }
 
-export interface EngineRlSymbol {
+export interface EngineTtSymbol {
   kind: "enum" | "case" | "field";
   range: EngineRange;
   name: string;
   enumName: string;
-  /** The declaration in rl syntax — the hover's code block. */
+  /** The declaration in tt syntax — the hover's code block. */
   signature: string;
   /** One sentence about what it is and where it came from. */
   detail: string;
   definition: EngineLocation | null;
 }
 
-/** One thing rl has to say about a range that is not an error. */
-export interface EngineRlHint {
+/** One thing tt has to say about a range that is not an error. */
+export interface EngineTtHint {
   /** What kind of hint it is — switch on this, not on the message. */
   kind: "unreachableArm";
   range: EngineRange;
   message: string;
 }
 
-export interface EngineRlCompletion {
+export interface EngineTtCompletion {
   label: string;
   kind: "case" | "field" | "wildcard";
   detail: string;
@@ -139,7 +139,7 @@ interface EngineServer {
   buffer: string;
   alive: boolean;
   /** Whether any request was ever answered — a server that dies before its
-   * first answer is an rlc without `--server`, and retrying is pointless. */
+   * first answer is a ttc without `--server`, and retrying is pointless. */
   answered: boolean;
 }
 
@@ -170,7 +170,7 @@ function engineServerFor(compiler: string): EngineServer | null {
       // The engine resolves its TypeScript toolchain from the environment;
       // a local-development setup (scripts/setup) is handed over here so the
       // editor drives the same toolchain as the CLI launcher (dev.ts).
-      env: rlcSpawnEnv(compiler),
+      env: ttcSpawnEnv(compiler),
     });
   } catch {
     engineServerStrikes += 1;
@@ -320,7 +320,7 @@ async function semantic<T>(
   const answer = await engineRequest(compiler, method, params, SEMANTIC_TIMEOUT_MS);
   if (!answer) return null;
   if ("error" in answer) {
-    onError?.(`rl: ${method}: ${answer.error}`);
+    onError?.(`tt: ${method}: ${answer.error}`);
     return null;
   }
   return (answer.result ?? null) as T | null;
@@ -432,56 +432,56 @@ export async function semanticTokens(
   return result?.tokens ?? null;
 }
 
-/** An rl name — an enum, a case tag, a payload field — at a position.
+/** A tt name — an enum, a case tag, a payload field — at a position.
  *
- * These three name spaces exist only in `.rl` source (an enum declaration
+ * These three name spaces exist only in `.tt` source (an enum declaration
  * lowers to synthesized text, a tag to a string literal, a field to a
  * destructuring key), so the TypeScript service cannot be asked about them
  * and the engine answers from the compiler's own declaration table. Like
  * `semanticTokens` it is text-based and parse-only, so it answers with no
- * toolchain and in a buffer mid-edit; `null` means "not an rl name here",
+ * toolchain and in a buffer mid-edit; `null` means "not a tt name here",
  * and the caller falls through to the service. */
-export function rlSymbol(
+export function ttSymbol(
   compiler: string,
   path: string,
   text: string,
   position: EnginePosition,
   onError?: (message: string) => void,
-): Promise<EngineRlSymbol | null> {
-  return semantic(compiler, "rlSymbol", { path, text, position }, onError);
+): Promise<EngineTtSymbol | null> {
+  return semantic(compiler, "ttSymbol", { path, text, position }, onError);
 }
 
 /** What can be written at a pattern position: case tags, payload field
- * names. Empty when the position is not one rl owns — the service's own
+ * names. Empty when the position is not one tt owns — the service's own
  * completions are merged in by the caller. */
-export async function rlCompletions(
+export async function ttCompletions(
   compiler: string,
   path: string,
   text: string,
   position: EnginePosition,
   onError?: (message: string) => void,
-): Promise<EngineRlCompletion[]> {
-  const result = await semantic<{ items: EngineRlCompletion[] }>(
+): Promise<EngineTtCompletion[]> {
+  const result = await semantic<{ items: EngineTtCompletion[] }>(
     compiler,
-    "rlCompletions",
+    "ttCompletions",
     { path, text, position },
     onError,
   );
   return result?.items ?? [];
 }
 
-/** What rl has to say about a buffer that is not an error — today, the
+/** What tt has to say about a buffer that is not an error — today, the
  * arms an earlier arm already covers. Parse-only, so it answers without a
  * TypeScript toolchain; empty when there is nothing to say. */
-export async function rlHints(
+export async function ttHints(
   compiler: string,
   path: string,
   text: string,
   onError?: (message: string) => void,
-): Promise<EngineRlHint[]> {
-  const result = await semantic<{ hints: EngineRlHint[] }>(
+): Promise<EngineTtHint[]> {
+  const result = await semantic<{ hints: EngineTtHint[] }>(
     compiler,
-    "rlHints",
+    "ttHints",
     { path, text },
     onError,
   );
@@ -532,7 +532,7 @@ export interface EngineDeclarations {
 /** The declarations visible in a buffer — what used to be re-derived here
  * by regexes (parseEnums/visibleEnums/BUILTIN_ENUMS) is now the compiler's
  * single answer. Text-based and parse-only; empty when the engine (or a
- * pre-`declarations` rlc) cannot answer, and the callers degrade the same
+ * pre-`declarations` ttc) cannot answer, and the callers degrade the same
  * way every other engine surface does. */
 export async function declarations(
   compiler: string,

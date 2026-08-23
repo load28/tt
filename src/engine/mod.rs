@@ -1,13 +1,13 @@
-//! The rl language engine — one authoritative project state for every
+//! The tt language engine — one authoritative project state for every
 //! consumer.
 //!
-//! rlc's batch build compiles files one at a time and forgets them; that
+//! ttc's batch build compiles files one at a time and forgets them; that
 //! mode needs no engine (the same way `tsc` runs without tsserver). This
 //! module is for everything else: type checking, watching, editors, and
 //! external tooling — the consumers that need a **live** project whose
 //! answers stay consistent while files change.
 //!
-//! The shape follows typescript-go's project service, sized to rl:
+//! The shape follows typescript-go's project service, sized to tt:
 //!
 //! - an [`Engine`] discovers the toolchain and opens projects;
 //! - a [`Project`] is the long-lived, mutable state of one workspace —
@@ -16,16 +16,16 @@
 //! - a [`Snapshot`] is the project at one moment, immutable; every semantic
 //!   request runs against a snapshot, so a request started before an edit
 //!   still answers about a consistent state;
-//! - the projection ([`ProjectedDocument`]) — rl source, generated
+//! - the projection ([`ProjectedDocument`]) — tt source, generated
 //!   TypeScript, byte-exact mappings, probes — is the engine's own layer,
-//!   the one thing rl has that a plain TypeScript engine does not.
+//!   the one thing tt has that a plain TypeScript engine does not.
 //!
-//! Results come back in rl's own vocabulary ([`Diagnostic`], [`Checked`]):
+//! Results come back in tt's own vocabulary ([`Diagnostic`], [`Checked`]):
 //! TypeScript's unstable API surface stays behind
 //! [`crate::typescript::backend`] and never reaches a consumer.
 //!
 //! ```no_run
-//! use rlc::engine::{CheckRequest, Engine, ProjectOptions};
+//! use ttc::engine::{CheckRequest, Engine, ProjectOptions};
 //!
 //! let engine = Engine::new(None);
 //! let mut project = engine
@@ -50,17 +50,17 @@ mod semantics;
 mod snapshot;
 mod tokens;
 
-pub use completions::{RlCompletion, RlCompletionKind, rl_completions_at};
+pub use completions::{TtCompletion, TtCompletionKind, tt_completions_at};
 pub use declarations::{
-    RlCaseDecl, RlDeclarations, RlEnumDecl, RlEnumOrigin, RlFieldDecl, RlMatchSite, rl_declarations,
+    TtCaseDecl, TtDeclarations, TtEnumDecl, TtEnumOrigin, TtFieldDecl, TtMatchSite, tt_declarations,
 };
-pub use hints::{RlHint, RlHintKind, rl_hints};
+pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{
     CompletionAnswer, CompletionDetail, CompletionItem, HoverInfo, Location, Position,
     RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, Signature, SignatureHelp,
     SignatureParameter,
 };
-pub use names::{RlSymbol, RlSymbolKind, rl_symbol_at};
+pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
 pub use project::{Blocked, CheckRequest, Project, collect_sources};
 pub use projection::ProjectedDocument;
 pub use semantics::{Checked, Declarations, Diagnostic, ModuleDeclaration};
@@ -103,7 +103,7 @@ impl Engine {
     ///
     /// The project's own configuration is what the checker runs with: the
     /// named `tsconfig` or the nearest one above the inputs. The graph is
-    /// the project's, not the input list's — every `.rl` file under the
+    /// the project's, not the input list's — every `.tt` file under the
     /// root joins it, because a named input may import one that was not
     /// named. What was named decides only what an emitting pass writes.
     ///
@@ -114,22 +114,22 @@ impl Engine {
         inputs: &[String],
         options: &ProjectOptions,
     ) -> Result<Project, String> {
-        let collected = match project::collect_rl(inputs) {
-            Ok(files) if files.is_empty() => return Err("no .rl or .rlx sources found".to_string()),
+        let collected = match project::collect_tt(inputs) {
+            Ok(files) if files.is_empty() => return Err("no .tt or .ttx sources found".to_string()),
             Ok(files) => files,
             Err(e) => return Err(e.to_string()),
         };
         let (tsconfig, root) = identity_of(&collected, options);
-        // The graph is the project's, not the command line's: every `.rl`
+        // The graph is the project's, not the command line's: every `.tt`
         // file under the project root joins the first pass, because a named
         // input may import one that was not named.
         let initial =
-            match project::project_sources(&root, options.out_dir.as_deref(), &["rl", "rlx"]) {
+            match project::project_sources(&root, options.out_dir.as_deref(), &["tt", "ttx"]) {
                 Ok(all) if !all.is_empty() => all,
                 Ok(_) => collected.clone(),
                 Err(e) => return Err(e.to_string()),
             };
-        // No toolchain is not "no project": the rl layer answers without
+        // No toolchain is not "no project": the tt layer answers without
         // one, and the missing backend is carried as the typed layer's
         // failure instead ([`Checked::backend_error`]).
         let backend = NativeBackend::new(self.node.clone(), &root);
@@ -163,8 +163,8 @@ impl Engine {
         inputs: &[String],
         options: &ProjectOptions,
     ) -> Result<(Option<PathBuf>, PathBuf), String> {
-        let collected = match project::collect_rl(inputs) {
-            Ok(files) if files.is_empty() => return Err("no .rl or .rlx sources found".to_string()),
+        let collected = match project::collect_tt(inputs) {
+            Ok(files) if files.is_empty() => return Err("no .tt or .ttx sources found".to_string()),
             Ok(files) => files,
             Err(e) => return Err(e.to_string()),
         };

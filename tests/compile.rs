@@ -1,12 +1,12 @@
-//! Emitted-code and error-reporting tests for the rl → TypeScript transform.
+//! Emitted-code and error-reporting tests for the tt → TypeScript transform.
 
-use rlc::{Options, SourceKind, compile};
+use ttc::{Options, SourceKind, compile};
 
 fn ok(src: &str) -> String {
     compile(src, &Options::default()).expect("compile failed")
 }
 
-fn err(src: &str) -> rlc::CompileError {
+fn err(src: &str) -> ttc::CompileError {
     compile(src, &Options::default()).expect_err("expected a compile error")
 }
 
@@ -18,11 +18,11 @@ fn ok_tsx(src: &str) -> String {
             ..Options::default()
         },
     )
-    .expect("rlx compile failed")
+    .expect("ttx compile failed")
 }
 
 #[test]
-fn rlx_lowers_constructs_in_jsx_children_and_attributes() {
+fn ttx_lowers_constructs_in_jsx_children_and_attributes() {
     let source = r#"enum State { Ready(value: string), Empty }
 declare const state: State;
 const child = <section>{match (state) {
@@ -42,16 +42,16 @@ const ordered = (state: State) => <Panel before={mark("first")} value={match (st
     assert!(output.contains("const child = <section>{"), "{output}");
     assert!(output.contains("<strong>{value}</strong>"), "{output}");
     assert!(output.contains("const prop = <Panel"), "{output}");
-    assert_eq!(output.matches("switch ($rl_m.kind)").count(), 3, "{output}");
+    assert_eq!(output.matches("switch ($tt_m.kind)").count(), 3, "{output}");
     let prop_start = output.find("const prop").unwrap();
     let before = output[prop_start..].find("mark(\"before\")").unwrap() + prop_start;
-    let decision = output[prop_start..].find("switch ($rl_m.kind)").unwrap() + prop_start;
+    let decision = output[prop_start..].find("switch ($tt_m.kind)").unwrap() + prop_start;
     let after = output[prop_start..].find("mark(\"after\")").unwrap() + prop_start;
     assert!(before < decision && decision < after, "{output}");
     let ordered_start = output.find("const ordered").unwrap();
     let first = output[ordered_start..].find("mark(\"first\")").unwrap() + ordered_start;
     let ordered_decision =
-        output[ordered_start..].find("switch ($rl_m.kind)").unwrap() + ordered_start;
+        output[ordered_start..].find("switch ($tt_m.kind)").unwrap() + ordered_start;
     let last = output[ordered_start..].find("mark(\"last\")").unwrap() + ordered_start;
     assert!(
         first < ordered_decision && ordered_decision < last,
@@ -64,15 +64,15 @@ const ordered = (state: State) => <Panel before={mark("first")} value={match (st
 }
 
 #[test]
-fn rlx_rewrites_rlx_imports_for_each_target_surface() {
-    let source = "import { View } from \"./view.rlx\";\nexport { View };\n";
+fn ttx_rewrites_ttx_imports_for_each_target_surface() {
+    let source = "import { View } from \"./view.ttx\";\nexport { View };\n";
     let js = ok_tsx(source);
     assert!(js.contains("from \"./view.jsx\""), "{js}");
     let ts = compile(
         source,
         &Options {
             source_kind: SourceKind::Tsx,
-            rewrite_imports: rlc::ImportRewrite::Ts,
+            rewrite_imports: ttc::ImportRewrite::Ts,
             ..Options::default()
         },
     )
@@ -81,7 +81,7 @@ fn rlx_rewrites_rlx_imports_for_each_target_surface() {
 }
 
 #[test]
-fn rlx_expression_boundaries_ignore_delimiters_inside_regex_literals() {
+fn ttx_expression_boundaries_ignore_delimiters_inside_regex_literals() {
     let output = ok_tsx(
         r#"enum State { Ready(value: string), Empty }
 declare const state: State;
@@ -92,7 +92,7 @@ const view = <Panel visible={/}/.test("}")} value={match (state) {
 "#,
     );
     assert!(output.contains("(/}/.test(\"}\"))"), "{output}");
-    assert!(output.contains("switch ($rl_m.kind)"), "{output}");
+    assert!(output.contains("switch ($tt_m.kind)"), "{output}");
 }
 
 /* ------------------------------------------------------------------ */
@@ -128,8 +128,8 @@ fn unit_only_enum_is_a_plain_typescript_enum() {
 }
 
 #[test]
-fn empty_parens_case_forces_rl_enum() {
-    // A unit-only enum can opt into rl semantics by giving one case parens.
+fn empty_parens_case_forces_tt_enum() {
+    // A unit-only enum can opt into tt semantics by giving one case parens.
     let out = ok("enum Status { Active(), Inactive }\n");
     assert!(out.contains("type Status ="));
     assert!(out.contains("Active: (): Status => ({ kind: \"Active\" })"));
@@ -137,7 +137,7 @@ fn empty_parens_case_forces_rl_enum() {
 }
 
 #[test]
-fn generics_force_rl_enum() {
+fn generics_force_tt_enum() {
     let out = ok("enum Pair<T> { First, Second }\n");
     assert!(out.contains("type Pair<T> ="));
 }
@@ -219,14 +219,14 @@ const area = match (shape) {
   Point => 0,
 };
 "#);
-    assert!(out.contains("switch ($rl_m.kind)"));
+    assert!(out.contains("switch ($tt_m.kind)"));
     assert!(out.contains(
-        "case \"Circle\": { const { radius } = $rl_m; $rl_v0 = (3.14 * radius * radius); break; }"
+        "case \"Circle\": { const { radius } = $tt_m; $tt_v0 = (3.14 * radius * radius); break; }"
     ));
-    assert!(out.contains("case \"Point\": { $rl_v0 = (0); break; }"));
+    assert!(out.contains("case \"Point\": { $tt_v0 = (0); break; }"));
     // The output is plain TypeScript: a runtime guard, no type-level tricks.
     assert!(out.contains(
-        "default: { throw new Error(\"rl match: unexpected case \" + JSON.stringify($rl_m)); }"
+        "default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }"
     ));
     assert!(!out.contains("never"));
 }
@@ -234,7 +234,7 @@ const area = match (shape) {
 #[test]
 fn match_wildcard_becomes_default() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };");
-    assert!(out.contains("default: { $rl_v0 = (0); break; }"));
+    assert!(out.contains("default: { $tt_v0 = (0); break; }"));
     assert!(!out.contains("never"));
 }
 
@@ -242,17 +242,17 @@ fn match_wildcard_becomes_default() {
 fn whole_initializer_match_uses_a_statement_slot_without_an_iife() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };\n");
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("let $rl_v0;"), "{out}");
-    assert!(out.contains("$rl_v0 = (1);"), "{out}");
-    assert!(out.contains("const r = $rl_v0;"), "{out}");
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(out.contains("$tt_v0 = (1);"), "{out}");
+    assert!(out.contains("const r = $tt_v0;"), "{out}");
 }
 
 #[test]
 fn expression_bodied_arrow_match_becomes_a_block_without_an_iife() {
     let out = ok("enum E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("const f = (e: E) => {\nlet $rl_v0;"), "{out}");
-    assert!(out.contains("return $rl_v0;\n};"), "{out}");
+    assert!(out.contains("const f = (e: E) => {\nlet $tt_v0;"), "{out}");
+    assert!(out.contains("return $tt_v0;\n};"), "{out}");
 }
 
 #[test]
@@ -271,38 +271,38 @@ fn expression_only_owners_use_one_named_boundary_without_an_iife() {
          class C { value = match (E.A(2)) { A(value) => value, B => 0 }; }\n");
     assert!(!out.contains("((() =>"), "{out}");
     assert!(!out.contains("(await (async () =>"), "{out}");
-    assert_eq!(out.matches("function $rl_expr<").count(), 1, "{out}");
-    assert_eq!(out.matches("$rl_expr(() => {").count(), 2, "{out}");
+    assert_eq!(out.matches("function $tt_expr<").count(), 1, "{out}");
+    assert_eq!(out.matches("$tt_expr(() => {").count(), 2, "{out}");
 }
 
 #[test]
 fn expression_boundary_names_share_the_generated_name_namespace() {
     let out = ok(
-        "enum E { A, B }\nconst $rl_expr = 1;\nfunction f(value = match (E.A) { A => 1, B => 0 }) { return value; }\n",
+        "enum E { A, B }\nconst $tt_expr = 1;\nfunction f(value = match (E.A) { A => 1, B => 0 }) { return value; }\n",
     );
-    assert!(out.contains("$rl_expr_1(() => {"), "{out}");
-    assert!(out.contains("function $rl_expr_1<T>"), "{out}");
+    assert!(out.contains("$tt_expr_1(() => {"), "{out}");
+    assert!(out.contains("function $tt_expr_1<T>"), "{out}");
 }
 
 #[test]
-fn one_owner_schedules_multiple_rl_values_without_expression_boundaries() {
+fn one_owner_schedules_multiple_tt_values_without_expression_boundaries() {
     let out = ok(
         "enum E { A(value: number), B }\nconst value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });\n",
     );
-    assert!(!out.contains("$rl_expr(() =>"), "{out}");
+    assert!(!out.contains("$tt_expr(() =>"), "{out}");
     assert_eq!(out.matches("switch (").count(), 2, "{out}");
-    assert!(out.contains("const value = new ($rl_v0)($rl_v1);"), "{out}");
+    assert!(out.contains("const value = new ($tt_v0)($tt_v1);"), "{out}");
 }
 
 #[test]
 fn reference_protocol_preserves_optional_calls_and_structures_tagged_templates() {
     let optional = ok("enum E { A(value: number), B }\n\
          const value = receiver.method?.(match (input) { A(value) => value, B => 0 });\n");
-    assert!(optional.contains("$rl_expr(() =>"), "{optional}");
+    assert!(optional.contains("$tt_expr(() =>"), "{optional}");
 
     let tagged = ok("enum E { A(value: number), B }\n\
          const value = receiver.tag`value:${match (input) { A(value) => value, B => 0 }}`;\n");
-    assert!(!tagged.contains("$rl_expr(() =>"), "{tagged}");
+    assert!(!tagged.contains("$tt_expr(() =>"), "{tagged}");
     assert!(tagged.contains(".bind("), "{tagged}");
     assert_eq!(tagged.matches("switch (").count(), 1, "{tagged}");
 }
@@ -327,15 +327,15 @@ fn direct_return_match_keeps_await_in_the_host_function() {
         "async function f(x: T) { return match (x) { A(url) => await fetch(url), _ => null }; }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$rl_v0 = (await fetch(url));"), "{out}");
-    assert!(out.contains("return $rl_v0;"), "{out}");
+    assert!(out.contains("$tt_v0 = (await fetch(url));"), "{out}");
+    assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
 #[test]
 fn direct_return_match_does_not_require_a_semicolon() {
     let out = ok("function f(x: T) {\n  return match (x) { A(value) => value, _ => 0 }\n}\n");
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
@@ -346,13 +346,13 @@ const r = match (a) {
   _ => 0,
 };
 "#);
-    assert_eq!(out.matches("switch ($rl_m.kind)").count(), 2);
+    assert_eq!(out.matches("switch ($tt_m.kind)").count(), 2);
 }
 
 #[test]
 fn match_inside_template_interpolation() {
     let out = ok("const s = `v=${match (x) { A => 1, _ => 0 }}`;");
-    assert!(out.contains("switch ($rl_m.kind)"));
+    assert!(out.contains("switch ($tt_m.kind)"));
 }
 
 #[test]
@@ -366,7 +366,7 @@ const r = match (m) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("const { x: px, y: py } = $rl_m;"));
+    assert!(out.contains("const { x: px, y: py } = $tt_m;"));
     assert!(out.contains("break; }"));
 }
 
@@ -392,7 +392,7 @@ const action = match (key) {
 };
 "#);
     assert!(
-        out.contains("case \"Escape\": case \"Tab\": { $rl_v0 = (\"cancel\"); break; }"),
+        out.contains("case \"Escape\": case \"Tab\": { $tt_v0 = (\"cancel\"); break; }"),
         "{out}"
     );
 }
@@ -401,7 +401,7 @@ const action = match (key) {
 fn or_pattern_with_identical_bindings_shares_destructuring() {
     let out = ok("const r = match (x) { A(v) | B(v) => v, _ => 0 };");
     assert!(
-        out.contains("case \"A\": case \"B\": { const { v } = $rl_m; $rl_v0 = (v); break; }"),
+        out.contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0 = (v); break; }"),
         "{out}"
     );
 }
@@ -410,7 +410,7 @@ fn or_pattern_with_identical_bindings_shares_destructuring() {
 fn or_pattern_binding_order_is_insensitive() {
     let out = ok("const r = match (p) { A(x, y) | B(y, x) => x + y, _ => 0 };");
     assert!(
-        out.contains("case \"A\": case \"B\": { const { x, y } = $rl_m;"),
+        out.contains("case \"A\": case \"B\": { const { x, y } = $tt_m;"),
         "{out}"
     );
 }
@@ -509,14 +509,14 @@ fn or_pattern_binding_mismatch_is_error() {
 }
 
 #[test]
-fn or_pattern_double_pipe_is_not_rl_syntax() {
+fn or_pattern_double_pipe_is_not_tt_syntax() {
     // `A || B` is not an or-pattern; the surrounding arrow arm commits the
-    // construct to rl, so the parser reports it directly.
+    // construct to tt, so the parser reports it directly.
     let e = err("const r = match (x) { A || B => 1 };");
     // Reported where the text that failed is — the `match` that stayed
     // verbatim — not at a position in the generated module.
     assert!(
-        e.message.contains("rl `match` could not be parsed"),
+        e.message.contains("tt `match` could not be parsed"),
         "{}",
         e.message
     );
@@ -541,19 +541,19 @@ const grade = match (s) {
     assert!(!out.contains("switch ("), "{out}");
     assert!(
         out.contains(
-            "if ($rl_m.kind === \"Graded\") { const { points } = $rl_m; if ((points >= 90)) { $rl_v0 = (\"A\"); break; } }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if ((points >= 90)) { $tt_v0 = (\"A\"); break; } }"
         ),
         "{out}"
     );
     assert!(
         out.contains(
-            "if ($rl_m.kind === \"Graded\") { const { points } = $rl_m; $rl_v0 = (\"F\"); break; }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0 = (\"F\"); break; }"
         ),
         "{out}"
     );
     // the same fail-fast runtime guard as the switch emission
     assert!(
-        out.contains("throw new Error(\"rl match: unexpected case \" + JSON.stringify($rl_m));"),
+        out.contains("throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"),
         "{out}"
     );
 }
@@ -561,15 +561,15 @@ const grade = match (s) {
 #[test]
 fn guard_free_match_still_emits_switch() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
-    assert!(!out.contains("$rl_b"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
+    assert!(!out.contains("$tt_b"), "{out}");
 }
 
 #[test]
 fn repeated_guarded_tags_are_allowed() {
     let out =
         ok("const r = match (x) { A(v) if v > 9 => 2, A(v) if v > 0 => 1, A => 0, _ => -1 };");
-    assert_eq!(out.matches("$rl_m.kind === \"A\"").count(), 3, "{out}");
+    assert_eq!(out.matches("$tt_m.kind === \"A\"").count(), 3, "{out}");
 }
 
 #[test]
@@ -606,7 +606,7 @@ fn guard_with_or_pattern_emits_combined_condition() {
     let out = ok("const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };");
     assert!(
         out.contains(
-            "if ($rl_m.kind === \"A\" || $rl_m.kind === \"B\") { const { v } = $rl_m; if ((v > 0)) { $rl_v0 = (v); break; } }"
+            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if ((v > 0)) { $tt_v0 = (v); break; } }"
         ),
         "{out}"
     );
@@ -615,8 +615,8 @@ fn guard_with_or_pattern_emits_combined_condition() {
 #[test]
 fn guarded_block_body_uses_labeled_break() {
     let out = ok("const r = match (x) { A(v) if v > 0 => { log(v); }, _ => 0 };");
-    assert!(out.contains("$rl_b: {"), "{out}");
-    assert!(out.contains("break $rl_b;"), "{out}");
+    assert!(out.contains("$tt_b: {"), "{out}");
+    assert!(out.contains("break $tt_b;"), "{out}");
 }
 
 #[test]
@@ -626,10 +626,10 @@ fn await_in_guard_makes_match_async() {
     );
     assert!(!out.contains("async () =>"), "{out}");
     assert!(
-        out.contains("if ((await allowed(u))) { $rl_v0 = (1); break; }"),
+        out.contains("if ((await allowed(u))) { $tt_v0 = (1); break; }"),
         "{out}"
     );
-    assert!(out.contains("return $rl_v0;"), "{out}");
+    assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
 #[test]
@@ -638,17 +638,17 @@ fn nested_await_match_keeps_its_expression_boundary() {
         "async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$rl_v0 = (await fetch(url));"), "{out}");
-    assert!(out.contains("return $rl_v1($rl_v0);"), "{out}");
+    assert!(out.contains("$tt_v0 = (await fetch(url));"), "{out}");
+    assert!(out.contains("return $tt_v1($tt_v0);"), "{out}");
 }
 
 #[test]
-fn wildcard_with_guard_is_not_rl_syntax() {
-    // `_ if ...` does not parse as an rl match; the arrow arm has already
-    // committed the construct to rl.
+fn wildcard_with_guard_is_not_tt_syntax() {
+    // `_ if ...` does not parse as a tt match; the arrow arm has already
+    // committed the construct to tt.
     let e = err("const r = match (x) { A => 1, _ if c => 0 };");
     assert!(
-        e.message.contains("rl `match` could not be parsed"),
+        e.message.contains("tt `match` could not be parsed"),
         "{}",
         e.message
     );
@@ -663,17 +663,17 @@ fn try_inside_a_function_inside_a_guard_is_allowed() {
         "const r = match (x) {\n  A(v) if run(() => { try g(); return true; }) => v,\n  _ => 0,\n};\n",
     );
     assert!(
-        out.contains("if ($rl_t0.kind !== \"Ok\") return $rl_t0;"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
 }
 
 /* ------------------------------------------------------------------ */
-/* exhaustiveness — an rlc error, not a tsc error                      */
+/* exhaustiveness — a ttc error, not a tsc error                      */
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn non_exhaustive_match_is_an_rlc_error_with_position() {
+fn non_exhaustive_match_is_an_ttc_error_with_position() {
     let e = err(
         r#"enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 const f = (s: Shape) => match (s) {
@@ -728,7 +728,7 @@ enum Shape { Circle(radius: number), Point }
 
 #[test]
 fn match_on_unknown_tags_is_not_checked() {
-    // Hand-written unions / imported enums: rlc has no type info, so no
+    // Hand-written unions / imported enums: ttc has no type info, so no
     // exhaustiveness check — the runtime guard still protects.
     let out = ok(r#"
 type AppEvent = { kind: "click"; x: number } | { kind: "key"; code: string };
@@ -779,7 +779,7 @@ fn wildcard_exempts_builtin_exhaustiveness() {
 
 #[test]
 fn local_enum_shadows_builtin() {
-    // A file-local rl enum named Option replaces the built-in for this file.
+    // A file-local tt enum named Option replaces the built-in for this file.
     let e =
         err("enum Option { Some(), Stale }\nconst f = (o: Option) => match (o) { Some => 1 };\n");
     assert!(
@@ -830,7 +830,7 @@ fn try_decl_emits_early_return_and_bind() {
     let out = ok("function f(): X {\n  const n = try g();\n  return h(n);\n}\n");
     assert!(
         out.contains(
-            "const $rl_t0 = (g()); if ($rl_t0.kind !== \"Ok\") return $rl_t0; const n = $rl_t0.value;"
+            "const $tt_t0 = (g()); if ($tt_t0.kind !== \"Ok\") return $tt_t0; const n = $tt_t0.value;"
         ),
         "{out}"
     );
@@ -840,10 +840,10 @@ fn try_decl_emits_early_return_and_bind() {
 fn try_bare_statement_emits_early_return_only() {
     let out = ok("function f(): X {\n  try g();\n  return h();\n}\n");
     assert!(
-        out.contains("const $rl_t0 = (g()); if ($rl_t0.kind !== \"Ok\") return $rl_t0;"),
+        out.contains("const $tt_t0 = (g()); if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
-    assert!(!out.contains("$rl_t0.value"), "{out}");
+    assert!(!out.contains("$tt_t0.value"), "{out}");
 }
 
 #[test]
@@ -851,14 +851,14 @@ fn try_temporaries_are_unique_and_keep_declaration_keyword() {
     let out = ok(
         "function f(): X {\n  let a: number = try g();\n  var b = try h(a);\n  return k(b);\n}\n",
     );
-    assert!(out.contains("let a: number = $rl_t0.value;"), "{out}");
-    assert!(out.contains("var b = $rl_t1.value;"), "{out}");
+    assert!(out.contains("let a: number = $tt_t0.value;"), "{out}");
+    assert!(out.contains("var b = $tt_t1.value;"), "{out}");
 }
 
 #[test]
 fn try_destructuring_binding_is_kept_verbatim() {
     let out = ok("function f(): X {\n  const { a, b } = try g();\n  return a + b;\n}\n");
-    assert!(out.contains("const { a, b } = $rl_t0.value;"), "{out}");
+    assert!(out.contains("const { a, b } = $tt_t0.value;"), "{out}");
 }
 
 #[test]
@@ -866,20 +866,19 @@ fn try_expression_may_contain_a_match() {
     let out = ok(
         "function f(): X {\n  const x = try match (m) { Ok(value) => wrap(value), Err(error) => rewrap(error) };\n  return x;\n}\n",
     );
-    assert!(out.contains("const $rl_t0 = ("), "{out}");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(out.contains("const $tt_t0 = ("), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
 fn try_without_semicolon_is_not_recognized() {
-    // No terminating `;` → not rl syntax; the (invalid-TS) source passes
+    // No terminating `;` → not tt syntax; the (invalid-TS) source passes
     // through and the output self-check reports it.
     let e = err("function f(): X {\n  const n = try g()\n  return h(n);\n}\n");
     // The `try` that did not parse is the thing to look at, and the
     // message says why the output no longer parses.
     assert!(
-        e.message
-            .contains("`try` here did not parse as an rl `try`"),
+        e.message.contains("`try` here did not parse as a tt `try`"),
         "{}",
         e.message
     );
@@ -909,7 +908,7 @@ fn try_inside_match_arm_is_an_error() {
 fn try_at_module_top_level_is_an_error() {
     // The lowering's `return` would have no function to exit — before the
     // flow answer this fell through to the output self-check's "invalid
-    // TypeScript or an rlc bug" backstop.
+    // TypeScript or a ttc bug" backstop.
     let e = err("function f(): void {}\ntry g();\n");
     assert!(
         e.message.contains("`try` must be inside a function"),
@@ -941,9 +940,9 @@ fn try_cannot_be_used_in_expression_position() {
         "function f() { const run = () => try read(); }\n",
         "function f(c: boolean) { const x = c ? 0 : try read(); }\n",
     ] {
-        let diagnostics = rlc::analyze(src, &Options::default());
+        let diagnostics = ttc::analyze(src, &Options::default());
         assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
-        assert_eq!(diagnostics[0].code, rlc::DiagnosticCode::TryPlacement);
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
         assert!(
             diagnostics[0]
                 .message
@@ -963,7 +962,7 @@ fn try_inside_a_function_inside_a_scrutinee_is_allowed() {
         "const x = match (run(() => { try g(); return h(); })) {\n  Ok(value) => value,\n  Err(error) => 0,\n};\n",
     );
     assert!(
-        out.contains("if ($rl_t0.kind !== \"Ok\") return $rl_t0;"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
 }
@@ -974,7 +973,7 @@ fn try_inside_a_function_inside_an_arm_body_is_allowed() {
         "const x = match (r) {\n  Ok(value) => { const f = () => { try g(value); return 1; }; return f(); },\n  Err(error) => 0,\n};\n",
     );
     assert!(
-        out.contains("if ($rl_t0.kind !== \"Ok\") return $rl_t0;"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
 }
@@ -983,7 +982,7 @@ fn try_inside_a_function_inside_an_arm_body_is_allowed() {
 fn try_inside_a_function_inside_a_template_interpolation_is_allowed() {
     let out = ok("const s = `${run(() => { try g(); return h(); })}`;\n");
     assert!(
-        out.contains("if ($rl_t0.kind !== \"Ok\") return $rl_t0;"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
 }
@@ -999,7 +998,7 @@ fn let_else_emits_guard_and_bind() {
     );
     assert!(
         out.contains(
-            "const $rl_t0 = (find()); if ($rl_t0.kind !== \"Some\") { return 0; } const { value } = $rl_t0;"
+            "const $tt_t0 = (find()); if ($tt_t0.kind !== \"Some\") { return 0; } const { value } = $tt_t0;"
         ),
         "{out}"
     );
@@ -1010,7 +1009,7 @@ fn let_else_binding_alias_and_keyword() {
     let out = ok(
         "function f(): string {\n  let Some(value: user) = find() else { throw new Error(\"none\"); };\n  return user;\n}\n",
     );
-    assert!(out.contains("let { value: user } = $rl_t0;"), "{out}");
+    assert!(out.contains("let { value: user } = $tt_t0;"), "{out}");
 }
 
 #[test]
@@ -1018,10 +1017,10 @@ fn let_else_empty_bindings_checks_only() {
     let out =
         ok("function f(): number {\n  const Ok() = check() else { return -1; };\n  return 1;\n}\n");
     assert!(
-        out.contains("if ($rl_t0.kind !== \"Ok\") { return -1; }"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") { return -1; }"),
         "{out}"
     );
-    assert!(!out.contains("} = $rl_t0;"), "{out}");
+    assert!(!out.contains("} = $tt_t0;"), "{out}");
 }
 
 #[test]
@@ -1035,7 +1034,7 @@ fn let_else_or_pattern_shares_one_destructuring() {
     );
     assert!(
         out.contains(
-            "if ($rl_t0.kind !== \"A\" && $rl_t0.kind !== \"B\") { return 0; } const { x } = $rl_t0;"
+            "if ($tt_t0.kind !== \"A\" && $tt_t0.kind !== \"B\") { return 0; } const { x } = $tt_t0;"
         ),
         "{out}"
     );
@@ -1049,10 +1048,10 @@ fn let_else_or_pattern_with_a_bare_alternative_checks_only() {
         "enum E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A() | C = e else { return 0; };\n  return 1;\n}\n",
     );
     assert!(
-        out.contains("if ($rl_t0.kind !== \"A\" && $rl_t0.kind !== \"C\") { return 0; }"),
+        out.contains("if ($tt_t0.kind !== \"A\" && $tt_t0.kind !== \"C\") { return 0; }"),
         "{out}"
     );
-    assert!(!out.contains("} = $rl_t0;"), "{out}");
+    assert!(!out.contains("} = $tt_t0;"), "{out}");
 }
 
 #[test]
@@ -1076,7 +1075,7 @@ fn if_let_or_pattern_condition_is_a_disjunction() {
         "enum E { A(x: number), B(x: number), C }\nfunction g(e: E): number {\n  if let A(x) | B(x) = e {\n    return x;\n  }\n  return -1;\n}\n",
     );
     assert!(
-        out.contains("if ($rl_t0.kind === \"A\" || $rl_t0.kind === \"B\") { const { x } = $rl_t0;"),
+        out.contains("if ($tt_t0.kind === \"A\" || $tt_t0.kind === \"B\") { const { x } = $tt_t0;"),
         "{out}"
     );
 }
@@ -1104,14 +1103,14 @@ fn inline_bodies_inherit_the_enclosing_functions_place() {
         "enum E { A(x: number), B }\nfunction f(e: E): Result<number, string> {\n  if let A(x) = e {\n    const n = try g(x);\n    return Result.Ok(n);\n  }\n  return Result.Ok(0);\n}\n",
     );
     assert!(
-        out.contains("if ($rl_t1.kind !== \"Ok\") return $rl_t1;"),
+        out.contains("if ($tt_t1.kind !== \"Ok\") return $tt_t1;"),
         "{out}"
     );
 
     let out = ok(
         "enum E { A(x: number), B }\nfunction f(e: E): number {\n  const Some(v) = find(e) else {\n    const B() = e else { throw new Error(\"a\"); };\n    return 0;\n  };\n  return v;\n}\n",
     );
-    assert!(out.contains("if ($rl_t1.kind !== \"B\")"), "{out}");
+    assert!(out.contains("if ($tt_t1.kind !== \"B\")"), "{out}");
 }
 
 #[test]
@@ -1131,14 +1130,14 @@ fn an_inline_chain_bottoming_out_in_an_iife_still_rejects_try() {
 #[test]
 fn a_module_level_inline_try_reports_the_cause_not_the_backstop() {
     // At the module's top level the chain bottoms out in the module: the
-    // rl diagnostic is the cause, and the output self-check's failure on
+    // tt diagnostic is the cause, and the output self-check's failure on
     // the emitted `return` is its effect — reported once, not twice.
     let src = "enum E { A(x: number), B }\nif let A(x) = e {\n  try g(x);\n}\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
     assert_eq!(
         report.diagnostics[0].code,
-        rlc::DiagnosticCode::TryPlacement
+        ttc::DiagnosticCode::TryPlacement
     );
     assert!(
         report.diagnostics[0]
@@ -1155,9 +1154,9 @@ fn let_else_shares_try_temp_counter() {
     let out = ok(
         "function f(): X {\n  const n = try g();\n  const Some(v) = h(n) else { return fallback(); };\n  return wrap(v);\n}\n",
     );
-    assert!(out.contains("if ($rl_t0.kind !== \"Ok\")"), "{out}");
+    assert!(out.contains("if ($tt_t0.kind !== \"Ok\")"), "{out}");
     assert!(
-        out.contains("const $rl_t1 = (h(n)); if ($rl_t1.kind !== \"Some\")"),
+        out.contains("const $tt_t1 = (h(n)); if ($tt_t1.kind !== \"Some\")"),
         "{out}"
     );
 }
@@ -1177,8 +1176,8 @@ fn let_else_expression_may_be_a_match() {
     let out = ok(
         "function f(): number {\n  const Some(v) = match (x) { A => some(1), _ => none() } else { return 0; };\n  return v;\n}\n",
     );
-    assert!(out.contains("if ($rl_t0.kind !== \"Some\")"), "{out}");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(out.contains("if ($tt_t0.kind !== \"Some\")"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
@@ -1193,7 +1192,7 @@ fn let_else_diverges_when_the_return_value_is_an_object_literal() {
         out.contains("{ return { kind: \"Err\", error: \"no\" }; }"),
         "{out}"
     );
-    // Same with a statement in front of it, and with an rl construct as
+    // Same with a statement in front of it, and with a tt construct as
     // the returned value.
     ok(
         "function f(): number {\n  const Some(v) = find() else { log(\"x\"); return { k: 1 }; };\n  return v;\n}\n",
@@ -1301,12 +1300,12 @@ fn let_else_inside_a_function_inside_an_arm_body_is_allowed() {
     let out = ok(
         "const x = match (r) {\n  Ok(value) => { const f = () => { const Some(v) = h(value) else { return 0; }; return v; }; return f(); },\n  _ => 0,\n};\n",
     );
-    assert!(out.contains("if ($rl_t0.kind !== \"Some\")"), "{out}");
+    assert!(out.contains("if ($tt_t0.kind !== \"Some\")"), "{out}");
 }
 
 #[test]
 fn let_else_without_semicolon_is_not_recognized() {
-    // No terminating `;` → not rl syntax; the (invalid-TS) source passes
+    // No terminating `;` → not tt syntax; the (invalid-TS) source passes
     // through and the output self-check reports it.
     let e = err(
         "function f(): number {\n  const Some(v) = find() else { return 0; }\n  return v;\n}\n",
@@ -1320,7 +1319,7 @@ fn let_else_without_semicolon_is_not_recognized() {
 
 #[test]
 fn let_else_requires_parens_on_the_pattern() {
-    // `const Point = e else { ... };` (no parens) is not rl syntax — the
+    // `const Point = e else { ... };` (no parens) is not tt syntax — the
     // invalid-TS text passes through to the output self-check.
     let e =
         err("function f(): number {\n  const Point = find() else { return 0; };\n  return 1;\n}\n");
@@ -1358,11 +1357,11 @@ fn no_verify_passes_invalid_typescript_through() {
 #[test]
 fn filename_appears_in_error_display() {
     let opts = Options {
-        filename: Some("demo.rl"),
+        filename: Some("demo.tt"),
         ..Options::default()
     };
     let e = compile("const r = match (x) { A => 1, A => 2 };", &opts).expect_err("expected error");
-    assert_eq!(e.to_string(), "demo.rl:1:31: match: duplicate arm \"A\"");
+    assert_eq!(e.to_string(), "demo.tt:1:31: match: duplicate arm \"A\"");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1370,33 +1369,33 @@ fn filename_appears_in_error_display() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn relative_rl_import_is_rewritten_to_js_by_default() {
-    let out = ok("import { CalcError } from \"./error.rl\";\n");
+fn relative_tt_import_is_rewritten_to_js_by_default() {
+    let out = ok("import { CalcError } from \"./error.tt\";\n");
     assert_eq!(out, "import { CalcError } from \"./error.js\";\n");
 }
 
 #[test]
 fn rewrite_covers_all_static_import_forms() {
     let out = ok(r#"
-import def from "./a.rl";
-import def2, { named as alias } from "./b.rl";
-import * as ns from "./c.rl";
-import type { T } from "./d.rl";
-import "./side.rl";
-export { x, y as z } from "./e.rl";
-export * from "./f.rl";
-export * as g from "./g.rl";
-export type { U } from "./h.rl";
+import def from "./a.tt";
+import def2, { named as alias } from "./b.tt";
+import * as ns from "./c.tt";
+import type { T } from "./d.tt";
+import "./side.tt";
+export { x, y as z } from "./e.tt";
+export * from "./f.tt";
+export * as g from "./g.tt";
+export type { U } from "./h.tt";
 "#);
     for stem in ["a", "b", "c", "d", "side", "e", "f", "g", "h"] {
         assert!(out.contains(&format!("\"./{stem}.js\"")), "{out}");
-        assert!(!out.contains(&format!("\"./{stem}.rl\"")), "{out}");
+        assert!(!out.contains(&format!("\"./{stem}.tt\"")), "{out}");
     }
 }
 
 #[test]
 fn rewrite_keeps_quote_style_and_parent_paths() {
-    let out = ok("import a from './x.rl';\nimport b from \"../up/y.rl\";\n");
+    let out = ok("import a from './x.tt';\nimport b from \"../up/y.tt\";\n");
     assert_eq!(
         out,
         "import a from './x.js';\nimport b from \"../up/y.js\";\n"
@@ -1405,37 +1404,37 @@ fn rewrite_keeps_quote_style_and_parent_paths() {
 
 #[test]
 fn the_std_specifier_is_left_alone_by_default() {
-    // A bundler plugin resolves `@rl/std` itself, so the untouched
+    // A bundler plugin resolves `@tt/std` itself, so the untouched
     // specifier is the right default.
-    let src = "import type { TOption, TResult } from \"@rl/std\";\n\
-import * as Option from \"@rl/std/option\";\n\
-import * as Result from \"@rl/std/result\";\n";
+    let src = "import type { TOption, TResult } from \"@tt/std\";\n\
+import * as Option from \"@tt/std/option\";\n\
+import * as Result from \"@tt/std/result\";\n";
     assert_eq!(ok(src), src);
 }
 
 #[test]
 fn the_std_specifier_is_rewritten_when_the_caller_places_the_module() {
     let opts = Options {
-        std_imports: rlc::StdImports {
-            types: Some("../rl/index.js"),
-            option: Some("../rl/option.js"),
-            result: Some("../rl/result.js"),
+        std_imports: ttc::StdImports {
+            types: Some("../tt/index.js"),
+            option: Some("../tt/option.js"),
+            result: Some("../tt/result.js"),
         },
         ..Options::default()
     };
     let out = compile(
-        "import type { TOption } from '@rl/std';\n\
-import * as Option from '@rl/std/option';\n\
-import * as Result from '@rl/std/result';\n",
+        "import type { TOption } from '@tt/std';\n\
+import * as Option from '@tt/std/option';\n\
+import * as Result from '@tt/std/result';\n",
         &opts,
     )
     .unwrap();
     // The quote style survives; only the specifier's text changes.
     assert_eq!(
         out,
-        "import type { TOption } from '../rl/index.js';\n\
-import * as Option from '../rl/option.js';\n\
-import * as Result from '../rl/result.js';\n"
+        "import type { TOption } from '../tt/index.js';\n\
+import * as Option from '../tt/option.js';\n\
+import * as Result from '../tt/result.js';\n"
     );
 }
 
@@ -1443,32 +1442,32 @@ import * as Result from '../rl/result.js';\n"
 fn the_std_specifier_is_not_a_project_module() {
     // It has no file to follow, so it is not part of the module graph the
     // CLI walks for declarations.
-    assert!(rlc::rl_imports("import type { TOption } from \"@rl/std\";\n").is_empty());
-    assert!(rlc::imports_std("export * from \"@rl/std/result\";\n"));
-    assert!(!rlc::imports_std("import { Option } from \"./rl.js\";\n"));
+    assert!(ttc::tt_imports("import type { TOption } from \"@tt/std\";\n").is_empty());
+    assert!(ttc::imports_std("export * from \"@tt/std/result\";\n"));
+    assert!(!ttc::imports_std("import { Option } from \"./tt.js\";\n"));
 }
 
 #[test]
 fn ts_mode_points_at_the_emitted_file() {
     // With `allowImportingTsExtensions` + `rewriteRelativeImportExtensions`,
     // tsc accepts `.ts` specifiers and rewrites them to `.js` on emit — so
-    // rlc only has to name the file it actually produces.
+    // ttc only has to name the file it actually produces.
     let opts = Options {
-        rewrite_imports: rlc::ImportRewrite::Ts,
+        rewrite_imports: ttc::ImportRewrite::Ts,
         ..Options::default()
     };
-    let out = compile("import { E } from \"./error.rl\";\n", &opts).unwrap();
+    let out = compile("import { E } from \"./error.tt\";\n", &opts).unwrap();
     assert_eq!(out, "import { E } from \"./error.ts\";\n");
 }
 
 #[test]
 fn ts_mode_preserves_the_quote_style_and_path() {
     let opts = Options {
-        rewrite_imports: rlc::ImportRewrite::Ts,
+        rewrite_imports: ttc::ImportRewrite::Ts,
         ..Options::default()
     };
     let out = compile(
-        "import a from './x.rl';\nexport * from \"../up/y.rl\";\n",
+        "import a from './x.tt';\nexport * from \"../up/y.tt\";\n",
         &opts,
     )
     .unwrap();
@@ -1481,38 +1480,38 @@ fn ts_mode_preserves_the_quote_style_and_path() {
 #[test]
 fn off_mode_leaves_the_specifier_untouched() {
     let opts = Options {
-        rewrite_imports: rlc::ImportRewrite::Off,
+        rewrite_imports: ttc::ImportRewrite::Off,
         ..Options::default()
     };
-    let src = "import { E } from \"./error.rl\";\n";
+    let src = "import { E } from \"./error.tt\";\n";
     assert_eq!(compile(src, &opts).unwrap(), src);
 }
 
 #[test]
-fn non_relative_rl_specifiers_are_untouched() {
+fn non_relative_tt_specifiers_are_untouched() {
     // Only relative paths are rewritten — package-like and absolute
     // specifiers keep their bytes.
-    let src = "import a from \"pkg.rl\";\nimport b from \"/abs/x.rl\";\nimport c from \"@scope/p/x.rl\";\n";
+    let src = "import a from \"pkg.tt\";\nimport b from \"/abs/x.tt\";\nimport c from \"@scope/p/x.tt\";\n";
     assert_eq!(ok(src), src);
 }
 
 #[test]
 fn dynamic_import_and_import_meta_are_untouched() {
-    let src = "const m = import(\"./x.rl\");\nconst u = import.meta.url;\n";
+    let src = "const m = import(\"./x.tt\");\nconst u = import.meta.url;\n";
     assert_eq!(ok(src), src);
 }
 
 #[test]
 fn import_assignment_is_untouched() {
     // TS import-assignment is not a static import declaration.
-    let src = "import fs = require(\"./legacy.rl\");\n";
+    let src = "import fs = require(\"./legacy.tt\");\n";
     assert_eq!(ok(src), src);
 }
 
 #[test]
-fn rewrite_composes_with_rl_constructs_in_the_same_file() {
+fn rewrite_composes_with_tt_constructs_in_the_same_file() {
     let out = ok(r#"
-import { CalcError } from "./error.rl";
+import { CalcError } from "./error.tt";
 enum Shape { Circle(radius: number), Point }
 const area = match (Shape.Point) {
   Circle(radius) => radius,
@@ -1520,18 +1519,18 @@ const area = match (Shape.Point) {
 };
 "#);
     assert!(out.contains("\"./error.js\""), "{out}");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 /* ------------------------------------------------------------------ */
 /* project-wide exhaustiveness (extern enums)                          */
 /* ------------------------------------------------------------------ */
 
-fn token_extern() -> rlc::ExternEnum {
-    rlc::ExternEnum {
+fn token_extern() -> ttc::ExternEnum {
+    ttc::ExternEnum {
         name: "Token".to_string(),
         tags: vec!["Num".to_string(), "Ident".to_string(), "Eof".to_string()],
-        from: Some("./token.rl".to_string()),
+        from: Some("./token.tt".to_string()),
     }
 }
 
@@ -1549,7 +1548,7 @@ fn extern_enum_makes_match_checked() {
     .expect_err("expected non-exhaustive error");
     assert!(
         e.message
-            .contains("match on enum Token (imported from \"./token.rl\") is not exhaustive"),
+            .contains("match on enum Token (imported from \"./token.tt\") is not exhaustive"),
         "{}",
         e.message
     );
@@ -1569,7 +1568,7 @@ fn extern_enum_full_coverage_compiles() {
         &opts,
     )
     .unwrap();
-    assert!(out.contains("switch ($rl_m.kind)"));
+    assert!(out.contains("switch ($tt_m.kind)"));
 }
 
 #[test]
@@ -1586,17 +1585,17 @@ fn local_enum_shadows_extern_of_same_name() {
         &opts,
     )
     .unwrap();
-    assert!(out.contains("switch ($rl_m.kind)"));
+    assert!(out.contains("switch ($tt_m.kind)"));
 }
 
 #[test]
 fn extern_enum_shadows_builtin_of_same_name() {
     // An imported `Option` with an extra case replaces the built-in: the
     // two-case match that satisfies the built-in must now be an error.
-    let externs = [rlc::ExternEnum {
+    let externs = [ttc::ExternEnum {
         name: "Option".to_string(),
         tags: vec!["Some".to_string(), "None".to_string(), "Maybe".to_string()],
-        from: Some("./opt.rl".to_string()),
+        from: Some("./opt.tt".to_string()),
     }];
     let opts = Options {
         extern_enums: &externs,
@@ -1619,7 +1618,7 @@ fn extern_enums_do_not_affect_unrelated_matches() {
         ..Options::default()
     };
     let out = compile("const s = match (x) { Foo(a) => a, Bar => 0 };\n", &opts).unwrap();
-    assert!(out.contains("switch ($rl_m.kind)"));
+    assert!(out.contains("switch ($tt_m.kind)"));
 }
 
 /* ------------------------------------------------------------------ */
@@ -1627,11 +1626,11 @@ fn extern_enums_do_not_affect_unrelated_matches() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn exported_enums_returns_exported_rl_enums_only() {
-    let decls = rlc::exported_enums(
+fn exported_enums_returns_exported_tt_enums_only() {
+    let decls = ttc::exported_enums(
         "export enum Token { Num(value: number), Eof }\nenum Private { A(), B }\nexport enum Color { Red, Green }\n",
     );
-    // Color is a plain TS enum (no payload, no generics) — not an rl enum.
+    // Color is a plain TS enum (no payload, no generics) — not a tt enum.
     assert_eq!(decls.len(), 1);
     assert_eq!(decls[0].name, "Token");
     assert_eq!(decls[0].tags, vec!["Num".to_string(), "Eof".to_string()]);
@@ -1639,32 +1638,32 @@ fn exported_enums_returns_exported_rl_enums_only() {
 }
 
 #[test]
-fn rl_imports_reports_specifiers_and_names() {
-    use rlc::RlImportNames;
-    let imports = rlc::rl_imports(
+fn tt_imports_reports_specifiers_and_names() {
+    use ttc::TtImportNames;
+    let imports = ttc::tt_imports(
         r#"
-import { Token, Kind as K, type T } from "./a.rl";
-import * as ns from "../b.rl";
-import "./side.rl";
-export { X } from "./re.rl";
-import { skip } from "./not-rl.ts";
+import { Token, Kind as K, type T } from "./a.tt";
+import * as ns from "../b.tt";
+import "./side.tt";
+export { X } from "./re.tt";
+import { skip } from "./not-tt.ts";
 "#,
     );
     assert_eq!(imports.len(), 4);
-    assert_eq!(imports[0].specifier, "./a.rl");
+    assert_eq!(imports[0].specifier, "./a.tt");
     assert_eq!(
         imports[0].names,
-        RlImportNames::Named(vec![
+        TtImportNames::Named(vec![
             ("Token".to_string(), None),
             ("Kind".to_string(), Some("K".to_string())),
             ("T".to_string(), None),
         ])
     );
-    assert_eq!(imports[1].specifier, "../b.rl");
-    assert_eq!(imports[1].names, RlImportNames::Namespace("ns".to_string()));
-    assert_eq!(imports[2].names, RlImportNames::None);
-    assert_eq!(imports[3].specifier, "./re.rl");
-    assert_eq!(imports[3].names, RlImportNames::None);
+    assert_eq!(imports[1].specifier, "../b.tt");
+    assert_eq!(imports[1].names, TtImportNames::Namespace("ns".to_string()));
+    assert_eq!(imports[2].names, TtImportNames::None);
+    assert_eq!(imports[3].specifier, "./re.tt");
+    assert_eq!(imports[3].names, TtImportNames::None);
 }
 
 #[test]
@@ -1673,23 +1672,23 @@ fn scan_module_answers_both_questions_in_one_pass() {
     // views must never disagree — that equivalence is what lets the CLI
     // parse each input once.
     for source in [
-        "import * as Option from \"@rl/std/option\";\nimport { T } from \"./t.rl\";\n",
-        "import { T } from \"./t.rl\";\n",
-        "export * from \"@rl/std/result\";\n",
+        "import * as Option from \"@tt/std/option\";\nimport { T } from \"./t.tt\";\n",
+        "import { T } from \"./t.tt\";\n",
+        "export * from \"@tt/std/result\";\n",
         "const match = 1;\n",
         "",
     ] {
-        let scan = rlc::scan_module(source);
-        assert_eq!(scan.imports, rlc::rl_imports(source), "{source:?}");
-        assert_eq!(scan.imports_std, rlc::imports_std(source), "{source:?}");
+        let scan = ttc::scan_module(source);
+        assert_eq!(scan.imports, ttc::tt_imports(source), "{source:?}");
+        assert_eq!(scan.imports_std, ttc::imports_std(source), "{source:?}");
     }
 
-    let scan = rlc::scan_module(
-        "import * as Option from \"@rl/std/option\";\nimport * as ns from \"../b.rl\";\n",
+    let scan = ttc::scan_module(
+        "import * as Option from \"@tt/std/option\";\nimport * as ns from \"../b.tt\";\n",
     );
     assert!(scan.imports_std);
     assert_eq!(scan.imports.len(), 1);
-    assert_eq!(scan.imports[0].specifier, "../b.rl");
+    assert_eq!(scan.imports[0].specifier, "../b.tt");
 }
 
 /* ------------------------------------------------------------------ */
@@ -1700,15 +1699,15 @@ fn scan_module_answers_both_questions_in_one_pass() {
 fn enum_symbols_carries_positions_and_field_shapes() {
     let src =
         "export enum Token {\n  Num(value: number),\n  Empty(),\n  Eof,\n}\nenum Local { A() }\n";
-    let syms = rlc::enum_symbols(src);
+    let syms = ttc::enum_symbols(src);
     assert_eq!(syms.len(), 2);
 
     let token = &syms[0];
     assert_eq!(token.name, "Token");
     assert!(token.exported);
-    assert_eq!(rlc::line_col(src, token.offset), (1, 13));
+    assert_eq!(ttc::line_col(src, token.offset), (1, 13));
     assert_eq!(token.cases.len(), 3);
-    assert_eq!(rlc::line_col(src, token.cases[0].offset), (2, 3));
+    assert_eq!(ttc::line_col(src, token.cases[0].offset), (2, 3));
     let fields = token.cases[0].fields.as_ref().unwrap();
     assert_eq!(fields[0].name, "value");
     assert_eq!(fields[0].ty, "number");
@@ -1729,17 +1728,17 @@ fn enum_symbols_carries_positions_and_field_shapes() {
 fn pipeline_emits_nested_apply_helper_calls() {
     let out = ok("const y = half(4) |> double |> label;\n");
     assert!(
-        out.contains("const y = $rl_ap($rl_ap((half(4)), (double)), (label));"),
+        out.contains("const y = $tt_ap($tt_ap((half(4)), (double)), (label));"),
         "{out}"
     );
-    assert!(out.contains("function $rl_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }"));
+    assert!(out.contains("function $tt_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }"));
 }
 
 #[test]
 fn pipeline_method_step_chains_postfix() {
     let out = ok("const t = s |> .trim() |> .split(\",\") |> f;\n");
     assert!(
-        out.contains("const t = $rl_ap((((s)).trim()).split(\",\"), (f));"),
+        out.contains("const t = $tt_ap((((s)).trim()).split(\",\"), (f));"),
         "{out}"
     );
 }
@@ -1747,7 +1746,7 @@ fn pipeline_method_step_chains_postfix() {
 #[test]
 fn pipeline_helper_is_emitted_once_per_file() {
     let out = ok("const a = x |> f;\nconst b = y |> g;\n");
-    assert_eq!(out.matches("function $rl_ap").count(), 1, "{out}");
+    assert_eq!(out.matches("function $tt_ap").count(), 1, "{out}");
     // and appended at the end so original lines keep their positions
     assert!(out.trim_end().ends_with("{ return f(v); }"), "{out}");
 }
@@ -1755,7 +1754,7 @@ fn pipeline_helper_is_emitted_once_per_file() {
 #[test]
 fn file_without_pipeline_gets_no_helper() {
     let out = ok("const a = f(x);\n");
-    assert!(!out.contains("$rl_ap"), "{out}");
+    assert!(!out.contains("$tt_ap"), "{out}");
 }
 
 #[test]
@@ -1763,7 +1762,7 @@ fn pipeline_head_reclaims_a_lifted_template() {
     // The template token is lifted as a segment before the `|>` is seen —
     // the claim must rewind it into the head sub-program.
     let out = ok("const a = `v=${n}` |> f;\n");
-    assert!(out.contains("const a = $rl_ap((`v=${n}`), (f));"), "{out}");
+    assert!(out.contains("const a = $tt_ap((`v=${n}`), (f));"), "{out}");
 }
 
 #[test]
@@ -1771,9 +1770,9 @@ fn pipeline_head_reclaims_a_lifted_match() {
     let out =
         ok("enum E { A(v: number), B }\nconst a = match (e) { A(v) => v, B => 0, } |> double;\n");
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
-    assert!(out.contains("$rl_v0 = $rl_ap($rl_v0, (double));"), "{out}");
-    assert!(out.contains("const a = $rl_v0;"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
+    assert!(out.contains("$tt_v0 = $tt_ap($tt_v0, (double));"), "{out}");
+    assert!(out.contains("const a = $tt_v0;"), "{out}");
 }
 
 #[test]
@@ -1781,7 +1780,7 @@ fn pipeline_head_is_the_whole_call_not_the_inner_argument() {
     // Bracket tracking must restore the enclosing expression's start:
     // the head of `a(b) |> g` is `a(b)`, not `b`.
     let out = ok("const y = f(a(b) |> g);\n");
-    assert!(out.contains("const y = f($rl_ap((a(b)), (g)));"), "{out}");
+    assert!(out.contains("const y = f($tt_ap((a(b)), (g)));"), "{out}");
 }
 
 #[test]
@@ -1790,14 +1789,14 @@ fn pipeline_inside_match_scrutinee_arm_and_template() {
         "enum E { A(v: number), B }\nconst r = match (x |> norm) {\n  A(v) => v |> double,\n  B => 0,\n};\nconst t = `n=${x |> f}`;\n",
     );
     assert!(
-        out.contains("const $rl_m = ($rl_ap((x), (norm)));"),
+        out.contains("const $tt_m = ($tt_ap((x), (norm)));"),
         "{out}"
     );
     assert!(
-        out.contains("$rl_v0 = ($rl_ap((v), (double))); break;"),
+        out.contains("$tt_v0 = ($tt_ap((v), (double))); break;"),
         "{out}"
     );
-    assert!(out.contains("`n=${$rl_ap((x), (f))}`"), "{out}");
+    assert!(out.contains("`n=${$tt_ap((x), (f))}`"), "{out}");
 }
 
 #[test]
@@ -1806,7 +1805,7 @@ fn pipeline_composes_with_try() {
         "function f(): Result<number, string> {\n  const a = try readCfg() |> norm;\n  return Result.Ok(a);\n}\n",
     );
     assert!(
-        out.contains("const $rl_t0 = ($rl_ap((readCfg()), (norm)));"),
+        out.contains("const $tt_t0 = ($tt_ap((readCfg()), (norm)));"),
         "{out}"
     );
 }
@@ -1814,7 +1813,7 @@ fn pipeline_composes_with_try() {
 #[test]
 fn pipeline_await_in_head_needs_no_async_wrapper() {
     let out = ok("async function f(p: Promise<string>) {\n  return await p |> norm;\n}\n");
-    assert!(out.contains("return $rl_ap((await p), (norm));"), "{out}");
+    assert!(out.contains("return $tt_ap((await p), (norm));"), "{out}");
     assert!(!out.contains("async () =>"), "{out}");
 }
 
@@ -1828,7 +1827,7 @@ fn unparenthesized_ternary_next_to_pipeline_is_an_error() {
 #[test]
 fn parenthesized_ternary_head_compiles() {
     let out = ok("const a = (c ? x : y) |> f;\n");
-    assert!(out.contains("$rl_ap(((c ? x : y)), (f))"), "{out}");
+    assert!(out.contains("$tt_ap(((c ? x : y)), (f))"), "{out}");
 }
 
 #[test]
@@ -1855,7 +1854,7 @@ fn optional_chain_step_is_an_error() {
 fn try_inside_a_function_inside_a_pipeline_step_is_allowed() {
     let out = ok("const a = x |> (n => { const b = try f(n); return b; });\n");
     assert!(
-        out.contains("if ($rl_t0.kind !== \"Ok\") return $rl_t0;"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
 }
@@ -1868,22 +1867,22 @@ fn try_inside_a_function_inside_a_pipeline_step_is_allowed() {
 fn flow_emits_nested_composition_helper_calls() {
     let out = ok("const f = flow |> parse |> double |> label;\n");
     assert!(
-        out.contains("const f = $rl_fl($rl_fl((parse), (double)), (label));"),
+        out.contains("const f = $tt_fl($tt_fl((parse), (double)), (label));"),
         "{out}"
     );
     assert!(out.contains(
-        "function $rl_fl<A extends unknown[], B, C>(f: (...a: A) => B, g: (b: B) => C): \
+        "function $tt_fl<A extends unknown[], B, C>(f: (...a: A) => B, g: (b: B) => C): \
          (...a: A) => C { return (...a: A) => g(f(...a)); }"
     ));
     // a composition is not a value pipeline — no apply helper
-    assert!(!out.contains("$rl_ap"), "{out}");
+    assert!(!out.contains("$tt_ap"), "{out}");
 }
 
 #[test]
 fn flow_method_step_becomes_a_contextually_typed_arrow() {
     let out = ok("const f = flow |> parse |> .toFixed(1);\n");
     assert!(
-        out.contains("const f = $rl_fl((parse), (($rl_v) => ($rl_v).toFixed(1)));"),
+        out.contains("const f = $tt_fl((parse), (($tt_v) => ($tt_v).toFixed(1)));"),
         "{out}"
     );
 }
@@ -1892,20 +1891,20 @@ fn flow_method_step_becomes_a_contextually_typed_arrow() {
 fn flow_with_a_single_step_is_that_step_and_needs_no_helper() {
     let out = ok("const f = flow |> parse;\n");
     assert!(out.contains("const f = (parse);"), "{out}");
-    assert!(!out.contains("$rl_fl"), "{out}");
+    assert!(!out.contains("$tt_fl"), "{out}");
 }
 
 #[test]
 fn flow_helper_is_emitted_once_per_file() {
     let out = ok("const a = flow |> f |> g;\nconst b = flow |> h |> i;\n");
-    assert_eq!(out.matches("function $rl_fl").count(), 1, "{out}");
+    assert_eq!(out.matches("function $tt_fl").count(), 1, "{out}");
     assert!(out.trim_end().ends_with("g(f(...a)); }"), "{out}");
 }
 
 #[test]
 fn file_without_flow_gets_no_composition_helper() {
     let out = ok("const a = x |> f;\n");
-    assert!(!out.contains("$rl_fl"), "{out}");
+    assert!(!out.contains("$tt_fl"), "{out}");
 }
 
 #[test]
@@ -1913,27 +1912,27 @@ fn flow_is_a_contextual_keyword_only_at_a_pipeline_head() {
     // a `flow` variable still pipes when parenthesized, and a dotted or
     // called head is an ordinary value head
     let out = ok("const a = (flow) |> f;\nconst b = o.flow |> f;\nconst c = flow() |> f;\n");
-    assert!(out.contains("const a = $rl_ap(((flow)), (f));"), "{out}");
-    assert!(out.contains("const b = $rl_ap((o.flow), (f));"), "{out}");
-    assert!(out.contains("const c = $rl_ap((flow()), (f));"), "{out}");
-    assert!(!out.contains("$rl_fl"), "{out}");
+    assert!(out.contains("const a = $tt_ap(((flow)), (f));"), "{out}");
+    assert!(out.contains("const b = $tt_ap((o.flow), (f));"), "{out}");
+    assert!(out.contains("const c = $tt_ap((flow()), (f));"), "{out}");
+    assert!(!out.contains("$tt_fl"), "{out}");
 }
 
 #[test]
 fn flow_composes_inside_expressions() {
     let out = ok("const a = xs.map(flow |> parse |> double);\nconst b = `${flow |> f |> g}`;\n");
     assert!(
-        out.contains("const a = xs.map($rl_fl((parse), (double)));"),
+        out.contains("const a = xs.map($tt_fl((parse), (double)));"),
         "{out}"
     );
-    assert!(out.contains("const b = `${$rl_fl((f), (g))}`;"), "{out}");
+    assert!(out.contains("const b = `${$tt_fl((f), (g))}`;"), "{out}");
 }
 
 #[test]
 fn flow_step_can_be_a_parenthesized_arrow() {
     let out = ok("const f = flow |> parse |> (n => n + 1);\n");
     assert!(
-        out.contains("const f = $rl_fl((parse), ((n => n + 1)));"),
+        out.contains("const f = $tt_fl((parse), ((n => n + 1)));"),
         "{out}"
     );
 }
@@ -1970,19 +1969,19 @@ const step = match (dir, speed) {
   (South, _) => -1,
 };
 "#);
-    assert!(out.contains("const $rl_m0 = (dir);"), "{out}");
-    assert!(out.contains("const $rl_m1 = (speed);"), "{out}");
+    assert!(out.contains("const $tt_m0 = (dir);"), "{out}");
+    assert!(out.contains("const $tt_m1 = (speed);"), "{out}");
     assert!(
         out.contains(
-            "if ($rl_m0.kind === \"North\" && $rl_m1.kind === \"Fast\") { $rl_v0 = (2); break; }"
+            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0 = (2); break; }"
         ),
         "{out}"
     );
     assert!(
-        out.contains("if ($rl_m0.kind === \"South\") { $rl_v0 = (-1); break; }"),
+        out.contains("if ($tt_m0.kind === \"South\") { $tt_v0 = (-1); break; }"),
         "{out}"
     );
-    assert!(out.contains("JSON.stringify([$rl_m0, $rl_m1])"), "{out}");
+    assert!(out.contains("JSON.stringify([$tt_m0, $tt_m1])"), "{out}");
 }
 
 #[test]
@@ -1995,7 +1994,7 @@ const r = match (a, b) {
 "#);
     assert!(
         out.contains(
-            "{ const { value: x } = $rl_m0; const { value: y } = $rl_m1; $rl_v0 = (x + y); break; }"
+            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0 = (x + y); break; }"
         ),
         "{out}"
     );
@@ -2008,9 +2007,9 @@ fn comma_expression_scrutinee_is_still_a_single_match() {
     let out = ok(
         "const r = match ((a, b)) { A => 1, _ => 0 };\nconst s = match (a, b) { A => 1, _ => 0 };\n",
     );
-    assert!(out.contains("const $rl_m = ((a, b));"), "{out}");
-    assert!(out.contains("const $rl_m = (a, b);"), "{out}");
-    assert!(!out.contains("$rl_m0"), "{out}");
+    assert!(out.contains("const $tt_m = ((a, b));"), "{out}");
+    assert!(out.contains("const $tt_m = (a, b);"), "{out}");
+    assert!(!out.contains("$tt_m0"), "{out}");
 }
 
 #[test]
@@ -2044,10 +2043,10 @@ const step = match (d, s) {
   (West, _) => 3,
 };
 "#);
-    assert!(out.contains("$rl_m0"), "{out}");
+    assert!(out.contains("$tt_m0"), "{out}");
     assert!(
         out.contains(
-            "if (($rl_m0.kind === \"North\" || $rl_m0.kind === \"South\")) { $rl_v0 = (1); break; }"
+            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0 = (1); break; }"
         ),
         "{out}"
     );
@@ -2080,7 +2079,7 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("$rl_v0 = (0); break;"), "{out}");
+    assert!(out.contains("$tt_v0 = (0); break;"), "{out}");
 
     let e = err("const r = match (a, b) {\n  _ => 0,\n  (A, B) => 1,\n};\n");
     assert!(e.message.contains("must be the last arm"), "{}", e.message);
@@ -2097,9 +2096,9 @@ fn tuple_match_arity_mismatch_is_an_error() {
         e.message
     );
     assert_eq!((e.line, e.col), (2, 3));
-    let diagnostic = rlc::analyze(src, &Options::default())
+    let diagnostic = ttc::analyze(src, &Options::default())
         .into_iter()
-        .find(|d| d.code == rlc::DiagnosticCode::MatchTupleArity)
+        .find(|d| d.code == ttc::DiagnosticCode::MatchTupleArity)
         .unwrap();
     assert_eq!(
         &src[diagnostic.start.unwrap()..diagnostic.end.unwrap()],
@@ -2126,7 +2125,7 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
 }
 
 #[test]
-fn match_without_scrutinee_parentheses_is_a_malformed_rl_match() {
+fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
     let e = err("const r = match value { A => 1, _ => 0 };\n");
     assert!(
         e.message.contains("wrap the scrutinee in parentheses"),
@@ -2185,9 +2184,9 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("$rl_b: {"), "{out}");
+    assert!(out.contains("$tt_b: {"), "{out}");
     assert!(out.contains("if ((go()))"), "{out}");
-    assert!(out.contains("break $rl_b;"), "{out}");
+    assert!(out.contains("break $tt_b;"), "{out}");
 }
 
 #[test]
@@ -2196,7 +2195,7 @@ fn tuple_match_await_in_scrutinee_makes_it_async() {
         "async function f() {\n  return match (await a, b) {\n    (X, Y) => 1,\n    _ => 0,\n  };\n}\n",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("const $rl_m0 = (await a);"), "{out}");
+    assert!(out.contains("const $tt_m0 = (await a);"), "{out}");
 }
 
 #[test]
@@ -2226,17 +2225,17 @@ const n = match (r) {
 };
 "#);
     assert!(
-        out.contains("if ($rl_m.kind === \"Ok\" && $rl_m.value.kind === \"Some\") { const { value: v } = $rl_m.value; $rl_v0 = (v); break; }"),
+        out.contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0 = (v); break; }"),
         "{out}"
     );
     assert!(
         out.contains(
-            "if ($rl_m.kind === \"Ok\" && $rl_m.value.kind === \"None\") { $rl_v0 = (0); break; }"
+            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0 = (0); break; }"
         ),
         "{out}"
     );
     // nested patterns force the if-chain form
-    assert!(!out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(!out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
@@ -2248,10 +2247,10 @@ const n = match (r) {
 };
 "#);
     assert!(
-        out.contains("$rl_m.kind === \"Ok\" && $rl_m.value.kind === \"Some\" && $rl_m.value.value.kind === \"Pair\""),
+        out.contains("$tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\" && $tt_m.value.value.kind === \"Pair\""),
         "{out}"
     );
-    assert!(out.contains("const { a, b } = $rl_m.value.value;"), "{out}");
+    assert!(out.contains("const { a, b } = $tt_m.value.value;"), "{out}");
 }
 
 #[test]
@@ -2264,7 +2263,7 @@ const n = match (r) {
 "#);
     assert!(
         out.contains(
-            "{ const { left } = $rl_m; const { value } = $rl_m.right; $rl_v0 = (left + value); break; }"
+            "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0 = (left + value); break; }"
         ),
         "{out}"
     );
@@ -2275,8 +2274,8 @@ fn plain_alias_is_still_an_alias_not_a_nested_pattern() {
     // `value: v` (no parens) binds; only `value: Tag(...)` nests. A match
     // without nested patterns keeps the switch form.
     let out = ok("const n = match (o) { Some(value: None) => None, _ => 0 };");
-    assert!(out.contains("const { value: None } = $rl_m;"), "{out}");
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(out.contains("const { value: None } = $tt_m;"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
@@ -2309,7 +2308,7 @@ const n = match (r) {
   Err(error) => -1,
 };
 "#);
-    assert!(out.contains("$rl_m.value.kind === \"Some\""), "{out}");
+    assert!(out.contains("$tt_m.value.kind === \"Some\""), "{out}");
 }
 
 #[test]
@@ -2348,11 +2347,11 @@ const n = match (a, b) {
 };
 "#);
     assert!(
-        out.contains("$rl_m0.kind === \"Ok\" && $rl_m0.value.kind === \"Some\" && $rl_m1.kind === \"Ok\" && $rl_m1.value.kind === \"Some\""),
+        out.contains("$tt_m0.kind === \"Ok\" && $tt_m0.value.kind === \"Some\" && $tt_m1.kind === \"Ok\" && $tt_m1.value.kind === \"Some\""),
         "{out}"
     );
     assert!(
-        out.contains("const { value: x } = $rl_m0.value; const { value: y } = $rl_m1.value;"),
+        out.contains("const { value: x } = $tt_m0.value; const { value: y } = $tt_m1.value;"),
         "{out}"
     );
 }
@@ -2366,14 +2365,14 @@ const n = match (r) {
 };
 "#);
     assert!(
-        out.contains("if ((v > 0)) { $rl_v0 = (v); break; }"),
+        out.contains("if ((v > 0)) { $tt_v0 = (v); break; }"),
         "{out}"
     );
 }
 
 #[test]
 fn let_else_does_not_take_nested_patterns() {
-    // `const Some(value: Ok(v)) = ...` is not rl let-else syntax; the
+    // `const Some(value: Ok(v)) = ...` is not tt let-else syntax; the
     // candidate passes through and (being invalid TS) fails the output
     // self-check — same as any malformed candidate.
     let e = err("function f() {\n  const Some(value: Ok(v)) = g() else { return; };\n}\n");
@@ -2393,7 +2392,7 @@ fn if_let_emits_a_self_contained_block() {
     let out =
         ok("function f() {\n  if let Some(value: user) = find() {\n    greet(user);\n  }\n}\n");
     assert!(
-        out.contains("{ const $rl_t0 = (find()); if ($rl_t0.kind === \"Some\") { const { value: user } = $rl_t0; greet(user); } }"),
+        out.contains("{ const $tt_t0 = (find()); if ($tt_t0.kind === \"Some\") { const { value: user } = $tt_t0; greet(user); } }"),
         "{out}"
     );
 }
@@ -2412,7 +2411,7 @@ function f() {
 }
 "#);
     assert!(
-        out.contains("} else { const $rl_t1 = (b()); if ($rl_t1.kind === \"Ok\")"),
+        out.contains("} else { const $tt_t1 = (b()); if ($tt_t1.kind === \"Ok\")"),
         "{out}"
     );
     assert!(out.contains("else { fallback(); } } }"), "{out}");
@@ -2422,7 +2421,7 @@ function f() {
 fn if_let_takes_nested_patterns() {
     let out = ok("function f(r: Res) {\n  if let Ok(value: Some(value: v)) = r { use(v); }\n}\n");
     assert!(
-        out.contains("if ($rl_t0.kind === \"Ok\" && $rl_t0.value.kind === \"Some\") { const { value: v } = $rl_t0.value; use(v); }"),
+        out.contains("if ($tt_t0.kind === \"Ok\" && $tt_t0.value.kind === \"Some\") { const { value: v } = $tt_t0.value; use(v); }"),
         "{out}"
     );
 }
@@ -2432,8 +2431,8 @@ fn if_let_shares_the_temp_counter_with_try() {
     let out = ok(
         "function f(): Result<number, string> {\n  const a = try g();\n  if let Some(value) = h(a) { use(value); }\n  return Result.Ok(a);\n}\n",
     );
-    assert!(out.contains("$rl_t0"), "{out}");
-    assert!(out.contains("const $rl_t1 = (h(a));"), "{out}");
+    assert!(out.contains("$tt_t0"), "{out}");
+    assert!(out.contains("const $tt_t1 = (h(a));"), "{out}");
 }
 
 #[test]
@@ -2452,7 +2451,7 @@ function f(x: X, o: O) {
   return r;
 }
 "#);
-    assert!(out.contains("if ($rl_t0.kind === \"Some\")"), "{out}");
+    assert!(out.contains("if ($tt_t0.kind === \"Some\")"), "{out}");
 }
 
 #[test]
@@ -2474,10 +2473,10 @@ fn if_let_inside_a_function_inside_an_expression_region_is_allowed() {
     let out = ok(
         "const v = match (run(() => { if let A(x) = e { return x; } return 0; })) {\n  Ok(value) => value,\n  _ => 0,\n};\n",
     );
-    assert!(out.contains("if ($rl_t0.kind === \"A\")"), "{out}");
+    assert!(out.contains("if ($tt_t0.kind === \"A\")"), "{out}");
 
     let out = ok("const s = `${run(() => { if let A(x) = e { log(x); } return 1; })}`;\n");
-    assert!(out.contains("if ($rl_t0.kind === \"A\")"), "{out}");
+    assert!(out.contains("if ($tt_t0.kind === \"A\")"), "{out}");
 }
 
 #[test]
@@ -2530,26 +2529,26 @@ const data = result {
 };
 "#);
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("let $rl_v0;\ndo {"), "{out}");
+    assert!(out.contains("let $tt_v0;\ndo {"), "{out}");
     assert!(
         out.contains(
-            "const $rl_r0 = (getUser(id)); if ($rl_r0.kind !== \"Ok\") { $rl_v0 = ($rl_r0); break; } \
-             const user = $rl_r0.value;"
+            "const $tt_r0 = (getUser(id)); if ($tt_r0.kind !== \"Ok\") { $tt_v0 = ($tt_r0); break; } \
+             const user = $tt_r0.value;"
         ),
         "{out}"
     );
     assert!(
         out.contains(
-            "const $rl_r1 = (getCompany(user.companyId)); if ($rl_r1.kind !== \"Ok\") \
-             { $rl_v0 = ($rl_r1); break; } const company = $rl_r1.value;"
+            "const $tt_r1 = (getCompany(user.companyId)); if ($tt_r1.kind !== \"Ok\") \
+             { $tt_v0 = ($tt_r1); break; } const company = $tt_r1.value;"
         ),
         "{out}"
     );
     assert!(
-        out.contains("$rl_v0 = ({ kind: \"Ok\" as const, value: ({ user, company }"),
+        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: ({ user, company }"),
         "{out}"
     );
-    assert!(out.contains("const data = $rl_v0;"), "{out}");
+    assert!(out.contains("const data = $tt_v0;"), "{out}");
 }
 
 #[test]
@@ -2580,9 +2579,9 @@ const a = result {
   n + x + y + first
 };
 "#);
-    assert!(out.contains("let n: number = $rl_r0.value;"), "{out}");
-    assert!(out.contains("var { x, y } = $rl_r1.value;"), "{out}");
-    assert!(out.contains("const [first] = $rl_r2.value;"), "{out}");
+    assert!(out.contains("let n: number = $tt_r0.value;"), "{out}");
+    assert!(out.contains("var { x, y } = $tt_r1.value;"), "{out}");
+    assert!(out.contains("const [first] = $tt_r2.value;"), "{out}");
 }
 
 #[test]
@@ -2595,7 +2594,7 @@ const data = async () => result {
 "#);
     assert!(!out.contains("(async () =>"), "{out}");
     assert!(out.contains("const data = async () => {"), "{out}");
-    assert!(out.contains("const $rl_r0 = (await getUser(id));"), "{out}");
+    assert!(out.contains("const $tt_r0 = (await getUser(id));"), "{out}");
 }
 
 #[test]
@@ -2609,9 +2608,9 @@ const a = result {
   outer
 };
 "#);
-    assert!(out.contains("$rl_r0"), "{out}");
-    assert!(out.contains("$rl_r1"), "{out}");
-    assert!(!out.contains("$rl_r2"), "{out}");
+    assert!(out.contains("$tt_r0"), "{out}");
+    assert!(out.contains("$tt_r1"), "{out}");
+    assert!(!out.contains("$tt_r2"), "{out}");
 }
 
 #[test]
@@ -2619,10 +2618,10 @@ fn result_block_can_be_a_pipeline_head() {
     let out = ok("const a = result {\n  const x <- f();\n  x\n} |> Result.mapP(double);\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("$rl_v0 = $rl_ap($rl_v0, (Result.mapP(double)));"),
+        out.contains("$tt_v0 = $tt_ap($tt_v0, (Result.mapP(double)));"),
         "{out}"
     );
-    assert!(out.contains("const a = $rl_v0;"), "{out}");
+    assert!(out.contains("const a = $tt_v0;"), "{out}");
 }
 
 #[test]
@@ -2638,10 +2637,10 @@ const a = result {
 "#);
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("$rl_v0 = ({ kind: \"Ok\" as const, value: (value) });"),
+        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: (value) });"),
         "{out}"
     );
-    assert!(out.contains("switch ($rl_m.kind)"), "{out}");
+    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
@@ -2651,14 +2650,14 @@ fn direct_return_result_region_uses_the_host_function_without_an_iife() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("if ($rl_r0.kind !== \"Ok\") { $rl_v0 = ($rl_r0); break; }"),
+        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = ($tt_r0); break; }"),
         "{out}"
     );
     assert!(
-        out.contains("$rl_v0 = ({ kind: \"Ok\" as const, value: (value + 1"),
+        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: (value + 1"),
         "{out}"
     );
-    assert!(out.contains("return $rl_v0;"), "{out}");
+    assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
 #[test]
@@ -2668,11 +2667,11 @@ fn result_region_in_a_match_arm_inherits_the_parent_slot() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("if ($rl_r0.kind !== \"Ok\") { $rl_v0 = ($rl_r0); break; }"),
+        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = ($tt_r0); break; }"),
         "{out}"
     );
     assert!(
-        out.contains("$rl_v0 = ({ kind: \"Ok\" as const, value: (x"),
+        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: (x"),
         "{out}"
     );
 }
@@ -2707,7 +2706,7 @@ const a = result {
   { x, label }
 };
 "#);
-    assert!(out.contains("if ($rl_t1.kind === \"Some\")"), "{out}");
+    assert!(out.contains("if ($tt_t1.kind === \"Some\")"), "{out}");
 }
 
 #[test]
@@ -2725,7 +2724,7 @@ fn result_block_without_a_trailing_expression_is_an_error() {
 #[test]
 fn a_binding_without_a_declaration_keyword_is_a_located_error() {
     // The block is claimed by its other binding, so the file is not
-    // TypeScript and rlc can say where the mistake is — instead of
+    // TypeScript and ttc can say where the mistake is — instead of
     // emitting the comparison `b < -readNum()` and saying nothing.
     let e = err("const a = result {\n  const x <- f();\n  y <- g();\n  x + y\n};\n");
     assert!(
@@ -2805,14 +2804,14 @@ fn a_nested_result_block_answers_for_its_own_runs() {
         "const a = result {\n  const x <- f();\n  const b = result {\n    const c <- g();\n    c\n  };\n  x\n};\n",
     );
     assert_eq!(out.matches("(() => {").count(), 0, "{out}");
-    assert!(out.contains("let $rl_v0;\ndo {"), "{out}");
-    assert!(out.contains("let $rl_v1;\ndo {"), "{out}");
+    assert!(out.contains("let $tt_v0;\ndo {"), "{out}");
+    assert!(out.contains("let $tt_v1;\ndo {"), "{out}");
 }
 
 #[test]
 fn result_binding_without_a_semicolon_is_an_error() {
-    // The binding is rl syntax whether or not the `;` is there, so this is
-    // a located rl error rather than a failed output self-check.
+    // The binding is tt syntax whether or not the `;` is there, so this is
+    // a located tt error rather than a failed output self-check.
     let e = err("const a = result {\n  const x <- f()\n  x\n};\n");
     assert!(
         e.message
@@ -2861,9 +2860,9 @@ function outer() {
 }
 "#);
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("const s = `${$rl_v0}`;"), "{out}");
-    assert!(out.contains("const t = $rl_v2($rl_v1, 2);"), "{out}");
-    assert!(out.contains("const w = $rl_t2.value;"), "{out}");
+    assert!(out.contains("const s = `${$tt_v0}`;"), "{out}");
+    assert!(out.contains("const t = $tt_v2($tt_v1, 2);"), "{out}");
+    assert!(out.contains("const w = $tt_t2.value;"), "{out}");
 }
 
 /* ------------------------------------------------------------------ */
@@ -2879,12 +2878,12 @@ const label = match (dir) {
   _ => "?",
 };
 "#);
-    assert!(out.contains("const $rl_m = (dir);"));
-    assert!(out.contains("switch ($rl_m) {"));
-    assert!(!out.contains("$rl_m.kind"));
-    assert!(out.contains(r#"case "north": { $rl_v0 = ("N"); break; }"#));
-    assert!(out.contains(r#"case "south": { $rl_v0 = ("S"); break; }"#));
-    assert!(out.contains(r#"default: { $rl_v0 = ("?"); break; }"#));
+    assert!(out.contains("const $tt_m = (dir);"));
+    assert!(out.contains("switch ($tt_m) {"));
+    assert!(!out.contains("$tt_m.kind"));
+    assert!(out.contains(r#"case "north": { $tt_v0 = ("N"); break; }"#));
+    assert!(out.contains(r#"case "south": { $tt_v0 = ("S"); break; }"#));
+    assert!(out.contains(r#"default: { $tt_v0 = ("?"); break; }"#));
 }
 
 #[test]
@@ -2897,18 +2896,18 @@ const message = match (status) {
   _ => "unknown",
 };
 "#);
-    assert!(out.contains("switch ($rl_m) {"));
-    assert!(out.contains(r#"case 200: { $rl_v0 = ("ok"); break; }"#));
-    assert!(out.contains(r#"case 404: { $rl_v0 = ("not found"); break; }"#));
-    assert!(out.contains(r#"case 500: { $rl_v0 = ("error"); break; }"#));
+    assert!(out.contains("switch ($tt_m) {"));
+    assert!(out.contains(r#"case 200: { $tt_v0 = ("ok"); break; }"#));
+    assert!(out.contains(r#"case 404: { $tt_v0 = ("not found"); break; }"#));
+    assert!(out.contains(r#"case 500: { $tt_v0 = ("error"); break; }"#));
 }
 
 #[test]
 fn literal_boolean_match_emits_true_and_false_cases() {
     let out = ok("const v = match (flag) { true => 1, false => 0 };");
-    assert!(out.contains("switch ($rl_m) {"));
-    assert!(out.contains("case true: { $rl_v0 = (1); break; }"));
-    assert!(out.contains("case false: { $rl_v0 = (0); break; }"));
+    assert!(out.contains("switch ($tt_m) {"));
+    assert!(out.contains("case true: { $tt_v0 = (1); break; }"));
+    assert!(out.contains("case false: { $tt_v0 = (0); break; }"));
 }
 
 #[test]
@@ -2920,10 +2919,10 @@ const kind = match (code) {
   _ => "unknown",
 };
 "#);
-    assert!(out.contains(r#"case 200: case 201: case 204: { $rl_v0 = ("success"); break; }"#));
-    assert!(out.contains(r#"case 400: case 404: { $rl_v0 = ("client error"); break; }"#));
+    assert!(out.contains(r#"case 200: case 201: case 204: { $tt_v0 = ("success"); break; }"#));
+    assert!(out.contains(r#"case 400: case 404: { $tt_v0 = ("client error"); break; }"#));
     // one body per arm, never duplicated per alternative
-    assert_eq!(out.matches(r#"$rl_v0 = ("success")"#).count(), 1);
+    assert_eq!(out.matches(r#"$tt_v0 = ("success")"#).count(), 1);
 }
 
 #[test]
@@ -2939,7 +2938,7 @@ fn literal_match_keeps_the_number_spelling_of_the_source() {
 fn literal_match_without_a_wildcard_gets_a_runtime_guard() {
     let out = ok(r#"const label = match (dir) { "a" => 1, "b" => 2 };"#);
     assert!(out.contains(
-        r#"default: { throw new Error("rl match: unexpected literal " + JSON.stringify($rl_m)); }"#
+        r#"default: { throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m)); }"#
     ));
 }
 
@@ -2947,7 +2946,7 @@ fn literal_match_without_a_wildcard_gets_a_runtime_guard() {
 fn literal_match_evaluates_the_scrutinee_once() {
     let out = ok(r#"const v = match (getValue()) { "a" => foo(), _ => bar() };"#);
     assert_eq!(out.matches("getValue()").count(), 1);
-    assert!(out.contains("const $rl_m = (getValue());"));
+    assert!(out.contains("const $tt_m = (getValue());"));
 }
 
 #[test]
@@ -2955,7 +2954,7 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
     let out = ok(r#"const v = match (s) { "a" => { return 1; }, _ => 0 };"#);
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains(r#"case "a": { $rl_v0 = (1); break $rl_y_$rl_v0;"#),
+        out.contains(r#"case "a": { $tt_v0 = (1); break $tt_y_$tt_v0;"#),
         "{out}"
     );
 }
@@ -2964,14 +2963,14 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
 fn literal_match_with_a_guard_becomes_an_if_chain() {
     let out = ok("const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };");
     assert!(!out.contains("switch ("));
-    assert!(out.contains("if ($rl_m === 200) { if ((ok)) { $rl_v0 = (1); break; } }"));
-    assert!(out.contains("if ($rl_m === 200) { $rl_v0 = (2); break; }"));
+    assert!(out.contains("if ($tt_m === 200) { if ((ok)) { $tt_v0 = (1); break; } }"));
+    assert!(out.contains("if ($tt_m === 200) { $tt_v0 = (2); break; }"));
 }
 
 #[test]
 fn literal_or_pattern_if_chain_tests_each_alternative() {
     let out = ok(r#"const v = match (s) { "a" | "b" if ok => 1, _ => 2 };"#);
-    assert!(out.contains(r#"if ($rl_m === "a" || $rl_m === "b")"#));
+    assert!(out.contains(r#"if ($tt_m === "a" || $tt_m === "b")"#));
 }
 
 #[test]
@@ -2979,7 +2978,7 @@ fn literal_match_without_a_wildcard_has_no_if_chain_case_guard() {
     let out = ok("const v = match (code) { 200 if ok => 1, 404 => 2 };");
     assert!(
         out.contains(
-            r#"throw new Error("rl match: unexpected literal " + JSON.stringify($rl_m));"#
+            r#"throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m));"#
         )
     );
 }
@@ -3014,7 +3013,7 @@ fn literal_duplicate_is_allowed_between_guarded_arms() {
     // A guard may be false, so a guarded arm covers nothing — the same rule
     // tag patterns follow.
     let out = ok("const v = match (x) { 1 if a => 1, 1 if b => 2, 1 => 3, _ => 4 };");
-    assert_eq!(out.matches("$rl_m === 1").count(), 3);
+    assert_eq!(out.matches("$tt_m === 1").count(), 3);
 }
 
 #[test]
@@ -3059,7 +3058,7 @@ fn literal_match_is_not_checked_against_enums() {
     // A literal match carries no tags, so the tag exhaustiveness pass must
     // not adopt it — `Option`/`Result` are always in the candidate table.
     let out = ok(r#"const v = match (x) { "Some" => 1, "None" => 2 };"#);
-    assert!(out.contains("switch ($rl_m) {"));
+    assert!(out.contains("switch ($tt_m) {"));
 }
 
 #[test]
@@ -3070,28 +3069,28 @@ const v = match (a) {
   _ => "none",
 };
 "#);
-    assert_eq!(out.matches("switch ($rl_m) {").count(), 2);
+    assert_eq!(out.matches("switch ($tt_m) {").count(), 2);
 }
 
 #[test]
 fn direct_return_literal_match_keeps_await_in_the_host_function() {
     let out = ok(r#"async function f() { return match (s) { "a" => await g(), _ => null }; }"#);
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$rl_v0 = (await g());"), "{out}");
-    assert!(out.contains("return $rl_v0;"), "{out}");
+    assert!(out.contains("$tt_v0 = (await g());"), "{out}");
+    assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
 #[test]
 fn tuple_patterns_do_not_accept_literals() {
     // v1 keeps literals out of tuple positions (design §18). The arrow arm
-    // commits the construct to rl, then the tuple-pattern rule rejects it.
+    // commits the construct to tt, then the tuple-pattern rule rejects it.
     let opts = Options {
         verify: false,
         ..Options::default()
     };
     let src = r#"const v = match (a, b) { ("x", 1) => 1, _ => 0 };"#;
-    let error = compile(src, &opts).expect_err("tuple literals are malformed rl");
-    assert!(error.message.contains("rl `match` could not be parsed"));
+    let error = compile(src, &opts).expect_err("tuple literals are malformed tt");
+    assert!(error.message.contains("tt `match` could not be parsed"));
 }
 
 #[test]
@@ -3340,7 +3339,7 @@ fn val_never_calls_a_method_a_mutation_from_its_name() {
         // ... and neither are the built-in shapes, without types to prove it
         "val const items: number[] = [];\nitems.push(1);\n",
         "val const m = new Map<string, number>();\nm.set(\"a\", 1);\n",
-        "val const s = { u: { p: { tags: [] as string[] } } };\ns.u.p.tags.push(\"rl\");\n",
+        "val const s = { u: { p: { tags: [] as string[] } } };\ns.u.p.tags.push(\"tt\");\n",
         // reading methods were never in question
         "val const items: number[] = [];\nconst n = items.map((v) => v).filter(Boolean).length;\n",
     ] {
@@ -3360,7 +3359,7 @@ d.setHours(1);
 d.at(0);
 d.count = 2;
 ";
-    let probes = rlc::val_probes(SRC);
+    let probes = ttc::val_probes(SRC);
     let seen: Vec<(&str, Option<&str>)> = probes
         .mutations
         .iter()
@@ -3371,9 +3370,9 @@ d.count = 2;
         [("d", Some("setHours")), ("d", Some("at")), ("d", None),]
     );
     // The policy half of the verdict, stated as the library's own answer.
-    assert!(rlc::is_builtin_mutator_name("push"));
-    assert!(!rlc::is_builtin_mutator_name("at"));
-    assert!(!rlc::is_builtin_mutator_name("get"));
+    assert!(ttc::is_builtin_mutator_name("push"));
+    assert!(!ttc::is_builtin_mutator_name("at"));
+    assert!(!ttc::is_builtin_mutator_name("get"));
 }
 
 #[test]
@@ -3389,14 +3388,14 @@ function handle(u: { name: string }): void {}
 handle(user);
 handle(user.name, user);
 ";
-    let probes = rlc::val_probes(SRC);
+    let probes = ttc::val_probes(SRC);
     assert_eq!(probes.functions.len(), 1);
     let function = &probes.functions[0];
     assert_eq!(function.name, "handle");
     assert_eq!(&SRC[function.ident..function.ident + 6], "handle");
     assert_eq!(
         function.params,
-        vec![rlc::ValParam {
+        vec![ttc::ValParam {
             name: Some("u".into()),
             is_val: false,
         }]
@@ -3437,7 +3436,7 @@ fn a_type_argument_list_does_not_declare_a_val_binding() {
 }
 
 #[test]
-fn val_is_checked_inside_nested_rl_constructs() {
+fn val_is_checked_inside_nested_tt_constructs() {
     let e =
         err("val const cfg = { a: 1 };\nconst msg = `${(() => { cfg.a = 2; return 1; })()}`;\n");
     assert!(e.message.contains("val binding `cfg`"));
@@ -3478,7 +3477,7 @@ function f(e: E) {
 
 #[test]
 fn val_capability_check_only_covers_resolvable_callees() {
-    // An imported (or otherwise unknown) function has no signature rlc can
+    // An imported (or otherwise unknown) function has no signature ttc can
     // read, so passing a `val` binding to it is allowed — the documented
     // limit of the check (language.md §10.7).
     let src = "import { save } from \"./io.js\";\nfunction f(val user: User) {\n  save(user);\n  user.save();\n}\n";
@@ -3632,7 +3631,7 @@ fn a_misspelled_case_of_an_imported_enum_names_its_origin() {
     .expect_err("expected a resolution error");
     assert!(
         e.message.contains(
-            "enum Token (imported from \"./token.rl\") has no case `Idnet` — did you mean `Ident`?"
+            "enum Token (imported from \"./token.tt\") has no case `Idnet` — did you mean `Ident`?"
         ),
         "{}",
         e.message
@@ -3667,7 +3666,7 @@ fn a_hand_written_payload_field_is_not_a_misspelling() {
     // The tags are exactly Option's, so the analysis reads Option's
     // declaration — but `v` is not `value` misspelled, so it stays quiet.
     let out = ok("const n = match (o) { Some(v) => v, None => 0 };\n");
-    assert!(out.contains("const { v } = $rl_m"));
+    assert!(out.contains("const { v } = $tt_m"));
 }
 
 #[test]
@@ -3692,7 +3691,7 @@ function f(): number {
 
 #[test]
 fn a_misspelled_case_in_a_tuple_match_position_is_reported() {
-    // Payload cases make these rl enums rather than TypeScript ones.
+    // Payload cases make these tt enums rather than TypeScript ones.
     let e = err(r#"enum Dir { North(dx: number), South }
 enum Speed { Fast(v: number), Slow }
 const n = match (d, s) {
@@ -3725,7 +3724,7 @@ const a = match (o) {
   Bare => -1,
 };
 "#);
-    assert!(out.contains("$rl_m.inner.kind === \"Yes\""), "{out}");
+    assert!(out.contains("$tt_m.inner.kind === \"Yes\""), "{out}");
 }
 
 #[test]
@@ -3739,7 +3738,7 @@ fn a_generic_payload_is_typed_by_the_patterns_written_in_it() {
   Err(error) => -1,
 };
 "#);
-    assert!(out.contains("$rl_m.value.kind === \"Some\""), "{out}");
+    assert!(out.contains("$tt_m.value.kind === \"Some\""), "{out}");
 }
 
 #[test]
@@ -3809,7 +3808,7 @@ const a = match (o) {
     let pasted = base.replace("  Bare => -1,\n", &format!("  Bare => -1,\n{arms}"));
     let out = ok(&pasted);
     // ...and it really is the No case, not a binding that swallows Wrap.
-    assert!(out.contains("$rl_m.inner.kind === \"No\""), "{out}");
+    assert!(out.contains("$tt_m.inner.kind === \"No\""), "{out}");
 }
 
 /* ------------------------------------------------------------------ */
@@ -3817,7 +3816,7 @@ const a = match (o) {
 /* ------------------------------------------------------------------ */
 
 /// The source text an error's range covers — what an editor underlines.
-fn covered(src: &str, e: &rlc::CompileError) -> String {
+fn covered(src: &str, e: &ttc::CompileError) -> String {
     let offset = |line: usize, col: usize| {
         src.split_inclusive('\n')
             .take(line - 1)
@@ -3902,12 +3901,12 @@ fn analyze_reports_every_uncovered_match_in_source_order() {
         export function f(x: Shape): number {\n  return match (x) { Circle(r) => r };\n}\n\
         export function g(x: Shape): number {\n  return match (x) { Square(s) => s };\n}\n\
         export function h(x: Shape): number {\n  return match (x) { Tri(a) => a };\n}\n";
-    let diagnostics = rlc::analyze(src, &Options::default());
+    let diagnostics = ttc::analyze(src, &Options::default());
     assert_eq!(diagnostics.len(), 3, "{diagnostics:#?}");
     assert!(
         diagnostics
             .iter()
-            .all(|d| d.code == rlc::DiagnosticCode::MatchNotExhaustive)
+            .all(|d| d.code == ttc::DiagnosticCode::MatchNotExhaustive)
     );
     let starts: Vec<usize> = diagnostics.iter().map(|d| d.start.unwrap()).collect();
     let mut sorted = starts.clone();
@@ -3932,7 +3931,7 @@ fn analyze_reports_every_uncovered_match_in_source_order() {
 
 #[test]
 fn a_duplicate_arm_does_not_hide_the_files_other_diagnostics() {
-    // TASK-117 symptom 3, the rl half: one recoverable error used to stop
+    // TASK-117 symptom 3, the tt half: one recoverable error used to stop
     // the whole check.
     let src = "enum Shape { Circle(r: number), Square(s: number), Tri(a: number) }\n\
         export function f(x: Shape): number {\n\
@@ -3940,14 +3939,14 @@ fn a_duplicate_arm_does_not_hide_the_files_other_diagnostics() {
         }\n\
         export function g(x: Shape): number { return match (x) { Square(s) => s }; }\n\
         export function h(x: Shape): number { return match (x) { Tri(a) => a }; }\n";
-    let diagnostics = rlc::analyze(src, &Options::default());
+    let diagnostics = ttc::analyze(src, &Options::default());
     let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(
         codes,
         [
-            rlc::DiagnosticCode::MatchDuplicateArm,
-            rlc::DiagnosticCode::MatchNotExhaustive,
-            rlc::DiagnosticCode::MatchNotExhaustive,
+            ttc::DiagnosticCode::MatchDuplicateArm,
+            ttc::DiagnosticCode::MatchNotExhaustive,
+            ttc::DiagnosticCode::MatchNotExhaustive,
         ],
         "{diagnostics:#?}"
     );
@@ -3963,13 +3962,13 @@ fn a_typo_suppresses_coverage_for_its_own_match_only() {
           return match (x) { Circel(r) => r, Empty => 0 };\n\
         }\n\
         export function g(x: Shape): number { return match (x) { Empty => 0 }; }\n";
-    let diagnostics = rlc::analyze(src, &Options::default());
+    let diagnostics = ttc::analyze(src, &Options::default());
     let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(
         codes,
         [
-            rlc::DiagnosticCode::UnknownCase,
-            rlc::DiagnosticCode::MatchNotExhaustive,
+            ttc::DiagnosticCode::UnknownCase,
+            ttc::DiagnosticCode::MatchNotExhaustive,
         ],
         "{diagnostics:#?}"
     );
@@ -3983,13 +3982,13 @@ fn sema_and_val_diagnostics_merge_in_source_order() {
         val const cfg = { a: 1 };\n\
         cfg.a = 2;\n\
         const v = match (E.B) { B => 0 };\n";
-    let diagnostics = rlc::analyze(src, &Options::default());
+    let diagnostics = ttc::analyze(src, &Options::default());
     let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(
         codes,
         [
-            rlc::DiagnosticCode::ValMutation,
-            rlc::DiagnosticCode::MatchNotExhaustive,
+            ttc::DiagnosticCode::ValMutation,
+            ttc::DiagnosticCode::MatchNotExhaustive,
         ],
         "{diagnostics:#?}"
     );
@@ -4012,27 +4011,27 @@ fn compile_still_returns_the_first_error_in_source_order() {
 fn compile_report_still_emits_under_recoverable_errors() {
     // Codegen is infallible, so a duplicate arm does not withhold the
     // lowered TypeScript — that is what lets the typed pass run and report
-    // alongside the rl errors (TASK-117 symptom 3).
+    // alongside the tt errors (TASK-117 symptom 3).
     let src = "enum E { A(x: number), B }\n\
         const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1);
     assert_eq!(
         report.diagnostics[0].code,
-        rlc::DiagnosticCode::MatchDuplicateArm
+        ttc::DiagnosticCode::MatchDuplicateArm
     );
     let emit = report.emit.expect("recoverable errors still emit");
-    assert!(emit.code.contains("switch ($rl_m.kind)"));
+    assert!(emit.code.contains("switch ($tt_m.kind)"));
 }
 
 #[test]
 fn duplicate_enum_case_emits_only_one_constructor_property() {
     let src = "enum E { A(x: number), B, A(y: number) }\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
     assert_eq!(
         report.diagnostics[0].code,
-        rlc::DiagnosticCode::EnumDuplicateCase
+        ttc::DiagnosticCode::EnumDuplicateCase
     );
     let code = report.emit.expect("duplicate cases are recoverable").code;
     assert_eq!(code.matches("  A:").count(), 1, "{code}");
@@ -4043,18 +4042,18 @@ fn duplicate_enum_case_emits_only_one_constructor_property() {
 fn duplicate_pattern_binding_is_renamed_in_recovery_output() {
     let src = "enum E { A(left: number, right: number), B }\n\
         const value = match (E.A(1, 2)) { A(left: x, right: x) => x, B => 0 };\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
     assert_eq!(
         report.diagnostics[0].code,
-        rlc::DiagnosticCode::PatternDuplicateBinding
+        ttc::DiagnosticCode::PatternDuplicateBinding
     );
     let code = report
         .emit
         .expect("duplicate bindings are recoverable")
         .code;
     assert!(
-        code.contains("const { left: x, right: $rl_discard0 } = $rl_m;"),
+        code.contains("const { left: x, right: $tt_discard0 } = $tt_m;"),
         "{code}"
     );
 }
@@ -4067,12 +4066,12 @@ fn duplicate_nested_binding_is_renamed_across_destructuring_statements() {
           Ok(value: Some(value), error: value) => value,\n\
           Err => 0,\n\
         };\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert!(
         report
             .diagnostics
             .iter()
-            .any(|d| d.code == rlc::DiagnosticCode::PatternDuplicateBinding),
+            .any(|d| d.code == ttc::DiagnosticCode::PatternDuplicateBinding),
         "{:#?}",
         report.diagnostics
     );
@@ -4082,7 +4081,7 @@ fn duplicate_nested_binding_is_renamed_across_destructuring_statements() {
         .code;
     assert!(
         code.contains(
-            "const { error: value } = $rl_m; const { value: $rl_discard0 } = $rl_m.value;"
+            "const { error: value } = $tt_m; const { value: $tt_discard0 } = $tt_m.value;"
         ),
         "{code}"
     );
@@ -4092,12 +4091,12 @@ fn duplicate_nested_binding_is_renamed_across_destructuring_statements() {
 fn duplicate_tuple_binding_is_renamed_across_tuple_elements() {
     let src = "enum E { A(value: number), B }\n\
         const value = match (E.A(1), E.A(2)) { (A(value: x), A(value: x)) => x, _ => 0 };\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert!(
         report
             .diagnostics
             .iter()
-            .any(|d| d.code == rlc::DiagnosticCode::PatternDuplicateBinding),
+            .any(|d| d.code == ttc::DiagnosticCode::PatternDuplicateBinding),
         "{:#?}",
         report.diagnostics
     );
@@ -4106,7 +4105,7 @@ fn duplicate_tuple_binding_is_renamed_across_tuple_elements() {
         .expect("duplicate bindings are recoverable")
         .code;
     assert!(
-        code.contains("const { value: x } = $rl_m0; const { value: $rl_discard0 } = $rl_m1;"),
+        code.contains("const { value: x } = $tt_m0; const { value: $tt_discard0 } = $tt_m1;"),
         "{code}"
     );
 }
@@ -4116,13 +4115,13 @@ fn compile_report_withholds_emission_when_the_output_cannot_be_typescript() {
     // A stray `|>` passes through verbatim, so the output would not parse:
     // that diagnostic blocks projection.
     let src = "const x = 1 |> ;\n";
-    let report = rlc::compile_report(src, &Options::default());
+    let report = ttc::compile_report(src, &Options::default());
     assert!(report.emit.is_none());
     assert!(
         report
             .diagnostics
             .iter()
-            .any(|d| d.code == rlc::DiagnosticCode::StrayPipe),
+            .any(|d| d.code == ttc::DiagnosticCode::StrayPipe),
         "{:#?}",
         report.diagnostics
     );
@@ -4131,10 +4130,10 @@ fn compile_report_withholds_emission_when_the_output_cannot_be_typescript() {
 #[test]
 fn every_stray_construct_is_reported_not_just_the_first() {
     let src = "const x = 1 |> ;\nconst y = 2 |> ;\n";
-    let diagnostics = rlc::analyze(src, &Options::default());
+    let diagnostics = ttc::analyze(src, &Options::default());
     let strays = diagnostics
         .iter()
-        .filter(|d| d.code == rlc::DiagnosticCode::StrayPipe)
+        .filter(|d| d.code == ttc::DiagnosticCode::StrayPipe)
         .count();
     assert_eq!(strays, 2, "{diagnostics:#?}");
 }
@@ -4144,11 +4143,11 @@ fn a_mixed_match_reports_the_cause_and_suppresses_its_coverage() {
     // The mixed-pattern error is the cause; that match's own exhaustiveness
     // answer would be an effect stacked on it.
     let src = "const v = match (x) {\n  Some(v) => v,\n  222 => 0,\n};\n";
-    let diagnostics = rlc::analyze(src, &Options::default());
+    let diagnostics = ttc::analyze(src, &Options::default());
     let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(
         codes,
-        [rlc::DiagnosticCode::MatchMixedPatterns],
+        [ttc::DiagnosticCode::MatchMixedPatterns],
         "{diagnostics:#?}"
     );
     assert_eq!(
@@ -4160,10 +4159,10 @@ fn a_mixed_match_reports_the_cause_and_suppresses_its_coverage() {
 #[test]
 fn diagnostic_codes_are_stable_strings() {
     assert_eq!(
-        rlc::DiagnosticCode::MatchNotExhaustive.as_str(),
+        ttc::DiagnosticCode::MatchNotExhaustive.as_str(),
         "match-not-exhaustive"
     );
-    assert_eq!(rlc::DiagnosticCode::ValMutation.as_str(), "val-mutation");
-    assert!(rlc::DiagnosticCode::StrayPipe.blocks_projection());
-    assert!(!rlc::DiagnosticCode::MatchDuplicateArm.blocks_projection());
+    assert_eq!(ttc::DiagnosticCode::ValMutation.as_str(), "val-mutation");
+    assert!(ttc::DiagnosticCode::StrayPipe.blocks_projection());
+    assert!(!ttc::DiagnosticCode::MatchDuplicateArm.blocks_projection());
 }

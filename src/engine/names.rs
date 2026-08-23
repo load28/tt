@@ -1,11 +1,11 @@
-//! rl's own names — the semantic surface the checker cannot be asked about.
+//! tt's own names — the semantic surface the checker cannot be asked about.
 //!
-//! Three of rl's name spaces exist only in `.rl` source: an **enum name**,
+//! Three of tt's name spaces exist only in `.tt` source: an **enum name**,
 //! a **case tag**, and a **payload field name**. None survives lowering in
 //! a form TypeScript can be pointed at — an enum declaration is synthesized
 //! text with no mapping back, a tag becomes a string literal, a field a
 //! destructuring key. So the answers TypeScript gives for every other
-//! identifier (hover, go-to-definition) are simply absent here, and rl has
+//! identifier (hover, go-to-definition) are simply absent here, and tt has
 //! to give them itself.
 //!
 //! This module is that answer, and it follows the same layering the rest of
@@ -16,7 +16,7 @@
 //!   workspace with no TypeScript installed, exactly like semantic tokens.
 //! - It answers **only where the checker cannot be asked**. A use site like
 //!   `Shape.Circle(1)` or a type annotation `const s: Shape` lowers to
-//!   ordinary TypeScript that the checker knows better than rl does, so
+//!   ordinary TypeScript that the checker knows better than tt does, so
 //!   this module says nothing about those positions and lets the service
 //!   answer. (The editor's previous implementation claimed them, which is
 //!   how a local variable that happened to share a case's name came to
@@ -33,9 +33,9 @@ use crate::{CaseSymbol, EnumSymbol, MatchConstructor, PayloadField};
 
 use super::language::{Location, Position, Range};
 
-/// What an rl name names.
+/// What a tt name names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RlSymbolKind {
+pub enum TtSymbolKind {
     /// An enum, at its declaration.
     Enum,
     /// One case of an enum.
@@ -44,19 +44,19 @@ pub enum RlSymbolKind {
     Field,
 }
 
-/// An rl name the editor asked about, resolved.
+/// A tt name the editor asked about, resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RlSymbol {
+pub struct TtSymbol {
     /// What the name names.
-    pub kind: RlSymbolKind,
-    /// The identifier's range in the `.rl` source — what an editor
+    pub kind: TtSymbolKind,
+    /// The identifier's range in the `.tt` source — what an editor
     /// highlights.
     pub range: Range,
     /// The name as written.
     pub name: String,
     /// The enum it belongs to (itself, for an enum).
     pub enum_name: String,
-    /// The declaration rendered in rl syntax — the hover's first line.
+    /// The declaration rendered in tt syntax — the hover's first line.
     pub signature: String,
     /// One sentence about what it is and where it came from.
     pub detail: String,
@@ -64,12 +64,12 @@ pub struct RlSymbol {
     pub definition: Option<Location>,
 }
 
-/// The rl name at `position`, or `None` when the position is not on one.
+/// The tt name at `position`, or `None` when the position is not on one.
 ///
 /// `path` is the file the source belongs to; it is used to resolve
-/// relative `.rl` imports (from disk — an unsaved imported file is seen as
+/// relative `.tt` imports (from disk — an unsaved imported file is seen as
 /// last saved) and to name the file a definition lives in.
-pub fn rl_symbol_at(path: &Path, source: &str, position: Position) -> Option<RlSymbol> {
+pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtSymbol> {
     let offset = super::language::source_byte(source, position);
     let locals = crate::enum_symbols_with_kind(
         source,
@@ -100,7 +100,7 @@ pub fn rl_symbol_at(path: &Path, source: &str, position: Position) -> Option<RlS
                 .iter()
                 .find(|c| c.tag == resolved.name)?;
             (
-                RlSymbolKind::Case,
+                TtSymbolKind::Case,
                 case_signature(&declared.name, constructor),
                 case_detail(declared, constructor),
                 case_definition(path, source, &locals, declared, &resolved.name),
@@ -116,7 +116,7 @@ pub fn rl_symbol_at(path: &Path, source: &str, position: Position) -> Option<RlS
                 .iter()
                 .find(|f| f.name == resolved.name)?;
             (
-                RlSymbolKind::Field,
+                TtSymbolKind::Field,
                 field_signature(field),
                 format!(
                     "payload field of `{}.{tag}` — the pattern binds it by name",
@@ -126,7 +126,7 @@ pub fn rl_symbol_at(path: &Path, source: &str, position: Position) -> Option<RlS
             )
         }
     };
-    Some(RlSymbol {
+    Some(TtSymbol {
         kind,
         range: super::language::span_range(source, resolved.start, resolved.end),
         name: resolved.name.clone(),
@@ -145,7 +145,7 @@ fn declaration_at(
     source: &str,
     locals: &[EnumSymbol],
     offset: usize,
-) -> Option<RlSymbol> {
+) -> Option<TtSymbol> {
     for declaration in locals {
         if offset >= declaration.offset && offset <= declaration.offset + declaration.name.len() {
             let here = Location {
@@ -156,13 +156,13 @@ fn declaration_at(
                     declaration.offset + declaration.name.len(),
                 ),
             };
-            return Some(RlSymbol {
-                kind: RlSymbolKind::Enum,
+            return Some(TtSymbol {
+                kind: TtSymbolKind::Enum,
                 range: here.range,
                 name: declaration.name.clone(),
                 enum_name: declaration.name.clone(),
                 signature: enum_signature(declaration),
-                detail: "rl enum — compiles to a `kind`-tagged union type and a constructor \
+                detail: "tt enum — compiles to a `kind`-tagged union type and a constructor \
                          object of the same name"
                     .to_string(),
                 definition: Some(here),
@@ -179,8 +179,8 @@ fn declaration_at(
                         field.offset,
                         field.offset + field.name.len(),
                     );
-                    return Some(RlSymbol {
-                        kind: RlSymbolKind::Field,
+                    return Some(TtSymbol {
+                        kind: TtSymbolKind::Field,
                         range,
                         name: field.name.clone(),
                         enum_name: declaration.name.clone(),
@@ -211,7 +211,7 @@ fn symbol_of_local_case(
     source: &str,
     declaration: &EnumSymbol,
     case: &CaseSymbol,
-) -> RlSymbol {
+) -> TtSymbol {
     let range = super::language::span_range(source, case.offset, case.offset + case.tag.len());
     let constructor = MatchConstructor {
         tag: case.tag.clone(),
@@ -226,8 +226,8 @@ fn symbol_of_local_case(
                 .collect()
         }),
     };
-    RlSymbol {
-        kind: RlSymbolKind::Case,
+    TtSymbol {
+        kind: TtSymbolKind::Case,
         range,
         name: case.tag.clone(),
         enum_name: declaration.name.clone(),
@@ -295,7 +295,7 @@ fn field_definition(
 
 /// The file an imported enum was declared in, its text, and the declaration
 /// — found the way the analysis found it, by walking this file's relative
-/// `.rl` imports.
+/// `.tt` imports.
 fn imported_declaration(
     path: &Path,
     declared: &DeclaredEnum,
@@ -313,7 +313,7 @@ fn imported_declaration(
         .to_string();
     let dir = path.parent().unwrap_or(Path::new("."));
     let source = std::fs::read_to_string(path).ok()?;
-    for import in crate::rl_imports_with_kind(
+    for import in crate::tt_imports_with_kind(
         &source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     ) {
@@ -417,9 +417,9 @@ mod tests {
         }
     }
 
-    fn symbol(source: &str, needle: &str, delta: usize) -> RlSymbol {
-        rl_symbol_at(Path::new("/p/a.rl"), source, at(source, needle, delta))
-            .unwrap_or_else(|| panic!("no rl symbol at {needle:?}+{delta}"))
+    fn symbol(source: &str, needle: &str, delta: usize) -> TtSymbol {
+        tt_symbol_at(Path::new("/p/a.tt"), source, at(source, needle, delta))
+            .unwrap_or_else(|| panic!("no tt symbol at {needle:?}+{delta}"))
     }
 
     const SRC: &str = "enum Shape { Circle(radius: number), Point }\n\
@@ -429,22 +429,22 @@ mod tests {
     #[test]
     fn an_enum_declaration_answers_for_its_own_names() {
         let e = symbol(SRC, "enum Shape", 5);
-        assert_eq!(e.kind, RlSymbolKind::Enum);
+        assert_eq!(e.kind, TtSymbolKind::Enum);
         assert_eq!(e.signature, "enum Shape { Circle(radius: number), Point }");
 
         let case = symbol(SRC, "Circle(radius: number)", 0);
-        assert_eq!(case.kind, RlSymbolKind::Case);
+        assert_eq!(case.kind, TtSymbolKind::Case);
         assert_eq!(case.signature, "Shape.Circle(radius: number)");
 
         let field = symbol(SRC, "radius: number", 0);
-        assert_eq!(field.kind, RlSymbolKind::Field);
+        assert_eq!(field.kind, TtSymbolKind::Field);
         assert_eq!(field.signature, "radius: number");
     }
 
     #[test]
     fn a_pattern_tag_resolves_to_its_case() {
         let case = symbol(SRC, "Circle(radius) =>", 0);
-        assert_eq!(case.kind, RlSymbolKind::Case);
+        assert_eq!(case.kind, TtSymbolKind::Case);
         assert_eq!(case.signature, "Shape.Circle(radius: number)");
         assert!(case.detail.contains("payload case"), "{}", case.detail);
         // ...and points at the declaration.
@@ -458,7 +458,7 @@ mod tests {
         let case = symbol(SRC, "Circle(radius: r)", 0);
         assert_eq!(case.signature, "Shape.Circle(radius: number)");
         let field = symbol(SRC, "radius: r)", 0);
-        assert_eq!(field.kind, RlSymbolKind::Field);
+        assert_eq!(field.kind, TtSymbolKind::Field);
         assert_eq!(field.signature, "radius: number");
     }
 
@@ -479,8 +479,8 @@ mod tests {
         let src = "enum Shape { Circle(radius: number), Point }\n\
                    const s: Shape = Shape.Circle(1);\n\
                    const Point = 2;\n";
-        assert!(rl_symbol_at(Path::new("/p/a.rl"), src, at(src, "s: Shape", 0)).is_none());
-        assert!(rl_symbol_at(Path::new("/p/a.rl"), src, at(src, "Shape.Circle(1)", 0)).is_none());
-        assert!(rl_symbol_at(Path::new("/p/a.rl"), src, at(src, "const Point = 2", 6)).is_none());
+        assert!(tt_symbol_at(Path::new("/p/a.tt"), src, at(src, "s: Shape", 0)).is_none());
+        assert!(tt_symbol_at(Path::new("/p/a.tt"), src, at(src, "Shape.Circle(1)", 0)).is_none());
+        assert!(tt_symbol_at(Path::new("/p/a.tt"), src, at(src, "const Point = 2", 6)).is_none());
     }
 }

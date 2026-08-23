@@ -1,4 +1,4 @@
-//! Structural parsing of rl let-else statements (Rust-style refutable
+//! Structural parsing of tt let-else statements (Rust-style refutable
 //! binding):
 //!
 //! ```text
@@ -147,7 +147,7 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`
                 // shape so the bare-`{` abort below doesn't reject it (the
-                // recursive parse decides whether it really is rl syntax).
+                // recursive parse decides whether it really is tt syntax).
                 if let Some(past) = skip_braced_construct(cur.tokens, word, k) {
                     expr_end = cur.tokens[past - 1].span.end;
                     k = past;

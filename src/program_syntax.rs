@@ -1,6 +1,6 @@
-//! Whole-program TypeScript syntax for rl-aware target lowering.
+//! Whole-program TypeScript syntax for tt-aware target lowering.
 //!
-//! The lossless rl parser remains authoritative for claiming rl syntax.
+//! The lossless tt parser remains authoritative for claiming tt syntax.
 //! This module projects Core IR primitives to category-preserving TypeScript
 //! placeholders, parses the complete projection with SWC, and joins every
 //! placeholder to its exact SWC parent path and stable minimum host owner.
@@ -8,7 +8,7 @@
 //! SWC is the compiler's in-process TypeScript **syntax substrate**, not a
 //! substitute for TypeScript's type checker. Its whole-program AST supplies
 //! the parent/owner/evaluation structure that lowering must retain while it
-//! rewrites an rl value. Sending that work to the TypeScript 7 backend would
+//! rewrites a tt value. Sending that work to the TypeScript 7 backend would
 //! turn a local compiler invariant into an external semantic-service call and
 //! would duplicate the source-preserving target model maintained here.
 //!
@@ -41,8 +41,8 @@ use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-/// Stable identity assigned to an RL node in the projected syntax overlay.
-pub(crate) struct RlNodeId(u32);
+/// Stable identity assigned to an TT node in the projected syntax overlay.
+pub(crate) struct TtNodeId(u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 /// Byte coordinate in the original source buffer.
@@ -81,7 +81,7 @@ pub(crate) enum SyntaxCategory {
 
 #[derive(Debug)]
 struct OverlayEntry {
-    id: RlNodeId,
+    id: TtNodeId,
     category: SyntaxCategory,
     source: SourceSpan,
     projected: ProjectedSpan,
@@ -99,7 +99,7 @@ pub(crate) struct HostExit {
     pub(crate) argument: Option<SourceSpan>,
 }
 
-/// Ordered JavaScript evaluation obligations between one RL value and its
+/// Ordered JavaScript evaluation obligations between one TT value and its
 /// minimum source-backed owner. Target lowering must consume every step.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct HostEvaluationProtocol {
@@ -198,7 +198,7 @@ pub(crate) enum HostOwnerKind {
     Statement,
     ModuleItem,
     /// The expression body of a concise arrow function. Lowering rewrites
-    /// this expression to a block when a nested rl value needs statements.
+    /// this expression to a block when a nested tt value needs statements.
     ArrowExpression,
 }
 
@@ -398,7 +398,7 @@ fn is_transparent_expression_edge(parent: &AstParentKind) -> bool {
     )
 }
 
-/// A complete SWC view of one rl-containing TypeScript module.
+/// A complete SWC view of one tt-containing TypeScript module.
 #[derive(Debug)]
 pub(crate) struct ProgramSyntax {
     source_len: usize,
@@ -412,7 +412,7 @@ pub(crate) struct ProgramSyntax {
 #[derive(Debug)]
 pub(crate) struct HostOwnerSyntax {
     pub(crate) owner: HostOwner,
-    pub(crate) roots: Vec<RlNodeId>,
+    pub(crate) roots: Vec<TtNodeId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -421,8 +421,8 @@ pub(crate) enum ProgramSyntaxError {
     InvalidSourceSpan { start: SourceByte, end: SourceByte },
     NodeCountOverflow,
     Parse { message: String, projection: String },
-    MissingOverlay { id: RlNodeId },
-    DuplicateOverlay { id: RlNodeId },
+    MissingOverlay { id: TtNodeId },
+    DuplicateOverlay { id: TtNodeId },
     UnmappedEvaluationSpan { start: usize, end: usize },
 }
 
@@ -462,7 +462,7 @@ impl ProgramSyntax {
     ) -> impl Iterator<
         Item = (
             CoreRoot,
-            RlNodeId,
+            TtNodeId,
             EvaluationContext,
             HostEvaluationProtocol,
             SourceSpan,
@@ -563,7 +563,7 @@ enum ProjectionSegmentKind {
 
 #[derive(Debug)]
 struct PendingOverlay {
-    id: RlNodeId,
+    id: TtNodeId,
     category: SyntaxCategory,
     source: SourceSpan,
     projected: ProjectedSpan,
@@ -645,7 +645,7 @@ impl<'a> ProjectionBuilder<'a> {
     ) -> Result<(), ProgramSyntaxError> {
         let ordinal =
             u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-        let id = RlNodeId(ordinal);
+        let id = TtNodeId(ordinal);
         let owner_start = ProjectedByte(self.code.len());
         match category {
             SyntaxCategory::Expression => self.code.push('('),
@@ -654,9 +654,9 @@ impl<'a> ProjectionBuilder<'a> {
         }
         let start = ProjectedByte(self.code.len());
         let prefix = match category {
-            SyntaxCategory::Expression => "$rl_syntax_expr_",
-            SyntaxCategory::Statement => "$rl_syntax_stmt_",
-            SyntaxCategory::Item => "$rl_syntax_item_",
+            SyntaxCategory::Expression => "$tt_syntax_expr_",
+            SyntaxCategory::Statement => "$tt_syntax_stmt_",
+            SyntaxCategory::Item => "$tt_syntax_item_",
         };
         self.code.push_str(prefix);
         self.code.push_str(&ordinal.to_string());
@@ -757,7 +757,7 @@ impl<'a> ProjectionBuilder<'a> {
         let source = self.source_span(region.node)?;
         let ordinal =
             u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-        let id = RlNodeId(ordinal);
+        let id = TtNodeId(ordinal);
         let start = ProjectedByte(self.code.len());
         let pending_index = self.pending.len();
         self.pending.push(PendingOverlay {
@@ -802,7 +802,7 @@ impl<'a> ProjectionBuilder<'a> {
         let source = self.source_span(decision.extent)?;
         let ordinal =
             u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-        let id = RlNodeId(ordinal);
+        let id = TtNodeId(ordinal);
         let start = ProjectedByte(self.code.len());
         let pending_index = self.pending.len();
         self.pending.push(PendingOverlay {
@@ -921,17 +921,17 @@ fn parse_module(
 
 struct ParentCollector {
     source_start: u32,
-    expected_identifiers: HashMap<ProjectedSpan, RlNodeId>,
-    expected_calls: HashMap<ProjectedSpan, RlNodeId>,
-    expected_exit_calls: HashSet<RlNodeId>,
-    found: HashMap<RlNodeId, FoundOverlay>,
-    duplicates: Vec<RlNodeId>,
+    expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
+    expected_calls: HashMap<ProjectedSpan, TtNodeId>,
+    expected_exit_calls: HashSet<TtNodeId>,
+    found: HashMap<TtNodeId, FoundOverlay>,
+    duplicates: Vec<TtNodeId>,
     source_segments: Vec<ProjectionSourceSegment>,
     host_owners: Vec<ProjectedHostOwner>,
     protocol_frames: Vec<ProjectedProtocolFrame>,
     occupied_names: HashSet<String>,
     function_depth: usize,
-    exit_regions: Vec<(RlNodeId, usize)>,
+    exit_regions: Vec<(TtNodeId, usize)>,
 }
 
 struct CollectedProgramSyntax {
@@ -1172,7 +1172,7 @@ impl ParentCollector {
         }
     }
 
-    fn record_overlay(&mut self, id: RlNodeId, path: &AstNodePath<'_>) {
+    fn record_overlay(&mut self, id: TtNodeId, path: &AstNodePath<'_>) {
         if self
             .found
             .insert(

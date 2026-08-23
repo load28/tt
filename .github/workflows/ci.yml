@@ -29,9 +29,9 @@ jobs:
         with:
           node-version: "22"
 
-      # `tsc` for the integration tests, which type-check and run rlc's
+      # `tsc` for the integration tests, which type-check and run ttc's
       # emitted TypeScript. Pinned to major 6 because major 7 *is* the
-      # native compiler and takes a different command line; what rlc drives
+      # native compiler and takes a different command line; what ttc drives
       # for `--types` is installed separately below.
       - name: Install TypeScript
         run: npm install -g typescript@6
@@ -41,12 +41,12 @@ jobs:
 
       # What `--check-types`/`--types` drive: TypeScript 7's own compiler,
       # through its API client. Without one the `tests/native.rs` suite
-      # skips silently, so the gate installs it and points rlc at it.
+      # skips silently, so the gate installs it and points ttc at it.
       - name: Install TypeScript 7 for the type checking modes
         run: |
           mkdir -p "$HOME/ts7" && cd "$HOME/ts7"
           npm install --no-save typescript@7
-          echo "RLC_TSGO_API=$HOME/ts7/node_modules/typescript/dist/api/sync/api.js" >> "$GITHUB_ENV"
+          echo "TTC_TSGO_API=$HOME/ts7/node_modules/typescript/dist/api/sync/api.js" >> "$GITHUB_ENV"
 
       - name: Check formatting
         run: cargo fmt --check
@@ -58,22 +58,22 @@ jobs:
         run: cargo test
 
       - name: Test project initializer
-        run: node --test packages/create-rl/test/*.test.mjs
+        run: node --test packages/create-tt/test/*.test.mjs
 
       # A skipped suite is green in every other way, so the suite itself
-      # has to go red: `RLC_REQUIRE_TSGO` turns "no toolchain found" from a
+      # has to go red: `TTC_REQUIRE_TSGO` turns "no toolchain found" from a
       # silent skip into a failure. (It replaced a `grep "N passed"` count,
       # which went stale every time a test was added.)
       - name: Guard — integration tests must not have been skipped
         env:
-          RLC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TSGO: "1"
         run: |
           tsc --version
           node --version
           # The native suite needs a TypeScript 7 API client to check
           # against; declaration emit needs more than a release has, and is
           # covered by the `native` job below.
-          test -f "$RLC_TSGO_API"
+          test -f "$TTC_TSGO_API"
           cargo test --test native
 
   extension:
@@ -90,7 +90,7 @@ jobs:
 
       # The server tests drive the real compiler; without it on PATH they
       # skip, and the guard below would pass on nothing.
-      - name: Build rlc
+      - name: Build ttc
         run: cargo build
 
       - name: Install Node.js
@@ -128,7 +128,7 @@ jobs:
       # does and runs the whole suite with nothing skipped.
       - name: Guard — nothing skipped for a tool this job installed
         run: |
-          ! grep -q "SKIP rlc not on PATH" /tmp/extension.log
+          ! grep -q "SKIP ttc not on PATH" /tmp/extension.log
           ! grep -q "SKIP no tsgo executable" /tmp/extension.log
 
   native:
@@ -172,14 +172,14 @@ jobs:
           npm ci
           npx tsc -b _packages/native-preview
 
-      - name: Build rlc
+      - name: Build ttc
         run: cargo build
 
       - name: Test — the type checking modes end to end
         env:
-          RLC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           # Nothing here may skip: this job builds the compiler itself.
-          RLC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TSGO: "1"
         run: cargo test --test native
 
       - name: Build the extension
@@ -191,7 +191,7 @@ jobs:
       - name: Test — the extension against a compiler that can emit
         working-directory: editors/vscode
         env:
-          RLC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
         run: |
           export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
           node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log

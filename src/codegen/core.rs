@@ -1,7 +1,7 @@
 //! TypeScript target lowering from validated Core IR.
 //!
 //! This module is intentionally independent of `ast`: source text enters
-//! only through HIR nodes and the source map. Every rl surface reaches this
+//! only through HIR nodes and the source map. Every tt surface reaches this
 //! module through a shared Core primitive.
 
 use std::cell::Cell;
@@ -73,14 +73,14 @@ pub(crate) fn emit_with_map<'a>(
         if !output.ends_with_newline() {
             output.push_lit("\n");
         }
-        output.push_lit("function $rl_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }\n");
+        output.push_lit("function $tt_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }\n");
     }
     if emitter.used_flow.get() {
         if !output.ends_with_newline() {
             output.push_lit("\n");
         }
         output.push_lit(
-            "function $rl_fl<A extends unknown[], B, C>(f: (...a: A) => B, g: (b: B) => C): (...a: A) => C { return (...a: A) => g(f(...a)); }\n",
+            "function $tt_fl<A extends unknown[], B, C>(f: (...a: A) => B, g: (b: B) => C): (...a: A) => C { return (...a: A) => g(f(...a)); }\n",
         );
     }
     if emitter.used_expression_boundary.get() {
@@ -462,7 +462,7 @@ fn decision_has_block_arm(decision: &Decision) -> bool {
 }
 
 fn exit_label(target: &str) -> String {
-    format!("$rl_y_{target}")
+    format!("$tt_y_{target}")
 }
 
 impl<'a> Emitter<'a> {
@@ -1158,7 +1158,7 @@ impl<'a> Emitter<'a> {
                             next.append(body);
                         }
                         ApplyMode::Call => {
-                            next.push_lit("$rl_ap(");
+                            next.push_lit("$tt_ap(");
                             next.append(acc);
                             next.push_lit(", (");
                             next.append(body);
@@ -1194,11 +1194,11 @@ impl<'a> Emitter<'a> {
             self.used_flow.set(true);
             let body = guard_line_comment(self.emit_expr(step.value).trim());
             let mut next = Rope::new();
-            next.push_lit("$rl_fl(");
+            next.push_lit("$tt_fl(");
             next.append(acc);
             match step.mode {
                 ApplyMode::Postfix => {
-                    next.push_lit(", (($rl_v) => ($rl_v)");
+                    next.push_lit(", (($tt_v) => ($tt_v)");
                     next.append(body);
                     next.push_lit("))");
                 }
@@ -1504,7 +1504,7 @@ impl<'a> Emitter<'a> {
                     inner.push_lit(";\n");
                 }
                 ApplyMode::Call => {
-                    inner.push_lit(format!("{accumulator} = $rl_ap({accumulator}, ("));
+                    inner.push_lit(format!("{accumulator} = $tt_ap({accumulator}, ("));
                     inner.append(step_value);
                     inner.push_lit("));\n");
                 }
@@ -1600,7 +1600,7 @@ impl<'a> Emitter<'a> {
             out.push_lit("  do {\n");
         }
         if needs_label {
-            out.push_lit("  $rl_b: {\n");
+            out.push_lit("  $tt_b: {\n");
         }
         let mut unconditional = false;
         for arm in &decision.arms {
@@ -1701,7 +1701,7 @@ impl<'a> Emitter<'a> {
                         continuation.assignment_target().unwrap()
                     ));
                 }
-                action.push_lit("\n    break $rl_b; }");
+                action.push_lit("\n    break $tt_b; }");
             }
             ArmBodyKind::Block => {
                 action.append(body);
@@ -1965,15 +1965,15 @@ impl<'a> Emitter<'a> {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "  throw new Error(\"rl match: unexpected case \" + JSON.stringify([{temps}]));\n"
+                    "  throw new Error(\"tt match: unexpected case \" + JSON.stringify([{temps}]));\n"
                 )
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
-                "  throw new Error(\"rl match: unexpected literal \" + JSON.stringify($rl_m));\n"
+                "  throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));\n"
                     .to_owned()
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
-                "  throw new Error(\"rl match: unexpected case \" + JSON.stringify($rl_m));\n"
+                "  throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));\n"
                     .to_owned()
             }
             _ => panic!("internal compiler error: match has non-match miss action"),
@@ -2002,10 +2002,10 @@ fn binding_keyword(mode: BindingMode) -> &'static str {
 
 fn temp_name(temp: TempId) -> String {
     match temp {
-        TempId::Statement(sequence) => format!("$rl_t{sequence}"),
-        TempId::Result(sequence) => format!("$rl_r{sequence}"),
-        TempId::Decision => "$rl_m".to_owned(),
-        TempId::DecisionElement(sequence) => format!("$rl_m{sequence}"),
+        TempId::Statement(sequence) => format!("$tt_t{sequence}"),
+        TempId::Result(sequence) => format!("$tt_r{sequence}"),
+        TempId::Decision => "$tt_m".to_owned(),
+        TempId::DecisionElement(sequence) => format!("$tt_m{sequence}"),
     }
 }
 
@@ -2136,7 +2136,7 @@ impl BindingRecovery {
             return None;
         }
         loop {
-            let candidate = format!("$rl_discard{}", self.discard_sequence);
+            let candidate = format!("$tt_discard{}", self.discard_sequence);
             self.discard_sequence += 1;
             if self.available.insert(candidate.clone()) {
                 return Some(candidate);
@@ -2147,9 +2147,9 @@ impl BindingRecovery {
 
 fn unexpected_switch(literal: bool) -> &'static str {
     if literal {
-        "    default: { throw new Error(\"rl match: unexpected literal \" + JSON.stringify($rl_m)); }\n"
+        "    default: { throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m)); }\n"
     } else {
-        "    default: { throw new Error(\"rl match: unexpected case \" + JSON.stringify($rl_m)); }\n"
+        "    default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }\n"
     }
 }
 

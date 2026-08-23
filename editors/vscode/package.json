@@ -1,13 +1,13 @@
 {
-  "name": "rl-language",
-  "displayName": "rl Language",
-  "description": "Language support for rl — syntax highlighting, diagnostics via rlc, completion, hover, go-to-definition",
+  "name": "tt-language",
+  "displayName": "tt Language",
+  "description": "Language support for tt — syntax highlighting, diagnostics via ttc, completion, hover, go-to-definition",
   "version": "0.1.0",
-  "publisher": "rl-lang",
+  "publisher": "tt-lang",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/load28/rl"
+    "url": "https://github.com/load28/tt"
   },
   "engines": {
     "vscode": "^1.75.0"
@@ -16,112 +16,112 @@
     "Programming Languages"
   ],
   "activationEvents": [
-    "onLanguage:rl",
-    "onLanguage:rlx"
+    "onLanguage:tt",
+    "onLanguage:ttx"
   ],
   "main": "./client/out/extension",
   "contributes": {
     "languages": [
       {
-        "id": "rl",
+        "id": "tt",
         "aliases": [
-          "rl"
+          "tt"
         ],
         "extensions": [
-          ".rl"
+          ".tt"
         ],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./icons/rl-file.svg",
-          "dark": "./icons/rl-file.svg"
+          "light": "./icons/tt-file.svg",
+          "dark": "./icons/tt-file.svg"
         }
       },
       {
-        "id": "rlx",
+        "id": "ttx",
         "aliases": [
-          "rlx"
+          "ttx"
         ],
         "extensions": [
-          ".rlx"
+          ".ttx"
         ],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./icons/rlx-file.svg",
-          "dark": "./icons/rlx-file.svg"
+          "light": "./icons/ttx-file.svg",
+          "dark": "./icons/ttx-file.svg"
         }
       }
     ],
     "grammars": [
       {
-        "language": "rl",
-        "scopeName": "source.rl",
-        "path": "./syntaxes/rl.tmLanguage.json"
+        "language": "tt",
+        "scopeName": "source.tt",
+        "path": "./syntaxes/tt.tmLanguage.json"
       },
       {
-        "language": "rlx",
-        "scopeName": "source.rlx",
-        "path": "./syntaxes/rlx.tmLanguage.json"
+        "language": "ttx",
+        "scopeName": "source.ttx",
+        "path": "./syntaxes/ttx.tmLanguage.json"
       },
       {
-        "scopeName": "markdown.rl.codeblock",
-        "path": "./syntaxes/rl.markdown.tmLanguage.json",
+        "scopeName": "markdown.tt.codeblock",
+        "path": "./syntaxes/tt.markdown.tmLanguage.json",
         "injectTo": [
           "text.html.markdown",
           "source.mdx"
         ],
         "embeddedLanguages": {
-          "meta.embedded.block.rl": "rl"
+          "meta.embedded.block.tt": "tt"
         }
       }
     ],
     "configurationDefaults": {
       "explorer.fileNesting.enabled": true,
       "explorer.fileNesting.patterns": {
-        "*.rl": "${capture}.rl.d.ts, ${capture}.rl.d.ts.map",
-        "*.rlx": "${capture}.rlx.d.ts, ${capture}.rlx.d.ts.map"
+        "*.tt": "${capture}.tt.d.ts, ${capture}.tt.d.ts.map",
+        "*.ttx": "${capture}.ttx.d.ts, ${capture}.ttx.d.ts.map"
       },
       "search.exclude": {
-        "**/*.rl.d.ts": true,
-        "**/*.rl.d.ts.map": true,
-        "**/*.rlx.d.ts": true,
-        "**/*.rlx.d.ts.map": true
+        "**/*.tt.d.ts": true,
+        "**/*.tt.d.ts.map": true,
+        "**/*.ttx.d.ts": true,
+        "**/*.ttx.d.ts.map": true
       },
       "files.readonlyInclude": {
-        "**/*.rl.d.ts": true,
-        "**/*.rl.d.ts.map": true,
-        "**/*.rlx.d.ts": true,
-        "**/*.rlx.d.ts.map": true
+        "**/*.tt.d.ts": true,
+        "**/*.tt.d.ts.map": true,
+        "**/*.ttx.d.ts": true,
+        "**/*.ttx.d.ts.map": true
       }
     },
     "configuration": {
       "type": "object",
-      "title": "rl",
+      "title": "tt",
       "properties": {
-        "rl.compilerPath": {
+        "tt.compilerPath": {
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the `rlc` compiler used for diagnostics. When empty, the extension looks for `target/release/rlc` or `target/debug/rlc` in the workspace, then falls back to `rlc` on PATH."
+          "markdownDescription": "Path to the `ttc` compiler used for diagnostics. When empty, the extension looks for `target/release/ttc` or `target/debug/ttc` in the workspace, then falls back to `ttc` on PATH."
         },
-        "rl.verify": {
+        "tt.verify": {
           "scope": "resource",
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Run rlc's field-type validation and output self-check. When disabled, `--no-verify` is passed to `rlc --check`."
+          "markdownDescription": "Run ttc's field-type validation and output self-check. When disabled, `--no-verify` is passed to `ttc --check`."
         },
-        "rl.typeDiagnostics": {
+        "tt.typeDiagnostics": {
           "scope": "resource",
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Report TypeScript type errors in `.rl` and `.rlx` files. The language server type-checks the TypeScript or TSX each buffer compiles to and maps the errors back onto the source, so a type error inside a `match` arm, JSX expression, or a `|>` pipeline is reported where you wrote it. rl-level errors always come from `rlc` and are unaffected."
+          "markdownDescription": "Report TypeScript type errors in `.tt` and `.ttx` files. The language server type-checks the TypeScript or TSX each buffer compiles to and maps the errors back onto the source, so a type error inside a `match` arm, JSX expression, or a `|>` pipeline is reported where you wrote it. tt-level errors always come from `ttc` and are unaffected."
         },
-        "rl.typedChecks": {
+        "tt.typedChecks": {
           "scope": "resource",
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Report the rl errors that only a type can decide — a mutation through a `val` binding, exhaustiveness over the type a scrutinee actually has. The language server runs `rlc --check-types` over the buffer as part of its project, so the messages are the compiler's own. It opens the project and runs the TypeScript compiler, so it may trail the other diagnostics briefly; turn it off in a project with no TypeScript installed."
+          "markdownDescription": "Report the tt errors that only a type can decide — a mutation through a `val` binding, exhaustiveness over the type a scrutinee actually has. The language server runs `ttc --check-types` over the buffer as part of its project, so the messages are the compiler's own. It opens the project and runs the TypeScript compiler, so it may trail the other diagnostics briefly; turn it off in a project with no TypeScript installed."
         },
-        "rl.sidecar": {
+        "tt.sidecar": {
           "scope": "resource",
           "type": "string",
           "enum": [
@@ -130,15 +130,15 @@
             "off"
           ],
           "default": "refresh",
-          "markdownDescription": "Rebuild a file's editor sidecar (`x.rl.d.ts` or `x.rlx.d.ts` and its declaration map) when it is saved, so TypeScript-family files importing it keep type-checking and \"go to definition\" lands in the original source. `refresh` only rewrites sidecars that already exist (a project opts in by running `rlc --sidecar` once); `always` creates them on first save; `off` disables it."
+          "markdownDescription": "Rebuild a file's editor sidecar (`x.tt.d.ts` or `x.ttx.d.ts` and its declaration map) when it is saved, so TypeScript-family files importing it keep type-checking and \"go to definition\" lands in the original source. `refresh` only rewrites sidecars that already exist (a project opts in by running `ttc --sidecar` once); `always` creates them on first save; `off` disables it."
         },
-        "rl.sidecarDir": {
+        "tt.sidecarDir": {
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.rl` or `.rlx` file; set it to a directory such as `.rl-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports."
+          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.tt` or `.ttx` file; set it to a directory such as `.tt-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports."
         },
-        "rl.trace.server": {
+        "tt.trace.server": {
           "scope": "window",
           "type": "string",
           "enum": [
@@ -147,7 +147,7 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Traces the communication between VS Code and the rl language server."
+          "description": "Traces the communication between VS Code and the tt language server."
         }
       }
     }

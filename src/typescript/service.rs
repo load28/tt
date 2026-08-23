@@ -22,7 +22,7 @@
 //!   client that ignores it hangs on every later request. The reader thread
 //!   answers them the moment they arrive.
 //! - **Documents are the conversation.** A file that exists only as text in
-//!   this process — the lowered TypeScript of an `.rl` buffer — is served
+//!   this process — the lowered TypeScript of an `.tt` buffer — is served
 //!   with `didOpen`/`didChange` and answered exactly like one on disk.
 
 use std::collections::HashMap;
@@ -108,7 +108,7 @@ impl Service {
             serde_json::json!({
                 "processId": std::process::id(),
                 "rootUri": root_uri,
-                "workspaceFolders": [{ "uri": root_uri, "name": "rl" }],
+                "workspaceFolders": [{ "uri": root_uri, "name": "tt" }],
                 "capabilities": {
                     "textDocument": {
                         "synchronization": { "dynamicRegistration": true },
@@ -223,7 +223,7 @@ impl Service {
 }
 
 /// LSP document kind for a lowered TypeScript-family module. The projected
-/// URI owns this decision: `.rl` is served as `.rl.ts`, `.rlx` as `.rlx.tsx`.
+/// URI owns this decision: `.tt` is served as `.tt.ts`, `.ttx` as `.ttx.tsx`.
 fn language_id(uri: &str) -> &'static str {
     if uri.ends_with(".tsx") {
         "typescriptreact"
@@ -366,12 +366,12 @@ pub(crate) fn uri_path(uri: &str) -> Option<PathBuf> {
 /// places the compiler backend looks ([`super::native::Toolchain`]), plus
 /// the platform package an installed TypeScript ships its binary in.
 pub(crate) fn service_binary(root: &Path) -> Result<PathBuf, String> {
-    if let Some(bin) = env_path("RLC_TSGO_BIN")
+    if let Some(bin) = env_path("TTC_TSGO_BIN")
         && bin.exists()
     {
         return Ok(bin);
     }
-    if let Some(tree) = env_path("RLC_TSGO_ROOT") {
+    if let Some(tree) = env_path("TTC_TSGO_ROOT") {
         let bin = tree.join("built/local/tsgo");
         if bin.exists() {
             return Ok(bin);
@@ -395,7 +395,7 @@ pub(crate) fn service_binary(root: &Path) -> Result<PathBuf, String> {
         }
         if !dir.pop() {
             return Err("no tsgo language server found — install TypeScript 7 \
-                 (`npm i -D typescript@7`) or point RLC_TSGO_ROOT at a built \
+                 (`npm i -D typescript@7`) or point TTC_TSGO_ROOT at a built \
                  typescript-go checkout"
                 .to_string());
         }
@@ -429,11 +429,11 @@ mod tests {
     use super::language_id;
 
     #[test]
-    fn projected_rlx_documents_open_as_typescript_react() {
+    fn projected_ttx_documents_open_as_typescript_react() {
         assert_eq!(
-            language_id("file:///project/view.rlx.tsx"),
+            language_id("file:///project/view.ttx.tsx"),
             "typescriptreact"
         );
-        assert_eq!(language_id("file:///project/model.rl.ts"), "typescript");
+        assert_eq!(language_id("file:///project/model.tt.ts"), "typescript");
     }
 }

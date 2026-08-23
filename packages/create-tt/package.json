@@ -1,14 +1,14 @@
 {
-  "name": "create-rl",
+  "name": "create-tt",
   "version": "0.0.0-dev",
-  "description": "Create a new rl project or add rl to an existing TypeScript project",
+  "description": "Create a new tt project or add tt to an existing TypeScript project",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "create-rl": "bin/create-rl.js"
+    "create-tt": "bin/create-tt.js"
   },
   "files": [
-    "bin/create-rl.js",
+    "bin/create-tt.js",
     "src/installer.js",
     "README.md"
   ],
@@ -20,11 +20,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/load28/rl",
-    "directory": "packages/create-rl"
+    "url": "https://github.com/load28/tt",
+    "directory": "packages/create-tt"
   },
   "keywords": [
-    "rl",
+    "tt",
     "typescript",
     "scaffold",
     "vite"

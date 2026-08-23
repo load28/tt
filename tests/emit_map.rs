@@ -5,11 +5,11 @@
 //! are *identical* in source and output — the language server relies on it
 //! to translate offsets in both directions without ever re-parsing.
 
-use rlc::{EmitMapping, ImportRewrite, Options, compile, emit_mapped};
+use ttc::{EmitMapping, ImportRewrite, Options, compile, emit_mapped};
 
 /// Every mapping's chunk must read the same in source and output, chunks
 /// must be in-bounds, and must not overlap in either coordinate space.
-fn assert_mapping_invariants(src: &str, m: &rlc::MappedEmit) {
+fn assert_mapping_invariants(src: &str, m: &ttc::MappedEmit) {
     let mut by_src = m.mappings.clone();
     by_src.sort_by_key(|e| e.src);
     let mut by_out = m.mappings.clone();
@@ -43,7 +43,7 @@ fn assert_mapping_invariants(src: &str, m: &rlc::MappedEmit) {
 }
 
 /// The output byte range a source byte falls in, if it was copied verbatim.
-fn map_offset(m: &rlc::MappedEmit, src_offset: usize) -> Option<usize> {
+fn map_offset(m: &ttc::MappedEmit, src_offset: usize) -> Option<usize> {
     m.mappings
         .iter()
         .find(|e| src_offset >= e.src && src_offset < e.src + e.len)
@@ -92,9 +92,9 @@ const r = match (shape) {
 fn construct_corpus_upholds_mapping_invariants() {
     // One of everything the emitter rewrites: enum, guarded match with
     // or-patterns and nested patterns, tuple match, try, let-else, if let,
-    // pipeline, template interpolation, .rl import.
-    let src = r#"import { Token } from "./token.rl";
-import type { TOption, TResult } from "@rl/std";
+    // pipeline, template interpolation, .tt import.
+    let src = r#"import { Token } from "./token.tt";
+import type { TOption, TResult } from "@tt/std";
 enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 
 const area = (s: Shape): number =>
@@ -144,13 +144,13 @@ declare function getShape(): Shape;
 }
 
 #[test]
-fn emit_is_infallible_on_rl_level_errors() {
+fn emit_is_infallible_on_tt_level_errors() {
     // A non-exhaustive match is a compile() error but must still emit for
     // the editor: diagnostics stay `--check`'s job.
     let src = "enum E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x };\n";
     assert!(compile(src, &Options::default()).is_err());
     let m = emit_mapped(src);
-    assert!(m.code.contains("switch ($rl_m.kind)"));
+    assert!(m.code.contains("switch ($tt_m.kind)"));
     assert_mapping_invariants(src, &m);
 }
 
@@ -172,8 +172,8 @@ const r = match (Shape.Circle(2)) {
 }
 
 #[test]
-fn rl_import_specifiers_stay_untouched() {
-    let src = "import { Token } from \"./token.rl\";\nconsole.log(Token);\n";
+fn tt_import_specifiers_stay_untouched() {
+    let src = "import { Token } from \"./token.tt\";\nconsole.log(Token);\n";
     let m = emit_mapped(src);
     assert_eq!(m.code, src);
     assert_mapping_invariants(src, &m);
@@ -199,8 +199,8 @@ fn val_modifier_is_dropped_and_the_rest_keeps_mapping() {
 
 #[test]
 fn result_block_bindings_are_mapped_to_emitted_declarations() {
-    let src = r#"import type { TResult } from "@rl/std";
-import * as Result from "@rl/std/result";
+    let src = r#"import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
 function load(): TResult<number, string> { return Result.Ok(1); }
 const total = result {
   const first <- load();
@@ -236,7 +236,7 @@ fn offset_in(src: &str, context: &str, needle: &str) -> usize {
 
 /// Asserts the `needle` written inside `context` reaches the output through
 /// the map, unchanged.
-fn assert_mapped_in(src: &str, m: &rlc::MappedEmit, context: &str, needle: &str) {
+fn assert_mapped_in(src: &str, m: &ttc::MappedEmit, context: &str, needle: &str) {
     let at = offset_in(src, context, needle);
     let out = map_offset(m, at)
         .unwrap_or_else(|| panic!("expected a mapping for {needle:?} in {context:?}"));
@@ -246,8 +246,8 @@ fn assert_mapped_in(src: &str, m: &rlc::MappedEmit, context: &str, needle: &str)
 #[test]
 fn try_declaration_bindings_are_mapped_to_emitted_declarations() {
     // The binding is where the editor asks what `try` produced, so it has
-    // to reach `const n = $rl_t0.value;` through the map.
-    let src = r#"import type { TResult } from "@rl/std";
+    // to reach `const n = $tt_t0.value;` through the map.
+    let src = r#"import type { TResult } from "@tt/std";
 declare function load(): TResult<number, string>;
 function run(): TResult<number, string> {
   const n = try load();
@@ -269,7 +269,7 @@ fn pattern_bindings_are_mapped_to_their_destructurings() {
     // Every binding a pattern introduces — match arm, let-else, if let,
     // nested — is copied from the source into the emitted destructuring,
     // so the editor can hover it and jump to it.
-    let src = r#"import type { TOption } from "@rl/std";
+    let src = r#"import type { TOption } from "@tt/std";
 enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 declare function getShape(): Shape;
 declare function boxed(): TOption<Shape>;
@@ -347,7 +347,7 @@ const v = match (get()) {
 "#;
     let m = emit_mapped(src);
     assert_mapping_invariants(src, &m);
-    assert!(m.code.contains("const { x } = $rl_m;"));
+    assert!(m.code.contains("const { x } = $tt_m;"));
     assert_eq!(map_offset(&m, offset_in(src, "A(x) | B(x)", "x")), None);
     // The arm body still is mapped — only the binding list is not.
     assert_mapped_in(src, &m, "=> x,", "x");
@@ -364,36 +364,36 @@ fn every_construct_anchors_the_glue_it_writes() {
     let anchor = m
         .anchors
         .iter()
-        .find(|a| a.kind == rlc::AnchorKind::Try)
+        .find(|a| a.kind == ttc::AnchorKind::Try)
         .expect("the try statement is anchored");
     // The anchor spans the construct as the user wrote it — the
     // propagation, not the declaration around it — which is what a
     // diagnostic about its glue is drawn over.
     assert_eq!(&src[anchor.src..anchor.src_end], "try readNum()");
     // ...and covers the glue the construct wrote.
-    assert!(m.code[anchor.out..anchor.end].contains("$rl_t0.kind !== \"Ok\""));
+    assert!(m.code[anchor.out..anchor.end].contains("$tt_t0.kind !== \"Ok\""));
 }
 
 #[test]
 fn anchors_nest_innermost_first() {
     let src = "function f() {\n  const a = try wrap(match (s) { A(x) => x, _ => other() });\n}\n";
     let m = emit_mapped(src);
-    let kinds: Vec<rlc::AnchorKind> = m.anchors.iter().map(|a| a.kind).collect();
+    let kinds: Vec<ttc::AnchorKind> = m.anchors.iter().map(|a| a.kind).collect();
     let inner = kinds
         .iter()
-        .position(|k| *k == rlc::AnchorKind::Match)
+        .position(|k| *k == ttc::AnchorKind::Match)
         .expect("match anchored");
     let outer = kinds
         .iter()
-        .position(|k| *k == rlc::AnchorKind::Try)
+        .position(|k| *k == ttc::AnchorKind::Try)
         .expect("try anchored");
     assert!(inner < outer, "inner anchor must come first: {kinds:?}");
 
     // A byte inside the match resolves to the match, not the try.
-    let at = m.code.find("$rl_m.kind").expect("switch glue");
+    let at = m.code.find("$tt_m.kind").expect("switch glue");
     assert_eq!(
         m.anchor_at(at).map(|a| a.kind),
-        Some(rlc::AnchorKind::Match)
+        Some(ttc::AnchorKind::Match)
     );
 }
 

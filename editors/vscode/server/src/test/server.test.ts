@@ -22,7 +22,7 @@ import { pathToFileURL } from "node:url";
 import { findTsgo } from "./toolchain";
 
 const SERVER = path.join(__dirname, "..", "server.js");
-const COMPILER = "rlc";
+const COMPILER = "ttc";
 
 function compilerAvailable(): boolean {
   try {
@@ -33,10 +33,10 @@ function compilerAvailable(): boolean {
   }
 }
 
-const skip = compilerAvailable() ? false : "rlc not on PATH";
+const skip = compilerAvailable() ? false : "ttc not on PATH";
 /** Answers that need the TypeScript language service. A skip must mean a
  * tool is missing, never that a feature quietly answered nothing — so the
- * cases below that ask TypeScript guard on tsgo as well as on rlc. */
+ * cases below that ask TypeScript guard on tsgo as well as on ttc. */
 const skipTyped = skip || (findTsgo() ? false : "tsgo not installed");
 /** Each case spawns a server and compiles through it; generous, and only
  * reached when something has hung. */
@@ -119,9 +119,9 @@ function connect(): Client {
   };
 }
 
-/** A server with `source` open as an rl-family document, ready to be asked. */
-async function open(source: string, languageId: "rl" | "rlx" = "rl") {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rl-server-test-"));
+/** A server with `source` open as a tt-family document, ready to be asked. */
+async function open(source: string, languageId: "tt" | "ttx" = "tt") {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-server-test-"));
   const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
   const uri = pathToFileURL(file).toString();
@@ -174,7 +174,7 @@ async function open(source: string, languageId: "rl" | "rlx" = "rl") {
   return { client, uri, completion, stop: () => client.stop() };
 }
 
-const RLX_EDITOR_SOURCE = [
+const TTX_EDITOR_SOURCE = [
   "declare global {",
   "  namespace JSX { interface IntrinsicElements { main: { children?: unknown } } }",
   "}",
@@ -192,10 +192,10 @@ const RLX_EDITOR_SOURCE = [
 ].join("\n");
 
 test(
-  "rlx documents receive completion, hover, diagnostics, and semantic tokens",
+  "ttx documents receive completion, hover, diagnostics, and semantic tokens",
   { skip: skipTyped, timeout },
   async () => {
-    const { client, uri, completion, stop } = await open(RLX_EDITOR_SOURCE, "rlx");
+    const { client, uri, completion, stop } = await open(TTX_EDITOR_SOURCE, "ttx");
     try {
       const diagnosticPromise = client.waitFor(
         "textDocument/publishDiagnostics",
@@ -211,7 +211,7 @@ test(
 
       const hover = await client.request("textDocument/hover", {
         textDocument: { uri },
-        position: positionOf(RLX_EDITOR_SOURCE, "const lab"),
+        position: positionOf(TTX_EDITOR_SOURCE, "const lab"),
       });
       assert.match(String(hover.result?.contents?.value ?? ""), /label: string/);
 
@@ -219,7 +219,7 @@ test(
       const mismatch = published.diagnostics.find(
         (diagnostic: any) => diagnostic.code === "ts2322",
       );
-      assert.equal(covered(RLX_EDITOR_SOURCE, mismatch.range), "label");
+      assert.equal(covered(TTX_EDITOR_SOURCE, mismatch.range), "label");
 
       const semantic = await client.request("textDocument/semanticTokens/full", {
         textDocument: { uri },
@@ -232,9 +232,9 @@ test(
 );
 
 const STD_SOURCE = [
-  'import type { TOption, TResult } from "@rl/std";',
-  'import * as Option from "@rl/std/option";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TOption, TResult } from "@tt/std";',
+  'import * as Option from "@tt/std/option";',
+  'import * as Result from "@tt/std/result";',
   "",
   "declare const r: TResult<number, string>;",
   "const out = Result.",
@@ -248,7 +248,7 @@ test(
     const { completion, stop } = await open(STD_SOURCE);
     try {
       const { labels, resolve } = await completion("const out = Result.");
-      // rl's own: the case constructors, first in the list.
+      // tt's own: the case constructors, first in the list.
       assert.deepEqual(labels.slice(0, 2), ["Ok", "Err"]);
       // TypeScript's: the standard library combinators that used to be
       // dropped on the floor by returning only the constructors.
@@ -285,7 +285,7 @@ test(
       for (const member of ["toFixed", "toString", "toPrecision"]) {
         assert.ok(labels.includes(member), `missing ${member} in: ${labels}`);
       }
-      // A member access is members only — no enum names, no rl snippets.
+      // A member access is members only — no enum names, no tt snippets.
       for (const noise of ["Option", "Result", "match", "enum"]) {
         assert.ok(!labels.includes(noise), `unexpected ${noise} in: ${labels}`);
       }
@@ -305,7 +305,7 @@ test(
   { skip: skipTyped, timeout },
   async () => {
     // Recovering from `|>`, TypeScript can lose the dot and answer with
-    // every name in scope — the compiler's own `$rl_ap` helper included.
+    // every name in scope — the compiler's own `$tt_ap` helper included.
     // That answer is not a member list and must not be shown as one.
     const source = ["const n: number = 1;", "const s = n", "  |> n.", ""].join(
       "\n",
@@ -314,7 +314,7 @@ test(
     try {
       const { labels } = await completion("  |> n.");
       assert.ok(labels.includes("toFixed"), `members were: ${labels}`);
-      for (const leaked of ["$rl_ap", "n", "s", "AbortController"]) {
+      for (const leaked of ["$tt_ap", "n", "s", "AbortController"]) {
         assert.ok(
           !labels.includes(leaked),
           `global scope leaked ${leaked} into: ${labels}`,
@@ -331,8 +331,8 @@ test(
   { skip: skipTyped, timeout },
   async () => {
     const source = [
-      'import type { TResult } from "@rl/std";',
-      'import * as Result from "@rl/std/result";',
+      'import type { TResult } from "@tt/std";',
+      'import * as Result from "@tt/std/result";',
       "",
       "declare const r: TResult<number, string>;",
       "const out = r",
@@ -433,8 +433,8 @@ test(
 );
 
 /* ---------------------------------------------------------------------- *
- * rl's own names (TASK-107): hover, definition and completion for the
- * three name spaces that exist only in `.rl` source. The engine answers
+ * tt's own names (TASK-107): hover, definition and completion for the
+ * three name spaces that exist only in `.tt` source. The engine answers
  * these from the compiler's declaration table, so — unlike everything
  * above — they need no TypeScript toolchain at all.
  * ---------------------------------------------------------------------- */
@@ -610,7 +610,7 @@ test(
   "a construct that did not parse is reported where it is written",
   { skip, timeout },
   async () => {
-    // Parser recovery owns this unambiguous rl near miss and keeps its
+    // Parser recovery owns this unambiguous tt near miss and keeps its
     // stable rule identity through the compiler protocol and LSP adapter.
     const source = [
       "enum Shape { Circle(r: number), Square(s: number) }",

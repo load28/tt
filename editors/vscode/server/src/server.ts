@@ -1,19 +1,19 @@
 /* --------------------------------------------------------------------------
- * rl language server — a protocol adapter over the rl engine.
+ * tt language server — a protocol adapter over the tt engine.
  *
  * The server owns the LSP surface: capabilities, document sync with the
  * client, debouncing, configuration, and presentation. Language semantics
  * live elsewhere and are consumed, not implemented, here:
  *
- * - The **engine** (`rlc --server`, engine.ts) is the authoritative project
+ * - The **engine** (`ttc --server`, engine.ts) is the authoritative project
  *   state. The editor's buffers are forwarded to it (didOpen/didChange/
  *   didClose), and every TypeScript-backed answer — hover, definition,
  *   references, completion with its incomplete-source probe, rename,
- *   signature help, type diagnostics — comes back from it already in `.rl`
+ *   signature help, type diagnostics — comes back from it already in `.tt`
  *   coordinates. No projection, source mapping, TypeScript session or
  *   probe logic lives in this process.
- * - **rl's own names** — enum names, case tags, payload fields — come from
- *   the engine too (`rlSymbol`, `rlCompletions`), even though no type is
+ * - **tt's own names** — enum names, case tags, payload fields — come from
+ *   the engine too (`ttSymbol`, `ttCompletions`), even though no type is
  *   involved: they exist nowhere in the emitted TypeScript, so the
  *   compiler's declaration table is the only thing that knows them, and a
  *   second opinion here would answer differently from the compiler
@@ -31,7 +31,7 @@
  *   the word under the cursor, masking. It is deliberately
  *   diagnostic-free — a near-miss can lose a convenience, never invent an
  *   error.
- * - Diagnostics run the real compiler through rlc.ts (`--check`, and the
+ * - Diagnostics run the real compiler through ttc.ts (`--check`, and the
  *   typed layer via the engine's `typedCheck`).
  * ----------------------------------------------------------------------- */
 import {
@@ -65,7 +65,7 @@ import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
 import * as engine from "./engine";
-import * as rlc from "./rlc";
+import * as ttc from "./ttc";
 import * as path from "node:path";
 
 import * as sidecar from "./sidecar";
@@ -129,7 +129,7 @@ connection.onInitialized(() => {
 
 // ---------------------------------------------------------------- settings
 
-interface RlSettings {
+interface TtSettings {
   compilerPath: string;
   verify: boolean;
   typeDiagnostics: boolean;
@@ -138,7 +138,7 @@ interface RlSettings {
   sidecarDir: string;
 }
 
-const DEFAULT_SETTINGS: RlSettings = {
+const DEFAULT_SETTINGS: TtSettings = {
   compilerPath: "",
   verify: true,
   typeDiagnostics: true,
@@ -147,12 +147,12 @@ const DEFAULT_SETTINGS: RlSettings = {
   sidecarDir: "",
 };
 
-async function getSettings(uri: string): Promise<RlSettings> {
+async function getSettings(uri: string): Promise<TtSettings> {
   if (!hasConfigurationCapability) return DEFAULT_SETTINGS;
   const conf = (await connection.workspace.getConfiguration({
     scopeUri: uri,
-    section: "rl",
-  })) as Partial<RlSettings> | null;
+    section: "tt",
+  })) as Partial<TtSettings> | null;
   return {
     compilerPath: conf?.compilerPath ?? DEFAULT_SETTINGS.compilerPath,
     verify: conf?.verify ?? DEFAULT_SETTINGS.verify,
@@ -169,7 +169,7 @@ connection.onDidChangeConfiguration(() => {
 });
 
 connection.onDidChangeWatchedFiles(() => {
-  // A freshly built rlc appeared (or changed) — try validating again.
+  // A freshly built ttc appeared (or changed) — try validating again.
   warnedCompilerMissing = false;
   for (const doc of documents.all()) scheduleValidation(doc);
 });
@@ -185,7 +185,7 @@ interface Analyzed {
 const analysisCache = new Map<string, Analyzed>();
 
 /** The text-shape half: the masked buffer for cursor-context questions
- * (member access, word boundaries). rl *semantics* — which enums are
+ * (member access, word boundaries). tt *semantics* — which enums are
  * visible, where the match sites are — are the compiler's answer
  * ([declarationsOf]), not this file's. */
 function analyze(doc: TextDocument): Analyzed {
@@ -245,7 +245,7 @@ function caseSignature(
 let servedCompiler: string | null = null;
 
 function currentCompiler(): string {
-  return servedCompiler ?? rlc.findCompiler("", workspaceRoots);
+  return servedCompiler ?? ttc.findCompiler("", workspaceRoots);
 }
 
 const logEngine = (message: string) => connection.console.warn(message);
@@ -275,9 +275,9 @@ const pendingValidation = new Map<string, NodeJS.Timeout>();
 const VALIDATION_DELAY_MS = 300;
 
 /* ------------------------------------------------------------------------
- * The typed rl layer.
+ * The typed tt layer.
  *
- * `rlc --check` answers from the text; what needs a *type* to decide — a
+ * `ttc --check` answers from the text; what needs a *type* to decide — a
  * mutation through a `val` binding, exhaustiveness over the type a scrutinee
  * actually has — is the engine's typed pass. The engine keeps the compiler
  * session alive and answers incrementally (TASK-076), so the pass runs on a
@@ -299,7 +299,7 @@ interface VersionedDiagnostics {
 
 /** What `--check` and the TypeScript layer found, as last published. */
 const baseDiagnostics = new Map<string, VersionedDiagnostics>();
-/** What the typed rl layer found, for the version it ran on. */
+/** What the typed tt layer found, for the version it ran on. */
 const typedDiagnostics = new Map<string, VersionedDiagnostics>();
 let warnedTypedCheckUnavailable = false;
 
@@ -337,7 +337,7 @@ function mergeTyped(
     );
     if (sameDiagnostic >= 0) {
       // The service answer is provisional. The compiler pass carries the
-      // structured RL rendering and replaces the same checker diagnostic.
+      // structured TT rendering and replaces the same checker diagnostic.
       into[sameDiagnostic] = d;
       continue;
     }
@@ -361,7 +361,7 @@ function scheduleTypedCheck(
   doc: TextDocument,
   compiler: string,
   includeTypes: boolean,
-  includeTypedRl: boolean,
+  includeTypedTt: boolean,
 ): void {
   const existing = pendingTypedCheck.get(doc.uri);
   if (existing !== undefined) clearTimeout(existing);
@@ -369,7 +369,7 @@ function scheduleTypedCheck(
     doc.uri,
     setTimeout(() => {
       pendingTypedCheck.delete(doc.uri);
-      void typedCheck(doc, compiler, includeTypes, includeTypedRl);
+      void typedCheck(doc, compiler, includeTypes, includeTypedTt);
     }, TYPED_CHECK_DELAY_MS),
   );
 }
@@ -378,11 +378,11 @@ async function typedCheck(
   doc: TextDocument,
   compiler: string,
   includeTypes: boolean,
-  includeTypedRl: boolean,
+  includeTypedTt: boolean,
 ): Promise<void> {
   const uri = URI.parse(doc.uri);
   if (uri.scheme !== "file") return;
-  const result = await rlc.runTypedCheck(
+  const result = await ttc.runTypedCheck(
     compiler,
     doc.getText(),
     uri.fsPath,
@@ -400,10 +400,10 @@ async function typedCheck(
     if (!warnedTypedCheckUnavailable) {
       warnedTypedCheckUnavailable = true;
       connection.console.info(
-        `rl: typed checks unavailable (${result.detail}). ` +
+        `tt: typed checks unavailable (${result.detail}). ` +
           "`val` mutations and typed exhaustiveness are reported by " +
           "the typed pass, which needs a TypeScript install — set " +
-          "rl.typedChecks to false to stop trying.",
+          "tt.typedChecks to false to stop trying.",
       );
     }
     return;
@@ -413,7 +413,7 @@ async function typedCheck(
     version: doc.version,
     replacesTypes: includeTypes,
     diagnostics: result.diagnostics
-      .filter((d) => includeTypedRl || String(d.code ?? "").startsWith("ts"))
+      .filter((d) => includeTypedTt || String(d.code ?? "").startsWith("ts"))
       .map((d) => toDiagnostic(fresh, d)),
   });
   const base = baseDiagnostics.get(doc.uri);
@@ -434,19 +434,19 @@ function scheduleValidation(doc: TextDocument): void {
 
 async function validate(doc: TextDocument): Promise<void> {
   const settings = await getSettings(doc.uri);
-  const compiler = rlc.findCompiler(settings.compilerPath, workspaceRoots);
+  const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const uri = URI.parse(doc.uri);
   const docName = uri.scheme === "file" ? uri.fsPath : uri.path;
   servedCompiler = compiler;
 
-  const result = await rlc.runCheck(
+  const result = await ttc.runCheck(
     compiler,
     doc.getText(),
     docName,
     settings.verify,
   );
 
-  // The buffer may have changed while rlc ran; drop stale results.
+  // The buffer may have changed while ttc ran; drop stale results.
   const current = documents.get(doc.uri);
   if (!current || current.version !== doc.version) return;
 
@@ -454,13 +454,13 @@ async function validate(doc: TextDocument): Promise<void> {
     if (!warnedCompilerMissing) {
       warnedCompilerMissing = true;
       connection.console.warn(
-        `rl: compiler not found (${result.compiler}). ` +
-          "Set rl.compilerPath, build target/{debug,release}/rlc, or put rlc on PATH — " +
+        `tt: compiler not found (${result.compiler}). ` +
+          "Set tt.compilerPath, build target/{debug,release}/ttc, or put ttc on PATH — " +
           "diagnostics are disabled until then.",
       );
       void connection.window.showWarningMessage(
-        "rl: rlc compiler not found — diagnostics are disabled. " +
-          "Set `rl.compilerPath` or install rlc (cargo install --path .).",
+        "tt: ttc compiler not found — diagnostics are disabled. " +
+          "Set `tt.compilerPath` or install ttc (cargo install --path .).",
       );
     }
     forget(doc.uri);
@@ -468,7 +468,7 @@ async function validate(doc: TextDocument): Promise<void> {
     return;
   }
   if (result.kind === "failed") {
-    connection.console.error(`rl: ${result.detail}`);
+    connection.console.error(`tt: ${result.detail}`);
     forget(doc.uri);
     void connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
     return;
@@ -496,9 +496,9 @@ async function validate(doc: TextDocument): Promise<void> {
     if (!fresh || fresh.version !== doc.version) return;
   }
 
-  // Hints are not diagnostics of the compile: rlc never fails on one, and
+  // Hints are not diagnostics of the compile: ttc never fails on one, and
   // they only reach the user here (`engine::hints`).
-  diagnostics.push(...(await rlHints(doc, compiler)));
+  diagnostics.push(...(await ttHints(doc, compiler)));
   const settled = documents.get(doc.uri);
   if (!settled || settled.version !== doc.version) return;
 
@@ -518,10 +518,10 @@ function forget(uri: string): void {
 }
 
 /**
- * TypeScript's type errors for a buffer, already on the `.rl` source.
+ * TypeScript's type errors for a buffer, already on the `.tt` source.
  *
  * The engine computes them over the buffer's projection and drops anything
- * landing in compiler glue — rlc's emissions are the compiler's
+ * landing in compiler glue — ttc's emissions are the compiler's
  * responsibility, never something to report at the user (CLAUDE.md, error
  * layers). This side only converts and version-gates.
  */
@@ -544,18 +544,18 @@ async function typeDiagnostics(
 }
 
 /**
- * What rl has to say about a buffer that is not an error — an unreachable
+ * What tt has to say about a buffer that is not an error — an unreachable
  * arm, today. These carry `DiagnosticSeverity.Hint` and the `Unnecessary`
- * tag, which is what dims dead code: rl has no warning level and the CLI
+ * tag, which is what dims dead code: tt has no warning level and the CLI
  * never reports these, so nothing here may look like a build failure.
  */
-async function rlHints(
+async function ttHints(
   doc: TextDocument,
   compiler: string,
 ): Promise<Diagnostic[]> {
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
-  const hints = await engine.rlHints(
+  const hints = await engine.ttHints(
     compiler,
     fsPath,
     doc.getText(),
@@ -566,11 +566,11 @@ async function rlHints(
     tags: [DiagnosticTag.Unnecessary],
     range: hint.range,
     message: hint.message,
-    source: "rl",
+    source: "tt",
   }));
 }
 
-function toDiagnostic(doc: TextDocument, d: rlc.RlcDiagnostic): Diagnostic {
+function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
   let range: Range;
   if (d.line > 0) {
     const start = { line: d.line - 1, character: Math.max(0, d.col - 1) };
@@ -602,7 +602,7 @@ function toDiagnostic(doc: TextDocument, d: rlc.RlcDiagnostic): Diagnostic {
     range,
     message: d.message,
     code: d.code,
-    source: "rlc",
+    source: "ttc",
   };
 }
 
@@ -619,7 +619,7 @@ documents.onDidSave((e) => {
 
 /**
  * Where this file's declarations belong: next to the source when
- * `rl.sidecarDir` is empty, otherwise that directory under the workspace
+ * `tt.sidecarDir` is empty, otherwise that directory under the workspace
  * root the file lives in (TypeScript merges the two trees with `rootDirs`).
  */
 function resolveSidecarDir(configured: string, filePath: string): string | undefined {
@@ -634,7 +634,7 @@ function resolveSidecarDir(configured: string, filePath: string): string | undef
 }
 
 /**
- * Keeps a saved `.rl` file's editor sidecar (`x.rl.d.ts` + map) current, so
+ * Keeps a saved `.tt` file's editor sidecar (`x.tt.d.ts` + map) current, so
  * `.ts` files importing it type-check and jump into the original on "go to
  * definition" without a build step.
  */
@@ -645,7 +645,7 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
   const settings = await getSettings(doc.uri);
   if (settings.sidecar === "off") return;
 
-  const compiler = rlc.findCompiler(settings.compilerPath, workspaceRoots);
+  const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const result = await sidecar.refreshSidecar(
     compiler,
     uri.fsPath,
@@ -653,7 +653,7 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
     resolveSidecarDir(settings.sidecarDir, uri.fsPath),
   );
   if (result.kind === "failed") {
-    connection.console.warn(`rl: sidecar refresh failed — ${result.detail}`);
+    connection.console.warn(`tt: sidecar refresh failed — ${result.detail}`);
   }
 }
 documents.onDidChangeContent((e) => {
@@ -691,11 +691,11 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
     label: "enum",
     kind: CompletionItemKind.Snippet,
-    detail: "rl enum declaration",
+    detail: "tt enum declaration",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "rl 태그드 유니언 선언. 케이스에 페이로드 괄호가 있거나 제네릭이 있어야 rl enum입니다.",
+        "tt 태그드 유니언 선언. 케이스에 페이로드 괄호가 있거나 제네릭이 있어야 tt enum입니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "enum ${1:Name} {\n\t${2:Case}(${3:field}: ${4:number}),\n\t${5:Unit},\n}",
@@ -703,11 +703,11 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
     label: "match",
     kind: CompletionItemKind.Snippet,
-    detail: "rl match expression",
+    detail: "tt match expression",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`kind` 태그로 분기하는 match 표현식. `_` 없는 match는 같은 파일·import한 rl enum에 대해 소진성이 검사됩니다.",
+        "`kind` 태그로 분기하는 match 표현식. `_` 없는 match는 같은 파일·import한 tt enum에 대해 소진성이 검사됩니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "match (${1:value}) {\n\t$0\n}",
@@ -715,7 +715,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
     label: "try",
     kind: CompletionItemKind.Snippet,
-    detail: "rl try statement (Result propagation)",
+    detail: "tt try statement (Result propagation)",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
@@ -727,7 +727,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
     label: "flow",
     kind: CompletionItemKind.Snippet,
-    detail: "rl flow composition (point-free pipeline)",
+    detail: "tt flow composition (point-free pipeline)",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
@@ -739,7 +739,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
     label: "result",
     kind: CompletionItemKind.Snippet,
-    detail: "rl result computation block",
+    detail: "tt result computation block",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
@@ -751,7 +751,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
     label: "let-else",
     kind: CompletionItemKind.Snippet,
-    detail: "rl let-else statement",
+    detail: "tt let-else statement",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
@@ -810,8 +810,8 @@ function atMemberAccess(masked: string, offset: number): boolean {
 }
 
 /**
- * TypeScript completions from the engine, sorted after the rl-specific
- * items (`2` prefix; rl items use `0`/`1`). The engine applies the whole
+ * TypeScript completions from the engine, sorted after the tt-specific
+ * items (`2` prefix; tt items use `0`/`1`). The engine applies the whole
  * member/probe policy: at a member access only a member answer comes back,
  * probed from the mended source when the buffer's own text cannot answer.
  */
@@ -852,7 +852,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
   // `Enum.` member access → the enum's case constructors, then everything
   // else TypeScript offers on that same object. Both halves are needed:
-  // the constructors are rl's (case signature, field snippet, tags an
+  // the constructors are tt's (case signature, field snippet, tags an
   // unimported built-in still has), while the rest of a standard-library
   // namespace — `Result.map`, `Option.unwrapOrElse`, the `*P` pipeline
   // variants — is ordinary TypeScript the service already types. Returning
@@ -876,15 +876,15 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   }
 
   // A pattern position — an arm, an `if let`, a payload field list, a
-  // nested pattern — is rl's alone: case tags and field names exist
+  // nested pattern — is tt's alone: case tags and field names exist
   // nowhere in the emitted TypeScript, so the service has nothing to
   // complete there. The engine answers from the compiler's own
   // declaration table, under the same shadowing the compiler resolves
   // with, and knows the positions this server never did (`if let`,
   // let-else payloads, nested patterns).
   const fsPath = enginePath(doc);
-  const rlItemsHere = fsPath
-    ? await engine.rlCompletions(
+  const ttItemsHere = fsPath
+    ? await engine.ttCompletions(
         currentCompiler(),
         fsPath,
         doc.getText(),
@@ -892,8 +892,8 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
         logEngine,
       )
     : [];
-  if (rlItemsHere.length > 0) {
-    return rlItemsHere.map((item) => ({
+  if (ttItemsHere.length > 0) {
+    return ttItemsHere.map((item) => ({
       label: item.label,
       kind:
         item.kind === "case"
@@ -908,8 +908,8 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     }));
   }
 
-  // General position → enum names + rl keyword snippets, then everything
-  // TypeScript would offer in a .ts file (sorted after the rl items).
+  // General position → enum names + tt keyword snippets, then everything
+  // TypeScript would offer in a .ts file (sorted after the tt items).
   const items: CompletionItem[] = visible.map((e) => ({
     label: e.name,
     kind: CompletionItemKind.Enum,
@@ -921,9 +921,9 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
           : `enum ${e.name}${e.generics}`,
     sortText: `0${e.name}`,
   }));
-  const rlItems = items.concat(KEYWORD_SNIPPETS);
-  const seen = new Set(rlItems.map((i) => i.label));
-  return rlItems.concat(
+  const ttItems = items.concat(KEYWORD_SNIPPETS);
+  const seen = new Set(ttItems.map((i) => i.label));
+  return ttItems.concat(
     (await tsCompletions(doc, offset, false)).filter((i) => !seen.has(i.label)),
   );
 });
@@ -931,7 +931,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 /**
  * The signature and documentation of a delegated completion entry, fetched
  * when the editor asks about the one entry the user is looking at. This is
- * what puts a type on `Result.map` in the completion list; rl's own items
+ * what puts a type on `Result.map` in the completion list; tt's own items
  * carry their signature in `detail` from the start and pass through here
  * untouched.
  */
@@ -970,7 +970,7 @@ connection.onCompletionResolve(
  * the engine — so the arguments of a standard library combinator
  * (`Result.andThen(r, f)`) are typed as they are typed, including inside a
  * `match` arm or a `|>` pipeline, where the raw text is not TypeScript at
- * all. rl syntax that has no call at the cursor simply yields nothing.
+ * all. tt syntax that has no call at the cursor simply yields nothing.
  */
 connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
   const doc = documents.get(params.textDocument.uri);
@@ -1045,23 +1045,23 @@ connection.onHover(async (params) => {
         contents: {
           kind: MarkupKind.Markdown,
           value:
-            "```rl\nmatch (값) { 패턴 => 본문, ... }\n```\n" +
-            "rl match 표현식 — 값의 `kind` 필드로 분기합니다. " +
-            "`_` 없는 match는 같은 파일·import한 rl enum(내장 `Option`/`Result` 포함)에 대해 소진성이 검사됩니다.",
+            "```tt\nmatch (값) { 패턴 => 본문, ... }\n```\n" +
+            "tt match 표현식 — 값의 `kind` 필드로 분기합니다. " +
+            "`_` 없는 match는 같은 파일·import한 tt enum(내장 `Option`/`Result` 포함)에 대해 소진성이 검사됩니다.",
         },
         range: { start: doc.positionAt(w.start), end: doc.positionAt(w.end) },
       };
     }
   }
 
-  // An rl name — an enum, a case tag, a payload field. None of the three
+  // A tt name — an enum, a case tag, a payload field. None of the three
   // survives lowering in a form the TypeScript service can be pointed at,
   // so the engine answers from the compiler's own declaration table. It
   // answers only where the service cannot be asked; everywhere else
   // (`Shape.Circle(1)`, `const s: Shape`) the service knows more.
   const fsPath = enginePath(doc);
   const sym = fsPath
-    ? await engine.rlSymbol(
+    ? await engine.ttSymbol(
         currentCompiler(),
         fsPath,
         doc.getText(),
@@ -1073,13 +1073,13 @@ connection.onHover(async (params) => {
   return {
     contents: {
       kind: MarkupKind.Markdown,
-      value: `\`\`\`rl\n${sym.signature}\n\`\`\`\n${sym.detail}`,
+      value: `\`\`\`tt\n${sym.signature}\n\`\`\`\n${sym.detail}`,
     },
     range: sym.range,
   };
 });
 
-/** Hover for everything the rl layer does not own, from the engine. */
+/** Hover for everything the tt layer does not own, from the engine. */
 async function tsHover(
   doc: TextDocument,
   position: { line: number; character: number },
@@ -1105,14 +1105,14 @@ connection.onDefinition(async (params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
 
-  // An rl name first: an enum, a case tag, a payload field. The engine
-  // knows where each is declared — in this file or in the `.rl` the import
+  // A tt name first: an enum, a case tag, a payload field. The engine
+  // knows where each is declared — in this file or in the `.tt` the import
   // names — because the emitted TypeScript carries none of them.
-  const rlPath = enginePath(doc);
-  if (rlPath !== null) {
-    const sym = await engine.rlSymbol(
+  const ttPath = enginePath(doc);
+  if (ttPath !== null) {
+    const sym = await engine.ttSymbol(
       currentCompiler(),
-      rlPath,
+      ttPath,
       doc.getText(),
       params.position,
       logEngine,
@@ -1130,7 +1130,7 @@ connection.onDefinition(async (params) => {
 
   // Everything else — ordinary TypeScript symbols, and built-in enum
   // names the user may have imported from the std module — is the
-  // engine's answer, already in `.rl` coordinates.
+  // engine's answer, already in `.tt` coordinates.
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const locations = await engine.definition(
@@ -1153,7 +1153,7 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   // Delegated wholesale to the engine: TypeScript resolves the passthrough
-  // region exactly, and rl-specific spans degrade to an empty result.
+  // region exactly, and tt-specific spans degrade to an empty result.
   const references = (
     await engine.references(currentCompiler(), fsPath, params.position, logEngine)
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);
@@ -1169,12 +1169,12 @@ connection.onRenameRequest(async (params) => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
 
-  // rl names (enums, case tags, payload fields) are compiled into emitted
-  // `kind` strings and destructuring keys — renaming one needs rl-aware
+  // tt names (enums, case tags, payload fields) are compiled into emitted
+  // `kind` strings and destructuring keys — renaming one needs tt-aware
   // rewriting across both worlds, so refuse rather than let TypeScript do
-  // half the job. The engine decides what is an rl name; this server does
+  // half the job. The engine decides what is a tt name; this server does
   // not keep a second opinion.
-  const sym = await engine.rlSymbol(
+  const sym = await engine.ttSymbol(
     currentCompiler(),
     fsPath,
     doc.getText(),
@@ -1196,7 +1196,7 @@ connection.onRenameRequest(async (params) => {
   const changes: Record<string, TextEdit[]> = {};
   for (const edit of edits) {
     // What the engine wants written, which is not always the bare name: a
-    // destructuring shorthand — what an rl pattern binding `Some(value)`
+    // destructuring shorthand — what a tt pattern binding `Some(value)`
     // compiles to — expands to `value: <new>`, and dropping the expansion
     // would rebind a *different* field under the new name.
     const newText =
@@ -1266,7 +1266,7 @@ connection.onCodeAction(async (params): Promise<CodeAction[]> => {
   const actions: CodeAction[] = [];
 
   for (const diag of params.context.diagnostics) {
-    if (diag.source !== "rlc") continue;
+    if (diag.source !== "ttc") continue;
     const m = NON_EXHAUSTIVE_RE.exec(diag.message);
     if (!m) continue;
     const missing = [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
@@ -1368,7 +1368,7 @@ connection.languages.semanticTokens.on(async (params) => {
     doc.getText(),
     URI.parse(doc.uri).scheme === "file"
       ? URI.parse(doc.uri).fsPath
-      : `buffer.${doc.languageId === "rlx" ? "rlx" : "rl"}`,
+      : `buffer.${doc.languageId === "ttx" ? "ttx" : "tt"}`,
     logEngine,
   );
   // Engine unavailable: no answer beats a wrong empty one — the grammar's

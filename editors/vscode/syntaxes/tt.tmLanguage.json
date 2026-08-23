@@ -1,6 +1,6 @@
 {
-  "name": "rl",
-  "scopeName": "source.rl",
+  "name": "tt",
+  "scopeName": "source.tt",
   "patterns": [
     {
       "include": "#directives"
@@ -1463,7 +1463,7 @@
     "expression": {
       "patterns": [
         {
-          "include": "#rl-expression"
+          "include": "#tt-expression"
         },
         {
           "include": "#expressionWithoutIdentifiers"
@@ -1479,7 +1479,7 @@
     "expression-inside-possibly-arrow-parens": {
       "patterns": [
         {
-          "include": "#rl-val-parameter"
+          "include": "#tt-val-parameter"
         },
         {
           "include": "#expressionWithoutIdentifiers"
@@ -1565,7 +1565,7 @@
     "expression-operators": {
       "patterns": [
         {
-          "include": "#rl-pipeline-operator"
+          "include": "#tt-pipeline-operator"
         },
         {
           "match": "(?<![$_[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(await)(?![$_[:alnum:]])(?:(?=\\.\\.\\.)|(?!\\.))",
@@ -1900,7 +1900,7 @@
           },
           "patterns": [
             {
-              "include": "#rl-val-declaration-modifier"
+              "include": "#tt-val-declaration-modifier"
             },
             {
               "include": "#var-expr"
@@ -2111,7 +2111,7 @@
     "function-parameters-body": {
       "patterns": [
         {
-          "include": "#rl-val-parameter"
+          "include": "#tt-val-parameter"
         },
         {
           "include": "#comment"
@@ -3790,7 +3790,7 @@
       },
       "patterns": [
         {
-          "include": "#rl-val-parameter"
+          "include": "#tt-val-parameter"
         },
         {
           "include": "#expression"
@@ -4240,7 +4240,7 @@
     "statements": {
       "patterns": [
         {
-          "include": "#rl-statement"
+          "include": "#tt-statement"
         },
         {
           "include": "#declaration"
@@ -5763,51 +5763,51 @@
         }
       ]
     },
-    "rl-statement": {
+    "tt-statement": {
       "patterns": [
         {
-          "include": "#rl-val-declaration-modifier"
+          "include": "#tt-val-declaration-modifier"
         },
         {
-          "include": "#rl-enum-declaration"
+          "include": "#tt-enum-declaration"
         },
         {
-          "include": "#rl-if-let"
+          "include": "#tt-if-let"
         },
         {
-          "include": "#rl-let-else"
+          "include": "#tt-let-else"
         },
         {
-          "include": "#rl-catch-val-parameters"
+          "include": "#tt-catch-val-parameters"
         }
       ]
     },
-    "rl-expression": {
+    "tt-expression": {
       "patterns": [
         {
-          "include": "#rl-match-expression"
+          "include": "#tt-match-expression"
         },
         {
-          "include": "#rl-result-expression"
+          "include": "#tt-result-expression"
         },
         {
-          "include": "#rl-flow-head"
+          "include": "#tt-flow-head"
         },
         {
-          "include": "#rl-try-expression"
+          "include": "#tt-try-expression"
         }
       ]
     },
-    "rl-val-declaration-modifier": {
+    "tt-val-declaration-modifier": {
       "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(val)\\s+(?=(?:const|let|var)(?![_$[:alnum:]]))",
       "captures": {
         "1": {
-          "name": "storage.modifier.val.rl"
+          "name": "storage.modifier.val.tt"
         }
       }
     },
-    "rl-catch-val-parameters": {
-      "name": "meta.catch.parameters.rl",
+    "tt-catch-val-parameters": {
+      "name": "meta.catch.parameters.tt",
       "begin": "(?<![_$[:alnum:]])(catch)\\s*(\\()(?=[^)]*(?<![_$[:alnum:]])val\\s)",
       "beginCaptures": {
         "1": {
@@ -5828,7 +5828,7 @@
           "include": "#comment"
         },
         {
-          "include": "#rl-val-parameter"
+          "include": "#tt-val-parameter"
         },
         {
           "include": "#parameter-name"
@@ -5838,16 +5838,16 @@
         }
       ]
     },
-    "rl-val-parameter": {
+    "tt-val-parameter": {
       "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(val)(?=\\s+(?!as(?![_$[:alnum:]])|satisfies(?![_$[:alnum:]])|is(?![_$[:alnum:]])|in(?![_$[:alnum:]])|of(?![_$[:alnum:]])|instanceof(?![_$[:alnum:]])|keyof(?![_$[:alnum:]]))[$_[:alpha:]{\\[])",
       "captures": {
         "1": {
-          "name": "storage.modifier.val.rl"
+          "name": "storage.modifier.val.tt"
         }
       }
     },
-    "rl-enum-declaration": {
-      "name": "meta.enum.declaration.rl",
+    "tt-enum-declaration": {
+      "name": "meta.enum.declaration.tt",
       "begin": "(?<![_$[:alnum:]])(?<!const )(?<!declare )(?:\\b(export)\\s+)?\\b(enum)\\s+([$_[:alpha:]][$_[:alnum:]]*)",
       "beginCaptures": {
         "1": {
@@ -5869,12 +5869,12 @@
           "include": "#type-parameters"
         },
         {
-          "include": "#rl-enum-body"
+          "include": "#tt-enum-body"
         }
       ]
     },
-    "rl-enum-body": {
-      "name": "meta.enum.body.rl",
+    "tt-enum-body": {
+      "name": "meta.enum.body.tt",
       "begin": "\\{",
       "end": "\\}",
       "beginCaptures": {
@@ -5892,7 +5892,7 @@
           "include": "#comment"
         },
         {
-          "name": "meta.enum.case.payload.rl",
+          "name": "meta.enum.case.payload.tt",
           "begin": "([$_[:alpha:]][$_[:alnum:]]*)\\s*(\\()",
           "beginCaptures": {
             "1": {
@@ -5916,7 +5916,7 @@
               "begin": "([$_[:alpha:]][$_[:alnum:]]*)\\s*(\\??)\\s*(:)",
               "beginCaptures": {
                 "1": {
-                  "name": "variable.other.property.rl"
+                  "name": "variable.other.property.tt"
                 },
                 "2": {
                   "name": "keyword.operator.optional.ts"
@@ -5962,12 +5962,12 @@
         }
       ]
     },
-    "rl-match-expression": {
-      "name": "meta.match.rl",
+    "tt-match-expression": {
+      "name": "meta.match.tt",
       "begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(match)\\s*(?=\\()",
       "beginCaptures": {
         "1": {
-          "name": "keyword.control.match.rl"
+          "name": "keyword.control.match.tt"
         }
       },
       "end": "(?<=\\})|(?=[^\\s({])",
@@ -5976,7 +5976,7 @@
           "include": "#comment"
         },
         {
-          "name": "meta.match.scrutinee.rl",
+          "name": "meta.match.scrutinee.tt",
           "begin": "\\(",
           "end": "\\)",
           "beginCaptures": {
@@ -5996,12 +5996,12 @@
           ]
         },
         {
-          "include": "#rl-match-body"
+          "include": "#tt-match-body"
         }
       ]
     },
-    "rl-match-body": {
-      "name": "meta.match.body.rl",
+    "tt-match-body": {
+      "name": "meta.match.body.tt",
       "begin": "\\{",
       "end": "\\}",
       "beginCaptures": {
@@ -6023,17 +6023,17 @@
           "name": "punctuation.separator.comma.ts"
         },
         {
-          "include": "#rl-match-arm"
+          "include": "#tt-match-arm"
         }
       ]
     },
-    "rl-match-arm": {
-      "name": "meta.match.arm.rl",
+    "tt-match-arm": {
+      "name": "meta.match.arm.tt",
       "begin": "(?=[^\\s,}])",
       "end": "(?=[,}])",
       "patterns": [
         {
-          "name": "meta.match.arm.body.rl",
+          "name": "meta.match.arm.body.tt",
           "begin": "=>",
           "beginCaptures": {
             "0": {
@@ -6048,22 +6048,22 @@
           ]
         },
         {
-          "include": "#rl-match-arm-pattern"
+          "include": "#tt-match-arm-pattern"
         }
       ]
     },
-    "rl-match-arm-pattern": {
+    "tt-match-arm-pattern": {
       "patterns": [
         {
           "include": "#comment"
         },
         {
           "match": "(?<![_$[:alnum:]])_(?![_$[:alnum:]])",
-          "name": "keyword.control.wildcard.rl"
+          "name": "keyword.control.wildcard.tt"
         },
         {
           "match": "\\|(?!\\|)",
-          "name": "keyword.operator.or-pattern.rl"
+          "name": "keyword.operator.or-pattern.tt"
         },
         {
           "begin": "(?<![_$[:alnum:]])if(?![_$[:alnum:]])",
@@ -6084,7 +6084,7 @@
           "name": "constant.language.boolean.ts"
         },
         {
-          "include": "#rl-tag-pattern"
+          "include": "#tt-tag-pattern"
         },
         {
           "include": "#string"
@@ -6094,10 +6094,10 @@
         }
       ]
     },
-    "rl-tag-pattern": {
+    "tt-tag-pattern": {
       "patterns": [
         {
-          "name": "meta.tag.pattern.rl",
+          "name": "meta.tag.pattern.tt",
           "begin": "([$_[:alpha:]][$_[:alnum:]]*)\\s*(\\()",
           "beginCaptures": {
             "1": {
@@ -6115,7 +6115,7 @@
           },
           "patterns": [
             {
-              "include": "#rl-binding-list"
+              "include": "#tt-binding-list"
             }
           ]
         },
@@ -6125,7 +6125,7 @@
         }
       ]
     },
-    "rl-binding-list": {
+    "tt-binding-list": {
       "patterns": [
         {
           "include": "#comment"
@@ -6134,7 +6134,7 @@
           "begin": "([$_[:alpha:]][$_[:alnum:]]*)\\s*(:)\\s*",
           "beginCaptures": {
             "1": {
-              "name": "variable.other.property.rl"
+              "name": "variable.other.property.tt"
             },
             "2": {
               "name": "punctuation.separator.key-value.ts"
@@ -6143,7 +6143,7 @@
           "end": "(?=[,)])",
           "patterns": [
             {
-              "name": "meta.tag.pattern.rl",
+              "name": "meta.tag.pattern.tt",
               "begin": "([$_[:alpha:]][$_[:alnum:]]*)\\s*(\\()",
               "beginCaptures": {
                 "1": {
@@ -6161,7 +6161,7 @@
               },
               "patterns": [
                 {
-                  "include": "#rl-binding-list"
+                  "include": "#tt-binding-list"
                 }
               ]
             },
@@ -6181,8 +6181,8 @@
         }
       ]
     },
-    "rl-let-else": {
-      "name": "meta.let-else.rl",
+    "tt-let-else": {
+      "name": "meta.let-else.tt",
       "begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(const|let|var)\\s+(?=[$_[:alpha:]][$_[:alnum:]]*\\s*\\()",
       "beginCaptures": {
         "1": {
@@ -6237,12 +6237,12 @@
           ]
         },
         {
-          "include": "#rl-tag-pattern"
+          "include": "#tt-tag-pattern"
         }
       ]
     },
-    "rl-if-let": {
-      "name": "meta.if-let.rl",
+    "tt-if-let": {
+      "name": "meta.if-let.tt",
       "begin": "(?<![_$[:alnum:]])(if)\\s+(let)(?=\\s+[$_[:alpha:]][$_[:alnum:]]*\\s*\\()",
       "beginCaptures": {
         "1": {
@@ -6272,16 +6272,16 @@
           ]
         },
         {
-          "include": "#rl-tag-pattern"
+          "include": "#tt-tag-pattern"
         }
       ]
     },
-    "rl-result-expression": {
-      "name": "meta.result.rl",
+    "tt-result-expression": {
+      "name": "meta.result.tt",
       "begin": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(result)\\s*(\\{)",
       "beginCaptures": {
         "1": {
-          "name": "keyword.control.result.rl"
+          "name": "keyword.control.result.tt"
         },
         "2": {
           "name": "punctuation.definition.block.ts"
@@ -6295,14 +6295,14 @@
       },
       "patterns": [
         {
-          "include": "#rl-result-binding"
+          "include": "#tt-result-binding"
         },
         {
           "include": "#statements"
         }
       ]
     },
-    "rl-result-binding": {
+    "tt-result-binding": {
       "patterns": [
         {
           "match": "(?<![_$[:alnum:]])(const|let|var)\\s+([$_[:alpha:]][$_[:alnum:]]*)\\s*(<-)",
@@ -6314,7 +6314,7 @@
               "name": "variable.other.readwrite.ts"
             },
             "3": {
-              "name": "keyword.operator.result-bind.rl"
+              "name": "keyword.operator.result-bind.tt"
             }
           }
         },
@@ -6328,7 +6328,7 @@
           "end": "<-",
           "endCaptures": {
             "0": {
-              "name": "keyword.operator.result-bind.rl"
+              "name": "keyword.operator.result-bind.tt"
             }
           },
           "patterns": [
@@ -6363,19 +6363,19 @@
         }
       ]
     },
-    "rl-pipeline-operator": {
+    "tt-pipeline-operator": {
       "match": "\\|>",
-      "name": "keyword.operator.pipeline.rl"
+      "name": "keyword.operator.pipeline.tt"
     },
-    "rl-flow-head": {
+    "tt-flow-head": {
       "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(flow)(?=\\s*\\|>)",
       "captures": {
         "1": {
-          "name": "keyword.control.flow.rl"
+          "name": "keyword.control.flow.tt"
         }
       }
     },
-    "rl-try-expression": {
+    "tt-try-expression": {
       "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(try)(?=\\s+[^\\s({<])",
       "captures": {
         "1": {

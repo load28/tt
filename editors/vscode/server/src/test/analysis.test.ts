@@ -1,5 +1,5 @@
 /* Unit tests for the text-shape utilities — run with `node --test` after
- * compiling (npm test). rl *semantics* (visible enums, match sites) are
+ * compiling (npm test). tt *semantics* (visible enums, match sites) are
  * the compiler's answer via the server's `declarations` method and are
  * covered by server.test.ts; what is pinned here is masking and cursor
  * context. */

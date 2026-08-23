@@ -1,4 +1,4 @@
-//! The HIR — rl's analysis representation.
+//! The HIR — tt's analysis representation.
 //!
 //! The AST ([`crate::ast`]) is the *syntax* tree: lossless, byte-faithful,
 //! the passthrough contract's carrier. The HIR is the *analysis* tree the
@@ -11,7 +11,7 @@
 //!
 //! What the HIR deliberately does **not** do:
 //!
-//! - It does not re-parse passthrough TypeScript. An expression rl only
+//! - It does not re-parse passthrough TypeScript. An expression tt only
 //!   needs to *point at* (a scrutinee, a guard, a pipeline step's text) is
 //!   an [`Expr::OpaqueTs`] span; its type is the checker's answer, asked
 //!   through the backend seam.
@@ -188,13 +188,13 @@ pub enum AstOrigin {
 /// One item of the file.
 #[derive(Debug)]
 pub enum Item {
-    /// An rl enum declaration.
+    /// A tt enum declaration.
     Enum(EnumItem),
-    /// A lifted `.rl`/`@rl/std` package import.
+    /// A lifted `.tt`/`@tt/std` package import.
     Import(ImportItem),
 }
 
-/// An rl enum declaration: one type definition and one constructor-value
+/// A tt enum declaration: one type definition and one constructor-value
 /// definition in the making (the resolver mints the [`DefId`]s — Phase 2).
 #[derive(Debug)]
 pub struct EnumItem {
@@ -240,21 +240,21 @@ pub struct FieldData {
     pub ty_text: String,
 }
 
-/// A lifted import: a relative `.rl` specifier or an `@rl/std` entry.
+/// A lifted import: a relative `.tt` specifier or an `@tt/std` entry.
 #[derive(Debug)]
 pub struct ImportItem {
     /// The specifier's node (span = the quoted specifier).
     pub node: NodeId,
-    /// Which kind of rl specifier this is.
+    /// Which kind of tt specifier this is.
     pub kind: ImportKind,
     /// What the statement brings into local scope.
     pub names: ImportNames,
 }
 
-/// The two specifiers rlc understands beyond plain passthrough.
+/// The two specifiers ttc understands beyond plain passthrough.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImportKind {
-    /// A relative rl source, carrying the target's TypeScript surface.
+    /// A relative tt source, carrying the target's TypeScript surface.
     Relative(crate::SourceKind),
     /// One module of the standard-library package.
     Std(crate::StdModule),
@@ -281,7 +281,7 @@ pub struct Body {
 /// One statement of a [`Body`], in source order.
 #[derive(Debug)]
 pub enum Stmt {
-    /// Passthrough TypeScript (or an erased `val` modifier) — bytes rl does
+    /// Passthrough TypeScript (or an erased `val` modifier) — bytes tt does
     /// not interpret.
     Opaque(NodeId),
     /// An item declaration sits here in the stream.
@@ -377,11 +377,11 @@ pub enum IfLetElse {
 /// One expression.
 #[derive(Debug)]
 pub enum Expr {
-    /// Passthrough TypeScript rl only points at — never re-parsed; its
+    /// Passthrough TypeScript tt only points at — never re-parsed; its
     /// type is the backend's answer.
     OpaqueTs(NodeId),
     /// A nested statement stream in expression position (an arm's block
-    /// body, a scrutinee that itself contains rl constructs).
+    /// body, a scrutinee that itself contains tt constructs).
     Seq {
         /// Span = the whole nested stream.
         node: NodeId,

@@ -1,0 +1,42 @@
+{
+  "name": "tt-lang",
+  "version": "0.0.0-dev",
+  "description": "tt — a tiny TypeScript preprocessor adding Rust-style enums, match expressions, try, let-else, if let and the pipeline operator. Installs the ttc compiler.",
+  "license": "MIT",
+  "bin": {
+    "ttc": "bin/ttc.js"
+  },
+  "main": "index.js",
+  "files": [
+    "bin/ttc.js",
+    "index.js",
+    "dev.js",
+    "tt-dev.local.json",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/load28/tt",
+    "directory": "npm/tt-lang"
+  },
+  "homepage": "https://github.com/load28/tt#readme",
+  "keywords": [
+    "typescript",
+    "compiler",
+    "preprocessor",
+    "enum",
+    "pattern-matching",
+    "match",
+    "tt"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "tt-lang-linux-x64": "0.0.0-dev",
+    "tt-lang-linux-arm64": "0.0.0-dev",
+    "tt-lang-darwin-x64": "0.0.0-dev",
+    "tt-lang-darwin-arm64": "0.0.0-dev",
+    "tt-lang-win32-x64": "0.0.0-dev"
+  }
+}

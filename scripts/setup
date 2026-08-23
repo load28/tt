@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ----------------------------------------------------------------------------
-# scripts/setup — build the local RL development environment.
+# scripts/setup — build the local TT development environment.
 #
 #   ./scripts/setup --tsgo-root ~/dev/typescript-go   # first run (checkout mode)
 #   ./scripts/setup --tsgo-npm                        # first run (npm mode)
@@ -12,29 +12,29 @@
 #   1. resolve the TypeScript toolchain — a typescript-go checkout named by
 #      --tsgo-root (built here, in place), or "npm" (--tsgo-npm): TypeScript 7
 #      installed from npm by each consuming project, nothing to build here
-#   2. save that choice to .rl-dev/toolchain.json (local, never committed)
+#   2. save that choice to .tt-dev/toolchain.json (local, never committed)
 #   3. checkout mode only: build the current typescript-go checkout
 #      (native compiler + API client) and verify both artifacts
-#   4. build the current RL checkout (cargo build --release) and verify rlc
-#   5. stamp npm/rl-lang for local `file:` installs (rl-dev.local.json)
+#   4. build the current TT checkout (cargo build --release) and verify ttc
+#   5. stamp npm/tt-lang for local `file:` installs (tt-dev.local.json)
 #   6. build the VSCode extension and reinstall it (uninstall first when an
 #      old install exists; skipped when the `code` CLI is not on PATH)
 #
 # What it never does: touch git state (pull/checkout/reset — updating either
 # repository is the user's move), or write to your shell profile. Toolchain
-# environment variables exist only inside the rlc processes the launcher
-# spawns (npm/rl-lang/dev.js).
+# environment variables exist only inside the ttc processes the launcher
+# spawns (npm/tt-lang/dev.js).
 #
-# This whole layer is temporary (docs/tasks/TASK-090): once RL ships a
-# verified TypeScript 7 inside its own package, delete this script, .rl-dev/
-# and npm/rl-lang/dev.js together.
+# This whole layer is temporary (docs/tasks/TASK-090): once TT ships a
+# verified TypeScript 7 inside its own package, delete this script, .tt-dev/
+# and npm/tt-lang/dev.js together.
 # ----------------------------------------------------------------------------
 set -euo pipefail
 
-RL_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-CONFIG_DIR="$RL_ROOT/.rl-dev"
+TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+CONFIG_DIR="$TT_ROOT/.tt-dev"
 CONFIG="$CONFIG_DIR/toolchain.json"
-PKG_DIR="$RL_ROOT/npm/rl-lang"
+PKG_DIR="$TT_ROOT/npm/tt-lang"
 
 fail() {
   echo "error: $*" >&2
@@ -47,10 +47,10 @@ usage: ./scripts/setup [--tsgo-root <path> | --tsgo-npm]
 
   --tsgo-root <path>  use a local typescript-go checkout (built in place)
   --tsgo-npm          use TypeScript 7 from npm — each consuming project
-                      installs it (npm i -D typescript@7) and rlc finds it
+                      installs it (npm i -D typescript@7) and ttc finds it
                       in that project's node_modules
 
-With no flag, the toolchain saved in .rl-dev/toolchain.json is reused.
+With no flag, the toolchain saved in .tt-dev/toolchain.json is reused.
 EOF
 }
 
@@ -133,7 +133,7 @@ elif [ -f "$CONFIG" ]; then
   esac
 else
   cat >&2 <<EOF
-RL setup: TypeScript toolchain is not configured.
+TT setup: TypeScript toolchain is not configured.
 Run:
   ./scripts/setup --tsgo-root /path/to/typescript-go
 or, once TypeScript 7 is what your projects install from npm:
@@ -142,7 +142,7 @@ EOF
   exit 1
 fi
 
-command -v cargo > /dev/null 2>&1 || fail "Rust (cargo) is required to build rlc."
+command -v cargo > /dev/null 2>&1 || fail "Rust (cargo) is required to build ttc."
 if [ "$KIND" = "checkout" ]; then
   command -v go > /dev/null 2>&1 \
     || fail "Go is required to build the TypeScript native compiler."
@@ -177,7 +177,7 @@ if [ "$KIND" = "checkout" ]; then
     || fail "failed to build TypeScript API client."
 
   # The build commands above may leave stale artifacts behind; only the
-  # files rlc actually loads decide success.
+  # files ttc actually loads decide success.
   TSGO_BIN="$TSGO_ROOT/built/local/tsgo"
   TSGO_API="$TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js"
   [ -f "$TSGO_BIN" ] || fail "failed to build TypeScript native compiler.
@@ -188,32 +188,32 @@ else
   echo "==> TypeScript toolchain: npm (consuming projects install typescript@7)"
 fi
 
-# ------------------------------------------------------------------ build RL --
-echo "==> building rlc (cargo build --release)"
-(cd "$RL_ROOT" && cargo build --release) || fail "failed to build rlc."
+# ------------------------------------------------------------------ build TT --
+echo "==> building ttc (cargo build --release)"
+(cd "$TT_ROOT" && cargo build --release) || fail "failed to build ttc."
 case "$(uname -s)" in
-  MINGW* | MSYS* | CYGWIN*) RLC_EXE="rlc.exe" ;;
-  *) RLC_EXE="rlc" ;;
+  MINGW* | MSYS* | CYGWIN*) TTC_EXE="ttc.exe" ;;
+  *) TTC_EXE="ttc" ;;
 esac
-RLC_BIN="$RL_ROOT/target/release/$RLC_EXE"
-[ -f "$RLC_BIN" ] || fail "failed to build rlc.
-  missing: $RLC_BIN"
+TTC_BIN="$TT_ROOT/target/release/$TTC_EXE"
+[ -f "$TTC_BIN" ] || fail "failed to build ttc.
+  missing: $TTC_BIN"
 
 # -------------------------------------------------- stamp the local package --
-# rl-dev.local.json marks npm/rl-lang as a local development install: the
-# launcher (dev.js) then runs this repository's release rlc and injects the
+# tt-dev.local.json marks npm/tt-lang as a local development install: the
+# launcher (dev.js) then runs this repository's release ttc and injects the
 # toolchain environment. The file is machine-local and gitignored.
 node -e '
   require("fs").writeFileSync(
     process.argv[1],
     JSON.stringify({ root: process.argv[2] }, null, 2) + "\n",
   );
-' "$PKG_DIR/rl-dev.local.json" "$RL_ROOT"
+' "$PKG_DIR/tt-dev.local.json" "$TT_ROOT"
 
 # ------------------------------------------------------------------- VSCode --
-EXT_DIR="$RL_ROOT/editors/vscode"
-EXT_ID="rl-lang.rl-language"
-VSIX="$CONFIG_DIR/rl-language.vsix"
+EXT_DIR="$TT_ROOT/editors/vscode"
+EXT_ID="tt-lang.tt-language"
+VSIX="$CONFIG_DIR/tt-language.vsix"
 
 echo "==> building the VSCode extension"
 if [ ! -d "$EXT_DIR/node_modules" ] \
@@ -230,16 +230,16 @@ fi
 # the uninstall.
 if command -v code > /dev/null 2>&1; then
   if code --list-extensions 2> /dev/null | grep -qix "$EXT_ID"; then
-    echo "==> uninstalling the existing RL extension"
+    echo "==> uninstalling the existing TT extension"
     code --uninstall-extension "$EXT_ID" > /dev/null \
-      || fail "failed to uninstall the existing RL extension."
-    VSCODE_STATUS="RL extension reinstalled"
+      || fail "failed to uninstall the existing TT extension."
+    VSCODE_STATUS="TT extension reinstalled"
   else
-    VSCODE_STATUS="RL extension installed"
+    VSCODE_STATUS="TT extension installed"
   fi
-  echo "==> installing the RL extension"
+  echo "==> installing the TT extension"
   code --install-extension "$VSIX" > /dev/null \
-    || fail "failed to install the RL extension."
+    || fail "failed to install the TT extension."
 else
   VSCODE_STATUS="build ready, install skipped — no 'code' CLI on PATH
   (install manually: code --install-extension $VSIX)"
@@ -247,10 +247,10 @@ fi
 
 # ------------------------------------------------------------------ summary --
 echo
-echo "RL development environment ready"
-echo "RL"
-echo "  root: $RL_ROOT"
-echo "  rlc: target/release/$RLC_EXE"
+echo "TT development environment ready"
+echo "TT"
+echo "  root: $TT_ROOT"
+echo "  ttc: target/release/$TTC_EXE"
 echo "TypeScript toolchain"
 if [ "$KIND" = "checkout" ]; then
   echo "  root: $TSGO_ROOT"

@@ -2,12 +2,12 @@
 //!
 //! A case tag and a payload field name are written in places that lower to
 //! a string literal and a destructuring key, so asking TypeScript "what can
-//! go here?" asks about the wrong text — there *is* no text of rl's kind in
+//! go here?" asks about the wrong text — there *is* no text of tt's kind in
 //! the output. The completion probe that mends an unfinished `x |> .`
 //! cannot help either: splicing a placeholder into a pattern produces a
 //! pattern, not a question TypeScript can answer.
 //!
-//! So rl answers, from the analysis' declaration table — the same table
+//! So tt answers, from the analysis' declaration table — the same table
 //! that decides exhaustiveness and resolution, under the same shadowing.
 //!
 //! **Why the token stream and not the parser.** Completion is asked exactly
@@ -28,23 +28,23 @@ use super::language::Position;
 
 /// What a completion item is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RlCompletionKind {
+pub enum TtCompletionKind {
     /// A case tag.
     Case,
     /// A payload field name.
     Field,
     /// The wildcard arm `_`. Offered where an arm may be written, and
-    /// nowhere else — `if let _ = x` is not rl syntax.
+    /// nowhere else — `if let _ = x` is not tt syntax.
     Wildcard,
 }
 
 /// One thing that can be written at the asked-about position.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RlCompletion {
+pub struct TtCompletion {
     /// What to insert.
     pub label: String,
     /// Which name space it comes from.
-    pub kind: RlCompletionKind,
+    pub kind: TtCompletionKind,
     /// The declaration, rendered — shown beside the label.
     pub detail: String,
     /// Whether an arm already covers this case (an editor sorts these
@@ -53,11 +53,11 @@ pub struct RlCompletion {
 }
 
 /// What can be written at `position`, or an empty list when the position is
-/// not a pattern position rl owns.
+/// not a pattern position tt owns.
 ///
 /// The answer never includes ordinary TypeScript completions: those are the
 /// service's, and a consumer merges the two lists.
-pub fn rl_completions_at(path: &Path, source: &str, position: Position) -> Vec<RlCompletion> {
+pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<TtCompletion> {
     let offset = super::language::source_byte(source, position);
     let tokens = lex(source, 0, source.len());
     let declarations = super::language::analyses_for(path, source).declarations;
@@ -69,9 +69,9 @@ pub fn rl_completions_at(path: &Path, source: &str, position: Position) -> Vec<R
             };
             // An arm position always admits the wildcard, whether or not
             // the subject resolved.
-            items.push(RlCompletion {
+            items.push(TtCompletion {
                 label: "_".to_string(),
-                kind: RlCompletionKind::Wildcard,
+                kind: TtCompletionKind::Wildcard,
                 detail: "wildcard arm — every remaining case (must be last)".to_string(),
                 covered: false,
             });
@@ -169,7 +169,7 @@ fn context(source: &str, tokens: &[Token], offset: usize) -> Option<Context> {
         return None;
     }
 
-    // `if let <cursor>` — rl-only syntax, so no other reading is possible.
+    // `if let <cursor>` — tt-only syntax, so no other reading is possible.
     if before >= 2
         && text(source, &tokens[before - 1]) == "let"
         && text(source, &tokens[before - 2]) == "if"
@@ -349,20 +349,20 @@ fn type_enum<'a>(declarations: &'a [DeclaredEnum], ty: &str) -> Option<&'a Decla
     declarations.iter().find(|d| d.name == base)
 }
 
-fn cases(declared: &DeclaredEnum, covered: &[String]) -> Vec<RlCompletion> {
+fn cases(declared: &DeclaredEnum, covered: &[String]) -> Vec<TtCompletion> {
     declared
         .constructors
         .iter()
-        .map(|constructor| RlCompletion {
+        .map(|constructor| TtCompletion {
             label: constructor.tag.clone(),
-            kind: RlCompletionKind::Case,
+            kind: TtCompletionKind::Case,
             detail: super::names::case_signature(&declared.name, constructor),
             covered: covered.contains(&constructor.tag),
         })
         .collect()
 }
 
-fn fields(declared: &DeclaredEnum, tag: &str) -> Vec<RlCompletion> {
+fn fields(declared: &DeclaredEnum, tag: &str) -> Vec<TtCompletion> {
     declared
         .constructors
         .iter()
@@ -370,9 +370,9 @@ fn fields(declared: &DeclaredEnum, tag: &str) -> Vec<RlCompletion> {
         .and_then(|c| c.fields.as_deref())
         .unwrap_or_default()
         .iter()
-        .map(|field| RlCompletion {
+        .map(|field| TtCompletion {
             label: field.name.clone(),
-            kind: RlCompletionKind::Field,
+            kind: TtCompletionKind::Field,
             detail: super::names::field_signature(field),
             covered: false,
         })
@@ -397,7 +397,7 @@ mod tests {
     }
 
     fn labels(source: &str, needle: &str) -> Vec<String> {
-        rl_completions_at(Path::new("/p/a.rl"), source, at(source, needle))
+        tt_completions_at(Path::new("/p/a.tt"), source, at(source, needle))
             .into_iter()
             .map(|item| item.label)
             .collect()
@@ -414,7 +414,7 @@ mod tests {
             labels(&src, "Circle(r) => r, "),
             ["Circle", "Rect", "Point", "_"]
         );
-        let items = rl_completions_at(Path::new("/p/a.rl"), &src, at(&src, "Circle(r) => r, "));
+        let items = tt_completions_at(Path::new("/p/a.tt"), &src, at(&src, "Circle(r) => r, "));
         assert_eq!(
             items
                 .iter()

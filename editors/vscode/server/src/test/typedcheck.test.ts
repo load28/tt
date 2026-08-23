@@ -1,4 +1,4 @@
-/* `runTypedCheck` — the editor's entry into `rlc --check-types` (TASK-072).
+/* `runTypedCheck` — the editor's entry into `ttc --check-types` (TASK-072).
  *
  * What is tested here is the seam, not the rule: that the buffer (and not
  * the file on disk) is what gets checked, that the compiler's own message
@@ -11,10 +11,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { runTypedCheck } from "../rlc";
+import { runTypedCheck } from "../ttc";
 import { COMPILER, compilerAvailable } from "./toolchain";
 
-const skip = compilerAvailable() ? false : "rlc not on PATH";
+const skip = compilerAvailable() ? false : "ttc not on PATH";
 /** A typed check opens a project and starts the TypeScript compiler. */
 const timeout = 60_000;
 
@@ -22,7 +22,7 @@ let seq = 0;
 function tmpProject(): string {
   const dir = path.join(
     os.tmpdir(),
-    `rl-typedcheck-${process.pid}-${seq++}`,
+    `tt-typedcheck-${process.pid}-${seq++}`,
     "src",
   );
   fs.mkdirSync(dir, { recursive: true });
@@ -34,7 +34,7 @@ test("a buffer that was never saved has no place in the project", async () => {
   const result = await runTypedCheck(
     COMPILER,
     "val const xs: number[] = [];\nxs.push(1);\n",
-    path.join(dir, "never-saved.rl"),
+    path.join(dir, "never-saved.tt"),
   );
   // Not "ok with no diagnostics": that would render as a clean file.
   assert.equal(result.kind, "unavailable");
@@ -45,7 +45,7 @@ test(
   { skip, timeout },
   async () => {
     const dir = tmpProject();
-    const file = path.join(dir, "main.rl");
+    const file = path.join(dir, "main.tt");
     fs.writeFileSync(file, "export const saved = 0;\n");
 
     const result = await runTypedCheck(
@@ -57,7 +57,7 @@ test(
     );
 
     if (result.kind === "unavailable") {
-      // No TypeScript for rlc to drive on this machine — the mode itself
+      // No TypeScript for ttc to drive on this machine — the mode itself
       // said so, which is the only thing this test would be asserting.
       return;
     }
@@ -80,7 +80,7 @@ test(
   { skip, timeout },
   async () => {
     const dir = tmpProject();
-    const file = path.join(dir, "main.rl");
+    const file = path.join(dir, "main.tt");
     fs.writeFileSync(file, "export const saved = 0;\n");
 
     const result = await runTypedCheck(
@@ -101,7 +101,7 @@ test(
   { skip, timeout },
   async () => {
     const dir = tmpProject();
-    const file = path.join(dir, "main.rl");
+    const file = path.join(dir, "main.tt");
     fs.writeFileSync(file, "export const saved = 0;\n");
 
     const result = await runTypedCheck(

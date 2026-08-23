@@ -1,10 +1,10 @@
 import type { UnpluginFactory, UnpluginInstance } from "unplugin";
 
-/** Options accepted by every `unplugin-rl` entry. */
+/** Options accepted by every `unplugin-tt` entry. */
 export interface Options {
-  /** Path to the rlc binary (default: the installed `rl-lang`, else `"rlc"`). */
+  /** Path to the ttc binary (default: the installed `tt-lang`, else `"ttc"`). */
   compiler?: string;
-  /** Run rlc's output self-check (default: true). */
+  /** Run ttc's output self-check (default: true). */
   verify?: boolean;
 }
 

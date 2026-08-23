@@ -1,14 +1,14 @@
 /* --------------------------------------------------------------------------
  * host.mjs — the TypeScript 7 native backend's host process.
  *
- * rlc embeds this file (`include_str!`) and runs it with `node`. It is the
+ * ttc embeds this file (`include_str!`) and runs it with `node`. It is the
  * only place that knows the TypeScript API: it opens ONE real TypeScript
- * project over a layered file system where every `.rl` file appears as the
- * ordinary TypeScript it lowers to, and answers rl's semantic questions
+ * project over a layered file system where every `.tt` file appears as the
+ * ordinary TypeScript it lowers to, and answers tt's semantic questions
  * against that project's checker.
  *
- * The API comes from the typescript-go tree rlc was pointed at
- * (`RLC_TSGO_ROOT`/`RLC_TSGO_BIN`, see `native.rs`): the JS client and the
+ * The API comes from the typescript-go tree ttc was pointed at
+ * (`TTC_TSGO_ROOT`/`TTC_TSGO_BIN`, see `native.rs`): the JS client and the
  * `tsgo` binary speak an unversioned MessagePack protocol and must come from
  * the same build, so both are resolved from that one tree.
  *
@@ -21,7 +21,7 @@
  *   open   { tsgoBin (nullable), apiModule, cwd, tsconfig (nullable) }
  *       →  { ok: true }
  *
- *   ask    { modules: [{ path, text }],   // lowered .rl → virtual .ts
+ *   ask    { modules: [{ path, text }],   // lowered .tt → virtual .ts
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
  *            symbolChecks: [{ module, start }],
@@ -37,7 +37,7 @@
  * without ending the session. EOF on stdin ends it.
  *
  * `start`/`end` are UTF-16 code-unit offsets — TypeScript's own coordinate
- * space. Mapping them back to `.rl` byte positions is rlc's job (`mapper`),
+ * space. Mapping them back to `.tt` byte positions is ttc's job (`mapper`),
  * not this host's.
  *
  * Inside one `ask` the per-position questions are batched by module through
@@ -108,8 +108,8 @@ function lineReader() {
 }
 
 /**
- * The file system TypeScript sees: rlc's lowered modules layered over the
- * real disk. A `.rl` file is invisible to TypeScript; the `.ts` it lowers to
+ * The file system TypeScript sees: ttc's lowered modules layered over the
+ * real disk. A `.tt` file is invisible to TypeScript; the `.ts` it lowers to
  * takes its place, including in directory listings, so a `tsconfig.json`
  * that globs a directory picks it up exactly as it would a hand-written file.
  */
@@ -135,9 +135,9 @@ function layeredFileSystem(files, dirs) {
         const base = path.basename(f);
         if (!names.has(base)) real.files.push(base);
       }
-      // The sources rlc lowered are not TypeScript; hide them so no tool
-      // tries to read `.rl` as TypeScript.
-      real.files = real.files.filter((f) => !f.endsWith(".rl") && !f.endsWith(".rlx"));
+      // The sources ttc lowered are not TypeScript; hide them so no tool
+      // tries to read `.tt` as TypeScript.
+      real.files = real.files.filter((f) => !f.endsWith(".tt") && !f.endsWith(".ttx"));
       return real;
     },
   };
@@ -154,7 +154,7 @@ async function main() {
   try {
     open = JSON.parse(readLine());
   } catch (e) {
-    fail(3, "rlc host: malformed open request: " + e.message);
+    fail(3, "ttc host: malformed open request: " + e.message);
   }
 
   let API;
@@ -165,10 +165,10 @@ async function main() {
       path.resolve(path.dirname(open.apiModule), "../../ast/index.js")
     ));
   } catch (e) {
-    fail(2, "rlc host: cannot load the TypeScript API from " + open.apiModule + ": " + e.message);
+    fail(2, "ttc host: cannot load the TypeScript API from " + open.apiModule + ": " + e.message);
   }
 
-  // The modules rlc serves, mutated in place between requests: the file
+  // The modules ttc serves, mutated in place between requests: the file
   // system the compiler holds is this one, so an updated text is visible as
   // soon as the snapshot is told the file changed.
   const files = new Map();
@@ -221,7 +221,7 @@ async function main() {
     const paths = (job.modules ?? []).map((m) => m.path);
     // Without a configuration the project is whatever is opened, so the
     // hand-written `.ts` files come along: one nothing imports is still the
-    // user's code, and `rlc --types src` is expected to check it.
+    // user's code, and `ttc --types src` is expected to check it.
     const params = opened
       ? { fileChanges: changes }
       : open.tsconfig
@@ -236,9 +236,9 @@ async function main() {
     }
 
     // The whole program, not just the lowered modules: a hand-written `.ts`
-    // and an `.rl` are in one project, so an error in either is this run's to
+    // and an `.tt` are in one project, so an error in either is this run's to
     // report. Which file it lands in decides how it is positioned, and that
-    // is rlc's half.
+    // is ttc's half.
     const checker = project.checker;
     for (const d of project.program.getSemanticDiagnostics()) {
       if (!d.fileName) continue;
@@ -321,7 +321,7 @@ async function main() {
         if (missing) out.literalMissing.push({ index: entry.index, missing });
         return;
       }
-      // An rl enum lowers to a discriminated union, so the question is
+      // A tt enum lowers to a discriminated union, so the question is
       // "which `kind` values does the scrutinee's type still allow?" —
       // again at the match, so a case an earlier guard removed is not
       // demanded back.
@@ -353,17 +353,17 @@ async function main() {
         const seen = new Set(work.covered);
         const missing = tags.filter((tag) => !seen.has(tag));
         if (missing.length > 0) out.tagMissing.push({ index: work.index, missing });
-        // The whole member list, not just what the arms left out: rl runs
+        // The whole member list, not just what the arms left out: tt runs
         // its own exhaustiveness algorithm over it, which is what sees
         // holes *inside* a payload (TASK-108). The `missing` above stays
-        // for the answer rl falls back to.
+        // for the answer tt falls back to.
         out.tagMembers.push({ index: work.index, tags });
       }
     }
 
-    // Resolution: the primitive rl's `val` is built from. Which binding an
+    // Resolution: the primitive tt's `val` is built from. Which binding an
     // identifier names, and whether a method is a built-in, are both "what
-    // symbol is this?" — asked here, interpreted by rl.
+    // symbol is this?" — asked here, interpreted by tt.
     const symbolChecks = (job.symbolChecks ?? []).map((check, index) => ({ check, index }));
     const symbols = perModule(symbolChecks, (module, positions) =>
       batched(
@@ -387,14 +387,14 @@ async function main() {
       });
     });
     // Declaration emit, in memory. The compiler writes the `.d.ts` for a
-    // lowered module exactly as it would for a hand-written one, so rlc
+    // lowered module exactly as it would for a hand-written one, so ttc
     // never generates TypeScript declaration syntax itself.
     if (job.emitDeclarations) {
       // Declaration emit is newer than the checker API: a released 7.0
       // client can check but cannot emit.
       if (typeof project.program.getDeclarationEmit !== "function") {
         process.exitCode = 5;
-        fail(5, "rlc host: the resolved TypeScript has no declaration emit API");
+        fail(5, "ttc host: the resolved TypeScript has no declaration emit API");
       }
       const emitted = project.program.getDeclarationEmit(
         (job.modules ?? []).map((m) => m.path),

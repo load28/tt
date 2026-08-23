@@ -1,6 +1,6 @@
 /* --------------------------------------------------------------------------
- * rl language client — follows the official VS Code LSP extension pattern
- * (client launches the server over Node IPC and wires the `rl` language).
+ * tt language client — follows the official VS Code LSP extension pattern
+ * (client launches the server over Node IPC and wires the `tt` language).
  * ----------------------------------------------------------------------- */
 import * as path from "path";
 import { ExtensionContext, workspace } from "vscode";
@@ -29,22 +29,22 @@ export function activate(context: ExtensionContext): void {
 
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
-      { scheme: "file", language: "rl" },
-      { scheme: "untitled", language: "rl" },
-      { scheme: "file", language: "rlx" },
-      { scheme: "untitled", language: "rlx" },
+      { scheme: "file", language: "tt" },
+      { scheme: "untitled", language: "tt" },
+      { scheme: "file", language: "ttx" },
+      { scheme: "untitled", language: "ttx" },
     ],
     synchronize: {
       // Re-validate when the locally built compiler appears or changes.
       fileEvents: workspace.createFileSystemWatcher(
-        "**/target/{debug,release}/rlc",
+        "**/target/{debug,release}/ttc",
       ),
     },
   };
 
   client = new LanguageClient(
-    "rl",
-    "rl Language Server",
+    "tt",
+    "tt Language Server",
     serverOptions,
     clientOptions,
   );

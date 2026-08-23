@@ -1,10 +1,10 @@
-//! The flow IR — rl's minimal control-flow analysis.
+//! The flow IR — tt's minimal control-flow analysis.
 //!
 //! This is the compiler core's flow layer (`docs/design/compiler-core.md`
 //! §9): **not** a TypeScript MIR, just enough of a CFG to answer the
-//! control-flow questions rl's own constructs pose. The first consumer is
+//! control-flow questions tt's own constructs pose. The first consumer is
 //! let-else — Rust's rule is "the `else` block must diverge", and until now
-//! rlc approximated it by looking at the last statement's first keyword,
+//! ttc approximated it by looking at the last statement's first keyword,
 //! which rejected genuinely diverging blocks (`if`/`else` with both
 //! branches returning, a bare block ending in `return`, code after a
 //! `return`). The CFG answers structurally.
@@ -348,7 +348,7 @@ fn find_close(tokens: &[Token], open: usize) -> Option<usize> {
 /// stream would leave a **user-written function inside the stream** — the
 /// placement question `try` asks: its lowering emits a `return`, and that
 /// `return` must have a function of the user's to exit. At the top level
-/// of a module (or of an rl construct's own statement region, which
+/// of a module (or of a tt construct's own statement region, which
 /// forms an isolated value region) there is none; inside a `function`, a method, or
 /// an arrow body written in the region there is.
 ///

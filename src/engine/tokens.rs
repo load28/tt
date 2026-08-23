@@ -1,13 +1,13 @@
 //! Semantic tokens — the parser's own classification of the ambiguous
 //! surface, for editors.
 //!
-//! The TextMate grammar (a regex approximation) colors rl constructs
+//! The TextMate grammar (a regex approximation) colors tt constructs
 //! structurally, but two families of decisions are the parser's alone:
 //!
-//! - **Claimed**: a `match`/`result`/`flow` the parser lifted really is rl,
+//! - **Claimed**: a `match`/`result`/`flow` the parser lifted really is tt,
 //!   even where the grammar's same-line lookaheads miss it (a `flow` head
 //!   with its first `|>` on the next line, a binding split across lines).
-//! - **Not claimed**: an identifier that merely looks like rl — a function
+//! - **Not claimed**: an identifier that merely looks like tt — a function
 //!   named `match` being called, a variable named `result` before a block —
 //!   stays plain TypeScript, and the editor should color it that way.
 //!
@@ -30,17 +30,17 @@ use crate::typescript::mapper;
 /// standard token types so an adapter maps them one to one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticTokenKind {
-    /// An rl keyword the parser claimed: `match`, `result`, `flow`, `try`.
+    /// A tt keyword the parser claimed: `match`, `result`, `flow`, `try`.
     Keyword,
-    /// An rl enum's name, at its declaration.
+    /// A tt enum's name, at its declaration.
     Enum,
     /// A case tag — in an enum declaration or in a pattern.
     EnumMember,
-    /// A binding an rl pattern introduces (alias included).
+    /// A binding a tt pattern introduces (alias included).
     Variable,
     /// A field name in a pattern's `field: alias` binding.
     Property,
-    /// An identifier that looks like an rl keyword but is a call —
+    /// An identifier that looks like a tt keyword but is a call —
     /// `match(...)` naming a plain function. Reported so the editor
     /// *un*-colors what the grammar over-approximated.
     Function,
@@ -63,10 +63,10 @@ impl SemanticTokenKind {
     }
 }
 
-/// One classified token, in `.rl` coordinates (never spans lines).
+/// One classified token, in `.tt` coordinates (never spans lines).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SemanticToken {
-    /// Where, in the `.rl` source.
+    /// Where, in the `.tt` source.
     pub range: Range,
     /// What the parser says it is.
     pub kind: SemanticTokenKind,
@@ -81,7 +81,7 @@ fn scan(source: &str) -> Vec<(usize, usize, SemanticTokenKind)> {
     out
 }
 
-/// The semantic tokens of one source text, in `.rl` coordinates.
+/// The semantic tokens of one source text, in `.tt` coordinates.
 ///
 /// Parse-only and stateless — no project, no TypeScript toolchain — so a
 /// consumer can ask on every pause, for any buffer, in any environment
@@ -167,7 +167,7 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                 walk(src, &stmt.else_body, out);
             }
             Segment::IfLet(stmt) => if_let(src, stmt, out),
-            Segment::RlImport(_) => {}
+            Segment::TtImport(_) => {}
             Segment::ValModifier(_) => {
                 // `val` keeps its grammar color (a storage modifier); the
                 // parser and the grammar agree on every valid occurrence.

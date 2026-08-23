@@ -1,8 +1,8 @@
-storage: ../.rl-dev/local-registry/storage
+storage: ../.tt-dev/local-registry/storage
 
 auth:
   htpasswd:
-    file: ../.rl-dev/local-registry/htpasswd
+    file: ../.tt-dev/local-registry/htpasswd
     max_users: -1
 
 uplinks:

@@ -1,10 +1,10 @@
-/* End-to-end tests for TypeScript answers over rl constructs, through the
+/* End-to-end tests for TypeScript answers over tt constructs, through the
  * engine session: hover inside match arms and pipelines, navigation out of
- * an arm body, imported unopened `.rl` modules, `@rl/std`, and type errors
+ * an arm body, imported unopened `.tt` modules, `@tt/std`, and type errors
  * mapped onto the source. The projection and every mapping live in the
  * engine now; what these lock is the observable result — the same results
  * the virtual-document pipeline (TASK-050/055/057/058/080) has always
- * produced, asked for and answered in `.rl` coordinates.
+ * produced, asked for and answered in `.tt` coordinates.
  *
  * They drive the real compiler *and* a real TypeScript language server, so
  * they skip when either is missing. */
@@ -19,7 +19,7 @@ import { positionAt, sliceOf } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 
 const skip = !compilerAvailable()
-  ? "rlc not on PATH"
+  ? "ttc not on PATH"
   : findTsgo() === null
     ? "no tsgo executable"
     : false;
@@ -66,11 +66,11 @@ test(
     // switch — the raw text could never answer this; the engine's
     // projection does, and the span comes back in the arm body the user
     // wrote.
-    const dir = fixture("rl-emitmap-test-", {
-      "shapes.rl": SOURCE,
+    const dir = fixture("tt-emitmap-test-", {
+      "shapes.tt": SOURCE,
       "helpers.ts": HELPERS,
     });
-    const file = path.join(dir, "shapes.rl");
+    const file = path.join(dir, "shapes.tt");
     const info = await engine.hover(
       COMPILER,
       file,
@@ -89,11 +89,11 @@ test(
   "definition from an arm body lands in the hand-written file",
   { skip },
   async () => {
-    const dir = fixture("rl-emitmap-test-", {
-      "shapes.rl": SOURCE,
+    const dir = fixture("tt-emitmap-test-", {
+      "shapes.tt": SOURCE,
       "helpers.ts": HELPERS,
     });
-    const file = path.join(dir, "shapes.rl");
+    const file = path.join(dir, "shapes.tt");
     const defs = await engine.definition(
       COMPILER,
       file,
@@ -106,15 +106,15 @@ test(
 );
 
 /* --------------------------------------------------------------------------
- * TASK-055: the std module and imported `.rl` modules must reach the
+ * TASK-055: the std module and imported `.tt` modules must reach the
  * language service with real types. Both used to arrive as `any` — the bare
- * `"@rl/std"` specifier resolved nowhere, and an imported `.rl` file was
+ * `"@tt/std"` specifier resolved nowhere, and an imported `.tt` file was
  * served as raw source TypeScript can only error-recover through.
  * -------------------------------------------------------------------- */
 
 const PIPE_SOURCE = [
-  'import type { TResult } from "@rl/std";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TResult } from "@tt/std";',
+  'import * as Result from "@tt/std/result";',
   "",
   "declare function tokenize(s: string): TResult<string[], string>;",
   "declare function parse(t: string[]): TResult<number, string>;",
@@ -129,8 +129,8 @@ const PIPE_SOURCE = [
 ].join("\n");
 
 test("a pipeline step over the std module is not `any`", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": PIPE_SOURCE });
-  const file = path.join(dir, "calc.rl");
+  const dir = fixture("tt-std-test-", { "calc.tt": PIPE_SOURCE });
+  const file = path.join(dir, "calc.tt");
   const info = await engine.hover(
     COMPILER,
     file,
@@ -147,8 +147,8 @@ test(
   "a postfix pipeline step keeps its receiver's type",
   { skip },
   async () => {
-    const dir = fixture("rl-std-test-", { "calc.rl": PIPE_SOURCE });
-    const file = path.join(dir, "calc.rl");
+    const dir = fixture("tt-std-test-", { "calc.tt": PIPE_SOURCE });
+    const file = path.join(dir, "calc.tt");
     const info = await engine.hover(
       COMPILER,
       file,
@@ -171,7 +171,7 @@ const IMPORTED_SHAPES = [
 ].join("\n");
 
 const IMPORTER = [
-  'import { Shape } from "./shapes.rl";',
+  'import { Shape } from "./shapes.tt";',
   "",
   "declare function getShape(): Shape;",
   "",
@@ -183,18 +183,18 @@ const IMPORTER = [
 ].join("\n");
 
 test(
-  "an imported .rl module is served emitted, not raw",
+  "an imported .tt module is served emitted, not raw",
   { skip },
   async () => {
-    // The importer is the open buffer; `shapes.rl` is only on disk. The
+    // The importer is the open buffer; `shapes.tt` is only on disk. The
     // engine projects and serves it on its own — served raw, TypeScript
     // would read `enum Shape` as a TS enum and the arm bindings would lose
     // their types.
-    const dir = fixture("rl-import-test-", {
-      "shapes.rl": IMPORTED_SHAPES,
-      "main.rl": IMPORTER,
+    const dir = fixture("tt-import-test-", {
+      "shapes.tt": IMPORTED_SHAPES,
+      "main.tt": IMPORTER,
     });
-    const file = path.join(dir, "main.rl");
+    const file = path.join(dir, "main.tt");
     engine.openDocument(COMPILER, file, IMPORTER);
     const info = await engine.hover(
       COMPILER,
@@ -211,14 +211,14 @@ test(
 );
 
 /* --------------------------------------------------------------------------
- * TASK-057: type errors inside rl syntax reach the editor, every span on
+ * TASK-057: type errors inside tt syntax reach the editor, every span on
  * the source the user wrote — a span that would land in generated code is
  * dropped, never reported at a made-up position.
  * -------------------------------------------------------------------- */
 
 const BAD_PIPE = [
-  'import type { TResult } from "@rl/std";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TResult } from "@tt/std";',
+  'import * as Result from "@tt/std/result";',
   "",
   "declare function evaluate(): TResult<number, string>;",
   "",
@@ -228,8 +228,8 @@ const BAD_PIPE = [
 ].join("\n");
 
 test("a type error inside a pipeline is reported", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": BAD_PIPE });
-  const file = path.join(dir, "calc.rl");
+  const dir = fixture("tt-std-test-", { "calc.tt": BAD_PIPE });
+  const file = path.join(dir, "calc.tt");
   const diagnostics = await engine.tsDiagnostics(COMPILER, file);
   assert.equal(diagnostics.length, 1, JSON.stringify(diagnostics));
   assert.equal(diagnostics[0].code, 2339); // property does not exist
@@ -253,25 +253,25 @@ const BAD_ARM = [
 ].join("\n");
 
 test("a type error inside a match arm is reported", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": BAD_ARM });
-  const file = path.join(dir, "calc.rl");
+  const dir = fixture("tt-std-test-", { "calc.tt": BAD_ARM });
+  const file = path.join(dir, "calc.tt");
   const diagnostics = await engine.tsDiagnostics(COMPILER, file);
   assert.equal(diagnostics.length, 1, JSON.stringify(diagnostics));
   assert.equal(diagnostics[0].code, 2339);
   assert.equal(sliceOf(BAD_ARM, diagnostics[0].range), "toUpperCase");
 });
 
-test("clean rl syntax reports nothing", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": PIPE_SOURCE });
+test("clean tt syntax reports nothing", { skip }, async () => {
+  const dir = fixture("tt-std-test-", { "calc.tt": PIPE_SOURCE });
   assert.deepEqual(
-    await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.rl")),
+    await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.tt")),
     [],
   );
 });
 
 test("a buffer mid-edit is never invented errors for", { skip }, async () => {
   // An unfinished construct does not lower — the projection passes the raw
-  // text through — and TypeScript cannot parse rl syntax, so its recovery
+  // text through — and TypeScript cannot parse tt syntax, so its recovery
   // would invent errors all over the file. The parse-error guard drops
   // every one of them: degrade to silence, never to lies.
   const broken = [
@@ -279,8 +279,8 @@ test("a buffer mid-edit is never invented errors for", { skip }, async () => {
     "const label = match (shape) {",
     "  Circle(radius) => radius.",
   ].join("\n");
-  const dir = fixture("rl-rawdiag-test-", { "shapes.rl": broken });
-  const file = path.join(dir, "shapes.rl");
+  const dir = fixture("tt-rawdiag-test-", { "shapes.tt": broken });
+  const file = path.join(dir, "shapes.tt");
   engine.openDocument(COMPILER, file, broken);
   assert.deepEqual(await engine.tsDiagnostics(COMPILER, file), []);
   engine.closeDocument(COMPILER, file);
@@ -292,8 +292,8 @@ test("a buffer mid-edit is never invented errors for", { skip }, async () => {
  * -------------------------------------------------------------------- */
 
 const TUPLE_SOURCE = [
-  'import type { TResult } from "@rl/std";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TResult } from "@tt/std";',
+  'import * as Result from "@tt/std/result";',
   "",
   "type Evaluated = TResult<number, string>;",
   "type Operands = TResult<[number, number], string>;",
@@ -306,9 +306,9 @@ const TUPLE_SOURCE = [
 ].join("\n");
 
 test("tuple destructuring over the std module reports nothing", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": TUPLE_SOURCE });
+  const dir = fixture("tt-std-test-", { "calc.tt": TUPLE_SOURCE });
   assert.deepEqual(
-    await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.rl")),
+    await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.tt")),
     [],
   );
 });
@@ -321,9 +321,9 @@ test("tuple destructuring over the std module reports nothing", { skip }, async 
  * -------------------------------------------------------------------- */
 
 const BINDING_SOURCE = [
-  'import type { TOption, TResult } from "@rl/std";',
-  'import * as Option from "@rl/std/option";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TOption, TResult } from "@tt/std";',
+  'import * as Option from "@tt/std/option";',
+  'import * as Result from "@tt/std/result";',
   "",
   "declare function load(): TResult<number, string>;",
   "declare function boxed(): TOption<string>;",
@@ -361,15 +361,15 @@ async function signatureOfBinding(
 }
 
 test("a try declaration's binding hovers with its Ok type", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": BINDING_SOURCE });
-  const file = path.join(dir, "calc.rl");
+  const dir = fixture("tt-std-test-", { "calc.tt": BINDING_SOURCE });
+  const file = path.join(dir, "calc.tt");
   const signature = await signatureOfBinding(file, "total = try load()", "total");
   assert.match(signature, /total: number/);
 });
 
 test("let-else and if let bindings hover with the extracted type", { skip }, async () => {
-  const dir = fixture("rl-std-test-", { "calc.rl": BINDING_SOURCE });
-  const file = path.join(dir, "calc.rl");
+  const dir = fixture("tt-std-test-", { "calc.tt": BINDING_SOURCE });
+  const file = path.join(dir, "calc.tt");
   assert.match(
     await signatureOfBinding(file, "value: label)", "label"),
     /label: string/,
@@ -385,14 +385,14 @@ test("let-else and if let bindings hover with the extracted type", { skip }, asy
 });
 
 /* --------------------------------------------------------------------------
- * TASK-118: a diagnostic on generated code is restated in rl's words *and*
- * in rl's names — the case TypeScript printed structurally is called by the
+ * TASK-118: a diagnostic on generated code is restated in tt's words *and*
+ * in tt's names — the case TypeScript printed structurally is called by the
  * declaration it lowers from, with TypeScript's own text alongside.
  * -------------------------------------------------------------------- */
 
 const NAMED_SOURCE = [
-  'import type { TResult } from "@rl/std";',
-  'import * as Result from "@rl/std/result";',
+  'import type { TResult } from "@tt/std";',
+  'import * as Result from "@tt/std/result";',
   "",
   "enum Wire { OutOfRange(value: number), Missing }",
   "enum ParseError { NotANumber(text: string) }",
@@ -410,21 +410,21 @@ const NAMED_SOURCE = [
 ].join("\n");
 
 test("a restated diagnostic names the case it is about", { skip }, async () => {
-  const dir = fixture("rl-named-test-", { "wire.rl": NAMED_SOURCE });
+  const dir = fixture("tt-named-test-", { "wire.tt": NAMED_SOURCE });
   const diagnostics = await engine.tsDiagnostics(
     COMPILER,
-    path.join(dir, "wire.rl"),
+    path.join(dir, "wire.tt"),
   );
   const error = diagnostics.find((d) => d.code === 2322);
   assert.ok(error, JSON.stringify(diagnostics));
-  // The propagation is the extent, and the wording is rl's (TASK-104/116).
+  // The propagation is the extent, and the wording is tt's (TASK-104/116).
   assert.equal(sliceOf(NAMED_SOURCE, error!.range), "try inner(w)");
   assert.match(error!.message, /the `Err` this `try` propagates/);
-  // The narrowed case prints structurally; rl says whose case it is, and
+  // The narrowed case prints structurally; tt says whose case it is, and
   // a union covering a whole enum is that enum.
   assert.match(
     error!.message,
-    /in rl's names: Type 'TErr<Wire\.OutOfRange>' is not assignable to type 'TResult<number, ParseError>'/,
+    /in tt's names: Type 'TErr<Wire\.OutOfRange>' is not assignable to type 'TResult<number, ParseError>'/,
   );
   // TypeScript's own text rides along, unchanged.
   assert.match(
@@ -434,7 +434,7 @@ test("a restated diagnostic names the case it is about", { skip }, async () => {
 });
 
 test(
-  "a direct rl cause suppresses provisional checker consequences",
+  "a direct tt cause suppresses provisional checker consequences",
   { skip },
   async () => {
     const source = [
@@ -443,15 +443,15 @@ test(
       '  match (c) { Up(value) => "up", 404 => "gone", Down => "down" };',
       "",
     ].join("\n");
-    const dir = fixture("rl-owned-diagnostic-test-", { "mixed.rl": source });
+    const dir = fixture("tt-owned-diagnostic-test-", { "mixed.tt": source });
     const diagnostics = await engine.tsDiagnostics(
       COMPILER,
-      path.join(dir, "mixed.rl"),
+      path.join(dir, "mixed.tt"),
     );
     assert.deepEqual(
       diagnostics,
       [],
-      "the direct RL diagnostic owns every checker consequence of this lowering",
+      "the direct TT diagnostic owns every checker consequence of this lowering",
     );
   },
 );

@@ -1,13 +1,13 @@
-# rl
+# tt
 
-[공식 홈페이지](https://load28.github.io/rl/) · [English](./README.md) · [한국어](./README.ko.md)
+[공식 홈페이지](https://load28.github.io/tt/) · [English](./README.md) · [한국어](./README.ko.md)
 
-rl은 TypeScript에 표현력 높은 데이터·제어 흐름 기능을 더하고, 다시 순수 TypeScript로 컴파일하는 작은 언어입니다.
+tt은 TypeScript에 표현력 높은 데이터·제어 흐름 기능을 더하고, 다시 순수 TypeScript로 컴파일하는 작은 언어입니다.
 
 > [!WARNING]
-> **개발 중:** rl은 아직 프로덕션 사용을 권장하지 않습니다. 릴리스 사이에 API와 언어 동작이 바뀔 수 있습니다.
+> **개발 중:** tt은 아직 프로덕션 사용을 권장하지 않습니다. 릴리스 사이에 API와 언어 동작이 바뀔 수 있습니다.
 
-```rl
+```tt
 export enum Shape {
   Circle(radius: number),
   Rectangle(width: number, height: number),
@@ -22,15 +22,15 @@ export const area = (shape: Shape): number =>
   };
 ```
 
-모든 유효한 TypeScript 파일은 그대로 유효한 `.rl` 파일이고, 모든 유효한 TSX 파일은 유효한 `.rlx` 파일입니다. rl은 자신이 소유한 구문만 변환하고, 소진되지 않은 match 같은 언어 오류를 직접 보고하며, 런타임 의존성 없는 읽기 쉬운 TypeScript 또는 TSX를 방출합니다.
+모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이고, 모든 유효한 TSX 파일은 유효한 `.ttx` 파일입니다. tt은 자신이 소유한 구문만 변환하고, 소진되지 않은 match 같은 언어 오류를 직접 보고하며, 런타임 의존성 없는 읽기 쉬운 TypeScript 또는 TSX를 방출합니다.
 
 ## 설치와 사용
 
 npm에서 프리빌트 컴파일러를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지 않습니다.
 
 ```sh
-bun create rl@latest my-app
-bun create rl@latest init       # 기존 TypeScript 프로젝트에서 실행
+bun create tt@latest my-app
+bun create tt@latest init       # 기존 TypeScript 프로젝트에서 실행
 ```
 
 새 프로젝트의 자동 설치에는 Bun을 사용합니다. 자동 설치와 번들러별 수동 절차는
@@ -39,43 +39,43 @@ bun create rl@latest init       # 기존 TypeScript 프로젝트에서 실행
 컴파일러만 수동으로 설치하려면 다음 명령을 사용합니다.
 
 ```sh
-bun add -d rl-lang typescript@7
+bun add -d tt-lang typescript@7
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
 
 ```sh
-bunx rlc -o build src
-bunx rlc --check src
-bunx rlc --check-types src
+bunx ttc -o build src
+bunx ttc --check src
+bunx ttc --check-types src
 ```
 
-`rlc`는 `.rl`을 `.ts`로, `.rlx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.rl` 또는 `.rlx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`unplugin-rl`](./integrations/unplugin)을 사용하세요.
+`ttc`는 `.tt`을 `.ts`로, `.ttx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.tt` 또는 `.ttx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`unplugin-tt`](./integrations/unplugin)을 사용하세요.
 
 프리빌트 바이너리는 Linux x64/arm64, macOS x64/arm64, Windows x64를 지원합니다. 다른 플랫폼에서는 소스에서 빌드하세요.
 
 ```sh
-cargo install --git https://github.com/load28/rl
+cargo install --git https://github.com/load28/tt
 ```
 
-컴파일러 옵션은 `rlc --help`, 내장 언어 가이드는 `rlc help <topic>`으로 확인할 수 있습니다.
+컴파일러 옵션은 `ttc --help`, 내장 언어 가이드는 `ttc help <topic>`으로 확인할 수 있습니다.
 
 ## 언어 한눈에 보기
 
 - Rust 스타일 `enum`으로 데이터를 모델링하고, 가드·튜플·리터럴·or-패턴·중첩 패턴을 지원하는 소진적 `match`로 값을 추출합니다.
-- `@rl/std`의 `TOption`과 `TResult`를 `try`, `let-else`, `if let`, `result` 블록으로 다룹니다. 트리셰이킹 가능한 연산은 `@rl/std/option`과 `@rl/std/result`에서 가져옵니다.
+- `@tt/std`의 `TOption`과 `TResult`를 `try`, `let-else`, `if let`, `result` 블록으로 다룹니다. 트리셰이킹 가능한 연산은 `@tt/std/option`과 `@tt/std/result`에서 가져옵니다.
 - `|>`와 `flow`로 값 파이프라인과 함수 파이프라인을 만듭니다.
 - 변경을 허용하지 않을 바인딩과 매개변수에는 `val`을 붙입니다.
 
 나머지는 모두 평범한 TypeScript입니다. 기존 TypeScript의 타입, 모듈, 도구, 런타임 동작을 그대로 기반으로 사용합니다.
 
-## rl 개발하기
+## tt 개발하기
 
-컴파일러는 작은 공개 API와 `rlc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.88 이상이 필요합니다. 전체 통합 테스트에는 Node.js와 TypeScript도 필요합니다.
+컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.88 이상이 필요합니다. 전체 통합 테스트에는 Node.js와 TypeScript도 필요합니다.
 
 ```sh
-git clone https://github.com/load28/rl.git
-cd rl
+git clone https://github.com/load28/tt.git
+cd tt
 cargo build
 cargo test
 ```
@@ -93,7 +93,7 @@ cargo test
 컴파일러는 Rust 라이브러리로도 포함할 수 있습니다.
 
 ```rust
-use rlc::{compile, Options};
+use ttc::{compile, Options};
 
 let typescript = compile(source, &Options::default())?;
 ```

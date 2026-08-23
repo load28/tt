@@ -1,16 +1,16 @@
 //! Semantic checks over the AST.
 //!
-//! Everything the parser deliberately does not do lives here: rl-level rules
+//! Everything the parser deliberately does not do lives here: tt-level rules
 //! whose violation is a compile error rather than a passthrough. The checker
 //! walks the AST depth-first and **accumulates** every violation as an
-//! [`RlError`] with a byte offset and a [`DiagnosticCode`], then reports
+//! [`TtError`] with a byte offset and a [`DiagnosticCode`], then reports
 //! them in source order — one broken construct does not stop the next
 //! independent one from being checked (TASK-117; the recovery boundary is
 //! per construct: a match whose names did not resolve keeps its own
 //! exhaustiveness question suppressed, nobody else's).
 //!
 //! Error layering: every rule here is an
-//! rl-level rule, reported by rlc itself with an exact position. Nothing is
+//! tt-level rule, reported by ttc itself with an exact position. Nothing is
 //! delegated to tsc — in particular exhaustiveness, which this module
 //! *reports* but no longer computes: [`crate::analysis`] owns the subject
 //! table and the coverage rule, and sema turns its answer into positioned
@@ -33,13 +33,13 @@
 //! - `try`: must sit inside a function written in its parse region
 //!   ([`crate::flow::in_function_body`], carried on the statement by the
 //!   parser) — its emitted `return` needs a user function to exit. That
-//!   rules out the module's top level, and the statement regions of rl
+//!   rules out the module's top level, and the statement regions of tt
 //!   constructs (a match arm, a `result` block, a template interpolation)
 //!   *except* where the user wrote a function there: a `try` inside an
 //!   arrow inside an arm is Rust's `?` inside a closure, and is fine.
 //! - let-else: the same flow fact decides placement, except the module's
 //!   top level is fine (the lowering emits no `return` of its own; a
-//!   `throw`-diverging `else` is valid anywhere) — only rl constructs'
+//!   `throw`-diverging `else` is valid anywhere) — only tt constructs'
 //!   statement regions need a user function around it. And the `else`
 //!   block must diverge on every path (`return`/`throw`/`break`/
 //!   `continue`; a CFG answer) — otherwise the destructuring after the
@@ -47,36 +47,36 @@
 //! - exhaustiveness: a wildcard-free match whose arm tags all belong to an
 //!   enum declared in this file, an imported declaration
 //!   ([`crate::Options::extern_enums`], collected by the CLI from direct
-//!   relative `.rl` imports), or a built-in enum (`Option`, `Result`; the
+//!   relative `.tt` imports), or a built-in enum (`Option`, `Result`; the
 //!   analysis' declaration table) — must cover every case of that
 //!   enum with unguarded arms (a guard may be false, so guarded arms
 //!   identify the enum but cover nothing). A tuple match must cover the
 //!   cartesian product of its positions. Same-name shadowing runs
 //!   local > imported > built-in. Matches whose tags belong to no known
-//!   enum (hand-written unions, unresolved imports) are not checked — rlc
+//!   enum (hand-written unions, unresolved imports) are not checked — ttc
 //!   has no type information for them. The whole computation lives in
 //!   [`crate::analysis`]; what is here is the reporting.
 
 use crate::analysis::{CoveredEnum, NameKind, Origin, has_nested};
 use crate::ast::*;
 use crate::diagnostics::{DiagnosticCode, non_exhaustive_message};
-use crate::error::RlError;
+use crate::error::TtError;
 use crate::verify;
 
-/// Checks a whole program and returns **every** rl-level violation, in
+/// Checks a whole program and returns **every** tt-level violation, in
 /// source order. `verify` enables swc validation of field types; `externs`
 /// are enum declarations collected from imported modules
 /// ([`crate::Options::extern_enums`]). With `defer_to_checker` the two
 /// exhaustiveness passes are skipped, because a TypeScript backend answers
 /// the question better than this file's declaration table can
-/// ([`crate::Options::defer_to_checker`]); every other rl-level rule is
+/// ([`crate::Options::defer_to_checker`]); every other tt-level rule is
 /// checked either way.
 pub(crate) fn check_all(
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
     analyses: &crate::analysis::PatternAnalyses,
-) -> Vec<RlError> {
+) -> Vec<TtError> {
     let mut checker = Checker {
         verify,
         errors: Vec::new(),
@@ -101,14 +101,14 @@ pub(crate) fn check_all(
     checker.errors
 }
 
-/// Turns [`crate::analysis`]'s resolution answer into positioned rl
+/// Turns [`crate::analysis`]'s resolution answer into positioned tt
 /// errors.
 ///
 /// Every entry the analysis produced is an error: the *decision* whether
 /// an unresolved name is reportable belongs to the analysis (which is what
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
-fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut Vec<RlError>) {
+fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut Vec<TtError>) {
     for unresolved in &analyses.unresolved {
         let described = describe(&CoveredEnum {
             name: unresolved.enum_name.clone(),
@@ -130,14 +130,14 @@ fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut V
                 DiagnosticCode::UnknownCase,
             ),
         };
-        errors.push(RlError::span(unresolved.start, unresolved.end, message).code(code));
+        errors.push(TtError::span(unresolved.start, unresolved.end, message).code(code));
     }
 }
 
 struct Checker {
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
-    errors: Vec<RlError>,
+    errors: Vec<TtError>,
     /// Keyword offsets of matches whose *structure* is broken (mixed tag
     /// and literal patterns). Their coverage answer would be an effect
     /// stacked on a cause, so [`report_coverage`] skips them — the same
@@ -234,7 +234,7 @@ enum Place {
     Module,
     /// Inside a user-written function (directly or through inline chains).
     Function,
-    /// Inside an isolated rl value region.
+    /// Inside an isolated tt value region.
     ValueRegion,
 }
 
@@ -248,7 +248,7 @@ impl Place {
 }
 
 impl Checker {
-    fn error(&mut self, error: RlError) {
+    fn error(&mut self, error: TtError) {
         self.errors.push(error);
     }
 
@@ -258,11 +258,11 @@ impl Checker {
         }
         // A stray `|>` or `if let` cannot be passed through: neither is
         // valid TypeScript, so the output self-check would fail without a
-        // position. Report them as rl errors here instead (error-layering
+        // position. Report them as tt errors here instead (error-layering
         // contract) — all of them, not the first.
         for &off in &program.stray_pipes {
             self.error(
-                RlError::span(
+                TtError::span(
                     off,
                     off + "|>".len(),
                     "pipeline: `|>` could not be parsed here (steps must be expressions; \
@@ -274,7 +274,7 @@ impl Checker {
         }
         for &off in &program.stray_if_lets {
             self.error(
-                RlError::span(
+                TtError::span(
                     off,
                     off + "if".len(),
                     "`if let` could not be parsed here (pattern parens are mandatory, and the \
@@ -286,7 +286,7 @@ impl Checker {
         }
         for &off in &program.stray_results {
             self.error(
-                RlError::span(
+                TtError::span(
                     off,
                     off + "result".len(),
                     "`result` block could not be parsed here (every binding is \
@@ -299,7 +299,7 @@ impl Checker {
         }
         for &span in &program.result_missing_kw {
             self.error(
-                RlError::span(
+                TtError::span(
                     span.start,
                     span.end,
                     "`result` binding is missing its declaration keyword \
@@ -311,7 +311,7 @@ impl Checker {
         }
         for &span in &program.result_nested_binds {
             self.error(
-                RlError::span(
+                TtError::span(
                     span.start,
                     span.end,
                     "`<-` binding must be a top-level statement of the `result` block — \
@@ -325,7 +325,7 @@ impl Checker {
         }
         for segment in &program.segments {
             match segment {
-                Segment::Verbatim(_) | Segment::RlImport(_) | Segment::ValModifier(_) => {}
+                Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
                 Segment::Enum(decl) => self.check_enum(decl),
                 Segment::Match(expr) => self.check_match(expr),
                 Segment::TupleMatch(expr) => self.check_tuple_match(expr),
@@ -342,7 +342,7 @@ impl Checker {
                         && first.postfix
                     {
                         self.error(
-                            RlError::span(
+                            TtError::span(
                                 first.span.start,
                                 first.span.end,
                                 "`flow`: the first step cannot be a method step — it is the \
@@ -394,7 +394,7 @@ impl Checker {
                  or use a `<-` binding in a `result` block"
             };
             self.error(
-                RlError::span(stmt.span.start, stmt.span.end, message.to_string())
+                TtError::span(stmt.span.start, stmt.span.end, message.to_string())
                     .code(DiagnosticCode::TryPlacement),
             );
         }
@@ -409,7 +409,7 @@ impl Checker {
     fn check_let_else(&mut self, stmt: &LetElseStmt, place: Place) {
         if place == Place::ValueRegion && !stmt.in_function {
             self.error(
-                RlError::span(
+                TtError::span(
                     stmt.head_span.start,
                     stmt.head_span.end,
                     "let-else cannot be used here — its `else` block's exit (`return`, \
@@ -423,7 +423,7 @@ impl Checker {
         }
         if !stmt.diverges {
             self.error(
-                RlError::span(
+                TtError::span(
                     stmt.else_off,
                     stmt.else_off + "else".len(),
                     "let-else: every path through the `else` block must diverge — end it \
@@ -450,7 +450,7 @@ impl Checker {
     fn check_if_let(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
         if ctx == Ctx::Expr && !stmt.in_function {
             self.error(
-                RlError::span(
+                TtError::span(
                     stmt.head_span.start,
                     stmt.head_span.end,
                     "`if let` cannot be used in expression position (a template interpolation, \
@@ -490,7 +490,7 @@ impl Checker {
         if alts.iter().any(has_nested) {
             let at = alts.iter().find(|a| has_nested(a)).unwrap();
             self.error(
-                RlError::span(
+                TtError::span(
                     at.tag_off,
                     at.tag_off + at.tag.len(),
                     format!("{construct}: nested patterns cannot be combined with or-patterns"),
@@ -502,7 +502,7 @@ impl Checker {
         for alt in &alts[1..] {
             if binding_set(&alt.bindings) != first_set {
                 self.error(
-                    RlError::span(
+                    TtError::span(
                         alt.tag_off,
                         alt.tag_off + alt.tag.len(),
                         format!(
@@ -539,7 +539,7 @@ impl Checker {
         for case in &decl.cases {
             if seen.contains(&case.tag.as_str()) {
                 self.error(
-                    RlError::span(
+                    TtError::span(
                         case.tag_off,
                         case.tag_off + case.tag.len(),
                         format!("enum {}: duplicate case \"{}\"", decl.name, case.tag),
@@ -557,7 +557,7 @@ impl Checker {
                     for field in fields {
                         if let Err(msg) = verify::check_type_fragment(&field.ty) {
                             self.error(
-                                RlError::span(
+                                TtError::span(
                                     field.ty_off,
                                     field.ty_off + field.ty.len(),
                                     format!(
@@ -582,7 +582,7 @@ impl Checker {
         for (i, name) in leaves.iter().enumerate() {
             if leaves[..i].contains(name) {
                 self.error(
-                    RlError::span(
+                    TtError::span(
                         alt.tag_off,
                         alt.tag_off + alt.tag.len(),
                         format!(
@@ -597,7 +597,7 @@ impl Checker {
 
     fn check_match(&mut self, expr: &MatchExpr) {
         // Literal and tag patterns discriminate on different things
-        // (`$rl_m` vs `$rl_m.kind`), so one match cannot hold both.
+        // (`$tt_m` vs `$tt_m.kind`), so one match cannot hold both.
         let arm_kind = |arm: &Arm| match &arm.pattern {
             Pattern::Wildcard => None,
             Pattern::Tags(_) => Some("tag"),
@@ -610,13 +610,13 @@ impl Checker {
                 .find(|a| arm_kind(a).is_some_and(|k| k != first))
         {
             self.error(
-                RlError::span(
+                TtError::span(
                     other.pattern_span.start,
                     other.pattern_span.end,
                     format!(
                         "match: cannot mix tag patterns and literal patterns in the same match \
                          (this match starts with {first} patterns) — the two compare different \
-                         things (`$rl_m.kind` vs `$rl_m`); split them into two matches"
+                         things (`$tt_m.kind` vs `$tt_m`); split them into two matches"
                     ),
                 )
                 .code(DiagnosticCode::MatchMixedPatterns)
@@ -638,7 +638,7 @@ impl Checker {
                 Pattern::Wildcard => {
                     if idx != expr.arms.len() - 1 {
                         self.error(
-                            RlError::span(
+                            TtError::span(
                                 arm.pattern_span.start,
                                 arm.pattern_span.end,
                                 "match: the wildcard arm `_` must be the last arm".to_string(),
@@ -652,7 +652,7 @@ impl Checker {
                     for alt in alts {
                         if alt.value.kind() != alts[0].value.kind() {
                             self.error(
-                                RlError::span(
+                                TtError::span(
                                     alt.span.start,
                                     alt.span.end,
                                     format!(
@@ -670,7 +670,7 @@ impl Checker {
                             || arm_values.contains(&&alt.value)
                         {
                             self.error(
-                                RlError::span(
+                                TtError::span(
                                     alt.span.start,
                                     alt.span.end,
                                     format!("match: duplicate arm {}", alt.value.render()),
@@ -694,7 +694,7 @@ impl Checker {
                     if alts.len() > 1 && alts.iter().any(has_nested) {
                         let at = alts.iter().find(|a| has_nested(a)).unwrap();
                         self.error(
-                            RlError::span(
+                            TtError::span(
                                 at.tag_off,
                                 at.tag_off + at.tag.len(),
                                 "match: nested patterns cannot be combined with or-patterns"
@@ -711,7 +711,7 @@ impl Checker {
                             || arm_tags.contains(&alt.tag.as_str())
                         {
                             self.error(
-                                RlError::span(
+                                TtError::span(
                                     alt.tag_off,
                                     alt.tag_off + alt.tag.len(),
                                     format!("match: duplicate arm \"{}\"", alt.tag),
@@ -723,7 +723,7 @@ impl Checker {
                         arm_tags.push(&alt.tag);
                         if binding_set(&alt.bindings) != first_set {
                             self.error(
-                                RlError::span(
+                                TtError::span(
                                     alt.tag_off,
                                     alt.tag_off + alt.tag.len(),
                                     format!(
@@ -769,7 +769,7 @@ impl Checker {
                 TuplePattern::Wildcard => {
                     if idx != expr.arms.len() - 1 {
                         self.error(
-                            RlError::span(
+                            TtError::span(
                                 arm.pattern_span.start,
                                 arm.pattern_span.end,
                                 "match: the wildcard arm `_` must be the last arm".to_string(),
@@ -781,7 +781,7 @@ impl Checker {
                 TuplePattern::Elems(elems) => {
                     if elems.len() != arity {
                         self.error(
-                            RlError::span(
+                            TtError::span(
                                 arm.pattern_span.start,
                                 arm.pattern_span.end,
                                 format!(
@@ -803,7 +803,7 @@ impl Checker {
                         if alts.len() > 1 && alts.iter().any(has_nested) {
                             let at = alts.iter().find(|a| has_nested(a)).unwrap();
                             self.error(
-                                RlError::span(
+                                TtError::span(
                                     at.tag_off,
                                     at.tag_off + at.tag.len(),
                                     "match: nested patterns cannot be combined with or-patterns"
@@ -816,7 +816,7 @@ impl Checker {
                         for alt in alts {
                             if binding_set(&alt.bindings) != first_set {
                                 self.error(
-                                    RlError::span(
+                                    TtError::span(
                                         alt.tag_off,
                                         alt.tag_off + alt.tag.len(),
                                         format!(
@@ -833,7 +833,7 @@ impl Checker {
                         for name in leaves {
                             if bound.contains(&name) {
                                 self.error(
-                                    RlError::span(
+                                    TtError::span(
                                         alts[0].tag_off,
                                         alts[0].tag_off + alts[0].tag.len(),
                                         format!(
@@ -868,7 +868,7 @@ impl Checker {
     }
 }
 
-/// Turns [`crate::analysis`]'s coverage into positioned rl errors — every
+/// Turns [`crate::analysis`]'s coverage into positioned tt errors — every
 /// uncovered match, in the analysis' source order.
 ///
 /// A match whose own names failed to resolve is skipped: the typo is the
@@ -877,7 +877,7 @@ impl Checker {
 fn report_coverage(
     analyses: &crate::analysis::PatternAnalyses,
     suppressed: &[usize],
-    errors: &mut Vec<RlError>,
+    errors: &mut Vec<TtError>,
 ) {
     let uncovered = analyses
         .matches
@@ -918,7 +918,7 @@ fn report_coverage(
             non_exhaustive_message(Some(&format!("({names})")), &combinations, true)
         };
         errors.push(
-            RlError::span(offset, head_end, message).code(DiagnosticCode::MatchNotExhaustive),
+            TtError::span(offset, head_end, message).code(DiagnosticCode::MatchNotExhaustive),
         );
     }
 }

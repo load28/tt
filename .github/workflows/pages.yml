@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "website/**"
-      - "editors/vscode/syntaxes/rl.tmLanguage.json"
+      - "editors/vscode/syntaxes/tt.tmLanguage.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -43,7 +43,7 @@ jobs:
       - name: Build static website
         working-directory: website
         env:
-          SITE_BASE_PATH: /rl/
+          SITE_BASE_PATH: /tt/
         run: bun run build
 
       - name: Upload static site

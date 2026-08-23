@@ -1,7 +1,7 @@
 {
-  "name": "unplugin-rl",
+  "name": "unplugin-tt",
   "version": "0.1.0",
-  "description": "Compile .rl and .rlx modules with rlc in Vite, Rollup, webpack, Rspack, esbuild and Farm",
+  "description": "Compile .tt and .ttx modules with ttc in Vite, Rollup, webpack, Rspack, esbuild and Farm",
   "license": "MIT",
   "type": "module",
   "main": "./index.js",
@@ -60,7 +60,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/load28/rl",
+    "url": "https://github.com/load28/tt",
     "directory": "integrations/unplugin"
   },
   "keywords": [
@@ -69,7 +69,7 @@
     "rollup-plugin",
     "webpack-plugin",
     "esbuild-plugin",
-    "rl",
+    "tt",
     "typescript"
   ],
   "dependencies": {

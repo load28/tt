@@ -176,7 +176,8 @@
 | TASK-166 | 에디터 파일 아이콘을 웹사이트 로고로 통일 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-166](./TASK-166-editor-file-icon-refresh.md) |
 | TASK-167 | 프로젝트 설치 CLI와 통합 가이드 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-167](./TASK-167-project-installer-and-guides.md) |
 | TASK-168 | README와 웹사이트 개발 단계 안내 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-168](./TASK-168-development-status-notice.md) |
+| TASK-169 | rl을 tt로 전면 개명 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-169](./TASK-169-rename-rl-to-tt.md) |
 
 ## 다음 태스크 번호
 
-**TASK-169**
+**TASK-170**

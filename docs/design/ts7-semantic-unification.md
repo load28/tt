@@ -14,7 +14,7 @@ HEAD(`c6b013f5`)에 실제로 대조해 검증한 결과로 고쳐 쓴 것이다
 
 한 줄 요약은 원안과 같고, 지금 구현의 문장이기도 하다:
 
-> RL owns syntax and RL-only semantics. TypeScript owns TypeScript semantics.
+> TT owns syntax and TT-only semantics. TypeScript owns TypeScript semantics.
 
 **구현 상태 (TASK-083).** §3의 P1(host batch화 + metadata builtin 판정)과
 P2(mutator 정책의 판정 시점 이동)는 구현됐다 — 방출 TypeScript와 진단이
@@ -76,8 +76,8 @@ IPC를 batch화하는 것**이다. 원안의 문제의식은 옳지만 대상 �
 - **Node 기반 batch도 있다** (`getTypeAtLocation(nodes[])`,
   `getSymbolAtLocation(nodes[])`). 단, Node를 손에 쥐려면
   `program.getSourceFile()`로 **모듈 전체 AST를 바이너리로 전송**받아야
-  한다(`RemoteSourceFile`). rlc는 emit-map으로 정확한 UTF-16 offset을 이미
-  알고 있으므로, rlc의 용법에서 Node 경유는 순수한 추가 비용이다.
+  한다(`RemoteSourceFile`). ttc는 emit-map으로 정확한 UTF-16 offset을 이미
+  알고 있으므로, ttc의 용법에서 Node 경유는 순수한 추가 비용이다.
 - `getTypeOfSymbol(symbols[])` batch가 있다. `getPropertyOfType(type, name)`은
   batch 형태가 **없다** (2026-08-19 기준).
 - `isTypeAssignableTo(source: Type, target: Type): boolean`이 있다. 인자는
@@ -111,11 +111,11 @@ IPC를 batch화하는 것**이다. 원안의 문제의식은 옳지만 대상 �
 untyped 경로까지 포함하면 불가능하며 해서도 안 된다.**
 
 - `val.rs`의 scope model(`Frame`/`Var`/`lookup`)이 지금도 쓰이는 곳은
-  **untyped 경로**(`rlc file.rl`, `--check` — `Sink::Report`)뿐이다.
-  이 경로는 node도 tsgo도 없이 동작해야 하는 rlc의 기본 컴파일이다.
+  **untyped 경로**(`ttc file.tt`, `--check` — `Sink::Report`)뿐이다.
+  이 경로는 node도 tsgo도 없이 동작해야 하는 ttc의 기본 컴파일이다.
   여기서 scope model을 지우면 (a) untyped 컴파일에서 val 검사가 사라지거나
-  (b) tsgo가 필수 의존성이 된다. (a)는 원안 자신의 완료 기준 7("기존 RL
-  semantics 불변")과 모순이고 (b)는 rlc의 설계(독립 실행 컴파일러)와
+  (b) tsgo가 필수 의존성이 된다. (a)는 원안 자신의 완료 기준 7("기존 TT
+  semantics 불변")과 모순이고 (b)는 ttc의 설계(독립 실행 컴파일러)와
   모순이다. **untyped 경로의 scope model은 문서화된 근사로 유지한다**
   (`Options::defer_to_checker` 문서가 이미 이 이중 구조를 규범으로
   서술한다).
@@ -125,9 +125,9 @@ untyped 경로까지 포함하면 불가능하며 해서도 안 된다.**
      동명이 signature가 다르면 검사 포기), `check_call`이 호출식의 callee
      **이름**으로 그 표를 찾는다. probes 모드에서도 이 이름 매칭은
      그대로다 — 인자 쪽 root만 symbol로 판정하고, "어느 함수를 불렀는가"는
-     여전히 RL의 추정이다. → **callee identifier와 함수 선언 identifier에
+     여전히 TT의 추정이다. → **callee identifier와 함수 선언 identifier에
      각각 SymbolQuery를 걸어 id로 짝지어라.** signature(어느 파라미터가
-     `val`인가)는 `.rl` 원문에만 있는 RL 사실이므로 계속 RL이 소유하되,
+     `val`인가)는 `.tt` 원문에만 있는 TT 사실이므로 계속 TT이 소유하되,
      표의 키를 이름에서 선언 위치(byte offset)로 바꾼다. 이렇게 하면
      shadowing된 함수·재선언·블록 스코프 함수가 전부 checker의 답으로
      정리되고, 향후 cross-module 확장(NodeHandle.path + emit-map 역매핑)의
@@ -194,12 +194,12 @@ positions[])`를 호출하고, 결과를 원래의 전역 index로 흩뿌린다.
 
 ### 원안 4 (P4) — "position 중심에서 Node + Checker 중심으로"
 
-**판정: 뒤집는다. rlc의 용법에서는 position 기반이 옳다.**
+**판정: 뒤집는다. ttc의 용법에서는 position 기반이 옳다.**
 
 원안은 position 계열이 legacy로 정리되는 중이라고 전제했지만, HEAD의 API는
 position 계열에 1급 batch(`getTypesAtPositions`/`getSymbolsAtPositions`)를
 갖고 있다. Node 경유는 (a) `getSourceFile`로 모듈 전체 AST를 JS 쪽에
-전송·구성하고 (b) node id를 얻어 (c) batch를 부르는 3단계인데, rlc는
+전송·구성하고 (b) node id를 얻어 (c) batch를 부르는 3단계인데, ttc는
 emit-map으로 offset을 이미 알고 있으므로 (a)(b)가 순수 오버헤드다.
 스크루티니 위치가 "식의 첫 토큰이 아니라 temp binding"이어야 한다는 문제도
 codegen이 `ScrutineeTemp`로 이미 풀었다.
@@ -210,7 +210,7 @@ Rust 쪽은 어느 쪽이든 무관하며, 그것이 이 경계의 존재 이유
 
 ### 원안 5 — match exhaustiveness 유지
 
-동의. 이미 그 구조다. "RL 자체 타입 추론으로 되돌리지 않는다"는 금지
+동의. 이미 그 구조다. "TT 자체 타입 추론으로 되돌리지 않는다"는 금지
 목록(§5)은 개선판에도 그대로 승계한다.
 
 ### 원안 6 (P5) — `isTypeAssignableTo`를 향후 primitive로
@@ -226,8 +226,8 @@ try/result를 assignability 기반으로 재작성하지 않는다는 금지도 
 동의(검토만, 재설계 없음). 확인한 사실과 한계:
 
 - 이 API는 임시 snapshot을 만들고 미변경 파일의 source-file cache를
-  유지한다. 목적은 rl의 `--overlay`와 겹친다.
-- 그러나 rl의 overlay는 **lowering 이전의 `.rl` 원문**을 치환한다. host가
+  유지한다. 목적은 tt의 `--overlay`와 겹친다.
+- 그러나 tt의 overlay는 **lowering 이전의 `.tt` 원문**을 치환한다. host가
   serve하는 것은 lowering 결과인 virtual `.ts`이고, 이는 layered FS +
   `fileChanges`로 이미 증분 갱신된다. temporary update가 대체할 수 있는
   것은 "편집 중 버퍼의 ask가 세션 snapshot을 전진시키지 않게 하는" 부분
@@ -239,7 +239,7 @@ try/result를 assignability 기반으로 재작성하지 않는다는 금지도 
 
 동의. 현재 코드가 이미 그 경계 위에 있다. 한 가지 표현만 정확히 한다:
 원안 9의 "identifier binding resolution — TypeScript owns"는 **typed 경로**의
-서술이다. untyped 경로의 val 검사는 RL의 문서화된 근사로 남는다(위 P1
+서술이다. untyped 경로의 val 검사는 TT의 문서화된 근사로 남는다(위 P1
 판정). 이 비대칭 자체가 규범이며 `Options::defer_to_checker`에 이미 그렇게
 적혀 있다.
 
@@ -247,7 +247,7 @@ try/result를 assignability 기반으로 재작성하지 않는다는 금지도 
 
 전부 동의하고 두 개를 추가한다:
 
-- untyped 컴파일 경로에서 val 검사를 없애거나, 그것을 위해 tsgo를 rlc의
+- untyped 컴파일 경로에서 val 검사를 없애거나, 그것을 위해 tsgo를 ttc의
   필수 의존성으로 만들기.
 - mutator verdict를 `builtin`만으로 판정하기 — non-mutating builtin
   (`map.get`, `arr.at`, `slice`)이 전부 오탐이 된다. 이름 정책은 판정
@@ -320,5 +320,5 @@ literal/enum narrowing(`*_uses_the_narrowed_type_at_the_match`), any 수신자
 6. unstable TS7 API가 `src/typescript/{native.rs,host.mjs}` 밖으로 새지
    않는가 — `backend.rs`의 타입에 tsgo 고유 개념(Node id, snapshot id)이
    등장하지 않는 것으로 확인.
-7. 기존 RL semantics와 emitted TypeScript가 바이트 단위로 불변인가 —
+7. 기존 TT semantics와 emitted TypeScript가 바이트 단위로 불변인가 —
    `tests/compile.rs` 스냅샷과 `tests/passthrough.rs`로 확인.

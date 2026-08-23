@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /* --------------------------------------------------------------------------
- * rl/rlx TextMate 생성기 — 완전 문법 확장의 유지비를 흡수한다.
+ * tt/ttx TextMate 생성기 — 완전 문법 확장의 유지비를 흡수한다.
  *
  * 입력:
  *   src/typescript.tmLanguage.json  업스트림 TypeScript 문법, 무수정 vendoring
  *                                   (tm-grammars 1.32.5의 typescript.json —
  *                                   microsoft/TypeScript-TmLanguage 파생, MIT)
  *   src/typescriptreact.tmLanguage.json  업스트림 TSX 문법, 무수정 vendoring
- *   src/rl.rules.json               rl 규칙(repository)과 접합 명세(splices)
+ *   src/tt.rules.json               tt 규칙(repository)과 접합 명세(splices)
  *
  * 출력:
- *   rl.tmLanguage.json              scopeName source.rl의 독립 문법.
- *                                   TS repository 전체 + rl 규칙, 접합 지점의
- *                                   patterns 맨 앞에 rl include를 삽입.
- *   rlx.tmLanguage.json             scopeName source.rlx의 독립 TSX 문법.
+ *   tt.tmLanguage.json              scopeName source.tt의 독립 문법.
+ *                                   TS repository 전체 + tt 규칙, 접합 지점의
+ *                                   patterns 맨 앞에 tt include를 삽입.
+ *   ttx.tmLanguage.json             scopeName source.ttx의 독립 TSX 문법.
  *
  * 업스트림 갱신 = src/typescript.tmLanguage.json 교체 후 재생성.
- * 새 rl 구문 = src/rl.rules.json에 규칙과 접합 지점 추가 후 재생성.
+ * 새 tt 구문 = src/tt.rules.json에 규칙과 접합 지점 추가 후 재생성.
  *
  *   node build.mjs           생성
  *   node build.mjs --check   생성물이 소스와 일치하는지 검사 (CI/테스트용)
@@ -32,20 +32,20 @@ const tsGrammar = JSON.parse(
 const tsxGrammar = JSON.parse(
   readFileSync(join(here, "src", "typescriptreact.tmLanguage.json"), "utf8"),
 );
-const rl = JSON.parse(readFileSync(join(here, "src", "rl.rules.json"), "utf8"));
+const tt = JSON.parse(readFileSync(join(here, "src", "tt.rules.json"), "utf8"));
 const grammars = [
-  { base: tsGrammar, name: "rl", scopeName: "source.rl", file: "rl.tmLanguage.json" },
-  { base: tsxGrammar, name: "rlx", scopeName: "source.rlx", file: "rlx.tmLanguage.json" },
+  { base: tsGrammar, name: "tt", scopeName: "source.tt", file: "tt.tmLanguage.json" },
+  { base: tsxGrammar, name: "ttx", scopeName: "source.ttx", file: "ttx.tmLanguage.json" },
 ];
 
-// --- 검증: rl 규칙 이름은 rl- 접두사, TS repository와 충돌 금지 -----------
-for (const name of Object.keys(rl.repository)) {
-  if (!name.startsWith("rl-")) {
-    throw new Error(`rl rule "${name}" must be prefixed with "rl-"`);
+// --- 검증: tt 규칙 이름은 tt- 접두사, TS repository와 충돌 금지 -----------
+for (const name of Object.keys(tt.repository)) {
+  if (!name.startsWith("tt-")) {
+    throw new Error(`tt rule "${name}" must be prefixed with "tt-"`);
   }
   for (const { base } of grammars) {
     if (name in base.repository) {
-      throw new Error(`rl rule "${name}" collides with an upstream rule`);
+      throw new Error(`tt rule "${name}" collides with an upstream rule`);
     }
   }
 }
@@ -72,17 +72,17 @@ const resolveSpliceTarget = (repository, target) => {
   return entry;
 };
 for (const { base } of grammars) {
-  for (const [target, includes] of Object.entries(rl.splices)) {
+  for (const [target, includes] of Object.entries(tt.splices)) {
     resolveSpliceTarget(base.repository, target);
     for (const inc of includes) {
-      if (!(inc.slice(1) in rl.repository)) {
-        throw new Error(`splice "${inc}" into "${target}" names no rl rule`);
+      if (!(inc.slice(1) in tt.repository)) {
+        throw new Error(`splice "${inc}" into "${target}" names no tt rule`);
       }
     }
   }
 }
 
-// --- 검증: rl 규칙이 참조하는 include가 전부 해석돼야 한다 -----------------
+// --- 검증: tt 규칙이 참조하는 include가 전부 해석돼야 한다 -----------------
 const walk = (node, where, known) => {
   if (Array.isArray(node)) return node.forEach((n) => walk(n, where, known));
   if (node && typeof node === "object") {
@@ -95,9 +95,9 @@ const walk = (node, where, known) => {
   }
 };
 for (const { base } of grammars) {
-  const known = new Set([...Object.keys(base.repository), ...Object.keys(rl.repository)]);
-  for (const [name, rule] of Object.entries(rl.repository)) {
-    walk(rule, `rl rule "${name}"`, known);
+  const known = new Set([...Object.keys(base.repository), ...Object.keys(tt.repository)]);
+  for (const [name, rule] of Object.entries(tt.repository)) {
+    walk(rule, `tt rule "${name}"`, known);
   }
 }
 
@@ -107,9 +107,9 @@ const outputs = grammars.map(({ base, name, scopeName, file }) => {
     name,
     scopeName,
     patterns: base.patterns,
-    repository: { ...base.repository, ...rl.repository },
+    repository: { ...base.repository, ...tt.repository },
   };
-  for (const [target, includes] of Object.entries(rl.splices)) {
+  for (const [target, includes] of Object.entries(tt.splices)) {
     const entry = resolveSpliceTarget(out.repository, target);
     entry.patterns = [...includes.map((include) => ({ include })), ...entry.patterns];
   }
@@ -131,7 +131,7 @@ if (process.argv.includes("--check")) {
       process.exit(1);
     }
   }
-  console.log("rl and rlx TextMate grammars are up to date");
+  console.log("tt and ttx TextMate grammars are up to date");
 } else {
   for (const { rendered, outPath } of outputs) {
     writeFileSync(outPath, rendered);

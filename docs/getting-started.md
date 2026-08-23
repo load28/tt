@@ -1,42 +1,42 @@
-# Install rl
+# Install tt
 
 You need [Bun](https://bun.sh/) to run the recommended setup command. The
-generated project installs the prebuilt `rlc` compiler and TypeScript 7, so
+generated project installs the prebuilt `ttc` compiler and TypeScript 7, so
 Rust, Go, and a separate typescript-go checkout are not required.
 
 ## Automatic setup
 
-Create a Vite + TypeScript project with a starter `.rl` module:
+Create a Vite + TypeScript project with a starter `.tt` module:
 
 ```sh
-bun create rl@latest my-app
+bun create tt@latest my-app
 cd my-app
 bun run dev
 ```
 
-Add rl to an existing TypeScript project:
+Add tt to an existing TypeScript project:
 
 ```sh
 cd existing-project
-bun create rl@latest init
-bun run rl:check
+bun create tt@latest init
+bun run tt:check
 ```
 
 `init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
-`package.json`. It adds `rl-lang`, TypeScript 7, `unplugin-rl`, and RL scripts.
-For bundlers with a declarative config it writes an `rl.*.config.mjs` wrapper
+`package.json`. It adds `tt-lang`, TypeScript 7, `unplugin-tt`, and TT scripts.
+For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
 that composes the existing config; it never rewrites the user's config source.
-Run `bun run rl:dev` or `bun run rl:build` to use that wrapper. esbuild build
+Run `bun run tt:dev` or `bun run tt:build` to use that wrapper. esbuild build
 scripts are arbitrary JavaScript, so the command prints the one manual plugin
 line that must be added instead.
 
 Useful non-interactive options:
 
 ```sh
-bun create rl@latest init --bundler vite
-bun create rl@latest init --bundler none
-bun create rl@latest init --no-install
-bun create rl@latest init --package-manager bun
+bun create tt@latest init --bundler vite
+bun create tt@latest init --bundler none
+bun create tt@latest init --no-install
+bun create tt@latest init --package-manager bun
 ```
 
 New projects always use Bun. An existing project keeps the package manager in
@@ -51,8 +51,8 @@ replacing dependencies with `file:` paths. Start Verdaccio in one terminal:
 bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
 ```
 
-Build `rlc`, assemble packages for the current OS and CPU, and publish
-`rl-lang`, its platform binary, `unplugin-rl`, and `create-rl` to that registry:
+Build `ttc`, assemble packages for the current OS and CPU, and publish
+`tt-lang`, its platform binary, `unplugin-tt`, and `create-tt` to that registry:
 
 ```sh
 bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
@@ -62,11 +62,11 @@ The publisher prints the exact bootstrap command. It has this form:
 
 ```sh
 BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
-  bunx create-rl@latest my-app --registry http://127.0.0.1:4873
+  bunx create-tt@latest my-app --registry http://127.0.0.1:4873
 ```
 
 `--registry` passes the registry to `bun install` and writes it to the new
-project's `bunfig.toml`. Verdaccio serves the locally built RL packages and
+project's `bunfig.toml`. Verdaccio serves the locally built TT packages and
 proxies third-party packages such as Vite and TypeScript.
 
 ## Manual compiler setup
@@ -74,22 +74,22 @@ proxies third-party packages such as Vite and TypeScript.
 Install the compiler and the TypeScript version it drives:
 
 ```sh
-bun add -d rl-lang typescript@7
+bun add -d tt-lang typescript@7
 ```
 
-Keep sources in `src/**/*.rl` or `src/**/*.rlx`, then add scripts like these:
+Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
 
 ```json
 {
   "scripts": {
-    "build:rl": "rlc -o .rl-build src",
-    "check:rl": "rlc --check-types src"
+    "build:tt": "ttc -o .tt-build src",
+    "check:tt": "ttc --check-types src"
   }
 }
 ```
 
-`bun run build:rl` produces ordinary `.ts`/`.tsx` files in `.rl-build`; point
-an existing TypeScript build at that tree. Add `.rl-build/` and `.rl-types/`
+`bun run build:tt` produces ordinary `.ts`/`.tsx` files in `.tt-build`; point
+an existing TypeScript build at that tree. Add `.tt-build/` and `.tt-types/`
 to `.gitignore`. Do not edit generated files.
 
 ## Manual bundler setup
@@ -97,59 +97,59 @@ to `.gitignore`. Do not edit generated files.
 Install the direct-source plugin in addition to the compiler:
 
 ```sh
-bun add -d rl-lang typescript@7 unplugin-rl
+bun add -d tt-lang typescript@7 unplugin-tt
 ```
 
-Put `rl()` first in the bundler's plugins array:
+Put `tt()` first in the bundler's plugins array:
 
 ```ts
 // Vite: vite.config.ts
-import rl from "unplugin-rl/vite";
-export default { plugins: [rl()] };
+import tt from "unplugin-tt/vite";
+export default { plugins: [tt()] };
 
 // Rollup: rollup.config.js
-import rl from "unplugin-rl/rollup";
-export default { plugins: [rl()] };
+import tt from "unplugin-tt/rollup";
+export default { plugins: [tt()] };
 
 // Rolldown: rolldown.config.js
-import rl from "unplugin-rl/rolldown";
-export default { plugins: [rl()] };
+import tt from "unplugin-tt/rolldown";
+export default { plugins: [tt()] };
 
 // webpack: webpack.config.mjs
-import rl from "unplugin-rl/webpack";
-export default { plugins: [rl()] };
+import tt from "unplugin-tt/webpack";
+export default { plugins: [tt()] };
 
 // Rspack: rspack.config.mjs
-import rl from "unplugin-rl/rspack";
-export default { plugins: [rl()] };
+import tt from "unplugin-tt/rspack";
+export default { plugins: [tt()] };
 
 // Farm: farm.config.ts
-import rl from "unplugin-rl/farm";
-export default { plugins: [rl()] };
+import tt from "unplugin-tt/farm";
+export default { plugins: [tt()] };
 ```
 
 esbuild uses its JavaScript API:
 
 ```js
 import { build } from "esbuild";
-import rl from "unplugin-rl/esbuild";
+import tt from "unplugin-tt/esbuild";
 
-await build({ entryPoints: ["src/main.rl"], bundle: true, plugins: [rl()] });
+await build({ entryPoints: ["src/main.tt"], bundle: true, plugins: [tt()] });
 ```
 
-The plugin makes the bundler read `.rl` and `.rlx` directly. Keep
-`rlc --check-types src` as a separate check because transpiling bundlers do not
+The plugin makes the bundler read `.tt` and `.ttx` directly. Keep
+`ttc --check-types src` as a separate check because transpiling bundlers do not
 replace TypeScript type checking.
 
 ## Migrating files
 
-Start by renaming only files that use rl syntax from `.ts` to `.rl` or from
-`.tsx` to `.rlx`. Keep explicit `.rl`/`.rlx` extensions in relative imports.
+Start by renaming only files that use tt syntax from `.ts` to `.tt` or from
+`.tsx` to `.ttx`. Keep explicit `.tt`/`.ttx` extensions in relative imports.
 Ordinary TypeScript and TSX may remain unchanged and can be migrated gradually.
 
 ```ts
-import { render } from "./notice.rl";
+import { render } from "./notice.tt";
 ```
 
-Run `bunx rlc --check-types src` before the normal build. For editor diagnostics
-and navigation, install the RL VS Code extension and open the project root.
+Run `bunx ttc --check-types src` before the normal build. For editor diagnostics
+and navigation, install the TT VS Code extension and open the project root.

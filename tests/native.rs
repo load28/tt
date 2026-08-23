@@ -1,4 +1,4 @@
-//! The TypeScript 7 backend, end to end (`rlc --check-types` / `--types`).
+//! The TypeScript 7 backend, end to end (`ttc --check-types` / `--types`).
 //!
 //! These tests need a **built** typescript-go tree — the `tsgo` binary and
 //! the JS API client from the same build (see
@@ -8,7 +8,7 @@
 //! toolchain", never "the check quietly did nothing".
 //!
 //! Where a toolchain is *supposed* to be there — CI installs one — set
-//! `RLC_REQUIRE_TSGO=1` and a missing one fails the suite instead of
+//! `TTC_REQUIRE_TSGO=1` and a missing one fails the suite instead of
 //! skipping it. That is the whole of the CI guard: a skipped suite is
 //! green in every other way, so something has to make it red.
 
@@ -20,12 +20,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 const BIN_IN_TREE: &str = "built/local/tsgo";
 const API_IN_TREE: &str = "_packages/native-preview/dist/api/sync/api.js";
 
-/// What rlc will find, mirroring its own resolution rules.
+/// What ttc will find, mirroring its own resolution rules.
 #[derive(Clone)]
 enum Toolchain {
-    /// A built typescript-go checkout, named through `RLC_TSGO_ROOT`.
+    /// A built typescript-go checkout, named through `TTC_TSGO_ROOT`.
     Tree(PathBuf),
-    /// An installed package, which rlc finds on its own.
+    /// An installed package, which ttc finds on its own.
     Installed,
 }
 
@@ -34,8 +34,8 @@ fn toolchain() -> Option<Toolchain> {
         Some(found) => Some(found),
         // A caller that asked for no skipping gets an error, not a pass.
         None if required() => panic!(
-            "RLC_REQUIRE_TSGO is set but no TypeScript 7 toolchain was found \
-             (RLC_TSGO_API, RLC_TSGO_ROOT, or a built ../typescript-go)"
+            "TTC_REQUIRE_TSGO is set but no TypeScript 7 toolchain was found \
+             (TTC_TSGO_API, TTC_TSGO_ROOT, or a built ../typescript-go)"
         ),
         None => None,
     }
@@ -43,24 +43,24 @@ fn toolchain() -> Option<Toolchain> {
 
 /// True when the caller has declared that a toolchain must be present.
 fn required() -> bool {
-    std::env::var_os("RLC_REQUIRE_TSGO").is_some_and(|v| !v.is_empty() && v != "0")
+    std::env::var_os("TTC_REQUIRE_TSGO").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
 fn resolve() -> Option<Toolchain> {
-    // rlc's own order: a directly named client wins over any checkout, so
+    // ttc's own order: a directly named client wins over any checkout, so
     // the guard has to agree or a test will run against a compiler the
     // guard did not vet.
-    if let Some(api) = std::env::var_os("RLC_TSGO_API").filter(|v| !v.is_empty()) {
+    if let Some(api) = std::env::var_os("TTC_TSGO_API").filter(|v| !v.is_empty()) {
         return Path::new(&api).exists().then_some(Toolchain::Installed);
     }
-    let root = match std::env::var_os("RLC_TSGO_ROOT") {
+    let root = match std::env::var_os("TTC_TSGO_ROOT") {
         Some(root) if !root.is_empty() => PathBuf::from(root),
         _ => PathBuf::from("../typescript-go"),
     };
     if !(root.join(BIN_IN_TREE).exists() && root.join(API_IN_TREE).exists()) {
         return None;
     }
-    // Absolute, always: every case runs rlc with its working directory in
+    // Absolute, always: every case runs ttc with its working directory in
     // a temporary project, where the sibling-checkout default would point
     // somewhere else entirely. A relative root that resolves here and not
     // there fails the case rather than skipping it, which is the one thing
@@ -94,7 +94,7 @@ static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
 
 fn tmpdir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "rl-native-{}-{}",
+        "tt-native-{}-{}",
         std::process::id(),
         DIR_SEQ.fetch_add(1, Ordering::SeqCst)
     ));
@@ -106,7 +106,7 @@ fn write(dir: &Path, name: &str, text: &str) {
     fs::write(dir.join(name), text).unwrap();
 }
 
-/// A project whose `tsconfig.json` globs `src` — the lowered `.rl` modules
+/// A project whose `tsconfig.json` globs `src` — the lowered `.tt` modules
 /// have to enter the program through the user's own configuration.
 fn project(files: &[(&str, &str)]) -> PathBuf {
     let dir = tmpdir();
@@ -133,29 +133,29 @@ fn project(files: &[(&str, &str)]) -> PathBuf {
     dir
 }
 
-/// Runs rlc in `dir` with the toolchain the guard resolved.
+/// Runs ttc in `dir` with the toolchain the guard resolved.
 fn run(dir: &Path, toolchain: &Toolchain, args: &[&str]) -> std::process::Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_rlc"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
     command.args(args).current_dir(dir);
     match toolchain {
         Toolchain::Tree(root) => {
-            command.env("RLC_TSGO_ROOT", root);
+            command.env("TTC_TSGO_ROOT", root);
         }
-        // Nothing to set: rlc finds the installed package itself.
+        // Nothing to set: ttc finds the installed package itself.
         Toolchain::Installed => {}
     }
-    command.output().expect("rlc runs")
+    command.output().expect("ttc runs")
 }
 
-/// Runs `rlc --check-types src` in `dir`, returning its diagnostics.
+/// Runs `ttc --check-types src` in `dir`, returning its diagnostics.
 fn check(dir: &Path, toolchain: &Toolchain) -> String {
     let out = run(dir, toolchain, &["--check-types", "src"]);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         !stderr.contains("no TypeScript compiler found"),
-        "the toolchain guard passed but rlc disagreed: {stderr}"
+        "the toolchain guard passed but ttc disagreed: {stderr}"
     );
-    // Diagnostics are diagnostics: stderr, in rlc's own form. stdout is
+    // Diagnostics are diagnostics: stderr, in ttc's own form. stdout is
     // reserved for the modes that pipe.
     assert!(
         out.stdout.is_empty(),
@@ -183,14 +183,14 @@ fn typed_server(
             "includeTypes": true,
         },
     });
-    let mut command = Command::new(env!("CARGO_BIN_EXE_rlc"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
     command
         .arg("--server")
         .current_dir(dir)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped());
     if let Toolchain::Tree(root) = toolchain {
-        command.env("RLC_TSGO_ROOT", root);
+        command.env("TTC_TSGO_ROOT", root);
     }
     let mut child = command.spawn().expect("server starts");
     writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
@@ -230,30 +230,30 @@ fn source_slice<'a>(source: &'a str, diagnostic: &serde_json::Value) -> &'a str 
 fn watching_re_checks_against_the_compiler_it_already_started() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/color.rl",
+        "src/color.tt",
         "export enum Color { Red(), Green() }\n\
          export function name(c: Color): string {\n\
          \x20 return match (c) { Red => \"red\", Green => \"green\" };\n\
          }\n",
     )]);
 
-    let mut command = Command::new(env!("CARGO_BIN_EXE_rlc"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
     command
         .args(["--check-types", "src", "-w"])
         .current_dir(&dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
     if let Toolchain::Tree(root) = &root {
-        command.env("RLC_TSGO_ROOT", root);
+        command.env("TTC_TSGO_ROOT", root);
     }
-    let mut child = command.spawn().expect("rlc runs");
+    let mut child = command.spawn().expect("ttc runs");
 
     // Let the first pass finish, then add a case with no arm: the watch has
     // to see the edit through the compiler it is already holding.
     std::thread::sleep(std::time::Duration::from_secs(6));
     write(
         &dir,
-        "src/color.rl",
+        "src/color.tt",
         "export enum Color { Red(), Green(), Blue() }\n\
          export function name(c: Color): string {\n\
          \x20 return match (c) { Red => \"red\", Green => \"green\" };\n\
@@ -261,7 +261,7 @@ fn watching_re_checks_against_the_compiler_it_already_started() {
     );
     std::thread::sleep(std::time::Duration::from_secs(5));
     let _ = child.kill();
-    let out = child.wait_with_output().expect("rlc exits");
+    let out = child.wait_with_output().expect("ttc exits");
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -277,20 +277,20 @@ fn watching_re_checks_against_the_compiler_it_already_started() {
 }
 
 #[test]
-fn a_hand_written_ts_file_imports_an_rl_file_by_the_specifier_it_writes() {
+fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
     let root = require_tsgo!();
-    // `"./shape.rl"` is what a user writes, and it needs no configuration:
-    // the lowered module is served at `shape.rl.ts`, which is what ordinary
+    // `"./shape.tt"` is what a user writes, and it needs no configuration:
+    // the lowered module is served at `shape.tt.ts`, which is what ordinary
     // TypeScript resolution finds for that specifier. The project's
-    // tsconfig here sets no rl-specific option at all.
+    // tsconfig here sets no tt-specific option at all.
     let dir = project(&[
         (
-            "src/shape.rl",
+            "src/shape.tt",
             "export enum Shape { Circle(radius: number), Point }\n",
         ),
         (
             "src/use.ts",
-            "import { Shape } from \"./shape.rl\";\n\
+            "import { Shape } from \"./shape.tt\";\n\
              export const s: Shape = Shape.Point;\n\
              export const bad: number = Shape.Point;\n",
         ),
@@ -300,7 +300,7 @@ fn a_hand_written_ts_file_imports_an_rl_file_by_the_specifier_it_writes() {
     // in the hand-written file at TypeScript's own coordinates.
     assert!(
         out.contains("src/use.ts: type mismatch: expected `number`"),
-        "the .ts file's own error, in one project with the .rl: {out}"
+        "the .ts file's own error, in one project with the .tt: {out}"
     );
     assert!(
         !out.contains("2307") && !out.contains("Cannot find module"),
@@ -309,11 +309,11 @@ fn a_hand_written_ts_file_imports_an_rl_file_by_the_specifier_it_writes() {
 }
 
 #[test]
-fn a_hand_written_tsx_file_imports_an_rlx_file_by_its_specifier() {
+fn a_hand_written_tsx_file_imports_an_ttx_file_by_its_specifier() {
     let root = require_tsgo!();
     let dir = project(&[
         (
-            "src/view.rlx",
+            "src/view.ttx",
             "export enum State { Ready(value: string), Empty }\n\
              export const render = (state: State) => <main>{match (state) {\n\
              Ready(value) => <b>{value}</b>, Empty => null\n\
@@ -321,7 +321,7 @@ fn a_hand_written_tsx_file_imports_an_rlx_file_by_its_specifier() {
         ),
         (
             "src/use.tsx",
-            "import { State, render } from \"./view.rlx\";\n\
+            "import { State, render } from \"./view.ttx\";\n\
              declare global { namespace JSX { interface IntrinsicElements { main: {}; b: {}; } } }\n\
              export const value = render(State.Ready(\"ok\"));\n",
         ),
@@ -331,7 +331,7 @@ fn a_hand_written_tsx_file_imports_an_rlx_file_by_its_specifier() {
         !out.contains("2307") && !out.contains("Cannot find module"),
         "{out}"
     );
-    assert!(!out.contains("view.rlx"), "{out}");
+    assert!(!out.contains("view.ttx"), "{out}");
 }
 
 #[test]
@@ -339,12 +339,12 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
     let root = require_emit!();
     let dir = project(&[
         (
-            "src/token.rl",
+            "src/token.tt",
             "export enum Token { Num(value: number), Eof }\n",
         ),
         (
-            "src/parse.rl",
-            "import { Token } from \"./token.rl\";\n\
+            "src/parse.tt",
+            "import { Token } from \"./token.tt\";\n\
              export function width(t: Token): number {\n\
              \x20 return match (t) { Num(value) => value, Eof => 0 };\n\
              }\n",
@@ -354,9 +354,9 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
     let out = run(
         &dir,
         &root,
-        &["--types", "src/parse.rl", "-o", out_dir.to_str().unwrap()],
+        &["--types", "src/parse.tt", "-o", out_dir.to_str().unwrap()],
     );
-    // `./token.rl` was never named, but it is part of the project, so it is
+    // `./token.tt` was never named, but it is part of the project, so it is
     // part of the graph — otherwise this would be TS2307.
     assert!(
         out.status.success(),
@@ -365,20 +365,20 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
         String::from_utf8_lossy(&out.stderr),
     );
     assert!(
-        out_dir.join("parse.rl.d.ts").is_file(),
+        out_dir.join("parse.tt.d.ts").is_file(),
         "the named input is written"
     );
     assert!(
-        !out_dir.join("token.rl.d.ts").exists(),
+        !out_dir.join("token.tt.d.ts").exists(),
         "what was not named is in the graph, not in the output"
     );
 }
 
 #[test]
-fn a_declaration_carries_a_map_back_to_the_rl_source() {
+fn a_declaration_carries_a_map_back_to_the_tt_source() {
     let root = require_emit!();
     let dir = project(&[(
-        "src/token.rl",
+        "src/token.tt",
         "export enum Token { Num(value: number), Eof }\n\
          export function width(t: Token): number {\n\
          \x20 return match (t) { Num(value) => value, Eof => 0 };\n\
@@ -396,17 +396,17 @@ fn a_declaration_carries_a_map_back_to_the_rl_source() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    // The sidecar takes the name a `"./token.rl"` specifier resolves to
+    // The sidecar takes the name a `"./token.tt"` specifier resolves to
     // when no compiler is running — which is what makes it a sidecar.
-    let declarations = fs::read_to_string(out_dir.join("token.rl.d.ts")).expect("the sidecar");
+    let declarations = fs::read_to_string(out_dir.join("token.tt.d.ts")).expect("the sidecar");
     assert!(
-        declarations.contains("//# sourceMappingURL=token.rl.d.ts.map"),
+        declarations.contains("//# sourceMappingURL=token.tt.d.ts.map"),
         "and points at its map: {declarations}"
     );
-    let map = fs::read_to_string(out_dir.join("token.rl.d.ts.map")).expect("the map");
+    let map = fs::read_to_string(out_dir.join("token.tt.d.ts.map")).expect("the map");
     assert!(
-        map.contains("token.rl\"") && map.contains("\"mappings\""),
-        "whose sources is the .rl file, so go-to-definition lands there: {map}"
+        map.contains("token.tt\"") && map.contains("\"mappings\""),
+        "whose sources is the .tt file, so go-to-definition lands there: {map}"
     );
 }
 
@@ -414,7 +414,7 @@ fn a_declaration_carries_a_map_back_to_the_rl_source() {
 fn declarations_are_emitted_by_the_compiler_itself() {
     let root = require_emit!();
     let dir = project(&[(
-        "src/shape.rl",
+        "src/shape.tt",
         "export enum Shape { Circle(radius: number), Point }\n\
          export function area(s: Shape): number {\n\
          \x20 return match (s) { Circle(radius) => radius, Point => 0 };\n\
@@ -432,9 +432,9 @@ fn declarations_are_emitted_by_the_compiler_itself() {
         String::from_utf8_lossy(&out.stderr)
     );
 
-    let declaration = fs::read_to_string(out_dir.join("shape.rl.d.ts")).expect("a .d.ts");
-    // rlc writes no declaration syntax of its own: this is what the compiler
-    // emits for the module rlc lowered, exactly as for a hand-written one.
+    let declaration = fs::read_to_string(out_dir.join("shape.tt.d.ts")).expect("a .d.ts");
+    // ttc writes no declaration syntax of its own: this is what the compiler
+    // emits for the module ttc lowered, exactly as for a hand-written one.
     assert!(
         declaration.contains("kind: \"Circle\"") && declaration.contains("radius: number"),
         "the enum's union type: {declaration}"
@@ -449,9 +449,9 @@ fn declarations_are_emitted_by_the_compiler_itself() {
 fn the_standard_library_enters_the_graph_as_a_module_of_the_project() {
     let root = require_emit!();
     let dir = project(&[(
-        "src/parse.rl",
-        "import type { TResult } from \"@rl/std\";\n\
-         import * as Result from \"@rl/std/result\";\n\
+        "src/parse.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
          export function parse(text: string): TResult<number, string> {\n\
          \x20 const n = Number(text);\n\
          \x20 return Number.isNaN(n) ? Result.Err(\"not a number\") : Result.Ok(n);\n\
@@ -465,30 +465,30 @@ fn the_standard_library_enters_the_graph_as_a_module_of_the_project() {
     );
     assert!(
         out.status.success(),
-        "@rl/std has to resolve, and its types have to check: {}{}",
+        "@tt/std has to resolve, and its types have to check: {}{}",
         String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr),
     );
     // The library is a module of the project, resolved by ordinary node
     // resolution — so the specifier stays bare, in the source and in the
     // declaration alike, and no `paths` entry is involved in this compile.
-    let declaration = fs::read_to_string(out_dir.join("parse.rl.d.ts")).expect("a .d.ts");
+    let declaration = fs::read_to_string(out_dir.join("parse.tt.d.ts")).expect("a .d.ts");
     assert!(
-        declaration.contains("from \"@rl/std\""),
+        declaration.contains("from \"@tt/std\""),
         "the declaration keeps the specifier the user wrote: {declaration}"
     );
 }
 
 #[test]
-fn a_diagnostic_on_generated_code_is_restated_in_rls_words() {
+fn a_diagnostic_on_generated_code_is_restated_in_tts_words() {
     let root = require_tsgo!();
-    // A plain TypeScript enum is not an rl enum, so matching on one lowers
+    // A plain TypeScript enum is not a tt enum, so matching on one lowers
     // to a `.kind` switch over a value that has no `kind`. The error is
     // real and it is the user's, but the text TypeScript points at is code
-    // rlc wrote — so rlc says what the construct meant, at the construct
+    // ttc wrote — so ttc says what the construct meant, at the construct
     // (TASK-104), with TypeScript's own sentence alongside for checking.
     let dir = project(&[(
-        "src/ts_enum.rl",
+        "src/ts_enum.tt",
         "export enum Plain { A, B }\n\
          export function f(p: Plain): number {\n\
          \x20 return match (p) { A => 1 };\n\
@@ -496,12 +496,12 @@ fn a_diagnostic_on_generated_code_is_restated_in_rls_words() {
     )]);
     let out = check(&dir, &root);
     assert!(
-        out.contains("src/ts_enum.rl:3:10:"),
-        "reported at the `match` keyword in the .rl file: {out}"
+        out.contains("src/ts_enum.tt:3:10:"),
+        "reported at the `match` keyword in the .tt file: {out}"
     );
     assert!(
         out.contains("match on a tag pattern needs a value with a `kind` discriminant"),
-        "in rl's words: {out}"
+        "in tt's words: {out}"
     );
     assert!(
         out.contains("ts2339: Property 'kind' does not exist on type 'Plain'."),
@@ -512,12 +512,12 @@ fn a_diagnostic_on_generated_code_is_restated_in_rls_words() {
 #[test]
 fn a_restated_diagnostic_calls_a_case_by_its_declared_name() {
     let root = require_tsgo!();
-    // TypeScript has no word for an rl case, so a narrowed one prints as
-    // the object type it lowers to. rl names both sides from declarations.
+    // TypeScript has no word for a tt case, so a narrowed one prints as
+    // the object type it lowers to. tt names both sides from declarations.
     let dir = project(&[(
-        "src/named.rl",
-        "import type { TResult } from \"@rl/std\";\n\
-         import * as Result from \"@rl/std/result\";\n\
+        "src/named.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
          enum Wire { OutOfRange(value: number), Missing }\n\
          enum ParseError { NotANumber(text: string) }\n\
          function inner(w: Wire) {\n\
@@ -533,10 +533,10 @@ fn a_restated_diagnostic_calls_a_case_by_its_declared_name() {
     assert!(
         out.contains("type mismatch: expected `ParseError`, found `Wire.OutOfRange`")
             && out.contains("required type: `TResult<number, ParseError>`"),
-        "the case and surrounding obligation use rl declaration names: {out}"
+        "the case and surrounding obligation use tt declaration names: {out}"
     );
     assert!(
-        !out.contains("{ kind: \"OutOfRange\"; value: number; }") && !out.contains("in rl's names"),
+        !out.contains("{ kind: \"OutOfRange\"; value: number; }") && !out.contains("in tt's names"),
         "the lowered representation and duplicate prose stay hidden: {out}"
     );
 }
@@ -545,9 +545,9 @@ fn a_restated_diagnostic_calls_a_case_by_its_declared_name() {
 fn assignability_diagnostics_report_the_minimal_type_difference() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/mismatch.rl",
-        "import type { TResult } from \"@rl/std\";\n\
-         import * as Result from \"@rl/std/result\";\n\
+        "src/mismatch.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
          enum InputError { Empty, NotANumber(raw: string) }\n\
          enum RangeError { TooLarge(value: number, max: number) }\n\
          export function port(value: number): TResult<number, InputError> {\n\
@@ -566,16 +566,16 @@ fn assignability_diagnostics_report_the_minimal_type_difference() {
         "the surrounding obligation remains visible: {out}"
     );
     assert!(
-        !out.contains("Property 'raw' is missing") && !out.contains("in rl's names"),
+        !out.contains("Property 'raw' is missing") && !out.contains("in tt's names"),
         "the nested checker prose is not duplicated: {out}"
     );
 }
 
 #[test]
-fn structured_type_mismatches_are_not_tied_to_an_rl_construct() {
+fn structured_type_mismatches_are_not_tied_to_an_tt_construct() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/plain.rl",
+        "src/plain.tt",
         "const annotated: string = 1;\n\
          function takesString(value: string): void {}\n\
          takesString(2);\n",
@@ -592,9 +592,9 @@ fn structured_type_mismatches_are_not_tied_to_an_rl_construct() {
 fn one_structured_cause_replaces_try_lowering_consequences() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/try.rl",
-        "import type { TResult } from \"@rl/std\";\n\
-         import * as Result from \"@rl/std/result\";\n\
+        "src/try.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
          const a = () => Result.Err(10);\n\
          function test(): TResult<string, string> {\n\
          \x20 const value = try a();\n\
@@ -619,10 +619,10 @@ fn one_structured_cause_replaces_try_lowering_consequences() {
 }
 
 #[test]
-fn a_precise_rl_error_owns_an_overlapping_type_consequence() {
+fn a_precise_tt_error_owns_an_overlapping_type_consequence() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/field.rl",
+        "src/field.tt",
         "enum Shape { Circle(radius: number), Point }\n\
          export const radiusOf = (shape: Shape): number =>\n\
          \x20 match (shape) { Circle(radiuz) => radiuz, Point => 0 };\n",
@@ -630,15 +630,15 @@ fn a_precise_rl_error_owns_an_overlapping_type_consequence() {
     let out = check(&dir, &root);
     assert!(
         out.contains("case `Circle` has no field `radiuz`") && !out.contains("type mismatch:"),
-        "the direct rl cause replaces its broader checker consequence: {out}"
+        "the direct tt cause replaces its broader checker consequence: {out}"
     );
 }
 
 #[test]
 fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
     let root = require_tsgo!();
-    let source = "import type { TResult } from \"@rl/std\";\n\
-        import * as Result from \"@rl/std/result\";\n\
+    let source = "import type { TResult } from \"@tt/std\";\n\
+        import * as Result from \"@tt/std/result\";\n\
         enum Input { Blank, Num(value: number) }\n\
         enum InputError { Empty }\n\
         enum RangeError { TooLarge(value: number) }\n\
@@ -658,8 +658,8 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
         }\n\
         export const mixed = (c: Conn): string =>\n\
         \x20 match (c) { Up(value) => \"up\", 404 => \"gone\", Down => \"down\" };\n";
-    let dir = project(&[("src/ranges.rl", source)]);
-    let answer = typed_server(&dir, &root, "src/ranges.rl", source);
+    let dir = project(&[("src/ranges.tt", source)]);
+    let answer = typed_server(&dir, &root, "src/ranges.tt", source);
     let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
 
     let match_mismatch = diagnostics
@@ -687,7 +687,7 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
         diagnostics
             .iter()
             .any(|d| d["code"] == "match-mixed-patterns"),
-        "the direct rl cause remains: {answer}"
+        "the direct tt cause remains: {answer}"
     );
     assert!(
         diagnostics.iter().all(|d| d["code"] != "ts2678"),
@@ -699,7 +699,7 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
 fn a_pattern_typo_suppresses_typed_exhaustiveness_for_that_match() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/typo.rl",
+        "src/typo.tt",
         "enum Shape { Circle(radius: number), Square(size: number) }\n\
          export function area(shape: Shape): number {\n\
          \x20 return match (shape) { Circel(radius) => radius, Square(size) => size * size };\n\
@@ -720,9 +720,9 @@ fn a_pattern_typo_suppresses_typed_exhaustiveness_for_that_match() {
 fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/recovery.rl",
-        "import type { TResult } from \"@rl/std\";\n\
-         import * as Result from \"@rl/std/result\";\n\
+        "src/recovery.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
          function read(value: number): TResult<number, string> {\n\
          \x20 return Result.Ok(value);\n\
          }\n\
@@ -743,7 +743,7 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
     assert!(
         out.contains("result-nested-binding")
             || out.contains("`<-` binding must be a top-level statement"),
-        "the first rl error remains visible: {out}"
+        "the first tt error remains visible: {out}"
     );
     assert!(
         out.contains("`match` could not be parsed here"),
@@ -758,7 +758,7 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
 }
 
 #[test]
-fn a_ts_file_and_an_rl_file_share_one_project_graph() {
+fn a_ts_file_and_an_tt_file_share_one_project_graph() {
     let root = require_tsgo!();
     let dir = project(&[
         (
@@ -766,7 +766,7 @@ fn a_ts_file_and_an_rl_file_share_one_project_graph() {
             "export type State = \"idle\" | \"loading\" | \"done\";\n",
         ),
         (
-            "src/state.rl",
+            "src/state.tt",
             "import type { State } from \"./user\";\n\
              export function render(state: State): number {\n\
              \x20 return match (state) { \"idle\" => 0, \"loading\" => 1, \"done\" => 2 };\n\
@@ -786,7 +786,7 @@ fn literal_exhaustiveness_uses_the_narrowed_type_at_the_match() {
             "export type State = \"idle\" | \"loading\" | \"done\";\n",
         ),
         (
-            "src/state.rl",
+            "src/state.tt",
             "import type { State } from \"./user\";\n\
              export function render(state: State): number {\n\
              \x20 if (state !== \"idle\") {\n\
@@ -811,7 +811,7 @@ fn literal_exhaustiveness_uses_the_narrowed_type_at_the_match() {
 fn enum_exhaustiveness_uses_the_narrowed_type_at_the_match() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/shape.rl",
+        "src/shape.tt",
         "export enum Shape { Circle(radius: number), Square(side: number), Point }\n\
          export function area(s: Shape): number {\n\
          \x20 if (s.kind !== \"Point\") {\n\
@@ -835,12 +835,12 @@ fn enum_exhaustiveness_uses_the_narrowed_type_at_the_match() {
 fn val_holds_on_a_parameter_and_across_a_function_boundary() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/pass.rl",
+        "src/pass.tt",
         "interface User { name: string; tags: string[] }\n         function update(user: User) { user.name = \"Lee\"; }\n         export function process(val user: User) {\n         \x20 user.name = \"Lee\";\n         \x20 user.tags.push(\"x\");\n         \x20 update(user);\n         }\n",
     )]);
     // `val` has two syntactic homes and three rules; a mode that checks
     // only declarations, or only mutation paths, silently passes code the
-    // rl-level check rejects.
+    // tt-level check rejects.
     let out = check(&dir, &root);
     assert!(
         out.contains("cannot mutate through val binding `user`"),
@@ -860,7 +860,7 @@ fn val_holds_on_a_parameter_and_across_a_function_boundary() {
 fn exhaustiveness_holds_when_the_scrutinee_is_not_a_name() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/shape.rl",
+        "src/shape.tt",
         "export enum Shape { Circle(radius: number), Rect(w: number, h: number) }\n         declare function getShape(): Shape;\n         type State = \"idle\" | \"loading\" | \"done\";\n         declare function getState(): State;\n         export const area = match (getShape()) { Circle(radius) => radius };\n         export const label = match (getState()) { \"idle\" => 0, \"loading\" => 1 };\n",
     )]);
     // The question is asked about the temporary the match binds, not about
@@ -883,12 +883,12 @@ fn an_enum_from_another_module_needs_no_declaration_collecting() {
     let root = require_tsgo!();
     let dir = project(&[
         (
-            "src/token.rl",
+            "src/token.tt",
             "export enum Token { Num(value: number), Eof }\n",
         ),
         (
-            "src/parse.rl",
-            "import { Token } from \"./token.rl\";\n\
+            "src/parse.tt",
+            "import { Token } from \"./token.tt\";\n\
              export function width(t: Token): number {\n\
              \x20 return match (t) { Num(value) => value };\n\
              }\n",
@@ -910,7 +910,7 @@ fn val_mutation_is_decided_by_the_method_the_call_resolves_to() {
             "export class Store {\n  set(key: string, value: string): void {}\n}\n",
         ),
         (
-            "src/use.rl",
+            "src/use.tt",
             "import { Store } from \"./store\";\n\
              export function go(): void {\n\
              \x20 val const map = new Map<string, number>();\n\
@@ -935,7 +935,7 @@ fn val_mutation_is_decided_by_the_method_the_call_resolves_to() {
 fn a_shadowing_binding_is_a_different_binding() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/shadow.rl",
+        "src/shadow.tt",
         "export function go(): void {\n\
          \x20 val const items = new Map<string, number>();\n\
          \x20 {\n\
@@ -955,7 +955,7 @@ fn a_shadowing_binding_is_a_different_binding() {
 fn a_direct_mutation_through_a_val_binding_is_reported() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/direct.rl",
+        "src/direct.tt",
         "export function go(): void {\n\
          \x20 val const user = { name: \"a\", count: 0 };\n\
          \x20 user.name = \"b\";\n\
@@ -972,7 +972,7 @@ fn a_direct_mutation_through_a_val_binding_is_reported() {
 fn a_mutation_through_an_unmarked_binding_is_left_alone() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/plain.rl",
+        "src/plain.tt",
         "export function go(): void {\n\
          \x20 const items: number[] = [];\n\
          \x20 items.push(1);\n\
@@ -987,7 +987,7 @@ fn a_mutation_through_an_unmarked_binding_is_left_alone() {
 fn an_any_receiver_is_never_called_a_mutation() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/any.rl",
+        "src/any.tt",
         "export function go(x: any): void {\n\
          \x20 val const y = x;\n\
          \x20 y.set(\"a\", 1);\n\
@@ -1006,7 +1006,7 @@ fn a_call_is_checked_against_the_declaration_it_resolves_to() {
     // name-keyed model had to skip both as ambiguous.
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/who.rl",
+        "src/who.tt",
         "type U = { name: string };\n\
          export function go(): void {\n\
          \x20 val const user: U = { name: \"a\" };\n\
@@ -1027,7 +1027,7 @@ fn a_call_is_checked_against_the_declaration_it_resolves_to() {
         "only the call that names the mutable-parameter declaration: {out}"
     );
     assert!(
-        out.contains("src/who.rl:4:10") && out.contains("mutable parameter `u` of `handle`"),
+        out.contains("src/who.tt:4:10") && out.contains("mutable parameter `u` of `handle`"),
         "reported at the outer call's argument: {out}"
     );
 }
@@ -1045,7 +1045,7 @@ fn an_answer_past_the_pipe_buffer_still_arrives() {
     for i in 0..400 {
         source.push_str(&format!("export const a{i}: number = \"x{i}\";\n"));
     }
-    let dir = project(&[("src/big.rl", source.as_str())]);
+    let dir = project(&[("src/big.tt", source.as_str())]);
     let out = check(&dir, &root);
     assert_eq!(
         out.lines()
@@ -1059,12 +1059,12 @@ fn an_answer_past_the_pipe_buffer_still_arrives() {
 #[test]
 fn a_non_mutating_builtin_method_is_not_a_mutation() {
     // Collection asks about every method call through a `val` path; the
-    // verdict is two halves — the checker's (a built-in's method) and rl's
+    // verdict is two halves — the checker's (a built-in's method) and tt's
     // policy (one of the mutating ones). A built-in read fails the second,
     // so widening collection must never widen what is reported.
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/read.rl",
+        "src/read.tt",
         "export function go(): void {\n\
          \x20 val const m = new Map<string, number>();\n\
          \x20 m.get(\"a\");\n\
@@ -1077,7 +1077,7 @@ fn a_non_mutating_builtin_method_is_not_a_mutation() {
     assert_eq!(
         check(&dir, &root),
         "",
-        "a built-in method outside rl's mutator policy reads, it does not mutate"
+        "a built-in method outside tt's mutator policy reads, it does not mutate"
     );
 }
 
@@ -1090,7 +1090,7 @@ fn batched_answers_land_on_their_own_questions() {
     let root = require_tsgo!();
     let dir = project(&[
         (
-            "src/a.rl",
+            "src/a.tt",
             "declare const x: \"a\" | \"b\";\n\
              export const va = match (x) { \"a\" => 1 };\n\
              export function fa(): void {\n\
@@ -1099,7 +1099,7 @@ fn batched_answers_land_on_their_own_questions() {
              }\n",
         ),
         (
-            "src/b.rl",
+            "src/b.tt",
             "declare const y: \"c\" | \"d\";\n\
              export const vb = match (y) { \"c\" => 1 };\n\
              export function fb(): void {\n\
@@ -1110,10 +1110,10 @@ fn batched_answers_land_on_their_own_questions() {
     ]);
     let out = check(&dir, &root);
     for (file, line) in [
-        ("src/a.rl:2:", "missing \"b\""),
-        ("src/b.rl:2:", "missing \"d\""),
-        ("src/a.rl:5:3", "cannot mutate through val binding `ua`"),
-        ("src/b.rl:5:3", "cannot mutate through val binding `ub`"),
+        ("src/a.tt:2:", "missing \"b\""),
+        ("src/b.tt:2:", "missing \"d\""),
+        ("src/a.tt:5:3", "cannot mutate through val binding `ua`"),
+        ("src/b.tt:5:3", "cannot mutate through val binding `ub`"),
     ] {
         let landed = out.lines().any(|l| l.contains(file) && l.contains(line));
         assert!(landed, "expected {line} at {file}: {out}");
@@ -1121,32 +1121,32 @@ fn batched_answers_land_on_their_own_questions() {
 }
 
 #[test]
-fn a_type_error_is_reported_at_its_position_in_the_rl_source() {
+fn a_type_error_is_reported_at_its_position_in_the_tt_source() {
     let root = require_tsgo!();
     let dir = project(&[(
-        "src/bad.rl",
+        "src/bad.tt",
         // A multi-byte prefix: TypeScript counts UTF-16 code units and the
-        // `.rl` position is a byte offset, so the two have to be converted.
+        // `.tt` position is a byte offset, so the two have to be converted.
         "export function go(): void {\n  const 한글: string = 1;\n}\n",
     )]);
     let out = check(&dir, &root);
     assert!(
-        out.starts_with("src/bad.rl:2:22: type mismatch:")
-            || out.contains("bad.rl:2:22: type mismatch:"),
-        "the diagnostic belongs at the incompatible expression in the .rl file: {out}"
+        out.starts_with("src/bad.tt:2:22: type mismatch:")
+            || out.contains("bad.tt:2:22: type mismatch:"),
+        "the diagnostic belongs at the incompatible expression in the .tt file: {out}"
     );
 }
 
 #[test]
 fn typed_exhaustiveness_sees_a_hole_inside_a_payload() {
     let root = require_tsgo!();
-    // The checker names the scrutinee's constituents; rl runs its own
+    // The checker names the scrutinee's constituents; tt runs its own
     // exhaustiveness algorithm over that alphabet, so a nested pattern's
     // hole is seen on this path too (TASK-108). Before, the typed path
     // asked only "which top-level tags are missing?" and answered nothing
     // here, while `--check` reported the hole.
     let dir = project(&[(
-        "src/nest.rl",
+        "src/nest.tt",
         "enum Inner { Yes(n: number), No }\n\
          enum Outer { Wrap(inner: Inner), Bare }\n\
          declare const o: Outer;\n\
@@ -1166,7 +1166,7 @@ fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
     // removed is not demanded back. `--check`, which knows only the
     // declaration, does report it.
     let dir = project(&[(
-        "src/narrow.rl",
+        "src/narrow.tt",
         "enum Shape { Circle(radius: number), Point }\n\
          export function f(x: Shape): number {\n\
          \x20 if (x.kind === \"Point\") return 0;\n\
@@ -1183,12 +1183,12 @@ fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
 #[test]
 fn a_hand_written_payload_union_is_named_by_the_checker() {
     let root = require_tsgo!();
-    // The payload's declared type is a hand-written union, so no rl
+    // The payload's declared type is a hand-written union, so no tt
     // declaration describes it — the one thing the declaration table can
     // never answer. The emitted condition tests that payload at exactly
     // its type, and asking there names the column's alphabet (TASK-109).
     let dir = project(&[(
-        "src/opaque.rl",
+        "src/opaque.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
          enum Outer { Wrap(inner: Inner), Bare }\n\
          declare const o: Outer;\n\
@@ -1206,10 +1206,10 @@ fn a_hand_written_payload_union_fully_covered_is_exhaustive() {
     let root = require_tsgo!();
     // The other half of the same answer: covering the payload's cases
     // makes the match exhaustive, and nothing is reported. Before the
-    // payload question existed this stayed quiet too — but only because rl
+    // payload question existed this stayed quiet too — but only because tt
     // refused to guess, which is a different thing from knowing.
     let dir = project(&[(
-        "src/opaque_full.rl",
+        "src/opaque_full.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
          enum Outer { Wrap(inner: Inner), Bare }\n\
          declare const o: Outer;\n\
@@ -1230,10 +1230,10 @@ fn typed_exhaustiveness_resolves_a_payload_declared_in_another_module() {
     // ones have to be collected on this path too — the same 1-hop
     // collection the default path does.
     let dir = project(&[
-        ("src/token.rl", "export enum Tok { Num(n: number), Eof }\n"),
+        ("src/token.tt", "export enum Tok { Num(n: number), Eof }\n"),
         (
-            "src/line.rl",
-            "import { Tok } from \"./token.rl\";\n\
+            "src/line.tt",
+            "import { Tok } from \"./token.tt\";\n\
              enum Line { Head(t: Tok), Blank }\n\
              declare const l: Line;\n\
              export const a = match (l) { Head(t: Num(n)) => n, Blank => 0 };\n",
@@ -1253,7 +1253,7 @@ fn typed_exhaustiveness_covers_tuple_matches_too() {
     // the typed path skipped tuple matches entirely, so the product was
     // checked only by the default path's declaration table (TASK-111).
     let dir = project(&[(
-        "src/tuple.rl",
+        "src/tuple.tt",
         "enum Dir { North(dx: number), South }\n\
          enum Speed { Fast(v: number), Slow }\n\
          declare const d: Dir;\n\
@@ -1274,7 +1274,7 @@ fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
     // combinations that need it are not missing. The default path, which
     // knows only the declaration, does report them.
     let dir = project(&[(
-        "src/narrowed_tuple.rl",
+        "src/narrowed_tuple.tt",
         "enum Dir { North(dx: number), South }\n\
          enum Speed { Fast(v: number), Slow }\n\
          export function f(d: Dir, s: Speed): number {\n\

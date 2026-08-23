@@ -1,13 +1,13 @@
-# Release — build prebuilt rlc binaries and publish the npm packages.
+# Release — build prebuilt ttc binaries and publish the npm packages.
 #
 # Trigger: push a tag `vX.Y.Z` (from a commit whose Cargo.toml version is
 # X.Y.Z — the verify job enforces the match). Publishing needs the NPM_TOKEN
-# repository secret (an npm automation token with publish rights to rl-lang,
-# rl-lang-* platform packages, unplugin-rl, and create-rl).
+# repository secret (an npm automation token with publish rights to tt-lang,
+# tt-lang-* platform packages, unplugin-tt, and create-tt).
 #
 # Pipeline: verify tag ↔ Cargo.toml → build 5 targets → assemble npm
 # platform packages + stamp versions → publish (platform packages first,
-# then rl-lang and create-rl, so neither points at missing dependencies) →
+# then tt-lang and create-tt, so neither points at missing dependencies) →
 # GitHub Release with binary archives.
 name: Release
 
@@ -96,8 +96,8 @@ jobs:
       - name: Upload binary
         uses: actions/upload-artifact@v4
         with:
-          name: rlc-${{ matrix.key }}
-          path: target/${{ matrix.target }}/release/rlc${{ matrix.key == 'win32-x64' && '.exe' || '' }}
+          name: ttc-${{ matrix.key }}
+          path: target/${{ matrix.target }}/release/ttc${{ matrix.key == 'win32-x64' && '.exe' || '' }}
           if-no-files-found: error
 
   publish:
@@ -124,59 +124,59 @@ jobs:
         run: |
           mkdir -p dist/packages dist/assets
           for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
-            exe=rlc; [ "$key" = "win32-x64" ] && exe=rlc.exe
+            exe=ttc; [ "$key" = "win32-x64" ] && exe=ttc.exe
             node npm/scripts/make-platform-package.mjs \
-              "$key" "binaries/rlc-$key/$exe" dist/packages "$VERSION"
+              "$key" "binaries/ttc-$key/$exe" dist/packages "$VERSION"
             # Release archive alongside the npm package.
             if [ "$key" = "win32-x64" ]; then
-              (cd "dist/packages/rl-lang-$key/bin" && zip -q "$OLDPWD/dist/assets/rlc-v$VERSION-$key.zip" "$exe")
+              (cd "dist/packages/tt-lang-$key/bin" && zip -q "$OLDPWD/dist/assets/ttc-v$VERSION-$key.zip" "$exe")
             else
-              tar -C "dist/packages/rl-lang-$key/bin" -czf "dist/assets/rlc-v$VERSION-$key.tar.gz" "$exe"
+              tar -C "dist/packages/tt-lang-$key/bin" -czf "dist/assets/ttc-v$VERSION-$key.tar.gz" "$exe"
             fi
           done
 
       - name: Smoke-test the linux-x64 binary
         run: |
-          dist/packages/rl-lang-linux-x64/bin/rlc --version
-          # An rl-only enum (fields), so the output proves actual compilation
+          dist/packages/tt-lang-linux-x64/bin/ttc --version
+          # A tt-only enum (fields), so the output proves actual compilation
           # rather than TS passthrough.
-          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/smoke.rl
-          dist/packages/rl-lang-linux-x64/bin/rlc -p /tmp/smoke.rl | grep -q 'kind: "A"'
+          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/smoke.tt
+          dist/packages/tt-lang-linux-x64/bin/ttc -p /tmp/smoke.tt | grep -q 'kind: "A"'
 
-      - name: Stamp version into rl-lang
+      - name: Stamp version into tt-lang
         run: node npm/scripts/stamp-version.mjs "$VERSION"
 
       # Platform packages first: the main package's optionalDependencies
-      # must be resolvable the moment rl-lang@VERSION appears.
+      # must be resolvable the moment tt-lang@VERSION appears.
       - name: Publish platform packages
         run: |
           for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
-            npm publish "dist/packages/rl-lang-$key" --provenance --access public
+            npm publish "dist/packages/tt-lang-$key" --provenance --access public
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish rl-lang
-        run: npm publish npm/rl-lang --provenance --access public
+      - name: Publish tt-lang
+        run: npm publish npm/tt-lang --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # unplugin-rl has an independent version. Publish it only when that
+      # unplugin-tt has an independent version. Publish it only when that
       # exact version is not already present, so compiler-only releases do
       # not try to overwrite an immutable npm version.
-      - name: Publish unplugin-rl when needed
+      - name: Publish unplugin-tt when needed
         run: |
           UNPLUGIN_VERSION="$(node -p "require('./integrations/unplugin/package.json').version")"
-          if npm view "unplugin-rl@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
-            echo "unplugin-rl@$UNPLUGIN_VERSION is already published"
+          if npm view "unplugin-tt@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
+            echo "unplugin-tt@$UNPLUGIN_VERSION is already published"
           else
             npm publish integrations/unplugin --provenance --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Publish create-rl
-        run: npm publish packages/create-rl --provenance --access public
+      - name: Publish create-tt
+        run: npm publish packages/create-tt --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

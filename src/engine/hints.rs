@@ -1,11 +1,11 @@
-//! Hints — what rl has to say about a file that is not an error.
+//! Hints — what tt has to say about a file that is not an error.
 //!
-//! rl's diagnostics are errors, and only errors: the CLI either compiles a
+//! tt's diagnostics are errors, and only errors: the CLI either compiles a
 //! file or reports a position and stops. That is a deliberate part of the
 //! error-layer contract (`CLAUDE.md`), and it leaves no room for the one
 //! thing the pattern analysis knows but must not reject — an **unreachable
 //! arm**. Rust reports it as a lint; making it an error here would reject
-//! programs that compile today, and rl has no warning level to put it at.
+//! programs that compile today, and tt has no warning level to put it at.
 //!
 //! An editor does, though. A hint is not part of the compile answer: it is
 //! attached to a range, it never fails a build, and the CLI never prints
@@ -24,28 +24,28 @@ use super::language::{Range, span_range};
 /// What a hint is about. One kind today; the enum is the seam that keeps a
 /// consumer from switching on message text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RlHintKind {
+pub enum TtHintKind {
     /// An arm that matches nothing an earlier arm has not already matched.
     UnreachableArm,
 }
 
-/// One thing rl has to say about a range that is not an error.
+/// One thing tt has to say about a range that is not an error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RlHint {
+pub struct TtHint {
     /// What kind of hint it is.
-    pub kind: RlHintKind,
+    pub kind: TtHintKind,
     /// The range it is about — the whole arm, so an editor can dim it.
     pub range: Range,
     /// The message, as it is shown.
     pub message: String,
 }
 
-/// Every hint rl has about `source`.
+/// Every hint tt has about `source`.
 ///
-/// `path` resolves relative `.rl` imports (from disk, so an unsaved
+/// `path` resolves relative `.tt` imports (from disk, so an unsaved
 /// imported file is seen as last saved), exactly as the other parse-only
 /// surfaces resolve them.
-pub fn rl_hints(path: &Path, source: &str) -> Vec<RlHint> {
+pub fn tt_hints(path: &Path, source: &str) -> Vec<TtHint> {
     let analyses = super::language::analyses_for(path, source);
     let mut out = Vec::new();
     for analysis in &analyses.matches {
@@ -59,8 +59,8 @@ pub fn rl_hints(path: &Path, source: &str) -> Vec<RlHint> {
             // The body span runs to the arm's delimiter, so it can carry
             // trailing whitespace — a dimmed range should stop at the code.
             let end = source[..arm.body_end].trim_end().len();
-            out.push(RlHint {
-                kind: RlHintKind::UnreachableArm,
+            out.push(TtHint {
+                kind: TtHintKind::UnreachableArm,
                 range: span_range(source, arm.pattern_start, end),
                 message: "unreachable arm: an earlier arm already matches every value \
                           this one would"
@@ -76,8 +76,8 @@ pub fn rl_hints(path: &Path, source: &str) -> Vec<RlHint> {
 mod tests {
     use super::*;
 
-    fn hints(source: &str) -> Vec<RlHint> {
-        rl_hints(Path::new("/p/a.rl"), source)
+    fn hints(source: &str) -> Vec<TtHint> {
+        tt_hints(Path::new("/p/a.tt"), source)
     }
 
     #[test]
@@ -86,7 +86,7 @@ mod tests {
                    const v = match (e) { A(x) => x, B(y) => y, A(x: z) => z };\n";
         let found = hints(src);
         assert_eq!(found.len(), 1, "{found:?}");
-        assert_eq!(found[0].kind, RlHintKind::UnreachableArm);
+        assert_eq!(found[0].kind, TtHintKind::UnreachableArm);
         // The whole third arm, from its pattern to the end of its body.
         let line = src.lines().nth(1).expect("second line");
         let start = line.find("A(x: z)").expect("the dead arm") as u32;

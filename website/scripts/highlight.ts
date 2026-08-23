@@ -2,12 +2,12 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createHighlighter } from 'shiki'
 import content from '../src/content.json'
 
-const grammarUrl = new URL('../../editors/vscode/syntaxes/rl.tmLanguage.json', import.meta.url)
-const rlxGrammarUrl = new URL('../../editors/vscode/syntaxes/rlx.tmLanguage.json', import.meta.url)
+const grammarUrl = new URL('../../editors/vscode/syntaxes/tt.tmLanguage.json', import.meta.url)
+const ttxGrammarUrl = new URL('../../editors/vscode/syntaxes/ttx.tmLanguage.json', import.meta.url)
 const grammar = JSON.parse(await readFile(grammarUrl, 'utf8'))
-const rlxGrammar = JSON.parse(await readFile(rlxGrammarUrl, 'utf8'))
+const ttxGrammar = JSON.parse(await readFile(ttxGrammarUrl, 'utf8'))
 const highlighter = await createHighlighter({
-  langs: [grammar, rlxGrammar, 'shellscript'],
+  langs: [grammar, ttxGrammar, 'shellscript'],
   themes: ['github-dark-default'],
 })
 
@@ -15,7 +15,7 @@ const highlighted = Object.fromEntries(
   Object.entries(content.topics).map(([id, topic]) => [
     id,
     highlighter.codeToHtml(topic.code, {
-      lang: id === 'cli' || id === 'install' ? 'shellscript' : id === 'rlx' ? 'rlx' : 'rl',
+      lang: id === 'cli' || id === 'install' ? 'shellscript' : id === 'ttx' ? 'ttx' : 'tt',
       theme: 'github-dark-default',
       structure: 'inline',
     }),
@@ -24,7 +24,7 @@ const highlighted = Object.fromEntries(
 
 await writeFile(new URL('../src/highlighted.json', import.meta.url), `${JSON.stringify(highlighted, null, 2)}\n`)
 
-const origin = 'https://load28.github.io/rl'
+const origin = 'https://load28.github.io/tt'
 const paths = Object.keys(content.topics).flatMap((topic) => [
   topic === 'overview' ? '/' : `/${topic}`,
   topic === 'overview' ? '/ko' : `/ko/${topic}`,

@@ -1,14 +1,21 @@
 node_modules/
 npm/
+!npm/
+npm/*
+!npm/scripts/
+!npm/scripts/**
+!npm/tt-lang/
+!npm/tt-lang/**
 *.tsbuildinfo
 *.log
 
-# rlc sidecar output (rlc --types)
-.rl-types/
+# ttc sidecar output (ttc --types)
+.tt-types/
 
 # 로컬 개발 설정·산출물 (scripts/setup이 생성; 머신 로컬 — 커밋하지 않는다)
+.tt-dev/
+npm/tt-lang/tt-dev.local.json
 .rl-dev/
-npm/rl-lang/rl-dev.local.json
 
 # Added by cargo
 
@@ -16,4 +23,4 @@ npm/rl-lang/rl-dev.local.json
 /website/dist/
 
 # 표준 라이브러리 자동 방출물 (examples 컴파일 시)
-examples/rl/
+examples/tt/

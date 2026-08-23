@@ -12,10 +12,10 @@
 함께 들어 있는 다른 프로퍼티도 남는다. 반면 각 연산을 독립 ESM export로 만들면
 namespace import를 포함해 번들러가 사용하지 않은 선언을 제거할 수 있다.
 
-따라서 rlc가 프로젝트 전체 사용량을 분석해 매번 std 소스를 잘라내는 방식보다,
+따라서 ttc가 프로젝트 전체 사용량을 분석해 매번 std 소스를 잘라내는 방식보다,
 std의 원본 표현을 독립 ESM export로 바꾸는 방식이 책임 경계와 도구 호환성 면에서
 우선이다. 최종 API는 타입을 `TOption`/`TResult`로 구분하고 런타임 연산을
-`@rl/std/option`과 `@rl/std/result`에서 namespace import한다.
+`@tt/std/option`과 `@tt/std/result`에서 namespace import한다.
 
 **출처:**
 
@@ -39,7 +39,7 @@ std의 원본 표현을 독립 ESM export로 바꾸는 방식이 책임 경계�
 | 독립 export + 객체 facade | `import { Some }`; `Some(1)` | 45 B | 제거됨 |
 | 독립 export + 객체 facade | `import { Option }`; `Option.Some(1)` | 157 B | 남음 |
 
-재현 입력과 결과는 `/tmp/rl-std-research`에 두었다. 이 측정은 특정 축약 예제의
+재현 입력과 결과는 `/tmp/tt-std-research`에 두었다. 이 측정은 특정 축약 예제의
 관찰이며 모든 번들러의 보장은 아니다. 다만 esbuild 공식 문서의 독립 선언 및
 namespace import 예제와 같은 경계를 보인다.
 
@@ -61,7 +61,7 @@ Rollup의 `treeshake.propertyReadSideEffects`는 사용하지 않은 **프로퍼
 
 ## 비교: 가능한 세 접근
 
-### 1. rlc가 사용량을 분석해 객체를 선택 방출
+### 1. ttc가 사용량을 분석해 객체를 선택 방출
 
 AOT 빌드에서는 모든 입력을 읽으므로 구현할 수 있다. 그러나 값 자체 전달,
 계산 프로퍼티, 재수출에서는 전체 객체 보존이 필요하다. 번들러 플러그인은 std
@@ -69,14 +69,14 @@ AOT 빌드에서는 모든 입력을 읽으므로 구현할 수 있다. 그러�
 분석 결과를 안정적으로 만들기 어렵다. importer마다 다른 std 인스턴스를 만들면
 같은 ESM 지정자가 하나의 모듈 인스턴스를 가리킨다는 사용자의 기대도 깨진다.
 
-이 접근은 번들러가 이미 소유한 도달성 분석을 rlc와 플러그인에 중복 구현한다.
-프로젝트의 TypeScript 통과 영역을 더 깊게 해석해야 하므로 rl의 “일반 TS는 그대로
+이 접근은 번들러가 이미 소유한 도달성 분석을 ttc와 플러그인에 중복 구현한다.
+프로젝트의 TypeScript 통과 영역을 더 깊게 해석해야 하므로 tt의 “일반 TS는 그대로
 통과” 계약과도 긴장이 생긴다.
 
 ### 2. 객체 API를 제거하고 독립 named export만 제공
 
 가장 작은 번들을 안정적으로 만든다. `Option.map` 호출 형태는 유지하되 값은
-`import * as Option from "@rl/std/option"`으로 가져온다. 타입은 `TOption<T>`로
+`import * as Option from "@tt/std/option"`으로 가져온다. 타입은 `TOption<T>`로
 이름을 분리하므로 namespace binding과 충돌하지 않는다.
 
 TypeScript는 type-only import가 JavaScript 출력에서 제거됨을 보장한다. 따라서

@@ -1,8 +1,8 @@
-//! Structural parsing of rl `match` expressions.
+//! Structural parsing of tt `match` expressions.
 //!
-//! Purely structural: anything that does not fully parse as an rl match (a
+//! Purely structural: anything that does not fully parse as a tt match (a
 //! method named `match`, `String.prototype.match` calls, ...) returns `None`
-//! and passes through verbatim. rl-level errors — duplicate arms, a
+//! and passes through verbatim. tt-level errors — duplicate arms, a
 //! misplaced wildcard, non-exhaustiveness — are the semantic phase's job.
 //! The scrutinee and every arm body are recursively parsed sub-programs.
 
@@ -67,7 +67,7 @@ pub(super) fn parse_match<'t>(
              `match (<expression>) { ... }`"
                 .to_string()
         } else {
-            "rl `match` could not be parsed (write `match (<scrutinee>) { <pattern> => <body> }`; \
+            "tt `match` could not be parsed (write `match (<scrutinee>) { <pattern> => <body> }`; \
              tuple patterns must match the scrutinee arity)"
                 .to_string()
         };
@@ -77,7 +77,7 @@ pub(super) fn parse_match<'t>(
             .and_then(|close| cur.tokens.get(close))
             .map_or(cur.range_end, |token| token.span.end);
         Claim::Malformed {
-            error: crate::error::RlError::span(kw_span.start, kw_span.end, message)
+            error: crate::error::TtError::span(kw_span.start, kw_span.end, message)
                 .code(crate::DiagnosticCode::MalformedMatch),
             recovery: RecoveryNode {
                 span: Span {
@@ -88,7 +88,7 @@ pub(super) fn parse_match<'t>(
             },
         }
     } else {
-        Claim::NotRl
+        Claim::NotTt
     }
 }
 

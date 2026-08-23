@@ -3,7 +3,7 @@
 **/*.map
 **/tsconfig.json
 **/*.tsbuildinfo
-# 문법은 생성물(syntaxes/rl.tmLanguage.json)만 패키징한다.
+# 문법은 생성물(syntaxes/tt.tmLanguage.json)만 패키징한다.
 syntaxes/src/**
 syntaxes/build.mjs
 client/src/**

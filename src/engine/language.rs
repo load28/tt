@@ -1,6 +1,6 @@
-//! The engine's language-service surface — editor semantics in rl's terms.
+//! The engine's language-service surface — editor semantics in tt's terms.
 //!
-//! Every question here arrives as a position **in an `.rl` source** and is
+//! Every question here arrives as a position **in an `.tt` source** and is
 //! answered in the same coordinates: hover a value inside a `match` arm and
 //! the range that comes back is in the file the user is looking at, never
 //! in the TypeScript it lowered to. The whole journey — projection, the
@@ -51,7 +51,7 @@ pub struct Range {
 /// A place in a file the user can open.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Location {
-    /// The file — an `.rl` source, or a hand-written TypeScript file.
+    /// The file — an `.tt` source, or a hand-written TypeScript file.
     pub path: PathBuf,
     /// The range within it, in that file's own text.
     pub range: Range,
@@ -75,7 +75,7 @@ pub struct HoverInfo {
     pub signature: String,
     /// Documentation prose, empty when there is none.
     pub documentation: String,
-    /// The span the hover applies to, in the `.rl` source.
+    /// The span the hover applies to, in the `.tt` source.
     pub range: Range,
 }
 
@@ -98,7 +98,7 @@ pub struct CompletionAnswer {
     pub items: Vec<CompletionItem>,
     /// Whether the service answered as a *member* completion — what tells a
     /// real member list from the global scope offered while recovering from
-    /// unfinished rl syntax.
+    /// unfinished tt syntax.
     pub member: bool,
     /// Set when the answer came from a completion probe; pass it back to
     /// [`Project::completion_resolve`] so the entry is resolved against the
@@ -121,7 +121,7 @@ pub struct RenameEdit {
     /// Where the edit applies.
     pub location: Location,
     /// What the service wants written there, with [`RENAME_PLACEHOLDER`]
-    /// standing in for the new name — a destructuring shorthand (what an rl
+    /// standing in for the new name — a destructuring shorthand (what a tt
     /// pattern binding compiles to) expands to `field: <placeholder>`, and
     /// dropping that expansion would silently rebind a different field.
     /// `None` means the bare new name.
@@ -130,7 +130,7 @@ pub struct RenameEdit {
 
 /// The name a rename asks the service for, so every edit's text can be read
 /// as "the new name, in whatever shape this location needs it".
-pub const RENAME_PLACEHOLDER: &str = "rlRenamePlaceholder";
+pub const RENAME_PLACEHOLDER: &str = "ttRenamePlaceholder";
 
 /// One overload in a signature-help answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -163,10 +163,10 @@ pub struct SignatureHelp {
     pub active_parameter: u32,
 }
 
-/// One TypeScript diagnostic, mapped onto the `.rl` source.
+/// One TypeScript diagnostic, mapped onto the `.tt` source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDiagnostic {
-    /// Where, in the `.rl` source.
+    /// Where, in the `.tt` source.
     pub range: Range,
     /// The message, verbatim.
     pub message: String,
@@ -181,7 +181,7 @@ pub struct ServiceDiagnostic {
 #[derive(Debug)]
 pub(crate) struct ServiceSession {
     client: Service,
-    /// The text last served for each `.rl` file — the emitted TypeScript,
+    /// The text last served for each `.tt` file — the emitted TypeScript,
     /// or a probe standing in for it.
     served: HashMap<PathBuf, String>,
     /// Service projections by source path, reused while the text matches.
@@ -211,13 +211,13 @@ pub(crate) struct ServiceDoc {
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,
-    /// Direct RL causes found while building this exact projection. The
+    /// Direct TT causes found while building this exact projection. The
     /// quick checker layer uses their syntax owners before VSCode ever sees
     /// a provisional consequence.
-    rl_diagnostics: Vec<crate::Diagnostic>,
+    tt_diagnostics: Vec<crate::Diagnostic>,
 }
 
-/// A compiled completion probe: the buffer with `$rl_probe` spliced in at
+/// A compiled completion probe: the buffer with `$tt_probe` spliced in at
 /// the cursor, emitted, and the placeholder's position in that output.
 #[derive(Debug, Clone)]
 struct ProbeDoc {
@@ -231,10 +231,10 @@ struct ProbeDoc {
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so
 /// it cannot collide with the name the user is in the middle of typing.
-const PROBE_NAME: &str = "$rl_probe";
+const PROBE_NAME: &str = "$tt_probe";
 
 impl Project {
-    /// Hover at a position: the checker's answer first, rl's own match
+    /// Hover at a position: the checker's answer first, tt's own match
     /// analysis second.
     ///
     /// The service answers everything it can see — which is everything the
@@ -253,7 +253,7 @@ impl Project {
     pub fn hover(&mut self, path: &Path, position: Position) -> Result<Option<HoverInfo>, String> {
         let (doc, path) = match self.serve(path) {
             Ok(served) => served,
-            // No toolchain to ask: rl's own declaration table still answers
+            // No toolchain to ask: tt's own declaration table still answers
             // pattern bindings, instead of failing hover outright.
             Err(error) => {
                 return match self.declared_hover_unserved(path, position) {
@@ -269,7 +269,7 @@ impl Project {
     }
 
     /// The plain service hover: the signature TypeScript shows, mapped onto
-    /// the `.rl` source. `Ok(None)` when there is nothing to show.
+    /// the `.tt` source. `Ok(None)` when there is nothing to show.
     fn service_hover(
         &mut self,
         doc: &Arc<ServiceDoc>,
@@ -415,7 +415,7 @@ impl Project {
 
     /// The declaration-table hover for a session whose toolchain could not
     /// be reached: the file is read as the editor sees it (overlay first)
-    /// and only rl's own analysis answers.
+    /// and only tt's own analysis answers.
     fn declared_hover_unserved(&mut self, path: &Path, position: Position) -> Option<HoverInfo> {
         let canonical = path.canonicalize().ok()?;
         let source = match self.overlays.get(&canonical) {
@@ -548,7 +548,7 @@ impl Project {
     }
 
     /// Completions at a position. `member` says whether the *source* cursor
-    /// sits at a member access (the adapter knows, from the rl syntax layer)
+    /// sits at a member access (the adapter knows, from the tt syntax layer)
     /// — at a member access only a member answer means anything, and when
     /// the plain answer is not one, a probe mends the unfinished construct
     /// and asks again.
@@ -776,7 +776,7 @@ impl Project {
         }))
     }
 
-    /// TypeScript's type errors for one file, mapped onto its `.rl` source.
+    /// TypeScript's type errors for one file, mapped onto its `.tt` source.
     /// Exact source spans are reported as-is. Diagnostics that land in
     /// compiler-written glue use their lowering anchor's primary source
     /// span, matching the batch typed-check path.
@@ -818,7 +818,7 @@ impl Project {
             if recovery_intersects(&doc, s, e) {
                 continue;
             }
-            if projection::origin_intersects_rl_error(origin, &doc.rl_diagnostics) {
+            if projection::origin_intersects_tt_error(origin, &doc.tt_diagnostics) {
                 continue;
             }
             let (exact, projected_anchor) = match origin {
@@ -841,7 +841,7 @@ impl Project {
                 continue;
             }
             // On glue the construct is the diagnostic's extent: its own
-            // text is underlined, and where rlc can say what the construct
+            // text is underlined, and where ttc can say what the construct
             // meant it says that instead — the same table the CLI reports
             // through, so the two surfaces cannot drift.
             if !exact && let Some(anchor) = glue {
@@ -864,13 +864,13 @@ impl Project {
                         },
                         None => ServiceDiagnostic {
                             range,
-                            message: format!("{raw} (in code rlc generated for this construct)"),
+                            message: format!("{raw} (in code ttc generated for this construct)"),
                             code,
                             warning: severity == 2,
                         },
                     };
                 // One construct's glue can draw several TypeScript errors
-                // that all mean the same rl thing.
+                // that all mean the same tt thing.
                 if !out.contains(&entry) {
                     out.push(entry);
                 }
@@ -883,11 +883,11 @@ impl Project {
                     .clone()
             });
             let mut message = match crate::engine::semantics::name_types(&raw, declared) {
-                Some(named) => format!("{raw} (in rl's names: {named})"),
+                Some(named) => format!("{raw} (in tt's names: {named})"),
                 None => raw,
             };
             if !exact {
-                message.push_str(" (in code rlc generated for this construct)");
+                message.push_str(" (in code ttc generated for this construct)");
             }
             out.push(ServiceDiagnostic {
                 range: source_range(&doc.source, s, e),
@@ -900,7 +900,7 @@ impl Project {
     }
 
     /// Starts (or reuses) the service session and serves `path` and its
-    /// transitive `.rl` imports as the TypeScript they lower to. Returns the
+    /// transitive `.tt` imports as the TypeScript they lower to. Returns the
     /// file's projection and its canonical path; the session is then live.
     fn serve(&mut self, path: &Path) -> Result<(Arc<ServiceDoc>, PathBuf), String> {
         let canonical = path
@@ -929,13 +929,13 @@ impl Project {
         let doc = serve_one(session, overlays, &canonical)
             .ok_or_else(|| format!("cannot read {}", canonical.display()))?;
 
-        // The `.rl` modules it imports are served too, transitively. That is
-        // not an optimization: the server resolves `"./x.rl"` to `x.rl.ts`,
+        // The `.tt` modules it imports are served too, transitively. That is
+        // not an optimization: the server resolves `"./x.tt"` to `x.tt.ts`,
         // and that name only exists as a document *this session serves*.
         let mut seen: HashSet<PathBuf> = HashSet::from([canonical.clone()]);
         let mut stack = vec![(canonical.clone(), doc.clone())];
         while let Some((file, doc)) = stack.pop() {
-            for import in crate::rl_imports(&doc.source) {
+            for import in crate::tt_imports(&doc.source) {
                 let target = match file
                     .parent()
                     .unwrap_or(Path::new("."))
@@ -991,11 +991,11 @@ fn service_doc(path: &Path, text: String) -> ServiceDoc {
         mappings: emit.mappings,
         anchors: emit.anchors,
         recovered,
-        rl_diagnostics: report.diagnostics,
+        tt_diagnostics: report.diagnostics,
     }
 }
 
-/// Serves one `.rl` file's projection, creating or refreshing it from the
+/// Serves one `.tt` file's projection, creating or refreshing it from the
 /// overlay or the disk. `None` when the file cannot be read.
 fn serve_one(
     session: &mut ServiceSession,
@@ -1021,8 +1021,8 @@ fn serve_one(
     Some(doc)
 }
 
-/// The URI an `.rl` file is served under: the lowered module's name, which
-/// is what an `import "./x.rl"` resolves to.
+/// The URI an `.tt` file is served under: the lowered module's name, which
+/// is what an `import "./x.tt"` resolves to.
 fn served_uri(path: &Path) -> String {
     file_uri(&module_path_of(path))
 }
@@ -1094,7 +1094,7 @@ pub(super) fn span_range(text: &str, start: usize, end: usize) -> Range {
     )
 }
 
-/// The enum declarations a file's direct relative `.rl` imports bring into
+/// The enum declarations a file's direct relative `.tt` imports bring into
 /// scope, under the names the imports give them — the same 1-hop
 /// collection the CLI does for sema.
 ///
@@ -1108,7 +1108,7 @@ pub(super) fn externs_of(
 ) -> Vec<crate::EnumSymbol> {
     externs_from(
         path,
-        &crate::rl_imports_with_kind(
+        &crate::tt_imports_with_kind(
             source,
             crate::SourceKind::from_path(path).unwrap_or_default(),
         ),
@@ -1133,13 +1133,13 @@ pub(super) fn externs_of(
 /// symbols over without a re-parse.
 pub(super) fn externs_from(
     path: &Path,
-    imports: &[crate::RlImport],
+    imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::EnumSymbol>>,
 ) -> Vec<crate::EnumSymbol> {
     let dir = path.parent().unwrap_or(Path::new("."));
     let mut externs: Vec<crate::EnumSymbol> = Vec::new();
     for import in imports {
-        if matches!(import.names, crate::RlImportNames::None) {
+        if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
         }
         let target = match dir.join(&import.specifier).canonicalize() {
@@ -1150,13 +1150,13 @@ pub(super) fn externs_from(
             continue;
         };
         match &import.names {
-            crate::RlImportNames::Namespace(ns) => {
+            crate::TtImportNames::Namespace(ns) => {
                 externs.extend(decls.into_iter().map(|mut d| {
                     d.name = format!("{ns}.{}", d.name);
                     d
                 }));
             }
-            crate::RlImportNames::Named(entries) => {
+            crate::TtImportNames::Named(entries) => {
                 for (name, alias) in entries {
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         let mut d = d.clone();
@@ -1165,7 +1165,7 @@ pub(super) fn externs_from(
                     }
                 }
             }
-            crate::RlImportNames::None => unreachable!("skipped above"),
+            crate::TtImportNames::None => unreachable!("skipped above"),
         }
     }
     externs
@@ -1256,16 +1256,16 @@ fn map_target(
     let name = path.to_string_lossy();
     let source_name = name
         .strip_suffix(".tsx")
-        .filter(|n| n.ends_with(".rlx"))
-        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".rl")));
-    if let Some(rl) = source_name {
-        let rl_path = PathBuf::from(rl);
-        let doc = serve_doc_only(session, overlays, &rl_path)?;
+        .filter(|n| n.ends_with(".ttx"))
+        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")));
+    if let Some(tt) = source_name {
+        let tt_path = PathBuf::from(tt);
+        let doc = serve_doc_only(session, overlays, &tt_path)?;
         let start = u16_offset(&doc.code, lsp_range.start);
         let end = u16_offset(&doc.code, lsp_range.end);
         let (s, e) = from_service_span(&doc, start, end)?;
         return Some(Location {
-            path: rl_path,
+            path: tt_path,
             range: source_range(&doc.source, s, e),
         });
     }
@@ -1298,7 +1298,7 @@ fn serve_doc_only(
     }
 }
 
-/// An rl position translated into the served text, or `None` when it sits
+/// A tt position translated into the served text, or `None` when it sits
 /// in compiler-written glue.
 fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> {
     let u16 = u16_offset(&doc.source, position);
@@ -1528,16 +1528,16 @@ fn position_of(value: &serde_json::Value) -> Position {
     }
 }
 
-/// Makes every `@rl/std` entry resolvable in `root`, by putting the standard
+/// Makes every `@tt/std` entry resolvable in `root`, by putting the standard
 /// library where the TypeScript server looks for a package of that name.
 ///
 /// The compiler backend serves the library from memory; a language server
 /// cannot — module resolution reads the file system. So for the service the
-/// library has to *be* there. Only rl's own scoped package is ever written,
+/// library has to *be* there. Only tt's own scoped package is ever written,
 /// and never over one that already exists: a project that installs
-/// the `@rl/std` package itself keeps its own copy.
+/// the `@tt/std` package itself keeps its own copy.
 fn ensure_std_module(root: &Path) {
-    let pkg = root.join("node_modules/@rl/std");
+    let pkg = root.join("node_modules/@tt/std");
     let entry = pkg.join(crate::StdModule::Types.file_name());
     if entry.exists() || pkg.exists() {
         return;
@@ -1547,14 +1547,14 @@ fn ensure_std_module(root: &Path) {
     }
     for module in crate::StdModule::ALL {
         let source = format!(
-            "// @generated by rlc --emit-std — do not edit directly.\n{}",
+            "// @generated by ttc --emit-std — do not edit directly.\n{}",
             module.source()
         );
         let _ = std::fs::write(pkg.join(module.file_name()), source);
     }
     let _ = std::fs::write(
         pkg.join("package.json"),
-        "{\n  \"name\": \"@rl/std\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
+        "{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
     );
 }
 
@@ -1578,14 +1578,14 @@ mod tests {
     fn service_projection_recovers_parser_error_nodes() {
         let source = "function f(value: number) { const n = try value; return n; }\n\
             const broken = 1 |> ;\n";
-        let doc = service_doc(Path::new("/p/src/a.rl"), source.to_string());
+        let doc = service_doc(Path::new("/p/src/a.tt"), source.to_string());
         assert!(
             projection_accepts_diagnostics(&doc.code, crate::SourceKind::TypeScript),
             "{}",
             doc.code
         );
         assert_eq!(doc.recovered.len(), 1);
-        assert!(doc.code.contains("$rl_t0.kind"), "{}", doc.code);
+        assert!(doc.code.contains("$tt_t0.kind"), "{}", doc.code);
         assert!(doc.code.contains("const broken = 0"), "{}", doc.code);
     }
 
@@ -1689,15 +1689,15 @@ mod tests {
 
     #[test]
     fn analyses_collect_imported_declarations_like_the_cli() {
-        let dir = std::env::temp_dir().join(format!("rl-analyses-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tt-analyses-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
-            dir.join("token.rl"),
+            dir.join("token.tt"),
             "export enum Token { Num(value: number), Eof }\n",
         )
         .unwrap();
-        let source = "import { Token as T } from \"./token.rl\";\nconst v = match (t) { Num(value) | Eof => 0 };\n";
-        let main = dir.join("main.rl");
+        let source = "import { Token as T } from \"./token.tt\";\nconst v = match (t) { Num(value) | Eof => 0 };\n";
+        let main = dir.join("main.tt");
         std::fs::write(&main, source).unwrap();
         let main = main.canonicalize().unwrap();
 
@@ -1727,7 +1727,7 @@ mod tests {
         // the changed externs invalidate the cached entry, so this is a
         // recompute, not a stale hit.
         project.open_document(
-            dir.join("token.rl").canonicalize().unwrap(),
+            dir.join("token.tt").canonicalize().unwrap(),
             "export enum Token { Num(value: string), Eof }\n".to_string(),
         );
         let semantics = project.semantic_analyses(&main, source);
@@ -1742,9 +1742,9 @@ mod tests {
 
     #[test]
     fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
-        let dir = std::env::temp_dir().join(format!("rl-shared-cache-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tt-shared-cache-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("a.rl");
+        let file = dir.join("a.tt");
         let source = "enum E { A(x: number), B }\nconst v = match (e) { A(x) | B => 0 };\n";
         std::fs::write(&file, source).unwrap();
 

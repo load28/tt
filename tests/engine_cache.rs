@@ -13,10 +13,10 @@
 use std::fs;
 use std::path::PathBuf;
 
-use rlc::engine::{CheckRequest, Engine, ProjectOptions};
+use ttc::engine::{CheckRequest, Engine, ProjectOptions};
 
 fn tmpdir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("rl-cache-{}-{tag}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("tt-cache-{}-{tag}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     dir
 }
@@ -24,8 +24,8 @@ fn tmpdir(tag: &str) -> PathBuf {
 #[test]
 fn body_changes_keep_importers_and_export_changes_invalidate_them() {
     let dir = tmpdir("invalidate");
-    let shared = dir.join("shared.rl");
-    let user = dir.join("user.rl");
+    let shared = dir.join("shared.tt");
+    let user = dir.join("user.tt");
     fs::write(
         &shared,
         "export enum Token { Num(value: number), Eof }\nexport const noise = 1;\n",
@@ -33,7 +33,7 @@ fn body_changes_keep_importers_and_export_changes_invalidate_them() {
     .unwrap();
     fs::write(
         &user,
-        "import { Token } from \"./shared.rl\";\n\
+        "import { Token } from \"./shared.tt\";\n\
          export function f(t: Token): number {\n\
          \x20 return match (t) { Num(value) => value, Eof => 0 };\n\
          }\n",
@@ -61,7 +61,7 @@ fn body_changes_keep_importers_and_export_changes_invalidate_them() {
 
     // A body-only change to the dependency: shared recomputes (content
     // changed), the importer's key — its own content plus shared's
-    // *exports* — is untouched, so user.rl hits.
+    // *exports* — is untouched, so user.tt hits.
     fs::write(
         &shared,
         "export enum Token { Num(value: number), Eof }\nexport const noise = 2;\n",
@@ -76,7 +76,7 @@ fn body_changes_keep_importers_and_export_changes_invalidate_them() {
     );
 
     // An exported-declaration change: the importer's externs differ, so
-    // user.rl recomputes too — no stale exhaustiveness model survives.
+    // user.tt recomputes too — no stale exhaustiveness model survives.
     fs::write(
         &shared,
         "export enum Token { Num(value: number), Word(text: string), Eof }\nexport const noise = 2;\n",
@@ -96,7 +96,7 @@ fn body_changes_keep_importers_and_export_changes_invalidate_them() {
 #[test]
 fn an_unchanged_projection_is_shared_across_snapshots() {
     let dir = tmpdir("projection");
-    let file = dir.join("a.rl");
+    let file = dir.join("a.tt");
     fs::write(&file, "export enum E { A(x: number), B }\n").unwrap();
 
     let engine = Engine::new(None);
@@ -120,8 +120,8 @@ fn an_unchanged_projection_is_shared_across_snapshots() {
 #[test]
 fn an_error_node_keeps_its_file_and_other_files_checkable() {
     let dir = tmpdir("partial-snapshot");
-    let blocked = dir.join("a-blocked.rl");
-    let valid = dir.join("b-valid.rl");
+    let blocked = dir.join("a-blocked.tt");
+    let valid = dir.join("b-valid.tt");
     fs::write(&blocked, "const broken = 1 |> ;\n").unwrap();
     fs::write(
         &valid,
@@ -146,7 +146,7 @@ fn an_error_node_keeps_its_file_and_other_files_checkable() {
             &snapshot,
             &CheckRequest {
                 emit_declarations: false,
-                rl_only: true,
+                tt_only: true,
             },
         )
         .unwrap();

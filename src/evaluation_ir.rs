@@ -12,7 +12,7 @@ use crate::hir::ids::Idx;
 use crate::hir::{BodyId, ExprId, NodeId};
 use crate::program_syntax::{
     CoreRoot, EvaluationContext, EvaluationInputMode, HostContinuation, HostEvaluationOperation,
-    HostEvaluationProtocol, HostExit, HostOwner, ProgramSyntax, RlNodeId, SourceSpan,
+    HostEvaluationProtocol, HostExit, HostOwner, ProgramSyntax, SourceSpan, TtNodeId,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,7 +37,7 @@ pub(crate) enum OperationId {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum RegionPlacement {
     Host {
-        syntax: RlNodeId,
+        syntax: TtNodeId,
         context: EvaluationContext,
         protocol: HostEvaluationProtocol,
         source: SourceSpan,
@@ -168,7 +168,7 @@ struct PendingPlannedValue {
 
 #[derive(Debug, Clone)]
 struct HostBinding {
-    syntax: RlNodeId,
+    syntax: TtNodeId,
     context: EvaluationContext,
     protocol: HostEvaluationProtocol,
     source: SourceSpan,
@@ -431,7 +431,7 @@ impl EvaluationFile {
             let slot = allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names)?;
             value_slots.insert(expr, slot);
         }
-        let expression_boundary_name = allocate_generated_name("$rl_expr", &mut occupied_names)?;
+        let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
             slot_names,
@@ -603,7 +603,7 @@ fn allocate_slot_name(
     slot: ValueSlotId,
     occupied: &mut HashSet<String>,
 ) -> Result<String, EvaluationError> {
-    let base = format!("$rl_v{}", slot.0);
+    let base = format!("$tt_v{}", slot.0);
     if occupied.insert(base.clone()) {
         return Ok(base);
     }
@@ -1034,7 +1034,7 @@ mod tests {
     fn every_core_primitive_gets_one_region() {
         let file = evaluation(
             "enum E { A(value: number), B }\n\
-             import { load } from \"./load.rl\";\n\
+             import { load } from \"./load.tt\";\n\
              function f(e: E) {\n\
                try load();\n\
                return result { const x <- load(); match (e) { A(value) => x + value, B => 0 } |> done };\n\
@@ -1184,7 +1184,7 @@ mod tests {
     }
 
     #[test]
-    fn a_later_rl_value_depends_on_the_prior_value_slot() {
+    fn a_later_tt_value_depends_on_the_prior_value_slot() {
         let file = evaluation(
             "consume(match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 });\n",
         );
@@ -1207,10 +1207,10 @@ mod tests {
     #[test]
     fn generated_slot_names_do_not_collide_with_typescript_identifiers() {
         let file =
-            evaluation("const $rl_v0 = 1;\nconst out = match (value) { A => $rl_v0, _ => 0 };\n");
+            evaluation("const $tt_v0 = 1;\nconst out = match (value) { A => $tt_v0, _ => 0 };\n");
         let plan = file.lowering_plan().expect("lowering plan");
         let ValueTarget::Slot(slot) = plan.owners().next().expect("host rewrite").values[0].target;
-        assert_eq!(plan.slot_name(slot), "$rl_v0_1");
+        assert_eq!(plan.slot_name(slot), "$tt_v0_1");
     }
 
     #[test]

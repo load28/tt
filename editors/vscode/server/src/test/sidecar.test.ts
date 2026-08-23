@@ -1,6 +1,6 @@
-/* Tests for on-save sidecar regeneration. These drive the real `rlc`
+/* Tests for on-save sidecar regeneration. These drive the real `ttc`
  * binary, which in turn drives a real TypeScript compiler (the declarations
- * are the compiler's; only the map is rlc's). They skip when either is
+ * are the compiler's; only the map is ttc's). They skip when either is
  * missing — the guard runs the same command the feature runs, so a skip
  * means "no toolchain", never "the refresh quietly did nothing". */
 import * as assert from "node:assert/strict";
@@ -12,7 +12,7 @@ import * as path from "node:path";
 
 import { refreshSidecar } from "../sidecar";
 
-const COMPILER = "rlc";
+const COMPILER = "ttc";
 
 function compilerAvailable(): boolean {
   try {
@@ -31,14 +31,14 @@ function compilerAvailable(): boolean {
  * checkout can do both.
  */
 function toolchainAvailable(): boolean {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rl-toolchain-probe-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-toolchain-probe-"));
   try {
-    fs.writeFileSync(path.join(dir, "probe.rl"), "export const n: number = 1;\n");
+    fs.writeFileSync(path.join(dir, "probe.tt"), "export const n: number = 1;\n");
     // `-o` the way `refreshSidecar` passes it: on its own `--types` writes
-    // into `.rl-types`, and the probe asks whether a sidecar can be built
+    // into `.tt-types`, and the probe asks whether a sidecar can be built
     // where the editor puts one.
-    execFileSync(COMPILER, ["--types", "probe.rl", "-o", "."], { cwd: dir, stdio: "pipe" });
-    return fs.existsSync(path.join(dir, "probe.rl.d.ts"));
+    execFileSync(COMPILER, ["--types", "probe.tt", "-o", "."], { cwd: dir, stdio: "pipe" });
+    return fs.existsSync(path.join(dir, "probe.tt.d.ts"));
   } catch {
     return false;
   } finally {
@@ -47,9 +47,9 @@ function toolchainAvailable(): boolean {
 }
 
 const skip = !compilerAvailable()
-  ? "rlc not on PATH"
+  ? "ttc not on PATH"
   : !toolchainAvailable()
-    ? "no TypeScript compiler for rlc to drive"
+    ? "no TypeScript compiler for ttc to drive"
     : false;
 
 const SOURCE = [
@@ -69,40 +69,40 @@ const SOURCE = [
 ].join("\n");
 
 function workspace(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rl-sidecar-test-"));
-  fs.writeFileSync(path.join(dir, "notice.rl"), SOURCE);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-sidecar-test-"));
+  fs.writeFileSync(path.join(dir, "notice.tt"), SOURCE);
   return dir;
 }
 
 test("always mode writes both sidecar files", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
+  const tt = path.join(dir, "notice.tt");
 
-  const result = await refreshSidecar(COMPILER, rl, "always");
+  const result = await refreshSidecar(COMPILER, tt, "always");
   assert.equal(result.kind, "written", JSON.stringify(result));
 
-  const declarations = fs.readFileSync(`${rl}.d.ts`, "utf8");
-  const map = fs.readFileSync(`${rl}.d.ts.map`, "utf8");
+  const declarations = fs.readFileSync(`${tt}.d.ts`, "utf8");
+  const map = fs.readFileSync(`${tt}.d.ts.map`, "utf8");
 
-  // The declarations describe what rl emitted: a union type and a
+  // The declarations describe what tt emitted: a union type and a
   // constructor object under the same name.
   assert.match(declarations, /export type Notice/);
   assert.match(declarations, /export declare const Notice/);
   assert.match(declarations, /export declare function render/);
-  assert.match(declarations, /\/\/# sourceMappingURL=notice\.rl\.d\.ts\.map/);
+  assert.match(declarations, /\/\/# sourceMappingURL=notice\.tt\.d\.ts\.map/);
 
-  // The map points back at the .rl file — this is what sends "go to
+  // The map points back at the .tt file — this is what sends "go to
   // definition" to the original instead of the .d.ts.
   const parsed = JSON.parse(map) as { sources: string[]; mappings: string };
-  assert.deepEqual(parsed.sources, ["notice.rl"]);
+  assert.deepEqual(parsed.sources, ["notice.tt"]);
   assert.ok(parsed.mappings.length > 0);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("rlx saves refresh TSX declarations and map back to the rlx source", { skip }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rlx-sidecar-test-"));
-  const rlx = path.join(dir, "view.rlx");
+test("ttx saves refresh TSX declarations and map back to the ttx source", { skip }, async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ttx-sidecar-test-"));
+  const ttx = path.join(dir, "view.ttx");
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),
     JSON.stringify({
@@ -114,7 +114,7 @@ test("rlx saves refresh TSX declarations and map back to the rlx source", { skip
     }),
   );
   fs.writeFileSync(
-    rlx,
+    ttx,
     [
       "declare namespace JSX { interface IntrinsicElements { main: {} } }",
       "export enum State { Ready(label: string), Empty }",
@@ -125,130 +125,130 @@ test("rlx saves refresh TSX declarations and map back to the rlx source", { skip
     ].join("\n"),
   );
 
-  const result = await refreshSidecar(COMPILER, rlx, "always");
+  const result = await refreshSidecar(COMPILER, ttx, "always");
   assert.equal(result.kind, "written", JSON.stringify(result));
-  const declaration = fs.readFileSync(`${rlx}.d.ts`, "utf8");
+  const declaration = fs.readFileSync(`${ttx}.d.ts`, "utf8");
   assert.match(declaration, /export type State/);
   assert.match(declaration, /export declare const View/);
-  assert.match(declaration, /sourceMappingURL=view\.rlx\.d\.ts\.map/);
-  const map = JSON.parse(fs.readFileSync(`${rlx}.d.ts.map`, "utf8")) as {
+  assert.match(declaration, /sourceMappingURL=view\.ttx\.d\.ts\.map/);
+  const map = JSON.parse(fs.readFileSync(`${ttx}.d.ts.map`, "utf8")) as {
     sources: string[];
   };
-  assert.deepEqual(map.sources, ["view.rlx"]);
+  assert.deepEqual(map.sources, ["view.ttx"]);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("declarations can live in their own tree", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
-  const types = path.join(dir, ".rl-types");
+  const tt = path.join(dir, "notice.tt");
+  const types = path.join(dir, ".tt-types");
 
-  const result = await refreshSidecar(COMPILER, rl, "always", types);
+  const result = await refreshSidecar(COMPILER, tt, "always", types);
   assert.equal(result.kind, "written", JSON.stringify(result));
 
   // The source tree stays clean; the declarations sit next to each other.
-  assert.equal(fs.existsSync(`${rl}.d.ts`), false);
-  assert.equal(fs.existsSync(path.join(types, "notice.rl.d.ts")), true);
+  assert.equal(fs.existsSync(`${tt}.d.ts`), false);
+  assert.equal(fs.existsSync(path.join(types, "notice.tt.d.ts")), true);
 
   // `sources` has to cross the distance, or the map cannot find the source.
   const map = JSON.parse(
-    fs.readFileSync(path.join(types, "notice.rl.d.ts.map"), "utf8"),
+    fs.readFileSync(path.join(types, "notice.tt.d.ts.map"), "utf8"),
   ) as { sources: string[] };
-  assert.deepEqual(map.sources, ["../notice.rl"]);
+  assert.deepEqual(map.sources, ["../notice.tt"]);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("refresh mode looks for the sidecar where it is written", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
-  const types = path.join(dir, ".rl-types");
+  const tt = path.join(dir, "notice.tt");
+  const types = path.join(dir, ".tt-types");
 
   // Nothing there yet — refresh must not create it.
-  assert.equal((await refreshSidecar(COMPILER, rl, "refresh", types)).kind, "skipped");
+  assert.equal((await refreshSidecar(COMPILER, tt, "refresh", types)).kind, "skipped");
 
-  await refreshSidecar(COMPILER, rl, "always", types);
-  assert.equal((await refreshSidecar(COMPILER, rl, "refresh", types)).kind, "written");
+  await refreshSidecar(COMPILER, tt, "always", types);
+  assert.equal((await refreshSidecar(COMPILER, tt, "refresh", types)).kind, "written");
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("refresh mode leaves a workspace that never opted in alone", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
+  const tt = path.join(dir, "notice.tt");
 
-  const result = await refreshSidecar(COMPILER, rl, "refresh");
+  const result = await refreshSidecar(COMPILER, tt, "refresh");
   assert.equal(result.kind, "skipped");
-  assert.equal(fs.existsSync(`${rl}.d.ts`), false);
+  assert.equal(fs.existsSync(`${tt}.d.ts`), false);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("refresh mode updates a sidecar that is already there", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
+  const tt = path.join(dir, "notice.tt");
 
-  await refreshSidecar(COMPILER, rl, "always");
+  await refreshSidecar(COMPILER, tt, "always");
   // Anything exported after the first generation must show up on the next
   // save.
-  fs.writeFileSync(rl, `${SOURCE}export function count(items: Notice[]): number {\n  return items.length;\n}\n`);
+  fs.writeFileSync(tt, `${SOURCE}export function count(items: Notice[]): number {\n  return items.length;\n}\n`);
 
-  const result = await refreshSidecar(COMPILER, rl, "refresh");
+  const result = await refreshSidecar(COMPILER, tt, "refresh");
   assert.equal(result.kind, "written", JSON.stringify(result));
-  assert.match(fs.readFileSync(`${rl}.d.ts`, "utf8"), /export declare function count/);
+  assert.match(fs.readFileSync(`${tt}.d.ts`, "utf8"), /export declare function count/);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("a file that no longer compiles keeps its last good sidecar", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
+  const tt = path.join(dir, "notice.tt");
 
-  await refreshSidecar(COMPILER, rl, "always");
-  const before = fs.readFileSync(`${rl}.d.ts`, "utf8");
+  await refreshSidecar(COMPILER, tt, "always");
+  const before = fs.readFileSync(`${tt}.d.ts`, "utf8");
 
-  // Recoverable rl errors (a duplicate case, a missing arm) still lower
+  // Recoverable tt errors (a duplicate case, a missing arm) still lower
   // and still refresh (TASK-120); what blocks a refresh is a file that
   // cannot become TypeScript at all — a stray `|>` passes through
   // verbatim, so there is nothing to emit declarations from, and the
   // editor should keep showing the last good ones rather than lose them
   // mid-edit.
-  fs.writeFileSync(rl, `${SOURCE}const broken = 1 |> ;\n`);
-  const result = await refreshSidecar(COMPILER, rl, "refresh");
+  fs.writeFileSync(tt, `${SOURCE}const broken = 1 |> ;\n`);
+  const result = await refreshSidecar(COMPILER, tt, "refresh");
 
   assert.equal(result.kind, "failed", JSON.stringify(result));
-  assert.equal(fs.readFileSync(`${rl}.d.ts`, "utf8"), before);
+  assert.equal(fs.readFileSync(`${tt}.d.ts`, "utf8"), before);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("a match that is not exhaustive still refreshes the sidecar", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
+  const tt = path.join(dir, "notice.tt");
 
-  await refreshSidecar(COMPILER, rl, "always");
+  await refreshSidecar(COMPILER, tt, "always");
 
   // Exhaustiveness is a question about a type, so the checker answers it —
   // and it answers it *after* the declarations are emitted. The arm is
   // missing, the diagnostic says so, and the sidecar still describes the
   // new case, which is what the file being edited actually exports.
-  fs.writeFileSync(rl, SOURCE.replace("  Warn(text: string),", "  Warn(text: string),\n  Debug(),"));
-  const result = await refreshSidecar(COMPILER, rl, "refresh");
+  fs.writeFileSync(tt, SOURCE.replace("  Warn(text: string),", "  Warn(text: string),\n  Debug(),"));
+  const result = await refreshSidecar(COMPILER, tt, "refresh");
 
   assert.equal(result.kind, "written", JSON.stringify(result));
-  assert.match(fs.readFileSync(`${rl}.d.ts`, "utf8"), /Debug/);
+  assert.match(fs.readFileSync(`${tt}.d.ts`, "utf8"), /Debug/);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
 test("off mode does nothing", { skip }, async () => {
   const dir = workspace();
-  const rl = path.join(dir, "notice.rl");
+  const tt = path.join(dir, "notice.tt");
 
-  const result = await refreshSidecar(COMPILER, rl, "off");
+  const result = await refreshSidecar(COMPILER, tt, "off");
   assert.equal(result.kind, "skipped");
-  assert.equal(fs.existsSync(`${rl}.d.ts`), false);
+  assert.equal(fs.existsSync(`${tt}.d.ts`), false);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });

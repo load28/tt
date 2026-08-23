@@ -1,6 +1,6 @@
 # 컴파일러 아키텍처 — 단계 분리 파이프라인
 
-이 문서는 rlc 내부 구조의 규범 설명이다. TASK-010에서 단일 패스 구조를
+이 문서는 ttc 내부 구조의 규범 설명이다. TASK-010에서 단일 패스 구조를
 swc 스타일의 단계 분리 파이프라인으로 재구성했고, TASK-021에서 파서
 프런트엔드에 렉서(토큰화) 단계를 도입해 파서가 바이트가 아닌 토큰 스트림
 위에서 동작하게 했다. 모듈 배치가 이 문서와
@@ -14,7 +14,7 @@ swc 스타일의 단계 분리 파이프라인으로 재구성했고, TASK-021�
 동시에 수행했다. 구현은 작았지만, 기능을 추가할 때마다 세 관심사를 한
 함수에서 같이 건드려야 했고, 에러 전파(`Result`)가 파싱·방출 전체에
 퍼져 있었다. swc가 `swc_ecma_ast` / `swc_ecma_parser` /
-`swc_ecma_transforms` / `swc_ecma_codegen`으로 단계를 나누듯, rlc도
+`swc_ecma_transforms` / `swc_ecma_codegen`으로 단계를 나누듯, ttc도
 단계마다 독립 모듈을 두고 단계 간 계약을 타입드 AST로 명시한다.
 
 ## 파이프라인
@@ -27,7 +27,7 @@ Vec<Token>
    │  parser::parse          — 무오류(infallible) 구조 파싱
    ▼
 ast::Program                 — 단계 간 계약
-   │  sema::check            — AST 위의 모든 rl 수준 에러 (Result<(), RlError>)
+   │  sema::check            — AST 위의 모든 tt 수준 에러 (Result<(), TtError>)
    │  val::check             — 토큰 스트림 위의 `val` 바인딩 분석 (같은 에러 타입)
    ▼
 ast::Program (검증됨)
@@ -43,10 +43,10 @@ TypeScript 텍스트
 
 파싱된 파일은 `Program` = 소스 순서의 `Segment` 목록이다:
 
-- `Verbatim(Span)` — rl 구문이 아닌 모든 것. 원본 바이트 범위 그대로.
+- `Verbatim(Span)` — tt 구문이 아닌 모든 것. 원본 바이트 범위 그대로.
 - `Enum(EnumDecl)` / `Match(MatchExpr)` / `Try(TryStmt)` /
-  `LetElse(LetElseStmt)` — 완전하게 파싱된 rl 구문.
-- `RlImport(Span)` — 정적 import/re-export의 상대 경로 `.rl` 지정자 문자열
+  `LetElse(LetElseStmt)` — 완전하게 파싱된 tt 구문.
+- `TtImport(Span)` — 정적 import/re-export의 상대 경로 `.tt` 지정자 문자열
   (따옴표 포함). 문장의 나머지는 verbatim으로 남고, codegen이
   `ImportRewrite` 모드에 따라 확장자를 재작성한다.
 - `Template(Template)` — 템플릿 리터럴. 보간(`${ }`)마다 재귀 `Program`.
@@ -70,8 +70,8 @@ swc가 TypeScript를 렉서 → 파서로 처리하듯, 소스는 먼저 **유�
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로
 스캔한다. 태그·속성 이름·텍스트는 `JsxRaw`로 불투명하게 보존하고 `{...}`
-expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍스트의 rl
-키워드는 후보가 되지 않지만 expression container 안의 rl 구문은 일반 식과
+expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍스트의 tt
+키워드는 후보가 되지 않지만 expression container 안의 tt 구문은 일반 식과
 같이 AST로 올라간다. SWC 입력·출력 검증도 같은 `SourceKind`를 사용한다.
 
 ### 3. `parser` — 무오류 구조 파싱
@@ -82,16 +82,16 @@ expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍�
 순회하며, 구문이 완전하게 파싱될 때만 AST 노드로 들어올리고, 조금이라도
 어긋나면 그 후보를 verbatim 바이트 범위로 남긴다. "유효한 TS는 바이트
 그대로 통과" 계약이 여기서 구현된다: 구문 여부는 순수하게 구조적 판단이고,
-rl 수준 *에러*(중복 케이스 등)는 전부 sema의 몫이다. 중첩 코드(스크루티니,
+tt 수준 *에러*(중복 케이스 등)는 전부 sema의 몫이다. 중첩 코드(스크루티니,
 arm body, 보간)는 같은 토큰 스트림의 부분 슬라이스로 재귀 파싱된다.
 
-TS enum 구분 규칙(payload 케이스 또는 제네릭이 있어야 rl enum)과
+TS enum 구분 규칙(payload 케이스 또는 제네릭이 있어야 tt enum)과
 `const enum`/`declare enum` 제외, 예약어 규칙도 파서 소관이다.
 
 ### 4. `sema` — 의미 검사
 
 AST를 소스 순서로 깊이 우선 순회하며(노드 자체 규칙 → 자식 순),
-첫 위반을 바이트 오프셋과 함께 `RlError`로 보고한다:
+첫 위반을 바이트 오프셋과 함께 `TtError`로 보고한다:
 
 - enum: 중복 케이스 금지; 검증 활성 시 필드 타입이 TS 타입 조각으로
   파싱되는지(swc) 검사.
@@ -101,14 +101,14 @@ AST를 소스 순서로 깊이 우선 순회하며(노드 자체 규칙 → 자�
   `analysis.rs`가 계산해 `Coverage`로 답하고(`match-analysis.md` §5),
   sema는 그 답을 순회 **종료 후** 위치 있는 에러로 옮긴다 (match가 enum
   선언보다 앞서도 무관). 알 수 없는 태그의 match는 검사하지 않는다 —
-  rlc에 타입 정보가 없다.
+  ttc에 타입 정보가 없다.
 
-에러 계층 계약이 여기서 지켜진다: 모든 rl 수준 에러는 sema가 직접 보고하고,
+에러 계층 계약이 여기서 지켜진다: 모든 tt 수준 에러는 sema가 직접 보고하고,
 tsc에 위임하지 않는다.
 
 ### 4-1. `val` — 바인딩 수준 의미 검사
 
-`val`(TASK-070)은 다른 rl 구문과 달리 **통과 영역의 TypeScript**에 대해
+`val`(TASK-070)은 다른 tt 구문과 달리 **통과 영역의 TypeScript**에 대해
 판단해야 한다: 어떤 바인딩이 `val`인지, 어떤 식이 그 바인딩에서 시작하는
 경로를 변경하는지는 전부 AST가 의도적으로 불투명한 바이트 범위로 남겨 둔
 코드 안에 있다. 그래서 이 검사만 AST가 아니라 **렉서가 만든 토큰 스트림**
@@ -121,7 +121,7 @@ tsc에 위임하지 않는다.
 - `val::check`는 같은 토큰 스트림을 한 번 훑으며 렉시컬 스코프 스택을
   쌓고(블록·함수 매개변수·`for` 머리·`catch`), 변경 경로의 루트 식별자를
   해석하고, 같은 파일에서 이름으로 선언된 함수의 시그니처로 호출 시점의
-  변경 권한을 검사한다. 에러는 sema와 같은 `RlError`(바이트 오프셋)다.
+  변경 권한을 검사한다. 에러는 sema와 같은 `TtError`(바이트 오프셋)다.
 - 토큰 스트림은 `parser::lex_and_parse`가 파싱과 함께 돌려주므로 렉싱은
   파일당 여전히 한 번이고, `val` 수식자가 하나도 없는 파일은 선형 스캔
   한 번으로 즉시 끝난다.
@@ -129,13 +129,13 @@ tsc에 위임하지 않는다.
   바꾸는지는 `x`의 타입에 대한 사실이고, 여기에는 타입이 없다 — 이름으로
   추측하면 같은 이름의 사용자 정의 API가 오탐으로 막힌다. 그래서 같은 워크가
   두 번째 모드(`val::method_calls`)로 그 호출들을 **질문**으로 수집하고,
-  `rlc --types`가 실제 체커로 답한다. 리터럴 match의 타입 기반 소진성
+  `ttc --types`가 실제 체커로 답한다. 리터럴 match의 타입 기반 소진성
   (`probe.rs`)과 같은 구조이고, 같은 원칙이다: 확정할 수 없으면 보고하지
   않는다.
 
 이 단계가 sema와 분리된 이유는 **입력 자료가 다르기 때문**이다 — 규칙이
 AST 노드 위에서 표현되면 sema, 통과 영역의 토큰 위에서 표현되면 val이다.
-사용자에게는 둘 다 "rlc가 직접 내는 rl 수준 에러"로 동일하다.
+사용자에게는 둘 다 "ttc가 직접 내는 tt 수준 에러"로 동일하다.
 
 ### 5. `codegen` — 무오류 방출
 
@@ -152,7 +152,7 @@ AST에 남긴 원시 Span 위로 `scanner::contains_await`를 돌려 수행한�
 방출은 내부적으로 Lit(컴파일러 글루)/Src(원본, 오프셋 유지) 조각의
 로프(`codegen/rope.rs`)로 조립된다 — 조각은 원본을 **빌려오고**(복사하지
 않고) 평탄화 한 번에만 텍스트를 쓴다 — `compile()`은 평탄화한 텍스트만 쓰고,
-언어 도구용 `emit_mapped()`(`rlc --emit-map`)는 원본↔출력 바이트 매핑까지
+언어 도구용 `emit_mapped()`(`ttc --emit-map`)는 원본↔출력 바이트 매핑까지
 받아 에디터의 가상 TypeScript 문서에 쓴다(TASK-050). 이 도구 경로는
 파싱+방출만 조합한다: sema·verify를 생략해 편집 중인 버퍼에도 무오류로
 방출한다 — 진단이 `--check`의 몫이라는 에러 계층 계약은 그대로다.
@@ -164,8 +164,8 @@ AST에 남긴 원시 Span 위로 `scanner::contains_await`를 돌려 수행한�
 (TASK-056).
 
 - **파일당 한 번만 읽고 한 번만 스캔한다.** 입력을 읽으면서 `scan_module()`
-  한 번으로 상대 `.rl` import 목록과 `@rl/std` 사용 여부를 함께 얻는다
-  (`rl_imports()`/`imports_std()`를 잇달아 부르면 같은 파일을 두 번 판다).
+  한 번으로 상대 `.tt` import 목록과 `@tt/std` 사용 여부를 함께 얻는다
+  (`tt_imports()`/`imports_std()`를 잇달아 부르면 같은 파일을 두 번 판다).
 - **임포트된 모듈의 선언 테이블은 실행당 한 번만 만든다.** 소진성 검사용
   선언 수집(`language.md` §9.3)은 파일마다 임포트 대상을 다시 읽고 다시
   파싱했었다 — 공유 모듈 하나를 N개 파일이 임포트하면 N번. 지금은 경로별로
@@ -181,7 +181,7 @@ AST에 남긴 원시 Span 위로 `scanner::contains_await`를 돌려 수행한�
 typed 모드(`--check-types`/`--types`/`--server`)는 배치 드라이버가 아니라
 **엔진**(`src/engine/`)이 소유한다: `Project`(문서·projection 캐시·컴파일러
 세션)가 장수명 상태를 들고, `Snapshot`(불변)이 한 패스의 단위이며, 결과는
-RL-owned 타입으로 돌아온다. 설계 근거와 typescript-go 비교는
+TT-owned 타입으로 돌아온다. 설계 근거와 typescript-go 비교는
 [`engine-architecture.md`](./engine-architecture.md)에 있다. 배치 빌드가
 엔진 밖인 것은 tsgo가 배치 `tsc`를 project 시스템 밖에 두는 것과 같은
 분리다 — 상태가 필요 없는 1회 실행에 세션 기구를 태우지 않는다.

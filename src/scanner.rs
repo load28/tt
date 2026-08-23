@@ -1,4 +1,4 @@
-//! Low-level byte scanning over rl/TypeScript source.
+//! Low-level byte scanning over tt/TypeScript source.
 //!
 //! All scanning is byte-based: every character the scanner makes decisions on
 //! is ASCII, and UTF-8 continuation bytes (0x80+) never compare equal to any

@@ -1,6 +1,6 @@
 /* --------------------------------------------------------------------------
  * Diagnostics come from the real compiler: through the engine session
- * (`rlc --server`, see engine.ts) when one is available, and through the
+ * (`ttc --server`, see engine.ts) when one is available, and through the
  * one-shot commands otherwise — the two produce the same diagnostics, so
  * the fallback is invisible. Editor errors are byte-for-byte the compiler's
  * own (`file:line:col: message`).
@@ -11,7 +11,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { devPackageCompiler, rlcSpawnEnv } from "./dev";
+import { devPackageCompiler, ttcSpawnEnv } from "./dev";
 import { engineRequest } from "./engine";
 
 /** A typed check opens a project and starts a compiler; it is slower than
@@ -19,7 +19,7 @@ import { engineRequest } from "./engine";
  * editor forever. */
 const TYPED_CHECK_TIMEOUT_MS = 30000;
 
-export interface RlcDiagnostic {
+export interface TtcDiagnostic {
   /** 1-based; 0 means "no position" (output-verification errors). */
   line: number;
   /** 1-based; 0 means "no position". */
@@ -30,37 +30,37 @@ export interface RlcDiagnostic {
    * sends this for a construct it knows the extent of, so the underline
    * covers `try parse(text)` or `match (shape)` as a whole. */
   endLine?: number;
-  /** See {@link RlcDiagnostic.endLine}. */
+  /** See {@link TtcDiagnostic.endLine}. */
   endCol?: number;
   message: string;
-  /** Stable rl rule identity; older/one-shot compilers may omit it. */
+  /** Stable tt rule identity; older/one-shot compilers may omit it. */
   code?: string;
 }
 
-export type RlcResult =
-  | { kind: "ok"; diagnostics: RlcDiagnostic[] }
+export type TtcResult =
+  | { kind: "ok"; diagnostics: TtcDiagnostic[] }
   | { kind: "not-found"; compiler: string }
   | { kind: "failed"; detail: string };
 
 let tmpDir: string | null = null;
 function tempDir(): string {
   if (tmpDir === null) {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "rl-lsp-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-lsp-"));
   }
   return tmpDir;
 }
 
 const CANDIDATE_PATHS = [
-  path.join("target", "release", "rlc"),
-  path.join("target", "debug", "rlc"),
-  path.join("target", "release", "rlc.exe"),
-  path.join("target", "debug", "rlc.exe"),
+  path.join("target", "release", "ttc"),
+  path.join("target", "debug", "ttc"),
+  path.join("target", "release", "ttc.exe"),
+  path.join("target", "debug", "ttc.exe"),
 ];
 
 /**
  * Resolve the compiler to run: explicit setting > locally built binary in a
- * workspace root > the rlc of a `file:`-installed local rl-lang package
- * (a test project set up via `scripts/setup`, see dev.ts) > `rlc` on PATH.
+ * workspace root > the ttc of a `file:`-installed local tt-lang package
+ * (a test project set up via `scripts/setup`, see dev.ts) > `ttc` on PATH.
  */
 export function findCompiler(
   configuredPath: string,
@@ -79,19 +79,19 @@ export function findCompiler(
   }
   const dev = devPackageCompiler(workspaceRoots);
   if (dev !== "") return dev;
-  return "rlc";
+  return "ttc";
 }
 
 /**
  * Whether a TypeScript language toolchain is around, from the same places
  * the engine looks: a built typescript-go checkout named by
- * `RLC_TSGO_ROOT`, or the executable an installed TypeScript package ships
+ * `TTC_TSGO_ROOT`, or the executable an installed TypeScript package ships
  * beside its own files. The engine resolves its own; this mirror exists so
  * the tests can tell "the feature answered nothing" from "the toolchain is
  * missing" — and skip, not fail, on the latter.
  */
 export function findTsgo(workspaceRoots: string[]): string {
-  const root = process.env.RLC_TSGO_ROOT;
+  const root = process.env.TTC_TSGO_ROOT;
   if (root) {
     const built = path.join(root, "built/local/tsgo");
     if (exists(built)) return built;
@@ -123,13 +123,13 @@ function exists(file: string): boolean {
   }
 }
 
-/** Run `rlc --check` on the buffer contents and parse stderr diagnostics. */
+/** Run `ttc --check` on the buffer contents and parse stderr diagnostics. */
 export async function runCheck(
   compiler: string,
   text: string,
   docName: string,
   verify: boolean,
-): Promise<RlcResult> {
+): Promise<TtcResult> {
   // The engine server answers with the same diagnostics and no process
   // spawn; the one-shot below is the fallback and the reference.
   const answer = await engineRequest(
@@ -139,7 +139,7 @@ export async function runCheck(
     15000,
   );
   if (answer && "result" in answer) {
-    const result = answer.result as { diagnostics?: RlcDiagnostic[] };
+    const result = answer.result as { diagnostics?: TtcDiagnostic[] };
     return {
       kind: "ok",
       diagnostics: (result.diagnostics ?? []).map((d) => ({
@@ -155,17 +155,17 @@ export async function runCheck(
   return runCheckOnce(compiler, text, docName, verify);
 }
 
-/** The one-shot `rlc --check`, via a temp file. */
+/** The one-shot `ttc --check`, via a temp file. */
 function runCheckOnce(
   compiler: string,
   text: string,
   docName: string,
   verify: boolean,
-): Promise<RlcResult> {
+): Promise<TtcResult> {
   const rawBase = path.basename(docName).replace(/[^\w.-]/g, "_") || "buffer";
-  const base = rawBase.endsWith(".rl") || rawBase.endsWith(".rlx")
+  const base = rawBase.endsWith(".tt") || rawBase.endsWith(".ttx")
     ? rawBase
-    : `${rawBase}.rl`;
+    : `${rawBase}.tt`;
   const hash = crypto.createHash("sha1").update(docName).digest("hex");
   const file = path.join(tempDir(), `${hash.slice(0, 8)}-${base}`);
 
@@ -183,7 +183,7 @@ function runCheckOnce(
     execFile(
       compiler,
       args,
-      { timeout: 15000, maxBuffer: 4 * 1024 * 1024, env: rlcSpawnEnv(compiler) },
+      { timeout: 15000, maxBuffer: 4 * 1024 * 1024, env: ttcSpawnEnv(compiler) },
       (err, _stdout, stderr) => {
         if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
           resolve({ kind: "not-found", compiler });
@@ -205,9 +205,9 @@ function runCheckOnce(
 }
 
 /* ----------------------------------------------------------------------
- * Symbol interface (`rlc --symbols`): the compiler
- * reports a file's rl enum declarations (with 1-based positions) and its
- * direct relative `.rl` imports, including each referenced file's exported
+ * Symbol interface (`ttc --symbols`): the compiler
+ * reports a file's tt enum declarations (with 1-based positions) and its
+ * direct relative `.tt` imports, including each referenced file's exported
  * declarations — the server consumes this for cross-file features instead
  * of re-implementing import resolution.
  * -------------------------------------------------------------------- */
@@ -255,7 +255,7 @@ export interface SymbolsFile {
 }
 
 /**
- * Run `rlc --symbols` on a file on disk. Returns null when the compiler is
+ * Run `ttc --symbols` on a file on disk. Returns null when the compiler is
  * missing, predates `--symbols`, or the output is unparseable — callers
  * degrade to single-file behavior.
  */
@@ -267,7 +267,7 @@ export function runSymbols(
     execFile(
       compiler,
       ["--symbols", file],
-      { timeout: 15000, maxBuffer: 16 * 1024 * 1024, env: rlcSpawnEnv(compiler) },
+      { timeout: 15000, maxBuffer: 16 * 1024 * 1024, env: ttcSpawnEnv(compiler) },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -285,20 +285,20 @@ export function runSymbols(
 }
 
 /**
- * The typed half of the rl diagnostics, for the buffer as it stands.
+ * The typed half of the tt diagnostics, for the buffer as it stands.
  *
- * `rlc --check` answers everything rl can decide from the text alone. What
+ * `ttc --check` answers everything tt can decide from the text alone. What
  * it cannot decide is what a TypeScript *type* says — whether `m.set(...)`
  * calls a built-in mutator through a `val` binding, whether a scrutinee's
  * type still allows a case (`language.md` §10.4). Those answers come from
  * the engine's typed pass over the live project, or — as the fallback —
- * from `rlc --check-types --rl-only --overlay`.
+ * from `ttc --check-types --tt-only --overlay`.
  *
  * Every message is the compiler's own, verbatim: the editor decides nothing
- * about `val`, it relays what rlc said (CLAUDE.md, error layers).
+ * about `val`, it relays what ttc said (CLAUDE.md, error layers).
  */
 export type ValCheckResult =
-  | { kind: "ok"; diagnostics: RlcDiagnostic[] }
+  | { kind: "ok"; diagnostics: TtcDiagnostic[] }
   /** The check could not run (no toolchain, crash, or nothing to check).
    * Distinct from "ran and found nothing": the caller keeps what it has. */
   | { kind: "unavailable"; detail: string };
@@ -374,7 +374,7 @@ export async function runTypedCheck(
   return runTypedCheckOnce(compiler, text, fsPath, includeTypes);
 }
 
-/** The one-shot `rlc --check-types --overlay` fallback. */
+/** The one-shot `ttc --check-types --overlay` fallback. */
 function runTypedCheckOnce(
   compiler: string,
   text: string,
@@ -387,7 +387,7 @@ function runTypedCheckOnce(
   const cwd = path.dirname(fsPath);
   const shown = path.basename(fsPath);
   const args = ["--check-types"];
-  if (!includeTypes) args.push("--rl-only");
+  if (!includeTypes) args.push("--tt-only");
   args.push("--overlay", fsPath, fsPath);
 
   return new Promise((resolve) => {
@@ -400,11 +400,11 @@ function runTypedCheckOnce(
           cwd,
           timeout: TYPED_CHECK_TIMEOUT_MS,
           maxBuffer: 4 * 1024 * 1024,
-          env: rlcSpawnEnv(compiler),
+          env: ttcSpawnEnv(compiler),
         },
         (err, _stdout, stderr) => {
           const diagnostics = parseStderr(String(stderr), shown);
-          // Exit code 2 is "could not run, nothing was checked" — an rl-level
+          // Exit code 2 is "could not run, nothing was checked" — a tt-level
           // error left nothing to lower. Anything else with no parseable
           // diagnostic is a missing toolchain or a crash. Both keep whatever
           // the caller already had rather than clearing it.
@@ -428,11 +428,11 @@ function runTypedCheckOnce(
   });
 }
 
-/** Parse `rlc: <file>:<line>:<col>: <msg>` / `rlc: <file>: <msg>` lines. */
-export function parseStderr(stderr: string, file: string): RlcDiagnostic[] {
-  const diagnostics: RlcDiagnostic[] = [];
+/** Parse `ttc: <file>:<line>:<col>: <msg>` / `ttc: <file>: <msg>` lines. */
+export function parseStderr(stderr: string, file: string): TtcDiagnostic[] {
+  const diagnostics: TtcDiagnostic[] = [];
   for (const line of stderr.split("\n")) {
-    if (!line.startsWith("rlc: ")) continue;
+    if (!line.startsWith("ttc: ")) continue;
     const rest = line.slice(5);
     if (!rest.startsWith(file)) continue; // progress logs, other files
     const tail = rest.slice(file.length);

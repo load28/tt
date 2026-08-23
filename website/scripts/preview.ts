@@ -7,7 +7,7 @@ Bun.serve({
   port: Number(process.env.PORT ?? 4173),
   async fetch(request) {
     const url = new URL(request.url)
-    let pathname = decodeURIComponent(url.pathname).replace(/^\/rl(?=\/|$)/, '')
+    let pathname = decodeURIComponent(url.pathname).replace(/^\/tt(?=\/|$)/, '')
     if (pathname.endsWith('/')) pathname += 'index.html'
     else if (!pathname.split('/').at(-1)?.includes('.')) pathname += '/index.html'
 
@@ -18,4 +18,4 @@ Bun.serve({
   },
 })
 
-console.log('Local preview: http://127.0.0.1:4173/rl/')
+console.log('Local preview: http://127.0.0.1:4173/tt/')

@@ -2,10 +2,10 @@
 //!
 //! Only the specifier *string* of a static `import` declaration or an
 //! `export ... from` re-export is lifted, and only when it is a relative
-//! path ending in `.rl`; the rest of the statement stays a verbatim byte
+//! path ending in `.tt`; the rest of the statement stays a verbatim byte
 //! range. Dynamic `import(...)`, `import.meta`, and TypeScript
 //! import-assignment (`import x = require(...)`) never match, and — like
-//! every rl construct — a clause that deviates from the expected token
+//! every tt construct — a clause that deviates from the expected token
 //! shape aborts the attempt, leaving the statement untouched.
 //!
 //! Alongside the specifier, the clause's imported names are collected for
@@ -16,32 +16,32 @@
 
 use super::cursor::Cursor;
 use super::is_reserved;
-use crate::ast::{RlImportDecl, RlImportNames, RlSpecifier, Span};
+use crate::ast::{Span, TtImportDecl, TtImportNames, TtSpecifier};
 
 use crate::lexer::TokenKind;
 
 /// `cur` is positioned just past an `import` or `export` keyword (`kw`).
 /// Returns the advanced cursor and the lifted import (specifier span plus
 /// imported names) when the clause fully parses as a static
-/// import/re-export *and* the specifier is a relative `.rl` path.
-pub(super) fn parse_rl_import<'t>(
+/// import/re-export *and* the specifier is a relative `.tt` path.
+pub(super) fn parse_tt_import<'t>(
     mut cur: Cursor<'t>,
     kw: &str,
-) -> Option<(Cursor<'t>, RlImportDecl)> {
+) -> Option<(Cursor<'t>, TtImportDecl)> {
     let first = cur.peek()?;
 
     if kw == "import" {
         match first.kind {
             // `import "spec";` — side-effect import, the specifier is right here.
             TokenKind::Str => {
-                let (spec, kind) = rl_spec_span(&cur, first.span)?;
+                let (spec, kind) = tt_spec_span(&cur, first.span)?;
                 cur.bump();
                 return Some((
                     cur,
-                    RlImportDecl {
+                    TtImportDecl {
                         spec,
                         kind,
-                        names: RlImportNames::None,
+                        names: TtImportNames::None,
                     },
                 ));
             }
@@ -76,7 +76,7 @@ pub(super) fn parse_rl_import<'t>(
 /// token (a reserved word, `=`, `;`, ...) means this is not a static
 /// import clause. `local` is true for `import` declarations, whose clause
 /// names enter local scope and are collected.
-fn clause_then_spec(mut cur: Cursor<'_>, local: bool) -> Option<(Cursor<'_>, RlImportDecl)> {
+fn clause_then_spec(mut cur: Cursor<'_>, local: bool) -> Option<(Cursor<'_>, TtImportDecl)> {
     let mut namespace: Option<String> = None;
     let mut named: Option<Vec<(String, Option<String>)>> = None;
     loop {
@@ -116,16 +116,16 @@ fn clause_then_spec(mut cur: Cursor<'_>, local: bool) -> Option<(Cursor<'_>, RlI
                     if !matches!(spec_tok.kind, TokenKind::Str) {
                         return None;
                     }
-                    let (spec, kind) = rl_spec_span(&cur, spec_tok.span)?;
+                    let (spec, kind) = tt_spec_span(&cur, spec_tok.span)?;
                     cur.bump();
                     let names = match (namespace, named) {
-                        _ if !local => RlImportNames::None,
-                        (Some(ns), _) => RlImportNames::Namespace(ns),
-                        (None, Some(entries)) => RlImportNames::Named(entries),
-                        // only a default binding (rl enums are named exports)
-                        (None, None) => RlImportNames::None,
+                        _ if !local => TtImportNames::None,
+                        (Some(ns), _) => TtImportNames::Namespace(ns),
+                        (None, Some(entries)) => TtImportNames::Named(entries),
+                        // only a default binding (tt enums are named exports)
+                        (None, None) => TtImportNames::None,
                     };
-                    return Some((cur, RlImportDecl { spec, kind, names }));
+                    return Some((cur, TtImportDecl { spec, kind, names }));
                 }
                 if is_reserved(word) {
                     return None;
@@ -178,8 +178,8 @@ fn named_entries(cur: Cursor) -> Vec<(String, Option<String>)> {
 }
 
 /// `span` is a lexed string token; returns it back if its content is a
-/// relative path ending in `.rl`.
-fn rl_spec_span(cur: &Cursor, span: Span) -> Option<(Span, RlSpecifier)> {
+/// relative path ending in `.tt`.
+fn tt_spec_span(cur: &Cursor, span: Span) -> Option<(Span, TtSpecifier)> {
     let src = cur.parser.bytes;
     let quote = src[span.start];
     // The lexer tolerates unterminated strings (stopping at a newline or
@@ -189,13 +189,13 @@ fn rl_spec_span(cur: &Cursor, span: Span) -> Option<(Span, RlSpecifier)> {
     }
     let spec = &src[span.start + 1..span.end - 1];
     if let Some(module) = crate::stdlib::StdModule::from_specifier(spec) {
-        return Some((span, RlSpecifier::Std(module)));
+        return Some((span, TtSpecifier::Std(module)));
     }
     let relative = spec.starts_with(b"./") || spec.starts_with(b"../");
-    if relative && spec.ends_with(b".rl") {
-        Some((span, RlSpecifier::Relative(crate::SourceKind::TypeScript)))
-    } else if relative && spec.ends_with(b".rlx") {
-        Some((span, RlSpecifier::Relative(crate::SourceKind::Tsx)))
+    if relative && spec.ends_with(b".tt") {
+        Some((span, TtSpecifier::Relative(crate::SourceKind::TypeScript)))
+    } else if relative && spec.ends_with(b".ttx") {
+        Some((span, TtSpecifier::Relative(crate::SourceKind::Tsx)))
     } else {
         None
     }

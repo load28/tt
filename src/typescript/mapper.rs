@@ -1,12 +1,12 @@
 //! The three coordinate spaces, and the conversions between them.
 //!
-//! A position travels: `.rl` source byte → emitted TypeScript byte
+//! A position travels: `.tt` source byte → emitted TypeScript byte
 //! ([`crate::EmitMapping`]) → UTF-16 code unit, which is what TypeScript
 //! itself counts in. Questions travel that way; diagnostics travel back.
 //!
 //! Only bytes copied **verbatim** from the source have an exact source
 //! position. Compiler-written glue — a `switch` region or destructuring —
-//! belongs to no `.rl` byte, so diagnostics crossing it use the syntax
+//! belongs to no `.tt` byte, so diagnostics crossing it use the syntax
 //! anchor that owns the lowering instead of inventing a partial mapping.
 
 use crate::{EmitAnchor, EmitMapping};

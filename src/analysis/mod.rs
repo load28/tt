@@ -8,7 +8,7 @@
 //! be, what each pattern binding's payload type is, what an arm body sees.
 //! This module is that description, in the mold of rustc's typed pattern
 //! representation (surface pattern → analysis with types attached), sized
-//! to rl's contract: rlc does not grow a TypeScript type system, so the
+//! to tt's contract: ttc does not grow a TypeScript type system, so the
 //! types here are the *declared* field types from enum declarations.
 //!
 //! Layering follows the compiler's existing seams exactly:
@@ -68,7 +68,7 @@ pub struct PatternAnalyses {
     /// This is what an editor asks for: a case tag and a payload field name
     /// exist nowhere in the emitted TypeScript (a tag becomes a string
     /// literal, a field a destructuring key), so the checker cannot be
-    /// asked about them and rl has to answer. Sorted by position.
+    /// asked about them and tt has to answer. Sorted by position.
     pub resolved: Vec<ResolvedName>,
     /// The declaration table the analysis resolved against — local enums
     /// first, then imported ones, then the built-ins, each name once.
@@ -95,7 +95,7 @@ pub(crate) struct SemanticFile {
 /// `(constructor, field)` column, and the `kind` literals its type admits.
 ///
 /// This is the one thing the declaration table cannot work out — a field's
-/// declared type text may be a type parameter, or name a union no rl
+/// declared type text may be a type parameter, or name a union no tt
 /// declaration describes (`docs/design/rust-parity-analysis.md` §10.3).
 pub(crate) type PayloadAlphabet = ((String, String), Vec<String>);
 
@@ -163,7 +163,7 @@ pub struct PatternSite {
 /// A name in a pattern that names no declaration, together with the name
 /// it was probably meant to be.
 ///
-/// The suggestion is not decoration: rlc does not know the scrutinee's
+/// The suggestion is not decoration: ttc does not know the scrutinee's
 /// type, so "this tag resolves to nothing" is *not by itself* an error —
 /// a tag pattern legitimately matches hand-written tagged unions whose
 /// tags no declaration table holds. What licenses the report is that the
@@ -362,7 +362,7 @@ pub struct Coverage {
     /// matched — dead code, in source order.
     ///
     /// Nothing reports these yet: an unreachable arm is a *lint* in Rust,
-    /// and rl has only errors, so turning it into one would reject
+    /// and tt has only errors, so turning it into one would reject
     /// programs that compile today. It is computed here because the same
     /// recursion answers it, and because the editor is where a hint
     /// belongs (TASK-101 §P3). The narrower duplicate-arm rule sema
@@ -370,7 +370,7 @@ pub struct Coverage {
     pub unreachable: Vec<usize>,
 }
 
-/// One value a match leaves unhandled, as the rl pattern that would cover
+/// One value a match leaves unhandled, as the tt pattern that would cover
 /// it (`Wrap(inner: Yes)`, `_` at a universal position of a tuple match) —
 /// one entry per scrutinee position.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -382,7 +382,7 @@ pub struct Uncovered {
     ///
     /// `false` means some column's alphabet was not identifiable — a
     /// hand-written union, a payload whose declared type names no enum —
-    /// so this witness is rl's best guess rather than its knowledge. The
+    /// so this witness is tt's best guess rather than its knowledge. The
     /// default compile path reports it anyway (a conservative "you may
     /// have missed something" is the only answer available without types);
     /// the typed path does not, because there the honest move is to ask
@@ -406,7 +406,7 @@ impl Coverage {
 
 /// An enum a [`Coverage`] position enumerates, with where it was declared —
 /// the origin an error message names ("enum E", "built-in enum Option",
-/// "enum T (imported from \"./token.rl\")").
+/// "enum T (imported from \"./token.tt\")").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoveredEnum {
     /// The enum's name in this file's scope.
@@ -424,7 +424,7 @@ pub enum Origin {
     Local,
     /// Imported from another module.
     Imported {
-        /// The specifier as written (`./token.rl`), when the collector
+        /// The specifier as written (`./token.tt`), when the collector
         /// recorded it — an error message quotes it to say *which* enum.
         from: Option<String>,
     },
@@ -438,7 +438,7 @@ impl PatternAnalyses {
     ///
     /// ```
     /// let src = "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
-    /// let analyses = rlc::pattern_analyses(src, &[]);
+    /// let analyses = ttc::pattern_analyses(src, &[]);
     /// let a_x = analyses.binding_at(src.find("A(x)").unwrap() + 2).unwrap();
     /// assert_eq!(a_x.ty.as_deref(), Some("string"));
     /// let b_x = analyses.binding_at(src.find("B(x)").unwrap() + 2).unwrap();
@@ -522,7 +522,7 @@ impl PatternAnalyses {
 ///
 /// ```
 /// let src = "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) => x, B(x) => x };\n";
-/// let analyses = rlc::pattern_analyses(src, &[]);
+/// let analyses = ttc::pattern_analyses(src, &[]);
 /// let subject = analyses.matches[0].subjects[0].as_ref().unwrap();
 /// assert_eq!(subject.enum_name, "E");
 /// assert_eq!(analyses.matches[0].arms[0].body_bindings[0].ty.as_deref(), Some("string"));
@@ -532,7 +532,7 @@ impl PatternAnalyses {
 ///
 /// ```
 /// let src = "enum E { A(x: string) }\nif let A(x) = e { use(x); }\n";
-/// let analyses = rlc::pattern_analyses(src, &[]);
+/// let analyses = ttc::pattern_analyses(src, &[]);
 /// assert_eq!(analyses.sites[0].pattern_bindings[0].ty.as_deref(), Some("string"));
 /// ```
 pub fn pattern_analyses(source: &str, externs: &[EnumSymbol]) -> PatternAnalyses {
@@ -852,7 +852,7 @@ impl Table {
     /// The enum a declared type text names: a bare (possibly dotted)
     /// identifier, optionally with type arguments — `Shape`,
     /// `Option<number>`, `ns.Token` — and nothing else. Type arguments are
-    /// not substituted (rlc has no type system); the constructor's declared
+    /// not substituted (ttc has no type system); the constructor's declared
     /// field text answers as written.
     fn resolve_type(&self, ty: &str) -> Option<(&str, &[MatchConstructor])> {
         self.entry_of_type(ty)
@@ -893,7 +893,7 @@ fn walk(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyse
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
-            | Segment::RlImport(_)
+            | Segment::TtImport(_)
             | Segment::Enum(_)
             | Segment::ValModifier(_) => {}
             Segment::Match(expr) => {
@@ -1352,7 +1352,7 @@ fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
 
 /// The same answer for a subject the caller names — the typed path, where
 /// the checker says which constituents the scrutinee's type still has and
-/// rl runs its own algorithm over that alphabet. One algorithm, a better
+/// tt runs its own algorithm over that alphabet. One algorithm, a better
 /// oracle for the one column the checker can speak about.
 pub(crate) fn checked_coverage(
     source: &str,
@@ -1560,7 +1560,7 @@ fn collect_matches<'a>(
                 }
             }
             Segment::Verbatim(_)
-            | Segment::RlImport(_)
+            | Segment::TtImport(_)
             | Segment::Enum(_)
             | Segment::ValModifier(_) => {}
         }
@@ -2031,11 +2031,11 @@ mod tests {
 
     #[test]
     fn coverage_of_an_imported_enum_carries_its_specifier() {
-        let src = "import { Token } from \"./token.rl\";\nconst v = match (t) { Word => 0 };\n";
+        let src = "import { Token } from \"./token.tt\";\nconst v = match (t) { Word => 0 };\n";
         let externs = [ExternEnum {
             name: "Token".to_string(),
             tags: vec!["Word".to_string(), "Punct".to_string()],
-            from: Some("./token.rl".to_string()),
+            from: Some("./token.tt".to_string()),
         }];
         let program = crate::parser::parse(src);
         let analyses = coverage_analyses(&program, &externs);
@@ -2044,7 +2044,7 @@ mod tests {
         assert_eq!(
             coverage.positions[0].as_ref().unwrap().origin,
             Origin::Imported {
-                from: Some("./token.rl".to_string())
+                from: Some("./token.tt".to_string())
             }
         );
         // Coverage-only analyses skip binding work entirely.
@@ -2179,7 +2179,7 @@ mod tests {
     #[test]
     fn an_ambiguous_tag_identifies_no_enum() {
         // Both enums contain `A`, so neither is *the* subject — and a
-        // suggestion rlc cannot choose is no suggestion.
+        // suggestion ttc cannot choose is no suggestion.
         let analyses = pattern_analyses(
             "enum L { A(x: string), Left(n: number) }\n\
              enum R { A(x: string), Righ(n: number) }\n\
@@ -2227,7 +2227,7 @@ mod tests {
 
     #[test]
     fn a_witness_from_an_unidentifiable_column_is_not_certain() {
-        // `Inner` names no rl enum, so the payload column's alphabet is
+        // `Inner` names no tt enum, so the payload column's alphabet is
         // unknown and the witness is a guess. The default path reports it
         // anyway (nothing better is available without types); a consumer
         // with a checker filters on this flag and asks instead.

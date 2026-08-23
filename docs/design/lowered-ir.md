@@ -20,8 +20,8 @@ source
 
 rustc도 HIR을 직접 codegen하지 않는다. 타입이 붙고 더 desugar된 THIR에서 CFG
 형태의 MIR를 만들며, backend는 MIR의 block·statement·terminator·place·operand·
-rvalue를 codegen IR로 번역한다. RL은 borrow checking·drop·ABI·SSA를 소유하지
-않으므로 이를 복제하지 않는다. 대신 RL이 추가한 의미만 Core IR로 정규화한다.
+rvalue를 codegen IR로 번역한다. TT은 borrow checking·drop·ABI·SSA를 소유하지
+않으므로 이를 복제하지 않는다. 대신 TT이 추가한 의미만 Core IR로 정규화한다.
 
 근거:
 
@@ -54,7 +54,7 @@ lowering, editor가 다시 계산하지 않는다.
 - `Propagate`: 값을 한 번 평가하고 success payload를 bind하거나 정해진 target으로 exit
 - `Control`: block·branch·return·break와 result-producing region
 - `Apply`: 값 pipeline과 함수 composition의 평가 순서가 확정된 호출 그래프
-- `OpaqueTs`: RL이 해석하지 않는 TypeScript span
+- `OpaqueTs`: TT이 해석하지 않는 TypeScript span
 
 `match`, `if let`, `let-else`는 모두 `Decision`으로 낮춘다. `try`와 `result` binding은
 모두 `Propagate`로 낮춘다. 새 표면 문법이 기존 primitive로 표현되면 emitter는
@@ -62,11 +62,11 @@ lowering, editor가 다시 계산하지 않는다.
 
 ### TypeScript target IR
 
-RL이 생성하는 TypeScript는 mapping-aware structured writer인 `Rope`로 낮춘다. 일반
+TT이 생성하는 TypeScript는 mapping-aware structured writer인 `Rope`로 낮춘다. 일반
 TypeScript는 source span 조각으로, 생성 코드와 helper는 literal 조각으로 표현한다.
 source mapping mark와 anchor는 별도 구조 조각이며 문자열 검색이나 출력 후 보정으로
 만들지 않는다. 이 프로젝트는 TypeScript 전체를 소유하지 않으므로 전체 TypeScript
-AST를 복제하지 않고, RL이 생성하는 범위만 구조화한다.
+AST를 복제하지 않고, TT이 생성하는 범위만 구조화한다.
 
 ### Printer
 
@@ -99,5 +99,5 @@ TASK-150에서 네 단계를 모두 완료했다. 현재 backend 경계는
 참조하지 않는다.
 
 전체 TypeScript 평가 문맥과 Core IR을 결합해 owner별 최적 lowering을 선택하는 후속 계층은
-[`program-lowering.md`](./program-lowering.md)에 정의한다. Core IR의 rl 의미 소유권은
+[`program-lowering.md`](./program-lowering.md)에 정의한다. Core IR의 tt 의미 소유권은
 유지하며, SWC AST는 host TypeScript의 구조와 평가 문맥을 제공한다.

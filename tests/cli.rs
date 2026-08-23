@@ -1,5 +1,5 @@
-//! CLI contract tests: `rlc help` — the embedded language & workflow
-//! reference (docs/ai/rl.md served by topic) — and `--jobs`, whose whole
+//! CLI contract tests: `ttc help` — the embedded language & workflow
+//! reference (docs/ai/tt.md served by topic) — and `--jobs`, whose whole
 //! contract is that parallelism changes nothing an observer can see.
 
 use std::fs;
@@ -7,18 +7,18 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-fn rlc(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_rlc"))
+fn ttc(args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(args)
         .output()
-        .expect("failed to run rlc")
+        .expect("failed to run ttc")
 }
 
 static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
 
 fn tmpdir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "rl-cli-{}-{}",
+        "tt-cli-{}-{}",
         std::process::id(),
         DIR_SEQ.fetch_add(1, Ordering::SeqCst)
     ));
@@ -27,9 +27,9 @@ fn tmpdir() -> PathBuf {
 }
 
 #[test]
-fn rlx_builds_to_tsx_and_keeps_jsx() {
+fn ttx_builds_to_tsx_and_keeps_jsx() {
     let dir = tmpdir();
-    let source = dir.join("view.rlx");
+    let source = dir.join("view.ttx");
     let out_dir = dir.join("out");
     fs::write(
         &source,
@@ -38,7 +38,7 @@ fn rlx_builds_to_tsx_and_keeps_jsx() {
          export const view = <main>{match (state) { Ready(value) => <b>{value}</b>, Empty => null }}</main>;\n",
     )
     .unwrap();
-    let output = rlc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
     assert!(
         output.status.success(),
         "{}",
@@ -46,7 +46,7 @@ fn rlx_builds_to_tsx_and_keeps_jsx() {
     );
     let emitted = fs::read_to_string(out_dir.join("view.tsx")).unwrap();
     assert!(emitted.contains("<main>{"), "{emitted}");
-    assert!(emitted.contains("switch ($rl_m.kind)"), "{emitted}");
+    assert!(emitted.contains("switch ($tt_m.kind)"), "{emitted}");
 }
 
 #[test]
@@ -57,7 +57,7 @@ fn handwritten_tsx_is_checked_in_tsx_mode_and_keeps_its_extension() {
     let text = "export const view = <main>plain TSX</main>;\n";
     fs::write(&source, text).unwrap();
 
-    let output = rlc(&["-o", out_dir.to_str().unwrap(), dir.to_str().unwrap()]);
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), dir.to_str().unwrap()]);
     assert!(
         output.status.success(),
         "{}",
@@ -72,15 +72,15 @@ fn handwritten_tsx_is_checked_in_tsx_mode_and_keeps_its_extension() {
 /// to compile so diagnostics are part of what must stay ordered.
 fn write_project(dir: &Path, files: usize) {
     fs::write(
-        dir.join("shared.rl"),
+        dir.join("shared.tt"),
         "export enum Token { Num(value: number), Word(text: string), Eof }\n",
     )
     .unwrap();
     for n in 0..files {
         fs::write(
-            dir.join(format!("m{n}.rl")),
+            dir.join(format!("m{n}.tt")),
             format!(
-                "import {{ Token }} from \"./shared.rl\";\n\
+                "import {{ Token }} from \"./shared.tt\";\n\
                  export const n{n} = {n};\n\
                  export function name{n}(t: Token): string {{\n\
                  \x20 return match (t) {{ Num(value) => `${{value}}`, Word(text) => text, Eof => \"\" }};\n\
@@ -92,14 +92,14 @@ fn write_project(dir: &Path, files: usize) {
     // one non-exhaustive match: its error must appear in the same place
     // however many threads ran
     fs::write(
-        dir.join("bad.rl"),
-        "import { Token } from \"./shared.rl\";\n\
+        dir.join("bad.tt"),
+        "import { Token } from \"./shared.tt\";\n\
          export const broken = (t: Token) => match (t) { Eof => 0 };\n",
     )
     .unwrap();
 }
 
-/// What one `rlc` run leaves behind: the files it wrote (name → content,
+/// What one `ttc` run leaves behind: the files it wrote (name → content,
 /// sorted), its diagnostics, and whether it succeeded.
 type RunResult = (Vec<(String, String)>, String, bool);
 
@@ -111,7 +111,7 @@ fn jobs_does_not_change_outputs_or_diagnostics() {
     let mut baseline: Option<RunResult> = None;
     for jobs in ["1", "2", "3", "8"] {
         let out = tmpdir();
-        let result = rlc(&[
+        let result = ttc(&[
             "-j",
             jobs,
             "-o",
@@ -148,7 +148,7 @@ fn jobs_does_not_change_outputs_or_diagnostics() {
 #[test]
 fn jobs_rejects_zero_and_garbage() {
     for value in ["0", "many", "-1"] {
-        let out = rlc(&["-j", value, "--check", "examples"]);
+        let out = ttc(&["-j", value, "--check", "examples"]);
         assert!(!out.status.success(), "--jobs {value} should be rejected");
         let stderr = String::from_utf8(out.stderr).unwrap();
         assert!(
@@ -156,7 +156,7 @@ fn jobs_rejects_zero_and_garbage() {
             "{stderr}"
         );
     }
-    let out = rlc(&["--jobs"]);
+    let out = ttc(&["--jobs"]);
     assert!(!out.status.success());
     assert!(
         String::from_utf8(out.stderr)
@@ -167,7 +167,7 @@ fn jobs_rejects_zero_and_garbage() {
 
 #[test]
 fn help_lists_every_topic() {
-    let out = rlc(&["help"]);
+    let out = ttc(&["help"]);
     assert!(out.status.success());
     let stdout = String::from_utf8(out.stdout).unwrap();
     for topic in [
@@ -187,15 +187,15 @@ fn help_lists_every_topic() {
         "checklist",
     ] {
         assert!(stdout.contains(topic), "topic list missing {topic}");
-        let out = rlc(&["help", topic]);
-        assert!(out.status.success(), "rlc help {topic} failed");
-        assert!(!out.stdout.is_empty(), "rlc help {topic} printed nothing");
+        let out = ttc(&["help", topic]);
+        assert!(out.status.success(), "ttc help {topic} failed");
+        assert!(!out.stdout.is_empty(), "ttc help {topic} printed nothing");
     }
 }
 
 #[test]
 fn help_topic_prints_only_its_section() {
-    let out = rlc(&["help", "match"]);
+    let out = ttc(&["help", "match"]);
     assert!(out.status.success());
     let stdout = String::from_utf8(out.stdout).unwrap();
     assert!(stdout.starts_with("## match"));
@@ -205,33 +205,33 @@ fn help_topic_prints_only_its_section() {
 
 #[test]
 fn help_resolves_aliases_case_insensitively() {
-    let out = rlc(&["help", "Pipeline"]);
+    let out = ttc(&["help", "Pipeline"]);
     assert!(out.status.success());
     assert!(String::from_utf8(out.stdout).unwrap().starts_with("## |>"));
 }
 
 #[test]
 fn help_all_prints_the_whole_guide() {
-    let out = rlc(&["help", "all"]);
+    let out = ttc(&["help", "all"]);
     assert!(out.status.success());
     let stdout = String::from_utf8(out.stdout).unwrap();
-    assert_eq!(stdout, include_str!("../docs/ai/rl.md"));
+    assert_eq!(stdout, include_str!("../docs/ai/tt.md"));
 }
 
 #[test]
 fn help_unknown_topic_fails_with_a_pointer() {
-    let out = rlc(&["help", "nosuch"]);
+    let out = ttc(&["help", "nosuch"]);
     assert!(!out.status.success());
     assert!(out.stdout.is_empty(), "errors must not pollute stdout");
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.contains("unknown help topic \"nosuch\""));
-    assert!(stderr.contains("rlc help"));
+    assert!(stderr.contains("ttc help"));
 }
 
 #[test]
 fn help_only_triggers_as_the_first_argument() {
-    // `rlc --check help` must treat "help" as an input path, not a command.
-    let out = rlc(&["--check", "help"]);
+    // `ttc --check help` must treat "help" as an input path, not a command.
+    let out = ttc(&["--check", "help"]);
     assert!(!out.status.success());
     let stderr = String::from_utf8(out.stderr).unwrap();
     assert!(stderr.contains("no such file or directory"), "{stderr}");
@@ -249,78 +249,78 @@ fn have(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether rlc can resolve a TypeScript to drive. Asked by running the mode
-/// itself over a trivial project: the answer is rlc's own resolution, not a
+/// Whether ttc can resolve a TypeScript to drive. Asked by running the mode
+/// itself over a trivial project: the answer is ttc's own resolution, not a
 /// guess about the machine.
 fn have_typescript() -> bool {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src")).unwrap();
-    fs::write(dir.join("src/probe.rl"), "export const n: number = 1;\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    fs::write(dir.join("src/probe.tt"), "export const n: number = 1;\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(["--check-types", "src"])
         .current_dir(&dir)
         .output()
-        .expect("failed to run rlc");
+        .expect("failed to run ttc");
     out.status.success()
 }
 
-/// Runs `rlc --check-types` over a one-file project and returns rlc's
+/// Runs `ttc --check-types` over a one-file project and returns ttc's
 /// stderr. Nothing is written, so a released TypeScript 7 — which cannot
 /// emit declarations — answers these just as well as a built one.
 fn types_stderr(source: &str) -> String {
     let dir = tmpdir();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
-    fs::write(src.join("main.rl"), source).unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    fs::write(src.join("main.tt"), source).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(["--check-types", "src"])
         .current_dir(&dir)
         .output()
-        .expect("failed to run rlc");
+        .expect("failed to run ttc");
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 /// [`types_stderr`], but the file's text arrives as an editor's unsaved
 /// buffer: `saved` is written to disk, `buffer` goes on stdin under
 /// `--overlay`, and the check is what an editor would run.
-fn types_stderr_overlay(saved: &str, buffer: &str, rl_only: bool) -> String {
+fn types_stderr_overlay(saved: &str, buffer: &str, tt_only: bool) -> String {
     use std::io::Write;
     let dir = tmpdir();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
-    let file = src.join("main.rl");
+    let file = src.join("main.tt");
     fs::write(&file, saved).unwrap();
 
     let mut args = vec!["--check-types".to_string()];
-    if rl_only {
-        args.push("--rl-only".to_string());
+    if tt_only {
+        args.push("--tt-only".to_string());
     }
     args.push("--overlay".to_string());
     args.push(file.to_str().unwrap().to_string());
     args.push("src".to_string());
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(&args)
         .current_dir(&dir)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("failed to run rlc");
+        .expect("failed to run ttc");
     child
         .stdin
         .take()
         .expect("stdin piped")
         .write_all(buffer.as_bytes())
         .unwrap();
-    let out = child.wait_with_output().expect("failed to run rlc");
+    let out = child.wait_with_output().expect("failed to run ttc");
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
 macro_rules! require_types_toolchain {
     () => {
         if !have("node") || !have_typescript() {
-            eprintln!("skipping: no node, or no TypeScript for rlc to drive");
+            eprintln!("skipping: no node, or no TypeScript for ttc to drive");
             return;
         }
     };
@@ -339,9 +339,9 @@ fn types_reports_a_missing_literal_of_a_finite_union() {
         err.contains("match on literal union is not exhaustive: missing \"south\""),
         "{err}"
     );
-    // reported at the `match` keyword of the .rl source, not in the
+    // reported at the `match` keyword of the .tt source, not in the
     // generated TypeScript
-    assert!(err.contains("src/main.rl:3:10:"), "{err}");
+    assert!(err.contains("src/main.tt:3:10:"), "{err}");
 }
 
 #[test]
@@ -376,7 +376,7 @@ fn types_does_not_guess_when_the_scrutinee_type_is_open() {
 #[test]
 fn types_checks_a_union_derived_from_as_const() {
     require_types_toolchain!();
-    // The kind of type rlc could never resolve on its own — the checker can.
+    // The kind of type ttc could never resolve on its own — the checker can.
     let err = types_stderr(
         "const values = [\"north\", \"south\"] as const;\n\
          type D = (typeof values)[number];\n\
@@ -417,14 +417,14 @@ fn types_checks_boolean_and_number_unions() {
 }
 
 #[test]
-fn types_maps_a_bad_case_literal_back_to_the_rl_source() {
+fn types_maps_a_bad_case_literal_back_to_the_tt_source() {
     require_types_toolchain!();
     // The `case` label is copied from the source, so tsc's complaint about
     // it lands on the literal the user wrote.
     let err = types_stderr(
         "export const pick = (x: \"a\" | \"b\") => match (x) { \"a\" => 1, \"c\" => 2, \"b\" => 3 };\n",
     );
-    assert!(err.contains("src/main.rl:1:61:"), "{err}");
+    assert!(err.contains("src/main.tt:1:61:"), "{err}");
     assert!(err.contains("is not comparable to type"), "{err}");
 }
 
@@ -443,8 +443,8 @@ fn types_reports_a_mutating_method_of_a_built_in() {
         err.contains("cannot call mutating method `set` through val binding `map`"),
         "{err}"
     );
-    // reported at the path's root in the .rl source
-    assert!(err.contains("src/main.rl:2:1:"), "{err}");
+    // reported at the path's root in the .tt source
+    assert!(err.contains("src/main.tt:2:1:"), "{err}");
 }
 
 #[test]
@@ -456,7 +456,7 @@ fn types_reports_set_add_and_array_push() {
          val const items: number[] = [];\n\
          items.push(1);\n\
          val const state = { tags: [] as string[] };\n\
-         state.tags.push(\"rl\");\n",
+         state.tags.push(\"tt\");\n",
     );
     assert!(
         err.contains("mutating method `add` through val binding `set`"),
@@ -477,7 +477,7 @@ fn types_reports_set_add_and_array_push() {
 fn types_leaves_a_user_defined_method_of_the_same_name_alone() {
     require_types_toolchain!();
     // The whole point: `set`/`add`/`push` on a user-defined type are not
-    // mutations, and rlc must not guess otherwise from the name.
+    // mutations, and ttc must not guess otherwise from the name.
     let err = types_stderr(
         "class Query {\n\
          \x20 set(key: string): Query {\n\
@@ -520,7 +520,7 @@ fn types_does_not_guess_when_the_receiver_is_unknown() {
 #[test]
 fn types_keeps_reporting_syntactic_mutation_without_the_checker() {
     require_types_toolchain!();
-    // The syntactic half is rlc's own and fires before the host runs.
+    // The syntactic half is ttc's own and fires before the host runs.
     let err = types_stderr(
         "val const user = {\n\
          \x20 profile: {\n\
@@ -533,33 +533,33 @@ fn types_keeps_reporting_syntactic_mutation_without_the_checker() {
         err.contains("cannot mutate through val binding `user`"),
         "{err}"
     );
-    assert!(err.contains("src/main.rl:6:1:"), "{err}");
+    assert!(err.contains("src/main.tt:6:1:"), "{err}");
 }
 
 /* ------------------------------------------------------------------ */
-/* --overlay / --rl-only: the editor's entry into the typed check      */
+/* --overlay / --tt-only: the editor's entry into the typed check      */
 /* ------------------------------------------------------------------ */
 
 /// Both flags only make sense while `--check-types` is reporting. Every
 /// rejection names the mode that does accept them, so the message is a fix
 /// rather than a complaint.
 #[test]
-fn overlay_and_rl_only_require_check_types() {
+fn overlay_and_tt_only_require_check_types() {
     let dir = tmpdir();
-    let file = dir.join("a.rl");
+    let file = dir.join("a.tt");
     fs::write(&file, "export const n = 1;\n").unwrap();
     let path = file.to_str().unwrap();
 
     for args in [
         vec!["--overlay", path, path],
-        vec!["--rl-only", path],
-        vec!["--check", "--rl-only", path],
+        vec!["--tt-only", path],
+        vec!["--check", "--tt-only", path],
     ] {
-        let out = rlc(&args);
+        let out = ttc(&args);
         let err = String::from_utf8_lossy(&out.stderr).into_owned();
         assert!(!out.status.success(), "{args:?} should fail:\n{err}");
         assert!(
-            err.contains("--overlay and --rl-only require --check-types"),
+            err.contains("--overlay and --tt-only require --check-types"),
             "{args:?}:\n{err}"
         );
     }
@@ -568,21 +568,21 @@ fn overlay_and_rl_only_require_check_types() {
 /// `--types` writes sidecars. Unsaved text must not reach one, and a mode
 /// that writes is not one that hides half of what it found.
 #[test]
-fn overlay_and_rl_only_are_rejected_by_the_writing_mode() {
+fn overlay_and_tt_only_are_rejected_by_the_writing_mode() {
     let dir = tmpdir();
-    let file = dir.join("a.rl");
+    let file = dir.join("a.tt");
     fs::write(&file, "export const n = 1;\n").unwrap();
     let path = file.to_str().unwrap();
 
     for args in [
         vec!["--types", "--overlay", path, path],
-        vec!["--types", "--rl-only", path],
+        vec!["--types", "--tt-only", path],
     ] {
-        let out = rlc(&args);
+        let out = ttc(&args);
         let err = String::from_utf8_lossy(&out.stderr).into_owned();
         assert!(!out.status.success(), "{args:?} should fail:\n{err}");
         assert!(
-            err.contains("--overlay and --rl-only work with --check-types, not --types"),
+            err.contains("--overlay and --tt-only work with --check-types, not --types"),
             "{args:?}:\n{err}"
         );
     }
@@ -593,11 +593,11 @@ fn overlay_and_rl_only_are_rejected_by_the_writing_mode() {
 #[test]
 fn overlay_does_not_combine_with_watch() {
     let dir = tmpdir();
-    let file = dir.join("a.rl");
+    let file = dir.join("a.tt");
     fs::write(&file, "export const n = 1;\n").unwrap();
     let path = file.to_str().unwrap();
 
-    let out = rlc(&["--check-types", "--overlay", path, "--watch", path]);
+    let out = ttc(&["--check-types", "--overlay", path, "--watch", path]);
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
     assert!(
@@ -610,7 +610,7 @@ fn overlay_does_not_combine_with_watch() {
 /// in for a file of the project, so there has to be one.
 #[test]
 fn overlay_reports_a_missing_value_and_a_missing_file() {
-    let out = rlc(&["--check-types", "--overlay"]);
+    let out = ttc(&["--check-types", "--overlay"]);
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
     assert!(
@@ -619,10 +619,10 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     );
 
     let dir = tmpdir();
-    let file = dir.join("a.rl");
+    let file = dir.join("a.tt");
     fs::write(&file, "export const n = 1;\n").unwrap();
-    let gone = dir.join("gone.rl");
-    let out = rlc(&[
+    let gone = dir.join("gone.tt");
+    let out = ttc(&[
         "--check-types",
         "--overlay",
         gone.to_str().unwrap(),
@@ -631,7 +631,7 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
     assert!(err.contains("--overlay"), "{err}");
-    assert!(err.contains("gone.rl"), "{err}");
+    assert!(err.contains("gone.tt"), "{err}");
 }
 
 /// The overlay is what gets checked: a mutation that exists only in the
@@ -658,13 +658,13 @@ fn overlay_checks_the_buffer_rather_than_the_saved_file() {
     );
     // The position is the buffer's, and the file is named as the user knows
     // it — not as a temporary.
-    assert!(err.contains("src/main.rl:2:1:"), "{err}");
+    assert!(err.contains("src/main.tt:2:1:"), "{err}");
 }
 
-/// `--rl-only` drops TypeScript's layer and keeps rl's. The editor uses this
+/// `--tt-only` drops TypeScript's layer and keeps tt's. The editor uses this
 /// form when its type-diagnostic setting is disabled.
 #[test]
-fn rl_only_keeps_the_rl_layer_and_drops_the_type_layer() {
+fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
     require_types_toolchain!();
     let source = "val const scores = new Map<string, number>();\n\
                   scores.set(\"a\", 1);\n\
@@ -678,14 +678,14 @@ fn rl_only_keeps_the_rl_layer_and_drops_the_type_layer() {
     );
     assert!(full.contains("cannot call mutating method `set`"), "{full}");
 
-    let rl_only = types_stderr_overlay(source, source, true);
+    let tt_only = types_stderr_overlay(source, source, true);
     assert!(
-        !rl_only.contains("type mismatch:"),
-        "no type error should survive --rl-only:\n{rl_only}"
+        !tt_only.contains("type mismatch:"),
+        "no type error should survive --tt-only:\n{tt_only}"
     );
     assert!(
-        rl_only.contains("cannot call mutating method `set`"),
-        "{rl_only}"
+        tt_only.contains("cannot call mutating method `set`"),
+        "{tt_only}"
     );
 }
 
@@ -704,7 +704,7 @@ fn overlay_keeps_the_buffer_in_its_project() {
          export class Query { set(k: string): Query { return this; } }\n",
     )
     .unwrap();
-    let file = src.join("main.rl");
+    let file = src.join("main.tt");
     fs::write(&file, "export const nothing = 0;\n").unwrap();
 
     let buffer = "import { scores, Query } from \"./store\";\n\
@@ -715,10 +715,10 @@ fn overlay_keeps_the_buffer_in_its_project() {
                   export const n = shared.size;\n";
 
     use std::io::Write;
-    let mut child = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args([
             "--check-types",
-            "--rl-only",
+            "--tt-only",
             "--overlay",
             file.to_str().unwrap(),
             "src",
@@ -728,14 +728,14 @@ fn overlay_keeps_the_buffer_in_its_project() {
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .expect("failed to run rlc");
+        .expect("failed to run ttc");
     child
         .stdin
         .take()
         .expect("stdin piped")
         .write_all(buffer.as_bytes())
         .unwrap();
-    let out = child.wait_with_output().expect("failed to run rlc");
+    let out = child.wait_with_output().expect("failed to run ttc");
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
 
     // `Map#set` through the imported binding is a built-in mutation …
@@ -747,20 +747,20 @@ fn overlay_keeps_the_buffer_in_its_project() {
     assert!(!err.contains("`query`"), "{err}");
 }
 
-/// `rlc --server` answers `rlSymbol` without a project or a toolchain: the
-/// names it resolves exist only in `.rl` source, so nothing else can.
+/// `ttc --server` answers `ttSymbol` without a project or a toolchain: the
+/// names it resolves exist only in `.tt` source, so nothing else can.
 #[test]
-fn the_server_resolves_rl_names_without_a_toolchain() {
+fn the_server_resolves_tt_names_without_a_toolchain() {
     use std::io::Write;
     let dir = tmpdir();
-    let file = dir.join("shape.rl");
+    let file = dir.join("shape.tt");
     let source = "enum Shape { Circle(radius: number), Point }\n\
                   const a = match (s) { Circle(radius) => radius, Point => 0 };\n";
     fs::write(&file, source).unwrap();
 
     let request = serde_json::json!({
         "id": 1,
-        "method": "rlSymbol",
+        "method": "ttSymbol",
         "params": {
             "path": file.to_string_lossy(),
             "text": source,
@@ -768,7 +768,7 @@ fn the_server_resolves_rl_names_without_a_toolchain() {
             "position": { "line": 1, "character": 22 },
         },
     });
-    let mut child = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .arg("--server")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -794,29 +794,29 @@ fn the_server_resolves_rl_names_without_a_toolchain() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn a_missing_backend_still_reports_rl_diagnostics() {
+fn a_missing_backend_still_reports_tt_diagnostics() {
     // The TypeScript layer failing to run removes the typed facts, not
-    // the pass: rl's own diagnostics are still reported in full, the
+    // the pass: tt's own diagnostics are still reported in full, the
     // failure is named, and the exit code stays "could not check" (2).
     let dir = tmpdir();
     fs::write(
-        dir.join("a.rl"),
+        dir.join("a.tt"),
         "enum E { A(x: number), B }\n\
          const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n",
     )
     .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(["--check-types", dir.to_str().unwrap()])
         // Point the toolchain at nothing: the backend cannot run.
-        .env("RLC_TSGO_API", dir.join("nonexistent-api.js"))
-        .env_remove("RLC_TSGO_ROOT")
+        .env("TTC_TSGO_API", dir.join("nonexistent-api.js"))
+        .env_remove("TTC_TSGO_ROOT")
         .output()
-        .expect("failed to run rlc");
+        .expect("failed to run ttc");
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(2), "{stderr}");
     assert!(stderr.contains("duplicate arm"), "{stderr}");
     assert!(
-        stderr.contains("only rl-level diagnostics are shown"),
+        stderr.contains("only tt-level diagnostics are shown"),
         "{stderr}"
     );
     fs::remove_dir_all(&dir).ok();

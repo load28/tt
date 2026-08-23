@@ -1,10 +1,10 @@
 /* --------------------------------------------------------------------------
- * make-platform-package.mjs — assemble one rl-lang-<os>-<cpu> npm package.
+ * make-platform-package.mjs — assemble one tt-lang-<os>-<cpu> npm package.
  *
- *   node make-platform-package.mjs <os>-<cpu> <path/to/rlc[.exe]> <out-dir> \
+ *   node make-platform-package.mjs <os>-<cpu> <path/to/ttc[.exe]> <out-dir> \
  *        [version]
  *
- * Writes <out-dir>/rl-lang-<os>-<cpu>/ with package.json, the binary under
+ * Writes <out-dir>/tt-lang-<os>-<cpu>/ with package.json, the binary under
  * bin/, and a one-line README. The release workflow runs this once per build
  * matrix entry; version defaults to 0.0.0-dev for local smoke tests.
  * ----------------------------------------------------------------------- */
@@ -24,13 +24,13 @@ const target = TARGETS[key];
 if (!target || !binarySource || !outDir) {
   console.error(
     `usage: make-platform-package.mjs <${Object.keys(TARGETS).join("|")}> ` +
-      `<path/to/rlc[.exe]> <out-dir> [version]`,
+      `<path/to/ttc[.exe]> <out-dir> [version]`,
   );
   process.exit(1);
 }
 
-const name = `rl-lang-${key}`;
-const exe = target.os === "win32" ? "rlc.exe" : "rlc";
+const name = `tt-lang-${key}`;
+const exe = target.os === "win32" ? "ttc.exe" : "ttc";
 const root = path.join(outDir, name);
 
 fs.mkdirSync(path.join(root, "bin"), { recursive: true });
@@ -43,9 +43,9 @@ fs.writeFileSync(
     {
       name,
       version,
-      description: `Prebuilt rlc binary (rl compiler) for ${key}. Install rl-lang instead of this package.`,
+      description: `Prebuilt ttc binary (tt compiler) for ${key}. Install tt-lang instead of this package.`,
       license: "MIT",
-      repository: { type: "git", url: "https://github.com/load28/rl", directory: "npm/rl-lang" },
+      repository: { type: "git", url: "https://github.com/load28/tt", directory: "npm/tt-lang" },
       preferUnplugged: true,
       os: [target.os],
       cpu: [target.cpu],
@@ -56,7 +56,7 @@ fs.writeFileSync(
 );
 fs.writeFileSync(
   path.join(root, "README.md"),
-  `# ${name}\n\nPrebuilt \`rlc\` binary for ${key}. This is an internal platform package —\ninstall [\`rl-lang\`](https://www.npmjs.com/package/rl-lang) instead.\n`,
+  `# ${name}\n\nPrebuilt \`ttc\` binary for ${key}. This is an internal platform package —\ninstall [\`tt-lang\`](https://www.npmjs.com/package/tt-lang) instead.\n`,
 );
 
 console.log(root);

@@ -1,16 +1,16 @@
 /* --------------------------------------------------------------------------
- * TextMate 문법 테스트 — syntaxes/rl.tmLanguage.json.
+ * TextMate 문법 테스트 — syntaxes/tt.tmLanguage.json.
  *
  * 문법은 TypeScript 문법의 완전 확장(TSX 방식)으로 build.mjs가 생성한다.
  * 여기서 지키는 계약:
  *
- * 1. rl 구문은 **중첩 컨텍스트에서도** rl 스코프를 받는다 — 함수 본문,
+ * 1. tt 구문은 **중첩 컨텍스트에서도** tt 스코프를 받는다 — 함수 본문,
  *    초기화식, 매개변수 목록. (기존 문법은 최상위에서만 동작해서 함수 안의
- *    모든 rl 구문이 순수 TS로 오해석됐고, `result { ... }`는 객체 리터럴로
+ *    모든 tt 구문이 순수 TS로 오해석됐고, `result { ... }`는 객체 리터럴로
  *    파싱되어 뒤 코드까지 연쇄 오염됐다.)
  * 2. 순수 TypeScript는 TypeScript 문법과 **동일한 스코프**를 받는다 —
- *    "유효한 TS는 그대로 유효한 rl" 통과 계약의 하이라이팅판.
- * 3. 생성물은 소스(src/)와 일치한다 — 손으로 고친 rl.tmLanguage.json은
+ *    "유효한 TS는 그대로 유효한 tt" 통과 계약의 하이라이팅판.
+ * 3. 생성물은 소스(src/)와 일치한다 — 손으로 고친 tt.tmLanguage.json은
  *    여기서 잡힌다.
  *
  * VS Code와 같은 엔진(vscode-textmate + oniguruma)으로 토크나이즈한다.
@@ -43,16 +43,16 @@ function registry(): Promise<vsctm.Registry> {
       }),
       loadGrammar: async (scopeName) => {
         const file =
-          scopeName === "source.rl"
-            ? path.join(syntaxesDir, "rl.tmLanguage.json")
-            : scopeName === "source.rlx"
-              ? path.join(syntaxesDir, "rlx.tmLanguage.json")
+          scopeName === "source.tt"
+            ? path.join(syntaxesDir, "tt.tmLanguage.json")
+            : scopeName === "source.ttx"
+              ? path.join(syntaxesDir, "ttx.tmLanguage.json")
             : scopeName === "source.ts"
               ? path.join(syntaxesDir, "src", "typescript.tmLanguage.json")
               : scopeName === "source.tsx"
                 ? path.join(syntaxesDir, "src", "typescriptreact.tmLanguage.json")
-              : scopeName === "markdown.rl.codeblock"
-                ? path.join(syntaxesDir, "rl.markdown.tmLanguage.json")
+              : scopeName === "markdown.tt.codeblock"
+                ? path.join(syntaxesDir, "tt.markdown.tmLanguage.json")
                 : undefined;
         if (!file) return null;
         return vsctm.parseRawGrammar(fs.readFileSync(file, "utf8"), file);
@@ -125,14 +125,14 @@ function widen(val box: { width: number; height: number }): number {
 }
 `;
 
-test("rl constructs inside a function body get rl scopes (reported regression)", async () => {
-  const lines = await tokenize("source.rl", REPORTED);
+test("tt constructs inside a function body get tt scopes (reported regression)", async () => {
+  const lines = await tokenize("source.tt", REPORTED);
 
   // result 블록: 키워드, 바인딩, `<-` 전부 함수 본문 안에서.
-  assertScope(lines, 2, "result", "keyword.control.result.rl");
+  assertScope(lines, 2, "result", "keyword.control.result.tt");
   assertScope(lines, 3, "const", "storage.type.ts");
   assertScope(lines, 3, "host", "variable.other.readwrite.ts");
-  assertScope(lines, 3, "<-", "keyword.operator.result-bind.rl");
+  assertScope(lines, 3, "<-", "keyword.operator.result-bind.tt");
   assertScope(lines, 3, "get", "entity.name.function.ts");
   assertScope(lines, 3, "host", "variable.other.readwrite.ts");
   // 블록의 마지막 값 식(템플릿)은 문자열로 남는다 — 객체 키가 아니라.
@@ -150,9 +150,9 @@ test("rl constructs inside a function body get rl scopes (reported regression)",
   }
 
   // val — 선언 수식자와 매개변수 수식자, 둘 다 중첩 위치에서.
-  assertScope(lines, 11, "val", "storage.modifier.val.rl");
+  assertScope(lines, 11, "val", "storage.modifier.val.tt");
   assertScope(lines, 11, "source", "variable.other.constant.ts");
-  assertScope(lines, 16, "val", "storage.modifier.val.rl");
+  assertScope(lines, 16, "val", "storage.modifier.val.tt");
   assertScope(lines, 16, "box", "variable.parameter.ts");
 });
 
@@ -189,33 +189,33 @@ const NESTED = `function demo(items: Item[]) {
 }
 `;
 
-test("every rl construct works in nested contexts", async () => {
-  const lines = await tokenize("source.rl", NESTED);
+test("every tt construct works in nested contexts", async () => {
+  const lines = await tokenize("source.tt", NESTED);
 
   // enum — 함수 안 선언, 페이로드 필드와 타입.
   assertScope(lines, 2, "enum", "storage.type.enum.ts");
   assertScope(lines, 2, "Shape", "entity.name.type.enum.ts");
   assertScope(lines, 2, "Circle", "variable.other.enummember.ts");
-  assertScope(lines, 2, "r", "variable.other.property.rl");
+  assertScope(lines, 2, "r", "variable.other.property.tt");
   assertScope(lines, 2, "number", "support.type.primitive.ts");
   assertScope(lines, 2, "Dot", "variable.other.enummember.ts");
 
   // match — 초기화식 위치, 패턴/가드/or-패턴/리터럴/와일드카드.
-  assertScope(lines, 3, "match", "keyword.control.match.rl");
+  assertScope(lines, 3, "match", "keyword.control.match.tt");
   assertScope(lines, 4, "Circle", "variable.other.enummember.ts");
   assertScope(lines, 4, "=>", "storage.type.function.arrow.ts");
-  assertScope(lines, 5, "w", "variable.other.property.rl");
+  assertScope(lines, 5, "w", "variable.other.property.tt");
   assertScope(lines, 5, "width", "variable.other.readwrite.ts");
   assertScope(lines, 5, "if", "keyword.control.conditional.ts");
-  assertScope(lines, 6, "|", "keyword.operator.or-pattern.rl");
+  assertScope(lines, 6, "|", "keyword.operator.or-pattern.tt");
   assertScope(lines, 7, "north", "string.quoted.double.ts");
   assertScope(lines, 8, "true", "constant.language.boolean.ts");
   assertScope(lines, 9, "Circle", "variable.other.enummember.ts");
-  assertScope(lines, 10, "_", "keyword.control.wildcard.rl");
+  assertScope(lines, 10, "_", "keyword.control.wildcard.tt");
 
   // 파이프라인과 flow.
-  assertScope(lines, 12, "|>", "keyword.operator.pipeline.rl");
-  assertScope(lines, 13, "flow", "keyword.control.flow.rl");
+  assertScope(lines, 12, "|>", "keyword.operator.pipeline.tt");
+  assertScope(lines, 13, "flow", "keyword.control.flow.tt");
 
   // try 문(식 형태)과 값 바인딩 형태.
   assertScope(lines, 14, "try", "keyword.control.trycatch.ts");
@@ -223,7 +223,7 @@ test("every rl construct works in nested contexts", async () => {
 
   // let-else와 if let — 패턴, else, 본문.
   assertScope(lines, 16, "Some", "variable.other.enummember.ts");
-  assertScope(lines, 16, "value", "variable.other.property.rl");
+  assertScope(lines, 16, "value", "variable.other.property.tt");
   assertScope(lines, 16, "user", "variable.other.readwrite.ts");
   assertScope(lines, 16, "else", "keyword.control.conditional.ts");
   assertScope(lines, 16, "return", "keyword.control.flow.ts");
@@ -233,21 +233,21 @@ test("every rl construct works in nested contexts", async () => {
   assertScope(lines, 18, "greet", "entity.name.function.ts");
 
   // val — for 헤드와 catch 매개변수.
-  assertScope(lines, 22, "val", "storage.modifier.val.rl");
-  assertScope(lines, 23, "val", "storage.modifier.val.rl");
+  assertScope(lines, 22, "val", "storage.modifier.val.tt");
+  assertScope(lines, 23, "val", "storage.modifier.val.tt");
   assertScope(lines, 23, "error", "variable.parameter.ts");
   assertScope(lines, 23, "unknown", "support.type.primitive.ts");
 
   // result — 타입 주석 바인딩과 구조 분해 바인딩.
-  assertScope(lines, 24, "result", "keyword.control.result.rl");
+  assertScope(lines, 24, "result", "keyword.control.result.tt");
   assertScope(lines, 25, "n", "variable.other.readwrite.ts");
   assertScope(lines, 25, "number", "support.type.primitive.ts");
-  assertScope(lines, 25, "<-", "keyword.operator.result-bind.rl");
+  assertScope(lines, 25, "<-", "keyword.operator.result-bind.tt");
   assertScope(lines, 26, "x", "variable.other.readwrite.ts");
-  assertScope(lines, 26, "<-", "keyword.operator.result-bind.rl");
+  assertScope(lines, 26, "<-", "keyword.operator.result-bind.tt");
 });
 
-// rl 구문과 형태가 겹치는 순수 TypeScript — rl로 오인하면 안 된다.
+// tt 구문과 형태가 겹치는 순수 TypeScript — tt로 오인하면 안 된다.
 const LOOKALIKES = `const enum Flags { A = 1, B = 2 }
 function passthrough(a: number, b: number) {
   const cmp = a < -b;
@@ -256,24 +256,24 @@ function passthrough(a: number, b: number) {
 }
 `;
 
-test("TypeScript look-alikes are not claimed by rl rules", async () => {
-  const lines = await tokenize("source.rl", LOOKALIKES);
-  // const enum은 TS enum 규칙의 것 — rl enum 스코프가 없어야 한다.
-  // (루트 스코프 source.rl은 모든 토큰이 가지므로 제외.)
+test("TypeScript look-alikes are not claimed by tt rules", async () => {
+  const lines = await tokenize("source.tt", LOOKALIKES);
+  // const enum은 TS enum 규칙의 것 — tt enum 스코프가 없어야 한다.
+  // (루트 스코프 source.tt은 모든 토큰이 가지므로 제외.)
   for (const token of lines[0]) {
     assert.ok(
-      !token.scopes.slice(1).some((s) => s.endsWith(".rl")),
-      `const enum leaked an rl scope on ${JSON.stringify(token.text)}`,
+      !token.scopes.slice(1).some((s) => s.endsWith(".tt")),
+      `const enum leaked a tt scope on ${JSON.stringify(token.text)}`,
     );
   }
   // `a < -b`는 비교 — result 바인딩이 아니다.
   assertScope(lines, 3, "<", "keyword.operator.relational.ts");
   // 객체 키 result는 키워드가 아니다.
   const key = tokenAt(lines, 4, "result");
-  assert.ok(!key.scopes.includes("keyword.control.result.rl"));
+  assert.ok(!key.scopes.includes("keyword.control.result.tt"));
 });
 
-// 순수 TypeScript 픽스처 — rl 문법과 TS 문법의 스코프가 같아야 한다.
+// 순수 TypeScript 픽스처 — tt 문법과 TS 문법의 스코프가 같아야 한다.
 const PURE_TS = `import { readFile } from "node:fs/promises";
 
 export interface User { name: string; tags: string[]; }
@@ -305,13 +305,13 @@ export default { label };
 `;
 
 test("pure TypeScript tokenizes identically to the TypeScript grammar", async () => {
-  const rl = await tokenize("source.rl", PURE_TS);
+  const tt = await tokenize("source.tt", PURE_TS);
   const ts = await tokenize("source.ts", PURE_TS);
   const strip = (lines: Token[][]) =>
     lines.map((line) =>
       line.map((t) => ({ text: t.text, scopes: t.scopes.slice(1).join(" ") })),
     );
-  assert.deepEqual(strip(rl), strip(ts));
+  assert.deepEqual(strip(tt), strip(ts));
 });
 
 const PURE_TSX = `type Props<T> = { value: T };
@@ -321,35 +321,35 @@ export const Item = <T,>({ value }: Props<T>) => (
 `;
 
 test("pure TSX tokenizes identically to the TypeScript React grammar", async () => {
-  const rlx = await tokenize("source.rlx", PURE_TSX);
+  const ttx = await tokenize("source.ttx", PURE_TSX);
   const tsx = await tokenize("source.tsx", PURE_TSX);
   const strip = (lines: Token[][]) =>
     lines.map((line) =>
       line.map((t) => ({ text: t.text, scopes: t.scopes.slice(1).join(" ") })),
     );
-  assert.deepEqual(strip(rlx), strip(tsx));
+  assert.deepEqual(strip(ttx), strip(tsx));
 });
 
-test("rl constructs inside JSX expression containers keep rl scopes", async () => {
+test("tt constructs inside JSX expression containers keep tt scopes", async () => {
   const lines = await tokenize(
-    "source.rlx",
+    "source.ttx",
     `enum State { Ready(value: string), Empty }
 export const View = ({ state }: { state: State }) => (
   <main>{match (state) { Ready(value) => <b>{value}</b>, Empty => null }}</main>
 );`,
   );
   assertScope(lines, 3, "main", "entity.name.tag.tsx");
-  assertScope(lines, 3, "match", "keyword.control.match.rl");
+  assertScope(lines, 3, "match", "keyword.control.match.tt");
 });
 
-test("the extension registers rlx and shares each file icon across themes", () => {
+test("the extension registers ttx and shares each file icon across themes", () => {
   const extensionDir = path.join(syntaxesDir, "..");
   const pkg = JSON.parse(
     fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"),
   );
-  assert.ok(pkg.activationEvents.includes("onLanguage:rlx"));
+  assert.ok(pkg.activationEvents.includes("onLanguage:ttx"));
 
-  for (const [id, extension] of [["rl", ".rl"], ["rlx", ".rlx"]]) {
+  for (const [id, extension] of [["tt", ".tt"], ["ttx", ".ttx"]]) {
     const language = pkg.contributes.languages.find(
       (entry: { id: string }) => entry.id === id,
     );
@@ -361,26 +361,26 @@ test("the extension registers rlx and shares each file icon across themes", () =
   }
 
   const grammar = pkg.contributes.grammars.find(
-    (entry: { language?: string }) => entry.language === "rlx",
+    (entry: { language?: string }) => entry.language === "ttx",
   );
   assert.deepEqual(grammar, {
-    language: "rlx",
-    scopeName: "source.rlx",
-    path: "./syntaxes/rlx.tmLanguage.json",
+    language: "ttx",
+    scopeName: "source.ttx",
+    path: "./syntaxes/ttx.tmLanguage.json",
   });
 });
 
-// 마크다운 injection 문법 — ```rl 펜스 안을 source.rl로 칠한다.
+// 마크다운 injection 문법 — ```tt 펜스 안을 source.tt로 칠한다.
 // 호스트(내장 마크다운 문법)를 vendoring하지 않고 injection 문법을 루트로
-// 직접 토크나이즈한다 — 펜스 인식·source.rl 임베드·펜스 종료·타 언어 펜스
+// 직접 토크나이즈한다 — 펜스 인식·source.tt 임베드·펜스 종료·타 언어 펜스
 // 불간섭이 이 문법의 계약 전부다 (TASK-094 결정 3).
-const MARKDOWN_FENCES = `\`\`\`rl
+const MARKDOWN_FENCES = `\`\`\`tt
 enum Shape { Circle(r: number), Dot }
 const area = match (s) { Circle(r) => r * r, _ => 0 };
 \`\`\`
 after the fence
 
-~~~rl
+~~~tt
 const out = raw |> trim |> parse;
 ~~~
 
@@ -389,28 +389,28 @@ const enum Flags { A = 1 }
 \`\`\`
 `;
 
-test("markdown ```rl fences embed the rl grammar", async () => {
-  const lines = await tokenize("markdown.rl.codeblock", MARKDOWN_FENCES);
+test("markdown ```tt fences embed the tt grammar", async () => {
+  const lines = await tokenize("markdown.tt.codeblock", MARKDOWN_FENCES);
 
   // 여는 펜스: 구분자와 언어 태그가 내장 마크다운과 같은 스코프를 받는다.
   assertScope(lines, 1, "```", "punctuation.definition.markdown");
-  assertScope(lines, 1, "rl", "fenced_code.block.language.markdown");
+  assertScope(lines, 1, "tt", "fenced_code.block.language.markdown");
 
-  // 펜스 안: 내용이 meta.embedded.block.rl로 감싸이고 rl/TS 스코프가 붙는다.
+  // 펜스 안: 내용이 meta.embedded.block.tt로 감싸이고 tt/TS 스코프가 붙는다.
   assertScope(lines, 2, "enum", "storage.type.enum.ts");
   assertScope(lines, 2, "Circle", "variable.other.enummember.ts");
-  assertScope(lines, 3, "match", "keyword.control.match.rl");
-  assertScope(lines, 3, "_", "keyword.control.wildcard.rl");
+  assertScope(lines, 3, "match", "keyword.control.match.tt");
+  assertScope(lines, 3, "_", "keyword.control.wildcard.tt");
   for (const line of [2, 3]) {
     for (const token of lines[line - 1]) {
       assert.ok(
-        token.scopes.includes("meta.embedded.block.rl"),
+        token.scopes.includes("meta.embedded.block.tt"),
         `line ${line} token ${JSON.stringify(token.text)} is outside the embedded block`,
       );
     }
   }
 
-  // 닫는 펜스에서 임베드가 끝난다 — 뒤 텍스트는 rl로 칠해지지 않는다.
+  // 닫는 펜스에서 임베드가 끝난다 — 뒤 텍스트는 tt로 칠해지지 않는다.
   assertScope(lines, 4, "```", "punctuation.definition.markdown");
   for (const token of lines[5 - 1]) {
     assert.ok(
@@ -420,7 +420,7 @@ test("markdown ```rl fences embed the rl grammar", async () => {
   }
 
   // ~~~ 펜스도 동일하게 동작한다.
-  assertScope(lines, 8, "|>", "keyword.operator.pipeline.rl");
+  assertScope(lines, 8, "|>", "keyword.operator.pipeline.tt");
 
   // 다른 언어의 펜스는 건드리지 않는다.
   for (const line of [11, 12, 13]) {
@@ -438,7 +438,7 @@ test("markdown injection targets markdown and MDX hosts consistently", () => {
   // 가리켜야 한다 — 한쪽만 고치면 에디터에서 주입이 조용히 빠진다.
   const hosts = ["text.html.markdown", "source.mdx"];
   const grammar = JSON.parse(
-    fs.readFileSync(path.join(syntaxesDir, "rl.markdown.tmLanguage.json"), "utf8"),
+    fs.readFileSync(path.join(syntaxesDir, "tt.markdown.tmLanguage.json"), "utf8"),
   );
   assert.equal(grammar.injectionSelector, hosts.map((h) => `L:${h}`).join(", "));
   const pkg = JSON.parse(
@@ -449,7 +449,7 @@ test("markdown injection targets markdown and MDX hosts consistently", () => {
   );
   assert.ok(entry, `package.json contributes no grammar for ${grammar.scopeName}`);
   assert.deepEqual(entry.injectTo, hosts);
-  assert.deepEqual(entry.embeddedLanguages, { "meta.embedded.block.rl": "rl" });
+  assert.deepEqual(entry.embeddedLanguages, { "meta.embedded.block.tt": "tt" });
 });
 
 test("generated grammar matches its sources (build.mjs --check)", () => {

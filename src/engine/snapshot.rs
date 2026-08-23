@@ -12,7 +12,7 @@ use std::sync::Arc;
 use super::projection::ProjectedDocument;
 
 /// One source that belongs to the snapshot but could not be lowered.
-/// Its source and rl diagnostics remain available even though it cannot
+/// Its source and tt diagnostics remain available even though it cannot
 /// join the TypeScript program.
 #[derive(Debug)]
 pub(crate) struct BlockedFile {
@@ -62,7 +62,7 @@ impl Snapshot {
         self.id
     }
 
-    /// The project's `.rl` files, projected, in project order.
+    /// The project's `.tt` files, projected, in project order.
     pub fn files(&self) -> &[Arc<ProjectedDocument>] {
         &self.files
     }

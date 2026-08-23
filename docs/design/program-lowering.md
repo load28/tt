@@ -1,18 +1,18 @@
 # SWC 전체 프로그램 lowering 아키텍처
 
 TASK-154의 규범 설계다. 이 문서는 특정 `match` 출력 모양을 바꾸는 제안이 아니다.
-TypeScript 전체 평가 문맥과 rl Core IR을 하나의 프로그램 모델에서 결합하고, 모든 rl
+TypeScript 전체 평가 문맥과 tt Core IR을 하나의 프로그램 모델에서 결합하고, 모든 tt
 구문을 공통 제어·데이터 흐름으로 낮추는 다음 컴파일러 계층을 정의한다.
 
 ## 1. 결론
 
-rl 구문이 하나라도 확정된 파일은 전체 TypeScript 구조를 SWC AST로 파악한다. 기존
-`SemanticFile → CoreFile`은 rl 의미의 단일 원천으로 유지하고, SWC AST와 Core IR을
+tt 구문이 하나라도 확정된 파일은 전체 TypeScript 구조를 SWC AST로 파악한다. 기존
+`SemanticFile → CoreFile`은 tt 의미의 단일 원천으로 유지하고, SWC AST와 Core IR을
 결합한 **Evaluation IR**에서 평가 순서·스코프·효과·제어 흐름을 확정한다. 출력은 SWC
 printer가 아니라 원본 조각과 생성 조각을 함께 보존하는 source-preserving printer가
 맡는다.
 
-SWC AST는 최적화 가능 여부를 분류하는 보조 도구가 아니라 실제 변환 골격이다. RL 값을
+SWC AST는 최적화 가능 여부를 분류하는 보조 도구가 아니라 실제 변환 골격이다. TT 값을
 포함한 최소 실행 owner 전체를 Evaluation IR로 선형화하고, 결과 슬롯·`if`/`switch`·직접
 `return`·대입·선언으로 TypeScript를 다시 구조화한다. `match`나 `result`뿐 아니라 모든
 Core primitive가 이 경로를 사용하며 IIFE 제거는 전체 최적 lowering의 한 결과다.
@@ -40,16 +40,16 @@ Reference는 receiver·property·callee의 평가 순서와 `thisValue`를 명�
 
 이 전환은 내부 아키텍처 변경이다. 다음은 호환성 검증 항목이 아니라 설계 불변조건이다.
 
-- rl이 없는 유효한 TypeScript는 입력과 출력이 바이트 단위로 같다.
-- rl이 있는 파일에서도 rl span 밖의 사용자 바이트는 한 번씩, 변경 없이, 원래 순서로
+- tt이 없는 유효한 TypeScript는 입력과 출력이 바이트 단위로 같다.
+- tt이 있는 파일에서도 tt span 밖의 사용자 바이트는 한 번씩, 변경 없이, 원래 순서로
   출력된다. 생성 코드는 삽입할 수 있지만 사용자 코드를 재포맷하지 않는다.
 - 사용자 코드의 평가 횟수, 좌우 평가 순서, conditional 실행 여부, `this`, `super`,
   optional-chain 단락, getter/proxy 관측, throw와 await 순서를 바꾸지 않는다.
-- 기존 rl 진단의 코드·문안·primary span·owner·정렬 순서를 유지한다.
+- 기존 tt 진단의 코드·문안·primary span·owner·정렬 순서를 유지한다.
 - 기존 `EmitMapping`, `EmitAnchor`, scrutinee/payload mark의 의미를 유지한다.
 - SWC projection의 파싱 오류나 내부 lowering 실패를 새로운 사용자 진단으로 노출하지
   않는다.
-- rlc가 만든 TypeScript 때문에 TypeScript 진단이 새로 생기면 최적화 실패가 아니라
+- ttc가 만든 TypeScript 때문에 TypeScript 진단이 새로 생기면 최적화 실패가 아니라
   컴파일러 버그로 취급한다.
 
 ## 3. 전체 파이프라인
@@ -57,7 +57,7 @@ Reference는 receiver·property·callee의 평가 순서와 `thisValue`를 명�
 ```text
 source bytes
   │
-  ├─ lossless rl parse ─→ HIR ─→ resolution / typed facts / flow facts
+  ├─ lossless tt parse ─→ HIR ─→ resolution / typed facts / flow facts
   │                                      │
   │                                      └─→ SemanticFile ─→ CoreFile
   │
@@ -78,7 +78,7 @@ source bytes
        TypeScript + mappings + anchors + semantic marks
 ```
 
-기존 lossless parser를 SWC로 교체하지 않는다. SWC는 rl 문법을 모르며, 기존 parser는
+기존 lossless parser를 SWC로 교체하지 않는다. SWC는 tt 문법을 모르며, 기존 parser는
 유효한 TypeScript를 잘못 청구하지 않는 언어 경계와 recovery 계약을 이미 소유한다.
 두 front-end는 경쟁하지 않고 서로 다른 사실을 제공한다.
 
@@ -86,24 +86,24 @@ source bytes
 
 ### 4.1 Projection은 출력물이 아니라 SWC 입력이다
 
-lossless parser가 확정한 rl node를 syntax category가 같은 sentinel로 치환한다.
+lossless parser가 확정한 tt node를 syntax category가 같은 sentinel로 치환한다.
 
 - expression node → sentinel expression
 - statement node → sentinel statement
 - item node → sentinel declaration
 - modifier node → 동일 위치를 추적할 수 있는 trivia
 
-각 sentinel은 `RlNodeId`와 projection span을 가지며 `ProjectionMap`이 원본 span으로
-되돌린다. 길이를 억지로 같게 만들지 않는다. 별도 좌표 변환을 사용해야 중첩 rl 구문과
+각 sentinel은 `TtNodeId`와 projection span을 가지며 `ProjectionMap`이 원본 span으로
+되돌린다. 길이를 억지로 같게 만들지 않는다. 별도 좌표 변환을 사용해야 중첩 tt 구문과
 멀티바이트 입력에서도 위치가 정확하다.
 
 projection은 TypeScript checker나 사용자에게 노출되지 않는다. SWC parse diagnostic은
-프로그램 모델의 recovery 사실일 뿐이며, 최종 사용자 오류는 현재 rlc/TypeScript 진단
+프로그램 모델의 recovery 사실일 뿐이며, 최종 사용자 오류는 현재 ttc/TypeScript 진단
 경계를 그대로 따른다.
 
 ### 4.2 SWC AST만 단일 원천으로 삼지 않는다
 
-`swc_ecma_ast::Expr`에는 rl variant를 추가할 수 없다. 프로그램 소유 모델은 다음의
+`swc_ecma_ast::Expr`에는 tt variant를 추가할 수 없다. 프로그램 소유 모델은 다음의
 합성 자료다.
 
 ```text
@@ -111,26 +111,26 @@ ProgramSyntax
   source: SourceFile
   projection: ProjectionMap
   typescript: swc_ecma_ast::Program
-  rl_overlay: RlNodeId → CoreNodeId
+  tt_overlay: TtNodeId → CoreNodeId
   parents: SwcNodeId → ParentEdge
   scopes: SwcNodeId → ScopeId
   origins: OriginId → SourceOrigin
 ```
 
-SWC AST는 TypeScript 구조와 parent context를 소유한다. Core IR은 rl 의미를 소유한다.
-`rl_overlay`만 두 세계를 연결하며, SWC visitor가 다시 `match` 문자열을 찾거나 Core
+SWC AST는 TypeScript 구조와 parent context를 소유한다. Core IR은 tt 의미를 소유한다.
+`tt_overlay`만 두 세계를 연결하며, SWC visitor가 다시 `match` 문자열을 찾거나 Core
 lowering이 TypeScript 문맥을 추측하지 않는다.
 
 ### 4.3 이름은 scope identity로 생성한다
 
-문자열 검색으로 `$rl_m` 충돌을 피하지 않는다. SWC scope tree와 기존 resolver를 결합해
+문자열 검색으로 `$tt_m` 충돌을 피하지 않는다. SWC scope tree와 기존 resolver를 결합해
 `GeneratedLocalId`를 할당하고, target 직전에 hygiene된 spelling을 정한다. 생성 이름의
 identity와 출력 철자를 분리한다.
 
 ## 5. Evaluation IR
 
-Core IR은 rl 표면을 `Decision`, `Propagate`, `Apply`, `Adt`로 이미 정규화한다. 새
-Evaluation IR은 이 연산을 TypeScript host context에 배치한다. 특정 rl 문법별 방출기를
+Core IR은 tt 표면을 `Decision`, `Propagate`, `Apply`, `Adt`로 이미 정규화한다. 새
+Evaluation IR은 이 연산을 TypeScript host context에 배치한다. 특정 tt 문법별 방출기를
 추가하는 계층이 아니다.
 
 ```text
@@ -159,8 +159,8 @@ EvalTerminator
 assignment target은 단순 값으로 바꾸면 의미가 달라진다. 이 구분이 없는 expression
 lifting은 `this` 또는 setter/getter 순서를 깨뜨릴 수 있으므로 허용하지 않는다.
 
-Evaluation IR은 완전한 TypeScript MIR가 아니다. rl node를 포함하는 최소 owner만
-구조화하며, rl과 관계없는 subtree는 `SourceExpr`/`SourceStmt`와 원본 span으로 유지한다.
+Evaluation IR은 완전한 TypeScript MIR가 아니다. tt node를 포함하는 최소 owner만
+구조화하며, tt과 관계없는 subtree는 `SourceExpr`/`SourceStmt`와 원본 span으로 유지한다.
 다만 그 subtree의 평가 프로토콜과 효과는 분석한다.
 
 ## 6. 문맥은 syntax case가 아니라 평가 프로토콜로 분류한다
@@ -179,14 +179,14 @@ Evaluation IR은 완전한 TypeScript MIR가 아니다. rl node를 포함하는 
 
 Svelte에서 가져올 원칙은 parse/analyze/transform 분리, node별 scope map, 충돌 없는 이름
 생성, transform state에 statement를 예약하는 방식이다. Svelte의 runtime thunk나
-syntactic purity 판정을 그대로 가져오지는 않는다. rl은 TypeScript 실행 의미와
+syntactic purity 판정을 그대로 가져오지는 않는다. tt은 TypeScript 실행 의미와
 tree-shaking 안전성을 보존해야 하기 때문이다.
 
 ## 7. 공통 lowering 알고리즘
 
 ### 7.1 owner 형성
 
-rl node에서 parent chain을 올라가면서 원래 실행 빈도와 스코프를 보존하는 가장 작은
+tt node에서 parent chain을 올라가면서 원래 실행 빈도와 스코프를 보존하는 가장 작은
 `EvaluationOwner`를 찾는다. module/function/block/static block처럼 statement를 넣을 수
 있는 owner가 일반적인 종료점이다. parameter initializer나 일부 class/decorator 위치처럼
 독립적인 실행 환경은 별도 owner다.
@@ -217,13 +217,13 @@ const value = match (input) { A(x) => f(x), B => 0 };
 개념적인 target은 다음과 같다. 실제 printer는 원본 조각을 보존한다.
 
 ```ts
-let $rl_value;
-const $rl_subject = input;
-switch ($rl_subject.kind) {
-  case "A": $rl_value = f($rl_subject.x); break;
-  case "B": $rl_value = 0; break;
+let $tt_value;
+const $tt_subject = input;
+switch ($tt_subject.kind) {
+  case "A": $tt_value = f($tt_subject.x); break;
+  case "B": $tt_value = 0; break;
 }
-const value = $rl_value;
+const value = $tt_value;
 ```
 
 이는 `match` 전용 rewrite가 아니다. 값을 생산하는 모든 `EvalRegion`이 같은 result-local
@@ -263,7 +263,7 @@ identifier에서 발생한 TypeScript 진단도 원래 value 전체의 위치와
 parameter, class initializer, static block, async/generator는 각각 독립
 `EvaluationOwner`를 형성한다. statement를 넣을 수 있는 owner는 해당 환경 안에서 slot과
 CFG를 만든다. 표준 TypeScript 문법상 statement를 넣을 수 없는 parameter initializer와
-class field initializer는 파일마다 하나인 hygiene된 `$rl_expr` intrinsic에 Core CFG callback을
+class field initializer는 파일마다 하나인 hygiene된 `$tt_expr` intrinsic에 Core CFG callback을
 전달한다. callback은 원래 위치에서 즉시 실행되므로 parameter environment, `this`,
 `arguments`, field 초기화 순서를 보존한다. Reference는 값으로 강제 materialize하지 않고
 `Reference` 입력으로 다음 call/member 연산까지 전달한다.
@@ -274,9 +274,9 @@ boundary는 분석 실패 fallback이 아니라 `EvaluationOwner`가 선택하�
 capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 실제 사용 파일에 한 번만
 방출한다.
 
-## 8. 전체 rl 표면의 공통 배치
+## 8. 전체 tt 표면의 공통 배치
 
-| Core primitive | rl 표면 | Evaluation IR 동작 |
+| Core primitive | tt 표면 | Evaluation IR 동작 |
 |---|---|---|
 | `Decision` | `match`, `if let`, `let-else` | branch/switch, bind, result join 또는 exit |
 | `Propagate` | `try`, `result` binding | 단일 평가, 실패 edge, success payload bind |
@@ -284,7 +284,7 @@ capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 
 | `Adt`/source edit | enum, import, `val`, template | 구조화 선언 또는 국소 source edit |
 
 optimizer는 `match`라는 단어를 보지 않는다. `Decision`의 branch, `Propagate`의 exit,
-`Apply`의 call처럼 공통 primitive만 본다. 새 rl 문법이 기존 primitive로 낮아지면 프로그램
+`Apply`의 call처럼 공통 primitive만 본다. 새 tt 문법이 기존 primitive로 낮아지면 프로그램
 분석과 target structuring을 다시 구현하지 않는다.
 
 ## 9. 효과 분석과 최적화
@@ -331,7 +331,7 @@ TargetPiece
 
 변경하지 않은 TypeScript subtree와 trivia는 `Source`로 복사한다. 변환된 owner도 원본의
 토큰·주석 조각을 가능한 한 그대로 재사용하고 필요한 glue만 `Generated`로 삽입한다.
-printer는 모든 원본 non-RL span이 정확히 한 번, 원래 순서로 출력됐는지 검증한다.
+printer는 모든 원본 non-TT span이 정확히 한 번, 원래 순서로 출력됐는지 검증한다.
 
 모든 생성 node는 `OriginId`를 가진다.
 
@@ -347,20 +347,20 @@ SourceOrigin
 - `Synthetic` 진단은 가장 가까운 non-synthetic parent origin으로 올라간다.
 
 projection span, SWC span, generated TypeScript span을 사용자 좌표로 직접 취급하지 않는다.
-진단 정렬과 primary span은 기존 `SemanticFile` 결과를 사용하며, target lowering은 새 rl
+진단 정렬과 primary span은 기존 `SemanticFile` 결과를 사용하며, target lowering은 새 tt
 진단을 만들지 않는다.
 
 ## 11. validator
 
 각 단계는 다음을 검증한다.
 
-- `validate_projection`: 모든 sentinel이 하나의 rl node에 대응하고 span 변환이 왕복됨
+- `validate_projection`: 모든 sentinel이 하나의 tt node에 대응하고 span 변환이 왕복됨
 - `validate_program_syntax`: overlay node의 syntax category와 parent edge가 일치함
 - `validate_eval`: 모든 block이 종료되고 value가 모든 정상 경로에서 한 번 정의됨
 - `validate_order`: source evaluation ordinal과 conditional/repeated 영역이 보존됨
 - `validate_reference`: reference-required operand가 value temporary로 강등되지 않음
 - `validate_origin`: 모든 generated node가 source origin 또는 parent origin을 가짐
-- `validate_source_preservation`: non-RL source span이 한 번씩 원래 순서로 출력됨
+- `validate_source_preservation`: non-TT source span이 한 번씩 원래 순서로 출력됨
 - `verify_output`: 최종 TypeScript가 SWC parser를 통과함
 
 validator 실패는 사용자 오류가 아니라 internal compiler error다. release 경로에서
@@ -373,12 +373,12 @@ capability 판정으로 분석 대상에서 제외한다.
 SWC와 tsgo의 책임을 섞지 않는다.
 
 - SWC: TypeScript syntax AST, parent path, scope 형성, 평가 문맥
-- rlc Semantic/Core: rl 이름·패턴·소진성·flow·의미 primitive
+- ttc Semantic/Core: tt 이름·패턴·소진성·flow·의미 primitive
 - tsgo: 프로젝트 타입·심볼·narrowing 사실과 최종 TypeScript 진단
 - Evaluation IR: runtime 평가 순서와 target 제어 흐름
 
 타입 정보가 없어도 correctness는 유지되어야 한다. tsgo 질의 실패는 최적화 기회를
-줄일 수 있지만 다른 코드를 만들거나 기존 rl 진단을 없애면 안 된다.
+줄일 수 있지만 다른 코드를 만들거나 기존 tt 진단을 없애면 안 된다.
 
 ## 13. 전환 계획
 
@@ -386,11 +386,11 @@ SWC와 tsgo의 책임을 섞지 않는다.
 
 현재 전체 compile output, mapped emit, 진단, runtime trace corpus를 고정한다. 평가 순서,
 getter/proxy, `this`, throw, short-circuit, async, default parameter, class initialization,
-decorator, optional chain, template/JSX와 중첩 rl 구문을 포함한다.
+decorator, optional chain, template/JSX와 중첩 tt 구문을 포함한다.
 
 ### Phase 1 — shadow ProgramSyntax
 
-projection, SWC AST, parent/scope/origin table을 만들되 출력에 사용하지 않는다. rl node와
+projection, SWC AST, parent/scope/origin table을 만들되 출력에 사용하지 않는다. tt node와
 sentinel의 완전 대응 및 원본 span 왕복만 검증한다.
 
 ### Phase 2 — shadow Evaluation IR
@@ -421,13 +421,13 @@ variable initializer owner를 `value slot + statement decision + rewritten initi
 
 ## 14. 완료 기준
 
-- 모든 rl 구문이 `ProgramSyntax + CoreFile → Evaluation IR` 한 경로를 사용한다.
+- 모든 tt 구문이 `ProgramSyntax + CoreFile → Evaluation IR` 한 경로를 사용한다.
 - backend에 `match`/`result` 전용 IIFE 선택 로직이 없다.
 - 모든 Core primitive가 host owner에 맞는 TypeScript 제어 흐름·표현식·선언으로 출력된다.
 - backend에는 self-invoked anonymous closure/IIFE 경로가 없다. statement 불가 owner만
   이름 있는 expression-boundary intrinsic을 사용한다.
-- 기존 rl 진단 snapshot과 source 위치가 바이트 단위로 같다.
-- pure TypeScript passthrough와 non-RL source-piece 보존 검사가 통과한다.
+- 기존 tt 진단 snapshot과 source 위치가 바이트 단위로 같다.
+- pure TypeScript passthrough와 non-TT source-piece 보존 검사가 통과한다.
 - runtime trace corpus에서 평가 횟수·순서·`this`·throw·await가 기존과 같다.
 - SWC parse 검증과 tsgo 타입 검증에 새 오류가 없다.
 - Rolldown/Rollup/esbuild fixture에서 effect-free 미사용 region은 제거되고 effectful region은

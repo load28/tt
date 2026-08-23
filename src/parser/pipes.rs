@@ -1,4 +1,4 @@
-//! Structural parsing of rl pipeline expressions (`head |> step |> ...`).
+//! Structural parsing of tt pipeline expressions (`head |> step |> ...`).
 //!
 //! Contract safety: `|>` (a `|` immediately followed by `>`) cannot occur
 //! anywhere in valid TypeScript — after a `|` (bitwise OR / union type) an

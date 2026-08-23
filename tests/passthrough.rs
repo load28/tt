@@ -1,7 +1,7 @@
-//! Every valid TypeScript file is a valid .rl file and must compile to
+//! Every valid TypeScript file is a valid .tt file and must compile to
 //! itself, byte for byte.
 
-use rlc::{Options, SourceKind, compile};
+use ttc::{Options, SourceKind, compile};
 
 fn assert_passthrough(src: &str) {
     let out = compile(src, &Options::default()).expect("compile failed");
@@ -197,10 +197,10 @@ fn multibyte_content_preserved() {
 fn plain_ts_using_option_result_names_is_untouched() {
     // The built-in Option/Result enums must never affect pure TypeScript: a
     // file that works with these names on its own (import, constructors, a
-    // switch over the tags) contains no rl syntax and passes through.
+    // switch over the tags) contains no tt syntax and passes through.
     assert_passthrough(
         r#"
-import { Option, Result } from "./rl.js";
+import { Option, Result } from "./tt.js";
 const o = Option.Some(1);
 switch (o.kind) {
   case "Some":
@@ -237,7 +237,7 @@ fn class_field_and_method_named_try() {
 #[test]
 fn interface_members_named_try() {
     // Signatures named `try` — including generic and annotation-free ones —
-    // must never be taken for an rl try statement.
+    // must never be taken for a tt try statement.
     assert_passthrough(
         "interface Retryable {\n  try(times: number): void;\n  try2?: () => void;\n}\ninterface Generic {\n  try<T>(x: T);\n}\n",
     );
@@ -270,7 +270,7 @@ fn object_method_named_const() {
 }
 
 #[test]
-fn import_specifiers_without_rl_extension_untouched() {
+fn import_specifiers_without_tt_extension_untouched() {
     assert_passthrough(
         r#"
 import { a } from "./mod.js";
@@ -283,23 +283,23 @@ import "polyfill";
 }
 
 #[test]
-fn rl_specifier_in_string_comment_and_template_untouched() {
+fn tt_specifier_in_string_comment_and_template_untouched() {
     assert_passthrough(
-        "const s = \"import x from './a.rl'\";\n// import y from \"./b.rl\";\nconst t = `from \"./c.rl\"`;\n",
+        "const s = \"import x from './a.tt'\";\n// import y from \"./b.tt\";\nconst t = `from \"./c.tt\"`;\n",
     );
 }
 
 #[test]
-fn dynamic_import_of_rl_path_untouched() {
+fn dynamic_import_of_tt_path_untouched() {
     // Dynamic import is out of scope for specifier rewriting.
-    assert_passthrough("const m = import(\"./x.rl\");\n");
+    assert_passthrough("const m = import(\"./x.tt\");\n");
 }
 
 #[test]
 fn export_declarations_are_not_reexports() {
     // `export` followed by a declaration must never be scanned for a
     // module specifier, even if a `from` + string appears later.
-    assert_passthrough("export const from = 1;\nexport function f() { return \"./x.rl\"; }\n");
+    assert_passthrough("export const from = 1;\nexport function f() { return \"./x.tt\"; }\n");
 }
 
 #[test]

@@ -1,5 +1,5 @@
-//! End-to-end tests: compile rl → TypeScript, then run `tsc` to type-check
-//! (exhaustiveness is checked by rlc itself; tsc sees plain TypeScript) and `node` to execute.
+//! End-to-end tests: compile tt → TypeScript, then run `tsc` to type-check
+//! (exhaustiveness is checked by ttc itself; tsc sees plain TypeScript) and `node` to execute.
 //!
 //! These tests skip silently when `tsc` or `node` is not installed.
 
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use rlc::{Options, SourceKind, compile};
+use ttc::{Options, SourceKind, compile};
 
 const TSC_FLAGS: &[&str] = &[
     "--strict",
@@ -33,7 +33,7 @@ static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
 
 fn tmpdir() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "rl-test-{}-{}",
+        "tt-test-{}-{}",
         std::process::id(),
         DIR_SEQ.fetch_add(1, Ordering::SeqCst)
     ));
@@ -41,7 +41,7 @@ fn tmpdir() -> PathBuf {
     dir
 }
 
-/// Appended to every snippet so it is a module (like real rl files with
+/// Appended to every snippet so it is a module (like real tt files with
 /// exports) — otherwise script-scope names collide with DOM globals
 /// such as `Option`.
 fn as_module(src: &str) -> String {
@@ -49,16 +49,16 @@ fn as_module(src: &str) -> String {
 }
 
 fn write_std(dir: &std::path::Path) {
-    let std_dir = dir.join("rl");
+    let std_dir = dir.join("tt");
     fs::create_dir_all(&std_dir).unwrap();
-    for module in rlc::StdModule::ALL {
+    for module in ttc::StdModule::ALL {
         fs::write(std_dir.join(module.file_name()), module.source()).unwrap();
     }
 }
 
-/// Compile rl source and type-check the output with tsc. Returns (ok, tsc output).
+/// Compile tt source and type-check the output with tsc. Returns (ok, tsc output).
 fn typecheck(src: &str) -> (bool, String) {
-    let code = compile(&as_module(src), &Options::default()).expect("rl compile failed");
+    let code = compile(&as_module(src), &Options::default()).expect("tt compile failed");
     let dir = tmpdir();
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
@@ -76,7 +76,7 @@ fn typecheck(src: &str) -> (bool, String) {
 }
 
 #[test]
-fn rlx_output_typechecks_as_tsx() {
+fn ttx_output_typechecks_as_tsx() {
     if !have("tsc") {
         return;
     }
@@ -96,7 +96,7 @@ export const render = (state: State) => <main>{match (state) {
             ..Options::default()
         },
     )
-    .expect("rlx compile failed");
+    .expect("ttx compile failed");
     let dir = tmpdir();
     let tsx = dir.join("main.tsx");
     fs::write(&tsx, &code).unwrap();
@@ -115,10 +115,10 @@ export const render = (state: State) => <main>{match (state) {
     );
 }
 
-/// Type-check code emitted despite recoverable rl diagnostics.
+/// Type-check code emitted despite recoverable tt diagnostics.
 fn typecheck_recovery(src: &str) -> (bool, String) {
-    let report = rlc::compile_report(&as_module(src), &Options::default());
-    assert!(!report.diagnostics.is_empty(), "expected an rl diagnostic");
+    let report = ttc::compile_report(&as_module(src), &Options::default());
+    assert!(!report.diagnostics.is_empty(), "expected a tt diagnostic");
     let code = report
         .emit
         .expect("recoverable diagnostics still emit")
@@ -140,18 +140,18 @@ fn typecheck_recovery(src: &str) -> (bool, String) {
 }
 
 /// Type-check a snippet that imports the standard library: the std module is
-/// written under `rl/` and all files go through tsc (`--noEmit`).
+/// written under `tt/` and all files go through tsc (`--noEmit`).
 /// Returns (ok, tsc output + compiled source).
 fn typecheck_with_std(src: &str) -> (bool, String) {
-    let code = compile(&as_module(src), &Options::default()).expect("rl compile failed");
+    let code = compile(&as_module(src), &Options::default()).expect("tt compile failed");
     let dir = tmpdir();
     write_std(&dir);
     fs::write(dir.join("main.ts"), &code).unwrap();
     let out = Command::new("tsc")
         .arg(dir.join("main.ts"))
-        .arg(dir.join("rl/index.ts"))
-        .arg(dir.join("rl/option.ts"))
-        .arg(dir.join("rl/result.ts"))
+        .arg(dir.join("tt/index.ts"))
+        .arg(dir.join("tt/option.ts"))
+        .arg(dir.join("tt/result.ts"))
         .arg("--noEmit")
         .args([
             "--strict",
@@ -187,9 +187,9 @@ fn recoverable_codegen_errors_do_not_create_tsc_errors() {
     assert!(ok, "tsc rejected duplicate-binding recovery:\n{out}");
 }
 
-/// Compile rl source, emit JS with tsc, execute with node, return stdout lines.
+/// Compile tt source, emit JS with tsc, execute with node, return stdout lines.
 fn run(src: &str) -> Vec<String> {
-    let code = compile(&as_module(src), &Options::default()).expect("rl compile failed");
+    let code = compile(&as_module(src), &Options::default()).expect("tt compile failed");
     let dir = tmpdir();
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
@@ -225,16 +225,16 @@ fn run(src: &str) -> Vec<String> {
 /// Compile a snippet that imports the standard library, emit JS for it and
 /// the std package with tsc, execute with node, return stdout lines.
 fn run_with_std(src: &str) -> Vec<String> {
-    let code = compile(src, &Options::default()).expect("rl compile failed");
+    let code = compile(src, &Options::default()).expect("tt compile failed");
     let dir = tmpdir();
     write_std(&dir);
     fs::write(dir.join("main.ts"), &code).unwrap();
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
     let out = Command::new("tsc")
         .arg(dir.join("main.ts"))
-        .arg(dir.join("rl/index.ts"))
-        .arg(dir.join("rl/option.ts"))
-        .arg(dir.join("rl/result.ts"))
+        .arg(dir.join("tt/index.ts"))
+        .arg(dir.join("tt/option.ts"))
+        .arg(dir.join("tt/result.ts"))
         .arg("--outDir")
         .arg(&dir)
         .args([
@@ -605,14 +605,14 @@ try {
 "#);
     assert_eq!(
         lines,
-        vec![r#"threw: rl match: unexpected case {"kind":"C"}"#]
+        vec![r#"threw: tt match: unexpected case {"kind":"C"}"#]
     );
 }
 
 #[test]
 fn runtime_plain_typescript_enum_coexists() {
     require_toolchain!();
-    // A unit-only enum is TypeScript's own enum, untouched by rlc.
+    // A unit-only enum is TypeScript's own enum, untouched by ttc.
     let lines = run(r#"
 enum Color { Red, Green, Blue }
 enum Shape { Circle(radius: number), Point }
@@ -629,9 +629,9 @@ fn runtime_std_option_result_functional_pipeline() {
     require_toolchain!();
     let lines = run_with_std(
         r#"
-import type { TOption, TResult } from "./rl/index.js";
-import * as Option from "./rl/option.js";
-import * as Result from "./rl/result.js";
+import type { TOption, TResult } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+import * as Result from "./tt/result.js";
 
 function parseNum(raw: string): TResult<number, string> {
   const n = Number(raw);
@@ -676,9 +676,9 @@ fn runtime_std_new_combinators() {
     require_toolchain!();
     let lines = run_with_std(
         r#"
-import type { TOption, TResult } from "./rl/index.js";
-import * as Option from "./rl/option.js";
-import * as Result from "./rl/result.js";
+import type { TOption, TResult } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+import * as Result from "./tt/result.js";
 
 console.log(JSON.stringify(Option.zip(Option.Some(1), Option.Some("a"))));
 console.log(JSON.stringify(Option.zip(Option.Some(1), Option.None)));
@@ -721,8 +721,8 @@ fn runtime_try_error_propagation() {
     require_toolchain!();
     let lines = run_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 function parseNum(raw: string): TResult<number, string> {
   const n = Number(raw);
@@ -797,9 +797,9 @@ fn runtime_try_inside_an_if_let_body_propagates_from_the_function() {
     // propagates from `f` — not from any construct in between.
     let lines = run_with_std(
         r#"
-import type { TOption, TResult } from "./rl/index.js";
-import * as Option from "./rl/option.js";
-import * as Result from "./rl/result.js";
+import type { TOption, TResult } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+import * as Result from "./tt/result.js";
 
 function parseNum(raw: string): TResult<number, string> {
   const n = Number(raw);
@@ -837,8 +837,8 @@ fn runtime_try_inside_a_closure_propagates_from_the_closure() {
     // Result it produced.
     let lines = run_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 function parseNum(raw: string): TResult<number, string> {
   const n = Number(raw);
@@ -869,9 +869,9 @@ fn runtime_let_else_narrows_and_diverges() {
     // else block narrows the temporary to the matched case.
     let lines = run_with_std(
         r#"
-import type { TOption, TResult } from "./rl/index.js";
-import * as Option from "./rl/option.js";
-import * as Result from "./rl/result.js";
+import type { TOption, TResult } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+import * as Result from "./tt/result.js";
 
 function findUser(id: number): TOption<string> {
   return id === 1 ? Option.Some("amy") : Option.None;
@@ -909,9 +909,9 @@ fn runtime_let_else_else_block_returns_an_object_literal() {
     // so the divergence check still sees a `return`.
     let lines = run_with_std(
         r#"
-import type { TOption, TResult } from "./rl/index.js";
-import * as Option from "./rl/option.js";
-import * as Result from "./rl/result.js";
+import type { TOption, TResult } from "./tt/index.js";
+import * as Option from "./tt/option.js";
+import * as Result from "./tt/result.js";
 
 function findUser(id: number): TOption<string> {
   return id === 1 ? Option.Some("amy") : Option.None;
@@ -977,9 +977,9 @@ fn std_result_constructors_type_only_their_own_variant() {
     // `TResult<T, E>` wherever one is expected.
     let (ok, out) = typecheck_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
-import type { TOk, TErr } from "./rl/index.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+import type { TOk, TErr } from "./tt/index.js";
 
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
@@ -1010,11 +1010,11 @@ fn try_error_types_infer_as_a_union_without_an_annotation() {
     // Two `try`s over results with different error types: the lowered early
     // returns plus `Result.Ok(...)` give tsc `TErr<UserError> | TErr<ConfigError>
     // | TOk<Data>`, which is exactly `TResult<Data, UserError | ConfigError>`.
-    // rlc collects no error types of its own — this is tsc's union inference.
+    // ttc collects no error types of its own — this is tsc's union inference.
     let (ok, out) = typecheck_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 type User = { id: number };
 type Config = { port: number };
@@ -1045,8 +1045,8 @@ fn try_error_union_stays_checked_against_the_declared_return_type() {
     // by tsc on the emitted early return.
     let (ok, out) = typecheck_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 declare function getUser(): TResult<number, { tag: "user" }>;
 
@@ -1065,8 +1065,8 @@ console.log(load());
 /// failing its own way, so a chain that loses an error type is visible in the
 /// asserted union.
 const ERROR_UNION_PRELUDE: &str = r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
@@ -1130,7 +1130,7 @@ fn std_result_and_then_p_accumulates_error_types_along_a_pipeline() {
     require_toolchain!();
     // The end-to-end shape from the design: `try` collects two error types
     // into the function's inferred return type, and every `andThenP` step
-    // adds its own. rlc collects nothing — this is tsc's union inference.
+    // adds its own. ttc collects nothing — this is tsc's union inference.
     let (ok, out) = typecheck_with_std(&format!(
         r#"{ERROR_UNION_PRELUDE}
 function loadUser() {{
@@ -1278,8 +1278,8 @@ fn runtime_result_and_then_chain_short_circuits_on_the_first_err() {
     // return the first `Err` untouched and run the rest only on `Ok`.
     let lines = run_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 type Parsed = { n: number };
 type ParseError = { tag: "parse"; raw: string };
@@ -1335,8 +1335,8 @@ const f = (e: AppEvent) => match (e) {
 /* import specifier rewriting                                          */
 /* ------------------------------------------------------------------ */
 
-const ERROR_RL: &str = "export enum CalcError { DivByZero, Overflow(limit: number) }\n";
-const MAIN_RL: &str = r#"import { CalcError } from "./error.rl";
+const ERROR_TT: &str = "export enum CalcError { DivByZero, Overflow(limit: number) }\n";
+const MAIN_TT: &str = r#"import { CalcError } from "./error.tt";
 const e = CalcError.Overflow(9);
 const msg = match (e) {
   Overflow(limit) => `over ${limit}`,
@@ -1347,11 +1347,11 @@ export {};
 "#;
 
 #[test]
-fn cross_file_rl_import_typechecks_and_runs() {
+fn cross_file_tt_import_typechecks_and_runs() {
     require_toolchain!();
     let dir = tmpdir();
-    let error_ts = compile(ERROR_RL, &Options::default()).expect("rl compile failed");
-    let main_ts = compile(MAIN_RL, &Options::default()).expect("rl compile failed");
+    let error_ts = compile(ERROR_TT, &Options::default()).expect("tt compile failed");
+    let main_ts = compile(MAIN_TT, &Options::default()).expect("tt compile failed");
     assert!(main_ts.contains("\"./error.js\""), "{main_ts}");
     fs::write(dir.join("error.ts"), &error_ts).unwrap();
     fs::write(dir.join("main.ts"), &main_ts).unwrap();
@@ -1384,44 +1384,44 @@ fn cross_file_rl_import_typechecks_and_runs() {
 /* project-wide exhaustiveness through the CLI                         */
 /* ------------------------------------------------------------------ */
 
-const TOKEN_RL: &str =
+const TOKEN_TT: &str =
     "export enum Token {\n  Num(value: number),\n  Ident(name: string),\n  Eof,\n}\n";
 
-/// Runs the rlc binary itself — declaration collection across files lives
+/// Runs the ttc binary itself — declaration collection across files lives
 /// in the CLI, not in `compile`. No tsc/node needed.
-fn run_rlc(dir: &std::path::Path, args: &[&str]) -> (bool, String) {
-    run_rlc_env(dir, args, false)
+fn run_ttc(dir: &std::path::Path, args: &[&str]) -> (bool, String) {
+    run_ttc_env(dir, args, false)
 }
 
-/// [`run_rlc`], optionally with every TypeScript-toolchain variable cleared
-/// so rlc resolves nothing — the only way to test what it says when there
+/// [`run_ttc`], optionally with every TypeScript-toolchain variable cleared
+/// so ttc resolves nothing — the only way to test what it says when there
 /// is no compiler, on a machine that has one.
-fn run_rlc_env(dir: &std::path::Path, args: &[&str], no_typescript: bool) -> (bool, String) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_rlc"));
+fn run_ttc_env(dir: &std::path::Path, args: &[&str], no_typescript: bool) -> (bool, String) {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
     command.current_dir(dir).args(args);
     if no_typescript {
         command
-            .env_remove("RLC_TSGO_API")
-            .env_remove("RLC_TSGO_BIN")
-            .env_remove("RLC_TSGO_ROOT");
+            .env_remove("TTC_TSGO_API")
+            .env_remove("TTC_TSGO_BIN")
+            .env_remove("TTC_TSGO_ROOT");
     }
-    let out = command.output().expect("failed to run rlc");
+    let out = command.output().expect("failed to run ttc");
     (
         out.status.success(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
     )
 }
 
-/// Whether rlc can resolve a TypeScript to drive *and* emit declarations
+/// Whether ttc can resolve a TypeScript to drive *and* emit declarations
 /// with it. Asked by running `--types` over a trivial project and looking
-/// for the sidecar: the answer is rlc's own resolution, not a guess about
+/// for the sidecar: the answer is ttc's own resolution, not a guess about
 /// the machine. A released `typescript@7` can check but not emit, so it
 /// answers `false` here and the `--types` success tests skip.
 fn usable_typescript_for_types() -> bool {
     let dir = tmpdir();
-    fs::write(dir.join("probe.rl"), "export const n: number = 1;\n").unwrap();
-    let (ok, _) = run_rlc(&dir, &["--types", "probe.rl", "-o", "."]);
-    ok && dir.join("probe.rl.d.ts").exists()
+    fs::write(dir.join("probe.tt"), "export const n: number = 1;\n").unwrap();
+    let (ok, _) = run_ttc(&dir, &["--types", "probe.tt", "-o", "."]);
+    ok && dir.join("probe.tt.d.ts").exists()
 }
 
 /// Skip a `--types` success test when no TypeScript that can emit
@@ -1429,34 +1429,34 @@ fn usable_typescript_for_types() -> bool {
 macro_rules! require_types_typescript {
     () => {
         if !usable_typescript_for_types() {
-            eprintln!("skipping: no TypeScript for rlc to drive, or it cannot emit declarations");
+            eprintln!("skipping: no TypeScript for ttc to drive, or it cannot emit declarations");
             return;
         }
     };
 }
 
 #[test]
-fn cli_checks_exhaustiveness_across_rl_imports() {
+fn cli_checks_exhaustiveness_across_tt_imports() {
     let dir = tmpdir();
-    fs::write(dir.join("token.rl"), TOKEN_RL).unwrap();
+    fs::write(dir.join("token.tt"), TOKEN_TT).unwrap();
     fs::write(
-        dir.join("parser.rl"),
-        "import { Token } from \"./token.rl\";\nconst show = (t: Token) =>\n  match (t) {\n    Num(value) => value,\n    Ident(name) => 0,\n  };\n",
+        dir.join("parser.tt"),
+        "import { Token } from \"./token.tt\";\nconst show = (t: Token) =>\n  match (t) {\n    Num(value) => value,\n    Ident(name) => 0,\n  };\n",
     )
     .unwrap();
-    let (ok, err) = run_rlc(&dir, &["--check", "parser.rl"]);
+    let (ok, err) = run_ttc(&dir, &["--check", "parser.tt"]);
     assert!(!ok, "expected failure:\n{err}");
     assert!(
-        err.contains("parser.rl:3:3: match on enum Token (imported from \"./token.rl\") is not exhaustive: missing \"Eof\""),
+        err.contains("parser.tt:3:3: match on enum Token (imported from \"./token.tt\") is not exhaustive: missing \"Eof\""),
         "{err}"
     );
 
     fs::write(
-        dir.join("parser.rl"),
-        "import { Token } from \"./token.rl\";\nconst show = (t: Token) =>\n  match (t) {\n    Num(value) => value,\n    Ident(name) => 0,\n    Eof => -1,\n  };\n",
+        dir.join("parser.tt"),
+        "import { Token } from \"./token.tt\";\nconst show = (t: Token) =>\n  match (t) {\n    Num(value) => value,\n    Ident(name) => 0,\n    Eof => -1,\n  };\n",
     )
     .unwrap();
-    let (ok, err) = run_rlc(&dir, &["--check", "parser.rl"]);
+    let (ok, err) = run_ttc(&dir, &["--check", "parser.tt"]);
     assert!(ok, "expected success:\n{err}");
 }
 
@@ -1466,11 +1466,11 @@ fn cli_skips_unresolvable_imports_silently() {
     // unchecked, as before phase 2.
     let dir = tmpdir();
     fs::write(
-        dir.join("main.rl"),
-        "import { Gone } from \"./missing.rl\";\nconst x = match (g) { A(v) => v, B => 0 };\n",
+        dir.join("main.tt"),
+        "import { Gone } from \"./missing.tt\";\nconst x = match (g) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
-    let (ok, err) = run_rlc(&dir, &["--check", "main.rl"]);
+    let (ok, err) = run_ttc(&dir, &["--check", "main.tt"]);
     assert!(ok, "expected success:\n{err}");
 }
 
@@ -1478,14 +1478,14 @@ fn cli_skips_unresolvable_imports_silently() {
 fn cli_cross_file_match_runs_end_to_end() {
     require_toolchain!();
     let dir = tmpdir();
-    fs::write(dir.join("token.rl"), TOKEN_RL).unwrap();
+    fs::write(dir.join("token.tt"), TOKEN_TT).unwrap();
     fs::write(
-        dir.join("main.rl"),
-        "import { Token } from \"./token.rl\";\nconst t = Token.Ident(\"x\");\nconsole.log(match (t) {\n  Num(value) => `n${value}`,\n  Ident(name) => `i${name}`,\n  Eof => \"eof\",\n});\nexport {};\n",
+        dir.join("main.tt"),
+        "import { Token } from \"./token.tt\";\nconst t = Token.Ident(\"x\");\nconsole.log(match (t) {\n  Num(value) => `n${value}`,\n  Ident(name) => `i${name}`,\n  Eof => \"eof\",\n});\nexport {};\n",
     )
     .unwrap();
-    let (ok, err) = run_rlc(&dir, &["token.rl", "main.rl"]);
-    assert!(ok, "rlc failed:\n{err}");
+    let (ok, err) = run_ttc(&dir, &["token.tt", "main.tt"]);
+    assert!(ok, "ttc failed:\n{err}");
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
     let out = Command::new("tsc")
         .arg(dir.join("main.ts"))
@@ -1514,24 +1514,24 @@ fn cli_cross_file_match_runs_end_to_end() {
 #[test]
 fn symbols_reports_imports_and_positions_as_valid_json() {
     let dir = tmpdir();
-    fs::write(dir.join("token.rl"), TOKEN_RL).unwrap();
+    fs::write(dir.join("token.tt"), TOKEN_TT).unwrap();
     fs::write(
-        dir.join("parser.rl"),
-        "import { Token as Tok } from \"./token.rl\";\nimport { Gone } from \"./missing.rl\";\nenum Local { A(x: number) }\n",
+        dir.join("parser.tt"),
+        "import { Token as Tok } from \"./token.tt\";\nimport { Gone } from \"./missing.tt\";\nenum Local { A(x: number) }\n",
     )
     .unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_rlc"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .current_dir(&dir)
-        .args(["--symbols", "parser.rl"])
+        .args(["--symbols", "parser.tt"])
         .output()
-        .expect("failed to run rlc");
+        .expect("failed to run ttc");
     assert!(out.status.success());
     let json = String::from_utf8_lossy(&out.stdout).into_owned();
 
     // Shape: the local enum with its position, the resolved import with the
     // referenced file's exported declarations, and the unresolvable import
     // marked null.
-    assert!(json.contains("\"file\":\"parser.rl\""), "{json}");
+    assert!(json.contains("\"file\":\"parser.tt\""), "{json}");
     assert!(json.contains("\"name\":\"Local\""), "{json}");
     assert!(
         json.contains("\"entries\":[{\"name\":\"Token\",\"alias\":\"Tok\"}]"),
@@ -1547,7 +1547,7 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
         json.contains("\"tag\":\"Eof\",\"line\":4,\"col\":3,\"fields\":null"),
         "{json}"
     );
-    assert!(json.contains("\"specifier\":\"./missing.rl\""), "{json}");
+    assert!(json.contains("\"specifier\":\"./missing.tt\""), "{json}");
     assert!(json.contains("\"resolved\":null,\"enums\":[]"), "{json}");
 
     // And it must be JSON a real parser accepts.
@@ -1576,14 +1576,14 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
 /* the unified pipeline through the CLI: build and --types             */
 /* ------------------------------------------------------------------ */
 
-const LEVEL_RL: &str = "export enum Level {\n  Low,\n  High(threshold: number),\n}\n";
+const LEVEL_TT: &str = "export enum Level {\n  Low,\n  High(threshold: number),\n}\n";
 
-const NOTICE_RL: &str = "import type { TOption } from \"@rl/std\";\nimport * as Option from \"@rl/std/option\";\nimport { Level } from \"./level.rl\";\n\nexport enum Notice {\n  Info(text: string),\n  Warn(text: string, code: number),\n}\n\nexport function render(n: Notice): string {\n  return match (n) {\n    Info(text) => `info: ${text}`,\n    Warn(text, code) => `warn[${code}]: ${text}`,\n  };\n}\n\nexport function gate(l: Level): number {\n  return match (l) {\n    Low => 0,\n    High(threshold) => threshold,\n  };\n}\n\nexport function first(list: Notice[]): TOption<Notice> {\n  return list.length > 0 ? Option.Some(list[0]) : Option.None;\n}\n";
+const NOTICE_TT: &str = "import type { TOption } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport { Level } from \"./level.tt\";\n\nexport enum Notice {\n  Info(text: string),\n  Warn(text: string, code: number),\n}\n\nexport function render(n: Notice): string {\n  return match (n) {\n    Info(text) => `info: ${text}`,\n    Warn(text, code) => `warn[${code}]: ${text}`,\n  };\n}\n\nexport function gate(l: Level): number {\n  return match (l) {\n    Low => 0,\n    High(threshold) => threshold,\n  };\n}\n\nexport function first(list: Notice[]): TOption<Notice> {\n  return list.length > 0 ? Option.Some(list[0]) : Option.None;\n}\n";
 
-const CONSUMER_MAIN_TS: &str = "import * as Option from \"@rl/std/option\";\nimport { Notice, render, first } from \"./notice.rl\";\n\nconst items = [Notice.Info(\"hello\"), Notice.Warn(\"careful\", 7)];\nfor (const n of items) console.log(render(n));\nconsole.log(Option.isSome(first(items)));\n";
+const CONSUMER_MAIN_TS: &str = "import * as Option from \"@tt/std/option\";\nimport { Notice, render, first } from \"./notice.tt\";\n\nconst items = [Notice.Info(\"hello\"), Notice.Warn(\"careful\", 7)];\nfor (const n of items) console.log(render(n));\nconsole.log(Option.isSome(first(items)));\n";
 
-/// A mixed source tree: two `.rl` modules (one importing the other and the
-/// standard library) plus a hand-written `.ts` entry that imports `.rl`.
+/// A mixed source tree: two `.tt` modules (one importing the other and the
+/// standard library) plus a hand-written `.ts` entry that imports `.tt`.
 /// Every file under `dir`, recursively.
 fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     let mut out = Vec::new();
@@ -1607,8 +1607,8 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
 
 fn write_consumer_tree(dir: &std::path::Path) {
     fs::create_dir_all(dir.join("src")).unwrap();
-    fs::write(dir.join("src/level.rl"), LEVEL_RL).unwrap();
-    fs::write(dir.join("src/notice.rl"), NOTICE_RL).unwrap();
+    fs::write(dir.join("src/level.tt"), LEVEL_TT).unwrap();
+    fs::write(dir.join("src/notice.tt"), NOTICE_TT).unwrap();
     fs::write(dir.join("src/main.ts"), CONSUMER_MAIN_TS).unwrap();
 }
 
@@ -1618,20 +1618,20 @@ fn cli_build_emits_a_complete_tree_that_runs() {
     let dir = tmpdir();
     write_consumer_tree(&dir);
 
-    let (ok, err) = run_rlc(&dir, &["-o", "build", "--no-banner", "src"]);
+    let (ok, err) = run_ttc(&dir, &["-o", "build", "--no-banner", "src"]);
     assert!(ok, "build failed:\n{err}");
 
     // Hand-written TypeScript rides along byte-for-byte except for its
-    // relative `.rl` (and `@rl/std`) specifiers.
+    // relative `.tt` (and `@tt/std`) specifiers.
     let main_ts = fs::read_to_string(dir.join("build/main.ts")).unwrap();
     assert_eq!(
         main_ts,
         CONSUMER_MAIN_TS
-            .replace("./notice.rl", "./notice.js")
-            .replace("@rl/std/option", "./rl/option.js")
+            .replace("./notice.tt", "./notice.js")
+            .replace("@tt/std/option", "./tt/option.js")
     );
-    for module in rlc::StdModule::ALL {
-        assert!(dir.join("build/rl").join(module.file_name()).exists());
+    for module in ttc::StdModule::ALL {
+        assert!(dir.join("build/tt").join(module.file_name()).exists());
     }
 
     // The emitted tree stands on its own: tsc compiles it, node runs it.
@@ -1670,14 +1670,14 @@ fn cli_refuses_to_overwrite_a_pass_through_input() {
     fs::write(dir.join("main.ts"), "export const x = 1;\n").unwrap();
 
     // In place, a pass-through `.ts` would land on top of itself.
-    let (ok, err) = run_rlc(&dir, &["main.ts"]);
+    let (ok, err) = run_ttc(&dir, &["main.ts"]);
     assert!(!ok, "expected failure:\n{err}");
     assert!(err.contains("output would overwrite the input"), "{err}");
     let untouched = fs::read_to_string(dir.join("main.ts")).unwrap();
     assert_eq!(untouched, "export const x = 1;\n");
 
     // A separate output tree is fine.
-    let (ok, err) = run_rlc(&dir, &["-o", "out", "main.ts"]);
+    let (ok, err) = run_ttc(&dir, &["-o", "out", "main.ts"]);
     assert!(ok, "build failed:\n{err}");
 }
 
@@ -1688,12 +1688,12 @@ fn cli_types_leaves_nothing_but_the_sidecars() {
     let dir = tmpdir();
     write_consumer_tree(&dir);
 
-    let (ok, err) = run_rlc(&dir, &["--types", "src"]);
+    let (ok, err) = run_ttc(&dir, &["--types", "src"]);
     assert!(ok, "--types failed:\n{err}");
 
     // Declaration emit runs in memory: no cache tree, and above all no
     // copy of the hand-written TypeScript anywhere.
-    assert!(!dir.join(".rl-build").exists(), "a cache tree was created");
+    assert!(!dir.join(".tt-build").exists(), "a cache tree was created");
     let copies: Vec<String> = walk(&dir)
         .into_iter()
         .filter(|path| {
@@ -1707,13 +1707,13 @@ fn cli_types_leaves_nothing_but_the_sidecars() {
         "hand-written source was copied: {copies:?}"
     );
 
-    // What it does leave: one sidecar pair per .rl, plus the std types.
-    assert!(dir.join(".rl-types/notice.rl.d.ts").exists());
-    assert!(dir.join(".rl-types/notice.rl.d.ts.map").exists());
-    assert!(dir.join(".rl-types/level.rl.d.ts").exists());
-    for module in rlc::StdModule::ALL {
+    // What it does leave: one sidecar pair per .tt, plus the std types.
+    assert!(dir.join(".tt-types/notice.tt.d.ts").exists());
+    assert!(dir.join(".tt-types/notice.tt.d.ts.map").exists());
+    assert!(dir.join(".tt-types/level.tt.d.ts").exists());
+    for module in ttc::StdModule::ALL {
         assert!(
-            dir.join(".rl-types/rl")
+            dir.join(".tt-types/tt")
                 .join(module.file_name())
                 .with_extension("d.ts")
                 .exists()
@@ -1727,7 +1727,7 @@ fn cli_types_reports_type_errors_but_keeps_the_sidecars_fresh() {
     require_types_typescript!();
     let dir = tmpdir();
     write_consumer_tree(&dir);
-    // A type error in the consumer, not an rl-level one: declarations are
+    // A type error in the consumer, not a tt-level one: declarations are
     // still emitted, so the sidecars must be written and the run must fail.
     fs::write(
         dir.join("src/main.ts"),
@@ -1735,37 +1735,37 @@ fn cli_types_reports_type_errors_but_keeps_the_sidecars_fresh() {
     )
     .unwrap();
 
-    let (ok, err) = run_rlc(&dir, &["--types", "src"]);
+    let (ok, err) = run_ttc(&dir, &["--types", "src"]);
     assert!(!ok, "expected a failing exit code:\n{err}");
     assert!(
         err.contains("main.ts"),
         "diagnostic should name the file: {err}"
     );
     assert!(
-        dir.join(".rl-types/notice.rl.d.ts").exists(),
+        dir.join(".tt-types/notice.tt.d.ts").exists(),
         "sidecars should still be written: {err}"
     );
 }
 
 #[test]
-fn cli_types_reports_rl_type_errors_at_the_source_position() {
+fn cli_types_reports_tt_type_errors_at_the_source_position() {
     require_toolchain!();
     require_types_typescript!();
     let dir = tmpdir();
     write_consumer_tree(&dir);
-    // A type error *inside* rl syntax. The emitted TypeScript is a switch
+    // A type error *inside* tt syntax. The emitted TypeScript is a switch
     // IIFE that moves the offending expression far from where it was
     // written, and the file it lives in is never written to disk — the
-    // diagnostic has to name `bad.rl` and the source line/column anyway.
-    let bad = "import type { TResult } from \"@rl/std\";\n\
-               import * as Result from \"@rl/std/result\";\n\
+    // diagnostic has to name `bad.tt` and the source line/column anyway.
+    let bad = "import type { TResult } from \"@tt/std\";\n\
+               import * as Result from \"@tt/std/result\";\n\
                \n\
                declare function evaluate(): TResult<number, string>;\n\
                \n\
                export const bad = evaluate() |> Result.mapP((n) => n.length);\n";
-    fs::write(dir.join("src/bad.rl"), bad).unwrap();
+    fs::write(dir.join("src/bad.tt"), bad).unwrap();
 
-    let (ok, err) = run_rlc(&dir, &["--types", "src"]);
+    let (ok, err) = run_ttc(&dir, &["--types", "src"]);
     assert!(!ok, "expected a failing exit code:\n{err}");
 
     let line = err
@@ -1775,8 +1775,8 @@ fn cli_types_reports_rl_type_errors_at_the_source_position() {
     // `length` sits at column 55 of line 5 of the source. The emitted code
     // puts it elsewhere entirely, and there is no `bad.ts` to open.
     assert!(
-        line.starts_with("rlc: src/bad.rl:6:55: "),
-        "diagnostic should point into the .rl source: {line}"
+        line.starts_with("ttc: src/bad.tt:6:55: "),
+        "diagnostic should point into the .tt source: {line}"
     );
     assert!(
         !err.contains("bad.ts"),
@@ -1789,12 +1789,12 @@ fn cli_types_without_typescript_says_so() {
     require_toolchain!();
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src")).unwrap();
-    fs::write(dir.join("src/level.rl"), LEVEL_RL).unwrap();
+    fs::write(dir.join("src/level.tt"), LEVEL_TT).unwrap();
     // No TypeScript on purpose: the environment variables that would name
     // one are cleared, and a temporary directory has no `node_modules` and
     // no sibling typescript-go above it. So this runs everywhere, rather
     // than skipping on any machine that happens to have a compiler.
-    let (ok, err) = run_rlc_env(&dir, &["--types", "src"], true);
+    let (ok, err) = run_ttc_env(&dir, &["--types", "src"], true);
     assert!(!ok, "expected failure:\n{err}");
     assert!(err.contains("no TypeScript compiler found"), "{err}");
 }
@@ -1806,23 +1806,23 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
     let dir = tmpdir();
     write_consumer_tree(&dir);
 
-    let (ok, err) = run_rlc(&dir, &["--types", "src"]);
+    let (ok, err) = run_ttc(&dir, &["--types", "src"]);
     assert!(ok, "--types failed:\n{err}");
 
     // The declarations keep the *source* specifiers — that is what resolves
     // in the consumer's merged view.
-    let sidecar = fs::read_to_string(dir.join(".rl-types/notice.rl.d.ts")).unwrap();
-    assert!(sidecar.contains("from \"@rl/std\""), "{sidecar}");
-    assert!(sidecar.contains("from \"./level.rl\""), "{sidecar}");
+    let sidecar = fs::read_to_string(dir.join(".tt-types/notice.tt.d.ts")).unwrap();
+    assert!(sidecar.contains("from \"@tt/std\""), "{sidecar}");
+    assert!(sidecar.contains("from \"./level.tt\""), "{sidecar}");
     assert!(
         sidecar.contains("export declare function render"),
         "{sidecar}"
     );
-    assert!(dir.join(".rl-types/notice.rl.d.ts.map").exists());
-    assert!(dir.join(".rl-types/level.rl.d.ts").exists());
-    for module in rlc::StdModule::ALL {
+    assert!(dir.join(".tt-types/notice.tt.d.ts.map").exists());
+    assert!(dir.join(".tt-types/level.tt.d.ts").exists());
+    for module in ttc::StdModule::ALL {
         assert!(
-            dir.join(".rl-types/rl")
+            dir.join(".tt-types/tt")
                 .join(module.file_name())
                 .with_extension("d.ts")
                 .exists(),
@@ -1832,7 +1832,7 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
     }
 
     // Round trip: the untouched source tree typechecks once the sidecars
-    // are merged in (`rootDirs`) and `@rl/std` is mapped (`paths`).
+    // are merged in (`rootDirs`) and `@tt/std` is mapped (`paths`).
     fs::write(
         dir.join("tsconfig.json"),
         r#"{
@@ -1843,10 +1843,10 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "rootDirs": ["./src", "./.rl-types"],
+    "rootDirs": ["./src", "./.tt-types"],
     "paths": {
-      "@rl/std": ["./.rl-types/rl/index.d.ts"],
-      "@rl/std/*": ["./.rl-types/rl/*.d.ts"]
+      "@tt/std": ["./.tt-types/tt/index.d.ts"],
+      "@tt/std/*": ["./.tt-types/tt/*.d.ts"]
     }
   },
   "include": ["src"]
@@ -1893,7 +1893,7 @@ const half = (n: number): TOption<number> =>
 #[test]
 fn pipeline_curried_combinator_steps_infer_without_annotations() {
     require_toolchain!();
-    // The whole point of the $rl_ap emission: `x` in the curried step must
+    // The whole point of the $tt_ap emission: `x` in the curried step must
     // infer as number (a direct-application emission collapses it to
     // `unknown` — TS18046).
     let (ok, out) = typecheck(&format!(
@@ -1917,7 +1917,7 @@ fn pipeline_generic_user_functions_instantiate() {
 fn pipeline_type_error_in_a_step_is_reported_on_user_text() {
     require_toolchain!();
     // A step that is not a unary function is the user's type error — tsc
-    // must reject it (rlc emits it untouched).
+    // must reject it (ttc emits it untouched).
     let (ok, out) = typecheck("const n: number = 1 |> ((a: string) => a.length);\n");
     assert!(!ok, "{out}");
 }
@@ -1962,7 +1962,7 @@ fn flow_composition_keeps_the_first_step_arity() {
 fn flow_composition_input_mismatch_is_a_type_error_on_user_text() {
     require_toolchain!();
     // Calling the composed function with the wrong argument type is the
-    // user's error — rlc emits no type tricks that could hide it.
+    // user's error — ttc emits no type tricks that could hide it.
     let (ok, out) = typecheck(
         "const parse = (s: string) => s.length;\nconst f = flow |> parse |> ((n: number) => n + 1);\nconst v = f(3);\n",
     );
@@ -2093,7 +2093,7 @@ console.log(grade(Res.Err("boom")));
 #[test]
 fn nested_pattern_bindings_typecheck_through_the_paths() {
     require_toolchain!();
-    // The emitted condition chain must narrow $rl_m.value for the
+    // The emitted condition chain must narrow $tt_m.value for the
     // destructuring — no type tricks, plain control-flow analysis.
     let (ok, out) = typecheck(
         r#"
@@ -2163,7 +2163,7 @@ function f(o: Opt, xs: number[]): string[] {
 /* result computation block                                            */
 /* ------------------------------------------------------------------ */
 
-/// rl enums in exactly the shape `@rl/std`'s `Result` has, so the block
+/// tt enums in exactly the shape `@tt/std`'s `Result` has, so the block
 /// tests need no module setup.
 const RESULT_PRELUDE: &str = r#"
 enum Res<T, E> { Ok(value: T), Err(error: E) }
@@ -2180,7 +2180,7 @@ fn result_block_unions_the_error_types_of_its_bindings() {
     require_toolchain!();
     // The whole error-type question: two bindings with different error
     // types must produce `Res<_, UserError | CompanyError>` with no help
-    // from rlc and no change to the combinators' signatures.
+    // from ttc and no change to the combinators' signatures.
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number): Res<string, UserError | CompanyError> => result {{
@@ -2301,8 +2301,8 @@ fn runtime_result_block_replaces_nested_combinator_callbacks() {
     // written flat, against the real standard library.
     let lines = run_with_std(
         r#"
-import type { TResult } from "./rl/index.js";
-import * as Result from "./rl/result.js";
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 
 type User = { id: number; companyId: number; name: string };
 type Company = { id: number; name: string };
@@ -2449,7 +2449,7 @@ try {
   console.log((e as Error).message);
 }
 "#);
-    assert_eq!(lines, [r#"rl match: unexpected literal "zzz""#]);
+    assert_eq!(lines, [r#"tt match: unexpected literal "zzz""#]);
 }
 
 #[test]
@@ -2539,7 +2539,7 @@ const label = inspect(user) + state.count;
 fn run_val_program_behaves_exactly_like_the_typescript_it_erases_to() {
     require_toolchain!();
     let lines = run(r#"
-val const config = { name: "rl", tags: ["dev"] };
+val const config = { name: "tt", tags: ["dev"] };
 val let state = { count: 0 };
 
 function describe(val c: { name: string; tags: string[] }): string {
@@ -2559,5 +2559,5 @@ console.log(describe(config));
 console.log(String(state.count));
 console.log(String(mutable.count));
 "#);
-    assert_eq!(lines, ["rl:1", "1", "1"]);
+    assert_eq!(lines, ["tt:1", "1", "1"]);
 }

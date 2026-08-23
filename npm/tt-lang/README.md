@@ -1,0 +1,82 @@
+# tt-lang
+
+**tt** is a tiny preprocessor language that compiles to TypeScript. It adds
+Rust-style tagged unions and pattern matching, concise `Option`/`Result`
+control flow, pipelines, and mutation-safe bindings while keeping valid
+TypeScript valid.
+
+This package installs `ttc`, the tt compiler, as a prebuilt native binary —
+no Rust toolchain required.
+
+For a complete Bun + Vite project, or to add tt to an existing TypeScript
+project, use the initializer instead:
+
+```sh
+bun create tt@latest my-app
+bun create tt@latest init
+```
+
+```sh
+bun add -d tt-lang typescript@7
+```
+
+```sh
+bunx ttc -o build src/     # compile a source tree to TypeScript
+bunx ttc --check src/      # check without writing anything
+bunx ttc --types src/      # editor/typecheck declarations
+```
+
+Using a bundler? [`unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
+reads `.tt` files directly in Vite, Rollup, webpack, Rspack, esbuild and
+Farm, and finds this package's binary automatically.
+
+## Supported platforms
+
+Prebuilt binaries ship as optional dependencies; npm installs the one
+matching your machine.
+
+| Package | OS | CPU |
+|---------|----|----|
+| `tt-lang-linux-x64` | Linux | x64 (static musl build) |
+| `tt-lang-linux-arm64` | Linux | arm64 (static musl build) |
+| `tt-lang-darwin-x64` | macOS | x64 |
+| `tt-lang-darwin-arm64` | macOS | arm64 |
+| `tt-lang-win32-x64` | Windows | x64 |
+
+On other platforms, build from source
+(`cargo install --git https://github.com/load28/tt`) and set the
+`TTC_BINARY` environment variable to the resulting binary.
+
+## API
+
+The package exports one helper for tools that want to spawn the compiler
+directly:
+
+```js
+const { binaryPath } = require("tt-lang");
+binaryPath(); // absolute path to the ttc binary for this platform
+```
+
+## Local development install
+
+In a checkout of the [tt repository](https://github.com/load28/tt),
+`./scripts/setup` stamps this directory for local installs. A project can
+then use the work-in-progress compiler like any other dependency:
+
+```sh
+pnpm add -D file:/path/to/tt/npm/tt-lang
+```
+
+The launcher runs the repository's `target/release/ttc` and, when setup was
+pointed at a typescript-go checkout, hands that toolchain to the spawned
+compiler process only — your shell environment is never modified. Published
+installs are unaffected (the stamp file is not committed or published).
+
+## Documentation
+
+Language reference, CLI options, standard library and error index:
+<https://github.com/load28/tt#readme>.
+
+## License
+
+MIT

@@ -1,10 +1,10 @@
-//! The rl AST — the contract between the compiler's phases.
+//! The tt AST — the contract between the compiler's phases.
 //!
 //! A parsed file is a [`Program`]: an ordered list of [`Segment`]s covering
-//! the whole source. Anything that is not an rl construct stays a
+//! the whole source. Anything that is not a tt construct stays a
 //! [`Segment::Verbatim`] byte range of the original source, which is how the
 //! "every valid TypeScript file compiles to itself byte for byte" contract is
-//! carried through the pipeline: the parser only lifts fully-parsed rl
+//! carried through the pipeline: the parser only lifts fully-parsed tt
 //! constructs out of the byte stream, and codegen copies every verbatim span
 //! back unchanged.
 //!
@@ -20,22 +20,22 @@ pub(crate) struct Span {
     pub end: usize,
 }
 
-/// A parsed source range: rl constructs plus untouched byte ranges.
+/// A parsed source range: tt constructs plus untouched byte ranges.
 #[derive(Debug)]
 pub(crate) struct Program {
     pub segments: Vec<Segment>,
-    /// Structurally identified rl syntax that cannot be emitted as written.
+    /// Structurally identified tt syntax that cannot be emitted as written.
     /// Normal compilation still copies it verbatim; the project engine uses
     /// these nodes to build a type-checkable recovery projection without
     /// hiding independent diagnostics elsewhere in the file.
     pub recoveries: Vec<RecoveryNode>,
-    /// Candidates committed to rl syntax but malformed. Unlike a failed
+    /// Candidates committed to tt syntax but malformed. Unlike a failed
     /// lookalike parse, these cannot be valid TypeScript passthrough.
-    pub malformed: Vec<crate::error::RlError>,
+    pub malformed: Vec<crate::error::TtError>,
     /// Byte offsets of `|>` tokens that could not be claimed as a pipeline.
     /// `|>` cannot occur in valid TypeScript, so leaving one in the output
     /// would fail the self-check without a position — the semantic phase
-    /// reports these as rl errors instead (the parser stays infallible).
+    /// reports these as tt errors instead (the parser stays infallible).
     pub stray_pipes: Vec<usize>,
     /// Byte offsets of `if let` sequences that could not be claimed as an
     /// `if let` statement — same reporting story as [`Self::stray_pipes`]
@@ -53,7 +53,7 @@ pub(crate) struct Program {
     /// Byte spans of `result` bindings written **below** a block's top
     /// level (inside an `if` body, a loop, a function written in the
     /// block) — a binding exits the block's isolated value region, and only a
-    /// top-level statement can (`rlc help result`). Same
+    /// top-level statement can (`ttc help result`). Same
     /// reporting story as [`Self::stray_pipes`]: the shape is never valid
     /// TypeScript, so it cannot pass through either.
     pub result_nested_binds: Vec<Span>,
@@ -87,25 +87,25 @@ pub(crate) enum RecoveryKind {
 pub(crate) enum Segment {
     /// Bytes copied to the output unchanged.
     Verbatim(Span),
-    /// An rl `enum` declaration (plain TypeScript enums never get here).
+    /// A tt `enum` declaration (plain TypeScript enums never get here).
     Enum(EnumDecl),
-    /// An rl `match` expression.
+    /// A tt `match` expression.
     Match(MatchExpr),
-    /// An rl tuple match expression (`match (a, b) { (P, Q) => ... }`).
+    /// A tt tuple match expression (`match (a, b) { (P, Q) => ... }`).
     TupleMatch(TupleMatchExpr),
-    /// An rl `try` statement (Rust-style error propagation).
+    /// A tt `try` statement (Rust-style error propagation).
     Try(TryStmt),
-    /// An rl let-else statement (Rust-style refutable binding).
+    /// A tt let-else statement (Rust-style refutable binding).
     LetElse(LetElseStmt),
-    /// An rl `if let` statement (conditional refutable binding).
+    /// A tt `if let` statement (conditional refutable binding).
     IfLet(IfLetStmt),
     /// A static import declaration or `export ... from` re-export whose
-    /// specifier is a relative path ending in `.rl`. Only the specifier
+    /// specifier is a relative path ending in `.tt`. Only the specifier
     /// string is lifted out of the byte stream — the rest of the statement
     /// stays verbatim; codegen rewrites the extension per
     /// [`crate::ImportRewrite`]. The clause's imported names are recorded
-    /// for the declaration-collection API ([`crate::rl_imports`]).
-    RlImport(RlImportDecl),
+    /// for the declaration-collection API ([`crate::tt_imports`]).
+    TtImport(TtImportDecl),
     /// A lifted `val` binding modifier (the keyword plus the spaces after
     /// it). `val` is a compile-time-only modifier — codegen emits nothing
     /// for this segment, so `val const x = 1;` becomes `const x = 1;`.
@@ -115,23 +115,23 @@ pub(crate) enum Segment {
     ValModifier(Span),
     /// A template literal; its interpolations are recursively parsed.
     Template(Template),
-    /// An rl pipeline expression (`head |> step |> ...`).
+    /// A tt pipeline expression (`head |> step |> ...`).
     Pipe(PipeExpr),
-    /// An rl `result { ... }` computation block.
+    /// A tt `result { ... }` computation block.
     ResultBlock(ResultBlock),
 }
 
-/// A structurally parsed rl pipeline expression: `head ("|>" step)+`.
+/// A structurally parsed tt pipeline expression: `head ("|>" step)+`.
 /// `|>` cannot occur anywhere in valid TypeScript (after a `|` an
 /// expression or type must follow, and `>` starts neither), so claiming it
 /// never affects the passthrough contract. Compiles to nested calls of a
-/// per-file two-argument apply helper (`$rl_ap`) — argument position gives
+/// per-file two-argument apply helper (`$tt_ap`) — argument position gives
 /// each step contextual typing, which is what keeps curried combinator
 /// steps fully inferred by tsc; method steps chain as plain postfix text.
 ///
 /// With the head keyword `flow` the same step chain composes *functions*
 /// instead of flowing a value ([`PipeExpr::head`] is then `None`); it
-/// compiles to nested calls of the per-file composition helper (`$rl_fl`).
+/// compiles to nested calls of the per-file composition helper (`$tt_fl`).
 #[derive(Debug)]
 pub(crate) struct PipeExpr {
     /// Raw span of the head expression — the `flow` keyword for a
@@ -158,7 +158,7 @@ pub(crate) struct PipeStep {
     pub body: Program,
 }
 
-/// A structurally parsed rl `result { ... }` computation block: a chain of
+/// A structurally parsed tt `result { ... }` computation block: a chain of
 /// `Result` bindings written as ordinary statements, with the block's last
 /// expression as its success value.
 ///
@@ -218,42 +218,42 @@ pub(crate) struct ResultBind {
     pub expr: Program,
 }
 
-/// See [`Segment::RlImport`].
+/// See [`Segment::TtImport`].
 #[derive(Debug)]
-pub(crate) struct RlImportDecl {
+pub(crate) struct TtImportDecl {
     /// Span of the specifier string, including quotes.
     pub spec: Span,
-    /// Which kind of rl specifier this is.
-    pub kind: RlSpecifier,
+    /// Which kind of tt specifier this is.
+    pub kind: TtSpecifier,
     /// What the statement brings into local scope.
-    pub names: RlImportNames,
+    pub names: TtImportNames,
 }
 
-/// The two specifiers rlc understands beyond plain passthrough.
+/// The two specifiers ttc understands beyond plain passthrough.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RlSpecifier {
-    /// A relative path ending in `.rl` or `.rlx` — another project module.
+pub(crate) enum TtSpecifier {
+    /// A relative path ending in `.tt` or `.ttx` — another project module.
     Relative(crate::SourceKind),
-    /// One standard-library package module supplied by rlc.
+    /// One standard-library package module supplied by ttc.
     Std(crate::stdlib::StdModule),
 }
 
-/// The bindings a lifted `.rl` import brings into local scope. Collection
+/// The bindings a lifted `.tt` import brings into local scope. Collection
 /// is best-effort and never affects whether the specifier is lifted: an
 /// exotic clause entry (e.g. a string import name) is simply skipped, which
 /// only means no exhaustiveness information for that binding.
 #[derive(Debug)]
-pub(crate) enum RlImportNames {
+pub(crate) enum TtImportNames {
     /// `import * as ns from ...` — every export, namespace-qualified.
     Namespace(String),
     /// `import { a, b as c, type d } from ...` — (exported name, alias).
-    /// A default binding is not recorded (rl enums are named exports).
+    /// A default binding is not recorded (tt enums are named exports).
     Named(Vec<(String, Option<String>)>),
     /// A side-effect import or a re-export — nothing enters local scope.
     None,
 }
 
-/// A structurally parsed rl let-else statement:
+/// A structurally parsed tt let-else statement:
 /// `const|let|var Tag(bindings...) (| Tag(bindings...))* = <expr> else
 /// { ... };`. Like [`TryStmt`] it compiles to statements in the enclosing
 /// function scope: evaluate once, run the (diverging) `else` block unless
@@ -287,13 +287,13 @@ pub(crate) struct LetElseStmt {
     pub diverges: bool,
     /// Whether the statement sits inside a function body written in the
     /// same parse region — same fact as [`TryStmt::in_function`]. Inside
-    /// an rl construct's statement region it decides placement: the
+    /// a tt construct's statement region it decides placement: the
     /// `else`'s exits must not leave the construct's value region, so without a
     /// function written there the statement is rejected.
     pub in_function: bool,
 }
 
-/// A structurally parsed rl `if let` statement:
+/// A structurally parsed tt `if let` statement:
 /// `if let Tag(bindings...) = <expr> { ... } else ...`. let-else's
 /// non-diverging sibling: evaluate once, run the body with the bindings
 /// when the pattern matches, the `else` part (a block or another `if let`)
@@ -339,7 +339,7 @@ pub(crate) enum IfLetElse {
     IfLet(Box<IfLetStmt>),
 }
 
-/// A structurally parsed rl `try` statement: `try <expr>;` or
+/// A structurally parsed tt `try` statement: `try <expr>;` or
 /// `const|let|var <binding> = try <expr>;`. Compiles to statements in the
 /// enclosing function scope — an early `return` of the `Err` value — so it is
 /// only valid where the parser sees the top-level statement stream (enforced
@@ -371,13 +371,13 @@ pub(crate) struct TryStmt {
     /// same parse region** (`crate::flow::in_function_body`) — the
     /// placement fact sema judges: the emitted `return` must have a
     /// user-written function to exit. At a module's top level there is
-    /// none; inside an rl construct's own statement region (which compiles
+    /// none; inside a tt construct's own statement region (which compiles
     /// into an isolated value region) the region boundary is the construct, so only a
     /// function the user wrote *inside* it counts.
     pub in_function: bool,
 }
 
-/// A structurally parsed rl `enum` declaration.
+/// A structurally parsed tt `enum` declaration.
 #[derive(Debug)]
 pub(crate) struct EnumDecl {
     pub name: String,
@@ -389,7 +389,7 @@ pub(crate) struct EnumDecl {
     pub cases: Vec<EnumCase>,
 }
 
-/// One case of an rl enum.
+/// One case of a tt enum.
 #[derive(Debug)]
 pub(crate) struct EnumCase {
     pub tag: String,
@@ -413,7 +413,7 @@ pub(crate) struct Field {
     pub ty_off: usize,
 }
 
-/// A structurally parsed rl `match` expression.
+/// A structurally parsed tt `match` expression.
 #[derive(Debug)]
 pub(crate) struct MatchExpr {
     /// Byte offset of the `match` keyword, for error reporting.
@@ -421,7 +421,7 @@ pub(crate) struct MatchExpr {
     /// Byte offset of the body's opening `{`.
     pub body_open: usize,
     /// Byte offset of the body's closing `}` — where an editor inserts a
-    /// missing arm ([`crate::engine::rl_declarations`]).
+    /// missing arm ([`crate::engine::tt_declarations`]).
     pub body_close: usize,
     /// Raw span of the scrutinee (used for `await` detection).
     pub scrutinee_span: Span,
@@ -430,7 +430,7 @@ pub(crate) struct MatchExpr {
     pub arms: Vec<Arm>,
 }
 
-/// A structurally parsed rl tuple match: two or more comma-separated
+/// A structurally parsed tt tuple match: two or more comma-separated
 /// scrutinees matched jointly against tuple patterns. Disambiguation from a
 /// comma-expression scrutinee is arm-driven: the arms decide — every arm
 /// must be a parenthesized tuple pattern (or a final bare `_`), otherwise
@@ -523,7 +523,7 @@ pub(crate) enum Pattern {
     /// One or more `|`-separated literal alternatives: `"north"`,
     /// `200 | 201`, `true`. Non-empty, same as [`Pattern::Tags`]. Literal
     /// and tag patterns never mix in one match (the emitted discriminant
-    /// differs: `$rl_m` vs `$rl_m.kind`) — that is a semantic check.
+    /// differs: `$tt_m` vs `$tt_m.kind`) — that is a semantic check.
     Literals(Vec<LiteralPattern>),
 }
 

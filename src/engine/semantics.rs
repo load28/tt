@@ -1,9 +1,9 @@
-//! Semantic results in rl's own vocabulary.
+//! Semantic results in tt's own vocabulary.
 //!
 //! The checker's answers come back as [`crate::typescript::backend::Answers`]
 //! — coordinates in emitted modules, symbol ids, raw diagnostics. This module
 //! turns them into what a consumer of the engine actually wants: diagnostics
-//! at positions in the `.rl` source, with the exact wording the CLI has
+//! at positions in the `.tt` source, with the exact wording the CLI has
 //! always printed, and declarations matched back to the files they were
 //! emitted for. Nothing TypeScript-shaped leaves the engine.
 
@@ -25,7 +25,7 @@ use crate::typescript::mapper::DiagnosticOrigin;
 /// two consumers can never drift apart on phrasing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
-    /// The file the problem is in — an `.rl` source, or a hand-written
+    /// The file the problem is in — an `.tt` source, or a hand-written
     /// TypeScript file when the checker reported one of those.
     pub path: PathBuf,
     /// 1-based line and column (columns count UTF-8 code points), or `None`
@@ -42,7 +42,7 @@ pub struct Diagnostic {
     pub end: Option<(usize, usize)>,
     /// The full message, as it is shown.
     pub message: String,
-    /// The diagnostic's stable identity: an rl rule's code
+    /// The diagnostic's stable identity: a tt rule's code
     /// ([`crate::DiagnosticCode::as_str`], e.g. `match-not-exhaustive`) or
     /// a TypeScript code (`ts2322`). `None` only where no rule is known.
     /// The same rule carries the same code on every path — CLI, server,
@@ -53,17 +53,17 @@ pub struct Diagnostic {
 /// What one checked snapshot came back with.
 #[derive(Debug, Default)]
 pub struct Checked {
-    /// Every diagnostic of the pass, in report order: the rl layer first
+    /// Every diagnostic of the pass, in report order: the tt layer first
     /// (each file's own recoverable diagnostics), then the type layer
-    /// (unless the request was rl-only), literal exhaustiveness, tag
+    /// (unless the request was tt-only), literal exhaustiveness, tag
     /// exhaustiveness, `val` mutations, and `val` passes.
     pub diagnostics: Vec<Diagnostic>,
     /// The declarations the compiler emitted, when they were requested.
     pub declarations: Declarations,
     /// Why the TypeScript layer could not answer, when it could not — the
-    /// backend failed to run (no toolchain, a dead process). The rl-level
+    /// backend failed to run (no toolchain, a dead process). The tt-level
     /// diagnostics above are still complete: a missing type checker
-    /// removes the *typed* facts, not rl's own answers
+    /// removes the *typed* facts, not tt's own answers
     /// (`docs/design/compiler-core.md` §7).
     pub backend_error: Option<String>,
 }
@@ -73,11 +73,11 @@ pub struct Checked {
 pub struct Declarations {
     /// The standard library package declarations, keyed by physical module.
     pub std: Vec<StdDeclaration>,
-    /// One entry per requested `.rl` file the compiler emitted for.
+    /// One entry per requested `.tt` file the compiler emitted for.
     pub modules: Vec<ModuleDeclaration>,
 }
 
-/// One emitted declaration module of `@rl/std`.
+/// One emitted declaration module of `@tt/std`.
 #[derive(Debug)]
 pub struct StdDeclaration {
     /// Which standard-library module this declaration describes.
@@ -92,7 +92,7 @@ pub struct ModuleDeclaration {
     /// The projected file the declarations were emitted for.
     pub file: Arc<ProjectedDocument>,
     /// The declaration text — the compiler's own; only the sidecar map is
-    /// rlc's to build.
+    /// ttc's to build.
     pub text: String,
 }
 
@@ -118,12 +118,12 @@ pub(crate) struct FileSemantics {
     pub analyses: crate::PatternAnalyses,
 }
 
-/// Turns a TypeScript diagnostic that landed on rlc's own glue into an rl
-/// one — said in rl's words, about rl's construct.
+/// Turns a TypeScript diagnostic that landed on ttc's own glue into a tt
+/// one — said in tt's words, about tt's construct.
 ///
 /// This is the third layer of `docs/design/rust-parity-analysis.md` §10 and
 /// the point of [`crate::EmitAnchor`]. The error-layer contract asks that a
-/// user never meet a TypeScript error caused by code rlc wrote; until now
+/// user never meet a TypeScript error caused by code ttc wrote; until now
 /// that state was not reached — the diagnostic simply arrived wearing the
 /// generated code's face. Translating it reaches it.
 ///
@@ -153,7 +153,7 @@ pub(crate) fn translate(
         }
         // The propagated `Err` reaching a return type that cannot hold it.
         (AnchorKind::Try, 2322 | 2345) => "the `Err` this `try` propagates does not fit the \
-             enclosing function's return type — rl has no automatic conversion, so widen the \
+             enclosing function's return type — tt has no automatic conversion, so widen the \
              return type or convert the error"
             .to_string(),
         (AnchorKind::LetElse, 2339 | 2571) => {
@@ -169,7 +169,7 @@ pub(crate) fn translate(
              has none (a plain TypeScript `enum` is not one)"
                 .to_string()
         }
-        // A tag compared against a type that cannot hold it. rlc reports
+        // A tag compared against a type that cannot hold it. ttc reports
         // the ones that look like misspellings itself; this is the rest.
         (AnchorKind::Match, 2678) | (AnchorKind::LetElse | AnchorKind::IfLet, 2367) => {
             "this pattern's case is not one the value can be".to_string()
@@ -179,15 +179,15 @@ pub(crate) fn translate(
     let message = message.trim();
     match name_types(message, declarations) {
         Some(named) => Some(format!(
-            "{said} (in rl's names: {named}) (ts{code}: {message})"
+            "{said} (in tt's names: {named}) (ts{code}: {message})"
         )),
         None => Some(format!("{said} (ts{code}: {message})")),
     }
 }
 
 /// Stable meaning shared by CLI and editor translation deduplication.
-/// TypeScript may emit several incidental diagnostics for one rl mistake;
-/// the class identifies the single rl-level explanation they share.
+/// TypeScript may emit several incidental diagnostics for one tt mistake;
+/// the class identifies the single tt-level explanation they share.
 pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static str> {
     match (kind, code) {
         (AnchorKind::Try | AnchorKind::ResultBind, 2339 | 2551 | 2571) => Some("not-result"),
@@ -204,7 +204,7 @@ pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static 
 
 fn ts_message(code: u32, message: &str, declarations: &[DeclaredEnum]) -> String {
     match name_types(message, declarations) {
-        Some(named) => format!("ts({code}): {message} (in rl's names: {named})"),
+        Some(named) => format!("ts({code}): {message} (in tt's names: {named})"),
         None => format!("ts({code}): {message}"),
     }
 }
@@ -285,14 +285,14 @@ fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
 }
 
 /// The message again, with every structural case type the declaration table
-/// **uniquely** recognizes written as the rl name it lowers from — `None`
+/// **uniquely** recognizes written as the tt name it lowers from — `None`
 /// when it recognizes none of them and the restatement would be the message
 /// itself.
 ///
-/// TypeScript has no word for an rl case: `Test.OutOfRange` lowers to a
+/// TypeScript has no word for a tt case: `Test.OutOfRange` lowers to a
 /// member of a union type, so a diagnostic about one prints the member —
 /// `{ kind: "OutOfRange"; value: number; }` — and the reader is left to
-/// match it back against a declaration by eye. rl can do that matching: the
+/// match it back against a declaration by eye. tt can do that matching: the
 /// tag and the payload's field names name a case, and the table says which
 /// enum declares it.
 ///
@@ -310,7 +310,7 @@ fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
 /// of named cases (`ParseError.NotANumber | ParseError.Overflow`).
 ///
 /// The restatement is a reading aid and never replaces the original — the
-/// caller carries TypeScript's own text along with it, because a name rl
+/// caller carries TypeScript's own text along with it, because a name tt
 /// got wrong has to be checkable against what the checker actually said.
 pub(crate) fn name_types(message: &str, declarations: &[DeclaredEnum]) -> Option<String> {
     let members = case_members(message, declarations);
@@ -558,7 +558,7 @@ pub(crate) fn report(
     snapshot: &Snapshot,
     answers: &Answers,
     probes: &Probes,
-    rl_only: bool,
+    tt_only: bool,
     semantics: &HashMap<PathBuf, Arc<FileSemantics>>,
 ) -> Vec<Diagnostic> {
     let files = snapshot.files();
@@ -576,13 +576,13 @@ pub(crate) fn report(
         }
     }
 
-    // The rl layer first: the diagnostics each file's projection found on
+    // The tt layer first: the diagnostics each file's projection found on
     // its own (duplicate arms, unknown cases, misplaced constructs). They
-    // are rl's answers about rl's constructs, so they are reported on the
-    // rl-only path too — and they no longer gate the rest of this report
+    // are tt's answers about tt's constructs, so they are reported on the
+    // tt-only path too — and they no longer gate the rest of this report
     // (TASK-117 symptom 3): the typed answers below follow either way.
     for file in files {
-        for d in &file.rl_diagnostics {
+        for d in &file.tt_diagnostics {
             out.push(Diagnostic {
                 path: file.source_path.clone(),
                 position: d.start.map(|at| crate::line_col(&file.source, at)),
@@ -593,9 +593,9 @@ pub(crate) fn report(
         }
     }
 
-    // TypeScript's own diagnostics, at the position in the `.rl` file the
+    // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
-    let type_diagnostics: &[TsDiagnostic] = if rl_only { &[] } else { &answers.diagnostics };
+    let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };
     let structured_glue: HashSet<(PathBuf, usize, AnchorKind)> = type_diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.mismatch.is_some())
@@ -629,7 +629,7 @@ pub(crate) fn report(
         if projection::diagnostic_intersects_recovery(file, diagnostic) {
             continue;
         }
-        if projection::diagnostic_intersects_rl_error(file, diagnostic) {
+        if projection::diagnostic_intersects_tt_error(file, diagnostic) {
             continue;
         }
         let Some(origin) = projection::diagnostic_origin(file, diagnostic_start, diagnostic_end)
@@ -643,7 +643,7 @@ pub(crate) fn report(
             });
             continue;
         };
-        // Glue is not the user's code. When rlc can say what the construct
+        // Glue is not the user's code. When ttc can say what the construct
         // meant, it says that — over the construct's own text. The
         // declaration table its wording names types from is built only for
         // a file that has a diagnostic on glue at all, and once for it.
@@ -711,8 +711,8 @@ pub(crate) fn report(
                     code: Some(format!("ts{}", diagnostic.code)),
                 };
                 // One construct's glue can draw several TypeScript errors
-                // that all mean the same rl thing (`$rl_t.kind` and
-                // `$rl_t.value`).
+                // that all mean the same tt thing (`$tt_t.kind` and
+                // `$tt_t.value`).
                 if !out.contains(&entry) {
                     out.push(entry);
                 }
@@ -738,7 +738,7 @@ pub(crate) fn report(
                 position: Some(crate::line_col(&file.source, anchor.src)),
                 end: Some(crate::line_col(&file.source, anchor.src_end)),
                 message: format!(
-                    "{} (in code rlc generated for this construct)",
+                    "{} (in code ttc generated for this construct)",
                     diagnostic_message(diagnostic, declared)
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
@@ -748,7 +748,7 @@ pub(crate) fn report(
                 position: Some(crate::line_col(&file.source, start)),
                 end: None,
                 message: format!(
-                    "{} (in code rlc generated near this position)",
+                    "{} (in code ttc generated near this position)",
                     diagnostic_message(diagnostic, declared)
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
@@ -787,11 +787,11 @@ pub(crate) fn report(
     }
 
     // Tag exhaustiveness. The checker names the constituents the
-    // scrutinee's type still has — narrowing included — and rl runs its
+    // scrutinee's type still has — narrowing included — and tt runs its
     // own algorithm over that alphabet, which is what sees a hole *inside*
     // a payload as well as a missing case (TASK-108).
     //
-    // A witness rl is not certain of is dropped here: the default path
+    // A witness tt is not certain of is dropped here: the default path
     // reports those because it has nothing better, but on this path the
     // honest answer for an unidentifiable column is to ask the checker,
     // and that question is not asked yet.
@@ -800,7 +800,7 @@ pub(crate) fn report(
     let mut by_file: HashMap<PathBuf, Vec<MatchAlphabets>> = HashMap::new();
     // The payload answers ride in the same list, after the match ones —
     // they name the alphabet of a `(constructor, field)` column, which is
-    // the one thing rl cannot work out from declarations alone.
+    // the one thing tt cannot work out from declarations alone.
     let mut payloads: HashMap<PathBuf, Vec<PayloadAlphabet>> = HashMap::new();
     // `(file, match keyword) -> end of `match (scrutinee)``.
     let mut match_ends: HashMap<(PathBuf, usize), usize> = HashMap::new();
@@ -896,7 +896,7 @@ pub(crate) fn report(
         }
     }
 
-    // `val`: two resolutions decide, and rlc guesses neither of them.
+    // `val`: two resolutions decide, and ttc guesses neither of them.
     //
     // 1. Which binding a path is rooted at — the root identifier and the
     //    binding's declaration are the same binding when they are the same
@@ -923,7 +923,7 @@ pub(crate) fn report(
         if let Some(method) = mutation.method {
             match symbols.get(&method) {
                 // Two halves make the verdict: the checker's — the
-                // method is one of TypeScript's own — and rl's policy —
+                // method is one of TypeScript's own — and tt's policy —
                 // that method is one of the mutating ones. A built-in
                 // `get` fails the second; a user-defined `set`, or a
                 // method the checker could not resolve, fails the first.
@@ -1050,8 +1050,8 @@ pub(crate) fn match_declarations(
 ) -> Declarations {
     let mut out = Declarations::default();
     // The standard library's own declarations, so a consumer running plain
-    // tsc can map every `@rl/std` entry to them. They are project modules
-    // like any other, but have no `.rl` sources to sit beside.
+    // tsc can map every `@tt/std` entry to them. They are project modules
+    // like any other, but have no `.tt` sources to sit beside.
     for declaration in &answers.declarations {
         if let Some(module) = crate::StdModule::ALL.into_iter().find(|module| {
             declaration.path
@@ -1081,7 +1081,7 @@ pub(crate) fn match_declarations(
     out
 }
 
-/// The enum declarations one file's direct `.rl` imports bring into scope,
+/// The enum declarations one file's direct `.tt` imports bring into scope,
 /// preferring the snapshot's own text for a file it holds — the same
 /// 1-hop collection every other surface does, so an imported enum is known
 /// under the name the import gave it.
@@ -1090,7 +1090,7 @@ pub(crate) fn match_declarations(
 /// a target that did not change is never re-parsed — and from disk
 /// otherwise.
 pub(crate) fn externs_of(snapshot: &Snapshot, file: &ProjectedDocument) -> Vec<crate::EnumSymbol> {
-    super::language::externs_from(&file.source_path, file.rl_imports(), &|target| {
+    super::language::externs_from(&file.source_path, file.tt_imports(), &|target| {
         snapshot
             .files()
             .iter()
@@ -1167,7 +1167,7 @@ mod tests {
         .expect("translated");
         assert!(
             said.contains(
-                "(in rl's names: Type 'Err<Test.OutOfRange>' is not assignable to type \
+                "(in tt's names: Type 'Err<Test.OutOfRange>' is not assignable to type \
                  'Result<string, ParseError>'.)"
             ),
             "{said}"
@@ -1230,7 +1230,7 @@ mod tests {
             &declarations,
         )
         .expect("translated");
-        assert!(!said.contains("in rl's names"), "{said}");
+        assert!(!said.contains("in tt's names"), "{said}");
     }
 
     #[test]
@@ -1255,7 +1255,7 @@ mod tests {
     }
 
     #[test]
-    fn translation_classes_group_incidental_ts_codes_by_rl_meaning() {
+    fn translation_classes_group_incidental_ts_codes_by_tt_meaning() {
         assert_eq!(translation_class(AnchorKind::Try, 2339), Some("not-result"));
         assert_eq!(translation_class(AnchorKind::Try, 2571), Some("not-result"));
         assert_eq!(
@@ -1266,7 +1266,7 @@ mod tests {
     }
 
     #[test]
-    fn an_ordinary_ts_message_also_uses_rl_names() {
+    fn an_ordinary_ts_message_also_uses_tt_names() {
         let declarations = table("enum E { A(x: number), B }\n");
         let said = ts_message(
             2322,
@@ -1276,14 +1276,14 @@ mod tests {
         assert_eq!(
             said,
             "ts(2322): Type '{ kind: \"A\"; x: number; }' is not assignable. \
-             (in rl's names: Type 'E.A' is not assignable.)"
+             (in tt's names: Type 'E.A' is not assignable.)"
         );
     }
 
     #[test]
     fn diagnostics_are_source_sorted_and_display_duplicates_are_merged() {
         let at = |line, code: &str| Diagnostic {
-            path: PathBuf::from("/p/a.rl"),
+            path: PathBuf::from("/p/a.tt"),
             position: Some((line, 1)),
             end: Some((line, 2)),
             message: "same".to_string(),

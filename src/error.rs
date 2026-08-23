@@ -1,20 +1,20 @@
 use std::fmt;
 
-/// A compile error with a position in the original `.rl` source.
+/// A compile error with a position in the original `.tt` source.
 ///
 /// `Display` renders the CLI's diagnostic format, `file:line:col: message`
 /// (position omitted when there is none):
 ///
 /// ```
-/// let err = rlc::CompileError {
+/// let err = ttc::CompileError {
 ///     message: "match: duplicate arm \"Circle\"".to_string(),
-///     filename: Some("shapes.rl".to_string()),
+///     filename: Some("shapes.tt".to_string()),
 ///     line: 3,
 ///     col: 7,
 ///     end_line: 3,
 ///     end_col: 13,
 /// };
-/// assert_eq!(err.to_string(), "shapes.rl:3:7: match: duplicate arm \"Circle\"");
+/// assert_eq!(err.to_string(), "shapes.tt:3:7: match: duplicate arm \"Circle\"");
 /// ```
 #[derive(Debug, Clone)]
 pub struct CompileError {
@@ -52,7 +52,7 @@ impl std::error::Error for CompileError {}
 /// Internal error type carrying a byte offset into the source; converted to
 /// line/column at the `compile()` boundary.
 #[derive(Debug, Clone)]
-pub(crate) struct RlError {
+pub(crate) struct TtError {
     pub message: String,
     /// Byte offset into the original source, or None for positionless errors.
     pub offset: Option<usize>,
@@ -63,7 +63,7 @@ pub(crate) struct RlError {
     pub end: Option<usize>,
     /// Which rule fired — the diagnostic's stable identity
     /// ([`crate::DiagnosticCode`]). Reporting sites set it with
-    /// [`RlError::code`]; a site that forgets still compiles, as
+    /// [`TtError::code`]; a site that forgets still compiles, as
     /// [`DiagnosticCode::Other`], which is why sema's tests pin the codes.
     pub code: DiagnosticCode,
     /// Complete syntax node that owns consequences of this cause.
@@ -72,10 +72,10 @@ pub(crate) struct RlError {
 
 use crate::diagnostics::{DiagnosticCode, DiagnosticOwner};
 
-impl RlError {
+impl TtError {
     /// An error at one byte, its width left to the consumer.
     pub fn at(offset: usize, message: impl Into<String>) -> Self {
-        RlError {
+        TtError {
             message: message.into(),
             offset: Some(offset),
             end: None,
@@ -87,7 +87,7 @@ impl RlError {
     /// An error over a byte range — the construct it is about, as the user
     /// wrote it. Reported at `start`, underlined to `end`.
     pub fn span(start: usize, end: usize, message: impl Into<String>) -> Self {
-        RlError {
+        TtError {
             message: message.into(),
             offset: Some(start),
             end: Some(end.max(start)),

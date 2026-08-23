@@ -2,7 +2,7 @@
 //! compiler is reached.
 //!
 //! The compiler is `tsgo`, the native TypeScript 7 compiler, driven through
-//! its API server. rlc talks to that server the way the TypeScript team's own
+//! its API server. ttc talks to that server the way the TypeScript team's own
 //! client does: a small host process ([`HOST`]) running under `node`, which
 //! imports the JS client and speaks the server's MessagePack protocol.
 //!
@@ -19,7 +19,7 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use super::backend::*;
 
-/// The host script, embedded so a released `rlc` needs no files beside it.
+/// The host script, embedded so a released `ttc` needs no files beside it.
 const HOST: &str = include_str!("host.mjs");
 
 /// Where the TypeScript compiler comes from.
@@ -30,14 +30,14 @@ const HOST: &str = include_str!("host.mjs");
 /// - an **installed package** (`node_modules/typescript`, or
 ///   `@typescript/native-preview`), which ships the API client and the
 ///   native executable together. The client finds its own executable, so
-///   rlc names only the client.
+///   ttc names only the client.
 /// - a **built typescript-go tree**, for working against the compiler's own
 ///   `main`. Both halves are named explicitly.
 ///
 /// Resolution order, first hit wins:
 ///
-/// 1. `RLC_TSGO_API` (+ optional `RLC_TSGO_BIN`) — named directly.
-/// 2. `RLC_TSGO_ROOT` — a typescript-go checkout, built in place.
+/// 1. `TTC_TSGO_API` (+ optional `TTC_TSGO_BIN`) — named directly.
+/// 2. `TTC_TSGO_ROOT` — a typescript-go checkout, built in place.
 /// 3. `../typescript-go`, likewise built.
 /// 4. an installed package, searched for in `node_modules` from the project
 ///    upwards — the workspace's own TypeScript, which is the one its code is
@@ -63,14 +63,14 @@ impl Toolchain {
     /// Resolves the toolchain from the environment. The error names what is
     /// missing and how to produce it.
     pub(crate) fn resolve(from: &Path) -> Result<Toolchain, String> {
-        if let Some(api) = env_path("RLC_TSGO_API") {
+        if let Some(api) = env_path("TTC_TSGO_API") {
             return Toolchain {
-                bin: env_path("RLC_TSGO_BIN"),
+                bin: env_path("TTC_TSGO_BIN"),
                 api,
             }
             .check();
         }
-        if let Some(root) = env_path("RLC_TSGO_ROOT") {
+        if let Some(root) = env_path("TTC_TSGO_ROOT") {
             return Toolchain::in_tree(&root).check();
         }
         let tree = Toolchain::in_tree(Path::new("../typescript-go"));
@@ -83,8 +83,8 @@ impl Toolchain {
                 "no TypeScript compiler found — install one \
                  (`npm i -D typescript@7`), or build a typescript-go checkout \
                  (`go build -o {BIN_IN_TREE} ./cmd/tsgo` plus `npm ci && npx \
-                 tsc -b _packages/native-preview`) and point rlc at it with \
-                 RLC_TSGO_ROOT"
+                 tsc -b _packages/native-preview`) and point ttc at it with \
+                 TTC_TSGO_ROOT"
             )),
         }
     }
@@ -203,7 +203,7 @@ impl NativeBackend {
         // The host is written beside the run rather than piped in: node reads
         // a module from a path, and the path is what import specifiers in the
         // job resolve against.
-        let dir = std::env::temp_dir().join(format!("rlc-host-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("ttc-host-{}", std::process::id()));
         std::fs::create_dir_all(&dir).map_err(|e| format!("cannot prepare the host: {e}"))?;
         let script = dir.join("host.mjs");
         std::fs::write(&script, HOST).map_err(|e| format!("cannot write the host: {e}"))?;
@@ -254,8 +254,8 @@ fn host_died(child: &mut Child) -> String {
     if status.and_then(|s| s.code()) == Some(5) {
         return "the resolved TypeScript can check but cannot emit declarations \
                 — that API is newer than the released package. Use --check-types \
-                (which writes nothing), or point rlc at a built typescript-go \
-                checkout with RLC_TSGO_ROOT"
+                (which writes nothing), or point ttc at a built typescript-go \
+                checkout with TTC_TSGO_ROOT"
             .to_string();
     }
     let stderr = stderr.trim();
@@ -459,7 +459,7 @@ fn array<'a>(value: &'a serde_json::Value, key: &str) -> &'a [serde_json::Value]
     value[key].as_array().map_or(&[], |a| a.as_slice())
 }
 
-/// A literal the checker reported, in rl's own vocabulary.
+/// A literal the checker reported, in tt's own vocabulary.
 fn json_literal(value: &serde_json::Value) -> Option<crate::Literal> {
     match value {
         serde_json::Value::String(s) => Some(crate::Literal::String(s.clone())),

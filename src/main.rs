@@ -1,18 +1,18 @@
-//! rlc — compile .rl/.rlx sources into a complete TypeScript tree.
+//! ttc — compile .tt/.ttx sources into a complete TypeScript tree.
 //!
-//!   rlc -o build src/              builds src/ under build/: .rl/.rlx files
+//!   ttc -o build src/              builds src/ under build/: .tt/.ttx files
 //!                                  are compiled, hand-written .ts/.tsx files
-//!                                  pass through (with .rl/.rlx specifiers
+//!                                  pass through (with .tt/.ttx specifiers
 //!                                  rewritten), and the standard library is
 //!                                  materialized when something imports it
-//!   rlc --check-types src/         type-checks the tree with the real
+//!   ttc --check-types src/         type-checks the tree with the real
 //!                                  TypeScript compiler, reporting at
-//!                                  positions in the .rl sources
-//!   rlc --types src/               the same check, and writes the editor/
+//!                                  positions in the .tt sources
+//!   ttc --types src/               the same check, and writes the editor/
 //!                                  typecheck sidecars it emits
-//!                                  (.rl-types/<name>.rl.d.ts + .map)
-//!   rlc --check src/               compiles without writing anything
-//!   rlc -p file.rl                 prints one compiled module to stdout
+//!                                  (.tt-types/<name>.tt.d.ts + .map)
+//!   ttc --check src/               compiles without writing anything
+//!   ttc -p file.tt                 prints one compiled module to stdout
 
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -25,25 +25,25 @@ use std::time::{Duration, SystemTime};
 
 mod server;
 
-use rlc::engine::collect_sources;
-use rlc::{
-    EnumSymbol, ExternEnum, ImportRewrite, ModuleScan, Options, RlImport, RlImportNames,
-    StdImports, StdModule, compile_report,
+use ttc::engine::collect_sources;
+use ttc::{
+    EnumSymbol, ExternEnum, ImportRewrite, ModuleScan, Options, StdImports, StdModule, TtImport,
+    TtImportNames, compile_report,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn usage() {
     println!(
-        "rlc v{VERSION} — rl to TypeScript compiler
+        "ttc v{VERSION} — tt to TypeScript compiler
 
-Usage: rlc [options] <file | dir> ...
-       rlc help [topic]      language & workflow reference (topics: rlc help)
+Usage: ttc [options] <file | dir> ...
+       ttc help [topic]      language & workflow reference (topics: ttc help)
 
-Builds a complete TypeScript tree: .rl/.rlx files are compiled, hand-written
-.ts/.tsx files pass through byte-for-byte (with relative .rl/.rlx specifiers
+Builds a complete TypeScript tree: .tt/.ttx files are compiled, hand-written
+.ts/.tsx files pass through byte-for-byte (with relative .tt/.ttx specifiers
 rewritten), and the standard library is materialized when an input
-imports \"@rl/std\". Types come from the same sources via --types.
+imports \"@tt/std\". Types come from the same sources via --types.
 
 Options:
   -o, --out-dir <dir>   write outputs under <dir> (mirrors input paths)
@@ -52,14 +52,14 @@ Options:
                         either way.
   -w, --watch           keep running; recompile inputs (and their importers)
                         as they change
-  --check               compile only; write nothing (rl-level checks; needs
+  --check               compile only; write nothing (tt-level checks; needs
                         no TypeScript)
   --check-types         also type-check: the tree is lowered into the real
                         TypeScript project and the compiler answers, with
-                        every diagnostic at a position in the .rl source
+                        every diagnostic at a position in the .tt source
   --types               --check-types, and write the editor/typecheck
-                        sidecars the compiler emits: <name>.rl.d.ts + .map
-                        under -o (default .rl-types)
+                        sidecars the compiler emits: <name>.tt.d.ts + .map
+                        under -o (default .tt-types)
   --project <path>      tsconfig.json the two modes above check against
                         (default: the nearest one at or above the inputs)
   --node <path>         node binary the TypeScript compiler's client runs
@@ -73,18 +73,18 @@ Tooling options (bundler plugins, editors):
   --no-banner           omit the \"generated\" banner comment
   --no-verify           skip swc validation of types and generated output
   --rewrite-imports <js|ts|off>
-                        how relative .rl/.rlx specifiers are emitted:
+                        how relative .tt/.ttx specifiers are emitted:
                         js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
                         off = untouched
-  --sidecar <dir>       write <name>.rl.d.ts and .map next to each input from
+  --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
                         <dir>/<name>.d.ts (tsc --emitDeclarationOnly output);
                         compiles nothing (--types runs this step for you)
-  --symbols             print rl enum declarations (with positions) and the
-                        direct .rl imports of each input as JSON; compiles
+  --symbols             print tt enum declarations (with positions) and the
+                        direct .tt imports of each input as JSON; compiles
                         nothing (for language tooling)
   --emit-map            print each input's emitted TypeScript plus source<->
                         output byte mappings as JSON; parse + emit only (no
-                        rl-level checks, .rl specifiers untouched) — the
+                        tt-level checks, .tt specifiers untouched) — the
                         editor's virtual-document feed (for language tooling)
   --server              keep the engine alive and answer check/emitMap/
                         typedCheck requests as JSON lines on stdin/stdout,
@@ -93,10 +93,10 @@ Tooling options (bundler plugins, editors):
     );
 }
 
-/// The language & workflow guide (docs/ai/rl.md), embedded so `rlc help`
+/// The language & workflow guide (docs/ai/tt.md), embedded so `ttc help`
 /// serves documentation offline. The file is the source of truth; `##`
 /// headings are the topic boundaries.
-const GUIDE: &str = include_str!("../docs/ai/rl.md");
+const GUIDE: &str = include_str!("../docs/ai/tt.md");
 
 /// Help topics: (name, aliases, `##` heading prefix in GUIDE). An empty
 /// prefix selects the preamble (everything before the first `## `).
@@ -110,7 +110,7 @@ const HELP_TOPICS: &[(&str, &[&str], &str)] = &[
     ("pipe", &["pipeline", "|>", "flow"], "## |>"),
     ("result", &["do", "result-block"], "## result block"),
     ("val", &["mutation", "readonly"], "## val"),
-    ("std", &["option"], "## @rl/std"),
+    ("std", &["option"], "## @tt/std"),
     ("modules", &["imports"], "## Modules"),
     ("install", &["update"], "## Install"),
     ("setup", &["init"], "## Setup"),
@@ -147,15 +147,15 @@ fn guide_section(heading: &str) -> &'static str {
     }
 }
 
-/// `rlc help [topic]` — print the embedded guide (whole, one section, or
+/// `ttc help [topic]` — print the embedded guide (whole, one section, or
 /// the topic list).
 fn run_help(args: &[String]) -> ExitCode {
     let topic = match args {
         [] => {
             println!(
-                "rlc help <topic> — rl language & workflow reference\n\n\
+                "ttc help <topic> — tt language & workflow reference\n\n\
                  Topics:\n  {}\n\n\
-                 `rlc help all` prints the whole guide; `rlc -h` shows CLI options.",
+                 `ttc help all` prints the whole guide; `ttc -h` shows CLI options.",
                 HELP_TOPICS
                     .iter()
                     .map(|(name, aliases, _)| if aliases.is_empty() {
@@ -170,7 +170,7 @@ fn run_help(args: &[String]) -> ExitCode {
         }
         [topic] => topic.to_lowercase(),
         _ => {
-            eprintln!("rlc: help takes at most one topic (run `rlc help` for the list)");
+            eprintln!("ttc: help takes at most one topic (run `ttc help` for the list)");
             return ExitCode::FAILURE;
         }
     };
@@ -187,7 +187,7 @@ fn run_help(args: &[String]) -> ExitCode {
             ExitCode::SUCCESS
         }
         None => {
-            eprintln!("rlc: unknown help topic \"{topic}\" (run `rlc help` for the list)");
+            eprintln!("ttc: unknown help topic \"{topic}\" (run `ttc help` for the list)");
             ExitCode::FAILURE
         }
     }
@@ -199,8 +199,8 @@ struct Job {
     out_path: PathBuf,
 }
 
-/// `--symbols`: prints, as a JSON array on stdout, each input file's rl
-/// enum declarations (positions included) and its direct relative `.rl`
+/// `--symbols`: prints, as a JSON array on stdout, each input file's tt
+/// enum declarations (positions included) and its direct relative `.tt`
 /// imports with the referenced files' exported declarations — the symbol
 /// interface language tooling consumes (module graph phase 3). Compiles
 /// nothing; unreadable *imported* files yield `"resolved": null` while
@@ -213,17 +213,17 @@ fn symbols_mode(jobs: &[Job]) -> ExitCode {
         let source = match fs::read_to_string(&job.file) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("rlc: {filename}: {e}");
+                eprintln!("ttc: {filename}: {e}");
                 failed = true;
                 continue;
             }
         };
         let mut entry = format!("{{\"file\":{}", json_str(&filename));
         entry.push_str(",\"enums\":");
-        entry.push_str(&enums_json(&source, &rlc::enum_symbols(&source)));
+        entry.push_str(&enums_json(&source, &ttc::enum_symbols(&source)));
         entry.push_str(",\"imports\":[");
         let dir = job.file.parent().unwrap_or(Path::new("."));
-        let imports = rlc::rl_imports(&source)
+        let imports = ttc::tt_imports(&source)
             .iter()
             .map(|import| {
                 let mut o = format!("{{\"specifier\":{}", json_str(&import.specifier));
@@ -236,7 +236,7 @@ fn symbols_mode(jobs: &[Job]) -> ExitCode {
                             ",\"resolved\":{}",
                             json_str(&target.display().to_string())
                         ));
-                        let exported: Vec<EnumSymbol> = rlc::enum_symbols(&imported_src)
+                        let exported: Vec<EnumSymbol> = ttc::enum_symbols(&imported_src)
                             .into_iter()
                             .filter(|e| e.exported)
                             .collect();
@@ -263,8 +263,8 @@ fn symbols_mode(jobs: &[Job]) -> ExitCode {
 
 /// `--emit-map`: prints, as a JSON array on stdout, each input file's
 /// emitted TypeScript and the source<->output byte mappings of every chunk
-/// copied verbatim from the source (`rlc::emit_mapped`). Parse + emit only —
-/// no rl-level checks, no verification, `.rl`/`@rl/std` specifiers left
+/// copied verbatim from the source (`ttc::emit_mapped`). Parse + emit only —
+/// no tt-level checks, no verification, `.tt`/`@tt/std` specifiers left
 /// untouched — so a buffer mid-edit still emits. This is the feed for the
 /// language server's virtual TypeScript documents (TASK-050).
 fn emit_map_mode(jobs: &[Job]) -> ExitCode {
@@ -275,12 +275,12 @@ fn emit_map_mode(jobs: &[Job]) -> ExitCode {
         let source = match fs::read_to_string(&job.file) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("rlc: {filename}: {e}");
+                eprintln!("ttc: {filename}: {e}");
                 failed = true;
                 continue;
             }
         };
-        let mapped = rlc::emit_mapped(&source);
+        let mapped = ttc::emit_mapped(&source);
         let mappings = mapped
             .mappings
             .iter()
@@ -302,10 +302,10 @@ fn emit_map_mode(jobs: &[Job]) -> ExitCode {
     }
 }
 
-/// `--sidecar <dir>`: writes `<name>.rl.d.ts` and `<name>.rl.d.ts.map` next
-/// to each input `.rl`, from the declarations tsc emitted for that module
-/// (`<dir>/<name>.d.ts`, produced with `--emitDeclarationOnly` over rlc's
-/// output). The map's `sources` is the `.rl` file, so an editor's "go to
+/// `--sidecar <dir>`: writes `<name>.tt.d.ts` and `<name>.tt.d.ts.map` next
+/// to each input `.tt`, from the declarations tsc emitted for that module
+/// (`<dir>/<name>.d.ts`, produced with `--emitDeclarationOnly` over ttc's
+/// output). The map's `sources` is the `.tt` file, so an editor's "go to
 /// definition" from a `.ts` importer lands in the original — not in the
 /// generated declarations. Compiles nothing.
 fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
@@ -329,7 +329,7 @@ fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
         let source = match fs::read_to_string(&job.file) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("rlc: {}: {e}", job.file.display());
+                eprintln!("ttc: {}: {e}", job.file.display());
                 failed = true;
                 continue;
             }
@@ -338,7 +338,7 @@ fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
         let declarations = match fs::read_to_string(&decl_path) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("rlc: {}: {e}", decl_path.display());
+                eprintln!("ttc: {}: {e}", decl_path.display());
                 failed = true;
                 continue;
             }
@@ -350,25 +350,25 @@ fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
         let map_path = job.out_path.with_file_name(format!("{file_name}.d.ts.map"));
         let dir = dts_path.parent().unwrap_or(Path::new(".")).to_path_buf();
         if let Err(e) = fs::create_dir_all(&dir) {
-            eprintln!("rlc: {}: {e}", dir.display());
+            eprintln!("ttc: {}: {e}", dir.display());
             failed = true;
             continue;
         }
 
         // The map's `sources` is read relative to the map itself, so it has
         // to point back across whatever distance `-o` introduced.
-        let sidecar = rlc::build_sidecar(&source, &declarations, &relative_path(&dir, &job.file));
+        let sidecar = ttc::build_sidecar(&source, &declarations, &relative_path(&dir, &job.file));
         if let Err(e) = fs::write(&dts_path, &sidecar.declarations) {
-            eprintln!("rlc: {}: {e}", dts_path.display());
+            eprintln!("ttc: {}: {e}", dts_path.display());
             failed = true;
             continue;
         }
         if let Err(e) = fs::write(&map_path, &sidecar.map) {
-            eprintln!("rlc: {}: {e}", map_path.display());
+            eprintln!("ttc: {}: {e}", map_path.display());
             failed = true;
             continue;
         }
-        eprintln!("rlc: {} → {}", job.file.display(), dts_path.display());
+        eprintln!("ttc: {} → {}", job.file.display(), dts_path.display());
     }
     if failed {
         ExitCode::FAILURE
@@ -411,12 +411,12 @@ fn enums_json(source: &str, symbols: &[EnumSymbol]) -> String {
     let objects = symbols
         .iter()
         .map(|e| {
-            let (line, col) = rlc::line_col(source, e.offset);
+            let (line, col) = ttc::line_col(source, e.offset);
             let cases = e
                 .cases
                 .iter()
                 .map(|c| {
-                    let (line, col) = rlc::line_col(source, c.offset);
+                    let (line, col) = ttc::line_col(source, c.offset);
                     let fields = match &c.fields {
                         None => "null".to_string(),
                         Some(fields) => format!(
@@ -451,12 +451,12 @@ fn enums_json(source: &str, symbols: &[EnumSymbol]) -> String {
     format!("[{}]", objects.join(","))
 }
 
-fn names_json(names: &RlImportNames) -> String {
+fn names_json(names: &TtImportNames) -> String {
     match names {
-        RlImportNames::Namespace(ns) => {
+        TtImportNames::Namespace(ns) => {
             format!("{{\"kind\":\"namespace\",\"name\":{}}}", json_str(ns))
         }
-        RlImportNames::Named(entries) => format!(
+        TtImportNames::Named(entries) => format!(
             "{{\"kind\":\"named\",\"entries\":[{}]}}",
             entries
                 .iter()
@@ -468,7 +468,7 @@ fn names_json(names: &RlImportNames) -> String {
                 .collect::<Vec<_>>()
                 .join(",")
         ),
-        RlImportNames::None => "{\"kind\":\"none\"}".to_string(),
+        TtImportNames::None => "{\"kind\":\"none\"}".to_string(),
     }
 }
 
@@ -491,7 +491,7 @@ fn json_str(s: &str) -> String {
     out
 }
 
-/// Declaration tables of the `.rl` modules a run imports, shared by every
+/// Declaration tables of the `.tt` modules a run imports, shared by every
 /// job.
 ///
 /// The same module is typically imported by many files, and each import
@@ -523,11 +523,11 @@ impl<'a> ExternCache<'a> {
         // Parsed outside the lock: a slow miss must not stall other jobs.
         // Two jobs racing on the same module both parse it once; the first
         // insertion wins and both see the same table.
-        let source_kind = rlc::SourceKind::from_path(path).unwrap_or_default();
+        let source_kind = ttc::SourceKind::from_path(path).unwrap_or_default();
         let decls = Arc::new(match self.inputs.get(path) {
-            Some(source) => rlc::exported_enums_with_kind(source, source_kind),
+            Some(source) => ttc::exported_enums_with_kind(source, source_kind),
             None => match fs::read_to_string(path) {
-                Ok(source) => rlc::exported_enums_with_kind(&source, source_kind),
+                Ok(source) => ttc::exported_enums_with_kind(&source, source_kind),
                 Err(_) => Vec::new(),
             },
         });
@@ -541,30 +541,30 @@ impl<'a> ExternCache<'a> {
     }
 }
 
-/// Collects enum declarations from the file's direct relative `.rl`
+/// Collects enum declarations from the file's direct relative `.tt`
 /// imports, so matches over imported enums get exhaustiveness-checked
 /// (module graph phase 2). One hop, import declarations only — re-exports
 /// bring nothing into scope. A specifier that cannot be read is skipped
 /// silently: module resolution is tsc's domain (`TS2307`), and an unknown
 /// enum simply stays unchecked, exactly as before.
-fn collect_extern_enums(file: &Path, imports: &[RlImport], cache: &ExternCache) -> Vec<ExternEnum> {
+fn collect_extern_enums(file: &Path, imports: &[TtImport], cache: &ExternCache) -> Vec<ExternEnum> {
     let dir = file.parent().unwrap_or(Path::new("."));
     let mut externs: Vec<ExternEnum> = Vec::new();
     for import in imports {
-        if matches!(import.names, RlImportNames::None) {
+        if matches!(import.names, TtImportNames::None) {
             continue;
         }
         let decls = cache.exported_enums(&dir.join(&import.specifier));
         let from = Some(import.specifier.clone());
         match &import.names {
-            RlImportNames::Namespace(ns) => {
+            TtImportNames::Namespace(ns) => {
                 externs.extend(decls.iter().map(|d| ExternEnum {
                     name: format!("{ns}.{}", d.name),
                     tags: d.tags.clone(),
                     from: from.clone(),
                 }));
             }
-            RlImportNames::Named(entries) => {
+            TtImportNames::Named(entries) => {
                 for (name, alias) in entries {
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         externs.push(ExternEnum {
@@ -575,7 +575,7 @@ fn collect_extern_enums(file: &Path, imports: &[RlImport], cache: &ExternCache) 
                     }
                 }
             }
-            RlImportNames::None => unreachable!(),
+            TtImportNames::None => unreachable!(),
         }
     }
     externs
@@ -593,9 +593,9 @@ fn load_jobs(jobs: &[Job], jobs_limit: Option<usize>) -> Vec<Result<Loaded, Stri
     par_map(jobs, jobs_limit, |job| {
         let source =
             fs::read_to_string(&job.file).map_err(|e| format!("{}: {e}", job.file.display()))?;
-        let scan = rlc::scan_module_with_kind(
+        let scan = ttc::scan_module_with_kind(
             &source,
-            rlc::SourceKind::from_path(&job.file).unwrap_or_default(),
+            ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
         );
         Ok(Loaded { source, scan })
     })
@@ -662,23 +662,23 @@ where
         .collect()
 }
 
-/// `rlc --check-types` / `rlc --types` as an engine consumer: open the
+/// `ttc --check-types` / `ttc --types` as an engine consumer: open the
 /// project once, take a snapshot per pass, print what the check found. The
 /// engine owns the state (documents, projections, the running compiler);
 /// this driver owns the terminal — wording, order and exit codes are the
 /// CLI's contract.
 fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_>) -> ExitCode {
-    let engine = rlc::engine::Engine::new(options.node.map(Path::to_path_buf));
+    let engine = ttc::engine::Engine::new(options.node.map(Path::to_path_buf));
     let mut project = match engine.open_project(
         inputs,
-        &rlc::engine::ProjectOptions {
+        &ttc::engine::ProjectOptions {
             tsconfig: options.project.map(Path::to_path_buf),
             out_dir: options.out_dir.map(Path::to_path_buf),
         },
     ) {
         Ok(project) => project,
         Err(e) => {
-            eprintln!("rlc: {e}");
+            eprintln!("ttc: {e}");
             return ExitCode::FAILURE;
         }
     };
@@ -704,7 +704,7 @@ fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_>) -> ExitC
         Ok(report) if report.reported == 0 => ExitCode::SUCCESS,
         Ok(_) => ExitCode::FAILURE,
         Err(e) => {
-            eprintln!("rlc: {e}");
+            eprintln!("ttc: {e}");
             ExitCode::FAILURE
         }
     }
@@ -722,8 +722,8 @@ struct TypedCheckOptions<'a> {
     /// `--overlay`: unsaved text standing in for a file on disk, keyed by
     /// canonical path.
     overlay: &'a std::collections::HashMap<PathBuf, String>,
-    /// `--rl-only`: report only the rl layer.
-    rl_only: bool,
+    /// `--tt-only`: report only the tt layer.
+    tt_only: bool,
     /// The raw inputs, for mirroring their layout under `-o`.
     inputs: &'a [String],
 }
@@ -732,13 +732,13 @@ struct TypedCheckOptions<'a> {
 struct TypedReport {
     /// How many diagnostics were printed. Zero is the only passing result.
     reported: usize,
-    /// Whether the pass could not run at all — see [`rlc::engine::Blocked`].
+    /// Whether the pass could not run at all — see [`ttc::engine::Blocked`].
     blocked: bool,
 }
 
 /// One snapshot, one check, everything printed.
 fn typed_pass(
-    project: &mut rlc::engine::Project,
+    project: &mut ttc::engine::Project,
     files: &[PathBuf],
     options: &TypedCheckOptions<'_>,
 ) -> Result<TypedReport, String> {
@@ -746,7 +746,7 @@ fn typed_pass(
         Ok(snapshot) => snapshot,
         Err(blocked) => {
             eprintln!(
-                "rlc: {}:{}:{}: {}",
+                "ttc: {}:{}:{}: {}",
                 shown(&blocked.path),
                 blocked.error.line,
                 blocked.error.col,
@@ -760,9 +760,9 @@ fn typed_pass(
     };
     let checked = project.check(
         &snapshot,
-        &rlc::engine::CheckRequest {
+        &ttc::engine::CheckRequest {
             emit_declarations: options.emit,
-            rl_only: options.rl_only,
+            tt_only: options.tt_only,
         },
     )?;
 
@@ -781,22 +781,22 @@ fn typed_pass(
     for diagnostic in &checked.diagnostics {
         match diagnostic.position {
             Some((line, col)) => eprintln!(
-                "rlc: {}:{}:{}: {}",
+                "ttc: {}:{}:{}: {}",
                 shown(&diagnostic.path),
                 line,
                 col,
                 diagnostic.message
             ),
-            None => eprintln!("rlc: {}: {}", shown(&diagnostic.path), diagnostic.message),
+            None => eprintln!("ttc: {}: {}", shown(&diagnostic.path), diagnostic.message),
         }
     }
 
     // A backend that could not run is the pass failing to *run*, not the
-    // code failing the check — the rl diagnostics above are complete, the
+    // code failing the check — the tt diagnostics above are complete, the
     // typed layer is missing, and the exit code says "could not check".
     if let Some(error) = &checked.backend_error {
-        eprintln!("rlc: {error}");
-        eprintln!("rlc: the TypeScript layer did not run — only rl-level diagnostics are shown");
+        eprintln!("ttc: {error}");
+        eprintln!("ttc: the TypeScript layer did not run — only tt-level diagnostics are shown");
         return Ok(TypedReport {
             reported: checked.diagnostics.len().max(1),
             blocked: true,
@@ -813,7 +813,7 @@ fn typed_pass(
 /// pass. The project is opened once and updated after that, which is what
 /// makes the wait a re-check rather than a cold start — and the engine's
 /// projection cache means only the files that changed are re-lowered.
-fn typed_watch(project: &mut rlc::engine::Project, options: &TypedCheckOptions<'_>) -> ExitCode {
+fn typed_watch(project: &mut ttc::engine::Project, options: &TypedCheckOptions<'_>) -> ExitCode {
     let mut stamps: std::collections::HashMap<PathBuf, std::time::SystemTime> =
         std::collections::HashMap::new();
     let mut first = true;
@@ -841,16 +841,16 @@ fn typed_watch(project: &mut rlc::engine::Project, options: &TypedCheckOptions<'
             let started = std::time::Instant::now();
             match typed_pass(project, &files, options) {
                 Ok(report) => eprintln!(
-                    "rlc: {} file(s), {} reported in {} ms — watching",
+                    "ttc: {} file(s), {} reported in {} ms — watching",
                     files.len(),
                     report.reported,
                     started.elapsed().as_millis()
                 ),
-                Err(e) => eprintln!("rlc: {e}"),
+                Err(e) => eprintln!("ttc: {e}"),
             }
         }
         if first {
-            eprintln!("rlc: watching {} file(s) — Ctrl-C to stop", files.len());
+            eprintln!("ttc: watching {} file(s) — Ctrl-C to stop", files.len());
             first = false;
         }
         stamps = current;
@@ -862,21 +862,21 @@ fn typed_watch(project: &mut rlc::engine::Project, options: &TypedCheckOptions<'
 /// under the project root — never beside the sources.
 ///
 /// A declaration emitted for a lowered module becomes an **editor sidecar**:
-/// `src/token.rl.d.ts` plus a `.d.ts.map` whose `sources` is the `.rl` file,
+/// `src/token.tt.d.ts` plus a `.d.ts.map` whose `sources` is the `.tt` file,
 /// so "go to definition" lands in what the user wrote rather than in a
-/// declaration. The body is the compiler's; only the map is rlc's, and it is
-/// built by the same [`rlc::build_sidecar`] the `--sidecar` mode uses.
+/// declaration. The body is the compiler's; only the map is ttc's, and it is
+/// built by the same [`ttc::build_sidecar`] the `--sidecar` mode uses.
 fn write_declarations(
-    declarations: &rlc::engine::Declarations,
+    declarations: &ttc::engine::Declarations,
     inputs: &[String],
     out_dir: Option<&Path>,
     root: &Path,
 ) -> std::io::Result<()> {
-    // Standard-library declarations mirror the generated `rl/` package, so
-    // plain tsc can map the root and wildcard `@rl/std` entries to them.
+    // Standard-library declarations mirror the generated `tt/` package, so
+    // plain tsc can map the root and wildcard `@tt/std` entries to them.
     if !declarations.std.is_empty() {
         let dir = out_dir.unwrap_or(root);
-        let std_dir = dir.join("rl");
+        let std_dir = dir.join("tt");
         fs::create_dir_all(&std_dir)?;
         for declaration in &declarations.std {
             fs::write(
@@ -907,7 +907,7 @@ fn write_declarations(
         let dir = target.parent().unwrap_or(Path::new(".")).to_path_buf();
         fs::create_dir_all(&dir)?;
 
-        let sidecar = rlc::build_sidecar(
+        let sidecar = ttc::build_sidecar(
             &file.source,
             &declaration.text,
             &relative_path(&dir, &file.source_path),
@@ -922,7 +922,7 @@ fn write_declarations(
 /// command was run in, when it is under it.
 ///
 /// The compiler resolves modules by absolute path, so that is what comes
-/// back — but `rlc: /tmp/build-42/src/a.rl:3:1: ...` is not what the other
+/// back — but `ttc: /tmp/build-42/src/a.tt:3:1: ...` is not what the other
 /// modes print, and not what an editor's problem matcher expects.
 fn shown(path: &Path) -> String {
     let relative = std::env::current_dir()
@@ -937,7 +937,7 @@ fn shown(path: &Path) -> String {
 fn main() -> ExitCode {
     let argv: Vec<String> = std::env::args().skip(1).collect();
 
-    // `rlc help [topic]` — only as the first argument, so a file that
+    // `ttc help [topic]` — only as the first argument, so a file that
     // happens to be named "help" can still be passed as `./help`.
     if argv.first().is_some_and(|a| a == "help") {
         return run_help(&argv[1..]);
@@ -952,7 +952,7 @@ fn main() -> ExitCode {
     let mut check_types = false;
     let mut types = false;
     let mut overlay_path: Option<PathBuf> = None;
-    let mut rl_only = false;
+    let mut tt_only = false;
     let mut project: Option<PathBuf> = None;
     let mut banner = true;
     let mut verify = true;
@@ -983,19 +983,19 @@ fn main() -> ExitCode {
                 check_types = true;
                 types = true;
             }
-            "--rl-only" => rl_only = true,
+            "--tt-only" => tt_only = true,
             "--server" => server = true,
             "--overlay" => match it.next() {
                 Some(path) => overlay_path = Some(PathBuf::from(path)),
                 None => {
-                    eprintln!("rlc: --overlay requires the path the buffer belongs to");
+                    eprintln!("ttc: --overlay requires the path the buffer belongs to");
                     return ExitCode::FAILURE;
                 }
             },
             "--project" => match it.next() {
                 Some(path) => project = Some(PathBuf::from(path)),
                 None => {
-                    eprintln!("rlc: --project requires a path to a tsconfig.json");
+                    eprintln!("ttc: --project requires a path to a tsconfig.json");
                     return ExitCode::FAILURE;
                 }
             },
@@ -1008,43 +1008,43 @@ fn main() -> ExitCode {
                 Some("option") => emit_std = Some(StdModule::Option),
                 Some("result") => emit_std = Some(StdModule::Result),
                 Some(other) => {
-                    eprintln!("rlc: --emit-std expects types, option, or result (got {other})");
+                    eprintln!("ttc: --emit-std expects types, option, or result (got {other})");
                     return ExitCode::FAILURE;
                 }
                 None => {
-                    eprintln!("rlc: --emit-std requires a module (types, option, or result)");
+                    eprintln!("ttc: --emit-std requires a module (types, option, or result)");
                     return ExitCode::FAILURE;
                 }
             },
             "--sidecar" => match it.next() {
                 Some(dir) => sidecar_dir = Some(PathBuf::from(dir)),
                 None => {
-                    eprintln!("rlc: --sidecar requires a directory of tsc-emitted .d.ts files");
+                    eprintln!("ttc: --sidecar requires a directory of tsc-emitted .d.ts files");
                     return ExitCode::FAILURE;
                 }
             },
             "-j" | "--jobs" => match it.next().map(|n| n.parse::<usize>()) {
                 Some(Ok(n)) if n >= 1 => jobs_limit = Some(n),
                 Some(_) => {
-                    eprintln!("rlc: --jobs expects a positive number of parallel compiles");
+                    eprintln!("ttc: --jobs expects a positive number of parallel compiles");
                     return ExitCode::FAILURE;
                 }
                 None => {
-                    eprintln!("rlc: --jobs requires a value");
+                    eprintln!("ttc: --jobs requires a value");
                     return ExitCode::FAILURE;
                 }
             },
             "-o" | "--out-dir" => match it.next() {
                 Some(dir) => out_dir = Some(PathBuf::from(dir)),
                 None => {
-                    eprintln!("rlc: --out-dir requires a value");
+                    eprintln!("ttc: --out-dir requires a value");
                     return ExitCode::FAILURE;
                 }
             },
             "--node" => match it.next() {
                 Some(path) => node = Some(PathBuf::from(path)),
                 None => {
-                    eprintln!("rlc: --node requires a path to the node binary");
+                    eprintln!("ttc: --node requires a path to the node binary");
                     return ExitCode::FAILURE;
                 }
             },
@@ -1053,16 +1053,16 @@ fn main() -> ExitCode {
                 Some("ts") => rewrite_imports = ImportRewrite::Ts,
                 Some("off") => rewrite_imports = ImportRewrite::Off,
                 Some(other) => {
-                    eprintln!("rlc: --rewrite-imports expects js, ts, or off (got {other})");
+                    eprintln!("ttc: --rewrite-imports expects js, ts, or off (got {other})");
                     return ExitCode::FAILURE;
                 }
                 None => {
-                    eprintln!("rlc: --rewrite-imports requires a value (js, ts, or off)");
+                    eprintln!("ttc: --rewrite-imports requires a value (js, ts, or off)");
                     return ExitCode::FAILURE;
                 }
             },
             other if other.starts_with('-') => {
-                eprintln!("rlc: unknown option {other}");
+                eprintln!("ttc: unknown option {other}");
                 return ExitCode::FAILURE;
             }
             other => inputs.push(other.to_string()),
@@ -1083,7 +1083,7 @@ fn main() -> ExitCode {
             || sidecar_dir.is_some()
             || overlay_path.is_some()
         {
-            eprintln!("rlc: --server takes no inputs and combines with no other mode");
+            eprintln!("ttc: --server takes no inputs and combines with no other mode");
             return ExitCode::FAILURE;
         }
         return server::run(node);
@@ -1091,15 +1091,15 @@ fn main() -> ExitCode {
 
     // The standard library on stdout — how a bundler plugin serves the
     // module from memory. Since the build materializes it on its own
-    // (`@rl/std` auto-emission), this combines with nothing else.
+    // (`@tt/std` auto-emission), this combines with nothing else.
     if let Some(module) = emit_std {
         if !inputs.is_empty() {
-            eprintln!("rlc: --emit-std takes no inputs (the build materializes @rl/std itself)");
+            eprintln!("ttc: --emit-std takes no inputs (the build materializes @tt/std itself)");
             return ExitCode::FAILURE;
         }
         let mut code = module.source().to_string();
         if banner {
-            code = format!("// @generated by rlc --emit-std — do not edit directly.\n{code}");
+            code = format!("// @generated by ttc --emit-std — do not edit directly.\n{code}");
         }
         print!("{code}");
         return ExitCode::SUCCESS;
@@ -1110,27 +1110,27 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    if !check_types && (overlay_path.is_some() || rl_only) {
-        eprintln!("rlc: --overlay and --rl-only require --check-types");
+    if !check_types && (overlay_path.is_some() || tt_only) {
+        eprintln!("ttc: --overlay and --tt-only require --check-types");
         return ExitCode::FAILURE;
     }
 
     // A watch re-reads the files it is watching; text pinned on stdin would
     // stay the same forever, so the pair has no coherent meaning.
     if overlay_path.is_some() && watch {
-        eprintln!("rlc: --overlay does not combine with --watch");
+        eprintln!("ttc: --overlay does not combine with --watch");
         return ExitCode::FAILURE;
     }
 
     if check_types && (print || check || symbols || emit_map || sidecar_dir.is_some()) {
         eprintln!(
-            "rlc: --types/--check-types does not combine with -p, --check, --symbols, \
+            "ttc: --types/--check-types does not combine with -p, --check, --symbols, \
              --emit-map, or --sidecar"
         );
         return ExitCode::FAILURE;
     }
 
-    // Tooling modes stay .rl-only; the compile modes carry hand-written
+    // Tooling modes stay .tt-only; the compile modes carry hand-written
     // TypeScript along so the output tree is complete.
     let include_ts = !symbols && !emit_map && sidecar_dir.is_none();
 
@@ -1139,8 +1139,8 @@ fn main() -> ExitCode {
         // rather than producing files: unsaved text must not reach a written
         // sidecar, and a mode that writes is not one that hides half of what
         // it found.
-        if types && (overlay_path.is_some() || rl_only) {
-            eprintln!("rlc: --overlay and --rl-only work with --check-types, not --types");
+        if types && (overlay_path.is_some() || tt_only) {
+            eprintln!("ttc: --overlay and --tt-only work with --check-types, not --types");
             return ExitCode::FAILURE;
         }
         let mut overlay = std::collections::HashMap::new();
@@ -1151,7 +1151,7 @@ fn main() -> ExitCode {
             let text = match std::io::read_to_string(std::io::stdin()) {
                 Ok(text) => text,
                 Err(e) => {
-                    eprintln!("rlc: cannot read the overlay from stdin: {e}");
+                    eprintln!("ttc: cannot read the overlay from stdin: {e}");
                     return ExitCode::FAILURE;
                 }
             };
@@ -1160,7 +1160,7 @@ fn main() -> ExitCode {
                     overlay.insert(path, text);
                 }
                 Err(e) => {
-                    eprintln!("rlc: --overlay {}: {e}", path.display());
+                    eprintln!("ttc: --overlay {}: {e}", path.display());
                     return ExitCode::FAILURE;
                 }
             }
@@ -1178,7 +1178,7 @@ fn main() -> ExitCode {
                 emit: types,
                 watch,
                 overlay: &overlay,
-                rl_only,
+                tt_only,
                 inputs: &inputs,
             },
         );
@@ -1190,7 +1190,7 @@ fn main() -> ExitCode {
     };
 
     if jobs.is_empty() {
-        eprintln!("rlc: no sources found");
+        eprintln!("ttc: no sources found");
         return ExitCode::FAILURE;
     }
 
@@ -1242,7 +1242,7 @@ struct BuildOptions {
     jobs: Option<usize>,
 }
 
-/// Where the generated `rl/` standard-library package goes.
+/// Where the generated `tt/` standard-library package goes.
 fn std_placement(
     jobs: &[Job],
     loaded: &[Result<Loaded, String>],
@@ -1258,7 +1258,7 @@ fn std_placement(
         Some(dir) => dir.to_path_buf(),
         None => common_ancestor(jobs)?,
     };
-    Some(dir.join("rl"))
+    Some(dir.join("tt"))
 }
 
 /// The deepest directory every output shares.
@@ -1313,10 +1313,10 @@ fn std_specifier(
     })
 }
 
-/// Expands the command line's inputs into one job per source file. `.rl` and
-/// `.rlx` files compile to `.ts` and `.tsx`; hand-written TypeScript/TSX
+/// Expands the command line's inputs into one job per source file. `.tt` and
+/// `.ttx` files compile to `.ts` and `.tsx`; hand-written TypeScript/TSX
 /// (collected when `include_ts` is set) keeps its file name and passes
-/// through with its `.rl` import specifiers rewritten.
+/// through with its `.tt` import specifiers rewritten.
 fn build_jobs(
     inputs: &[String],
     out_dir: Option<&Path>,
@@ -1326,17 +1326,17 @@ fn build_jobs(
     for input in inputs {
         let input_path = Path::new(input);
         if !input_path.exists() {
-            eprintln!("rlc: no such file or directory: {input}");
+            eprintln!("ttc: no such file or directory: {input}");
             return Err(ExitCode::FAILURE);
         }
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
         if let Err(e) = collect_sources(input_path, include_ts, &mut files) {
-            eprintln!("rlc: {input}: {e}");
+            eprintln!("ttc: {input}: {e}");
             return Err(ExitCode::FAILURE);
         }
         for file in files {
-            let out_name = if let Some(kind) = rlc::SourceKind::from_rl_path(&file) {
+            let out_name = if let Some(kind) = ttc::SourceKind::from_tt_path(&file) {
                 file.with_extension(kind.output_extension())
             } else {
                 file.clone()
@@ -1407,7 +1407,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             .any(|file| jobs.iter().any(|job| same_file(&job.file, &file)))
     {
         eprintln!(
-            "rlc: {}: the standard library would overwrite an input — pass -o <dir>",
+            "ttc: {}: the standard library would overwrite an input — pass -o <dir>",
             dir.display()
         );
         failed = true;
@@ -1419,22 +1419,22 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             for module in StdModule::ALL {
                 let mut code = module.source().to_string();
                 if opts.banner {
-                    code = format!("// @generated by rlc — do not edit directly.\n{code}");
+                    code = format!("// @generated by ttc — do not edit directly.\n{code}");
                 }
                 fs::write(dir.join(module.file_name()), code)?;
             }
             Ok(())
         });
         match wrote {
-            Ok(()) => eprintln!("rlc: std → {}", dir.display()),
+            Ok(()) => eprintln!("ttc: std → {}", dir.display()),
             Err(e) => {
-                eprintln!("rlc: {}: {e}", dir.display());
+                eprintln!("ttc: {}: {e}", dir.display());
                 failed = true;
             }
         }
     }
 
-    // Two inputs can claim one output path (`x.rl` and a hand-written
+    // Two inputs can claim one output path (`x.tt` and a hand-written
     // `x.ts` both emit `x.ts`), and the later job wins. Those writes go
     // back to the parent so the winner stays the same as in a sequential
     // run; every other job writes itself, straight from its worker.
@@ -1462,7 +1462,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             // than destroy hand-written code.
             if !opts.print && !opts.check && same_file(&job.file, &job.out_path) {
                 out.messages.push(format!(
-                    "rlc: {filename}: output would overwrite the input — pass -o <dir>"
+                    "ttc: {filename}: output would overwrite the input — pass -o <dir>"
                 ));
                 out.failed = true;
                 return out;
@@ -1470,7 +1470,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             let loaded = match loaded {
                 Ok(loaded) => loaded,
                 Err(e) => {
-                    out.messages.push(format!("rlc: {e}"));
+                    out.messages.push(format!("ttc: {e}"));
                     out.failed = true;
                     return out;
                 }
@@ -1489,26 +1489,26 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             };
             let options = Options {
                 filename: Some(&filename),
-                source_kind: rlc::SourceKind::from_path(&job.file).unwrap_or_default(),
+                source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
                 verify: opts.verify,
                 rewrite_imports: opts.rewrite_imports,
                 extern_enums: &extern_enums,
                 defer_to_checker: false,
                 std_imports,
             };
-            // Every rl-level diagnostic of the file, not the first one —
+            // Every tt-level diagnostic of the file, not the first one —
             // the reader fixes a file in one pass (TASK-120). Output is
             // only produced (and only written) when the file is clean.
             let report = compile_report(&loaded.source, &options);
             let errors: Vec<_> = report
                 .diagnostics
                 .iter()
-                .filter(|d| d.severity == rlc::Severity::Error)
+                .filter(|d| d.severity == ttc::Severity::Error)
                 .collect();
             if !errors.is_empty() {
                 for diagnostic in errors {
                     out.messages.push(format!(
-                        "rlc: {}",
+                        "ttc: {}",
                         diagnostic.to_compile_error(&loaded.source, Some(&filename))
                     ));
                 }
@@ -1526,7 +1526,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             };
             if opts.banner {
                 let base = job.file.file_name().unwrap().to_string_lossy();
-                code = format!("// @generated from {base} by rlc — do not edit directly.\n{code}");
+                code = format!("// @generated from {base} by ttc — do not edit directly.\n{code}");
             }
             if opts.print || (!opts.check && contested(job)) {
                 out.pending = Some(code);
@@ -1539,7 +1539,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                     return out;
                 }
                 out.messages.push(format!(
-                    "rlc: {} → {}",
+                    "ttc: {} → {}",
                     job.file.display(),
                     job.out_path.display()
                 ));
@@ -1561,7 +1561,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             continue;
         }
         match write_output(&job.out_path, &code) {
-            Ok(()) => eprintln!("rlc: {} → {}", job.file.display(), job.out_path.display()),
+            Ok(()) => eprintln!("ttc: {} → {}", job.file.display(), job.out_path.display()),
             Err(e) => {
                 eprintln!("{e}");
                 failed = true;
@@ -1577,9 +1577,9 @@ fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
     if let Some(parent) = out_path.parent()
         && let Err(e) = fs::create_dir_all(parent)
     {
-        return Err(format!("rlc: {}: {e}", parent.display()));
+        return Err(format!("ttc: {}: {e}", parent.display()));
     }
-    fs::write(out_path, code).map_err(|e| format!("rlc: {}: {e}", out_path.display()))
+    fs::write(out_path, code).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
 }
 
 /// How often `--watch` re-reads the inputs' timestamps.
@@ -1588,7 +1588,7 @@ pub(crate) const WATCH_INTERVAL: Duration = Duration::from_millis(300);
 /// `--watch`: compile once, then keep compiling what changes.
 ///
 /// Inputs are re-expanded every round, so files added to a watched directory
-/// are picked up. A changed file drags its **dependents** along: a `.rl` that
+/// are picked up. A changed file drags its **dependents** along: a `.tt` that
 /// imports it is checked against the new declarations, which is what makes
 /// project-wide exhaustiveness errors appear on the importing side.
 ///
@@ -1638,14 +1638,14 @@ fn watch_mode(inputs: &[String], out_dir: Option<&Path>, opts: &BuildOptions) ->
                 .collect();
             let failed = compile_jobs(&selected, opts);
             eprintln!(
-                "rlc: {} file(s) {} — watching",
+                "ttc: {} file(s) {} — watching",
                 selected.len(),
                 if failed { "failed" } else { "ok" }
             );
         }
 
         if first {
-            eprintln!("rlc: watching {} file(s) — Ctrl-C to stop", jobs.len());
+            eprintln!("ttc: watching {} file(s) — Ctrl-C to stop", jobs.len());
             first = false;
         }
         stamps = current;
@@ -1654,7 +1654,7 @@ fn watch_mode(inputs: &[String], out_dir: Option<&Path>, opts: &BuildOptions) ->
 }
 
 /// Default `-o` of `--types` — where the sidecars land.
-const TYPES_DIR: &str = ".rl-types";
+const TYPES_DIR: &str = ".tt-types";
 
 /// The file's path relative to whichever input directory contains it, so
 /// the sidecar tree mirrors the source tree rather than the whole cwd.
@@ -1686,7 +1686,7 @@ fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<PathBuf> {
             continue;
         };
         let dir = job.file.parent().unwrap_or(Path::new("."));
-        let imports_changed = rlc::rl_imports(&source).iter().any(|import| {
+        let imports_changed = ttc::tt_imports(&source).iter().any(|import| {
             dir.join(&import.specifier)
                 .canonicalize()
                 .is_ok_and(|target| changed_real.contains(&target))
@@ -1708,7 +1708,7 @@ mod help_tests {
             let section = guide_section(heading);
             assert!(
                 !section.trim().is_empty(),
-                "topic {name}: heading {heading:?} not found in docs/ai/rl.md"
+                "topic {name}: heading {heading:?} not found in docs/ai/tt.md"
             );
             if !heading.is_empty() {
                 assert!(section.starts_with(heading), "topic {name}: wrong slice");

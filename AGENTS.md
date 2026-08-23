@@ -1,12 +1,12 @@
-# AGENTS.md — rl 프로젝트 작업 가이드
+# AGENTS.md — tt 프로젝트 작업 가이드
 
 이 문서는 Codex(및 모든 기여자)가 이 저장소에서 작업할 때 반드시 따라야 하는
 규칙과 컨텍스트를 정의합니다.
 
 ## 프로젝트 개요
 
-**rl**은 TypeScript로 컴파일되는 초경량 전처리 언어이고, **rlc**는 Rust로 작성된
-그 컴파일러입니다. rl은 TypeScript 위에 딱 일곱 가지만 추가합니다:
+**tt**은 TypeScript로 컴파일되는 초경량 전처리 언어이고, **ttc**는 Rust로 작성된
+그 컴파일러입니다. tt은 TypeScript 위에 딱 일곱 가지만 추가합니다:
 Rust 스타일 `enum`(태그드 유니언), `match` 표현식(or-패턴·가드·튜플 match·
 중첩 패턴 포함), 에러 전파 `try` 문, 값 추출 `let-else`·`if let` 문,
 파이프라인 연산자 `|>`(함수 합성 `flow` 포함), `Result` 계산 블록
@@ -16,19 +16,19 @@ Rust 스타일 `enum`(태그드 유니언), `match` 표현식(or-패턴·가드�
 
 이 세 가지는 어떤 기능 추가·문제 해결·리팩토링에서도 깨뜨릴 수 없는 계약입니다:
 
-1. **모든 유효한 TypeScript 파일은 그대로 유효한 `.rl` 파일이다.**
-   컴파일러는 rl `enum`/`match` 구문만 변환하고 나머지는 바이트 단위 그대로
+1. **모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이다.**
+   컴파일러는 tt `enum`/`match` 구문만 변환하고 나머지는 바이트 단위 그대로
    통과시킨다. 구문이 완전하게 파싱될 때만 변환하고, 조금이라도 어긋나면 원문
-   그대로 통과시킨다. 유일한 예외는 상대 경로 `.rl` import 지정자의 재작성
+   그대로 통과시킨다. 유일한 예외는 상대 경로 `.tt` import 지정자의 재작성
    (TASK-020, `language.md` §9)이다 — 그런 지정자는 tsc가 어차피 해석하지
    못하므로(`TS2307`) 동작하던 TS가 달라지는 일은 없고, `--rewrite-imports
    off`로 끌 수 있다. 이 밖의 예외를 추가로 만들지 않는다.
-2. **에러 계층이 분리되어 있다.** rl 수준 에러(중복 케이스, 소진되지 않은 match,
-   잘못된 필드 타입)는 전부 rlc가 `파일:행:열`과 함께 직접 보고한다. 생성되는
-   코드는 타입 트릭 없는 순수 TypeScript이며, rlc가 방출한 코드 때문에 tsc
+2. **에러 계층이 분리되어 있다.** tt 수준 에러(중복 케이스, 소진되지 않은 match,
+   잘못된 필드 타입)는 전부 ttc가 `파일:행:열`과 함께 직접 보고한다. 생성되는
+   코드는 타입 트릭 없는 순수 TypeScript이며, ttc가 방출한 코드 때문에 tsc
    에러가 발생해서는 안 된다. 사용자가 통과 영역에 쓴 TS 코드의 타입 에러는
    tsc의 책임이다.
-3. **모든 해결은 구조적·아키텍처적이며 일반화되어야 한다.** rl/rlc는 Rust
+3. **모든 해결은 구조적·아키텍처적이며 일반화되어야 한다.** tt/ttc는 Rust
    컴파일러와 Svelte 컴파일러에 준하는 품질의 컴파일러를 목표로 한다. 특정 입력,
    테스트, 파일, 구문 모양만 통과시키는 조건 분기, 임시 예외 처리, 문자열 기반
    휴리스틱, 진단 억제나 폴백으로 기능을 구현하거나 문제를 덮지 않는다. 원인을
@@ -44,15 +44,15 @@ Rust 스타일 `enum`(태그드 유니언), `match` 표현식(or-패턴·가드�
 src/
   main.rs        CLI 진입점 — 인자 파싱, 파일 수집, 컴파일 실행/출력
   lib.rs         공개 API: compile(source, &Options) -> Result<String, CompileError>
-  error.rs       CompileError(공개) / RlError(내부, 바이트 오프셋) / line_col
+  error.rs       CompileError(공개) / TtError(내부, 바이트 오프셋) / line_col
   scanner.rs     바이트 단위 저수준 스캔 (문자열/템플릿/주석/정규식/괄호 매칭)
   lexer.rs       유의 토큰 스트림 생성 (정규식 휴리스틱, 템플릿 중첩 렉싱)
   ast.rs         타입드 AST — 단계 간 계약 (Program/Segment/EnumDecl/MatchExpr...)
   parser/
     mod.rs       메인 토큰 루프 → Program (무오류 구조 파싱, 템플릿 재귀)
     cursor.rs    토큰 커서 (Copy 백트래킹, 괄호 매칭, 공용 토큰 스캔)
-    enums.rs     rl enum 구조 파싱 (TS enum 구분 규칙 포함)
-    imports.rs   정적 import/re-export의 상대 경로 .rl 지정자 추출
+    enums.rs     tt enum 구조 파싱 (TS enum 구분 규칙 포함)
+    imports.rs   정적 import/re-export의 상대 경로 .tt 지정자 추출
     matches.rs   match 표현식 구조 파싱 (scrutinee/arm body 재귀 파싱)
     tries.rs     try 문 구조 파싱 (유효 TS의 try 형태 배제 규칙 포함)
     lets.rs      let-else 문 구조 파싱 (발산 판정 포함)
@@ -65,7 +65,7 @@ src/
                  (임포트 선언·내장 Option/Result 포함, 로컬 > 임포트 > 내장 섀도잉)
   stdlib.rs      표준 라이브러리 — STD_SOURCE(공개) / BUILTIN_ENUMS(내부)
   stdlib/
-    rl_std.ts    std 모듈 본체 (Option/Result + 콤비네이터, --emit-std로 방출)
+    tt_std.ts    std 모듈 본체 (Option/Result + 콤비네이터, --emit-std로 방출)
   codegen/
     mod.rs       backend 경계 — SemanticFile + CoreFile → TypeScript
     core.rs      전체 Core IR의 TypeScript target lowering
@@ -75,17 +75,17 @@ src/
 tests/
   compile.rs     컴파일 출력 스냅샷/에러 단위 테스트
   passthrough.rs "유효한 TS는 바이트 그대로 통과" 계약 테스트
-  stdlib.rs      std 모듈 계약 테스트 (통과 + rl enum 방출 형태와 바이트 일치)
+  stdlib.rs      std 모듈 계약 테스트 (통과 + tt enum 방출 형태와 바이트 일치)
   integration.rs tsc 타입체크 + node 실행 통합 테스트 (tsc/node 없으면 skip)
 docs/
   reference/     규범 레퍼런스 — language.md(언어) / cli.md / errors.md / std.md
   design/        설계 문서 (compiler-architecture.md — 파이프라인 규범 설명)
-  ai/            AI 코딩 도구용 컨텍스트 문서 (rl.md — 레퍼런스의 AI 소비용 압축)
+  ai/            AI 코딩 도구용 컨텍스트 문서 (tt.md — 레퍼런스의 AI 소비용 압축)
   tasks/         태스크 관리 (아래 참조)
 ```
 
 파이프라인 (swc 스타일 단계 분리): `compile()` = parser::parse(lexer::lex
-토큰화 → 무오류 구조 파싱 → AST) → sema::check(모든 rl 수준 에러 + 소진성) →
+토큰화 → 무오류 구조 파싱 → AST) → sema::check(모든 tt 수준 에러 + 소진성) →
 codegen::emit(무오류 방출) → verify_output(swc 파싱 자가 검사, `--no-verify`로
 생략 가능).
 새 기능은 해당 단계에만 손댄다: 새 구문 = ast + parser(+codegen), 새 검사 =
@@ -98,7 +98,7 @@ cargo build                        # 빌드
 cargo test                         # 전체 테스트 (tsc/node 있으면 통합 테스트 포함)
 cargo fmt --check                  # 포매팅 검사 (rustfmt 기본 스타일)
 cargo clippy --all-targets -- -D warnings   # 린트 (경고 = 실패)
-cargo run -- file.rl               # 컴파일 실행
+cargo run -- file.tt               # 컴파일 실행
 ```
 
 ## 검증 게이트 (머지 전 필수)
@@ -118,7 +118,7 @@ TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아
 하나의 릴리스로 묶어서만 올리듯, 이 저장소도 태스크 완료는 버전과 무관합니다.
 
 - **기준 버전은 `Cargo.toml`의 `version` 하나다.** npm 메인 패키지
-  (`npm/rl-lang`)와 설치기(`packages/create-rl`)는 저장소에서 `0.0.0-dev`로
+  (`npm/tt-lang`)와 설치기(`packages/create-tt`)는 저장소에서 `0.0.0-dev`로
   두고 배포 시점에 `npm/scripts/stamp-version.mjs`가 Cargo.toml 버전을
   스탬프한다 — 저장소에서 직접 올리지 않는다. 부속 패키지
   (`editors/vscode`, `integrations/unplugin`)는
@@ -152,7 +152,7 @@ TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아
    상태를 `완료`로 바꾸고 완료일과 커밋 해시를 기입한다.
    **완료 처리 전 확인**: 이번 변경이 언어 표면·표준 라이브러리·CLI·빌드
    흐름 등 사용자가 체감하는 동작을 바꿨다면, AI 제공 문서
-   (`docs/ai/rl.md`)에 그 내용이 반영됐는지 확인하고 어긋나면 함께
+   (`docs/ai/tt.md`)에 그 내용이 반영됐는지 확인하고 어긋나면 함께
    갱신한다. 반영이 필요 없는 변경(내부 리팩토링 등)이면 그대로 완료한다.
 4. **커밋 메시지**는 해당 태스크 ID로 시작한다: `TASK-004: split transform into modules`.
 
@@ -187,11 +187,11 @@ TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아
 - `unsafe` 금지 (`#![forbid(unsafe_code)]` 수준으로 유지).
 - 스캐너/변환기는 바이트 기반: ASCII 바이트로만 판단하고 멀티바이트 UTF-8은
   불투명하게 통과시킨다는 전제를 지킬 것.
-- 에러는 반드시 바이트 오프셋을 담아 `RlError::at`으로 만들고, 위치 변환은
+- 에러는 반드시 바이트 오프셋을 담아 `TtError::at`으로 만들고, 위치 변환은
   `compile()` 경계에서만 한다.
 - 새 기능에는 반드시 세 계층 테스트를 추가: 출력 단위 테스트(compile.rs),
   통과 계약이 걸리면 passthrough.rs, 타입/런타임 의미가 걸리면 integration.rs.
 - **언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 반드시
-  컴파일러 내장 가이드(`docs/ai/rl.md`)를 함께 갱신한다.** 사용자가 처음
+  컴파일러 내장 가이드(`docs/ai/tt.md`)를 함께 갱신한다.** 사용자가 처음
   접하는 기능이면 영문·한글 README도 같은 커밋에서 갱신한다. 구현과 문서가
   어긋나면 버그로 취급한다 (태스크 완료 전 확인 — 위 워크플로 3번).

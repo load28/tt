@@ -11,7 +11,7 @@ hover/definition이 소비하는 경로를 규범으로 남긴다.
 
 ## 1. 문제 — or-pattern binding 위치의 침묵
 
-```rl
+```tt
 enum E { A(x: string), B(x: number) }
 const v = match (e) {
   A(x) | B(x) => x
@@ -24,7 +24,7 @@ const v = match (e) {
 - `B(x)`의 `x` hover → `number` (B의 payload)
 - body의 `x` hover → `string | number` (병합)
 
-body의 `x`는 원래부터 동작한다: 방출된 `const { x } = $rl_m;`가
+body의 `x`는 원래부터 동작한다: 방출된 `const { x } = $tt_m;`가
 `kind === "A" || kind === "B"`로 좁혀진 위치에 있으므로, verbatim으로
 매핑된 body 참조에 tsgo가 union 타입을 답한다.
 
@@ -58,18 +58,18 @@ src/analysis.rs            ← 순수 단계 (probe.rs·sema.rs와 같은 층위
      같은 patternBindings (TASK-102)
    · unresolved: 이름 해석의 답 (TASK-102, §7)
 
-sema.rs                    ← 소비자 (컴파일 에러): unresolved → RlError,
-                             Coverage → 위치 있는 RlError
+sema.rs                    ← 소비자 (컴파일 에러): unresolved → TtError,
+                             Coverage → 위치 있는 TtError
 engine/language.rs         ← 소비자 (에디터 semantic 표면)
    hover:      TS 서비스 → (없으면) 대안 격리 프로브 → 선언 타입 폴백
    definition: TS 서비스 → (비면) body 참조 → 패턴 binding span들
-   externs 수집: rl_imports + overlay/디스크 + enum_symbols
+   externs 수집: tt_imports + overlay/디스크 + enum_symbols
                  (CLI가 sema에 extern_enums를 모아 주는 방식의 엔진판)
 ```
 
 - **core에 두는 이유**: sema가 `extern_enums`를 입력으로 받듯 분석기도
   소스 + 외부 선언만 받는 순수 함수다. 파일 시스템도 TypeScript도
-  모른다. 그래서 rlc(sema·CLI)와 엔진(LSP)이 **같은 모델**을 소비할 수
+  모른다. 그래서 ttc(sema·CLI)와 엔진(LSP)이 **같은 모델**을 소비할 수
   있고, 툴체인이 없는 환경에서도 항상 계산된다(semantic tokens와 같은
   가용성 — TASK-093).
 - **engine이 소비하는 이유**: TypeScript에 묻는 행위는 엔진의 서비스
@@ -105,7 +105,7 @@ or-pattern 분석 순서는 고정이다: ① 각 대안을 subject에 대해 **
 
 ## 3. hover — 답의 우선순위
 
-요구 계약: TypeScript/tsgo가 이미 아는 타입을 중심에 두고, RL 자체
+요구 계약: TypeScript/tsgo가 이미 아는 타입을 중심에 두고, TT 자체
 추론은 폴백이다.
 
 ```
@@ -144,7 +144,7 @@ definition은 같은 재료의 자연스러운 확장이다: or-arm body의 bind
 바꿨다: `match: or-pattern alternatives must bind the same names —
 `y` is bound in `B(...)` but not in `A(...)`` 형태로, 이름 결손과
 필드-이름 불일치를 구분해 알려준다(`errors.md`). 에러 계층 계약(모든
-rl 수준 에러는 rlc가 위치와 함께 직접 보고)은 그대로다.
+tt 수준 에러는 ttc가 위치와 함께 직접 보고)은 그대로다.
 
 ## 5. coverage — 소진성의 단일 원천
 
@@ -155,7 +155,7 @@ TASK-096은 모델에 `coverage`를 파생 데이터로 노출하는 데까지�
 ```
 analysis.rs   후보 표(로컬 > 임포트 > 내장) · subject 해석 · 커버 규칙 ·
               튜플 곱집합(odometer)  →  Coverage
-sema.rs       Coverage → 위치 있는 RlError (문안·오프셋·보고 순서)
+sema.rs       Coverage → 위치 있는 TtError (문안·오프셋·보고 순서)
 ```
 
 `Coverage`는 arity로 단일/튜플을 함께 표현한다:
@@ -164,7 +164,7 @@ sema.rs       Coverage → 위치 있는 RlError (문안·오프셋·보고 순�
 Coverage
   positions:   Vec<Option<CoveredEnum>>  // 위치별 subject, None = 보편 위치(`_`만 쓰인 자리)
   covered:     Vec<String>               // 단일 match에서 arm이 통째로 덮은 태그 (요약)
-  missing:     Vec<Vec<String>>          // witness: 빠진 값을 rl 패턴으로 렌더 (행 = 값, 칸 = 위치)
+  missing:     Vec<Vec<String>>          // witness: 빠진 값을 tt 패턴으로 렌더 (행 = 값, 칸 = 위치)
   unreachable: Vec<usize>                // 죽은 arm의 인덱스 (계산만 — 아래)
 CoveredEnum { name, origin: Local | Imported { from } | Builtin }
 ```
@@ -173,11 +173,11 @@ CoveredEnum { name, origin: Local | Imported { from } | Builtin }
 `missing`이 태그가 아니라 **패턴**인 이유가 그것이다 — 재귀가 페이로드 안까지
 내려가므로 빠진 것이 `Ok(value: None)`처럼 값의 모양으로 나온다. 중첩 패턴 arm이
 "아무것도 커버하지 못한다"는 v1 규칙은 사라졌고(가드 arm만 남는다), 도달 불가
-arm은 같은 재귀가 답하지만 **보고하지 않는다**: rl에는 경고 계층이 없어 rustc의
+arm은 같은 재귀가 답하지만 **보고하지 않는다**: tt에는 경고 계층이 없어 rustc의
 lint를 하드 에러로 바꾸면 지금 컴파일되는 프로그램이 깨진다.
 
 `origin`이 모델에 있는 이유는 에러 문안이 그것을 부르기 때문이다 —
-"enum E" / "built-in enum Option" / "enum T (imported from \"./token.rl\")".
+"enum E" / "built-in enum Option" / "enum T (imported from \"./token.tt\")".
 sema는 이제 자기 후보 표를 갖지 않는다.
 
 규칙 두 가지가 여기서 규범이 된다:
@@ -200,15 +200,15 @@ extern 입력의 모양이 둘인 것(컴파일러의 `ExternEnum` — 태그와
 
 ## 6. 한계 (알고 유지하는 것)
 
-- 폴백 타입은 **선언 텍스트**다. narrowing·제네릭 인스턴스화·다른 rl
-  enum들의 TS-union scrutinee는 checker 경로(1·2번)만 안다. 이것이 "RL
+- 폴백 타입은 **선언 텍스트**다. narrowing·제네릭 인스턴스화·다른 tt
+  enum들의 TS-union scrutinee는 checker 경로(1·2번)만 안다. 이것이 "TT
   타입체커를 만들지 않는다"는 계약의 형태다. TASK-098이 위치별로 확인한
   결과, 매핑이 없어 checker가 도달하지 못하는 자리는 **or-pattern
   binding(단일 match와 튜플 원소) 둘뿐**이고 그 둘은 프로브가 덮는다 —
   중첩 패턴 leaf와 튜플 단일 대안 원소는 매핑된 채 방출되므로 1번이
   인스턴스화까지 정확히 답한다. 즉 폴백의 부정확함은 "체커에 물을 수 없는
   상황"에만 남고, 그 상황에서는 치환할 입력도 없다.
-- extern 수집은 CLI와 같은 1-hop(직접 상대 `.rl` import)이다.
+- extern 수집은 CLI와 같은 1-hop(직접 상대 `.tt` import)이다.
 - `body_definitions`/`body_binding_at`은 body 안의 섀도잉을 모델링하지
   않는다 — TS가 빈 답을 준 뒤에만 쓰는 폴백이라는 전제가 계약이다.
 - 대안 격리 프로브는 tsgo 통합 환경에서의 e2e 테스트가 아직 없다
@@ -222,7 +222,7 @@ extern 입력의 모양이 둘인 것(컴파일러의 `ExternEnum` — 태그와
 
 TASK-096의 모델은 "이 바인딩의 타입은 무엇인가"만 답했다. 그 반대 방향 —
 **이 이름은 무엇을 가리키는가, 가리키는 것이 없으면 어떻게 되는가** — 은
-자리가 없었고, 그래서 태그 오타가 rlc를 통과해 글루 위의 tsc 에러가 됐다
+자리가 없었고, 그래서 태그 오타가 ttc를 통과해 글루 위의 tsc 에러가 됐다
 (`docs/design/rust-parity-analysis.md` §GAP-1).
 
 TASK-102이 그 질문을 같은 모델에 넣었다. rustc의 단계 구성과 같은 자리다:

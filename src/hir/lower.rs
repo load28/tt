@@ -83,7 +83,7 @@ impl Lower {
                     let owner = self.lower_enum(decl);
                     stmts.push(Stmt::Item(owner));
                 }
-                ast::Segment::RlImport(decl) => {
+                ast::Segment::TtImport(decl) => {
                     let owner = self.lower_import(decl);
                     stmts.push(Stmt::Item(owner));
                 }
@@ -117,7 +117,7 @@ impl Lower {
 
     /// An expression position holding a `Program`: a single verbatim
     /// segment is the common case and stays one opaque span; anything
-    /// richer (rl constructs inside the expression) becomes a [`Expr::Seq`]
+    /// richer (tt constructs inside the expression) becomes a [`Expr::Seq`]
     /// wrapping the lowered stream.
     fn lower_expr_program(&mut self, program: &ast::Program, span: Span) -> ExprId {
         if let [ast::Segment::Verbatim(inner)] = program.segments.as_slice() {
@@ -180,19 +180,19 @@ impl Lower {
         owner
     }
 
-    fn lower_import(&mut self, decl: &ast::RlImportDecl) -> OwnerId {
+    fn lower_import(&mut self, decl: &ast::TtImportDecl) -> OwnerId {
         let owner = OwnerId(u32::try_from(self.hir.items.len()).expect("item count fits u32"));
         let node = self.node(Self::span(decl.spec), AstOrigin::Import);
         self.hir.items.push(Item::Import(ImportItem {
             node,
             kind: match decl.kind {
-                ast::RlSpecifier::Relative(kind) => ImportKind::Relative(kind),
-                ast::RlSpecifier::Std(module) => ImportKind::Std(module),
+                ast::TtSpecifier::Relative(kind) => ImportKind::Relative(kind),
+                ast::TtSpecifier::Std(module) => ImportKind::Std(module),
             },
             names: match &decl.names {
-                ast::RlImportNames::Namespace(ns) => ImportNames::Namespace(ns.clone()),
-                ast::RlImportNames::Named(entries) => ImportNames::Named(entries.clone()),
-                ast::RlImportNames::None => ImportNames::None,
+                ast::TtImportNames::Namespace(ns) => ImportNames::Namespace(ns.clone()),
+                ast::TtImportNames::Named(entries) => ImportNames::Named(entries.clone()),
+                ast::TtImportNames::None => ImportNames::None,
             },
         }));
         owner

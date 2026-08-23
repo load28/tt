@@ -1,5 +1,5 @@
 /* --------------------------------------------------------------------------
- * stamp-version.mjs — write the release version into published RL packages.
+ * stamp-version.mjs — write the release version into published TT packages.
  *
  *   node stamp-version.mjs <version>
  *
@@ -18,7 +18,7 @@ if (!version || !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) {
   process.exit(1);
 }
 
-const manifest = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "rl-lang", "package.json");
+const manifest = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "tt-lang", "package.json");
 const pkg = JSON.parse(fs.readFileSync(manifest, "utf8"));
 pkg.version = version;
 for (const dep of Object.keys(pkg.optionalDependencies)) {
@@ -32,7 +32,7 @@ const initializerManifest = path.join(
   "..",
   "..",
   "packages",
-  "create-rl",
+  "create-tt",
   "package.json",
 );
 const initializer = JSON.parse(fs.readFileSync(initializerManifest, "utf8"));

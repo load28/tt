@@ -1,11 +1,11 @@
-//! `rlc --server` — the engine behind a pipe, for tools that ask often.
+//! `ttc --server` — the engine behind a pipe, for tools that ask often.
 //!
 //! An editor asks the compiler the same three questions on every keystroke:
 //! "does this buffer pass `--check`?", "what does it emit?" and "what does
 //! the typed layer say?". Answering each by spawning a process is fine for
 //! the first two and ruinous for the third — a typed check opens a project
-//! and starts a TypeScript compiler. This mode keeps one `rlc` process
-//! alive and, behind it, one [`rlc::engine::Project`] per project identity,
+//! and starts a TypeScript compiler. This mode keeps one `ttc` process
+//! alive and, behind it, one [`ttc::engine::Project`] per project identity,
 //! so a typed check after the first reuses the running compiler and every
 //! unchanged file's projection.
 //!
@@ -26,14 +26,14 @@
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
 //! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
 //!
-//! → { "id": 5, "method": "rlSymbol", "params": { "path", "text", "position" } }
+//! → { "id": 5, "method": "ttSymbol", "params": { "path", "text", "position" } }
 //! ← { "id": 5, "result": { "kind", "range", "name", "enumName",
 //!                          "signature", "detail", "definition" } | null }
 //!
-//! → { "id": 6, "method": "rlCompletions", "params": { "path", "text", "position" } }
+//! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
 //! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }] } }
 //!
-//! → { "id": 7, "method": "rlHints", "params": { "path", "text" } }
+//! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
 //!
 //! → { "id": 8, "method": "declarations", "params": { "path", "text" } }
@@ -45,10 +45,10 @@
 //! ```
 //!
 //! Every answer is computed by the same code the one-shot modes run —
-//! `check` is [`rlc::compile`] with the caller's text standing alone (its
+//! `check` is [`ttc::compile`] with the caller's text standing alone (its
 //! relative imports unresolvable, exactly like the one-shot's temp file),
-//! `emitMap` is [`rlc::emit_mapped`], and `typedCheck` is the engine's
-//! rl-only pass with the buffer as an overlay — so a consumer that falls
+//! `emitMap` is [`ttc::emit_mapped`], and `typedCheck` is the engine's
+//! tt-only pass with the buffer as an overlay — so a consumer that falls
 //! back from the server to the one-shot commands sees the same diagnostics
 //! either way. A `typedCheck` overlay lasts one request: the answer is
 //! stateless, the reuse (projection cache, running compiler) is not.
@@ -60,7 +60,7 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use rlc::engine::{
+use ttc::engine::{
     CheckRequest, CompletionAnswer, Engine, Location, Position, Project, ProjectOptions, Range,
 };
 
@@ -217,9 +217,9 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
         }),
         "semanticTokens" => semantic_tokens(params),
         "declarations" => declarations(params),
-        "rlSymbol" => rl_symbol(params),
-        "rlCompletions" => rl_completions(params),
-        "rlHints" => rl_hints(params),
+        "ttSymbol" => tt_symbol(params),
+        "ttCompletions" => tt_completions(params),
+        "ttHints" => tt_hints(params),
         "tsDiagnostics" => semantic(sessions, params, |project, path, _position| {
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
@@ -338,24 +338,24 @@ fn location_json(location: Location) -> serde_json::Value {
     })
 }
 
-/// `--check` for a buffer: rl-level diagnostics from the text alone.
+/// `--check` for a buffer: tt-level diagnostics from the text alone.
 fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let text = text_param(params)?;
     let filename = params["filename"].as_str();
-    let options = rlc::Options {
+    let options = ttc::Options {
         filename,
         source_kind: filename
-            .and_then(|name| rlc::SourceKind::from_path(std::path::Path::new(name)))
+            .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
             .unwrap_or_default(),
         verify: params["verify"].as_bool().unwrap_or(true),
-        ..rlc::Options::default()
+        ..ttc::Options::default()
     };
-    // Every rl-level diagnostic of the buffer, in source order (TASK-120).
+    // Every tt-level diagnostic of the buffer, in source order (TASK-120).
     // `endLine`/`endCol` close the range the diagnostic covers — the
     // construct as written. Zero means "position only": the consumer
     // decides the width. `code` is the rule's stable identity.
-    let diagnostics: Vec<_> = rlc::compile_report(text, &options)
+    let diagnostics: Vec<_> = ttc::compile_report(text, &options)
         .diagnostics
         .iter()
         .map(|d| {
@@ -380,26 +380,26 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 /// The declarations visible in a buffer — the compiler's own enum table
 /// (local, imported, built-in, under the compiler's shadowing) plus the
 /// buffer's `match` sites. This is the surface that replaces the editor's
-/// regex re-implementation of rl semantics (`engine::rl_declarations`).
-/// Text-only; `path` resolves the buffer's relative `.rl` imports.
+/// regex re-implementation of tt semantics (`engine::tt_declarations`).
+/// Text-only; `path` resolves the buffer's relative `.tt` imports.
 fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let decls = rlc::engine::rl_declarations(Path::new(path), text_param(params)?);
+    let decls = ttc::engine::tt_declarations(Path::new(path), text_param(params)?);
     let enums: Vec<_> = decls
         .enums
         .iter()
         .map(|e| {
             let (origin, specifier, name_span, span) = match &e.origin {
-                rlc::engine::RlEnumOrigin::Local { name_span, span } => (
+                ttc::engine::TtEnumOrigin::Local { name_span, span } => (
                     "local",
                     serde_json::Value::Null,
                     Some(*name_span),
                     Some(*span),
                 ),
-                rlc::engine::RlEnumOrigin::Imported { specifier } => (
+                ttc::engine::TtEnumOrigin::Imported { specifier } => (
                     "imported",
                     specifier
                         .clone()
@@ -408,7 +408,7 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
                     None,
                     None,
                 ),
-                rlc::engine::RlEnumOrigin::Builtin => {
+                ttc::engine::TtEnumOrigin::Builtin => {
                     ("builtin", serde_json::Value::Null, None, None)
                 }
             };
@@ -446,13 +446,13 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
     Ok(json!({ "enums": enums, "matches": matches }))
 }
 
-/// The rl name at a position — an enum, a case tag, a payload field.
+/// The tt name at a position — an enum, a case tag, a payload field.
 ///
 /// Text-only like `semanticTokens`: the answer needs no project and no
 /// toolchain, because these names exist nowhere in the emitted TypeScript
-/// and are rl's to answer (`engine::names`). `path` is still required, to
-/// resolve the file's relative `.rl` imports.
-fn rl_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// and are tt's to answer (`engine::names`). `path` is still required, to
+/// resolve the file's relative `.tt` imports.
+fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
@@ -461,15 +461,15 @@ fn rl_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let Some(symbol) = rlc::engine::rl_symbol_at(Path::new(path), text_param(params)?, position)
+    let Some(symbol) = ttc::engine::tt_symbol_at(Path::new(path), text_param(params)?, position)
     else {
         return Ok(serde_json::Value::Null);
     };
     Ok(json!({
         "kind": match symbol.kind {
-            rlc::engine::RlSymbolKind::Enum => "enum",
-            rlc::engine::RlSymbolKind::Case => "case",
-            rlc::engine::RlSymbolKind::Field => "field",
+            ttc::engine::TtSymbolKind::Enum => "enum",
+            ttc::engine::TtSymbolKind::Case => "case",
+            ttc::engine::TtSymbolKind::Field => "field",
         },
         "range": range_json(symbol.range),
         "name": symbol.name,
@@ -484,8 +484,8 @@ fn rl_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 }
 
 /// What can be written at a pattern position — case tags, payload field
-/// names. Text-only, for the same reason [`rl_symbol`] is.
-fn rl_completions(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// names. Text-only, for the same reason [`tt_symbol`] is.
+fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
@@ -495,15 +495,15 @@ fn rl_completions(params: &serde_json::Value) -> Result<serde_json::Value, Strin
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
     let items: Vec<_> =
-        rlc::engine::rl_completions_at(Path::new(path), text_param(params)?, position)
+        ttc::engine::tt_completions_at(Path::new(path), text_param(params)?, position)
             .into_iter()
             .map(|item| {
                 json!({
                     "label": item.label,
                     "kind": match item.kind {
-                        rlc::engine::RlCompletionKind::Case => "case",
-                        rlc::engine::RlCompletionKind::Field => "field",
-                        rlc::engine::RlCompletionKind::Wildcard => "wildcard",
+                        ttc::engine::TtCompletionKind::Case => "case",
+                        ttc::engine::TtCompletionKind::Field => "field",
+                        ttc::engine::TtCompletionKind::Wildcard => "wildcard",
                     },
                     "detail": item.detail,
                     "covered": item.covered,
@@ -513,21 +513,21 @@ fn rl_completions(params: &serde_json::Value) -> Result<serde_json::Value, Strin
     Ok(json!({ "items": items }))
 }
 
-/// What rl has to say about a buffer that is not an error — today, the
-/// arms an earlier arm already covers. Text-only like [`rl_symbol`], and
+/// What tt has to say about a buffer that is not an error — today, the
+/// arms an earlier arm already covers. Text-only like [`tt_symbol`], and
 /// separate from `check` on purpose: a hint never fails a build, so it
 /// never travels in the diagnostics of a compile answer.
-fn rl_hints(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn tt_hints(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let hints: Vec<_> = rlc::engine::rl_hints(Path::new(path), text_param(params)?)
+    let hints: Vec<_> = ttc::engine::tt_hints(Path::new(path), text_param(params)?)
         .into_iter()
         .map(|hint| {
             json!({
                 "kind": match hint.kind {
-                    rlc::engine::RlHintKind::UnreachableArm => "unreachableArm",
+                    ttc::engine::TtHintKind::UnreachableArm => "unreachableArm",
                 },
                 "range": range_json(hint.range),
                 "message": hint.message,
@@ -541,9 +541,9 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
     use serde_json::json;
     let source_kind = params["filename"]
         .as_str()
-        .and_then(|name| rlc::SourceKind::from_path(std::path::Path::new(name)))
+        .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
         .unwrap_or_default();
-    let tokens: Vec<_> = rlc::engine::semantic_tokens_with_kind(text_param(params)?, source_kind)
+    let tokens: Vec<_> = ttc::engine::semantic_tokens_with_kind(text_param(params)?, source_kind)
         .into_iter()
         .map(|token| {
             json!({
@@ -558,7 +558,7 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.
 fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let emit = rlc::emit_mapped(text_param(params)?);
+    let emit = ttc::emit_mapped(text_param(params)?);
     let mappings: Vec<_> = emit
         .mappings
         .iter()
@@ -569,7 +569,7 @@ fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 
 /// `--check-types --overlay <path>` for a buffer, against the live project
 /// it belongs to. `includeTypes` controls whether TypeScript diagnostics are
-/// included; typed rl facts are always computed by the same pass.
+/// included; typed tt facts are always computed by the same pass.
 fn typed_check(
     sessions: &mut Sessions,
     params: &serde_json::Value,
@@ -617,7 +617,7 @@ fn typed_check(
                 &snapshot,
                 &CheckRequest {
                     emit_declarations: false,
-                    rl_only: !include_types,
+                    tt_only: !include_types,
                 },
             );
             match checked {
@@ -646,7 +646,7 @@ fn typed_check(
                         })
                         .collect();
                     // `backendError`: the TypeScript layer could not run —
-                    // the rl diagnostics above are still complete.
+                    // the tt diagnostics above are still complete.
                     json!({
                         "blocked": false,
                         "diagnostics": diagnostics,

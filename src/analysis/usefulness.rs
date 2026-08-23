@@ -1,9 +1,9 @@
-//! Exhaustiveness by usefulness — the algorithm, in rl's terms.
+//! Exhaustiveness by usefulness — the algorithm, in tt's terms.
 //!
 //! This is Maranget's *usefulness* check, the one rustc's pattern analysis
 //! is built on: a pattern row `q` is **useful** with respect to a matrix of
 //! rows `P` when some value matches `q` and no row of `P`. Two questions
-//! rl asks are the same question:
+//! tt asks are the same question:
 //!
 //! - **Exhaustiveness** — is the all-wildcard row useful against the arms?
 //!   Every value it finds is a value nothing handles, and the algorithm
@@ -19,13 +19,13 @@
 //! recursion here descends into payloads instead, so a nested pattern
 //! covers exactly what it covers.
 //!
-//! What rl brings that a Rust matrix does not: patterns bind fields **by
+//! What tt brings that a Rust matrix does not: patterns bind fields **by
 //! name and by subset** (`Circle(radius)` and `Circle()` both match every
 //! `Circle`). Specialization normalizes that — a constructor's row becomes
 //! one column per *declared* field, in declaration order, with a wildcard
 //! wherever the pattern said nothing.
 //!
-//! What rlc still does not know is types. A column whose constructor set
+//! What ttc still does not know is types. A column whose constructor set
 //! cannot be identified is [`ColTy::Opaque`]: only a wildcard covers it,
 //! so the answer stays conservative rather than confident and wrong.
 
@@ -83,15 +83,15 @@ pub(super) enum ColTy<'a> {
     /// Constructors were written here, but which alphabet they belong to
     /// could not be identified — a hand-written union, a payload whose
     /// declared type names no enum. Only a wildcard covers it, and any
-    /// witness that passes through is a **guess**: rl does not know what
+    /// witness that passes through is a **guess**: tt does not know what
     /// else the column admits.
     Unknown,
 }
 
-/// A value the arms do not handle, in rl pattern syntax.
+/// A value the arms do not handle, in tt pattern syntax.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Witness {
-    /// Anything, and rl knows that is the whole answer.
+    /// Anything, and tt knows that is the whole answer.
     Wild,
     /// Anything, but only because the column's alphabet is unknown — the
     /// witness containing it is not certain (see [`Witness::certain`]).
@@ -105,7 +105,7 @@ pub(super) enum Witness {
 }
 
 impl Witness {
-    /// The witness as an rl pattern — **what a user can paste in as an
+    /// The witness as a tt pattern — **what a user can paste in as an
     /// arm**. That is the whole contract of this rendering, and it is why
     /// the two positions differ:
     ///
@@ -141,7 +141,7 @@ impl Witness {
 
 impl Witness {
     /// Whether every position of this witness was decided from a known
-    /// constructor set. A witness that is not certain names a value rl
+    /// constructor set. A witness that is not certain names a value tt
     /// *guessed* at, which a consumer with a real type checker refuses to
     /// report (TASK-108).
     pub(super) fn certain(&self) -> bool {
@@ -322,7 +322,7 @@ fn default<'a>(rows: &[Vec<Cell<'a>>]) -> Vec<Vec<Cell<'a>>> {
 /// One pattern's payload as columns: a cell per declared field, in
 /// declaration order. A field the pattern does not mention — or binds
 /// plainly, without a nested pattern — constrains nothing, so it is a
-/// wildcard. This is where rl's bind-by-name-and-subset patterns become a
+/// wildcard. This is where tt's bind-by-name-and-subset patterns become a
 /// fixed-arity matrix.
 fn expand<'a>(pattern: &'a TagPattern, constructor: &MatchConstructor) -> Vec<Cell<'a>> {
     let bindings = pattern.bindings.as_deref().unwrap_or_default();
@@ -347,7 +347,7 @@ fn expand<'a>(pattern: &'a TagPattern, constructor: &MatchConstructor) -> Vec<Ce
 /// The declared field type is consulted first — it is the precise answer
 /// when it names an enum that has every tag used in the column — and the
 /// patterns themselves decide otherwise. That fallback is what makes a
-/// generic payload (`Ok(value: T)`) analyzable at all: rlc does not
+/// generic payload (`Ok(value: T)`) analyzable at all: ttc does not
 /// substitute type arguments, but `Some`/`None` written in that column
 /// name `Option` just as arm tags name a match's subject.
 fn descend<'a>(

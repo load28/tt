@@ -1,6 +1,6 @@
-# RL LSP — 엔진 어댑터 아키텍처
+# TT LSP — 엔진 어댑터 아키텍처
 
-TASK-087의 설계 기록이다. **A. 기존 RL LSP → B. tsgo LSP 실제 구현 →
+TASK-087의 설계 기록이다. **A. 기존 TT LSP → B. tsgo LSP 실제 구현 →
 C. 채택/변형/기각 → D. 최종 구조**. 분석 대상은 `microsoft/typescript-go`
 HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 
@@ -9,20 +9,20 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 > LSP is not the language engine.
 > LSP is a protocol adapter to the language engine.
 
-절대 조건: 현재 RL LSP가 제공하는 모든 기능의 observable result 유지.
+절대 조건: 현재 TT LSP가 제공하는 모든 기능의 observable result 유지.
 에디터 테스트 스위트(및 e2e `server.test.ts` 무수정 통과)가 게이트다.
 
 ---
 
-## A. 기존 RL LSP — 무엇이 문제였나
+## A. 기존 TT LSP — 무엇이 문제였나
 
 `server.ts`(1712줄)는 어댑터가 아니라 그 자체가 language engine이었다:
 
 - **자체 tsgo 클라이언트.** `lsp.ts`(수제 JSON-RPC) + `tsgo.ts`(TsgoProject)가
   `tsgo --lsp`에 직결 — 컴파일러 백엔드(host.mjs/API server)와 **별개의**
-  두 번째 TypeScript 세션. Editor → RL LSP → tsgo LSP의 이중 LSP 구조.
+  두 번째 TypeScript 세션. Editor → TT LSP → tsgo LSP의 이중 LSP 구조.
 - **자체 프로젝트 그래프.** virtualDocs(열린 버퍼의 방출 TS) +
-  diskVirtuals(미열람 import, `rlc --emit-map`을 **동기** 실행) +
+  diskVirtuals(미열람 import, `ttc --emit-map`을 **동기** 실행) +
   pendingVirtual + 정규식 import 추적(재-export 누락).
 - **두 번째 매퍼.** `virtual.ts::MappedDoc` — Rust `mapper.rs`와 드리프트
   (끝-포함 vs 끝-배제, glue 폴백 유무).
@@ -54,16 +54,16 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 
 ## C. 채택 / 변형 / 기각 (§53 체크리스트)
 
-| tsgo 설계 | 결정 | RL에서의 형태 |
+| tsgo 설계 | 결정 | TT에서의 형태 |
 |---|---|---|
-| Server ↛ semantic, Session 소유 | **채택** | Node LSP는 `engine.ts`(EngineSession 클라이언트) 하나를 소유. semantic은 전부 `rlc --server` 뒤의 엔진 |
+| Server ↛ semantic, Session 소유 | **채택** | Node LSP는 `engine.ts`(EngineSession 클라이언트) 하나를 소유. semantic은 전부 `ttc --server` 뒤의 엔진 |
 | Project Session / 문서 lifecycle | **채택** | didOpen/didChange/didClose → 엔진의 `openDocument`/`updateDocument`/`closeDocument`. LSP는 문서 상태의 소유자가 아니다 |
 | "요청은 앞선 편집을 본다" 보장 | **변형** | 큐 대신 **파이프 순서**: 문서 sync는 동기 write, 서버는 순차 처리 — 같은 보장을 더 작은 기계로 |
-| pull diagnostics | **변형(현상 유지)** | 엔진↔tsgo 사이는 pull(`textDocument/diagnostic`), 에디터↔RL LSP는 기존 push 유지 — VSCode UX 불변이 우선 |
+| pull diagnostics | **변형(현상 유지)** | 엔진↔tsgo 사이는 pull(`textDocument/diagnostic`), 에디터↔TT LSP는 기존 push 유지 — VSCode UX 불변이 우선 |
 | request cancellation / 요청별 병렬 | **기각(현재)** | 서버는 순차 + 클라이언트 타임아웃 + 버전 기반 stale-drop(기존 것)으로 동등한 UX. 취소·병렬은 측정된 필요가 생기면 (스냅샷이 이미 불변이라 자리는 있다) |
 | recover 격리 | **채택** | 요청 실패는 그 요청의 error 응답; 세션은 산다. tsgo LSP 사망 → 다음 질문이 **재시작**(구 구현에 없던 복구, §38) |
-| position encoding 협상 | **변형** | VSCode 기본(UTF-16)을 프로토콜 좌표로 고정, 엔진 내부에서 rl 바이트↔UTF-16 변환을 독점. 협상은 다중 클라이언트가 생기면 |
-| watch 등록 위임(project→client) | **기각(현재)** | RL 에디터의 watch 표면은 컴파일러 바이너리 감시 하나뿐 — 지금 기구를 만들 이유 없음. 경로만 기록 |
+| position encoding 협상 | **변형** | VSCode 기본(UTF-16)을 프로토콜 좌표로 고정, 엔진 내부에서 tt 바이트↔UTF-16 변환을 독점. 협상은 다중 클라이언트가 생기면 |
+| watch 등록 위임(project→client) | **기각(현재)** | TT 에디터의 watch 표면은 컴파일러 바이너리 감시 하나뿐 — 지금 기구를 만들 이유 없음. 경로만 기록 |
 | progress / telemetry / ATA | **기각** | 필요 입증 전 복제하지 않는다 (§40·41) |
 | Server가 client 역할 겸장(역방향 인터페이스) | **채택(개념)** | 엔진 재시작 시 `onSessionStart` 콜백으로 열린 문서를 재동기화 — 서버가 세션에 제공하는 유일한 역방향 서비스 |
 
@@ -74,10 +74,10 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 | hover / definition / rename / signature help / completion resolve | **tsgo LSP** (`typescript/service.rs`) | API 서버에 해당 표면 없음 (B절) |
 | completion | tsgo LSP | API에 `getCompletionsAtPosition`이 있으나 resolve가 item-echo 방식(LSP형) — 한 백엔드로 통일 |
 | TS 진단 (에디터) | tsgo LSP pull | parse-error 가드(코드<2000) 등 기존 계약이 이 표면 위에 정의됨 |
-| typed rl 진단·소진성·val | tsgo **API server** (기존 Query/Answers) | TASK-073~085의 규범 경로 그대로 |
-| rl 구조 기능 (완성의 enum 목록, 문서 심볼, quick fix의 삽입 지점) | **엔진** (`engine/declarations.rs`, `declarations`) | 규칙의 단일 원천은 resolve — 정규식 재구현(구 analysis.ts)은 컴파일러와 다른 답을 했다 (TASK-127·128) |
-| rl 이름 hover/definition (enum·케이스·필드) | **엔진** (`engine/names.rs`, `rlSymbol`) | 위와 같은 이유지만 구현이 엔진에 있어야 규칙이 하나다 — 정규식 재구현은 컴파일러와 다른 답을 했다 (TASK-105) |
-| 패턴 자리 완성 (태그·필드) | **엔진** (`engine/completions.rs`, `rlCompletions`) | 같은 이유. 자리 판정은 토큰 스트림이라 미완성 버퍼에서도 답한다 (TASK-106) |
+| typed tt 진단·소진성·val | tsgo **API server** (기존 Query/Answers) | TASK-073~085의 규범 경로 그대로 |
+| tt 구조 기능 (완성의 enum 목록, 문서 심볼, quick fix의 삽입 지점) | **엔진** (`engine/declarations.rs`, `declarations`) | 규칙의 단일 원천은 resolve — 정규식 재구현(구 analysis.ts)은 컴파일러와 다른 답을 했다 (TASK-127·128) |
+| tt 이름 hover/definition (enum·케이스·필드) | **엔진** (`engine/names.rs`, `ttSymbol`) | 위와 같은 이유지만 구현이 엔진에 있어야 규칙이 하나다 — 정규식 재구현은 컴파일러와 다른 답을 했다 (TASK-105) |
+| 패턴 자리 완성 (태그·필드) | **엔진** (`engine/completions.rs`, `ttCompletions`) | 같은 이유. 자리 판정은 토큰 스트림이라 미완성 버퍼에서도 답한다 (TASK-106) |
 
 **갱신 (TASK-107)**: 위 두 행을 에디터가 실제로 채택했다. `analysis.ts`에서
 `symbolAt`·`armContextAt`·`inferEnum`·`armTags`·`matchBodyAt`·`enumSignature`가
@@ -90,7 +90,7 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 `parseEnums`/`parseMatches`/`visibleEnums`/`BUILTIN_ENUMS`는 삭제됐다.
 Node에 남은 것은 **텍스트 형태** 유틸뿐이다 — 마스킹, 커서의 단어, 멤버
 접근 판정.
-| semantic tokens (하이라이팅 정밀화) | **RL 자체** (`engine/tokens.rs`, 파스 전용·무상태) | TextMate 문법이 못 하는 판별(파서가 청구한/안 한 `match`·`result`·`flow`)의 단일 원천은 파서; 툴체인 없이도 답해야 하므로 text 기반 요청 (TASK-093) |
+| semantic tokens (하이라이팅 정밀화) | **TT 자체** (`engine/tokens.rs`, 파스 전용·무상태) | TextMate 문법이 못 하는 판별(파서가 청구한/안 한 `match`·`result`·`flow`)의 단일 원천은 파서; 툴체인 없이도 답해야 하므로 text 기반 요청 (TASK-093) |
 
 핵심: 이 표는 전부 **엔진 내부**의 세부다. Node LSP는 어느 백엔드가
 답했는지 모른다 — 이중 LSP는 public architecture에서 제거됐고(§34),
@@ -103,18 +103,18 @@ Editor ─ LSP ─ editors/vscode/server (어댑터)
                  ├─ server.ts    프로토콜·능력·디바운스·표시(마크다운/스니펫)
                  ├─ engine.ts    EngineSession 클라이언트 (문서 sync + semantic 요청)
                  ├─ analysis.ts  텍스트 형태 유틸 (마스킹·커서 문맥; 아래 참조)
-                 └─ rlc.ts       --check/typedCheck (엔진 경유 + one-shot 폴백)
+                 └─ ttc.ts       --check/typedCheck (엔진 경유 + one-shot 폴백)
                        │ JSON lines
                        ▼
-              rlc --server (src/server.rs)
+              ttc --server (src/server.rs)
                  openDocument/updateDocument/closeDocument
                  hover/definition/references/completion/completionResolve
                  rename/signatureHelp/tsDiagnostics/semanticTokens
                  (+check/emitMap/typedCheck)
                        │
                        ▼
-              rlc::engine  ── Project(문서·projection·세션) / Snapshot
-                 language.rs   semantic API — 질문도 답도 .rl 좌표
+              ttc::engine  ── Project(문서·projection·세션) / Snapshot
+                 language.rs   semantic API — 질문도 답도 .tt 좌표
                  (probe·매핑·serve·std 실체화 전부 여기)
                        │                      │
                        ▼                      ▼
@@ -128,12 +128,12 @@ Editor ─ LSP ─ editors/vscode/server (어댑터)
   끝-포함 의미론은 `to_output_inclusive`/`to_source_inclusive`로 승격됐다
   (language-service 위치는 포함, 진단 span은 배제 — 두 규칙 다 규범으로
   문서화).
-- **probe는 엔진 기능이다.** `$rl_probe` 삽입→emit→위치 매핑→임시 서빙→
+- **probe는 엔진 기능이다.** `$tt_probe` 삽입→emit→위치 매핑→임시 서빙→
   질의→복원이 `engine/language.rs` 안에서 한 요청으로 끝난다. 메인 문서
   상태는 오염되지 않는다(다음 serve가 텍스트 비교로 복원).
-- **미열람 `.rl` import는 Project의 기본 동작이다.** 대상 파일 + 이행적
-  `.rl` import를 엔진이 projection 캐시에서 서빙한다. import 추적은
-  정규식이 아니라 실제 스캐너(`rl_imports`)다 — 재-export도 따라간다
+- **미열람 `.tt` import는 Project의 기본 동작이다.** 대상 파일 + 이행적
+  `.tt` import를 엔진이 projection 캐시에서 서빙한다. import 추적은
+  정규식이 아니라 실제 스캐너(`tt_imports`)다 — 재-export도 따라간다
   (의도된 개선, 아래).
 - **rename 원자성은 엔진 규칙이다.** 글루로 역매핑 안 되는 edit 하나라도
   있으면 rename 전체가 null — half-rename은 구조적으로 불가능.
@@ -141,9 +141,9 @@ Editor ─ LSP ─ editors/vscode/server (어댑터)
 ### analysis.ts에 남는 것 (TASK-128 이후)
 
 **텍스트 형태**만 남는다: 마스킹(`maskNonCode`), 커서의 단어(`wordAt`),
-멤버 접근 판정(`memberAccessAt`) — 커서 문맥의 UI 보조이지 rl 의미론이
-아니다. rl 의미론(선언 표·match 사이트·패턴 완성)은 전부 컴파일러의
-답(`declarations`/`rlSymbol`/`rlCompletions`)이고, 그 요청들은 text 기반
+멤버 접근 판정(`memberAccessAt`) — 커서 문맥의 UI 보조이지 tt 의미론이
+아니다. tt 의미론(선언 표·match 사이트·패턴 완성)은 전부 컴파일러의
+답(`declarations`/`ttSymbol`/`ttCompletions`)이고, 그 요청들은 text 기반
 parse-only라 미완성 버퍼에서도, TS 툴체인 없이도 답한다 — 구 계층이
 Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔진 표면이
 같은 내성을 갖추면서 해소됐다.
@@ -152,13 +152,13 @@ Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:
    영구 침묵). 문서는 재시작 시 재동기화(`onSessionStart`).
-2. **import 추적이 재-export를 본다**: `export ... from "./x.rl"`로만
+2. **import 추적이 재-export를 본다**: `export ... from "./x.tt"`로만
    연결된 모듈도 서빙된다 (구 정규식은 누락). 타입이 없던 곳에 타입이
    생기는 방향의 확장.
-3. **raw-text 서빙 폴백 제거**: 구 구현은 `rlc --emit-map` 실패(컴파일러
+3. **raw-text 서빙 폴백 제거**: 구 구현은 `ttc --emit-map` 실패(컴파일러
    부재) 시 raw 텍스트를 서빙했다. 엔진 경로에서 projection은 엔진
    자신이므로 그 실패 모드가 존재하지 않는다 — 항상 방출 TS를 서빙한다.
-4. **컴파일러 교체가 세션에 반영된다**: `rl.compilerPath` 변경 시 새
+4. **컴파일러 교체가 세션에 반영된다**: `tt.compilerPath` 변경 시 새
    엔진 세션이 뜨고 문서가 재동기화된다 (구현 전: TsgoProject는 프로세스
    수명 동안 고정).
 
@@ -168,17 +168,17 @@ Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔
 `virtual.ts`(MappedDoc — 매핑 불변식은 Rust 테스트로 이동) ·
 `tstypes.ts` · virtualDocs/diskVirtuals/pendingVirtual와 그 캐시 정책 ·
 toServiceOffset/fromServiceOffset/fromServiceSpan · probe 설치/직렬화 ·
-`rlc.ts`의 runEmitMap/runEmitMapFileSync/ensureStdModule/stdModulePath.
-`server.ts`는 LSP 표면 + rl 구조 계층 + 표시만 남는다.
+`ttc.ts`의 runEmitMap/runEmitMapFileSync/ensureStdModule/stdModulePath.
+`server.ts`는 LSP 표면 + tt 구조 계층 + 표시만 남는다.
 
 ### lifecycle
 
 - **초기화**: initialize(능력 반환) → initialized. 엔진 세션은 첫 사용
   시 lazy 기동(구 getTsProject와 동일한 타이밍). 기동 시 std 실체화 +
   열린 문서 재동기화.
-- **종료**: LSP 클라이언트가 죽으면 서버 프로세스가 죽고, `rlc --server`는
+- **종료**: LSP 클라이언트가 죽으면 서버 프로세스가 죽고, `ttc --server`는
   stdin EOF로, 그 자식 tsgo들은 각 파이프 EOF/kill로 정리된다 — 계층별
   소유자가 자기 자식을 정리하는 사슬. 테스트는 `shutdownEngineServer()`로
   명시 종료.
 - **실패 격리**: 요청 실패 = 그 요청의 빈 답 + 로그. 엔진 서버 부재 =
-  기능 침묵(기존 "tsgo 없음"과 동일 UX) + rl 구조 기능 유지.
+  기능 침묵(기존 "tsgo 없음"과 동일 UX) + tt 구조 기능 유지.

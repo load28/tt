@@ -1,4 +1,4 @@
-//! Structural parsing of rl `try` statements (Rust-style error propagation).
+//! Structural parsing of tt `try` statements (Rust-style error propagation).
 //!
 //! Two forms, both terminated by a top-level `;`:
 //!
@@ -206,7 +206,7 @@ fn stmt_expr_end(cur: &Cursor) -> Option<(usize, usize)> {
                 // A match expression and a `result` block carry their own
                 // top-level braces; skip the whole shape so the bare-`{`
                 // abort below doesn't reject it (the recursive parse of the
-                // expression decides whether it really is an rl construct).
+                // expression decides whether it really is a tt construct).
                 if let Some(past) = skip_braced_construct(cur.tokens, word, k) {
                     k = past;
                     continue;

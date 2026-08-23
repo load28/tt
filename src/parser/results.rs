@@ -1,4 +1,4 @@
-//! Structural parsing of rl `result { ... }` computation blocks.
+//! Structural parsing of tt `result { ... }` computation blocks.
 //!
 //! ```text
 //! result {
@@ -47,7 +47,7 @@ pub(super) enum Attempt<'t> {
     /// the complete span of the name. Only reported where the text cannot be
     /// TypeScript — see [`no_keyword_is_certain`].
     MissingKeyword { span: Span, recovery: Span },
-    /// Not an rl construct: an ordinary `result` identifier and a block.
+    /// Not a tt construct: an ordinary `result` identifier and a block.
     Pass,
 }
 
@@ -153,7 +153,7 @@ pub(super) fn parse_result_block<'t>(
     }
 
     // The run after the last boundary is the block's value — a binding
-    // there is one whose `;` is missing, which is rl syntax either way.
+    // there is one whose `;` is missing, which is tt syntax either way.
     // A keyword-less run cannot reach here (it must end with a `;`).
     if run_start < close {
         match scan_bind(&cur, run_start, close) {
@@ -179,7 +179,7 @@ pub(super) fn parse_result_block<'t>(
         );
     }
     // The block is claimed, so the file is not TypeScript and a
-    // keyword-less binding here is a mistake rlc can name.
+    // keyword-less binding here is a mistake ttc can name.
     if let Some(&span) = missing.first() {
         return (Attempt::MissingKeyword { span, recovery }, nested);
     }
@@ -358,7 +358,7 @@ fn scan_bind<'t>(cur: &Cursor<'t>, from: usize, boundary: usize) -> BindRun<'t> 
     //   and an expression cannot leave a `>` unopened. The run passes
     //   through untouched.
     // - A statement-only keyword at this level means the scan ran past a
-    //   missing `;` into the next statement — rl syntax, so an error.
+    //   missing `;` into the next statement — tt syntax, so an error.
     let mut depth = 0usize;
     let mut opened = false;
     let mut ran_on = false;
@@ -382,7 +382,7 @@ fn scan_bind<'t>(cur: &Cursor<'t>, from: usize, boundary: usize) -> BindRun<'t> 
         return BindRun::Malformed;
     }
 
-    // From here the run is rl syntax: anything unexpected is an error, not
+    // From here the run is tt syntax: anything unexpected is an error, not
     // a passthrough.
     if !matches!(cur.tokens[boundary].kind, TokenKind::Punct(b';')) {
         return BindRun::Malformed; // a binding must end with `;`
@@ -478,7 +478,7 @@ fn scan_no_keyword<'t>(cur: &Cursor<'t>, from: usize, boundary: usize) -> BindRu
 }
 
 /// True when `result {` — the `{` is at token index `open` — cannot be
-/// TypeScript, so a keyword-less binding inside it is certainly an rl
+/// TypeScript, so a keyword-less binding inside it is certainly a tt
 /// `result` block the author mis-wrote.
 ///
 /// Two conditions, and both are needed:

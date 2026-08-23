@@ -2,9 +2,9 @@
 //! the fidelity of the conversion into the analysis surface (the analysis
 //! consumes this resolver — Phase 3, TASK-123·129).
 
-use rlc::ExternEnum;
-use rlc::hir::{self, FileId};
-use rlc::resolve::{self, DefKind, Namespace, Res, Resolution, UseKind};
+use ttc::ExternEnum;
+use ttc::hir::{self, FileId};
+use ttc::resolve::{self, DefKind, Namespace, Res, Resolution, UseKind};
 
 fn resolved(source: &str, externs: &[ExternEnum]) -> (hir::HirFile, Resolution) {
     let mut hir = hir::lower_source(FileId(0), source);
@@ -79,7 +79,7 @@ fn locals_shadow_imports_shadow_builtins() {
     let externs = [ExternEnum {
         name: "Token".to_string(),
         tags: vec!["Num".to_string(), "Eof".to_string()],
-        from: Some("./token.rl".to_string()),
+        from: Some("./token.tt".to_string()),
     }];
     let (hir, resolution) = resolved(src, &externs);
     let option = resolution.lookup(Namespace::Type, "Option").unwrap();
@@ -106,7 +106,7 @@ fn locals_shadow_imports_shadow_builtins() {
     assert_eq!(
         data.origin,
         resolve::DeclOrigin::Imported {
-            from: Some("./token.rl".to_string())
+            from: Some("./token.tt".to_string())
         }
     );
     // The match resolved against the *local* Option.
@@ -123,7 +123,7 @@ fn an_import_alias_is_the_name_in_scope() {
     let externs = [ExternEnum {
         name: "T".to_string(),
         tags: vec!["Num".to_string(), "Eof".to_string()],
-        from: Some("./token.rl".to_string()),
+        from: Some("./token.tt".to_string()),
     }];
     let src = "const v = match (t) { Num => 1, Eof => 0 };\n";
     let (hir, resolution) = resolved(src, &externs);
@@ -225,7 +225,7 @@ fn resolution_matches_the_analysis_answer() {
     ];
     for src in cases {
         let (hir, resolution) = resolved(src, &[]);
-        let analysis = rlc::pattern_analyses(src, &[]);
+        let analysis = ttc::pattern_analyses(src, &[]);
         let ours: Vec<(usize, usize, &str, &str)> = resolution
             .unresolved
             .iter()
@@ -245,7 +245,7 @@ fn resolution_matches_the_analysis_answer() {
 
 #[test]
 fn tuple_positions_identify_independently() {
-    // Empty parens force the rl-enum reading (a unit-only `enum` is
+    // Empty parens force the tt-enum reading (a unit-only `enum` is
     // TypeScript's own and passes through).
     let src = "enum A { X(), Y }\nenum B { P(), Q }\n\
         const v = match (a, b) { (X, P) => 0, (Y, Q) => 1 };\n";

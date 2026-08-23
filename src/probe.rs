@@ -1,9 +1,9 @@
 //! Typed exhaustiveness probes for literal matches.
 //!
-//! rlc resolves tag exhaustiveness itself, from the enum declarations it can
+//! ttc resolves tag exhaustiveness itself, from the enum declarations it can
 //! see. A literal match has no such registry: whether `"north" | "south"`
 //! covers the scrutinee is a fact about a *TypeScript type*, and the design
-//! contract (`docs/design/match-literal-patterns.md`) is that rlc must not
+//! contract (`docs/design/match-literal-patterns.md`) is that ttc must not
 //! grow a partial TypeScript type system to answer it.
 //!
 //! So the default compile path emits a runtime guard and says nothing, and
@@ -16,7 +16,7 @@
 use crate::ast::*;
 
 /// A wildcard-free literal `match` — one typed exhaustiveness question.
-/// Produced by [`crate::literal_matches`]; consumed by `rlc --types`.
+/// Produced by [`crate::literal_matches`]; consumed by `ttc --types`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LiteralMatch {
     /// Byte offset of the `match` keyword — where a missing-literal
@@ -52,7 +52,7 @@ pub enum Literal {
 /// A wildcard-free tag `match` — one typed exhaustiveness question about an
 /// enum. Produced by [`crate::tag_matches`].
 ///
-/// rlc can answer this one from its own declaration table, and does when no
+/// ttc can answer this one from its own declaration table, and does when no
 /// checker is available. A checker answers it *better*: the scrutinee's type
 /// at the `match` is the narrowed one, so a case an earlier guard already
 /// removed is not demanded back, and an enum declared in another module
@@ -78,7 +78,7 @@ pub struct TagMatch {
 /// One nested pattern, as a question about the *payload* it tests.
 ///
 /// `Ok(value: Some(v))` narrows twice: first that the value is `Ok`, then
-/// that its payload is `Some`. The second step is over a type rlc may not
+/// that its payload is `Some`. The second step is over a type ttc may not
 /// know — the field's declared type can be a type parameter or a
 /// hand-written union — so the type checker is asked at the receiver the
 /// emitted condition tests ([`crate::PayloadTemp`]), and the answer names
@@ -98,7 +98,7 @@ pub struct PayloadProbe {
 /// payload positions a checker can be asked about.
 ///
 /// ```
-/// let probes = rlc::payload_probes(
+/// let probes = ttc::payload_probes(
 ///     "const v = match (r) { Ok(value: Some(value: n)) => n, Err(e) => 0 };\n",
 /// );
 /// assert_eq!(probes.len(), 1);
@@ -189,7 +189,7 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
                 }
             }
             Segment::Verbatim(_)
-            | Segment::RlImport(_)
+            | Segment::TtImport(_)
             | Segment::Enum(_)
             | Segment::ValModifier(_) => {}
         }
@@ -228,7 +228,7 @@ fn payload_of(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
 /// included, in source order.
 ///
 /// ```
-/// let probes = rlc::tag_matches("const v = match (s) { Circle(r) => r, Point => 0 };\n");
+/// let probes = ttc::tag_matches("const v = match (s) { Circle(r) => r, Point => 0 };\n");
 /// assert_eq!(probes.len(), 1);
 /// assert_eq!(probes[0].covered, ["Circle", "Point"]);
 /// ```
@@ -236,7 +236,7 @@ fn payload_of(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
 /// A match with a `_` arm is already exhaustive and is not collected:
 ///
 /// ```
-/// assert!(rlc::tag_matches("const v = match (s) { Circle(r) => r, _ => 0 };\n").is_empty());
+/// assert!(ttc::tag_matches("const v = match (s) { Circle(r) => r, _ => 0 };\n").is_empty());
 /// ```
 pub fn tag_matches(source: &str) -> Vec<TagMatch> {
     tag_matches_with_kind(source, crate::SourceKind::TypeScript)
@@ -254,18 +254,18 @@ pub fn tag_matches_with_kind(source: &str, source_kind: crate::SourceKind) -> Ve
 /// ones included, in source order.
 ///
 /// ```
-/// let probes = rlc::literal_matches("const s = match (d) { \"n\" => 1, \"s\" => 2 };\n");
+/// let probes = ttc::literal_matches("const s = match (d) { \"n\" => 1, \"s\" => 2 };\n");
 /// assert_eq!(probes.len(), 1);
 /// assert_eq!(probes[0].covered, [
-///     rlc::Literal::String("n".to_string()),
-///     rlc::Literal::String("s".to_string()),
+///     ttc::Literal::String("n".to_string()),
+///     ttc::Literal::String("s".to_string()),
 /// ]);
 /// ```
 ///
 /// A match with a `_` arm is already exhaustive and is not collected:
 ///
 /// ```
-/// assert!(rlc::literal_matches("const s = match (d) { \"n\" => 1, _ => 2 };\n").is_empty());
+/// assert!(ttc::literal_matches("const s = match (d) { \"n\" => 1, _ => 2 };\n").is_empty());
 /// ```
 pub fn literal_matches(source: &str) -> Vec<LiteralMatch> {
     literal_matches_with_kind(source, crate::SourceKind::TypeScript)
@@ -302,7 +302,7 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
-            | Segment::RlImport(_)
+            | Segment::TtImport(_)
             | Segment::Enum(_)
             | Segment::ValModifier(_) => {}
             Segment::Match(expr) => {

@@ -1,30 +1,30 @@
 /* --------------------------------------------------------------------------
- * rl-lang local development mode — created by `scripts/setup` in the RL
+ * tt-lang local development mode — created by `scripts/setup` in the TT
  * repository, absent from published installs.
  *
- * `rl-dev.local.json` beside this file (written by setup, gitignored) marks
- * the package as a local `file:` install and names the RL repository root.
+ * `tt-dev.local.json` beside this file (written by setup, gitignored) marks
+ * the package as a local `file:` install and names the TT repository root.
  * From that one value everything else is derived, never stored twice:
  *
- *   rlc        <root>/target/release/rlc            (the release build)
- *   toolchain  <root>/.rl-dev/toolchain.json        (setup's toolchain choice)
+ *   ttc        <root>/target/release/ttc            (the release build)
+ *   toolchain  <root>/.tt-dev/toolchain.json        (setup's toolchain choice)
  *
  * A "checkout" toolchain names a typescript-go tree; its tsgo binary and API
- * client paths are computed here and handed to the child rlc process as
- * RLC_TSGO_* environment variables — the user's shell is never touched. An
- * "npm" toolchain injects nothing: rlc resolves TypeScript 7 from the
- * consuming project's own node_modules, exactly as a published rlc would.
+ * client paths are computed here and handed to the child ttc process as
+ * TTC_TSGO_* environment variables — the user's shell is never touched. An
+ * "npm" toolchain injects nothing: ttc resolves TypeScript 7 from the
+ * consuming project's own node_modules, exactly as a published ttc would.
  *
- * This whole layer is temporary (docs/tasks/TASK-090): once RL ships a
+ * This whole layer is temporary (docs/tasks/TASK-090): once TT ships a
  * verified TypeScript 7 inside its own package, delete this module together
- * with scripts/setup and .rl-dev/.
+ * with scripts/setup and .tt-dev/.
  * ----------------------------------------------------------------------- */
 "use strict";
 
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DEV_CONFIG = path.join(__dirname, "rl-dev.local.json");
+const DEV_CONFIG = path.join(__dirname, "tt-dev.local.json");
 
 /** tsgo's path inside a built typescript-go tree (src/typescript/native.rs). */
 const BIN_IN_TREE = "built/local/tsgo";
@@ -43,10 +43,10 @@ function readConfig(file) {
 
 /**
  * The local development environment `scripts/setup` configured, or null when
- * this is a regular published install (no `rl-dev.local.json`).
+ * this is a regular published install (no `tt-dev.local.json`).
  *
  * Throws when the config exists but the binary it names is gone — running
- * some other rlc silently would be worse than failing with the fix.
+ * some other ttc silently would be worse than failing with the fix.
  *
  * @returns {{ binary: string, env: Record<string, string> } | null}
  */
@@ -55,11 +55,11 @@ function devEnvironment() {
   const root = config && typeof config.root === "string" ? config.root : null;
   if (root === null) return null;
 
-  const exe = process.platform === "win32" ? "rlc.exe" : "rlc";
+  const exe = process.platform === "win32" ? "ttc.exe" : "ttc";
   const binary = path.join(root, "target", "release", exe);
   if (!fs.existsSync(binary)) {
     throw new Error(
-      `rl-lang: this is a local development install (${DEV_CONFIG}), ` +
+      `tt-lang: this is a local development install (${DEV_CONFIG}), ` +
         `but ${binary} does not exist. Run ./scripts/setup in ${root}, ` +
         `then reinstall this package.`,
     );
@@ -68,17 +68,17 @@ function devEnvironment() {
 }
 
 /**
- * Environment variables pointing rlc at the toolchain `scripts/setup` chose,
- * read from `<rlRoot>/.rl-dev/toolchain.json`. Empty for the "npm" toolchain
- * (rlc resolves the consuming project's TypeScript itself), for a missing
+ * Environment variables pointing ttc at the toolchain `scripts/setup` chose,
+ * read from `<ttRoot>/.tt-dev/toolchain.json`. Empty for the "npm" toolchain
+ * (ttc resolves the consuming project's TypeScript itself), for a missing
  * config, and for a checkout whose artifacts are gone — an unbuilt tree
- * named via RLC_TSGO_ROOT would stop rlc's own fallback resolution cold.
+ * named via TTC_TSGO_ROOT would stop ttc's own fallback resolution cold.
  *
- * @param {string} rlRoot
+ * @param {string} ttRoot
  * @returns {Record<string, string>}
  */
-function toolchainEnv(rlRoot) {
-  const config = readConfig(path.join(rlRoot, ".rl-dev", "toolchain.json"));
+function toolchainEnv(ttRoot) {
+  const config = readConfig(path.join(ttRoot, ".tt-dev", "toolchain.json"));
   if (config === null) return {};
   // A config predating the "kind" field named a checkout root only.
   const kind = typeof config.kind === "string" ? config.kind : "checkout";
@@ -88,7 +88,7 @@ function toolchainEnv(rlRoot) {
   const bin = path.join(root, ...BIN_IN_TREE.split("/"));
   const api = path.join(root, ...API_IN_TREE.split("/"));
   if (!fs.existsSync(bin) || !fs.existsSync(api)) return {};
-  return { RLC_TSGO_ROOT: root, RLC_TSGO_BIN: bin, RLC_TSGO_API: api };
+  return { TTC_TSGO_ROOT: root, TTC_TSGO_BIN: bin, TTC_TSGO_API: api };
 }
 
 module.exports = { devEnvironment };

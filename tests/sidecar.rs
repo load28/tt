@@ -1,10 +1,10 @@
-//! Editor sidecar tests: `.rl.d.ts` + `.rl.d.ts.map`.
+//! Editor sidecar tests: `.tt.d.ts` + `.tt.d.ts.map`.
 //!
 //! The map is what makes "go to definition" from a `.ts` importer land in
-//! the original `.rl`, so these tests decode it and check the positions
+//! the original `.tt`, so these tests decode it and check the positions
 //! rather than comparing opaque VLQ strings.
 
-use rlc::build_sidecar;
+use ttc::build_sidecar;
 
 const SOURCE: &str = r#"import { pad } from "./format.ts";
 
@@ -106,13 +106,13 @@ fn field(map: &str, key: &str) -> String {
 
 #[test]
 fn declarations_open_with_a_generated_banner() {
-    // The file sits next to the source (TypeScript resolves `./x.rl` to a
-    // sibling `x.rl.d.ts` and nowhere else), so it says what it is.
-    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.rl");
+    // The file sits next to the source (TypeScript resolves `./x.tt` to a
+    // sibling `x.tt.d.ts` and nowhere else), so it says what it is.
+    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
     assert!(
         sidecar
             .declarations
-            .starts_with("// @generated from notice.rl by rlc --sidecar"),
+            .starts_with("// @generated from notice.tt by ttc --sidecar"),
         "{}",
         sidecar.declarations
     );
@@ -120,12 +120,12 @@ fn declarations_open_with_a_generated_banner() {
 
 #[test]
 fn declarations_carry_a_source_mapping_url() {
-    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.rl");
+    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
     assert!(
         sidecar
             .declarations
             .trim_end()
-            .ends_with("//# sourceMappingURL=notice.rl.d.ts.map"),
+            .ends_with("//# sourceMappingURL=notice.tt.d.ts.map"),
         "{}",
         sidecar.declarations
     );
@@ -134,21 +134,21 @@ fn declarations_carry_a_source_mapping_url() {
 #[test]
 fn an_existing_source_mapping_url_is_replaced_not_duplicated() {
     let input = format!("{DECLARATIONS}//# sourceMappingURL=notice.d.ts.map\n");
-    let sidecar = build_sidecar(SOURCE, &input, "notice.rl");
+    let sidecar = build_sidecar(SOURCE, &input, "notice.tt");
     assert_eq!(sidecar.declarations.matches("sourceMappingURL").count(), 1);
     assert!(!sidecar.declarations.contains("notice.d.ts.map\n//#"));
 }
 
 #[test]
-fn map_names_the_rl_file_as_its_source() {
-    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.rl");
+fn map_names_the_tt_file_as_its_source() {
+    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
     assert!(
-        sidecar.map.contains("\"sources\":[\"notice.rl\"]"),
+        sidecar.map.contains("\"sources\":[\"notice.tt\"]"),
         "{}",
         sidecar.map
     );
     assert!(
-        sidecar.map.contains("\"file\":\"notice.rl.d.ts\""),
+        sidecar.map.contains("\"file\":\"notice.tt.d.ts\""),
         "{}",
         sidecar.map
     );
@@ -159,36 +159,36 @@ fn a_relative_source_path_records_the_distance_but_not_in_the_file_names() {
     // With `-o` the declarations live in their own tree, which TypeScript
     // merges back via `rootDirs`. Only `sources` carries the distance —
     // the map and the banner still name the file itself.
-    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "../src/notice.rl");
+    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "../src/notice.tt");
     assert!(
-        sidecar.map.contains("\"sources\":[\"../src/notice.rl\"]"),
+        sidecar.map.contains("\"sources\":[\"../src/notice.tt\"]"),
         "{}",
         sidecar.map
     );
     assert!(
-        sidecar.map.contains("\"file\":\"notice.rl.d.ts\""),
+        sidecar.map.contains("\"file\":\"notice.tt.d.ts\""),
         "{}",
         sidecar.map
     );
     assert!(
         sidecar
             .declarations
-            .starts_with("// @generated from notice.rl by rlc --sidecar"),
+            .starts_with("// @generated from notice.tt by ttc --sidecar"),
         "{}",
         sidecar.declarations
     );
     assert!(
         sidecar
             .declarations
-            .contains("//# sourceMappingURL=notice.rl.d.ts.map"),
+            .contains("//# sourceMappingURL=notice.tt.d.ts.map"),
         "{}",
         sidecar.declarations
     );
 }
 
 #[test]
-fn every_declaration_maps_to_its_position_in_the_rl_source() {
-    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.rl");
+fn every_declaration_maps_to_its_position_in_the_tt_source() {
+    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
     let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
 
     // `export enum Notice` is on source line 4 (zero-based 3), name at
@@ -214,7 +214,7 @@ fn every_declaration_maps_to_its_position_in_the_rl_source() {
 fn each_declaration_gets_a_segment_at_its_name_column() {
     // Go-to-definition asks about the column where the name starts; a
     // segment only at column 0 leaves the editor stranded in the .d.ts.
-    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.rl");
+    let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
     let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
 
     // "render" starts at column 24 of `export declare function render(...)`.
@@ -229,7 +229,7 @@ fn each_declaration_gets_a_segment_at_its_name_column() {
 
 #[test]
 fn declarations_with_no_source_match_are_skipped_without_panicking() {
-    let sidecar = build_sidecar(SOURCE, "export declare const ghost: number;\n", "notice.rl");
+    let sidecar = build_sidecar(SOURCE, "export declare const ghost: number;\n", "notice.tt");
     let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
     assert!(segments.is_empty(), "{segments:?}");
 }

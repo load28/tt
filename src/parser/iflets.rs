@@ -1,4 +1,4 @@
-//! Structural parsing of rl `if let` statements:
+//! Structural parsing of tt `if let` statements:
 //!
 //! ```text
 //! if let Tag(bindings...) (| Tag[(bindings...)])* = <expr> { ... }
@@ -8,7 +8,7 @@
 //!
 //! Contract safety: in valid TypeScript an undotted `if` is always followed
 //! by `(` — never by the reserved word `let` — so an `if let` sequence can
-//! only be rl syntax. That also means a candidate that *starts* with
+//! only be tt syntax. That also means a candidate that *starts* with
 //! `if let` but fails to parse cannot be passed through (the output would
 //! be invalid TypeScript with no position); the caller records the offset
 //! and the semantic phase reports it, like a stray `|>`.

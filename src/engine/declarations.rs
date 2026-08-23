@@ -1,7 +1,7 @@
 //! The declaration surface an editor consumes — the compiler's own answer.
 //!
 //! This is what retires the editor's second, regex-based implementation of
-//! rl semantics (`docs/design/rust-parity-analysis.md` GAP-3): the list of
+//! tt semantics (`docs/design/rust-parity-analysis.md` GAP-3): the list of
 //! enums visible in a file — local, imported (aliases applied), built-in —
 //! comes from [`crate::resolve`], under exactly the shadowing the compiler
 //! resolves with, together with everything a completion or an outline
@@ -16,31 +16,31 @@ use crate::resolve::{self, DeclOrigin, DefKind};
 
 /// Everything the declaration surface answers for one file.
 #[derive(Debug)]
-pub struct RlDeclarations {
+pub struct TtDeclarations {
     /// The enums visible in the file, in resolution order (local
     /// declarations in source order, then imports, then built-ins) —
     /// shadowed names appear once, as the declaration that wins.
-    pub enums: Vec<RlEnumDecl>,
+    pub enums: Vec<TtEnumDecl>,
     /// The file's `match` sites (nested ones included), in source order.
-    pub matches: Vec<RlMatchSite>,
+    pub matches: Vec<TtMatchSite>,
 }
 
 /// One visible enum.
 #[derive(Debug)]
-pub struct RlEnumDecl {
+pub struct TtEnumDecl {
     /// The name this enum is known by in the file's scope.
     pub name: String,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
     /// Where it comes from.
-    pub origin: RlEnumOrigin,
+    pub origin: TtEnumOrigin,
     /// The cases, in declaration order.
-    pub cases: Vec<RlCaseDecl>,
+    pub cases: Vec<TtCaseDecl>,
 }
 
 /// Where a visible enum is declared.
 #[derive(Debug, PartialEq, Eq)]
-pub enum RlEnumOrigin {
+pub enum TtEnumOrigin {
     /// Declared in this file. `name_span` is the declared name;
     /// `span` runs from the name to the last declared piece — the outline
     /// range.
@@ -52,7 +52,7 @@ pub enum RlEnumOrigin {
     },
     /// Imported; the specifier as written, when recorded.
     Imported {
-        /// e.g. `./token.rl`.
+        /// e.g. `./token.tt`.
         specifier: Option<String>,
     },
     /// A built-in (`Option`, `Result`).
@@ -61,7 +61,7 @@ pub enum RlEnumOrigin {
 
 /// One case of a visible enum.
 #[derive(Debug)]
-pub struct RlCaseDecl {
+pub struct TtCaseDecl {
     /// The tag.
     pub tag: String,
     /// Byte span of the tag, for a local declaration.
@@ -71,12 +71,12 @@ pub struct RlCaseDecl {
     pub unit: bool,
     /// The payload fields (empty for a unit case, and for imported
     /// declarations that carried tags only).
-    pub fields: Vec<RlFieldDecl>,
+    pub fields: Vec<TtFieldDecl>,
 }
 
 /// One payload field of a case.
 #[derive(Debug)]
-pub struct RlFieldDecl {
+pub struct TtFieldDecl {
     /// The field name.
     pub name: String,
     /// Whether it is optional (`name?: T`).
@@ -87,7 +87,7 @@ pub struct RlFieldDecl {
 
 /// One `match` site: where its keyword is and where an arm is inserted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RlMatchSite {
+pub struct TtMatchSite {
     /// Byte offset of the `match` keyword.
     pub keyword: usize,
     /// Byte offset of the body's opening `{`.
@@ -97,9 +97,9 @@ pub struct RlMatchSite {
 }
 
 /// The declarations visible in `source`, at `path` (which is what resolves
-/// its relative `.rl` imports — from disk; an editor passes the buffer's
+/// its relative `.tt` imports — from disk; an editor passes the buffer's
 /// text for the file itself).
-pub fn rl_declarations(path: &Path, source: &str) -> RlDeclarations {
+pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
     let program = crate::parser::parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
@@ -122,10 +122,10 @@ pub fn rl_declarations(path: &Path, source: &str) -> RlDeclarations {
         if resolution.type_ns.get(&def.name) != Some(&id) {
             continue;
         }
-        let cases: Vec<RlCaseDecl> = data
+        let cases: Vec<TtCaseDecl> = data
             .variants
             .iter()
-            .map(|variant| RlCaseDecl {
+            .map(|variant| TtCaseDecl {
                 tag: variant.name.clone(),
                 span: variant
                     .node
@@ -137,7 +137,7 @@ pub fn rl_declarations(path: &Path, source: &str) -> RlDeclarations {
                     .as_deref()
                     .unwrap_or_default()
                     .iter()
-                    .map(|field| RlFieldDecl {
+                    .map(|field| TtFieldDecl {
                         name: field.name.clone(),
                         optional: field.optional,
                         ty: field.ty_text.clone(),
@@ -170,17 +170,17 @@ pub fn rl_declarations(path: &Path, source: &str) -> RlDeclarations {
                     .map(|s| s.end)
                     .max()
                     .unwrap_or(name_span.1);
-                RlEnumOrigin::Local {
+                TtEnumOrigin::Local {
                     name_span,
                     span: (name_span.0, end.max(name_span.1)),
                 }
             }
-            DeclOrigin::Imported { from } => RlEnumOrigin::Imported {
+            DeclOrigin::Imported { from } => TtEnumOrigin::Imported {
                 specifier: from.clone(),
             },
-            DeclOrigin::Builtin => RlEnumOrigin::Builtin,
+            DeclOrigin::Builtin => TtEnumOrigin::Builtin,
         };
-        enums.push(RlEnumDecl {
+        enums.push(TtEnumDecl {
             name: def.name.clone(),
             generics: data.generics.clone(),
             origin,
@@ -192,18 +192,18 @@ pub fn rl_declarations(path: &Path, source: &str) -> RlDeclarations {
     collect_matches(&program, &mut matches);
     matches.sort_by_key(|m| m.keyword);
 
-    RlDeclarations { enums, matches }
+    TtDeclarations { enums, matches }
 }
 
 /// Every `match` of a program, nested positions included.
-fn collect_matches(program: &crate::ast::Program, out: &mut Vec<RlMatchSite>) {
+fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
     use crate::ast::{IfLetElse, ResultItem, Segment, TemplateChunk};
     for segment in &program.segments {
         match segment {
-            Segment::Verbatim(_) | Segment::RlImport(_) | Segment::ValModifier(_) => {}
+            Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
             Segment::Enum(_) => {}
             Segment::Match(expr) => {
-                out.push(RlMatchSite {
+                out.push(TtMatchSite {
                     keyword: expr.keyword_off,
                     body_open: expr.body_open,
                     body_close: expr.body_close,
@@ -217,7 +217,7 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<RlMatchSite>) {
                 }
             }
             Segment::TupleMatch(expr) => {
-                out.push(RlMatchSite {
+                out.push(TtMatchSite {
                     keyword: expr.keyword_off,
                     body_open: expr.body_open,
                     body_close: expr.body_close,
@@ -284,8 +284,8 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<RlMatchSite>) {
 mod tests {
     use super::*;
 
-    fn declarations(source: &str) -> RlDeclarations {
-        rl_declarations(Path::new("/nowhere/a.rl"), source)
+    fn declarations(source: &str) -> TtDeclarations {
+        tt_declarations(Path::new("/nowhere/a.tt"), source)
     }
 
     #[test]
@@ -295,7 +295,7 @@ mod tests {
         let names: Vec<&str> = decls.enums.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["Shape", "Option", "Result"]);
         let shape = &decls.enums[0];
-        let RlEnumOrigin::Local { name_span, span } = &shape.origin else {
+        let TtEnumOrigin::Local { name_span, span } = &shape.origin else {
             panic!("Shape is local");
         };
         assert_eq!(&src[name_span.0..name_span.1], "Shape");
@@ -306,16 +306,16 @@ mod tests {
         // The built-ins carry their declared type parameters.
         let option = decls.enums.iter().find(|e| e.name == "Option").unwrap();
         assert_eq!(option.generics, "<T>");
-        assert_eq!(option.origin, RlEnumOrigin::Builtin);
+        assert_eq!(option.origin, TtEnumOrigin::Builtin);
     }
 
     #[test]
     fn a_local_declaration_shadows_the_builtin_once() {
         let src = "enum Option { Nothing, Just(v: number) }\n";
         let decls = declarations(src);
-        let options: Vec<&RlEnumDecl> = decls.enums.iter().filter(|e| e.name == "Option").collect();
+        let options: Vec<&TtEnumDecl> = decls.enums.iter().filter(|e| e.name == "Option").collect();
         assert_eq!(options.len(), 1, "the shadowed built-in is not listed");
-        assert!(matches!(options[0].origin, RlEnumOrigin::Local { .. }));
+        assert!(matches!(options[0].origin, TtEnumOrigin::Local { .. }));
         assert_eq!(options[0].cases[0].tag, "Nothing");
     }
 

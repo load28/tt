@@ -1,10 +1,10 @@
-# rl match 리터럴 패턴 설계 의견
+# tt match 리터럴 패턴 설계 의견
 
 ## 결론
 
 리터럴 패턴은 추가할 만하다.
 
-다만 `rlc`가 TypeScript 타입 시스템을 직접 흉내 내면 안 된다.
+다만 `ttc`가 TypeScript 타입 시스템을 직접 흉내 내면 안 된다.
 이미 존재하는 TypeScript 연동 경로를 사용해야 한다.
 
 따라서 설계는 두 층으로 나누는 것이 좋다.
@@ -12,14 +12,14 @@
 1. 기본 컴파일 경로는 리터럴 패턴을 파싱하고 TypeScript로 방출한다.
 2. typed 경로는 TypeScript checker로 scrutinee 타입을 조회해서 리터럴 유니언 소진성을 검사한다.
 
-이렇게 하면 rl의 기존 장점인 "가벼운 구조 전처리기" 성격을 유지하면서,
+이렇게 하면 tt의 기존 장점인 "가벼운 구조 전처리기" 성격을 유지하면서,
 TypeScript 타입 정보가 있는 환경에서는 더 Rust다운 match 경험을 줄 수 있다.
 
 ## 왜 리터럴 패턴이 필요한가
 
-현재 rl의 `match`는 이미 표현식이다.
+현재 tt의 `match`는 이미 표현식이다.
 
-```rl
+```tt
 const value = match (shape) {
   Circle(radius) => radius,
   Point => 0,
@@ -30,7 +30,7 @@ const value = match (shape) {
 
 하지만 현재 패턴은 태그드 유니언 전용이다.
 
-```rl
+```tt
 match (shape) {
   Circle(radius) => ...,
   Point => ...,
@@ -45,9 +45,9 @@ type Size = "sm" | "md" | "lg";
 type Status = 200 | 400 | 404 | 500;
 ```
 
-이 값을 rl에서 자연스럽게 다루려면 아래가 가능해야 한다.
+이 값을 tt에서 자연스럽게 다루려면 아래가 가능해야 한다.
 
-```rl
+```tt
 const label = match (dir) {
   "north" => "N",
   "south" => "S",
@@ -62,7 +62,7 @@ const label = match (dir) {
 
 리터럴 패턴을 방출하는 것 자체는 어렵지 않다.
 
-```rl
+```tt
 const label = match (dir) {
   "north" => "N",
   "south" => "S",
@@ -74,8 +74,8 @@ const label = match (dir) {
 
 ```ts
 const label = ((() => {
-  const $rl_m = dir;
-  switch ($rl_m) {
+  const $tt_m = dir;
+  switch ($tt_m) {
     case "north": { return "N"; }
     case "south": { return "S"; }
     default: { return "?"; }
@@ -85,7 +85,7 @@ const label = ((() => {
 
 문제는 `_` 없는 match다.
 
-```rl
+```tt
 type Direction = "north" | "south";
 
 const label = match (dir) {
@@ -96,7 +96,7 @@ const label = match (dir) {
 
 이게 exhaustive인지 알려면 `dir`의 타입이 `"north" | "south"`라는 사실을 알아야 한다.
 
-현재 Rust 쪽 `rlc` 구조 파서만으로는 이 정보를 알 수 없다.
+현재 Rust 쪽 `ttc` 구조 파서만으로는 이 정보를 알 수 없다.
 이 정보는 TypeScript 타입 체커 안에 있다.
 
 ## TypeScript 연동을 쓰는 게 맞다
@@ -116,12 +116,12 @@ type ApiStatus = 200 | 400 | 404 | 500;
 import type { Mode } from "./mode";
 ```
 
-이걸 rlc가 직접 따라가면 TypeScript의 부분 구현체가 된다.
+이걸 ttc가 직접 따라가면 TypeScript의 부분 구현체가 된다.
 그 순간 유지보수 비용이 급격히 커지고, TypeScript 버전 변화에도 계속 끌려간다.
 
 이미 프로젝트에는 TypeScript 연동 경로가 있다.
 
-- `rlc --types`
+- `ttc --types`
 - VSCode language service
 - emitted TypeScript virtual document
 - TypeScript diagnostics source mapping
@@ -135,9 +135,9 @@ AST 위치의 타입을 조회할 수 있다.
 
 ### 1. 기본 컴파일은 타입 없이 동작한다
 
-기본 `rlc`는 지금처럼 빠르고 독립적으로 유지한다.
+기본 `ttc`는 지금처럼 빠르고 독립적으로 유지한다.
 
-```rl
+```tt
 const label = match (dir) {
   "north" => "N",
   "south" => "S",
@@ -159,7 +159,7 @@ const label = match (dir) {
 
 TypeScript가 연결된 경로에서는 scrutinee 타입을 조회한다.
 
-```rl
+```tt
 type Direction = "north" | "south";
 
 const label = match (dir) {
@@ -168,12 +168,12 @@ const label = match (dir) {
 ```
 
 TypeScript checker가 `dir`의 타입을 `"north" | "south"`로 알려주면,
-rlc는 arm 리터럴 집합과 비교해서 `"south"` 누락을 보고한다.
+ttc는 arm 리터럴 집합과 비교해서 `"south"` 누락을 보고한다.
 
-진단은 생성된 TypeScript 위치가 아니라 `.rl` 원본 위치로 매핑한다.
+진단은 생성된 TypeScript 위치가 아니라 `.tt` 원본 위치로 매핑한다.
 
 ```txt
-rlc: src/main.rl:4:15: match on literal union is not exhaustive: missing "south"
+ttc: src/main.tt:4:15: match on literal union is not exhaustive: missing "south"
 ```
 
 ### 3. 타입을 모르면 보수적으로 간다
@@ -215,7 +215,7 @@ T extends string
 
 v1은 문자열, 숫자, boolean 리터럴만 받는다.
 
-```rl
+```tt
 match (x) {
   "a" => 1,
   "b" => 2,
@@ -236,7 +236,7 @@ match (flag) {
 
 or-pattern도 허용할 수 있다.
 
-```rl
+```tt
 match (code) {
   200 | 201 | 204 => "success",
   400 | 404 => "client error",
@@ -247,7 +247,7 @@ match (code) {
 
 태그 패턴과 리터럴 패턴은 한 match에서 섞지 않는 게 좋다.
 
-```rl
+```tt
 // v1에서는 금지
 match (x) {
   Some(value) => value,
@@ -257,15 +257,15 @@ match (x) {
 
 이유는 방출 기준이 다르기 때문이다.
 
-- 태그 match는 `$rl_m.kind`를 본다.
-- 리터럴 match는 `$rl_m` 자체를 본다.
+- 태그 match는 `$tt_m.kind`를 본다.
+- 리터럴 match는 `$tt_m` 자체를 본다.
 
 ## 소진성 정책
 
 기본 경로에서는 `_` 없는 리터럴 match도 허용하는 편이 좋다.
 대신 런타임 guard를 넣는다.
 
-```rl
+```tt
 const label = match (dir) {
   "north" => "N",
   "south" => "S",
@@ -276,11 +276,11 @@ const label = match (dir) {
 
 ```ts
 const label = ((() => {
-  const $rl_m = dir;
-  switch ($rl_m) {
+  const $tt_m = dir;
+  switch ($tt_m) {
     case "north": { return "N"; }
     case "south": { return "S"; }
-    default: { throw new Error("rl match: unexpected literal " + JSON.stringify($rl_m)); }
+    default: { throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m)); }
   }
 })());
 ```
@@ -288,7 +288,7 @@ const label = ((() => {
 typed 경로에서는 소진성을 검사한다.
 
 - exhaustive면 통과한다.
-- 누락이면 rl 진단을 낸다.
+- 누락이면 tt 진단을 낸다.
 - 타입을 모르면 진단하지 않는다.
 
 이 방식이 기존 태그 match와 가장 비슷하다.
@@ -335,7 +335,7 @@ typed 소진성은 별도 레이어에서 한다.
 - TypeScript checker로 타입을 조회한다.
 - union member가 전부 string, number, boolean literal인지 확인한다.
 - arm 리터럴과 비교한다.
-- 누락을 `.rl` 원본 위치로 보고한다.
+- 누락을 `.tt` 원본 위치로 보고한다.
 
 ## 최종 의견
 
@@ -347,6 +347,6 @@ typed 소진성은 별도 레이어에서 한다.
 1. 리터럴 패턴 파싱과 방출
 2. 중복 리터럴과 혼합 패턴 검사
 3. VSCode와 `--types` 경로에서 TypeScript 기반 소진성 검사
-4. 필요하면 `rlc --check --typed` 같은 명시적 typed check 모드 추가
+4. 필요하면 `ttc --check --typed` 같은 명시적 typed check 모드 추가
 
-이 순서가 rl의 기존 설계 계약을 가장 덜 흔든다.
+이 순서가 tt의 기존 설계 계약을 가장 덜 흔든다.

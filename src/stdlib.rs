@@ -1,10 +1,10 @@
-//! The rl standard library as tree-shakeable TypeScript modules.
+//! The tt standard library as tree-shakeable TypeScript modules.
 //!
-//! rl itself adds no runtime — the standard library is three TypeScript
+//! tt itself adds no runtime — the standard library is three TypeScript
 //! modules that the CLI materializes as needed and bundler adapters expose
 //! virtually; imports otherwise pass through the compiler untouched,
 //! so the passthrough contract is unaffected. The values inside are
-//! byte-identical to what the corresponding rl `enum`s would compile to
+//! byte-identical to what the corresponding tt `enum`s would compile to
 //! (guarded by `tests/stdlib.rs`), which is what makes `match` — and the
 //! built-in exhaustiveness check below — work on them. `Result`'s two
 //! constructors are the one deliberate deviation: they are typed by the
@@ -12,33 +12,33 @@
 //! `TResult<T, E>`, so a function with several `try`s infers a union of the
 //! real error types instead of `unknown`.
 
-/// TypeScript source of the `@rl/std` type-only entry point.
+/// TypeScript source of the `@tt/std` type-only entry point.
 pub const STD_TYPES_SOURCE: &str = include_str!("stdlib/types.ts");
 
-/// TypeScript source of the `@rl/std/option` runtime module.
+/// TypeScript source of the `@tt/std/option` runtime module.
 pub const STD_OPTION_SOURCE: &str = include_str!("stdlib/option.ts");
 
-/// TypeScript source of the `@rl/std/result` runtime module.
+/// TypeScript source of the `@tt/std/result` runtime module.
 pub const STD_RESULT_SOURCE: &str = include_str!("stdlib/result.ts");
 
-/// The bare specifier a `.rl` file uses for standard-library types.
+/// The bare specifier a `.tt` file uses for standard-library types.
 ///
 /// It is bare rather than relative on purpose: a relative path would have
 /// to name a file that only exists after generation, and TypeScript's
 /// `paths` — the mapping an editor needs — does not apply to relative
-/// specifiers. The `rlc` CLI writes the module into the output tree and
+/// specifiers. The `ttc` CLI writes the module into the output tree and
 /// rewrites this specifier to point at it; a bundler plugin can serve it
 /// as a virtual module instead.
-pub const STD_SPECIFIER: &str = "@rl/std";
+pub const STD_SPECIFIER: &str = "@tt/std";
 
 /// One physical module of the standard-library package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum StdModule {
-    /// `@rl/std`, the type-only entry point.
+    /// `@tt/std`, the type-only entry point.
     Types,
-    /// `@rl/std/option`, the Option constructors and combinators.
+    /// `@tt/std/option`, the Option constructors and combinators.
     Option,
-    /// `@rl/std/result`, the Result constructors and combinators.
+    /// `@tt/std/result`, the Result constructors and combinators.
     Result,
 }
 
@@ -50,12 +50,12 @@ impl StdModule {
     pub const fn specifier(self) -> &'static str {
         match self {
             StdModule::Types => STD_SPECIFIER,
-            StdModule::Option => "@rl/std/option",
-            StdModule::Result => "@rl/std/result",
+            StdModule::Option => "@tt/std/option",
+            StdModule::Result => "@tt/std/result",
         }
     }
 
-    /// The module's file name inside the generated `rl/` directory.
+    /// The module's file name inside the generated `tt/` directory.
     pub const fn file_name(self) -> &'static str {
         match self {
             StdModule::Types => "index.ts",
@@ -83,11 +83,11 @@ impl StdModule {
 /// Per-module standard-library rewrites supplied by a build adapter.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdImports<'a> {
-    /// Replacement for `@rl/std`.
+    /// Replacement for `@tt/std`.
     pub types: Option<&'a str>,
-    /// Replacement for `@rl/std/option`.
+    /// Replacement for `@tt/std/option`.
     pub option: Option<&'a str>,
-    /// Replacement for `@rl/std/result`.
+    /// Replacement for `@tt/std/result`.
     pub result: Option<&'a str>,
 }
 

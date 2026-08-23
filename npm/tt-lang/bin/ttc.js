@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /* --------------------------------------------------------------------------
- * `rlc` launcher — thin veneer over the native binary from the platform
+ * `ttc` launcher — thin veneer over the native binary from the platform
  * package. All arguments, stdio and the exit code pass through untouched,
- * so `npx rlc` behaves exactly like a natively installed rlc.
+ * so `npx ttc` behaves exactly like a natively installed ttc.
  *
- * In a local development install (`scripts/setup` in the RL repository,
- * then `pnpm add -D file:.../npm/rl-lang`) the binary is the repository's
+ * In a local development install (`scripts/setup` in the TT repository,
+ * then `pnpm add -D file:.../npm/tt-lang`) the binary is the repository's
  * release build instead, and the TypeScript toolchain setup configured is
- * handed to it as RLC_TSGO_* variables — set on this child process only,
+ * handed to it as TTC_TSGO_* variables — set on this child process only,
  * never on the user's shell (dev.js).
  * ----------------------------------------------------------------------- */
 "use strict";
@@ -20,8 +20,8 @@ const { devEnvironment } = require("../dev.js");
 let binary;
 let env = process.env;
 try {
-  // RLC_BINARY stays the strongest override, exactly as in binaryPath().
-  const dev = process.env.RLC_BINARY ? null : devEnvironment();
+  // TTC_BINARY stays the strongest override, exactly as in binaryPath().
+  const dev = process.env.TTC_BINARY ? null : devEnvironment();
   if (dev) {
     binary = dev.binary;
     env = { ...process.env, ...dev.env };
@@ -38,7 +38,7 @@ const result = spawnSync(binary, process.argv.slice(2), {
   env,
 });
 if (result.error) {
-  console.error(`rlc: failed to run ${binary}: ${result.error.message}`);
+  console.error(`ttc: failed to run ${binary}: ${result.error.message}`);
   process.exit(1);
 }
 if (result.signal) {

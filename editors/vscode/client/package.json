@@ -1,6 +1,6 @@
 {
-  "name": "rl-language-client",
-  "description": "VS Code client for the rl language server",
+  "name": "tt-language-client",
+  "description": "VS Code client for the tt language server",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",

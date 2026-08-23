@@ -1,5 +1,5 @@
 /* Offset ↔ position conversions for tests: the engine speaks LSP
- * line/character positions over the `.rl` source, while fixtures address
+ * line/character positions over the `.tt` source, while fixtures address
  * text by `indexOf` offset. UTF-16 semantics, like the protocol's. */
 import type { EnginePosition, EngineRange } from "../engine";
 

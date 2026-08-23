@@ -1,4 +1,4 @@
-//! Tokenization of rl/TypeScript source — the layer between the byte
+//! Tokenization of tt/TypeScript source — the layer between the byte
 //! scanner and the parser, in the spirit of swc's lexer.
 //!
 //! [`lex`] turns a byte range into a stream of *significant* tokens:
@@ -47,7 +47,7 @@ pub(crate) enum TokenKind {
     Template(Box<[TplPart]>),
     /// A regex literal, decided by the preceding-token heuristic.
     Regex,
-    /// A raw JSX run. Its bytes are opaque to the rl parser; JSX expression
+    /// A raw JSX run. Its bytes are opaque to the tt parser; JSX expression
     /// containers are lexed recursively and appear as ordinary tokens between
     /// these runs.
     JsxRaw,
@@ -267,9 +267,9 @@ struct ScannedJsx {
 }
 
 /// Parses one complete JSX element or fragment and exposes only its
-/// JavaScript expression containers to the rl lexer. Every tag, attribute,
+/// JavaScript expression containers to the tt lexer. Every tag, attribute,
 /// and text run becomes an opaque token, so words in JSX text can never be
-/// claimed as rl syntax.
+/// claimed as tt syntax.
 fn scan_jsx(
     src_str: &str,
     start: usize,

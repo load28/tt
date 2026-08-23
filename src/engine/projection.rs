@@ -1,6 +1,6 @@
-//! The projection — rl's own layer between a source and the type checker.
+//! The projection — tt's own layer between a source and the type checker.
 //!
-//! An `.rl` file enters the TypeScript project as ordinary TypeScript. The
+//! An `.tt` file enters the TypeScript project as ordinary TypeScript. The
 //! [`ProjectedDocument`] is that fact made first-class: one file's source
 //! text, the module it becomes, the byte-exact mappings between the two, and
 //! every question the file wants asked of the checker (match probes, `val`
@@ -18,21 +18,21 @@ use crate::typescript::backend::{LiteralQuery, Module, Query, SymbolQuery, TagQu
 use crate::typescript::mapper;
 use crate::{LiteralMatch, MappedEmit, Options, TagMatch, ValProbes};
 
-/// One `.rl` file as every consumer of the engine sees it: the source the
+/// One `.tt` file as every consumer of the engine sees it: the source the
 /// user wrote, and the TypeScript the compiler is given — plus everything
 /// the engine derives from the text, cached with it.
 #[derive(Debug)]
 pub struct ProjectedDocument {
-    /// The `.rl` file.
+    /// The `.tt` file.
     pub source_path: PathBuf,
     /// The source text — the coordinate space diagnostics are reported in.
     pub source: String,
     /// The path the lowered module occupies in the project: the same place,
-    /// with a `.ts` extension (`src/token.rl` → `src/token.rl.ts`).
+    /// with a `.ts` extension (`src/token.tt` → `src/token.tt.ts`).
     pub(crate) module_path: PathBuf,
     /// The emitted TypeScript and its verbatim-chunk mappings.
     pub(crate) emit: MappedEmit,
-    /// Whether the file imports any `@rl/std` entry — decides whether the
+    /// Whether the file imports any `@tt/std` entry — decides whether the
     /// standard-library package joins the project graph.
     pub(crate) imports_std: bool,
     /// The literal-match exhaustiveness probes of this file.
@@ -45,12 +45,12 @@ pub struct ProjectedDocument {
     /// The `val` bindings, mutations, declarations and passes of this file,
     /// unpaired — pairing is symbol identity, the checker's answer.
     pub(crate) val: ValProbes,
-    /// The file's own rl-level diagnostics, found while projecting — the
+    /// The file's own tt-level diagnostics, found while projecting — the
     /// recoverable ones (a duplicate arm, an unknown case) that do not stop
     /// the file from lowering. The typed pass reports them **alongside**
-    /// its own answers, so one rl error no longer hides a file's type
+    /// its own answers, so one tt error no longer hides a file's type
     /// errors and exhaustiveness holes (TASK-117 symptom 3).
-    pub(crate) rl_diagnostics: Vec<crate::Diagnostic>,
+    pub(crate) tt_diagnostics: Vec<crate::Diagnostic>,
     /// Source ranges replaced by parser-owned error placeholders in the
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
@@ -60,9 +60,9 @@ pub struct ProjectedDocument {
     /// that did not change is never re-parsed for its exports
     /// (`docs/design/compiler-core.md` §11).
     enum_symbols: std::sync::OnceLock<Vec<crate::EnumSymbol>>,
-    /// The file's relative `.rl` imports, parsed once per content version —
+    /// The file's relative `.tt` imports, parsed once per content version —
     /// the dependency edges the semantic cache keys off.
-    imports: std::sync::OnceLock<Vec<crate::RlImport>>,
+    imports: std::sync::OnceLock<Vec<crate::TtImport>>,
 }
 
 impl ProjectedDocument {
@@ -77,8 +77,8 @@ impl ProjectedDocument {
         })
     }
 
-    /// The file's relative `.rl` imports, computed on first use.
-    pub(crate) fn rl_imports(&self) -> &[crate::RlImport] {
+    /// The file's relative `.tt` imports, computed on first use.
+    pub(crate) fn tt_imports(&self) -> &[crate::TtImport] {
         self.imports.get_or_init(|| {
             crate::scan_module_with_kind(
                 &self.source,
@@ -91,8 +91,8 @@ impl ProjectedDocument {
 
 impl ProjectedDocument {
     /// Projects one file: lowers it to ordinary TypeScript and derives every
-    /// probe the typed pass will ask about. Recoverable rl-level errors ride
-    /// along in [`ProjectedDocument::rl_diagnostics`]; only an error that
+    /// probe the typed pass will ask about. Recoverable tt-level errors ride
+    /// along in [`ProjectedDocument::tt_diagnostics`]; only an error that
     /// leaves the file impossible to lower
     /// ([`crate::DiagnosticCode::blocks_projection`]) fails the projection.
     #[cfg(test)]
@@ -122,8 +122,8 @@ impl ProjectedDocument {
             // Exhaustiveness and `val`'s pairing are the checker's answers
             // here — see `Options::defer_to_checker`.
             defer_to_checker: true,
-            // Specifiers stay exactly as written. `"./token.rl"` already
-            // names the lowered module ([`module_path_of`]), and `"@rl/std"`
+            // Specifiers stay exactly as written. `"./token.tt"` already
+            // names the lowered module ([`module_path_of`]), and `"@tt/std"`
             // entries already name the standard-library package — so the
             // declarations the compiler emits are usable as they are, by a
             // consumer that never sees this compile.
@@ -149,7 +149,7 @@ impl ProjectedDocument {
             source_path: source_path.to_path_buf(),
             source,
             emit,
-            rl_diagnostics: report.diagnostics,
+            tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
             enum_symbols: std::sync::OnceLock::new(),
             imports: std::sync::OnceLock::new(),
@@ -157,15 +157,15 @@ impl ProjectedDocument {
     }
 }
 
-/// The module path an `.rl` file takes in the project graph: its own path
-/// with `.ts` appended, so `src/token.rl` becomes `src/token.rl.ts`.
+/// The module path an `.tt` file takes in the project graph: its own path
+/// with `.ts` appended, so `src/token.tt` becomes `src/token.tt.ts`.
 ///
 /// This is what makes the whole arrangement need no configuration. A
-/// specifier written `"./token.rl"` — which is what a hand-written `.ts`
-/// and an `.rl` alike write — resolves to `token.rl.ts` by ordinary
+/// specifier written `"./token.tt"` — which is what a hand-written `.ts`
+/// and an `.tt` alike write — resolves to `token.tt.ts` by ordinary
 /// TypeScript resolution, with no `allowImportingTsExtensions`, no
 /// `paths`, and no rewriting. And the declaration the compiler emits for
-/// it lands on `token.rl.d.ts`, which is exactly the editor sidecar the
+/// it lands on `token.tt.d.ts`, which is exactly the editor sidecar the
 /// same specifier resolves to when no compiler is running.
 pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
     let mut name = source_path.as_os_str().to_os_string();
@@ -181,12 +181,12 @@ pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
 /// specifier stays bare in the source and in every declaration emitted from
 /// it. Nothing is written to the user's `node_modules`.
 pub(crate) fn std_module_path(module: crate::StdModule) -> PathBuf {
-    Path::new("node_modules/@rl/std").join(module.file_name())
+    Path::new("node_modules/@tt/std").join(module.file_name())
 }
 
 /// The path the compiler emits a lowered module's declarations to:
-/// `src/token.rl.ts` → `src/token.rl.d.ts`, which is the sidecar name a
-/// specifier written `"./token.rl"` resolves to.
+/// `src/token.tt.ts` → `src/token.tt.d.ts`, which is the sidecar name a
+/// specifier written `"./token.tt"` resolves to.
 pub(crate) fn declaration_path_of(file: &ProjectedDocument) -> PathBuf {
     file.module_path.with_extension("d.ts")
 }
@@ -194,7 +194,7 @@ pub(crate) fn declaration_path_of(file: &ProjectedDocument) -> PathBuf {
 /// Builds the batch of questions the whole snapshot asks in one round trip.
 ///
 /// Every question is anchored at a byte the compiler can see: a probe whose
-/// anchor did not survive lowering as verbatim text (a nested rl construct)
+/// anchor did not survive lowering as verbatim text (a nested tt construct)
 /// is dropped rather than asked about at an approximate position.
 pub(crate) fn assemble(
     files: &[Arc<ProjectedDocument>],
@@ -289,7 +289,7 @@ pub(crate) fn assemble(
             }
         }
 
-        // `val`: rlc finds the bindings and the mutations; which mutation
+        // `val`: ttc finds the bindings and the mutations; which mutation
         // belongs to which binding is symbol identity, which is the
         // checker's to answer.
         let val = &file.val;
@@ -304,7 +304,7 @@ pub(crate) fn assemble(
             probes.val_bindings.push(query.symbols.len() - 1);
         }
         for mutation in &val.mutations {
-            // A method call outside rl's mutator policy can never be
+            // A method call outside tt's mutator policy can never be
             // reported — the verdict needs the checker's `builtin` *and*
             // the policy name — so nothing is asked about it. The policy
             // itself lives at the verdict ([`crate::is_builtin_mutator_name`],
@@ -396,7 +396,7 @@ pub(crate) fn assemble(
             });
         }
     }
-    // A nested pattern narrows over the *payload*, whose type rlc may not
+    // A nested pattern narrows over the *payload*, whose type ttc may not
     // know — a type parameter, a hand-written union. The emitted condition
     // tests a receiver expression at exactly that type, and the emitter
     // recorded where; asking there names that column's alphabet for the
@@ -448,7 +448,7 @@ fn scrutinee_end(source: &str, after_scrutinee: usize) -> usize {
     }
 }
 
-/// Where a question's answer is reported: a byte range in the `.rl`
+/// Where a question's answer is reported: a byte range in the `.tt`
 /// source. `offset` is the position the CLI prints; `end` closes the range
 /// an editor underlines (`offset` again when the anchor is a single point).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -476,7 +476,7 @@ pub(crate) struct MutationAnchor {
     pub method_name: Option<String>,
 }
 
-/// One function declaration's symbol question, with the parameter list rl
+/// One function declaration's symbol question, with the parameter list tt
 /// read off it — the callee table's raw material.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct FnAnchor {
@@ -504,7 +504,7 @@ pub(crate) struct PassAnchor {
     pub arg_index: usize,
 }
 
-/// The `.rl`-side halves of a [`Query`], parallel to its own vectors.
+/// The `.tt`-side halves of a [`Query`], parallel to its own vectors.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Probes {
     pub literals: Vec<SourceAnchor>,
@@ -554,14 +554,14 @@ fn scrutinee_position(emit: &MappedEmit, keyword_offset: usize) -> Option<usize>
     Some(mapper::to_utf16(&emit.code, temp.out))
 }
 
-/// Where a TypeScript diagnostic belongs in the `.rl` source, and whether
+/// Where a TypeScript diagnostic belongs in the `.tt` source, and whether
 /// that position is exact.
 ///
 /// A diagnostic on compiler-written glue is not the user's code, so its
 /// position is approximate — the construct it was generated for — and the
 /// message says so. By the error-layer contract it should not happen at
-/// all: rlc's own output must not draw type errors.
-/// The rl wording for a TypeScript diagnostic that landed on glue, with
+/// all: ttc's own output must not draw type errors.
+/// The tt wording for a TypeScript diagnostic that landed on glue, with
 /// the source span to report it over — `None` when the diagnostic is not
 /// on glue, or when nothing in the whitelist covers it.
 ///
@@ -621,26 +621,26 @@ fn source_extent(origin: mapper::DiagnosticOrigin) -> (usize, usize) {
     }
 }
 
-/// Whether a checker diagnostic origin is already explained by a direct RL
+/// Whether a checker diagnostic origin is already explained by a direct TT
 /// cause. Display spans may be narrow; syntax-owner identity is what links
 /// a cause to consequences emitted elsewhere in the same lowering.
-pub(crate) fn origin_intersects_rl_error(
+pub(crate) fn origin_intersects_tt_error(
     origin: mapper::DiagnosticOrigin,
-    rl_diagnostics: &[crate::Diagnostic],
+    tt_diagnostics: &[crate::Diagnostic],
 ) -> bool {
     let (start, end) = source_extent(origin);
-    rl_diagnostics.iter().any(|rl| {
-        if let (mapper::DiagnosticOrigin::Anchor(anchor), Some(owner)) = (origin, rl.owner)
+    tt_diagnostics.iter().any(|tt| {
+        if let (mapper::DiagnosticOrigin::Anchor(anchor), Some(owner)) = (origin, tt.owner)
             && owner.start == anchor.src
             && owner.end == anchor.owner_end
         {
             return true;
         }
-        let Some(rl_start) = rl.start else {
+        let Some(tt_start) = tt.start else {
             return false;
         };
-        let rl_end = rl.end.unwrap_or_else(|| rl_start.saturating_add(1));
-        start < rl_end && rl_start < end
+        let tt_end = tt.end.unwrap_or_else(|| tt_start.saturating_add(1));
+        start < tt_end && tt_start < end
     })
 }
 
@@ -657,10 +657,10 @@ pub(crate) fn diagnostic_intersects_recovery(
         .any(|&(recovery_start, recovery_end)| start < recovery_end && recovery_start < end)
 }
 
-/// Whether a checker diagnostic covers source already owned by a direct RL
+/// Whether a checker diagnostic covers source already owned by a direct TT
 /// cause. The mismatch span, when available, is the checker's more precise
 /// statement of where the consequence originated.
-pub(crate) fn diagnostic_intersects_rl_error(
+pub(crate) fn diagnostic_intersects_tt_error(
     file: &ProjectedDocument,
     diagnostic: &crate::typescript::backend::Diagnostic,
 ) -> bool {
@@ -673,7 +673,7 @@ pub(crate) fn diagnostic_intersects_rl_error(
     let Some(origin) = diagnostic_origin(file, diagnostic_start, diagnostic_end) else {
         return false;
     };
-    origin_intersects_rl_error(origin, &file.rl_diagnostics)
+    origin_intersects_tt_error(origin, &file.tt_diagnostics)
 }
 
 #[cfg(test)]
@@ -705,7 +705,7 @@ mod tests {
     }
 
     fn project(source: &str) -> ProjectedDocument {
-        ProjectedDocument::project(Path::new("/p/src/a.rl"), source.to_string()).expect("projects")
+        ProjectedDocument::project(Path::new("/p/src/a.tt"), source.to_string()).expect("projects")
     }
 
     #[test]
@@ -725,13 +725,13 @@ mod tests {
     }
 
     #[test]
-    fn a_type_error_on_a_constructs_glue_is_reported_in_rls_words() {
+    fn a_type_error_on_a_constructs_glue_is_reported_in_tts_words() {
         // `try` on a non-Result: TypeScript reaches for `.kind` on a number
         // and says so about code the user never wrote.
         let file = project("function f() {\n  const a = try plain();\n  return a;\n}\n");
         let diagnostic = ts_at(
             &file,
-            "$rl_t0.kind",
+            "$tt_t0.kind",
             2339,
             "Property 'kind' does not exist on type 'number'.",
         );
@@ -757,7 +757,7 @@ mod tests {
     #[test]
     fn an_unrecognized_code_on_glue_is_not_guessed_at() {
         let file = project("function f() {\n  const a = try plain();\n  return a;\n}\n");
-        let diagnostic = ts_at(&file, "$rl_t0.kind", 2739, "Type is missing properties.");
+        let diagnostic = ts_at(&file, "$tt_t0.kind", 2739, "Type is missing properties.");
         assert!(translate_on_glue(&file, &diagnostic, &declarations(&file)).is_none());
     }
 
@@ -768,7 +768,7 @@ mod tests {
         );
         let diagnostic = ts_at(
             &file,
-            "$rl_m.kind",
+            "$tt_m.kind",
             2339,
             "Property 'kind' does not exist on type 'Plain'.",
         );
@@ -779,7 +779,7 @@ mod tests {
     }
 
     #[test]
-    fn a_recoverable_rl_error_does_not_block_the_projection() {
+    fn a_recoverable_tt_error_does_not_block_the_projection() {
         // TASK-117 symptom 3: a duplicate arm used to fail the projection
         // (`Blocked`) and silence the file's typed diagnostics wholesale.
         // Now the file lowers, and the error rides along for the report.
@@ -787,10 +787,10 @@ mod tests {
             "enum E { A(x: number), B }\n\
              const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n",
         );
-        assert!(file.emit.code.contains("switch ($rl_m.kind)"));
-        assert_eq!(file.rl_diagnostics.len(), 1);
+        assert!(file.emit.code.contains("switch ($tt_m.kind)"));
+        assert_eq!(file.tt_diagnostics.len(), 1);
         assert_eq!(
-            file.rl_diagnostics[0].code,
+            file.tt_diagnostics[0].code,
             crate::DiagnosticCode::MatchDuplicateArm
         );
     }
@@ -801,9 +801,9 @@ mod tests {
             "enum Shape { Circle(r: number), Empty }\n\
              const v = match (s) { Circel(r) => r, Empty => 0 };\n",
         );
-        assert_eq!(file.rl_diagnostics.len(), 1);
+        assert_eq!(file.tt_diagnostics.len(), 1);
         assert_eq!(
-            file.rl_diagnostics[0].code,
+            file.tt_diagnostics[0].code,
             crate::DiagnosticCode::UnknownCase
         );
     }
@@ -813,21 +813,21 @@ mod tests {
         let file = project("const x = 1 |> ;\n");
         assert_eq!(file.recovered, [(10, 14)]);
         assert!(file.emit.code.contains("const x = 0"), "{}", file.emit.code);
-        assert_eq!(file.rl_diagnostics.len(), 1);
+        assert_eq!(file.tt_diagnostics.len(), 1);
         assert_eq!(
-            file.rl_diagnostics[0].code,
+            file.tt_diagnostics[0].code,
             crate::DiagnosticCode::StrayPipe
         );
     }
 
     #[test]
-    fn a_lowered_module_is_named_so_that_an_rl_specifier_resolves_to_it() {
-        // `import "./state.rl"` resolves to `state.rl.ts` — and the
-        // declaration emitted for it lands on `state.rl.d.ts`, the sidecar
+    fn a_lowered_module_is_named_so_that_an_tt_specifier_resolves_to_it() {
+        // `import "./state.tt"` resolves to `state.tt.ts` — and the
+        // declaration emitted for it lands on `state.tt.d.ts`, the sidecar
         // the same specifier resolves to without a compiler.
         assert_eq!(
-            module_path_of(Path::new("/p/src/state.rl")),
-            PathBuf::from("/p/src/state.rl.ts"),
+            module_path_of(Path::new("/p/src/state.tt")),
+            PathBuf::from("/p/src/state.tt.ts"),
         );
     }
 }

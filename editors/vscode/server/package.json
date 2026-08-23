@@ -1,6 +1,6 @@
 {
-  "name": "rl-language-server",
-  "description": "Language server for rl (LSP)",
+  "name": "tt-language-server",
+  "description": "Language server for tt (LSP)",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",

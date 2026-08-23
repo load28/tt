@@ -7,7 +7,7 @@
       "topics": [
         "overview",
         "install",
-        "rlx"
+        "ttx"
       ]
     },
     {
@@ -56,31 +56,31 @@
         "ko": "TypeScript에 더 나은 제어 흐름을 더합니다."
       },
       "summary": {
-        "en": "rl is a small language that adds tagged unions, exhaustive pattern matching, Result control flow, pipelines, and mutation-safe bindings to TypeScript. It compiles to readable TypeScript and adds no runtime.",
-        "ko": "rl은 TypeScript에 태그드 유니언, 소진적 패턴 매칭, Result 제어 흐름, 파이프라인, 변경 안전 바인딩을 더하는 작은 언어입니다. 읽기 쉬운 TypeScript로 컴파일되며 별도 런타임이 없습니다."
+        "en": "tt is a small language that adds tagged unions, exhaustive pattern matching, Result control flow, pipelines, and mutation-safe bindings to TypeScript. It compiles to readable TypeScript and adds no runtime.",
+        "ko": "tt은 TypeScript에 태그드 유니언, 소진적 패턴 매칭, Result 제어 흐름, 파이프라인, 변경 안전 바인딩을 더하는 작은 언어입니다. 읽기 쉬운 TypeScript로 컴파일되며 별도 런타임이 없습니다."
       },
-      "code": "import * as Result from \"@rl/std/result\";\n\nconst message = input\n  |> parse\n  |> Result.mapP(format)\n  |> (result => match (result) {\n    Ok(value) => value,\n    Err(error) => `Error: ${error}`,\n  });",
+      "code": "import * as Result from \"@tt/std/result\";\n\nconst message = input\n  |> parse\n  |> Result.mapP(format)\n  |> (result => match (result) {\n    Ok(value) => value,\n    Err(error) => `Error: ${error}`,\n  });",
       "works": {
         "en": [
-          "Every valid TypeScript or TSX file remains a valid .rl or .rlx file.",
-          "rl-level diagnostics come from rlc at the original source range.",
+          "Every valid TypeScript or TSX file remains a valid .tt or .ttx file.",
+          "tt-level diagnostics come from ttc at the original source range.",
           "The output is plain TypeScript with no runtime library."
         ],
         "ko": [
-          "모든 유효한 TypeScript·TSX 파일은 그대로 유효한 .rl·.rlx 파일입니다.",
-          "rl 수준 진단은 rlc가 원본 소스 범위에 직접 보고합니다.",
+          "모든 유효한 TypeScript·TSX 파일은 그대로 유효한 .tt·.ttx 파일입니다.",
+          "tt 수준 진단은 ttc가 원본 소스 범위에 직접 보고합니다.",
           "출력은 런타임 라이브러리가 필요 없는 순수 TypeScript입니다."
         ]
       },
       "limits": {
         "en": [
-          "Only completely parsed rl constructs are transformed.",
-          ".rlx preserves JSX while rl constructs inside expression containers are compiled.",
+          "Only completely parsed tt constructs are transformed.",
+          ".ttx preserves JSX while tt constructs inside expression containers are compiled.",
           "Type errors in ordinary TypeScript remain TypeScript's responsibility."
         ],
         "ko": [
-          "완전히 파싱된 rl 구문만 변환합니다.",
-          ".rlx는 JSX를 보존하고 expression container 안의 rl 구문을 컴파일합니다.",
+          "완전히 파싱된 tt 구문만 변환합니다.",
+          ".ttx는 JSX를 보존하고 expression container 안의 tt 구문을 컴파일합니다.",
           "일반 TypeScript의 타입 오류는 TypeScript가 담당합니다."
         ]
       }
@@ -92,17 +92,17 @@
         "en": "Use Bun to create a ready-to-run project or migrate an existing TypeScript project. The same page also gives the complete manual compiler and bundler setup.",
         "ko": "Bun으로 바로 실행할 프로젝트를 만들거나 기존 TypeScript 프로젝트를 마이그레이션합니다. 컴파일러와 번들러를 직접 설정하는 전체 절차도 함께 제공합니다."
       },
-      "code": "bun create rl@latest my-app\n\n# Or, inside an existing TypeScript project:\nbun create rl@latest init\nbun run rl:check",
+      "code": "bun create tt@latest my-app\n\n# Or, inside an existing TypeScript project:\nbun create tt@latest init\nbun run tt:check",
       "works": {
         "en": [
-          "New projects use Bun, Vite, TypeScript 7, and a prebuilt rlc binary.",
-          "Existing projects keep their config source and receive a composable RL wrapper.",
+          "New projects use Bun, Vite, TypeScript 7, and a prebuilt ttc binary.",
+          "Existing projects keep their config source and receive a composable TT wrapper.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm are detected.",
           "Every generated change is reproducible with the manual instructions below."
         ],
         "ko": [
-          "새 프로젝트는 Bun, Vite, TypeScript 7, 프리빌트 rlc를 사용합니다.",
-          "기존 프로젝트의 설정 소스는 유지하고 합성 가능한 RL 래퍼를 추가합니다.",
+          "새 프로젝트는 Bun, Vite, TypeScript 7, 프리빌트 ttc를 사용합니다.",
+          "기존 프로젝트의 설정 소스는 유지하고 합성 가능한 TT 래퍼를 추가합니다.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 감지합니다.",
           "자동 생성되는 모든 변경을 아래 수동 절차로 재현할 수 있습니다."
         ]
@@ -111,80 +111,80 @@
         "en": [
           "The initializer does not rewrite arbitrary JavaScript config source.",
           "esbuild scripts need the printed plugin line because they have no standard config shape.",
-          "A bundler transpiles sources; keep rlc --check-types as a separate type-check step."
+          "A bundler transpiles sources; keep ttc --check-types as a separate type-check step."
         ],
         "ko": [
           "설치기는 임의 형태의 JavaScript 설정 소스를 재작성하지 않습니다.",
           "esbuild 스크립트에는 표준 설정 형태가 없어 출력된 플러그인 줄을 직접 추가합니다.",
-          "번들러는 소스를 변환할 뿐이므로 rlc --check-types 검사를 별도로 유지합니다."
+          "번들러는 소스를 변환할 뿐이므로 ttc --check-types 검사를 별도로 유지합니다."
         ]
       },
       "sections": [
         {
           "title": { "en": "New project", "ko": "새 프로젝트" },
-          "body": { "en": "The command creates src/main.ts with a starter src/app.rl module, installs with Bun, and adds dev, build, and check scripts.", "ko": "src/main.ts와 첫 src/app.rl 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다." },
-          "code": "bun create rl@latest my-app\ncd my-app\nbun run dev"
+          "body": { "en": "The command creates src/main.ts with a starter src/app.tt module, installs with Bun, and adds dev, build, and check scripts.", "ko": "src/main.ts와 첫 src/app.tt 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다." },
+          "code": "bun create tt@latest my-app\ncd my-app\nbun run dev"
         },
         {
           "title": { "en": "Existing project", "ko": "기존 프로젝트" },
           "body": { "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.", "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다." },
-          "code": "bun create rl@latest init\nbun create rl@latest init --bundler vite --no-install"
+          "code": "bun create tt@latest init\nbun create tt@latest init --bundler vite --no-install"
         },
         {
           "title": { "en": "Local registry", "ko": "로컬 레지스트리" },
-          "body": { "en": "Compiler contributors can publish the locally built binary and all RL npm packages to Verdaccio, then bootstrap through that registry without file dependencies.", "ko": "컴파일러 기여자는 로컬 빌드 바이너리와 모든 RL npm 패키지를 Verdaccio에 게시하고 file 의존성 없이 해당 레지스트리에서 생성할 수 있습니다." },
-          "code": "bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873\nbun scripts/publish-local-registry.mjs http://127.0.0.1:4873\nBUN_CONFIG_REGISTRY=http://127.0.0.1:4873 bunx create-rl@latest my-app --registry http://127.0.0.1:4873"
+          "body": { "en": "Compiler contributors can publish the locally built binary and all TT npm packages to Verdaccio, then bootstrap through that registry without file dependencies.", "ko": "컴파일러 기여자는 로컬 빌드 바이너리와 모든 TT npm 패키지를 Verdaccio에 게시하고 file 의존성 없이 해당 레지스트리에서 생성할 수 있습니다." },
+          "code": "bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873\nbun scripts/publish-local-registry.mjs http://127.0.0.1:4873\nBUN_CONFIG_REGISTRY=http://127.0.0.1:4873 bunx create-tt@latest my-app --registry http://127.0.0.1:4873"
         },
         {
           "title": { "en": "Manual compiler", "ko": "컴파일러 수동 설치" },
           "body": { "en": "Install the compiler and TypeScript 7, then compile to an ordinary TypeScript tree or check without writing output.", "ko": "컴파일러와 TypeScript 7을 설치한 뒤 일반 TypeScript 트리로 컴파일하거나 출력 없이 검사합니다." },
-          "code": "bun add -d rl-lang typescript@7\nbunx rlc -o .rl-build src\nbunx rlc --check-types src"
+          "code": "bun add -d tt-lang typescript@7\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
           "title": { "en": "Manual bundlers", "ko": "번들러 수동 설정" },
-          "body": { "en": "Install unplugin-rl and add rl() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "unplugin-rl을 설치하고 plugins 배열 맨 앞에 rl()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
-          "code": "bun add -d rl-lang typescript@7 unplugin-rl\n\nimport rl from \"unplugin-rl/vite\";\nexport default { plugins: [rl()] };"
+          "body": { "en": "Install unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
+          "code": "bun add -d tt-lang typescript@7 unplugin-tt\n\nimport tt from \"unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]
     },
-    "rlx": {
+    "ttx": {
       "nav": {
-        "en": "React / .rlx",
-        "ko": "React / .rlx"
+        "en": "React / .ttx",
+        "ko": "React / .ttx"
       },
       "title": {
         "en": "React, with exhaustive JSX.",
         "ko": "React JSX를 소진적으로 작성합니다."
       },
       "summary": {
-        "en": ".rlx is TSX plus rl. JSX stays intact, while rl constructs inside expression containers compile with the same diagnostics and evaluation guarantees as ordinary expressions.",
-        "ko": ".rlx는 TSX에 rl을 더한 소스 형식입니다. JSX는 그대로 보존하고 expression container 안의 rl 구문은 일반 식과 같은 진단·평가 순서 계약으로 컴파일합니다."
+        "en": ".ttx is TSX plus tt. JSX stays intact, while tt constructs inside expression containers compile with the same diagnostics and evaluation guarantees as ordinary expressions.",
+        "ko": ".ttx는 TSX에 tt을 더한 소스 형식입니다. JSX는 그대로 보존하고 expression container 안의 tt 구문은 일반 식과 같은 진단·평가 순서 계약으로 컴파일합니다."
       },
-      "code": "import { useState } from \"react\";\n\nenum LoadState {\n  Ready(message: string),\n  Empty,\n  Failed(message: string),\n}\n\nexport const Status = () => {\n  const [state] = useState<LoadState>(LoadState.Ready(\"Hello rlx\"));\n\n  return (\n    <section data-state={match (state) {\n      Ready => \"ready\",\n      Empty => \"empty\",\n      Failed => \"failed\",\n    }}>\n      {match (state) {\n        Ready(message) => <strong>{message}</strong>,\n        Empty => <span>Nothing here</span>,\n        Failed(message) => <mark>{message}</mark>,\n      }}\n    </section>\n  );\n};",
+      "code": "import { useState } from \"react\";\n\nenum LoadState {\n  Ready(message: string),\n  Empty,\n  Failed(message: string),\n}\n\nexport const Status = () => {\n  const [state] = useState<LoadState>(LoadState.Ready(\"Hello ttx\"));\n\n  return (\n    <section data-state={match (state) {\n      Ready => \"ready\",\n      Empty => \"empty\",\n      Failed => \"failed\",\n    }}>\n      {match (state) {\n        Ready(message) => <strong>{message}</strong>,\n        Empty => <span>Nothing here</span>,\n        Failed(message) => <mark>{message}</mark>,\n      }}\n    </section>\n  );\n};",
       "works": {
         "en": [
-          "Every valid TSX file passes through a .rlx file byte for byte.",
-          "rl constructs work inside JSX children and attribute expression containers.",
+          "Every valid TSX file passes through a .ttx file byte for byte.",
+          "tt constructs work inside JSX children and attribute expression containers.",
           "Concise arrow components preserve lexical scope and JSX evaluation order.",
-          "Relative .rlx imports work through the CLI, editor, and unplugin-rl."
+          "Relative .ttx imports work through the CLI, editor, and unplugin-tt."
         ],
         "ko": [
-          "모든 유효한 TSX 파일은 .rlx에서 바이트 그대로 통과합니다.",
-          "JSX 자식과 속성 expression container 안에서 rl 구문을 사용할 수 있습니다.",
+          "모든 유효한 TSX 파일은 .ttx에서 바이트 그대로 통과합니다.",
+          "JSX 자식과 속성 expression container 안에서 tt 구문을 사용할 수 있습니다.",
           "concise arrow 컴포넌트의 렉시컬 범위와 JSX 평가 순서를 보존합니다.",
-          "상대 .rlx import는 CLI, 에디터, unplugin-rl에서 동일하게 동작합니다."
+          "상대 .ttx import는 CLI, 에디터, unplugin-tt에서 동일하게 동작합니다."
         ]
       },
       "limits": {
         "en": [
-          ".rlx emits .tsx; your TypeScript project still chooses the jsx compiler option.",
-          "React, Preact, and other JSX runtimes remain application dependencies, not rl dependencies.",
-          "Use unplugin-rl when a bundler imports .rlx files directly."
+          ".ttx emits .tsx; your TypeScript project still chooses the jsx compiler option.",
+          "React, Preact, and other JSX runtimes remain application dependencies, not tt dependencies.",
+          "Use unplugin-tt when a bundler imports .ttx files directly."
         ],
         "ko": [
-          ".rlx는 .tsx를 방출하며 jsx 컴파일러 옵션은 TypeScript 프로젝트가 선택합니다.",
-          "React·Preact 같은 JSX 런타임은 rl이 아니라 애플리케이션 의존성입니다.",
-          "번들러가 .rlx를 직접 import할 때는 unplugin-rl을 사용합니다."
+          ".ttx는 .tsx를 방출하며 jsx 컴파일러 옵션은 TypeScript 프로젝트가 선택합니다.",
+          "React·Preact 같은 JSX 런타임은 tt이 아니라 애플리케이션 의존성입니다.",
+          "번들러가 .ttx를 직접 import할 때는 unplugin-tt을 사용합니다."
         ]
       }
     },
@@ -217,12 +217,12 @@
       "limits": {
         "en": [
           "The discriminant is always named kind.",
-          "A declaration is an rl enum only when a case has parentheses or the enum is generic.",
+          "A declaration is a tt enum only when a case has parentheses or the enum is generic.",
           "Duplicate case names are compile errors."
         ],
         "ko": [
           "판별 필드 이름은 항상 kind입니다.",
-          "괄호가 있는 케이스가 하나 이상이거나 제네릭일 때만 rl enum입니다.",
+          "괄호가 있는 케이스가 하나 이상이거나 제네릭일 때만 tt enum입니다.",
           "중복 케이스 이름은 컴파일 오류입니다."
         ]
       }
@@ -283,7 +283,7 @@
         "en": "Unwrap Ok or return Err from the enclosing function.",
         "ko": "Ok 값을 풀고 Err이면 현재 함수를 즉시 반환합니다."
       },
-      "code": "import type { TResult } from \"@rl/std\";\nimport * as Result from \"@rl/std/result\";\n\nfunction load(id: string): TResult<User, LoadError> {\n  const raw = try read(id);\n  const user = try decode(raw);\n  return Result.Ok(user);\n}",
+      "code": "import type { TResult } from \"@tt/std\";\nimport * as Result from \"@tt/std/result\";\n\nfunction load(id: string): TResult<User, LoadError> {\n  const raw = try read(id);\n  const user = try decode(raw);\n  return Result.Ok(user);\n}",
       "works": {
         "en": [
           "Value binding and propagate-only statements.",
@@ -556,7 +556,7 @@
         "en": "Represent an optional value as Some(value) or None.",
         "ko": "선택적인 값을 Some(value) 또는 None으로 표현합니다."
       },
-      "code": "import * as Option from \"@rl/std/option\";\n\nconst port = Option.fromNullable(env.PORT)\n  |> Option.mapP(Number)\n  |> Option.filterP(Number.isFinite)\n  |> Option.unwrapOrP(3000);",
+      "code": "import * as Option from \"@tt/std/option\";\n\nconst port = Option.fromNullable(env.PORT)\n  |> Option.mapP(Number)\n  |> Option.filterP(Number.isFinite)\n  |> Option.unwrapOrP(3000);",
       "works": {
         "en": [
           "Construct with Option.Some(value) and the Option.None value.",
@@ -575,12 +575,12 @@
         "en": [
           "The payload field is named value.",
           "try and result blocks operate on Result, not Option.",
-          "Import @rl/std/option to construct values even though match recognizes Option tags as built-ins."
+          "Import @tt/std/option to construct values even though match recognizes Option tags as built-ins."
         ],
         "ko": [
           "페이로드 필드 이름은 value입니다.",
           "try와 result 블록은 Option이 아니라 Result에만 동작합니다.",
-          "match는 Option 태그를 내장으로 알지만 값을 만들려면 @rl/std/option을 import해야 합니다."
+          "match는 Option 태그를 내장으로 알지만 값을 만들려면 @tt/std/option을 import해야 합니다."
         ]
       }
     },
@@ -597,7 +597,7 @@
         "en": "Represent success as Ok(value) and failure as Err(error).",
         "ko": "성공은 Ok(value), 실패는 Err(error)로 표현합니다."
       },
-      "code": "import * as Result from \"@rl/std/result\";\n\nconst user = Result.fromThrowable(() => JSON.parse(raw))\n  |> Result.andThenP(validateUser)\n  |> Result.mapP(normalizeUser);",
+      "code": "import * as Result from \"@tt/std/result\";\n\nconst user = Result.fromThrowable(() => JSON.parse(raw))\n  |> Result.andThenP(validateUser)\n  |> Result.mapP(normalizeUser);",
       "works": {
         "en": [
           "Constructors infer their own variant: TOk<T> or TErr<E>.",
@@ -635,30 +635,30 @@
         "ko": "모듈"
       },
       "summary": {
-        "en": "Keep .rl or .rlx on source imports and let rlc rewrite emitted specifiers.",
-        "ko": "소스 import에는 .rl 또는 .rlx를 유지하고 방출 지정자는 rlc가 재작성합니다."
+        "en": "Keep .tt or .ttx on source imports and let ttc rewrite emitted specifiers.",
+        "ko": "소스 import에는 .tt 또는 .ttx를 유지하고 방출 지정자는 ttc가 재작성합니다."
       },
-      "code": "import { Token } from \"./token.rl\";\nimport type { TOption, TResult } from \"@rl/std\";\nimport * as Option from \"@rl/std/option\";\nimport * as Result from \"@rl/std/result\";\n\nexport { Parser } from \"./parser.rl\";",
+      "code": "import { Token } from \"./token.tt\";\nimport type { TOption, TResult } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport * as Result from \"@tt/std/result\";\n\nexport { Parser } from \"./parser.tt\";",
       "works": {
         "en": [
-          "Relative .rl and .rlx imports emit as .js and .jsx by default.",
+          "Relative .tt and .ttx imports emit as .js and .jsx by default.",
           "Use --rewrite-imports ts or off for TypeScript-extension or bundler workflows.",
           "Direct relative imports participate in exported-enum exhaustiveness."
         ],
         "ko": [
-          "상대 .rl과 .rlx import는 기본적으로 .js와 .jsx로 방출됩니다.",
+          "상대 .tt과 .ttx import는 기본적으로 .js와 .jsx로 방출됩니다.",
           "TypeScript 확장자나 번들러 흐름에는 --rewrite-imports ts 또는 off를 사용합니다.",
           "직접 상대 import의 export enum은 소진성 검사에 참여합니다."
         ]
       },
       "limits": {
         "en": [
-          "Write the .rl or .rlx extension in source imports.",
+          "Write the .tt or .ttx extension in source imports.",
           "Re-export chains and package paths are not collected for exhaustiveness.",
           "Dynamic import() specifiers are not rewritten."
         ],
         "ko": [
-          "소스 import에는 .rl 또는 .rlx 확장자를 적어야 합니다.",
+          "소스 import에는 .tt 또는 .ttx 확장자를 적어야 합니다.",
           "재-export 체인과 패키지 경로는 소진성 정보로 수집하지 않습니다.",
           "동적 import() 지정자는 재작성하지 않습니다."
         ]
@@ -670,36 +670,36 @@
         "ko": "CLI"
       },
       "title": {
-        "en": "rlc CLI",
-        "ko": "rlc CLI"
+        "en": "ttc CLI",
+        "ko": "ttc CLI"
       },
       "summary": {
         "en": "Compile, check, type-check, and watch complete source trees.",
         "ko": "전체 소스 트리를 컴파일하고 검사하며 타입 검사·감시합니다."
       },
-      "code": "npx rlc --check src\nnpx rlc --check-types src\nnpx rlc --types -w src\nnpx rlc -o build src\nnpx rlc help match",
+      "code": "npx ttc --check src\nnpx ttc --check-types src\nnpx ttc --types -w src\nnpx ttc -o build src\nnpx ttc help match",
       "works": {
         "en": [
-          "--check runs rl-level checks without TypeScript.",
-          "--check-types adds TypeScript-backed checks at .rl source positions.",
+          "--check runs tt-level checks without TypeScript.",
+          "--check-types adds TypeScript-backed checks at .tt source positions.",
           "--types writes declaration sidecars; -w watches files and importers.",
           "Directories preserve the source tree and pass handwritten .ts and .tsx through."
         ],
         "ko": [
-          "--check는 TypeScript 없이 rl 수준 검사만 실행합니다.",
-          "--check-types는 .rl 원본 위치에 TypeScript 기반 검사를 추가합니다.",
+          "--check는 TypeScript 없이 tt 수준 검사만 실행합니다.",
+          "--check-types는 .tt 원본 위치에 TypeScript 기반 검사를 추가합니다.",
           "--types는 선언 사이드카를 쓰며 -w는 파일과 import 사용처를 감시합니다.",
           "디렉터리 구조를 유지하고 직접 작성한 .ts와 .tsx는 그대로 통과시킵니다."
         ]
       },
       "limits": {
         "en": [
-          "Never edit generated .ts/.tsx or .rl-types output.",
+          "Never edit generated .ts/.tsx or .tt-types output.",
           "Typed modes require a supported TypeScript 7 toolchain.",
           "The compiler refuses in-place overwrites of input trees."
         ],
         "ko": [
-          "생성된 .ts/.tsx와 .rl-types 출력은 수정하면 안 됩니다.",
+          "생성된 .ts/.tsx와 .tt-types 출력은 수정하면 안 됩니다.",
           "typed 모드는 지원되는 TypeScript 7 도구 체인이 필요합니다.",
           "컴파일러는 입력 트리를 제자리에서 덮어쓰지 않습니다."
         ]

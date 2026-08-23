@@ -6,7 +6,7 @@
 //! never talk to the compiler behind it — they take a [`Snapshot`] and ask
 //! about that.
 //!
-//! The lifecycle mirrors typescript-go's project service, sized to rl:
+//! The lifecycle mirrors typescript-go's project service, sized to tt:
 //! mutation happens on the project (documents open, change, close; disk
 //! moves), and [`Project::update`] is the single funnel that turns the
 //! current state into an immutable [`Snapshot`]. A file whose text is
@@ -27,8 +27,8 @@ use crate::CompileError;
 use crate::typescript::backend::TypeScriptBackend;
 use crate::typescript::native::NativeBackend;
 
-/// What counts as an rl source, and what counts as hand-written TypeScript.
-const RL_EXTENSIONS: &[&str] = &["rl", "rlx"];
+/// What counts as a tt source, and what counts as hand-written TypeScript.
+const TT_EXTENSIONS: &[&str] = &["tt", "ttx"];
 const TS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts"];
 
 /// A snapshot could not be taken because a source could not be read.
@@ -38,7 +38,7 @@ const TS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts"];
 pub struct Blocked {
     /// The file that failed to lower.
     pub path: PathBuf,
-    /// Its rl-level error, with the file's own position.
+    /// Its tt-level error, with the file's own position.
     pub error: CompileError,
 }
 
@@ -47,10 +47,10 @@ pub struct Blocked {
 pub struct CheckRequest {
     /// Emit declarations and return them (`--types`). A plain check does not.
     pub emit_declarations: bool,
-    /// Report only the rl layer. The type layer is TypeScript's answer about
+    /// Report only the tt layer. The type layer is TypeScript's answer about
     /// the user's own code, and a caller that already has it from somewhere
     /// else (an editor with a live language server) would show it twice.
-    pub rl_only: bool,
+    pub tt_only: bool,
 }
 
 /// One workspace's compiler state: documents, projections, and the session.
@@ -61,7 +61,7 @@ pub struct Project {
     /// The output tree a scan must not descend into (`--types`'s sidecar
     /// directory).
     out_dir: Option<PathBuf>,
-    /// The inputs' `.rl` files — what a `--types` run writes. The graph is
+    /// The inputs' `.tt` files — what a `--types` run writes. The graph is
     /// always the whole project; this only narrows emission.
     requested: HashSet<PathBuf>,
     /// The file set the first pass runs over, fixed at open: the project
@@ -77,7 +77,7 @@ pub struct Project {
     /// the file's current text equals the projected text.
     cache: HashMap<PathBuf, Arc<ProjectedDocument>>,
     /// The TypeScript backend — or why there is none (no toolchain found).
-    /// A project without one still opens and still answers the rl layer;
+    /// A project without one still opens and still answers the tt layer;
     /// only the typed facts degrade to unknown ([`Project::check`]).
     backend: Result<NativeBackend, String>,
     /// Cross-snapshot semantic cache, keyed per file by (content hash,
@@ -128,7 +128,7 @@ impl Project {
         &self.root
     }
 
-    /// The inputs' own `.rl` files: what an emitting pass writes for.
+    /// The inputs' own `.tt` files: what an emitting pass writes for.
     pub fn requested(&self) -> &HashSet<PathBuf> {
         &self.requested
     }
@@ -153,12 +153,12 @@ impl Project {
         self.overlays.remove(path);
     }
 
-    /// Every `.rl` file of the project, as sorted absolute paths — the
+    /// Every `.tt` file of the project, as sorted absolute paths — the
     /// compiler resolves modules by absolute path, and so must the modules
-    /// rlc adds. Scanned fresh so a file created since the last call is
+    /// ttc adds. Scanned fresh so a file created since the last call is
     /// seen.
     pub fn scan(&self) -> std::io::Result<Vec<PathBuf>> {
-        project_sources(&self.root, self.out_dir.as_deref(), RL_EXTENSIONS)
+        project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)
     }
 
     /// The file set the first pass runs over, decided when the project was
@@ -172,7 +172,7 @@ impl Project {
     /// document is open, disk text otherwise. A file whose text is unchanged
     /// since the last snapshot keeps its projection; the rest are
     /// re-projected. A file that cannot lower remains in the snapshot as a
-    /// blocked source with its rl diagnostics; other files still project.
+    /// blocked source with its tt diagnostics; other files still project.
     /// An I/O failure still blocks the snapshot because no source state is
     /// available to preserve.
     pub fn update(&mut self, files: &[PathBuf]) -> Result<Snapshot, Box<Blocked>> {
@@ -289,7 +289,7 @@ impl Project {
     pub(crate) fn semantic_analyses(&self, path: &Path, source: &str) -> Arc<FileSemantics> {
         let externs = super::language::externs_from(
             path,
-            &crate::rl_imports_with_kind(
+            &crate::tt_imports_with_kind(
                 source,
                 crate::SourceKind::from_path(path).unwrap_or_default(),
             ),
@@ -324,7 +324,7 @@ impl Project {
     }
 
     /// Checks a snapshot: asks the running compiler about it and returns
-    /// diagnostics at `.rl` positions — and the emitted declarations, when
+    /// diagnostics at `.tt` positions — and the emitted declarations, when
     /// the request wants them. The session persists across calls; only what
     /// changed since the last ask travels.
     pub fn check(&self, snapshot: &Snapshot, request: &CheckRequest) -> Result<Checked, String> {
@@ -332,7 +332,7 @@ impl Project {
         let (mut query, probes) = projection::assemble(snapshot.files(), &self.root, &self.sources);
         query.emit_declarations = request.emit_declarations;
         // A backend that cannot run removes the typed facts, not the pass:
-        // every typed answer degrades to unknown and the rl layer still
+        // every typed answer degrades to unknown and the tt layer still
         // reports in full (`docs/design/compiler-core.md` §7).
         let (answers, backend_error) = match &self.backend {
             Ok(backend) => match backend.ask(self.tsconfig.as_deref(), &self.root, &query) {
@@ -351,7 +351,7 @@ impl Project {
                 snapshot,
                 &answers,
                 &probes,
-                request.rl_only,
+                request.tt_only,
                 &semantics,
             ),
             declarations,
@@ -418,9 +418,9 @@ pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
     }
 }
 
-/// Collects sources under `entry` the way every rlc mode does: a file is
+/// Collects sources under `entry` the way every ttc mode does: a file is
 /// taken as it is; a directory is walked recursively, skipping
-/// dot-directories and `node_modules`, taking `.rl` — and, when
+/// dot-directories and `node_modules`, taking `.tt` — and, when
 /// `include_ts` is set, hand-written TypeScript (`.ts`/`.mts`/`.cts`) too.
 pub fn collect_sources(
     entry: &Path,
@@ -440,7 +440,7 @@ pub fn collect_sources(
         for child in children {
             let meta = std::fs::metadata(&child)?;
             if meta.is_dir() {
-                // Dot-directories (.git, .rl-build, .rl-types, ...) and
+                // Dot-directories (.git, .tt-build, .tt-types, ...) and
                 // node_modules are never sources; descending into them
                 // would pull generated or vendored TypeScript into the
                 // build — or the cache tree into itself.
@@ -453,7 +453,7 @@ pub fn collect_sources(
                 }
             } else if meta.is_file()
                 && child.extension().is_some_and(|e| {
-                    RL_EXTENSIONS.iter().any(|rl| *rl == e)
+                    TT_EXTENSIONS.iter().any(|tt| *tt == e)
                         || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
                 })
             {
@@ -464,15 +464,15 @@ pub fn collect_sources(
     Ok(())
 }
 
-/// The `.rl` files of `inputs`, as absolute paths.
-pub(crate) fn collect_rl(inputs: &[String]) -> std::io::Result<Vec<PathBuf>> {
+/// The `.tt` files of `inputs`, as absolute paths.
+pub(crate) fn collect_tt(inputs: &[String]) -> std::io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for input in inputs {
         collect_sources(Path::new(input), false, &mut files)?;
     }
     files
         .into_iter()
-        .filter(|f| crate::SourceKind::from_rl_path(f).is_some())
+        .filter(|f| crate::SourceKind::from_tt_path(f).is_some())
         .map(|f| f.canonicalize())
         .collect()
 }
