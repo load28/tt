@@ -342,24 +342,23 @@ export const View = ({ state }: { state: State }) => (
   assertScope(lines, 3, "match", "keyword.control.match.rl");
 });
 
-test("the extension registers rlx with its grammar and dedicated icons", () => {
+test("the extension registers rlx and shares each file icon across themes", () => {
   const extensionDir = path.join(syntaxesDir, "..");
   const pkg = JSON.parse(
     fs.readFileSync(path.join(extensionDir, "package.json"), "utf8"),
   );
   assert.ok(pkg.activationEvents.includes("onLanguage:rlx"));
 
-  const language = pkg.contributes.languages.find(
-    (entry: { id: string }) => entry.id === "rlx",
-  );
-  assert.ok(language, "package.json contributes no rlx language");
-  assert.deepEqual(language.extensions, [".rlx"]);
-  assert.deepEqual(language.icon, {
-    light: "./icons/rlx-file-light.svg",
-    dark: "./icons/rlx-file-dark.svg",
-  });
-  assert.ok(fs.existsSync(path.join(extensionDir, language.icon.light)));
-  assert.ok(fs.existsSync(path.join(extensionDir, language.icon.dark)));
+  for (const [id, extension] of [["rl", ".rl"], ["rlx", ".rlx"]]) {
+    const language = pkg.contributes.languages.find(
+      (entry: { id: string }) => entry.id === id,
+    );
+    assert.ok(language, `package.json contributes no ${id} language`);
+    assert.deepEqual(language.extensions, [extension]);
+    assert.equal(language.icon.light, `./icons/${id}-file.svg`);
+    assert.equal(language.icon.dark, language.icon.light);
+    assert.ok(fs.existsSync(path.join(extensionDir, language.icon.light)));
+  }
 
   const grammar = pkg.contributes.grammars.find(
     (entry: { language?: string }) => entry.language === "rlx",

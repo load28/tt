@@ -32,8 +32,8 @@
         ],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./icons/rl-file-light.svg",
-          "dark": "./icons/rl-file-dark.svg"
+          "light": "./icons/rl-file.svg",
+          "dark": "./icons/rl-file.svg"
         }
       },
       {
@@ -46,8 +46,8 @@
         ],
         "configuration": "./language-configuration.json",
         "icon": {
-          "light": "./icons/rlx-file-light.svg",
-          "dark": "./icons/rlx-file-dark.svg"
+          "light": "./icons/rlx-file.svg",
+          "dark": "./icons/rlx-file.svg"
         }
       }
     ],
