@@ -187,7 +187,8 @@
 | TASK-177 | 버전 채널 기반 자동 배포 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-177](./TASK-177-version-routed-releases.md) |
 | TASK-178 | Windows npm 플랫폼 패키지 이름 변경 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-178](./TASK-178-rename-windows-npm-package.md) |
 | TASK-179 | release 0.3.0-dev.1 | 진행 중 | 2026-08-23 | — | [TASK-179](./TASK-179-release-0.3.0-dev.1.md) |
+| TASK-180 | malformed projection의 codegen 진입 차단 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-180](./TASK-180-lsp-test-notification-race.md) |
 
 ## 다음 태스크 번호
 
-**TASK-180**
+**TASK-181**

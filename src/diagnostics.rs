@@ -155,6 +155,8 @@ impl DiagnosticCode {
             DiagnosticCode::StrayPipe
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::StrayResult
+                | DiagnosticCode::MalformedEnum
+                | DiagnosticCode::MalformedMatch
                 | DiagnosticCode::ResultMissingKeyword
                 | DiagnosticCode::ResultNestedBinding
                 | DiagnosticCode::EnumInvalidFieldType

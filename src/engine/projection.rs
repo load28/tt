@@ -725,6 +725,28 @@ mod tests {
     }
 
     #[test]
+    fn a_malformed_match_beside_an_enum_recovers_before_codegen() {
+        let source = "enum Shape { Circle(r: number), Square(s: number) }\n\
+            export function area(shape: Shape): number {\n\
+              return match shape { Circle(r) => r, Square(s) => s };\n\
+            }\n";
+        let file = project(source);
+        assert_eq!(file.recovered.len(), 1, "{:#?}", file.recovered);
+        assert!(
+            file.emit.code.contains("type Shape ="),
+            "{}",
+            file.emit.code
+        );
+        assert!(
+            file.tt_diagnostics
+                .iter()
+                .any(|d| d.code == crate::DiagnosticCode::MalformedMatch),
+            "{:#?}",
+            file.tt_diagnostics
+        );
+    }
+
+    #[test]
     fn a_type_error_on_a_constructs_glue_is_reported_in_tts_words() {
         // `try` on a non-Result: TypeScript reaches for `.kind` on a number
         // and says so about code the user never wrote.

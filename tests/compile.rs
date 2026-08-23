@@ -4269,5 +4269,24 @@ fn diagnostic_codes_are_stable_strings() {
     );
     assert_eq!(ttc::DiagnosticCode::ValMutation.as_str(), "val-mutation");
     assert!(ttc::DiagnosticCode::StrayPipe.blocks_projection());
+    assert!(ttc::DiagnosticCode::MalformedMatch.blocks_projection());
     assert!(!ttc::DiagnosticCode::MatchDuplicateArm.blocks_projection());
+}
+
+#[test]
+fn malformed_match_blocks_codegen_even_beside_a_lowered_enum() {
+    let src = "enum Shape { Circle(r: number), Square(s: number) }\n\
+        export function area(shape: Shape): number {\n\
+          return match shape { Circle(r) => r, Square(s) => s };\n\
+        }\n";
+    let report = ttc::compile_report(src, &Options::default());
+    assert!(report.emit.is_none());
+    assert!(
+        report
+            .diagnostics
+            .iter()
+            .any(|d| d.code == ttc::DiagnosticCode::MalformedMatch),
+        "{:#?}",
+        report.diagnostics
+    );
 }
