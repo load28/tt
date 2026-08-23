@@ -186,9 +186,10 @@
 | TASK-176 | VS Code 개발 확장을 GitHub Release로 배포 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-176](./TASK-176-github-vsix-dev-releases.md) |
 | TASK-177 | 버전 채널 기반 자동 배포 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-177](./TASK-177-version-routed-releases.md) |
 | TASK-178 | Windows npm 플랫폼 패키지 이름 변경 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-178](./TASK-178-rename-windows-npm-package.md) |
-| TASK-179 | release 0.3.0-dev.1 | 진행 중 | 2026-08-23 | — | [TASK-179](./TASK-179-release-0.3.0-dev.1.md) |
+| TASK-179 | release 0.3.0-dev.1 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-179](./TASK-179-release-0.3.0-dev.1.md) |
 | TASK-180 | malformed projection의 codegen 진입 차단 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-180](./TASK-180-lsp-test-notification-race.md) |
+| TASK-181 | release 0.3.0-dev.2 | 진행 중 | 2026-08-23 | — | [TASK-181](./TASK-181-release-0.3.0-dev.2.md) |
 
 ## 다음 태스크 번호
 
-**TASK-181**
+**TASK-182**
