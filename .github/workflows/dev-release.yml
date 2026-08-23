@@ -188,9 +188,9 @@ jobs:
 
       - name: Publish user-facing packages
         run: |
-          npm publish npm/tt-lang --tag dev --provenance --access public
-          npm publish integrations/unplugin --tag dev --provenance --access public
-          npm publish packages/create-tt --tag dev --provenance --access public
+          npm publish ./npm/tt-lang --tag dev --provenance --access public
+          npm publish ./integrations/unplugin --tag dev --provenance --access public
+          npm publish ./packages/create-tt --tag dev --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

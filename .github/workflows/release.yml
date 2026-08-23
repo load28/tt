@@ -193,7 +193,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish tt-lang
-        run: npm publish npm/tt-lang --provenance --access public
+        run: npm publish ./npm/tt-lang --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -206,13 +206,13 @@ jobs:
           if npm view "unplugin-tt@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
             echo "unplugin-tt@$UNPLUGIN_VERSION is already published"
           else
-            npm publish integrations/unplugin --provenance --access public
+            npm publish ./integrations/unplugin --provenance --access public
           fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish create-tt
-        run: npm publish packages/create-tt --provenance --access public
+        run: npm publish ./packages/create-tt --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
