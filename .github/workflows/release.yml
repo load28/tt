@@ -161,13 +161,13 @@ jobs:
           mkdir -p dist/packages dist/assets
           for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
             exe=ttc; [ "$key" = "win32-x64" ] && exe=ttc.exe
-            node npm/scripts/make-platform-package.mjs \
-              "$key" "binaries/ttc-$key/$exe" dist/packages "$VERSION"
+            package_dir="$(node npm/scripts/make-platform-package.mjs \
+              "$key" "binaries/ttc-$key/$exe" dist/packages "$VERSION")"
             # Release archive alongside the npm package.
             if [ "$key" = "win32-x64" ]; then
-              (cd "dist/packages/tt-lang-$key/bin" && zip -q "$OLDPWD/dist/assets/ttc-v$VERSION-$key.zip" "$exe")
+              (cd "$package_dir/bin" && zip -q "$OLDPWD/dist/assets/ttc-v$VERSION-$key.zip" "$exe")
             else
-              tar -C "dist/packages/tt-lang-$key/bin" -czf "dist/assets/ttc-v$VERSION-$key.tar.gz" "$exe"
+              tar -C "$package_dir/bin" -czf "dist/assets/ttc-v$VERSION-$key.tar.gz" "$exe"
             fi
           done
 
@@ -186,8 +186,8 @@ jobs:
       # must be resolvable the moment tt-lang@VERSION appears.
       - name: Publish platform packages
         run: |
-          for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
-            npm publish "dist/packages/tt-lang-$key" --provenance --access public
+          for package_dir in dist/packages/tt-lang-*; do
+            npm publish "$package_dir" --provenance --access public
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

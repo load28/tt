@@ -10,13 +10,19 @@
 "use strict";
 
 const path = require("node:path");
+const PLATFORMS = require("./platforms.json");
 
 /** Platforms a prebuilt ttc binary is published for. */
-const SUPPORTED = ["linux-x64", "linux-arm64", "darwin-x64", "darwin-arm64", "win32-x64"];
+const SUPPORTED = Object.keys(PLATFORMS);
 
 /** `"linux-x64"`-style key for the current process, supported or not. */
 function platformKey() {
   return `${process.platform}-${process.arch}`;
+}
+
+/** npm package containing the binary for a platform key. */
+function platformPackageName(key) {
+  return PLATFORMS[key]?.package;
 }
 
 /**
@@ -38,11 +44,11 @@ function binaryPath() {
 
   const key = platformKey();
   const exe = process.platform === "win32" ? "ttc.exe" : "ttc";
-  const pkg = `tt-lang-${key}`;
+  const pkg = platformPackageName(key);
   try {
     return require.resolve(`${pkg}/bin/${exe}`);
   } catch {
-    const reason = SUPPORTED.includes(key)
+    const reason = pkg
       ? `the ${pkg} package is not installed — it is an optionalDependency of tt-lang, ` +
         `so this usually means optional dependencies were disabled (--no-optional / ` +
         `--omit=optional) or the lockfile was created on a different platform. ` +
@@ -55,4 +61,4 @@ function binaryPath() {
   }
 }
 
-module.exports = { binaryPath, platformKey };
+module.exports = { binaryPath, platformKey, platformPackageName };

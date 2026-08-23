@@ -14,6 +14,9 @@ if (!baseVersion) fail('Cargo.toml has no package version')
 const stamp = Date.now()
 const compilerVersion = `${baseVersion}-local.${stamp}`
 const packageKey = platformKey()
+const platformPackages = JSON.parse(await readFile(join(root, 'npm/tt-lang/platforms.json'), 'utf8'))
+const platformPackage = platformPackages[packageKey]?.package
+if (!platformPackage) fail(`no prebuilt tt-lang package target for ${packageKey}`)
 const executable = platform() === 'win32' ? 'ttc.exe' : 'ttc'
 const binary = join(root, 'target', 'release', executable)
 const staging = await mkdtemp(join(tmpdir(), 'tt-local-registry-'))
@@ -36,7 +39,7 @@ await cp(join(root, 'npm/tt-lang'), ttLang, {
 })
 await updateManifest(ttLang, (manifest) => {
   manifest.version = compilerVersion
-  manifest.optionalDependencies = { [`tt-lang-${packageKey}`]: compilerVersion }
+  manifest.optionalDependencies = { [platformPackage]: compilerVersion }
 })
 
 const unplugin = join(packages, 'unplugin-tt')
@@ -55,7 +58,7 @@ await updateManifest(initializer, (manifest) => {
   manifest.version = compilerVersion
 })
 
-for (const directory of [join(packages, `tt-lang-${packageKey}`), ttLang, unplugin, initializer]) {
+for (const directory of [join(packages, platformPackage), ttLang, unplugin, initializer]) {
   run('bun', ['publish', '--registry', registry, '--tag', 'latest'], directory, {
     BUN_CONFIG_REGISTRY: registry,
   })

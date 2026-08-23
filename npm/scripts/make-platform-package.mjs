@@ -11,13 +11,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-const TARGETS = {
-  "linux-x64": { os: "linux", cpu: "x64" },
-  "linux-arm64": { os: "linux", cpu: "arm64" },
-  "darwin-x64": { os: "darwin", cpu: "x64" },
-  "darwin-arm64": { os: "darwin", cpu: "arm64" },
-  "win32-x64": { os: "win32", cpu: "x64" },
-};
+const TARGETS = JSON.parse(
+  fs.readFileSync(new URL("../tt-lang/platforms.json", import.meta.url), "utf8"),
+);
 
 const [key, binarySource, outDir, version = "0.0.0-dev"] = process.argv.slice(2);
 const target = TARGETS[key];
@@ -29,7 +25,7 @@ if (!target || !binarySource || !outDir) {
   process.exit(1);
 }
 
-const name = `tt-lang-${key}`;
+const name = target.package;
 const exe = target.os === "win32" ? "ttc.exe" : "ttc";
 const root = path.join(outDir, name);
 

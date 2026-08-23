@@ -41,7 +41,7 @@ matching your machine.
 | `tt-lang-linux-arm64` | Linux | arm64 (static musl build) |
 | `tt-lang-darwin-x64` | macOS | x64 |
 | `tt-lang-darwin-arm64` | macOS | arm64 |
-| `tt-lang-win32-x64` | Windows | x64 |
+| `tt-lang-win32-x64-msvc` | Windows | x64 (MSVC) |
 
 On other platforms, build from source
 (`cargo install --git https://github.com/load28/tt`) and set the

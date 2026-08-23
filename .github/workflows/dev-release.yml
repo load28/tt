@@ -180,8 +180,8 @@ jobs:
 
       - name: Publish platform packages
         run: |
-          for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
-            npm publish "dist/packages/tt-lang-$key" --tag dev --provenance --access public
+          for package_dir in dist/packages/tt-lang-*; do
+            npm publish "$package_dir" --tag dev --provenance --access public
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
