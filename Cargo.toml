@@ -1,6 +1,6 @@
 [package]
 name = "ttc"
-version = "0.3.0-dev.3"
+version = "0.3.0-dev.4"
 edition = "2024"
 rust-version = "1.88"
 description = "Compiler for tt — a tiny TypeScript preprocessor adding Rust-style enums and match expressions on top of 100%-compatible TypeScript."

@@ -191,8 +191,9 @@
 | TASK-181 | release 0.3.0-dev.2 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-181](./TASK-181-release-0.3.0-dev.2.md) |
 | TASK-182 | Windows npm 패키지의 고유 이름 적용 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-182-unique-windows-npm-package.md](./TASK-182-unique-windows-npm-package.md) |
 | TASK-183 | release 0.3.0-dev.3 | 취소 | 2026-08-23 | 2026-08-23 | [TASK-183-release-0.3.0-dev.3.md](./TASK-183-release-0.3.0-dev.3.md) |
-| TASK-184 | npm publish 로컬 경로 명시 | 진행 중 | 2026-08-23 | — | [TASK-184-explicit-npm-publish-paths.md](./TASK-184-explicit-npm-publish-paths.md) |
+| TASK-184 | npm publish 로컬 경로 명시 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-184-explicit-npm-publish-paths.md](./TASK-184-explicit-npm-publish-paths.md) |
+| TASK-185 | release 0.3.0-dev.4 | 진행 중 | 2026-08-23 | — | [TASK-185-release-0.3.0-dev.4.md](./TASK-185-release-0.3.0-dev.4.md) |
 
 ## 다음 태스크 번호
 
-**TASK-185**
+**TASK-186**
