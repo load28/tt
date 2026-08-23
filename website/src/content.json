@@ -56,20 +56,22 @@
         "ko": "TypeScript에 더 나은 제어 흐름을 더합니다."
       },
       "summary": {
-        "en": "tt is a small language that adds tagged unions, exhaustive pattern matching, Result control flow, pipelines, and mutation-safe bindings to TypeScript. It compiles to readable TypeScript and adds no runtime.",
-        "ko": "tt은 TypeScript에 태그드 유니언, 소진적 패턴 매칭, Result 제어 흐름, 파이프라인, 변경 안전 바인딩을 더하는 작은 언어입니다. 읽기 쉬운 TypeScript로 컴파일되며 별도 런타임이 없습니다."
+        "en": "tt is a small language that adds tagged unions, exhaustive pattern matching, Result control flow, pipelines, and mutation-safe bindings to TypeScript. Its syntax compiles to readable TypeScript without a runtime dependency.",
+        "ko": "tt은 TypeScript에 태그드 유니언, 소진적 패턴 매칭, Result 제어 흐름, 파이프라인, 변경 안전 바인딩을 더하는 작은 언어입니다. tt 문법은 런타임 의존성 없는 읽기 쉬운 TypeScript로 컴파일됩니다."
       },
       "code": "import * as Result from \"@tt/std/result\";\n\nconst message = input\n  |> parse\n  |> Result.mapP(format)\n  |> (result => match (result) {\n    Ok(value) => value,\n    Err(error) => `Error: ${error}`,\n  });",
       "works": {
         "en": [
           "Every valid TypeScript or TSX file remains a valid .tt or .ttx file.",
-          "tt-level diagnostics come from ttc at the original source range.",
-          "The output is plain TypeScript with no runtime library."
+          "Only completely parsed tt constructs are transformed; ordinary source passes through unchanged except for configured relative .tt and .ttx import rewriting.",
+          "tt-level diagnostics come from ttc at the original source range, while TypeScript owns ordinary type errors.",
+          "The emitted TypeScript or TSX preserves the source program's evaluation order."
         ],
         "ko": [
           "모든 유효한 TypeScript·TSX 파일은 그대로 유효한 .tt·.ttx 파일입니다.",
-          "tt 수준 진단은 ttc가 원본 소스 범위에 직접 보고합니다.",
-          "출력은 런타임 라이브러리가 필요 없는 순수 TypeScript입니다."
+          "완전히 파싱된 tt 구문만 변환하며 일반 소스는 설정된 상대 .tt·.ttx import 재작성을 제외하고 그대로 통과시킵니다.",
+          "tt 수준 진단은 ttc가 원본 소스 범위에 보고하고 일반 타입 오류는 TypeScript가 담당합니다.",
+          "방출된 TypeScript·TSX는 원본 프로그램의 평가 순서를 보존합니다."
         ]
       },
       "limits": {
@@ -96,13 +98,13 @@
       "works": {
         "en": [
           "New projects use Bun, Vite, TypeScript 7, and a prebuilt ttc binary.",
-          "Existing projects keep their config source and receive a composable TT wrapper.",
+          "Existing bundler configs stay unchanged where a composable TT wrapper is available; esbuild receives an explicit integration line.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm are detected.",
           "Every generated change is reproducible with the manual instructions below."
         ],
         "ko": [
           "새 프로젝트는 Bun, Vite, TypeScript 7, 프리빌트 ttc를 사용합니다.",
-          "기존 프로젝트의 설정 소스는 유지하고 합성 가능한 TT 래퍼를 추가합니다.",
+          "합성 가능한 TT 래퍼가 있는 번들러는 기존 설정 소스를 유지하고, esbuild에는 명시적인 통합 코드를 안내합니다.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 감지합니다.",
           "자동 생성되는 모든 변경을 아래 수동 절차로 재현할 수 있습니다."
         ]
@@ -163,13 +165,13 @@
       "code": "import { useState } from \"react\";\n\nenum LoadState {\n  Ready(message: string),\n  Empty,\n  Failed(message: string),\n}\n\nexport const Status = () => {\n  const [state] = useState<LoadState>(LoadState.Ready(\"Hello ttx\"));\n\n  return (\n    <section data-state={match (state) {\n      Ready => \"ready\",\n      Empty => \"empty\",\n      Failed => \"failed\",\n    }}>\n      {match (state) {\n        Ready(message) => <strong>{message}</strong>,\n        Empty => <span>Nothing here</span>,\n        Failed(message) => <mark>{message}</mark>,\n      }}\n    </section>\n  );\n};",
       "works": {
         "en": [
-          "Every valid TSX file passes through a .ttx file byte for byte.",
+          "Ordinary TSX remains valid in .ttx; JSX tags and text pass through byte for byte.",
           "tt constructs work inside JSX children and attribute expression containers.",
           "Concise arrow components preserve lexical scope and JSX evaluation order.",
           "Relative .ttx imports work through the CLI, editor, and unplugin-tt."
         ],
         "ko": [
-          "모든 유효한 TSX 파일은 .ttx에서 바이트 그대로 통과합니다.",
+          "일반 TSX는 .ttx에서도 유효하며 JSX 태그와 텍스트는 바이트 그대로 통과합니다.",
           "JSX 자식과 속성 expression container 안에서 tt 구문을 사용할 수 있습니다.",
           "concise arrow 컴포넌트의 렉시컬 범위와 JSX 평가 순서를 보존합니다.",
           "상대 .ttx import는 CLI, 에디터, unplugin-tt에서 동일하게 동작합니다."
@@ -245,14 +247,14 @@
         "en": [
           "Bindings use field names and may be aliased with field: name.",
           "Or-patterns, guards, nested patterns, and tuple product exhaustiveness.",
-          "String, number, boolean, bigint, and wildcard literal patterns.",
-          "await in a match produces an awaited async IIFE."
+          "String, number, boolean, and bigint literal patterns, plus a final wildcard arm.",
+          "await stays in the surrounding async owner when statement lowering is possible; expression-only positions use an awaited async boundary."
         ],
         "ko": [
           "필드 이름으로 바인딩하며 field: name 형태로 별칭을 줄 수 있습니다.",
           "or-패턴, 가드, 중첩 패턴, 튜플 곱집합 소진성을 지원합니다.",
-          "문자열, 숫자, 불리언, bigint, 와일드카드 리터럴 패턴을 지원합니다.",
-          "match 안의 await는 awaited async IIFE로 방출됩니다."
+          "문자열, 숫자, 불리언, bigint 리터럴 패턴과 마지막 와일드카드 암을 지원합니다.",
+          "문장으로 낮출 수 있으면 await를 바깥 async 문맥에 유지하고, 표현식 전용 위치에서만 awaited async 경계를 사용합니다."
         ]
       },
       "limits": {
@@ -483,12 +485,12 @@
         "en": [
           "Each <- unwraps Ok and returns Err from the block.",
           "Bindings stay in scope for later statements.",
-          "Different error types combine as a union; await makes an async block."
+          "Different error types combine as a union; await stays in the surrounding async owner or is awaited at an expression-only boundary."
         ],
         "ko": [
           "각 <-는 Ok를 풀고 Err이면 블록을 반환합니다.",
           "바인딩은 이후 문장 전체에서 유지됩니다.",
-          "서로 다른 오류 타입은 유니언이 되며 await를 쓰면 비동기 블록이 됩니다."
+          "서로 다른 오류 타입은 유니언이 되며 await는 바깥 async 문맥이나 표현식 전용 awaited 경계에서 실행됩니다."
         ]
       },
       "limits": {
@@ -681,13 +683,13 @@
       "works": {
         "en": [
           "--check runs tt-level checks without TypeScript.",
-          "--check-types adds TypeScript-backed checks at .tt source positions.",
+          "--check-types adds TypeScript-backed checks at .tt and .ttx source positions.",
           "--types writes declaration sidecars; -w watches files and importers.",
           "Directories preserve the source tree and pass handwritten .ts and .tsx through."
         ],
         "ko": [
           "--check는 TypeScript 없이 tt 수준 검사만 실행합니다.",
-          "--check-types는 .tt 원본 위치에 TypeScript 기반 검사를 추가합니다.",
+          "--check-types는 .tt·.ttx 원본 위치에 TypeScript 기반 검사를 추가합니다.",
           "--types는 선언 사이드카를 쓰며 -w는 파일과 import 사용처를 감시합니다.",
           "디렉터리 구조를 유지하고 직접 작성한 .ts와 .tsx는 그대로 통과시킵니다."
         ]

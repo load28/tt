@@ -97,8 +97,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
             </div>
 
             <div className="detail-grid">
-              <DetailList kind="works" title={language === 'ko' ? '지원 범위' : 'Supported'} items={item.works[language]} />
-              <DetailList kind="limits" title={language === 'ko' ? '사용 시 주의사항' : 'Things to know'} items={item.limits[language]} />
+              <DetailList title={language === 'ko' ? '기능' : 'Features'} items={item.works[language]} />
             </div>
 
             {'sections' in item && <GuideSections sections={item.sections} language={language} />}
@@ -153,9 +152,9 @@ function GuideSections({ sections, language }: {
   )
 }
 
-function DetailList({ kind, title, items }: { kind: 'works' | 'limits'; title: string; items: string[] }) {
+function DetailList({ title, items }: { title: string; items: string[] }) {
   return (
-    <section className={`detail-list detail-list--${kind}`}>
+    <section className="detail-list">
       <h2 className="detail-list__title">{title}</h2>
       <ul className="detail-list__items">
         {items.map((item) => <li className="detail-list__item" key={item}>{item}</li>)}

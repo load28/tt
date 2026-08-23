@@ -75,12 +75,9 @@ button:focus-visible, a:focus-visible { outline: 3px solid #6b7f18; outline-offs
 .code-block { margin-top: 44px; overflow: hidden; border: 1px solid #33312c; border-radius: 12px; background: var(--code); }
 .code-block__label { display: block; padding: 11px 18px; border-bottom: 1px solid #383631; color: #969188; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
 pre { margin: 0; padding: 24px; overflow-x: auto; color: var(--code-ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 14px; line-height: 1.7; tab-size: 2; }
-.detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 44px; border-top: 1px solid var(--line); }
+.detail-grid { margin-top: 44px; border-top: 1px solid var(--line); }
 .detail-list { padding-top: 24px; }
-.detail-list + .detail-list { padding-left: 32px; border-left: 1px solid var(--line); }
-.detail-list__title { margin: 0 0 16px; font-size: 15px; }
-.detail-list--works .detail-list__title { color: var(--positive); }
-.detail-list--limits .detail-list__title { color: var(--caution); }
+.detail-list__title { margin: 0 0 16px; color: var(--positive); font-size: 15px; }
 .detail-list__items { margin: 0; padding: 0; list-style: none; }
 .detail-list__item { position: relative; padding: 0 0 14px 20px; color: #514d46; font-size: 14px; line-height: 1.55; }
 .detail-list__item::before { position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: currentColor; content: ""; }
@@ -108,8 +105,6 @@ pre { margin: 0; padding: 24px; overflow-x: auto; color: var(--code-ink); font-f
   .reference-article { min-height: auto; padding: 52px 20px 72px; }
   .reference-title { font-size: clamp(38px, 12vw, 58px); }
   .reference-summary { font-size: 18px; }
-  .detail-grid { grid-template-columns: 1fr; }
-  .detail-list + .detail-list { padding-left: 0; border-left: 0; border-top: 1px solid var(--line); }
   .github-link { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
