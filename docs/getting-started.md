@@ -3,10 +3,9 @@
 You need [Bun](https://bun.sh/) to run the recommended setup command. TT
 packages and the prebuilt `ttc` compiler are installed from npm.
 
-During early development, the published TypeScript 7 package does not yet
-expose the sync API used by `ttc`. Build only that toolchain from the current
-[typescript-go source](https://github.com/microsoft/typescript-go); TT itself
-still comes from npm:
+During early development, build the toolchain required by `ttc` from the
+current [typescript-go source](https://github.com/microsoft/typescript-go);
+TT itself still comes from npm:
 
 ```sh
 git clone https://github.com/microsoft/typescript-go.git
@@ -42,7 +41,8 @@ bun run tt:check
 
 `init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
 `package.json`. The `@dev` initializer adds the `dev` channel of
-`@load28/tt-lang` and `@load28/unplugin-tt`, TypeScript 7, and TT scripts.
+`@load28/tt-lang` and `@load28/unplugin-tt`, plus TT scripts. It does not add
+an npm TypeScript package; `ttc` uses the built typescript-go checkout above.
 For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
 that composes the existing config; it never rewrites the user's config source.
 Run `bun run tt:dev` or `bun run tt:build` to use that wrapper. esbuild build
@@ -86,19 +86,15 @@ BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
 
 `--registry` passes the registry to `bun install` and writes it to the new
 project's `bunfig.toml`. Verdaccio serves the locally built TT packages and
-proxies third-party packages such as Vite and TypeScript.
+proxies third-party packages such as Vite.
 
 ## Manual compiler setup
 
 Before using this path, complete the typescript-go source build at the top of
-this guide and keep `TTC_TSGO_ROOT` exported. This is required: installing
-`typescript@7` below adds the project's TypeScript dependency but does not
-provide the sync API toolchain that `ttc` uses.
-
-Then install the compiler and TypeScript project dependency:
+this guide and keep `TTC_TSGO_ROOT` exported. Then install the compiler:
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7
+bun add -d @load28/tt-lang@dev
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
@@ -122,7 +118,7 @@ The same built typescript-go checkout and `TTC_TSGO_ROOT` are required for this
 path. Install the direct-source plugin in addition to the compiler:
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7 @load28/unplugin-tt@dev
+bun add -d @load28/tt-lang@dev @load28/unplugin-tt@dev
 ```
 
 Put `tt()` first in the bundler's plugins array:

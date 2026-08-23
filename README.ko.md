@@ -27,8 +27,7 @@ export const area = (shape: Shape): number =>
 ## 설치와 사용
 
 npm에서 TT의 공식 개발 패키지를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지
-않습니다. 단, 현재 npm의 TypeScript 7에는 `ttc`가 사용하는 sync API가 아직
-없으므로 typescript-go만 최신 소스에서 빌드합니다.
+않습니다. `ttc`가 사용할 typescript-go는 최신 소스에서 직접 빌드합니다.
 
 ```sh
 git clone https://github.com/microsoft/typescript-go.git
@@ -61,11 +60,10 @@ code --install-extension ./tt-language-<버전>.vsix
 ```
 
 컴파일러만 수동으로 설치할 때도 먼저 위의 typescript-go 빌드를 완료하고
-`TTC_TSGO_ROOT`를 설정한 상태로 유지해야 합니다. 다음 명령의 `typescript@7`은
-필수 소스 빌드 도구 체인을 대신하지 않습니다.
+`TTC_TSGO_ROOT`를 설정한 상태로 유지해야 합니다.
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7
+bun add -d @load28/tt-lang@dev
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.

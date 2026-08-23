@@ -8,7 +8,6 @@ const ttChannel = dependencyChannel(ownManifest.version)
 const versions = {
   '@load28/tt-lang': ttChannel,
   '@load28/unplugin-tt': ttChannel,
-  typescript: '^7.0.0',
   vite: '^8.0.0',
 }
 
@@ -101,7 +100,6 @@ export async function createProject(options) {
     devDependencies: {
       '@load28/tt-lang': versions['@load28/tt-lang'],
       '@load28/unplugin-tt': versions['@load28/unplugin-tt'],
-      typescript: versions.typescript,
       vite: versions.vite,
     },
   }
@@ -129,7 +127,6 @@ export async function initializeExisting(options) {
   const bundler = options.bundler === 'auto' ? detectBundler(manifest) : options.bundler
   const devDependencies = manifest.devDependencies ?? {}
   devDependencies['@load28/tt-lang'] ??= versions['@load28/tt-lang']
-  devDependencies.typescript ??= versions.typescript
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
   manifest.scripts['tt:check'] ??= 'ttc --check-types src'

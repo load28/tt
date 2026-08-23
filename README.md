@@ -27,9 +27,7 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 ## Install and use
 
 Install TT's official development packages from npm. Rust is not required on
-supported platforms. The one source-built prerequisite is typescript-go:
-the published TypeScript 7 package does not yet expose the sync API used by
-`ttc`.
+supported platforms. `ttc` requires a current source build of typescript-go.
 
 ```sh
 git clone https://github.com/microsoft/typescript-go.git
@@ -63,11 +61,10 @@ code --install-extension ./tt-language-<version>.vsix
 ```
 
 For a manual compiler-only install, first complete the typescript-go build
-above and keep `TTC_TSGO_ROOT` exported. The `typescript@7` dependency in this
-command does not replace that required source-built toolchain:
+above and keep `TTC_TSGO_ROOT` exported:
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7
+bun add -d @load28/tt-lang@dev
 ```
 
 Compile a file or source tree, or check it without writing output:

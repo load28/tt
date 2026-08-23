@@ -16,16 +16,16 @@ bunx @load28/create-tt@dev my-app
 bunx @load28/create-tt@dev init
 ```
 
-The published TypeScript 7 package does not yet expose the sync API used by
-`ttc`. During early development, build a current
+During early development, `ttc` uses APIs that are not yet available from an
+official TypeScript npm release. Build a current
 [typescript-go](https://github.com/microsoft/typescript-go) checkout and set
 `TTC_TSGO_ROOT` as described in the
 [installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md)
-before running the compiler. Installing `typescript@7` is still required for
-the project, but does not replace that source-built toolchain.
+before running the compiler. The current TT installer does not add a
+TypeScript npm package.
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7
+bun add -d @load28/tt-lang@dev
 ```
 
 ```sh

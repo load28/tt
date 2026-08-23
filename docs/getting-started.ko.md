@@ -3,9 +3,9 @@
 권장 설치 명령에는 [Bun](https://bun.sh/)이 필요합니다. TT 패키지와 프리빌트
 `ttc` 컴파일러는 npm 공식 배포본을 설치합니다.
 
-현재 개발 단계에서는 npm에 배포된 TypeScript 7 패키지에 `ttc`가 사용하는 sync
-API가 아직 없습니다. TT는 npm 배포본을 사용하고 이 도구 체인만 최신
-[typescript-go 소스](https://github.com/microsoft/typescript-go)에서 빌드합니다.
+현재 개발 단계에서는 `ttc`가 사용할 도구 체인을 최신
+[typescript-go 소스](https://github.com/microsoft/typescript-go)에서 직접
+빌드합니다. TT 자체는 npm 공식 배포본을 사용합니다.
 
 ```sh
 git clone https://github.com/microsoft/typescript-go.git
@@ -41,7 +41,8 @@ bun run tt:check
 
 `init`은 `package.json`에서 Vite, Rollup, Rolldown, webpack, Rspack,
 esbuild, Farm을 감지합니다. `@dev` 설치기는 `@load28/tt-lang`과
-`@load28/unplugin-tt`의 `dev` 채널, TypeScript 7, TT용 스크립트를 추가합니다.
+`@load28/unplugin-tt`의 `dev` 채널과 TT용 스크립트를 추가합니다. npm TypeScript
+패키지는 추가하지 않으며 `ttc`는 위에서 빌드한 typescript-go를 사용합니다.
 선언형 설정을 쓰는 번들러에는 기존 설정을 합성하는
 `tt.*.config.mjs` 래퍼를 생성하며 사용자 설정 소스는 고치지 않습니다. 생성된
 래퍼는 `bun run tt:dev` 또는 `bun run tt:build`로 사용합니다. esbuild 빌드
@@ -85,19 +86,15 @@ BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
 
 `--registry`는 같은 레지스트리를 `bun install`에 넘기고 새 프로젝트의
 `bunfig.toml`에도 기록합니다. Verdaccio는 로컬에서 빌드한 TT 패키지를 제공하고
-Vite와 TypeScript 같은 외부 패키지는 프록시합니다.
+Vite 같은 외부 패키지는 프록시합니다.
 
 ## 컴파일러 수동 설치
 
 이 절차를 사용하기 전에 이 문서 상단의 typescript-go 소스 빌드를 완료하고
-`TTC_TSGO_ROOT`가 설정된 상태를 유지해야 합니다. 이는 필수 조건입니다. 아래의
-`typescript@7`은 프로젝트의 TypeScript 의존성을 추가하지만 `ttc`가 사용하는
-sync API 도구 체인을 제공하지 않습니다.
-
-그다음 컴파일러와 TypeScript 프로젝트 의존성을 설치합니다.
+`TTC_TSGO_ROOT`가 설정된 상태를 유지해야 합니다. 그다음 컴파일러를 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7
+bun add -d @load28/tt-lang@dev
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.
@@ -121,7 +118,7 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@dev typescript@7 @load28/unplugin-tt@dev
+bun add -d @load28/tt-lang@dev @load28/unplugin-tt@dev
 ```
 
 각 번들러의 plugins 배열 맨 앞에 `tt()`을 넣습니다.
