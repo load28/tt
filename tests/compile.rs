@@ -4679,3 +4679,16 @@ fn a_spread_argument_capture_takes_the_expression_not_the_dots() {
     assert!(out.contains("= (rest);"), "{out}");
     assert!(out.contains("(...$tt_v"), "{out}");
 }
+
+#[test]
+fn an_inert_argument_is_not_captured_but_an_effectful_one_is() {
+    // TASK-160 §9: capture elision is proven by effects — a literal stays
+    // in place, a call is captured to keep its evaluation order.
+    let out = ok(
+        "declare function g(a: number, b: number, c: number): void;\ndeclare function eff(): number;\ng(1, match (1) { 1 => 1, _ => 0 }, 2);\ng(eff(), match (1) { 1 => 1, _ => 0 }, 2);\n",
+    );
+    assert!(!out.contains("= (1);"), "{out}");
+    assert!(!out.contains("= (2);"), "{out}");
+    assert!(out.contains("= (eff());"), "{out}");
+    assert!(out.contains("(1, $tt_v0, 2);"), "{out}");
+}

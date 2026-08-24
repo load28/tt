@@ -341,6 +341,25 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   protocol span을 `ExprOrSpread.span()`에서 표현식 span + spread 사실로
   바꿔 spread capture가 표현식만 capture하고 `...`는 원 위치에 남긴다.
 
+### 결정 18: Effects는 ProgramSyntax가 소유하고 최적화만 소비한다
+
+- **상황**: §9의 Effects 모델을 어느 계층이 소유할지 결정해야 했다.
+- **검토한 대안**: Core 의미 계층 — tt 구문의 효과는 알지만 host TypeScript
+  표현식은 opaque다. Evaluation IR — 실행 사실의 소비자이지 구문 판정자가
+  아니다.
+- **선택과 근거**: 효과는 host TypeScript **표현식**에 대한 구문 사실이므로
+  SWC AST를 소유한 ProgramSyntax가 `Effects`(may_read_mutable/may_write/
+  may_call/may_throw/may_suspend/may_allocate/requires_reference)를 계산해
+  protocol input마다 붙인다. 판정은 극도로 보수적이다: 평가가 관측 불가능함이
+  구문만으로 증명되는 형태 — 일반 리터럴(정규식 리터럴은 평가마다 새 객체를
+  할당하므로 제외), 투명 TS wrapper 아래의 그것 — 만 `NONE`이고, 식별자는
+  TDZ와 가변 바인딩 때문에, 알 수 없는 모든 표현식은 무조건 `ANY`다. 소비는
+  단 한 곳 — resolve_schedule의 capture 생략(`PlannedEvaluationInput::Stable`)
+  — 이며 correctness는 Effects 없이도 성립한다(모두 capture해도 맞다).
+  이것이 §6의 증명 기반 "한 번만 사용하는 안전한 source capture 제거"다:
+  inert한 입력의 유일한 역할은 순서 보존이었고, 관측 불가능한 평가는 순서를
+  가지지 않으므로 slot과 capture를 함께 제거해도 어떤 trace도 변하지 않는다.
+
 ## 작업 내역
 
 - 2026-08-22: TASK-160을 등록하고 SWC whole-owner cutover를 시작했다.
@@ -521,6 +540,14 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   출력 형태를 compile 테스트 4건으로 고정했다. 기존 snapshot 1건
   (member optional call의 boundary)을 새 계약(whole operation)으로 갱신했다.
   전체 게이트 13개 스위트가 통과했다.
+
+- 2026-08-24: Effects 모델을 구현했다(결정 18). ProgramSyntax가 protocol
+  input마다 보수적 `Effects`를 계산하고, resolve_schedule이 inert한 Value
+  입력을 `PlannedEvaluationInput::Stable`로 계획해 slot·capture를 생략한다.
+  optional call region의 inert 선행 인자는 재구성된 호출에 인라인되고, inert
+  조건은 branch에서 재평가된다 — 모두 관측 불가능성이 증명된 경우만이다.
+  `g(1, match …, 2)`가 리터럴 capture 없이, `g(eff(), match …)`는 capture와
+  함께 방출됨을 단위·출력 테스트로 고정했다. 전체 게이트 통과.
 
 ## 이슈 및 해결
 

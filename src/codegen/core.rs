@@ -505,7 +505,7 @@ impl TargetRewritePlan {
                     slot: lowering.slot_name(*target).to_owned(),
                     anchor: None,
                 }),
-                PlannedEvaluationInput::Slot { .. } => None,
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
             })
             .chain(operation_replacements)
             .collect();
@@ -1237,6 +1237,11 @@ impl<'a> Emitter<'a> {
     ) -> String {
         match condition {
             PlannedEvaluationInput::Slot { slot, .. } => self.value_slot_name(*slot).to_owned(),
+            // An inert condition needs no capture; re-reading it in each
+            // branch is unobservable and yields the same value.
+            PlannedEvaluationInput::Stable { source } => {
+                format!("({})", &self.source[source.start..source.end])
+            }
             PlannedEvaluationInput::Source {
                 source,
                 target,
@@ -1398,9 +1403,13 @@ impl<'a> Emitter<'a> {
                 let condition = match input {
                     PlannedEvaluationInput::Source { target, .. }
                     | PlannedEvaluationInput::Slot { slot: target, .. } => {
-                        self.value_slot_name(*target)
+                        self.value_slot_name(*target).to_owned()
+                    }
+                    PlannedEvaluationInput::Stable { source } => {
+                        format!("({})", &self.source[source.start..source.end])
                     }
                 };
+                let condition = condition.as_str();
                 prefix.push_lit("if (");
                 match branch {
                     ConditionalBranch::LogicalAndRight | ConditionalBranch::Consequent => {

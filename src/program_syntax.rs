@@ -157,6 +157,8 @@ pub(crate) struct HostEvaluationInput {
     pub(crate) source: SourceSpan,
     pub(crate) mode: EvaluationInputMode,
     pub(crate) receiver: Option<SourceSpan>,
+    /// What evaluating this input may do — an optimization fact only.
+    pub(crate) effects: Effects,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -164,6 +166,78 @@ pub(crate) enum EvaluationInputMode {
     Value,
     DirectReference,
     MemberReference,
+}
+
+/// What evaluating one host expression may observably do
+/// (`docs/design/program-lowering.md` §9). Owned by this layer because it
+/// is a fact about TypeScript syntax; consumed **only** by optimization
+/// decisions (a capture that may be skipped) — correctness never branches
+/// on it, and an unknown expression is every effect at once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Effects {
+    pub(crate) may_read_mutable: bool,
+    pub(crate) may_write: bool,
+    pub(crate) may_call: bool,
+    pub(crate) may_throw: bool,
+    pub(crate) may_suspend: bool,
+    pub(crate) may_allocate: bool,
+    pub(crate) requires_reference: bool,
+}
+
+impl Effects {
+    /// The conservative default: anything might happen.
+    pub(crate) const ANY: Effects = Effects {
+        may_read_mutable: true,
+        may_write: true,
+        may_call: true,
+        may_throw: true,
+        may_suspend: true,
+        may_allocate: true,
+        requires_reference: false,
+    };
+
+    /// Nothing observable happens and re-evaluation yields the same value.
+    pub(crate) const NONE: Effects = Effects {
+        may_read_mutable: false,
+        may_write: false,
+        may_call: false,
+        may_throw: false,
+        may_suspend: false,
+        may_allocate: false,
+        requires_reference: false,
+    };
+
+    /// Whether evaluating the expression is observable at all — the proof a
+    /// capture of it may be elided: with no reads, writes, calls, throws,
+    /// suspensions, or allocation identity, moving its evaluation to the
+    /// host occurrence changes no trace, no count, and no value.
+    pub(crate) fn is_inert(&self) -> bool {
+        *self == Effects::NONE
+    }
+}
+
+/// The effects one host expression may have, judged from syntax alone.
+///
+/// Only shapes whose evaluation is provably unobservable answer
+/// [`Effects::NONE`]: plain literals (a regex literal allocates a fresh
+/// object per evaluation, so it is not one), possibly under TypeScript's
+/// transparent expression wrappers. Identifiers may read mutable bindings
+/// and may throw (TDZ); user types never prove runtime purity; everything
+/// unknown is [`Effects::ANY`].
+fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
+    use swc_ecma_ast::{Expr as SwcExpr, Lit};
+    match expression {
+        SwcExpr::Lit(Lit::Str(_) | Lit::Bool(_) | Lit::Null(_) | Lit::Num(_) | Lit::BigInt(_)) => {
+            Effects::NONE
+        }
+        SwcExpr::Paren(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsAs(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsSatisfies(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsNonNull(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsTypeAssertion(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsInstantiation(inner) => expression_effects(&inner.expr),
+        _ => Effects::ANY,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1153,18 +1227,18 @@ struct ProjectedHostExit {
 enum ProjectedProtocolFrame {
     Ordered {
         parent: ProjectedSpan,
-        positions: Vec<ProjectedSpan>,
+        positions: Vec<(ProjectedSpan, Effects)>,
         kind: OrderedEvaluationKind,
     },
     Binary {
         parent: ProjectedSpan,
         operator: BinaryOp,
-        left: ProjectedSpan,
+        left: (ProjectedSpan, Effects),
         right: ProjectedSpan,
     },
     Conditional {
         parent: ProjectedSpan,
-        test: ProjectedSpan,
+        test: (ProjectedSpan, Effects),
         consequent: ProjectedSpan,
         alternate: ProjectedSpan,
     },
@@ -1173,34 +1247,34 @@ enum ProjectedProtocolFrame {
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,
         callee_receiver: Option<ProjectedSpan>,
-        arguments: Vec<(ProjectedSpan, bool)>,
+        arguments: Vec<(ProjectedSpan, bool, Effects)>,
         type_args: Option<ProjectedSpan>,
         optional: bool,
     },
     Member {
         parent: ProjectedSpan,
-        object: ProjectedSpan,
+        object: (ProjectedSpan, Effects),
         property: Option<ProjectedSpan>,
     },
     Construct {
         parent: ProjectedSpan,
         callee: ProjectedSpan,
-        arguments: Vec<(ProjectedSpan, bool)>,
+        arguments: Vec<(ProjectedSpan, bool, Effects)>,
     },
     TaggedTemplate {
         parent: ProjectedSpan,
         tag: ProjectedSpan,
         tag_mode: EvaluationInputMode,
         tag_receiver: Option<ProjectedSpan>,
-        expressions: Vec<ProjectedSpan>,
+        expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Template {
         parent: ProjectedSpan,
-        expressions: Vec<ProjectedSpan>,
+        expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Jsx {
         parent: ProjectedSpan,
-        expressions: Vec<ProjectedSpan>,
+        expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Suspend {
         parent: ProjectedSpan,
@@ -1246,23 +1320,35 @@ struct ProjectedHostOwner {
     edge: usize,
 }
 
-fn object_evaluation_positions(node: &ObjectLit, source_start: u32) -> Vec<ProjectedSpan> {
+fn object_evaluation_positions(
+    node: &ObjectLit,
+    source_start: u32,
+) -> Vec<(ProjectedSpan, Effects)> {
     let mut positions = Vec::new();
     for property in &node.props {
         match property {
             PropOrSpread::Spread(spread) => {
-                positions.push(projected_span(spread.expr.span(), source_start));
+                positions.push((
+                    projected_span(spread.expr.span(), source_start),
+                    expression_effects(&spread.expr),
+                ));
             }
             PropOrSpread::Prop(property) => match &**property {
                 Prop::Shorthand(identifier) => {
-                    positions.push(projected_span(identifier.span, source_start));
+                    positions.push((projected_span(identifier.span, source_start), Effects::ANY));
                 }
                 Prop::KeyValue(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
-                    positions.push(projected_span(property.value.span(), source_start));
+                    positions.push((
+                        projected_span(property.value.span(), source_start),
+                        expression_effects(&property.value),
+                    ));
                 }
                 Prop::Assign(property) => {
-                    positions.push(projected_span(property.value.span(), source_start));
+                    positions.push((
+                        projected_span(property.value.span(), source_start),
+                        expression_effects(&property.value),
+                    ));
                 }
                 Prop::Getter(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
@@ -1279,9 +1365,16 @@ fn object_evaluation_positions(node: &ObjectLit, source_start: u32) -> Vec<Proje
     positions
 }
 
-fn push_computed_property(positions: &mut Vec<ProjectedSpan>, name: &PropName, source_start: u32) {
+fn push_computed_property(
+    positions: &mut Vec<(ProjectedSpan, Effects)>,
+    name: &PropName,
+    source_start: u32,
+) {
     if let PropName::Computed(computed) = name {
-        positions.push(projected_span(computed.expr.span(), source_start));
+        positions.push((
+            projected_span(computed.expr.span(), source_start),
+            expression_effects(&computed.expr),
+        ));
     }
 }
 
@@ -1292,13 +1385,14 @@ fn push_computed_property(positions: &mut Vec<ProjectedSpan>, name: &PropName, s
 fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
     source_start: u32,
-) -> Vec<(ProjectedSpan, bool)> {
+) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments
         .iter()
         .map(|argument| {
             (
                 projected_span(argument.expr.span(), source_start),
                 argument.spread.is_some(),
+                expression_effects(&argument.expr),
             )
         })
         .collect()
@@ -1560,7 +1654,12 @@ impl VisitAstPath for ParentCollector {
                 .elems
                 .iter()
                 .flatten()
-                .map(|element| projected_span(element.expr.span(), self.source_start))
+                .map(|element| {
+                    (
+                        projected_span(element.expr.span(), self.source_start),
+                        expression_effects(&element.expr),
+                    )
+                })
                 .collect(),
             kind: OrderedEvaluationKind::Array,
         });
@@ -1589,7 +1688,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
             parent: projected_span(node.span, self.source_start),
-            positions: vec![projected_span(node.right.span(), self.source_start)],
+            positions: vec![(
+                projected_span(node.right.span(), self.source_start),
+                expression_effects(&node.right),
+            )],
             kind: OrderedEvaluationKind::Assignment,
         });
         <AssignExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1602,7 +1704,12 @@ impl VisitAstPath for ParentCollector {
             positions: node
                 .exprs
                 .iter()
-                .map(|expression| projected_span(expression.span(), self.source_start))
+                .map(|expression| {
+                    (
+                        projected_span(expression.span(), self.source_start),
+                        expression_effects(expression),
+                    )
+                })
                 .collect(),
             kind: OrderedEvaluationKind::Sequence,
         });
@@ -1617,7 +1724,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
             parent: projected_span(node.span, self.source_start),
-            positions: vec![projected_span(node.arg.span(), self.source_start)],
+            positions: vec![(
+                projected_span(node.arg.span(), self.source_start),
+                expression_effects(&node.arg),
+            )],
             kind: OrderedEvaluationKind::Unary,
         });
         <UnaryExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1628,7 +1738,10 @@ impl VisitAstPath for ParentCollector {
         self.protocol_frames.push(ProjectedProtocolFrame::Binary {
             parent: projected_span(node.span, self.source_start),
             operator: node.op,
-            left: projected_span(node.left.span(), self.source_start),
+            left: (
+                projected_span(node.left.span(), self.source_start),
+                expression_effects(&node.left),
+            ),
             right: projected_span(node.right.span(), self.source_start),
         });
         <BinExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1639,7 +1752,10 @@ impl VisitAstPath for ParentCollector {
         self.protocol_frames
             .push(ProjectedProtocolFrame::Conditional {
                 parent: projected_span(node.span, self.source_start),
-                test: projected_span(node.test.span(), self.source_start),
+                test: (
+                    projected_span(node.test.span(), self.source_start),
+                    expression_effects(&node.test),
+                ),
                 consequent: projected_span(node.cons.span(), self.source_start),
                 alternate: projected_span(node.alt.span(), self.source_start),
             });
@@ -1777,7 +1893,10 @@ impl VisitAstPath for ParentCollector {
         };
         self.protocol_frames.push(ProjectedProtocolFrame::Member {
             parent: projected_span(node.span, self.source_start),
-            object: projected_span(node.obj.span(), self.source_start),
+            object: (
+                projected_span(node.obj.span(), self.source_start),
+                expression_effects(&node.obj),
+            ),
             property,
         });
         <MemberExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1815,7 +1934,12 @@ impl VisitAstPath for ParentCollector {
                     .tpl
                     .exprs
                     .iter()
-                    .map(|expression| projected_span(expression.span(), self.source_start))
+                    .map(|expression| {
+                        (
+                            projected_span(expression.span(), self.source_start),
+                            expression_effects(expression),
+                        )
+                    })
                     .collect(),
             });
         <TaggedTpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1828,7 +1952,12 @@ impl VisitAstPath for ParentCollector {
             expressions: node
                 .exprs
                 .iter()
-                .map(|expression| projected_span(expression.span(), self.source_start))
+                .map(|expression| {
+                    (
+                        projected_span(expression.span(), self.source_start),
+                        expression_effects(expression),
+                    )
+                })
                 .collect(),
         });
         <Tpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1842,7 +1971,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
             parent: projected_span(node.span, self.source_start),
-            expressions: jsx_evaluation_positions(node, self.source_start),
+            expressions: jsx_evaluation_positions(node, self.source_start)
+                .into_iter()
+                .map(|span| (span, Effects::ANY))
+                .collect(),
         });
         <JSXElement as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -1855,7 +1987,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
             parent: projected_span(node.span, self.source_start),
-            expressions: jsx_fragment_positions(node, self.source_start),
+            expressions: jsx_fragment_positions(node, self.source_start)
+                .into_iter()
+                .map(|span| (span, Effects::ANY))
+                .collect(),
         });
         <JSXFragment as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -1947,7 +2082,10 @@ fn protocol_step(
             positions,
             kind,
         } => {
-            let Some(position) = child_index(positions, value) else {
+            let Some(position) = positions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -1962,17 +2100,19 @@ fn protocol_step(
             let inputs = positions[..position]
                 .iter()
                 .copied()
-                .map(|input| (input, EvaluationInputMode::Value, None))
+                .map(|(span, effects)| (span, EvaluationInputMode::Value, None, effects))
                 .collect();
             (*parent, operation, inputs)
         }
-        ProjectedProtocolFrame::Binary { parent, left, .. } if projected_contains(*left, value) => {
-            (
-                *parent,
-                HostEvaluationOperation::Eager(EagerPosition::BinaryLeft),
-                Vec::new(),
-            )
-        }
+        ProjectedProtocolFrame::Binary {
+            parent,
+            left: (left, _),
+            ..
+        } if projected_contains(*left, value) => (
+            *parent,
+            HostEvaluationOperation::Eager(EagerPosition::BinaryLeft),
+            Vec::new(),
+        ),
         ProjectedProtocolFrame::Binary {
             parent,
             operator,
@@ -2000,10 +2140,11 @@ fn protocol_step(
                     type_args: None,
                 });
             }
+            let (left, effects) = *left;
             (
                 *parent,
                 operation,
-                vec![(*left, EvaluationInputMode::Value, None)],
+                vec![(left, EvaluationInputMode::Value, None, effects)],
             )
         }
         ProjectedProtocolFrame::Conditional {
@@ -2018,10 +2159,11 @@ fn protocol_step(
                 operands: Vec::new(),
                 type_args: None,
             });
+            let (test, effects) = *test;
             (
                 *parent,
                 HostEvaluationOperation::Conditional(ConditionalBranch::Consequent),
-                vec![(*test, EvaluationInputMode::Value, None)],
+                vec![(test, EvaluationInputMode::Value, None, effects)],
             )
         }
         ProjectedProtocolFrame::Conditional {
@@ -2036,10 +2178,11 @@ fn protocol_step(
                 operands: Vec::new(),
                 type_args: None,
             });
+            let (test, effects) = *test;
             (
                 *parent,
                 HostEvaluationOperation::Conditional(ConditionalBranch::Alternate),
-                vec![(*test, EvaluationInputMode::Value, None)],
+                vec![(test, EvaluationInputMode::Value, None, effects)],
             )
         }
         ProjectedProtocolFrame::Call {
@@ -2067,7 +2210,7 @@ fn protocol_step(
         } => {
             let Some(position) = arguments
                 .iter()
-                .position(|(argument, _)| projected_contains(*argument, value))
+                .position(|(argument, _, _)| projected_contains(*argument, value))
             else {
                 return Ok(None);
             };
@@ -2077,7 +2220,10 @@ fn protocol_step(
                 conditional = Some(ProjectedConditionalFacts {
                     branch: arguments[position].0,
                     skipped: None,
-                    operands: arguments.clone(),
+                    operands: arguments
+                        .iter()
+                        .map(|(span, spread, _)| (*span, *spread))
+                        .collect(),
                     type_args: *type_args,
                 });
                 HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(index))
@@ -2087,32 +2233,30 @@ fn protocol_step(
             let inputs = callee
                 .iter()
                 .copied()
-                .map(|callee| (callee, *callee_mode, *callee_receiver))
-                .chain(
-                    arguments[..position]
-                        .iter()
-                        .map(|(argument, _)| (*argument, EvaluationInputMode::Value, None)),
-                )
+                .map(|callee| (callee, *callee_mode, *callee_receiver, Effects::ANY))
+                .chain(arguments[..position].iter().map(|(argument, _, effects)| {
+                    (*argument, EvaluationInputMode::Value, None, *effects)
+                }))
                 .collect();
             (*parent, operation, inputs)
         }
-        ProjectedProtocolFrame::Member { parent, object, .. }
-            if projected_contains(*object, value) =>
-        {
-            (
-                *parent,
-                HostEvaluationOperation::Reference(ReferencePosition::MemberObject),
-                Vec::new(),
-            )
-        }
         ProjectedProtocolFrame::Member {
             parent,
-            object,
+            object: (object, _),
+            ..
+        } if projected_contains(*object, value) => (
+            *parent,
+            HostEvaluationOperation::Reference(ReferencePosition::MemberObject),
+            Vec::new(),
+        ),
+        ProjectedProtocolFrame::Member {
+            parent,
+            object: (object, effects),
             property: Some(property),
         } if projected_contains(*property, value) => (
             *parent,
             HostEvaluationOperation::Reference(ReferencePosition::MemberProperty),
-            vec![(*object, EvaluationInputMode::Value, None)],
+            vec![(*object, EvaluationInputMode::Value, None, *effects)],
         ),
         ProjectedProtocolFrame::Construct { parent, callee, .. }
             if projected_contains(*callee, value) =>
@@ -2130,18 +2274,16 @@ fn protocol_step(
         } => {
             let Some(position) = arguments
                 .iter()
-                .position(|(argument, _)| projected_contains(*argument, value))
+                .position(|(argument, _, _)| projected_contains(*argument, value))
             else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = std::iter::once((*callee, EvaluationInputMode::Value, None))
-                .chain(
-                    arguments[..position]
-                        .iter()
-                        .map(|(argument, _)| (*argument, EvaluationInputMode::Value, None)),
-                )
+            let inputs = std::iter::once((*callee, EvaluationInputMode::Value, None, Effects::ANY))
+                .chain(arguments[..position].iter().map(|(argument, _, effects)| {
+                    (*argument, EvaluationInputMode::Value, None, *effects)
+                }))
                 .collect();
             (
                 *parent,
@@ -2165,17 +2307,22 @@ fn protocol_step(
             tag_receiver,
             expressions,
         } => {
-            let Some(position) = child_index(expressions, value) else {
+            let Some(position) = expressions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = std::iter::once((*tag, *tag_mode, *tag_receiver))
+            let inputs = std::iter::once((*tag, *tag_mode, *tag_receiver, Effects::ANY))
                 .chain(
                     expressions[..position]
                         .iter()
                         .copied()
-                        .map(|expression| (expression, EvaluationInputMode::Value, None)),
+                        .map(|(expression, effects)| {
+                            (expression, EvaluationInputMode::Value, None, effects)
+                        }),
                 )
                 .collect();
             (
@@ -2188,7 +2335,10 @@ fn protocol_step(
             parent,
             expressions,
         } => {
-            let Some(position) = child_index(expressions, value) else {
+            let Some(position) = expressions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -2196,7 +2346,9 @@ fn protocol_step(
             let inputs = expressions[..position]
                 .iter()
                 .copied()
-                .map(|expression| (expression, EvaluationInputMode::Value, None))
+                .map(|(expression, effects)| {
+                    (expression, EvaluationInputMode::Value, None, effects)
+                })
                 .collect();
             (
                 *parent,
@@ -2208,7 +2360,10 @@ fn protocol_step(
             parent,
             expressions,
         } => {
-            let Some(position) = child_index(expressions, value) else {
+            let Some(position) = expressions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -2216,7 +2371,9 @@ fn protocol_step(
             let inputs = expressions[..position]
                 .iter()
                 .copied()
-                .map(|expression| (expression, EvaluationInputMode::Value, None))
+                .map(|(expression, effects)| {
+                    (expression, EvaluationInputMode::Value, None, effects)
+                })
                 .collect();
             (
                 *parent,
@@ -2236,13 +2393,17 @@ fn protocol_step(
     let parent = map_evaluation_span(segments, parent)?;
     let inputs = inputs
         .into_iter()
-        .map(|(source, mode, receiver)| {
+        .map(|(source, mode, receiver, effects)| {
             Ok(HostEvaluationInput {
                 source: map_evaluation_span(segments, source)?,
                 mode,
                 receiver: receiver
                     .map(|receiver| map_evaluation_span(segments, receiver))
                     .transpose()?,
+                effects: Effects {
+                    requires_reference: mode != EvaluationInputMode::Value,
+                    ..effects
+                },
             })
         })
         .collect::<Result<Vec<_>, ProgramSyntaxError>>()?;
@@ -2337,12 +2498,6 @@ fn reference_value_span(expression: &swc_ecma_ast::Expr) -> swc_common::Span {
         SwcExpr::TsSatisfies(expression) => reference_value_span(&expression.expr),
         _ => expression.span(),
     }
-}
-
-fn child_index(children: &[ProjectedSpan], value: ProjectedSpan) -> Option<usize> {
-    children
-        .iter()
-        .position(|child| projected_contains(*child, value))
 }
 
 fn projected_span(span: swc_common::Span, source_start: u32) -> ProjectedSpan {

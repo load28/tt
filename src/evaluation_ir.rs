@@ -297,6 +297,13 @@ pub(crate) enum PlannedEvaluationInput {
         slot: ValueSlotId,
         mode: EvaluationInputMode,
     },
+    /// An input whose evaluation is provably unobservable and stable
+    /// ([`crate::program_syntax::Effects::is_inert`]) — a plain literal. It
+    /// needs no capture: evaluating it at its original host position after
+    /// the region changes no trace, no count, and no value. This is the
+    /// proof-based capture elision of `docs/design/program-lowering.md` §9,
+    /// decided here and only here — never re-derived by the target.
+    Stable { source: SourceSpan },
 }
 
 struct PendingPlannedValue {
@@ -801,7 +808,8 @@ impl EvaluationFile {
                                 .at(value.source));
                             }
                             PlannedEvaluationInput::Source { .. }
-                            | PlannedEvaluationInput::Slot { .. } => {}
+                            | PlannedEvaluationInput::Slot { .. }
+                            | PlannedEvaluationInput::Stable { .. } => {}
                         }
                     }
                 }
@@ -910,6 +918,17 @@ fn resolve_schedule(
                     .map(|input| {
                         slots.get(&input.source).map_or_else(
                             || {
+                                // §9 capture elision: an inert value input
+                                // is left in place — its only role here was
+                                // order preservation, and evaluating it is
+                                // unobservable.
+                                if input.mode == EvaluationInputMode::Value
+                                    && input.effects.is_inert()
+                                {
+                                    return Ok(PlannedEvaluationInput::Stable {
+                                        source: input.source,
+                                    });
+                                }
                                 if let Some(slot) = source_slots.get(&input.source) {
                                     return Ok(PlannedEvaluationInput::Source {
                                         source: input.source,
@@ -1151,6 +1170,8 @@ fn plan_one_operation(
             // Argument capture slots come from the members' planned inputs:
             // the schedule already assigned one to every argument that
             // evaluates before a value.
+            // A captured argument answers with its slot; an inert one with
+            // `None` — the rebuilt call inlines it, which is unobservable.
             let capture_of = |span: SourceSpan| {
                 members.iter().find_map(|member| {
                     values[*member].schedule.steps()[0].inputs.iter().find_map(
@@ -1158,7 +1179,10 @@ fn plan_one_operation(
                             PlannedEvaluationInput::Source { source, target, .. }
                                 if *source == span =>
                             {
-                                Some(*target)
+                                Some(Some(*target))
+                            }
+                            PlannedEvaluationInput::Stable { source } if *source == span => {
+                                Some(None)
                             }
                             _ => None,
                         },
@@ -1176,7 +1200,7 @@ fn plan_one_operation(
                         }
                         let capture = if index < last_value {
                             match capture_of(operand.span) {
-                                Some(slot) => Some(slot),
+                                Some(capture) => capture,
                                 None => return Ok(None),
                             }
                         } else {
@@ -1259,7 +1283,9 @@ fn target_capability(
                 } => {
                     return TargetCapability::ExpressionBoundary(Reason::ReferenceNotPreservable);
                 }
-                PlannedEvaluationInput::Source { .. } | PlannedEvaluationInput::Slot { .. } => {}
+                PlannedEvaluationInput::Source { .. }
+                | PlannedEvaluationInput::Slot { .. }
+                | PlannedEvaluationInput::Stable { .. } => {}
             }
         }
     }
@@ -2139,6 +2165,39 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn an_inert_input_needs_no_capture_but_an_effectful_one_does() {
+        // §9 capture elision: a literal's evaluation is unobservable, so it
+        // stays in place; a call may do anything, so it is captured to
+        // preserve its order against the hoisted region.
+        let (file, core) = evaluation(
+            "declare function g(a: number, b: number): void;\ndeclare function eff(): number;\ng(1, match (1) { 1 => 1, _ => 0 });\ng(eff(), match (1) { 1 => 2, _ => 0 });\n",
+        );
+        let plan = plan(&file, &core);
+        let inputs: Vec<_> = plan
+            .owners()
+            .flat_map(|owner| &owner.values)
+            .flat_map(|value| value.schedule.steps())
+            .flat_map(|step| &step.inputs)
+            .collect();
+        assert!(
+            inputs
+                .iter()
+                .any(|input| matches!(input, PlannedEvaluationInput::Stable { .. })),
+            "{inputs:#?}"
+        );
+        assert!(
+            inputs.iter().any(|input| matches!(
+                input,
+                PlannedEvaluationInput::Source {
+                    mode: EvaluationInputMode::Value,
+                    ..
+                }
+            )),
+            "{inputs:#?}"
+        );
     }
 
     #[test]
