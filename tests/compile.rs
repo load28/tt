@@ -2549,7 +2549,7 @@ fn tuple_match_over_builtin_enums() {
 }
 
 #[test]
-fn tuple_match_block_bodies_and_guards_use_the_label() {
+fn tuple_match_block_bodies_and_guards_leave_through_the_region() {
     let out = ok(r#"
 enum Coin { Heads(), Tails }
 const r = match (a, b) {
@@ -2558,11 +2558,12 @@ const r = match (a, b) {
 };
 "#);
     assert!(out.contains("if (go()) {"), "{out}");
-    // The arm's body always leaves, through the exit label the rewritten
-    // `return` breaks to — so the chain's fall-through label is never
-    // reached and is not written.
-    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
+    // The arm's body always leaves, through the region's own
+    // `do { … } while (false)` — so neither the chain's fall-through label
+    // nor a second exit label around the region is written.
+    assert!(out.contains("$tt_v0 = 1; break;"), "{out}");
     assert!(!out.contains("$tt_b"), "{out}");
+    assert!(!out.contains("$tt_y_"), "{out}");
 }
 
 #[test]
@@ -3326,10 +3327,22 @@ fn literal_match_evaluates_the_scrutinee_once() {
 fn literal_match_block_bodies_break_out_of_the_switch() {
     let out = ok(r#"const v = match (s) { "a" => { return 1; }, _ => 0 };"#);
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(
-        out.contains(r#"case "a": { $tt_v0 = 1; break $tt_y_$tt_v0;"#),
-        "{out}"
+    // The `switch` the region already generates is the nearest `break`
+    // target, so the rewritten `return` leaves through it and the region
+    // needs no label of its own (TASK-160 §6).
+    assert!(out.contains(r#"case "a": { $tt_v0 = 1; break; }"#), "{out}");
+    assert!(!out.contains("$tt_y_"), "{out}");
+}
+
+#[test]
+fn a_block_arm_exit_inside_a_loop_still_needs_the_region_label() {
+    // A `break` written inside the arm's own loop would be swallowed by
+    // it, so this is the one shape that keeps the label.
+    let out = ok(
+        r#"const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };"#,
     );
+    assert!(out.contains("$tt_y_$tt_v0: {"), "{out}");
+    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
 }
 
 #[test]

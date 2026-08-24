@@ -97,6 +97,12 @@ struct OverlayEntry {
 pub(crate) struct HostExit {
     pub(crate) statement: SourceSpan,
     pub(crate) argument: Option<SourceSpan>,
+    /// Whether the exit sits inside a statement that consumes an unlabeled
+    /// `break` — a loop or a `switch` written in the arm body. The rewrite
+    /// turns the `return` into a `break`, so such an exit is the only
+    /// reason a value region needs a label: everywhere else the region's
+    /// own dispatch is already the nearest `break` target.
+    pub(crate) captured_break: bool,
 }
 
 /// Ordered JavaScript evaluation obligations between one TT value and its
@@ -1201,7 +1207,12 @@ struct ParentCollector {
     protocol_frames: Vec<ProjectedProtocolFrame>,
     occupied_names: HashSet<String>,
     function_depth: usize,
-    exit_regions: Vec<(TtNodeId, usize)>,
+    /// How many enclosing statements consume an unlabeled `break`
+    /// (loops and `switch`).
+    break_capture_depth: usize,
+    /// The exit-collecting regions in scope, with the function depth an
+    /// exit must sit at and the break-capture depth the region opened at.
+    exit_regions: Vec<(TtNodeId, usize, usize)>,
 }
 
 struct CollectedProgramSyntax {
@@ -1221,6 +1232,7 @@ struct FoundOverlay {
 struct ProjectedHostExit {
     statement: ProjectedSpan,
     argument: Option<ProjectedSpan>,
+    captured_break: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1500,6 +1512,7 @@ impl ParentCollector {
             protocol_frames: Vec::new(),
             occupied_names: HashSet::new(),
             function_depth: 0,
+            break_capture_depth: 0,
             exit_regions: Vec::new(),
         }
     }
@@ -1609,6 +1622,7 @@ impl ParentCollector {
                                     map_evaluation_span(&self.source_segments, argument)
                                 })
                                 .transpose()?,
+                            captured_break: exit.captured_break,
                         })
                     })
                     .collect::<Result<Vec<_>, ProgramSyntaxError>>()?,
@@ -1769,7 +1783,8 @@ impl VisitAstPath for ParentCollector {
             self.record_overlay(id, path);
             let collects_exits = self.expected_exit_calls.contains(&id);
             if collects_exits {
-                self.exit_regions.push((id, self.function_depth + 1));
+                self.exit_regions
+                    .push((id, self.function_depth + 1, self.break_capture_depth));
             }
             <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
             if collects_exits {
@@ -1805,6 +1820,78 @@ impl VisitAstPath for ParentCollector {
         });
         <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
+    }
+
+    fn visit_for_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::ForStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::ForStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_for_in_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::ForInStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::ForInStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_for_of_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::ForOfStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::ForOfStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_while_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::WhileStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::WhileStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_do_while_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::DoWhileStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::DoWhileStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_switch_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::SwitchStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::SwitchStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
     }
 
     fn visit_arrow_expr<'ast: 'r, 'r>(
@@ -1844,7 +1931,7 @@ impl VisitAstPath for ParentCollector {
         node: &'ast ReturnStmt,
         path: &mut AstNodePath<'r>,
     ) {
-        if let Some((id, target_depth)) = self.exit_regions.last().copied()
+        if let Some((id, target_depth, region_break_depth)) = self.exit_regions.last().copied()
             && target_depth == self.function_depth
             && let Some(found) = self.found.get_mut(&id)
         {
@@ -1854,6 +1941,7 @@ impl VisitAstPath for ParentCollector {
                     .arg
                     .as_ref()
                     .map(|argument| projected_span(argument.span(), self.source_start)),
+                captured_break: self.break_capture_depth > region_break_depth,
             });
         }
         <ReturnStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);

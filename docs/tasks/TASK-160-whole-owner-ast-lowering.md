@@ -360,6 +360,31 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   inert한 입력의 유일한 역할은 순서 보존이었고, 관측 불가능한 평가는 순서를
   가지지 않으므로 slot과 capture를 함께 제거해도 어떤 trace도 변하지 않는다.
 
+### 결정 19: 값 region의 exit target은 하나이고, label은 필요할 때만 존재한다
+
+- **상황**: TASK-199가 기록한 `do { … } while (false)` + label block 이중 중첩이
+  남아 있었다. if-chain dispatch에서는 두 구조가 같은 region에 두 개의 exit
+  target을 만들고, 실제로는 label이 쓰이지 않는 경우에도 항상 방출됐다
+  (`$tt_y_$tt_v0: { … do { … } while (false); }`).
+- **여섯 질문의 답**: ① 사실 계산 책임 — "이 exit의 `break`가 삼켜지는가"는
+  arm body의 TypeScript 구문 사실이므로 ProgramSyntax가 SWC walk에서 계산한다.
+  ② 구조적으로 같은 입력 — block arm의 `return`이 rewrite되는 모든 match
+  (switch·if-chain·tuple·literal). ③ 이름 있는 타입 — `HostExit.captured_break`.
+  ④ 검증 — 출력 테스트(label 유무)와 runtime 테스트(loop 안 exit). ⑤ 회귀 —
+  `a_block_arm_exit_leaves_the_region_from_inside_a_loop` 등 2건. ⑥ mutation —
+  M8(항상 false)·M9(항상 true) 양방향 모두 실패 확인.
+- **검토한 대안**: (a) 출력에서 label 문자열을 찾아 지우는 사후 정리 — 지시가
+  금지한 문자열 기반 처리다. (b) dispatch 종류로 분기(switch면 label, if-chain이면
+  do-while) — 두 규칙이 되고, arm body가 loop를 쓰면 if-chain도 label이 필요하므로
+  틀린다.
+- **선택과 근거**: 원리는 하나다 — **region이 이미 만드는 dispatch(if-chain의
+  `do { … } while (false)`, 또는 `switch` 자신)가 가장 가까운 `break` 대상이므로,
+  label은 rewrite된 exit이 그 사이의 loop/`switch`에 삼켜질 때에만 필요하다.**
+  `ParentCollector`가 loop·switch를 지나며 `break_capture_depth`를 세고, exit이
+  region 진입 시점보다 깊으면 `captured_break`가 참이 된다. codegen은 이 사실만
+  소비해 label을 방출할지 정하고, exit rewrite는 label이 없으면 unlabeled
+  `break;`를 쓴다. 이로써 어떤 region도 exit target을 둘 갖지 않는다.
+
 ## 작업 내역
 
 - 2026-08-22: TASK-160을 등록하고 SWC whole-owner cutover를 시작했다.
@@ -567,6 +592,19 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   생존한 mutation 두 건(M5b·M7)은 테스트 공백의 증거였고, 각각 runtime 순서
   trace 테스트와 격리된 ordinal 위반 테스트를 추가해 닫았다. 명령:
   `cargo test --lib <validator test>` / `cargo test --test integration <trace test>`.
+
+- 2026-08-24: 값 region의 exit target을 하나로 정리했다(결정 19).
+  `HostExit.captured_break`를 ProgramSyntax가 계산하고, codegen은 그 사실이
+  참인 exit이 있을 때만 region label을 방출한다. `match (e) { A(v) => { use(v);
+  return v; }, B => 0 }`는 이제 `$tt_y_…: { … }` 없이 dispatch 자체로 나가고,
+  arm body가 `for` 안에서 `return`하는 경우에만 label이 남는다. 출력 테스트
+  2건을 새 계약으로 갱신하고 label 유지 케이스 1건, runtime 회귀 2건을
+  추가했다. mutation M8(captured_break를 항상 false)·M9(항상 true) 모두
+  테스트가 실패함을 확인했다.
+- 2026-08-24: `docs/ai/tt.md`의 match 표현식 항목을 갱신했다 — 조건부 연산은
+  operation 전체가 하나의 region으로 낮아지고, expression boundary는 statement가
+  도달할 수 없는 owner(매개변수 기본값, class field, loop header, switch case
+  test, 구조분해 default, 구조화 불가능한 조건 연산)에서만 쓰인다는 계약.
 
 ## 이슈 및 해결
 

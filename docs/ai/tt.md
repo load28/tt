@@ -33,7 +33,7 @@ const area = match (shape) {
   Point => 0,
 };
 ```
-- Expression: use after `=`, in `return`, in `${...}`. The compiler uses owner-scoped slots and `switch`/`if`; parameter defaults and class fields use one hygiene-safe named expression-boundary helper. Scrutinee parens mandatory, non-empty.
+- Expression: use after `=`, in `return`, in `${...}`. The compiler uses owner-scoped slots and `switch`/`if`. A value under `&&`/`||`/`??`/`? :`/`f?.()` lowers the WHOLE operation as one region (condition or callee evaluated once, every path assigning the result slot), so short-circuit, evaluation counts and the operation's type are unchanged. Where statements cannot reach the value — parameter defaults, class fields, a loop header (`while (f(match ...))`), a `switch` case test, a destructuring default, or a conditional operation that cannot be owned whole — one hygiene-safe named expression-boundary helper runs it in place. Scrutinee parens mandatory, non-empty.
 - Bindings by field name, NEVER position; subset ok, any order.
 - Arm body: expr, or block `{ ... return v; }` (no return → undefined; a block whose every path returns or throws gets no fall-through in the output). Object literal body needs parens: `Tag => ({a: 1})`.
 - `_` arm must be LAST.

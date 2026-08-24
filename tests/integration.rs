@@ -2959,3 +2959,53 @@ console.log(JSON.stringify(trace));
 "#);
     assert_eq!(lines, ["1 20 3", "[1,2,3]"]);
 }
+
+#[test]
+fn a_block_arm_exit_leaves_the_region_from_inside_a_loop() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    // TASK-160 §6: the region keeps a label exactly when the rewritten
+    // `return` sits inside a statement that would swallow an unlabeled
+    // `break`. If the label were dropped here the `break` would leave the
+    // loop and fall through to the next statement instead.
+    let lines = run(r#"
+enum Pick { Scan(from: number), Zero }
+declare const nothing: number;
+function choose(p: Pick): number {
+  return match (p) {
+    Scan(from) => {
+      for (const x of [from, from + 1, from + 2]) {
+        if (x % 3 === 0) { return x; }
+      }
+      return -1;
+    },
+    Zero => 0,
+  };
+}
+console.log(choose(Pick.Scan(2)), choose(Pick.Scan(4)), choose(Pick.Zero));
+"#);
+    assert_eq!(lines, ["3 6 0"]);
+}
+
+#[test]
+fn a_block_arm_exit_without_a_loop_still_yields_its_value() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    let lines = run(r#"
+enum Pick { Some(v: number), None }
+function choose(p: Pick): number {
+  return match (p) {
+    Some(v) => { const doubled = v * 2; return doubled; },
+    None => 0,
+  };
+}
+const guarded = (n: number): number => match (n) {
+  0 if true => 1,
+  _ => { return n + 100; },
+};
+console.log(choose(Pick.Some(21)), choose(Pick.None), guarded(0), guarded(5));
+"#);
+    assert_eq!(lines, ["42 0 1 105"]);
+}

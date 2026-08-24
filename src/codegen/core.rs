@@ -832,8 +832,11 @@ impl<'a> Emitter<'a> {
         body: hir::BodyId,
         exits: &[HostExit],
         continuation: &ValueContinuation<'_>,
-        label: &str,
+        label: Option<&str>,
     ) -> Rope<'a> {
+        // Without a label the region's own dispatch is the nearest `break`
+        // target already ([`HostExit::captured_break`]).
+        let leave = label.map_or_else(|| "break;".to_owned(), |label| format!("break {label};"));
         let mut edits = Vec::new();
         for exit in exits {
             match exit.argument {
@@ -852,16 +855,13 @@ impl<'a> Emitter<'a> {
                             start: argument.end,
                             end: exit.statement.end,
                         },
-                        text: format!(
-                            "{}; break {label};",
-                            continuation.assignment_suffix(grouped)
-                        ),
+                        text: format!("{}; {leave}", continuation.assignment_suffix(grouped)),
                     });
                 }
                 None => edits.push(LocalSourceEdit {
                     span: exit.statement,
                     text: format!(
-                        "{}undefined{}; break {label};",
+                        "{}undefined{}; {leave}",
                         continuation.assignment_prefix(false),
                         continuation.assignment_suffix(false)
                     ),
@@ -1943,9 +1943,17 @@ impl<'a> Emitter<'a> {
             panic!("internal compiler error: value decision is not a match")
         };
         let mut out = Rope::new();
+        // The region needs a label exactly when a rewritten exit sits
+        // inside a loop or `switch` the arm body wrote, which would swallow
+        // the `break` the rewrite emits. Otherwise the dispatch the region
+        // already generates — an if-chain's `do { … } while (false)`, or
+        // the `switch` itself — is the nearest `break` target, so the
+        // labeled block around it would be a second exit target for the
+        // same region (TASK-199, TASK-160 §6).
         let label = continuation
             .assignment_target()
             .filter(|_| decision_has_block_arm(decision))
+            .filter(|_| exits.iter().any(|exit| exit.captured_break))
             .map(exit_label);
         if let Some(label) = &label {
             out.push_lit(format!("{label}: "));
@@ -2261,10 +2269,7 @@ impl<'a> Emitter<'a> {
             _ => None,
         };
         let body = if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
-            let label = exit_label.unwrap_or_else(|| {
-                panic!("internal compiler error: statement arm has no exit label")
-            });
-            self.emit_body_with_exits(body, exits, continuation, label)
+            self.emit_body_with_exits(body, exits, continuation, exit_label)
                 .trim()
         } else {
             self.emit_body(body).trim()
