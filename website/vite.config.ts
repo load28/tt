@@ -7,6 +7,8 @@ const topics = Object.keys(content.topics)
 const pages = [
   ...topics.slice(1).map((topic) => ({ path: `/${topic}` })),
   ...topics.map((topic) => ({ path: topic === 'overview' ? '/ko' : `/ko/${topic}` })),
+  { path: '/why' },
+  { path: '/ko/why' },
 ]
 
 export default defineConfig({

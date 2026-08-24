@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TopicRouteImport } from './routes/$topic'
+import { Route as WhyRouteImport } from './routes/why'
 import { Route as KoIndexRouteImport } from './routes/ko.index'
 import { Route as KoTopicRouteImport } from './routes/ko.$topic'
+import { Route as KoWhyRouteImport } from './routes/ko.why'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const TopicRoute = TopicRouteImport.update({
   id: '/$topic',
   path: '/$topic',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WhyRoute = WhyRouteImport.update({
+  id: '/why',
+  path: '/why',
   getParentRoute: () => rootRouteImport,
 } as any)
 const KoIndexRoute = KoIndexRouteImport.update({
@@ -34,38 +41,51 @@ const KoTopicRoute = KoTopicRouteImport.update({
   path: '/ko/$topic',
   getParentRoute: () => rootRouteImport,
 } as any)
+const KoWhyRoute = KoWhyRouteImport.update({
+  id: '/ko/why',
+  path: '/ko/why',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$topic': typeof TopicRoute
+  '/why': typeof WhyRoute
   '/ko/$topic': typeof KoTopicRoute
+  '/ko/why': typeof KoWhyRoute
   '/ko/': typeof KoIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$topic': typeof TopicRoute
+  '/why': typeof WhyRoute
   '/ko/$topic': typeof KoTopicRoute
+  '/ko/why': typeof KoWhyRoute
   '/ko': typeof KoIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$topic': typeof TopicRoute
+  '/why': typeof WhyRoute
   '/ko/$topic': typeof KoTopicRoute
+  '/ko/why': typeof KoWhyRoute
   '/ko/': typeof KoIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$topic' | '/ko/$topic' | '/ko/'
+  fullPaths: '/' | '/$topic' | '/why' | '/ko/$topic' | '/ko/why' | '/ko/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$topic' | '/ko/$topic' | '/ko'
-  id: '__root__' | '/' | '/$topic' | '/ko/$topic' | '/ko/'
+  to: '/' | '/$topic' | '/why' | '/ko/$topic' | '/ko/why' | '/ko'
+  id: '__root__' | '/' | '/$topic' | '/why' | '/ko/$topic' | '/ko/why' | '/ko/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   TopicRoute: typeof TopicRoute
+  WhyRoute: typeof WhyRoute
   KoTopicRoute: typeof KoTopicRoute
+  KoWhyRoute: typeof KoWhyRoute
   KoIndexRoute: typeof KoIndexRoute
 }
 
@@ -85,6 +105,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TopicRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/why': {
+      id: '/why'
+      path: '/why'
+      fullPath: '/why'
+      preLoaderRoute: typeof WhyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ko/': {
       id: '/ko/'
       path: '/ko'
@@ -99,13 +126,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof KoTopicRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ko/why': {
+      id: '/ko/why'
+      path: '/ko/why'
+      fullPath: '/ko/why'
+      preLoaderRoute: typeof KoWhyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   TopicRoute: TopicRoute,
+  WhyRoute: WhyRoute,
   KoTopicRoute: KoTopicRoute,
+  KoWhyRoute: KoWhyRoute,
   KoIndexRoute: KoIndexRoute,
 }
 export const routeTree = rootRouteImport
