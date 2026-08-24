@@ -7,17 +7,17 @@
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-use super::rope::{Flat, Rope};
+use super::rope::{Flat, Rope, SourcePreservation};
 use crate::analysis::SemanticFile;
 use crate::core_ir::*;
 use crate::evaluation_ir::{
-    LoweringPlan, PlannedEvaluationInput, PlannedEvaluationStep, ValueTarget,
+    LoweringPlan, PlannedEvaluationInput, PlannedEvaluationStep, TargetCapability, ValueTarget,
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
 use crate::program_syntax::{
-    ConditionalBranch, EvaluationFrequency, EvaluationInputMode, EvaluationOwner, HostContinuation,
-    HostEvaluationOperation, HostExit, HostOwnerKind, SourceSpan,
+    ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
+    HostOwnerKind, SourceSpan,
 };
 use crate::scanner::{at, ident_end, is_ident_start, scan_type_end, skip_ws_comments};
 use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
@@ -70,9 +70,19 @@ pub(crate) fn lowering_plan(
         crate::evaluation_ir::EvaluationFile::build(&syntax, core).unwrap_or_else(|error| {
             panic!("internal compiler error: Evaluation IR construction failed: {error:?}")
         });
-    Ok(evaluation.lowering_plan().unwrap_or_else(|error| {
+    let plan = evaluation.lowering_plan(core).unwrap_or_else(|error| {
         panic!("internal compiler error: owner lowering plan failed: {error:?}")
-    }))
+    });
+    // The plan validators are pipeline stages, not tests: a violated
+    // evaluation contract fails the build here, before emission starts
+    // (`docs/design/program-lowering.md` §11).
+    if let Err(error) = evaluation.validate_order(&plan) {
+        error.raise();
+    }
+    if let Err(error) = evaluation.validate_reference(&plan) {
+        error.raise();
+    }
+    Ok(plan)
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -83,7 +93,13 @@ pub(crate) fn emit_with_map<'a>(
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
-    let target = TargetRewritePlan::build(lowering_plan, core);
+    let target = TargetRewritePlan::build(lowering_plan);
+    let mut relocated: Vec<SourceSpan> = target
+        .source_replacements
+        .iter()
+        .map(|replacement| replacement.source)
+        .collect();
+    relocated.extend(target.relocated_values.iter().copied());
     let emitter = Emitter {
         semantic,
         core,
@@ -127,13 +143,150 @@ pub(crate) fn emit_with_map<'a>(
             emitter.expression_boundary_name
         ));
     }
-    output.flatten(source.len())
+    // A block arm's `return` frame (the keyword, and anything after the
+    // argument) is claimed by the exit rewrite; the argument itself stays
+    // pass-through.
+    let rewritten = emitter
+        .value_exits
+        .values()
+        .flatten()
+        .flat_map(|exit| match exit.argument {
+            Some(argument) => vec![
+                SourceSpan {
+                    start: exit.statement.start,
+                    end: argument.start,
+                },
+                SourceSpan {
+                    start: argument.end,
+                    end: exit.statement.end,
+                },
+            ],
+            None => vec![exit.statement],
+        })
+        .collect();
+    let preservation = SourcePreservation {
+        owned: pass_through_spans(semantic, core),
+        relocated,
+        rewritten,
+    };
+    output.flatten(source, &preservation)
+}
+
+/// The pass-through ranges of a file, for the target's preservation check
+/// ([`SourcePreservation::owned`]): the source the compiler does not
+/// interpret — Core `Opaque` statements and expressions and template raw
+/// parts, wherever they sit. Read off the Core IR — the same structure the
+/// emitter walks — never off the output.
+fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpan> {
+    fn span(semantic: &SemanticFile, node: NodeId, out: &mut Vec<SourceSpan>) {
+        let span =
+            semantic.hir.source_map.node_span(node).unwrap_or_else(|| {
+                panic!("internal compiler error: target node has no source span")
+            });
+        out.push(span.into());
+    }
+
+    fn walk_body(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        body: hir::BodyId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        for statement in &core.bodies[body.index()].statements {
+            match statement {
+                Statement::Opaque(node) => span(semantic, *node, out),
+                Statement::Adt(_) | Statement::Import(_) => {}
+                Statement::Propagate(propagate) => {
+                    walk_expr(semantic, core, propagate.value, out);
+                }
+                Statement::Decision(decision) => walk_decision(semantic, core, decision, out),
+                Statement::Expr(expr) => walk_expr(semantic, core, *expr, out),
+            }
+        }
+    }
+
+    fn walk_decision(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        decision: &Decision,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        for subject in &decision.subjects {
+            walk_expr(semantic, core, subject.value, out);
+        }
+        for arm in &decision.arms {
+            if let Some(guard) = arm.guard {
+                walk_expr(semantic, core, guard, out);
+            }
+            match arm.action {
+                ArmAction::Yield { body, .. } | ArmAction::Execute(body) => {
+                    walk_body(semantic, core, body, out);
+                }
+                ArmAction::BindThrough(_) => {}
+            }
+        }
+        match &decision.miss {
+            MissAction::Execute(body) => walk_body(semantic, core, *body, out),
+            MissAction::Decision(inner) => walk_decision(semantic, core, inner, out),
+            MissAction::ThrowUnexpected(_) | MissAction::Nothing => {}
+        }
+    }
+
+    fn walk_expr(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        match &core.exprs[expr.index()] {
+            Expr::Opaque(node) => span(semantic, *node, out),
+            Expr::Sequence(body) => walk_body(semantic, core, *body, out),
+            Expr::Decision(decision) => walk_decision(semantic, core, decision, out),
+            Expr::Apply(apply) => {
+                if let Some(head) = apply.head {
+                    walk_expr(semantic, core, head, out);
+                }
+                for step in &apply.steps {
+                    walk_expr(semantic, core, step.value, out);
+                }
+            }
+            Expr::ResultRegion(region) => {
+                for item in &region.items {
+                    match item {
+                        ResultRegionItem::Statements(body) => {
+                            walk_body(semantic, core, *body, out);
+                        }
+                        ResultRegionItem::Propagate(propagate) => {
+                            walk_expr(semantic, core, propagate.value, out);
+                        }
+                    }
+                }
+                walk_expr(semantic, core, region.value, out);
+            }
+            Expr::Template(template) => {
+                for part in &template.parts {
+                    match part {
+                        TemplatePart::Raw(node) => span(semantic, *node, out),
+                        TemplatePart::Interpolation(expr) => walk_expr(semantic, core, *expr, out),
+                    }
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    walk_body(semantic, core, core.root, &mut out);
+    out
 }
 
 struct TargetRewritePlan {
     owner_slots: Vec<OwnerSlotRewrite>,
     composes: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
+    /// The source spans of values whose lowering moves them into a prelude
+    /// before their owner — a planned relocation the preservation check
+    /// must know about ([`SourcePreservation::relocated`]).
+    relocated_values: Vec<SourceSpan>,
     arrow_returns: Vec<ArrowReturnRewrite>,
     slot_exprs: HashMap<ExprId, String>,
     value_slots: HashMap<ExprId, String>,
@@ -182,7 +335,11 @@ struct LocalSourceEdit {
 }
 
 impl TargetRewritePlan {
-    fn build(lowering: &LoweringPlan, core: &CoreFile) -> Self {
+    fn build(lowering: &LoweringPlan) -> Self {
+        // Whether a value's control flow may become statements in its host
+        // owner was decided by the Evaluation IR and recorded on the value
+        // ([`TargetCapability`]); this plan only picks the statement *shape*
+        // that fits each host continuation.
         let owner_slots: Vec<_> = lowering
             .owners()
             .filter(|rewrite| rewrite.values.len() == 1)
@@ -195,16 +352,12 @@ impl TargetRewritePlan {
                         | HostContinuation::Return
                         | HostContinuation::Discard
                 ) && value.schedule.steps().is_empty()
-                    && !matches!(
-                        value.context.owner,
-                        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
-                    )
-                    && can_structure_value_expr(core, value.expr))
-                .then(|| OwnerSlotRewrite {
-                    owner: rewrite.owner.span,
-                    expr: value.expr,
-                    slot: lowering.slot_name(slot).to_owned(),
-                })
+                    && value.capability == TargetCapability::StatementRegion)
+                    .then(|| OwnerSlotRewrite {
+                        owner: rewrite.owner.span,
+                        expr: value.expr,
+                        slot: lowering.slot_name(slot).to_owned(),
+                    })
             })
             .collect();
         let arrow_returns: Vec<_> = lowering
@@ -215,11 +368,11 @@ impl TargetRewritePlan {
                 let ValueTarget::Slot(slot) = value.target;
                 (value.context.continuation == HostContinuation::ArrowReturn
                     && value.schedule.steps().is_empty()
-                    && can_structure_value_expr(core, value.expr))
-                .then(|| ArrowReturnRewrite {
-                    expr: value.expr,
-                    slot: lowering.slot_name(slot).to_owned(),
-                })
+                    && value.capability == TargetCapability::StatementRegion)
+                    .then(|| ArrowReturnRewrite {
+                        expr: value.expr,
+                        slot: lowering.slot_name(slot).to_owned(),
+                    })
             })
             .collect();
         let composes: Vec<_> = lowering
@@ -228,16 +381,7 @@ impl TargetRewritePlan {
                 let can_compose = !rewrite.values.is_empty()
                     && rewrite.values.iter().all(|value| {
                         value.context.continuation == HostContinuation::Compose
-                            && matches!(
-                                value.context.owner,
-                                EvaluationOwner::Module
-                                    | EvaluationOwner::FunctionBody
-                                    | EvaluationOwner::StaticBlock
-                            )
-                            && (!value.schedule.steps().is_empty()
-                                || value.context.frequency == EvaluationFrequency::Once)
-                            && compose_schedule_is_structurable(value.schedule.steps())
-                            && can_structure_value_expr(core, value.expr)
+                            && value.capability == TargetCapability::StatementRegion
                     });
                 can_compose.then(|| ComposeRewrite {
                     owner: rewrite.owner.span,
@@ -256,6 +400,25 @@ impl TargetRewritePlan {
                         .collect(),
                 })
             })
+            .collect();
+        // owner-slot and compose rewrites hoist the value's control flow
+        // to a prelude before the owner; arrow-return rewrites restructure
+        // the value in place, so they relocate nothing.
+        let hoisted: HashSet<ExprId> = owner_slots
+            .iter()
+            .map(|rewrite| rewrite.expr)
+            .chain(
+                composes
+                    .iter()
+                    .flat_map(|rewrite| &rewrite.values)
+                    .map(|value| value.expr),
+            )
+            .collect();
+        let relocated_values = lowering
+            .owners()
+            .flat_map(|rewrite| &rewrite.values)
+            .filter(|value| hoisted.contains(&value.expr))
+            .map(|value| value.source)
             .collect();
         let source_replacements = composes
             .iter()
@@ -299,6 +462,7 @@ impl TargetRewritePlan {
             owner_slots,
             composes,
             source_replacements,
+            relocated_values,
             arrow_returns,
             slot_exprs,
             value_slots,
@@ -307,68 +471,6 @@ impl TargetRewritePlan {
             expression_boundary_name,
         }
     }
-}
-
-fn compose_schedule_is_structurable(steps: &[PlannedEvaluationStep]) -> bool {
-    steps.iter().all(|step| {
-        step.inputs.iter().all(|input| match input {
-            PlannedEvaluationInput::Source { mode, receiver, .. } => match mode {
-                EvaluationInputMode::Value | EvaluationInputMode::DirectReference => true,
-                EvaluationInputMode::MemberReference => {
-                    receiver.is_some()
-                        && !matches!(
-                            step.operation,
-                            HostEvaluationOperation::Conditional(
-                                ConditionalBranch::OptionalCallArgument(_)
-                            )
-                        )
-                }
-            },
-            PlannedEvaluationInput::Slot { mode, .. } => {
-                *mode != EvaluationInputMode::MemberReference
-            }
-        })
-    })
-}
-
-fn can_structure_value_expr(core: &CoreFile, expr: ExprId) -> bool {
-    match &core.exprs[expr.index()] {
-        Expr::Decision(decision) => decision
-            .arms
-            .iter()
-            .all(|arm| matches!(arm.action, ArmAction::Yield { .. })),
-        Expr::ResultRegion(_) => true,
-        Expr::Sequence(body) => {
-            body_value_expr(core, *body).is_some_and(|inner| can_structure_value_expr(core, inner))
-        }
-        Expr::Apply(apply) => apply.head.is_some_and(|head| {
-            can_structure_value_expr(core, head)
-                || apply
-                    .steps
-                    .iter()
-                    .any(|step| can_structure_value_expr(core, step.value))
-        }),
-        Expr::Opaque(_) | Expr::Template(_) => false,
-    }
-}
-
-fn body_value_expr(core: &CoreFile, body: hir::BodyId) -> Option<ExprId> {
-    sequence_value(&core.bodies[body.index()].statements).map(|(_, expr)| expr)
-}
-
-fn sequence_value(statements: &[Statement]) -> Option<(usize, ExprId)> {
-    let (index, expr) = statements
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(index, statement)| match statement {
-            Statement::Expr(expr) => Some((index, *expr)),
-            _ => None,
-        })?;
-    statements[index + 1..]
-        .iter()
-        .all(|statement| matches!(statement, Statement::Opaque(_)))
-        .then_some((index, expr))
 }
 
 struct Emitter<'a> {
@@ -714,7 +816,7 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
         let statements = &self.core.bodies[body.index()].statements;
-        let (value_index, value) = sequence_value(statements)?;
+        let (value_index, value) = crate::core_ir::sequence_value(statements)?;
         let mut out = self.emit_statements(&statements[..value_index]);
         out.append(self.emit_continued_expr(value, continuation)?);
         out.append(self.emit_statements(&statements[value_index + 1..]));
@@ -945,7 +1047,9 @@ impl<'a> Emitter<'a> {
             let Expr::Sequence(body) = &self.core.exprs[expr.index()] else {
                 return None;
             };
-            body_value_expr(self.core, *body).and_then(|value| self.structured_value_slot(value))
+            self.core
+                .body_value_expr(*body)
+                .and_then(|value| self.structured_value_slot(value))
         })
     }
 
@@ -961,7 +1065,7 @@ impl<'a> Emitter<'a> {
                 (AnchorKind::ResultBind, start, end, end)
             }
             Expr::Sequence(body) => {
-                let value = body_value_expr(self.core, *body).unwrap_or_else(|| {
+                let value = self.core.body_value_expr(*body).unwrap_or_else(|| {
                     panic!("internal compiler error: slotted sequence has no value")
                 });
                 self.value_anchor(value)
@@ -1042,7 +1146,7 @@ impl<'a> Emitter<'a> {
 
     fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
         let mut out = Rope::new();
-        if can_structure_value_expr(self.core, value) && self.can_inline_continued_expr(value) {
+        if self.core.has_statement_form(value) && self.can_inline_continued_expr(value) {
             let slot = self.structured_value_slot(value).unwrap_or_else(|| {
                 panic!("internal compiler error: structured propagation value has no slot")
             });
@@ -1069,7 +1173,7 @@ impl<'a> Emitter<'a> {
             return true;
         };
         let statements = &self.core.bodies[body.index()].statements;
-        let Some((value_index, _)) = sequence_value(statements) else {
+        let Some((value_index, _)) = crate::core_ir::sequence_value(statements) else {
             return false;
         };
         statements
@@ -1486,7 +1590,7 @@ impl<'a> Emitter<'a> {
         expr: ExprId,
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
-        if !can_structure_value_expr(self.core, expr) {
+        if !self.core.has_statement_form(expr) {
             return None;
         }
         match &self.core.exprs[expr.index()] {
@@ -1536,7 +1640,7 @@ impl<'a> Emitter<'a> {
             inner.push_lit(format!("let {accumulator};"));
         }
         inner.push_break(1);
-        if can_structure_value_expr(self.core, head) {
+        if self.core.has_statement_form(head) {
             inner.append(Rope::indented(
                 1,
                 self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
@@ -1554,7 +1658,7 @@ impl<'a> Emitter<'a> {
         }
         self.used_pipe.set(true);
         for step in &apply.steps {
-            let step_value = if can_structure_value_expr(self.core, step.value) {
+            let step_value = if self.core.has_statement_form(step.value) {
                 let slot = self.structured_value_slot(step.value).unwrap_or_else(|| {
                     panic!("internal compiler error: structured apply step has no value slot")
                 });

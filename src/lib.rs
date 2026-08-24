@@ -62,6 +62,7 @@ mod error;
 mod evaluation_ir;
 pub mod flow;
 pub mod hir;
+mod ice;
 mod lexer;
 mod parser;
 mod probe;

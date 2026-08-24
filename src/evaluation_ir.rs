@@ -10,10 +10,16 @@ use crate::core_ir::{
 };
 use crate::hir::ids::Idx;
 use crate::hir::{BodyId, ExprId, NodeId};
+use crate::ice::LoweringSubject;
 use crate::program_syntax::{
-    CoreRoot, EvaluationContext, EvaluationInputMode, HostContinuation, HostEvaluationOperation,
-    HostEvaluationProtocol, HostExit, HostOwner, ProgramSyntax, SourceSpan, TtNodeId,
+    ConditionalBranch, CoreRoot, EvaluationContext, EvaluationInputMode, EvaluationOwner,
+    HostContinuation, HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner,
+    OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
 };
+
+/// A failure of one of the lowering validators, already carrying the stage,
+/// the named invariant, and the identities it failed on.
+pub(crate) type LoweringError = crate::ice::InternalCompilerError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct RegionId(u32);
@@ -92,6 +98,10 @@ struct EvalRegion {
 pub(crate) struct EvaluationFile {
     regions: Vec<EvalRegion>,
     occupied_names: HashSet<String>,
+    /// Source spans of every tt node in the file. A schedule's source
+    /// capture must not overlap one: the capture copies raw source bytes,
+    /// and a tt node inside them is lowered elsewhere.
+    tt_spans: Vec<SourceSpan>,
 }
 
 #[derive(Debug, Default)]
@@ -124,6 +134,60 @@ pub(crate) struct PlannedValue {
     pub(crate) context: EvaluationContext,
     pub(crate) schedule: EvaluationSchedule,
     pub(crate) exits: Vec<HostExit>,
+    /// Whether this value's control flow may become statements in its host
+    /// owner. Decided here, from typed facts; target lowering reads it and
+    /// chooses only the *shape* of the statements.
+    pub(crate) capability: TargetCapability,
+}
+
+/// Whether a host value's Core control flow can be lowered to statements in
+/// its host owner.
+///
+/// This is the semantic half of target selection and belongs to this stage:
+/// it depends on how often the owner is reached, on the execution regions
+/// the schedule opens, and on which source the schedule has to relocate.
+/// The remaining half — which statement shape fits the host continuation —
+/// belongs to target lowering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TargetCapability {
+    /// Statements in the host owner, delivering the value through its slot.
+    StatementRegion,
+    /// The named `$tt_expr` intrinsic runs the value's control flow exactly
+    /// where the value sits. Not a fallback for a failed analysis: a typed
+    /// capability with a recorded reason (`docs/design/program-lowering.md`
+    /// §7.4).
+    ExpressionBoundary(ExpressionBoundaryReason),
+}
+
+/// Why a value cannot be lowered to statements in its host owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ExpressionBoundaryReason {
+    /// A parameter default or class field initializer: standard TypeScript
+    /// has no statement position in the owner, and moving the value out of
+    /// it would change the parameter scope, `this`, `arguments`, the
+    /// function's `length`, or the field initialization order.
+    OwnerTakesNoStatements,
+    /// The value runs once per iteration but its owner runs once per loop —
+    /// it sits in a loop header, so hoisting to the owner would change how
+    /// often it runs.
+    RepeatedInOwner,
+    /// The value's evaluation is conditional relative to its owner through
+    /// an edge no protocol step models — a `switch` case test, a
+    /// destructuring default, an optional chain's tail — so hoisting to the
+    /// owner would evaluate it unconditionally.
+    ConditionalInOwner,
+    /// A source capture the schedule needs would be declared inside a
+    /// generated conditional region while the host occurrence that reads it
+    /// stays outside. Lifting the whole conditional operation into the
+    /// region is what removes this reason, not a wider `let`.
+    CaptureInsideConditionalRegion,
+    /// A source capture the schedule needs covers another tt value, or
+    /// another capture: the two replacements would overlap in the target.
+    CaptureOverlapsValue,
+    /// The schedule carries a reference mode statements cannot preserve.
+    ReferenceNotPreservable,
+    /// The Core value has no statement form ([`CoreFile::has_statement_form`]).
+    ValueHasNoStatementForm,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -299,12 +363,16 @@ impl EvaluationFile {
         let file = Self {
             regions: builder.regions,
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
+            tt_spans: syntax
+                .core_contexts()
+                .map(|(_, _, _, _, source, _, _)| source)
+                .collect(),
         };
         file.validate()?;
         Ok(file)
     }
 
-    pub(crate) fn lowering_plan(&self) -> Result<LoweringPlan, EvaluationError> {
+    pub(crate) fn lowering_plan(&self, core: &CoreFile) -> Result<LoweringPlan, EvaluationError> {
         let mut owners: HashMap<HostOwner, Vec<PendingPlannedValue>> = HashMap::new();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
@@ -402,20 +470,29 @@ impl EvaluationFile {
             let values = assigned
                 .into_iter()
                 .map(|(value, target)| {
+                    let schedule = resolve_schedule(
+                        value.protocol,
+                        &slots,
+                        &mut source_slots,
+                        &mut next_slot,
+                        &mut slot_names,
+                        &mut occupied_names,
+                    )?;
+                    let capability = target_capability(
+                        core,
+                        &self.tt_spans,
+                        value.expr,
+                        &value.context,
+                        &schedule,
+                    );
                     Ok(PlannedValue {
                         expr: value.expr,
                         source: value.source,
                         target,
                         context: value.context,
-                        schedule: resolve_schedule(
-                            value.protocol,
-                            &slots,
-                            &mut source_slots,
-                            &mut next_slot,
-                            &mut slot_names,
-                            &mut occupied_names,
-                        )?,
+                        schedule,
                         exits: value.exits,
+                        capability,
                     })
                 })
                 .collect::<Result<Vec<_>, EvaluationError>>()?;
@@ -438,6 +515,200 @@ impl EvaluationFile {
             value_slots,
             expression_boundary_name,
         })
+    }
+
+    /// Checks the plan's evaluation order and count contracts
+    /// (`docs/design/program-lowering.md` §11, `validate_order`).
+    ///
+    /// The checks re-derive each contract from the plan itself rather than
+    /// trusting [`target_capability`]'s decision: a bug in the decision is
+    /// exactly what this stage exists to catch, and the mutation tests break
+    /// the decision to prove it does.
+    pub(crate) fn validate_order(&self, plan: &LoweringPlan) -> Result<(), LoweringError> {
+        use crate::ice::{InternalCompilerError, Invariant, LoweringStage};
+        let stage = LoweringStage::EvaluationOrder;
+        for rewrite in plan.owners() {
+            let mut produced: HashSet<ValueSlotId> = HashSet::new();
+            let mut last_start = None;
+            // Capture spans in the order they reach the target. A span is
+            // materialized once per owner, at its first occurrence in
+            // emission order (the target dedups later occurrences), and the
+            // target writes a value's steps outermost first because each
+            // step wraps the accumulated action.
+            let mut materialized: Vec<SourceSpan> = Vec::new();
+            for value in &rewrite.values {
+                let subject =
+                    LoweringSubject::owner(rewrite.owner).with_root(CoreRoot::Expr(value.expr));
+                if value.capability != TargetCapability::StatementRegion {
+                    continue;
+                }
+                match value.context.owner_reach {
+                    OwnerReach::Same => {}
+                    OwnerReach::Repeated => {
+                        return Err(InternalCompilerError::new(
+                            stage,
+                            Invariant::RepetitionRegionLeft,
+                            subject,
+                        )
+                        .at(value.source));
+                    }
+                    OwnerReach::UnmodeledConditional => {
+                        return Err(InternalCompilerError::new(
+                            stage,
+                            Invariant::EvaluationCountChanged,
+                            subject,
+                        )
+                        .at(value.source));
+                    }
+                }
+                if last_start.is_some_and(|start| value.source.start < start) {
+                    return Err(InternalCompilerError::new(
+                        stage,
+                        Invariant::EvaluationOrderChanged,
+                        subject,
+                    )
+                    .at(value.source));
+                }
+                last_start = Some(value.source.start);
+                let steps = value.schedule.steps();
+                for step in steps {
+                    for input in &step.inputs {
+                        if let PlannedEvaluationInput::Slot { slot, .. } = input
+                            && !produced.contains(slot)
+                        {
+                            return Err(InternalCompilerError::new(
+                                stage,
+                                Invariant::ValueReadBeforeItIsProduced,
+                                subject.with_slot(*slot),
+                            )
+                            .at(value.source));
+                        }
+                    }
+                }
+                for index in (0..steps.len()).rev() {
+                    let step = &steps[index];
+                    let conditional_after = steps[index + 1..].iter().any(|later| {
+                        matches!(later.operation, HostEvaluationOperation::Conditional(_))
+                    });
+                    for input in &step.inputs {
+                        let PlannedEvaluationInput::Source { source, target, .. } = input else {
+                            continue;
+                        };
+                        if materialized.contains(source) {
+                            continue;
+                        }
+                        if conditional_after {
+                            return Err(InternalCompilerError::new(
+                                stage,
+                                Invariant::ConditionalRegionLeft,
+                                subject.with_slot(*target),
+                            )
+                            .at(*source));
+                        }
+                        for span in &self.tt_spans {
+                            if overlaps(*source, *span) {
+                                return Err(InternalCompilerError::new(
+                                    stage,
+                                    Invariant::EvaluationCountChanged,
+                                    subject.with_slot(*target),
+                                )
+                                .at(*source)
+                                .with_origin(vec![*span]));
+                            }
+                        }
+                        for earlier in &materialized {
+                            if overlaps(*source, *earlier) {
+                                return Err(InternalCompilerError::new(
+                                    stage,
+                                    Invariant::EvaluationCountChanged,
+                                    subject.with_slot(*target),
+                                )
+                                .at(*source)
+                                .with_origin(vec![*earlier]));
+                            }
+                            if source.end <= earlier.start {
+                                return Err(InternalCompilerError::new(
+                                    stage,
+                                    Invariant::EvaluationOrderChanged,
+                                    subject.with_slot(*target),
+                                )
+                                .at(*source)
+                                .with_origin(vec![*earlier]));
+                            }
+                        }
+                        materialized.push(*source);
+                    }
+                }
+                let ValueTarget::Slot(slot) = value.target;
+                produced.insert(slot);
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks the plan's JavaScript reference contracts
+    /// (`docs/design/program-lowering.md` §11, `validate_reference`).
+    pub(crate) fn validate_reference(&self, plan: &LoweringPlan) -> Result<(), LoweringError> {
+        use crate::ice::{InternalCompilerError, Invariant, LoweringStage};
+        let stage = LoweringStage::EvaluationReference;
+        for rewrite in plan.owners() {
+            for value in &rewrite.values {
+                if value.capability != TargetCapability::StatementRegion {
+                    continue;
+                }
+                let subject =
+                    LoweringSubject::owner(rewrite.owner).with_root(CoreRoot::Expr(value.expr));
+                for step in value.schedule.steps() {
+                    let optional_argument = matches!(
+                        step.operation,
+                        HostEvaluationOperation::Conditional(
+                            ConditionalBranch::OptionalCallArgument(_)
+                        )
+                    );
+                    for input in &step.inputs {
+                        match input {
+                            PlannedEvaluationInput::Source {
+                                mode: EvaluationInputMode::MemberReference,
+                                receiver,
+                                source,
+                                target,
+                            } => {
+                                if receiver.is_none() {
+                                    return Err(InternalCompilerError::new(
+                                        stage,
+                                        Invariant::ReceiverLost,
+                                        subject.with_slot(*target),
+                                    )
+                                    .at(*source));
+                                }
+                                if optional_argument {
+                                    return Err(InternalCompilerError::new(
+                                        stage,
+                                        Invariant::ReferenceModeUnsupported,
+                                        subject.with_slot(*target),
+                                    )
+                                    .at(*source));
+                                }
+                            }
+                            PlannedEvaluationInput::Slot {
+                                mode: EvaluationInputMode::MemberReference,
+                                slot,
+                            } => {
+                                return Err(InternalCompilerError::new(
+                                    stage,
+                                    Invariant::ReferenceDemoted,
+                                    subject.with_slot(*slot),
+                                )
+                                .at(value.source));
+                            }
+                            PlannedEvaluationInput::Source { .. }
+                            | PlannedEvaluationInput::Slot { .. } => {}
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn validate(&self) -> Result<(), EvaluationError> {
@@ -584,6 +855,106 @@ fn resolve_schedule(
         })
         .collect::<Result<Vec<_>, EvaluationError>>()?;
     Ok(EvaluationSchedule { steps })
+}
+
+fn overlaps(left: SourceSpan, right: SourceSpan) -> bool {
+    left.start < right.end && right.start < left.end
+}
+
+/// Decides whether a host value's Core control flow may become statements
+/// in its host owner, from typed facts alone: what kind of owner it has,
+/// how often the owner is reached, whether the Core value has a statement
+/// form, and what the schedule would have to capture and preserve.
+///
+/// Every refusal names its reason. Target lowering consumes the decision;
+/// [`EvaluationFile::validate_order`] and
+/// [`EvaluationFile::validate_reference`] re-check the resulting plan
+/// independently.
+fn target_capability(
+    core: &CoreFile,
+    tt_spans: &[SourceSpan],
+    expr: ExprId,
+    context: &EvaluationContext,
+    schedule: &EvaluationSchedule,
+) -> TargetCapability {
+    use ExpressionBoundaryReason as Reason;
+    if matches!(
+        context.owner,
+        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
+    ) {
+        return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
+    }
+    if !core.has_statement_form(expr) {
+        return TargetCapability::ExpressionBoundary(Reason::ValueHasNoStatementForm);
+    }
+    match context.owner_reach {
+        OwnerReach::Same => {}
+        OwnerReach::Repeated => {
+            return TargetCapability::ExpressionBoundary(Reason::RepeatedInOwner);
+        }
+        OwnerReach::UnmodeledConditional => {
+            return TargetCapability::ExpressionBoundary(Reason::ConditionalInOwner);
+        }
+    }
+    let steps = schedule.steps();
+    for step in steps {
+        let optional_argument = matches!(
+            step.operation,
+            HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_))
+        );
+        for input in &step.inputs {
+            match input {
+                PlannedEvaluationInput::Source {
+                    mode: EvaluationInputMode::MemberReference,
+                    receiver,
+                    ..
+                } => {
+                    if receiver.is_none() || optional_argument {
+                        return TargetCapability::ExpressionBoundary(
+                            Reason::ReferenceNotPreservable,
+                        );
+                    }
+                }
+                PlannedEvaluationInput::Slot {
+                    mode: EvaluationInputMode::MemberReference,
+                    ..
+                } => {
+                    return TargetCapability::ExpressionBoundary(Reason::ReferenceNotPreservable);
+                }
+                PlannedEvaluationInput::Source { .. } | PlannedEvaluationInput::Slot { .. } => {}
+            }
+        }
+    }
+    let mut captured: Vec<SourceSpan> = Vec::new();
+    for (index, step) in steps.iter().enumerate() {
+        let conditional_after = steps[index + 1..]
+            .iter()
+            .any(|later| matches!(later.operation, HostEvaluationOperation::Conditional(_)));
+        for input in &step.inputs {
+            let PlannedEvaluationInput::Source { source, .. } = input else {
+                continue;
+            };
+            if captured.contains(source) {
+                continue;
+            }
+            // The capture would be declared inside the generated conditional
+            // region while the host occurrence stays outside it.
+            if conditional_after {
+                return TargetCapability::ExpressionBoundary(
+                    Reason::CaptureInsideConditionalRegion,
+                );
+            }
+            // The capture copies raw source bytes; a tt node or another
+            // capture inside them is lowered or relocated elsewhere.
+            if tt_spans.iter().any(|span| overlaps(*source, *span))
+                || captured.iter().any(|span| overlaps(*source, *span))
+            {
+                return TargetCapability::ExpressionBoundary(Reason::CaptureOverlapsValue);
+            }
+            captured.push(*source);
+        }
+    }
+    TargetCapability::StatementRegion
 }
 
 fn allocate_value_slot(
@@ -1021,18 +1392,26 @@ fn push_block(
 mod tests {
     use super::*;
 
-    fn evaluation(source: &str) -> EvaluationFile {
+    fn evaluation(source: &str) -> (EvaluationFile, CoreFile) {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(&program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
         let syntax = ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
             .expect("program syntax");
-        EvaluationFile::build(&syntax, &core).expect("evaluation ir")
+        let file = EvaluationFile::build(&syntax, &core).expect("evaluation ir");
+        (file, core)
+    }
+
+    fn plan(file: &EvaluationFile, core: &CoreFile) -> LoweringPlan {
+        let plan = file.lowering_plan(core).expect("lowering plan");
+        file.validate_order(&plan).expect("validate_order");
+        file.validate_reference(&plan).expect("validate_reference");
+        plan
     }
 
     #[test]
     fn every_core_primitive_gets_one_region() {
-        let file = evaluation(
+        let (file, _core) = evaluation(
             "enum E { A(value: number), B }\n\
              import { load } from \"./load.tt\";\n\
              function f(e: E) {\n\
@@ -1081,7 +1460,7 @@ mod tests {
 
     #[test]
     fn a_decision_region_has_switch_arms_and_a_join() {
-        let file = evaluation(
+        let (file, core) = evaluation(
             "enum E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n",
         );
         let region = file
@@ -1094,7 +1473,7 @@ mod tests {
             EvalTerminator::Switch { arms, .. } if arms.len() == 2
         ));
         assert!(region.result.is_some());
-        let plan = file.lowering_plan().expect("lowering plan");
+        let plan = plan(&file, &core);
         let owner = plan.owners().next().expect("host rewrite");
         assert_eq!(owner.values.len(), 1);
         assert!(matches!(owner.values[0].target, ValueTarget::Slot(_)));
@@ -1102,10 +1481,10 @@ mod tests {
 
     #[test]
     fn nested_decisions_share_the_outer_host_plan() {
-        let file = evaluation(
+        let (file, core) = evaluation(
             "enum E { A, B }\nconst value = match (outer) { A => match (inner) { A => 1, B => 2 }, B => 0 };\n",
         );
-        let plan = file.lowering_plan().expect("lowering plan");
+        let plan = plan(&file, &core);
         let values = plan
             .owners()
             .flat_map(|owner| &owner.values)
@@ -1122,7 +1501,7 @@ mod tests {
 
     #[test]
     fn a_call_argument_is_composed_by_its_host_owner() {
-        let file =
+        let (file, core) =
             evaluation("enum E { A, B }\nconst out = render(match (e) { A => 1, B => 2 });\n");
         let placement = &file
             .regions
@@ -1140,7 +1519,7 @@ mod tests {
                 ..
             }
         ));
-        let plan = file.lowering_plan().expect("lowering plan");
+        let plan = plan(&file, &core);
         let value = &plan.owners().next().expect("host rewrite").values[0];
         assert!(value.schedule.steps().iter().any(|step| matches!(
             step.operation,
@@ -1152,7 +1531,7 @@ mod tests {
 
     #[test]
     fn a_result_binding_is_nested_under_the_result_region() {
-        let file = evaluation("const out = result { const x <- load(); x };\n");
+        let (file, _core) = evaluation("const out = result { const x <- load(); x };\n");
         let result = file
             .regions
             .iter()
@@ -1171,10 +1550,10 @@ mod tests {
 
     #[test]
     fn values_in_one_host_statement_form_one_rewrite() {
-        let file = evaluation(
+        let (file, core) = evaluation(
             "const out = [match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 }];\n",
         );
-        let plan = file.lowering_plan().expect("lowering plan");
+        let plan = plan(&file, &core);
         let owners: Vec<_> = plan.owners().collect();
         assert_eq!(owners.len(), 1);
         assert_eq!(owners[0].values.len(), 2);
@@ -1185,10 +1564,10 @@ mod tests {
 
     #[test]
     fn a_later_tt_value_depends_on_the_prior_value_slot() {
-        let file = evaluation(
+        let (file, core) = evaluation(
             "consume(match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 });\n",
         );
-        let plan = file.lowering_plan().expect("lowering plan");
+        let plan = plan(&file, &core);
         let owner = plan.owners().next().expect("host rewrite");
         let ValueTarget::Slot(first) = owner.values[0].target;
         assert!(
@@ -1206,16 +1585,16 @@ mod tests {
 
     #[test]
     fn generated_slot_names_do_not_collide_with_typescript_identifiers() {
-        let file =
+        let (file, core) =
             evaluation("const $tt_v0 = 1;\nconst out = match (value) { A => $tt_v0, _ => 0 };\n");
-        let plan = file.lowering_plan().expect("lowering plan");
+        let plan = plan(&file, &core);
         let ValueTarget::Slot(slot) = plan.owners().next().expect("host rewrite").values[0].target;
         assert_eq!(plan.slot_name(slot), "$tt_v0_1");
     }
 
     #[test]
     fn validation_rejects_a_normal_path_without_its_result() {
-        let mut file = evaluation(
+        let (mut file, _core) = evaluation(
             "enum E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n",
         );
         let region = file
@@ -1232,11 +1611,265 @@ mod tests {
 
     #[test]
     fn validation_rejects_an_out_of_region_target() {
-        let mut file = evaluation("enum E { A(value: number), B }\n");
+        let (mut file, _core) = evaluation("enum E { A(value: number), B }\n");
         file.regions[0].blocks[0].terminator = EvalTerminator::Goto(EvalBlockId(u32::MAX));
         assert!(matches!(
             file.validate(),
             Err(EvaluationError::InvalidTarget { .. })
         ));
+    }
+
+    fn sole_value(plan: &LoweringPlan) -> &PlannedValue {
+        let values: Vec<_> = plan.owners().flat_map(|owner| &owner.values).collect();
+        assert_eq!(values.len(), 1, "{values:#?}");
+        values[0]
+    }
+
+    #[test]
+    fn a_loop_header_value_may_not_become_owner_statements() {
+        let (file, core) = evaluation(
+            "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::RepeatedInOwner),
+        );
+    }
+
+    #[test]
+    fn a_loop_body_value_still_becomes_owner_statements() {
+        let (file, core) = evaluation(
+            "let n = 0;\nwhile (n < 3) { const v = match (n) { 0 => 1, _ => 0 }; n = n + v; }\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::StatementRegion
+        );
+    }
+
+    #[test]
+    fn a_switch_case_test_value_may_not_become_owner_statements() {
+        let (file, core) = evaluation(
+            "declare const n: number;\nswitch (n) { case match (n) { 1 => 1, _ => 0 }: break; }\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::ConditionalInOwner),
+        );
+    }
+
+    #[test]
+    fn a_destructuring_default_value_may_not_become_owner_statements() {
+        let (file, core) = evaluation(
+            "declare const source: { value?: number };\nconst { value = match (1) { 1 => 1, _ => 0 } } = source;\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::ConditionalInOwner),
+        );
+    }
+
+    #[test]
+    fn a_capture_may_not_move_into_a_generated_conditional_region() {
+        // The callee capture `id` would be declared inside the generated
+        // `if (flag)` region while the host expression reads it outside.
+        let (file, core) = evaluation(
+            "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::ExpressionBoundary(
+                ExpressionBoundaryReason::CaptureInsideConditionalRegion
+            ),
+        );
+    }
+
+    #[test]
+    fn a_capture_may_not_copy_a_tt_value_it_overlaps() {
+        // The second value's prior-argument input contains the first tt
+        // value; capturing it would copy tt source into generated code.
+        let (file, core) = evaluation(
+            "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
+        );
+        let plan = plan(&file, &core);
+        let values: Vec<_> = plan.owners().flat_map(|owner| &owner.values).collect();
+        assert_eq!(values.len(), 2, "{values:#?}");
+        assert_eq!(
+            values[1].capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::CaptureOverlapsValue),
+        );
+    }
+
+    #[test]
+    fn a_parameter_default_value_uses_the_expression_boundary_capability() {
+        let (file, core) = evaluation(
+            "function f(x: number = match (1) { 1 => 1, _ => 0 }): number { return x; }\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::OwnerTakesNoStatements),
+        );
+    }
+
+    #[test]
+    fn a_direct_optional_call_argument_still_becomes_owner_statements() {
+        let (file, core) = evaluation(
+            "declare const f: ((v: number) => number) | undefined;\nf?.(match (1) { 1 => 1, _ => 0 });\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::StatementRegion
+        );
+    }
+
+    #[test]
+    fn a_member_optional_call_argument_keeps_the_expression_boundary() {
+        let (file, core) = evaluation(
+            "declare const host: { f?: (v: number) => number };\nhost.f?.(match (1) { 1 => 1, _ => 0 });\n",
+        );
+        let plan = plan(&file, &core);
+        assert_eq!(
+            sole_value(&plan).capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::ReferenceNotPreservable),
+        );
+    }
+
+    #[test]
+    fn validate_order_rejects_a_repeated_value_planned_into_its_owner() {
+        let (file, core) = evaluation(
+            "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        // Break the decision the way a capability bug would: claim the loop
+        // header's value may become statements in the loop's own owner.
+        plan.owners[0].values[0].capability = TargetCapability::StatementRegion;
+        let error = file.validate_order(&plan).expect_err("must be rejected");
+        assert_eq!(error.invariant, crate::ice::Invariant::RepetitionRegionLeft);
+        assert_eq!(error.stage, crate::ice::LoweringStage::EvaluationOrder);
+    }
+
+    #[test]
+    fn validate_order_rejects_a_conditional_region_capture() {
+        let (file, core) = evaluation(
+            "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        plan.owners[0].values[0].capability = TargetCapability::StatementRegion;
+        let error = file.validate_order(&plan).expect_err("must be rejected");
+        assert_eq!(
+            error.invariant,
+            crate::ice::Invariant::ConditionalRegionLeft
+        );
+    }
+
+    #[test]
+    fn validate_order_rejects_a_capture_overlapping_a_tt_value() {
+        let (file, core) = evaluation(
+            "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        for value in &mut plan.owners[0].values {
+            value.capability = TargetCapability::StatementRegion;
+        }
+        let error = file.validate_order(&plan).expect_err("must be rejected");
+        assert_eq!(
+            error.invariant,
+            crate::ice::Invariant::EvaluationCountChanged
+        );
+    }
+
+    #[test]
+    fn validate_order_rejects_values_out_of_source_order() {
+        let (file, core) = evaluation(
+            "consume(match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 });\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        plan.owners[0].values.swap(0, 1);
+        let error = file.validate_order(&plan).expect_err("must be rejected");
+        assert!(
+            matches!(
+                error.invariant,
+                crate::ice::Invariant::EvaluationOrderChanged
+                    | crate::ice::Invariant::ValueReadBeforeItIsProduced
+            ),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn validate_order_rejects_a_slot_read_before_it_is_produced() {
+        let (file, core) = evaluation(
+            "consume(match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 });\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        // Point the second value's dependency at its own not-yet-produced slot.
+        let ValueTarget::Slot(own) = plan.owners[0].values[1].target;
+        for step in &mut plan.owners[0].values[1].schedule.steps {
+            for input in &mut step.inputs {
+                if let PlannedEvaluationInput::Slot { slot, .. } = input {
+                    *slot = own;
+                }
+            }
+        }
+        let error = file.validate_order(&plan).expect_err("must be rejected");
+        assert_eq!(
+            error.invariant,
+            crate::ice::Invariant::ValueReadBeforeItIsProduced
+        );
+    }
+
+    #[test]
+    fn validate_reference_rejects_a_receiverless_member_reference() {
+        let (file, core) = evaluation(
+            "declare const host: { f: (v: number) => number };\nhost.f(match (1) { 1 => 1, _ => 0 });\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        assert_eq!(
+            plan.owners[0].values[0].capability,
+            TargetCapability::StatementRegion
+        );
+        for step in &mut plan.owners[0].values[0].schedule.steps {
+            for input in &mut step.inputs {
+                if let PlannedEvaluationInput::Source {
+                    mode: EvaluationInputMode::MemberReference,
+                    receiver,
+                    ..
+                } = input
+                {
+                    *receiver = None;
+                }
+            }
+        }
+        let error = file
+            .validate_reference(&plan)
+            .expect_err("must be rejected");
+        assert_eq!(error.invariant, crate::ice::Invariant::ReceiverLost);
+        assert_eq!(error.stage, crate::ice::LoweringStage::EvaluationReference);
+    }
+
+    #[test]
+    fn validate_reference_rejects_a_reference_demoted_to_a_value_slot() {
+        let (file, core) = evaluation(
+            "consume(match (left) { A => 1, _ => 0 }, match (right) { B => 2, _ => 0 });\n",
+        );
+        let mut plan = file.lowering_plan(&core).expect("lowering plan");
+        for step in &mut plan.owners[0].values[1].schedule.steps {
+            for input in &mut step.inputs {
+                if let PlannedEvaluationInput::Slot { mode, .. } = input {
+                    *mode = EvaluationInputMode::MemberReference;
+                }
+            }
+        }
+        let error = file
+            .validate_reference(&plan)
+            .expect_err("must be rejected");
+        assert_eq!(error.invariant, crate::ice::Invariant::ReferenceDemoted);
     }
 }

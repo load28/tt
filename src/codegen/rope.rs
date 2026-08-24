@@ -13,6 +13,8 @@
 
 use std::borrow::Cow;
 
+use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubject};
+use crate::program_syntax::SourceSpan;
 use crate::{AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ScrutineeTemp};
 
 /// What a [`Piece::Mark`] marks — the two things codegen writes that a
@@ -131,6 +133,9 @@ struct TargetFile<'a> {
     pieces: Vec<TargetPiece<'a>>,
     len: usize,
     source_len: usize,
+    /// The original source, when the caller can supply it — required for
+    /// the preservation check's whitespace classification.
+    source: Option<&'a str>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -155,6 +160,75 @@ enum TargetError {
     UnclosedScopes {
         count: usize,
     },
+}
+
+/// Which source bytes the compiler does *not* own, and what the plan did
+/// to them — the inputs of the target's preservation check.
+///
+/// Computed from the Core IR and the lowering plan — never from the output.
+#[derive(Debug, Default)]
+pub(crate) struct SourcePreservation {
+    /// The pass-through ranges: source the compiler does not interpret
+    /// (Core `Opaque` statements and expressions, template raw parts).
+    /// Every non-whitespace byte in them must reach the target exactly
+    /// once, in source order. Bytes outside them belong to tt constructs,
+    /// whose lowerings rearrange, repeat, or drop their own text freely
+    /// (a dropped `try` keyword, a binding name written per alternative).
+    pub(crate) owned: Vec<SourceSpan>,
+    /// Pass-through ranges the plan relocates (schedule captures): still
+    /// printed exactly once, but at the capture site rather than in source
+    /// order.
+    pub(crate) relocated: Vec<SourceSpan>,
+    /// Pass-through ranges a lowering claimed and rewrote — the frame of a
+    /// block arm's `return` becoming a continuation assignment
+    /// ([`crate::program_syntax::HostExit`]). Exempt from the exactly-once
+    /// rule; the claim is recorded in the plan, never inferred here.
+    pub(crate) rewritten: Vec<SourceSpan>,
+}
+
+impl SourcePreservation {
+    fn owns(&self, at: usize) -> bool {
+        self.owned
+            .iter()
+            .any(|span| span.start <= at && at < span.end)
+    }
+
+    fn relocates(&self, at: usize) -> bool {
+        self.relocated
+            .iter()
+            .any(|span| span.start <= at && at < span.end)
+    }
+
+    fn rewrites(&self, at: usize) -> bool {
+        self.rewritten
+            .iter()
+            .any(|span| span.start <= at && at < span.end)
+    }
+}
+
+impl TargetError {
+    /// The broken contract, as a structured internal compiler error.
+    fn into_ice(self) -> InternalCompilerError {
+        let stage = LoweringStage::TargetOrigin;
+        let subject = LoweringSubject::default();
+        match self {
+            TargetError::LengthMismatch { .. } => {
+                InternalCompilerError::new(stage, Invariant::TargetLengthMismatch, subject)
+            }
+            TargetError::SourceOutOfBounds { start, end } => {
+                InternalCompilerError::new(stage, Invariant::OriginOutOfBounds, subject)
+                    .at(SourceSpan { start, end })
+            }
+            TargetError::CloseWithoutOpen | TargetError::UnclosedAnchors { .. } => {
+                InternalCompilerError::new(stage, Invariant::OriginNesting, subject)
+            }
+            TargetError::BreakOutsideScope
+            | TargetError::ScopeCloseWithoutOpen
+            | TargetError::UnclosedScopes { .. } => {
+                InternalCompilerError::new(stage, Invariant::LayoutScopeMissing, subject)
+            }
+        }
+    }
 }
 
 impl<'a> TargetFile<'a> {
@@ -236,6 +310,7 @@ impl<'a> TargetFile<'a> {
             pieces,
             len: rope.len,
             source_len,
+            source: None,
         }
     }
 
@@ -303,6 +378,93 @@ impl<'a> TargetFile<'a> {
         }
         if scopes != 0 {
             return Err(TargetError::UnclosedScopes { count: scopes });
+        }
+        Ok(())
+    }
+
+    /// Checks that the target treats the pass-through bytes the way the
+    /// contract says (`docs/design/program-lowering.md` §2, §11,
+    /// `validate_source_preservation`): every non-whitespace byte the
+    /// compiler does not own reaches the target exactly once — never
+    /// twice, never silently dropped — and in source order, except inside
+    /// a range the plan explicitly relocated.
+    ///
+    /// The check reads target pieces, source intervals, and the plan's
+    /// facts — never the printed string.
+    fn validate_source_preservation(
+        &self,
+        preservation: &SourcePreservation,
+    ) -> Result<(), InternalCompilerError> {
+        let stage = LoweringStage::TargetSourcePreservation;
+        let subject = LoweringSubject::default();
+        let mut printed = vec![0u16; self.source_len];
+        let mut last_ordered: Option<(usize, usize)> = None;
+        for piece in &self.pieces {
+            let TargetPiece::Source {
+                origin: ExactOrigin { start, end },
+                ..
+            } = piece
+            else {
+                continue;
+            };
+            for count in &mut printed[*start..(*end).min(self.source_len)] {
+                *count = count.saturating_add(1);
+            }
+            // Order applies to the pass-through stream only: pieces inside
+            // a construct's own text are its lowering's to arrange, and
+            // pieces inside a relocated range were moved on purpose.
+            if !preservation.owns(*start) || preservation.relocates(*start) {
+                continue;
+            }
+            if let Some((previous_start, previous_end)) = last_ordered
+                && *start < previous_end
+            {
+                return Err(
+                    InternalCompilerError::new(stage, Invariant::SourceReordered, subject)
+                        .at(SourceSpan {
+                            start: *start,
+                            end: *end,
+                        })
+                        .with_origin(vec![SourceSpan {
+                            start: previous_start,
+                            end: previous_end,
+                        }]),
+                );
+            }
+            last_ordered = Some((*start, *end));
+        }
+        let source = self
+            .source
+            .expect("preservation validation requires the source");
+        for span in &preservation.owned {
+            let clipped = span.start..span.end.min(self.source_len);
+            for (at, &count) in clipped.clone().zip(&printed[clipped]) {
+                if preservation.rewrites(at) {
+                    continue;
+                }
+                let byte = SourceSpan {
+                    start: at,
+                    end: at + 1,
+                };
+                if count > 1 {
+                    return Err(InternalCompilerError::new(
+                        stage,
+                        Invariant::SourceEmittedTwice,
+                        subject,
+                    )
+                    .at(byte)
+                    .with_origin(vec![*span]));
+                }
+                if count == 0 && !source.as_bytes()[at].is_ascii_whitespace() {
+                    return Err(InternalCompilerError::new(
+                        stage,
+                        Invariant::SourceOmitted,
+                        subject,
+                    )
+                    .at(byte)
+                    .with_origin(vec![*span]));
+                }
+            }
         }
         Ok(())
     }
@@ -725,13 +887,20 @@ impl<'a> Rope<'a> {
     }
 
     /// Builds, validates, and prints the source-preserving target.
-    pub(crate) fn flatten(self, source_len: usize) -> Flat {
-        let target = TargetFile::from_rope(self, source_len);
-        let validation = target.validate();
-        debug_assert!(
-            validation.is_ok(),
-            "internal compiler error: invalid TypeScript target: {validation:?}"
-        );
+    ///
+    /// Both validators run in every build: a violated target contract is an
+    /// internal compiler error, and a release build must fail on it exactly
+    /// like a debug build so a wrong lowering is never shipped silently
+    /// (`docs/design/program-lowering.md` §11).
+    pub(crate) fn flatten(self, source: &'a str, preservation: &SourcePreservation) -> Flat {
+        let mut target = TargetFile::from_rope(self, source.len());
+        target.source = Some(source);
+        if let Err(error) = target.validate() {
+            error.into_ice().raise();
+        }
+        if let Err(error) = target.validate_source_preservation(preservation) {
+            error.raise();
+        }
         target.print()
     }
 }
@@ -838,5 +1007,132 @@ mod tests {
         };
         let target = TargetFile::from_rope(rope, 0);
         assert_eq!(target.validate(), Err(TargetError::CloseWithoutOpen));
+    }
+
+    fn preserved<'a>(source: &'a str, rope: Rope<'a>) -> TargetFile<'a> {
+        let mut target = TargetFile::from_rope(rope, source.len());
+        target.source = Some(source);
+        target
+    }
+
+    fn owned_whole(source: &str) -> SourcePreservation {
+        SourcePreservation {
+            owned: vec![SourceSpan {
+                start: 0,
+                end: source.len(),
+            }],
+            relocated: Vec::new(),
+            rewritten: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn preservation_accepts_a_faithful_pass_through() {
+        let source = "const a = 1;";
+        let mut rope = Rope::new();
+        rope.push_src(&source[..6], 0);
+        rope.push_src(&source[6..], 6);
+        let target = preserved(source, rope);
+        assert_eq!(
+            target.validate_source_preservation(&owned_whole(source)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn preservation_rejects_a_pass_through_byte_printed_twice() {
+        // The defect shape: a relocated range whose bytes also stay in
+        // place — the relocation excuses the order, never the count.
+        let source = "const a = 1;";
+        let mut rope = Rope::new();
+        rope.push_src(source, 0);
+        rope.push_src(&source[6..7], 6);
+        let target = preserved(source, rope);
+        let preservation = SourcePreservation {
+            owned: vec![SourceSpan {
+                start: 0,
+                end: source.len(),
+            }],
+            relocated: vec![SourceSpan { start: 6, end: 7 }],
+            rewritten: Vec::new(),
+        };
+        let error = target
+            .validate_source_preservation(&preservation)
+            .expect_err("duplicate must be rejected");
+        assert_eq!(error.invariant, Invariant::SourceEmittedTwice);
+        assert_eq!(error.stage, LoweringStage::TargetSourcePreservation);
+    }
+
+    #[test]
+    fn preservation_rejects_a_dropped_pass_through_byte() {
+        let source = "const a = 1;";
+        let mut rope = Rope::new();
+        rope.push_src(&source[..6], 0);
+        // bytes 6.. never emitted
+        let target = preserved(source, rope);
+        let error = target
+            .validate_source_preservation(&owned_whole(source))
+            .expect_err("drop must be rejected");
+        assert_eq!(error.invariant, Invariant::SourceOmitted);
+        assert_eq!(error.span, Some(SourceSpan { start: 6, end: 7 }));
+    }
+
+    #[test]
+    fn preservation_allows_dropped_whitespace_only() {
+        let source = "a  b";
+        let mut rope = Rope::new();
+        rope.push_src(&source[..1], 0);
+        rope.push_src(&source[3..], 3);
+        let target = preserved(source, rope);
+        assert_eq!(
+            target.validate_source_preservation(&owned_whole(source)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn preservation_rejects_an_unregistered_reorder() {
+        let source = "ab";
+        let mut rope = Rope::new();
+        rope.push_src(&source[1..], 1);
+        rope.push_src(&source[..1], 0);
+        let target = preserved(source, rope);
+        let error = target
+            .validate_source_preservation(&owned_whole(source))
+            .expect_err("reorder must be rejected");
+        assert_eq!(error.invariant, Invariant::SourceReordered);
+    }
+
+    #[test]
+    fn preservation_accepts_a_registered_relocation() {
+        let source = "ab";
+        let mut rope = Rope::new();
+        rope.push_src(&source[1..], 1);
+        rope.push_src(&source[..1], 0);
+        let target = preserved(source, rope);
+        let preservation = SourcePreservation {
+            owned: vec![SourceSpan { start: 0, end: 2 }],
+            relocated: vec![SourceSpan { start: 1, end: 2 }],
+            rewritten: Vec::new(),
+        };
+        assert_eq!(target.validate_source_preservation(&preservation), Ok(()));
+    }
+
+    #[test]
+    fn preservation_exempts_a_registered_rewrite_from_coverage() {
+        let source = "return x;";
+        let mut rope = Rope::new();
+        // The exit rewrite prints only the argument; the frame is claimed.
+        rope.push_src(&source[7..8], 7);
+        let target = preserved(source, rope);
+        let preservation = SourcePreservation {
+            owned: vec![SourceSpan { start: 0, end: 9 }],
+            relocated: Vec::new(),
+            rewritten: vec![
+                SourceSpan { start: 0, end: 7 },
+                SourceSpan { start: 8, end: 9 },
+            ],
+        };
+        assert_eq!(target.validate_source_preservation(&preservation), Ok(()));
     }
 }

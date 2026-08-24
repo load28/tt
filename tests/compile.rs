@@ -4550,3 +4550,78 @@ fn malformed_match_blocks_codegen_even_beside_a_lowered_enum() {
         report.diagnostics
     );
 }
+
+#[test]
+fn a_loop_header_value_is_not_hoisted_out_of_the_loop() {
+    // TASK-160: the value runs once per iteration; statements hoisted to
+    // the `while` owner would run it once. The expression boundary keeps
+    // it in place.
+    let out = ok(
+        "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
+    );
+    let loop_at = out.find("while (").expect("loop");
+    let lowering = out.find("switch").expect("lowering");
+    assert!(loop_at < lowering, "{out}");
+    assert!(out.contains("while (id($tt_expr("), "{out}");
+}
+
+#[test]
+fn a_loop_body_value_still_lowers_to_owner_statements() {
+    let out =
+        ok("let n = 0;\nwhile (n < 3) { const v = match (n) { 0 => 1, _ => 0 }; n = n + v; }\n");
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+}
+
+#[test]
+fn a_capture_never_escapes_a_generated_conditional_region() {
+    // TASK-160 issue 15: promoting this owner to statements would declare
+    // the callee capture inside `if (flag)` while the host expression
+    // reads it outside; the boundary keeps evaluation in place.
+    let out = ok(
+        "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
+    );
+    assert!(out.contains("flag && id($tt_expr("), "{out}");
+    assert!(!out.contains("let $tt_v"), "{out}");
+}
+
+#[test]
+fn a_capture_never_copies_a_sibling_tt_value() {
+    // TASK-160 issue 16: the second value's prior-argument span contains
+    // the first tt value; capturing it would copy tt source into the
+    // output. Both stay in place instead.
+    let out = ok(
+        "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
+    );
+    assert_eq!(out.matches("$tt_expr(() => {").count(), 2, "{out}");
+    assert!(out.contains("g(a && $tt_expr("), "{out}");
+}
+
+#[test]
+fn a_switch_case_test_value_stays_behind_its_case() {
+    let out =
+        ok("declare const n: number;\nswitch (n) { case match (n) { 1 => 1, _ => 0 }: break; }\n");
+    let switch_at = out.find("switch (n)").expect("switch");
+    let lowering = out.find("$tt_expr(").expect("boundary");
+    assert!(switch_at < lowering, "{out}");
+}
+
+#[test]
+fn a_destructuring_default_value_stays_inside_the_default() {
+    let out = ok(
+        "declare const source: { value?: number };\nexport const { value = match (1) { 1 => 1, _ => 0 } } = source;\n",
+    );
+    assert!(out.contains("value = $tt_expr("), "{out}");
+}
+
+#[test]
+fn an_initializer_inside_a_callback_still_lowers_to_statements() {
+    // TASK-160: the evaluation protocol is owner-relative — an enclosing
+    // call frame beyond the function boundary is not this owner's
+    // obligation, so no expression boundary is needed here.
+    let out = ok(
+        "declare function f(cb: () => number): void;\nf(() => { const x = match (1) { 1 => 1, _ => 0 }; return x; });\n",
+    );
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+}

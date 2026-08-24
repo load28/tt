@@ -219,6 +219,33 @@ pub(crate) enum EvaluationFrequency {
     Indeterminate,
 }
 
+/// Whether reaching a value's [`HostOwner`] happens exactly as often as
+/// reaching the value.
+///
+/// Statement lowering inserts a value's control flow immediately before its
+/// host owner, so it is sound only when the two are reached equally often.
+/// That is a different question from [`EvaluationContext::frequency`], which
+/// is measured against the enclosing *function*: a value in the body of a
+/// `while` runs once per iteration relative to the function **and** relative
+/// to its owner (the body statement), but a value in the `while` **test**
+/// has the `while` statement itself as its owner, so hoisting to that owner
+/// would run it once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OwnerReach {
+    /// The owner is reached exactly when the value is. Edges the evaluation
+    /// protocol models as [`ConditionalBranch`] steps count as `Same`: the
+    /// schedule reproduces their conditionality in the target.
+    Same,
+    /// A loop header sits between them: the owner is reached once per loop,
+    /// the value once per iteration.
+    Repeated,
+    /// An edge between them makes the value's evaluation conditional in a
+    /// way no protocol step models — a `switch` case test, a destructuring
+    /// default, the tail of an optional chain. Statements hoisted to the
+    /// owner would run unconditionally.
+    UnmodeledConditional,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EvaluationOwner {
     Module,
@@ -247,18 +274,31 @@ pub(crate) enum HostContinuation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EvaluationContext {
+    /// How often the value runs inside its [`EvaluationOwner`].
     pub(crate) frequency: EvaluationFrequency,
+    /// How often the value runs relative to its [`HostOwner`] — the fact
+    /// that decides whether statements may be hoisted to that owner.
+    pub(crate) owner_reach: OwnerReach,
     pub(crate) owner: EvaluationOwner,
     pub(crate) value_role: ValueRole,
     pub(crate) continuation: HostContinuation,
 }
 
 impl EvaluationContext {
-    fn from_path(category: SyntaxCategory, parents: &[AstParentKind]) -> Self {
+    /// `host_owner_edge` is where the chosen [`HostOwner`]'s own child edges
+    /// begin in `parents`; everything from there down sits between the owner
+    /// and the value.
+    fn from_path(
+        category: SyntaxCategory,
+        parents: &[AstParentKind],
+        host_owner_edge: usize,
+    ) -> Self {
         let (owner, owner_edge) = evaluation_owner(parents);
+        let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
         if category != SyntaxCategory::Expression {
             return Self {
                 frequency: frequency_within_owner(parents, owner_edge),
+                owner_reach,
                 owner,
                 value_role: ValueRole::None,
                 continuation: HostContinuation::Discard,
@@ -271,11 +311,81 @@ impl EvaluationContext {
         let continuation = host_continuation(local_path);
         Self {
             frequency,
+            owner_reach,
             owner,
             value_role,
             continuation,
         }
     }
+}
+
+/// The evaluation regions between a value's host owner and the value.
+///
+/// Only the *header* positions of a loop can make the reach `Repeated`: a
+/// loop body is a statement, and a statement is itself a host owner, so a
+/// value in a body never sees the loop edge from its own owner.
+///
+/// Conditional edges split by who reproduces them. The ternary, logical
+/// right-hand sides, and optional call arguments become
+/// [`ConditionalBranch`] steps whose target regenerates the condition, so
+/// they leave the reach `Same`. A `switch` case test, a destructuring
+/// default, and the tail of an optional chain have no protocol step — a
+/// value behind one of them cannot be hoisted to its owner at all.
+fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
+    let mut reach = OwnerReach::Same;
+    for (index, parent) in local_path.iter().enumerate() {
+        match parent {
+            AstParentKind::ForStmt(
+                fields::ForStmtField::Test
+                | fields::ForStmtField::Update
+                | fields::ForStmtField::Body,
+            )
+            | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
+            | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
+            | AstParentKind::WhileStmt(fields::WhileStmtField::Test | fields::WhileStmtField::Body)
+            | AstParentKind::DoWhileStmt(
+                fields::DoWhileStmtField::Test | fields::DoWhileStmtField::Body,
+            ) => return OwnerReach::Repeated,
+            // Evaluated only when no earlier case matched — and always after
+            // the discriminant, which hoisting would also reorder.
+            AstParentKind::SwitchCase(fields::SwitchCaseField::Test)
+            // A destructuring default: evaluated only when the matched
+            // property or element is undefined.
+            | AstParentKind::AssignPat(fields::AssignPatField::Right)
+            | AstParentKind::AssignPatProp(fields::AssignPatPropField::Value) => {
+                reach = OwnerReach::UnmodeledConditional;
+            }
+            // Inside an optional chain, everything but the base object, the
+            // callee, and the arguments of the chain's own optional call is
+            // skipped when the chain short-circuits. The arguments are the
+            // one position a protocol step models
+            // ([`ConditionalBranch::OptionalCallArgument`]).
+            AstParentKind::OptChainExpr(fields::OptChainExprField::Base) => {
+                let modeled = match local_path.get(index + 1) {
+                    Some(AstParentKind::OptChainBase(fields::OptChainBaseField::Call)) => {
+                        matches!(
+                            local_path.get(index + 2),
+                            Some(AstParentKind::OptCall(
+                                fields::OptCallField::Args(_) | fields::OptCallField::Callee,
+                            ))
+                        )
+                    }
+                    Some(AstParentKind::OptChainBase(fields::OptChainBaseField::Member)) => {
+                        matches!(
+                            local_path.get(index + 2),
+                            Some(AstParentKind::MemberExpr(fields::MemberExprField::Obj))
+                        )
+                    }
+                    _ => false,
+                };
+                if !modeled {
+                    reach = OwnerReach::UnmodeledConditional;
+                }
+            }
+            _ => {}
+        }
+    }
+    reach
 }
 
 fn evaluation_owner(parents: &[AstParentKind]) -> (EvaluationOwner, usize) {
@@ -1065,6 +1175,24 @@ enum ProjectedProtocolFrame {
     },
 }
 
+impl ProjectedProtocolFrame {
+    /// The projected span of the node that owns this evaluation frame.
+    fn parent(&self) -> ProjectedSpan {
+        match self {
+            ProjectedProtocolFrame::Ordered { parent, .. }
+            | ProjectedProtocolFrame::Binary { parent, .. }
+            | ProjectedProtocolFrame::Conditional { parent, .. }
+            | ProjectedProtocolFrame::Call { parent, .. }
+            | ProjectedProtocolFrame::Member { parent, .. }
+            | ProjectedProtocolFrame::Construct { parent, .. }
+            | ProjectedProtocolFrame::TaggedTemplate { parent, .. }
+            | ProjectedProtocolFrame::Template { parent, .. }
+            | ProjectedProtocolFrame::Jsx { parent, .. }
+            | ProjectedProtocolFrame::Suspend { parent, .. } => *parent,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 enum OrderedEvaluationKind {
     Array,
@@ -1078,6 +1206,10 @@ enum OrderedEvaluationKind {
 struct ProjectedHostOwner {
     kind: HostOwnerKind,
     span: ProjectedSpan,
+    /// How many parent edges precede this owner's own child edges. Slicing
+    /// a value's parent path here leaves exactly the edges between the owner
+    /// and the value ([`owner_reach`]).
+    edge: usize,
 }
 
 fn object_evaluation_positions(node: &ObjectLit, source_start: u32) -> Vec<ProjectedSpan> {
@@ -1295,11 +1427,25 @@ impl ParentCollector {
                 category: entry.category,
                 source: entry.source,
                 projected: entry.projected,
-                context: EvaluationContext::from_path(entry.category, &found.parents),
+                context: EvaluationContext::from_path(
+                    entry.category,
+                    &found.parents,
+                    projected_owner.edge,
+                ),
+                // A frame outside the host owner is not this owner's
+                // evaluation obligation: a statement (or a concise arrow
+                // body) can sit inside an outer expression only across a
+                // function boundary, and the rewrite happens where the owner
+                // executes, not where the enclosing expression does.
                 protocol: evaluation_protocol(
                     &self.source_segments,
                     entry.projected,
-                    &found.protocol_frames,
+                    &found
+                        .protocol_frames
+                        .iter()
+                        .filter(|frame| projected_contains(projected_owner.span, frame.parent()))
+                        .cloned()
+                        .collect::<Vec<_>>(),
                 )?,
                 core_root: entry.core_root,
                 parents: found.parents,
@@ -1338,6 +1484,7 @@ impl VisitAstPath for ParentCollector {
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ModuleItem,
             span: projected_span(item.span(), self.source_start),
+            edge: path.kinds().len(),
         });
         <ModuleItem as VisitWithAstPath<Self>>::visit_children_with_ast_path(item, self, path);
         self.host_owners.pop();
@@ -1347,6 +1494,7 @@ impl VisitAstPath for ParentCollector {
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::Statement,
             span: projected_span(statement.span(), self.source_start),
+            edge: path.kinds().len(),
         });
         <Stmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(statement, self, path);
         self.host_owners.pop();
@@ -1499,6 +1647,7 @@ impl VisitAstPath for ParentCollector {
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
+            edge: path.kinds().len(),
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.host_owners.pop();

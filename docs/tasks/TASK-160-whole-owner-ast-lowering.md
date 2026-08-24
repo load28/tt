@@ -405,6 +405,54 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   "2026-08-24 감사" 절에 기록했다. 감사 중 세 건의 실제 결함(이슈 14~16)을
   `cargo run -- -p --no-banner`와 `tsgo --noEmit --strict`로 재현했다.
 
+- 2026-08-24: 구조화된 internal compiler error 계층(`src/ice.rs`)을 추가했다.
+  `LoweringStage`(실패 단계) × `Invariant`(위반한 이름 있는 계약) ×
+  `LoweringSubject`(owner/Core root/slot) × source span × origin chain을 타입으로
+  담고, 표시 문자열은 이 타입에서 파생된다. variant는 실제로 검증되는 계약이
+  있을 때만 존재한다.
+- 2026-08-24: `EvaluationContext`에 host owner 기준 사실
+  `owner_reach: OwnerReach{Same, Repeated, UnmodeledConditional}`를 추가했다
+  (결정 12). loop header는 `Repeated`, switch case test·구조분해 default·
+  optional chain 꼬리는 `UnmodeledConditional`(protocol step이 조건을 재현하지
+  못하는 edge), 삼항·논리 우변·optional call 인자는 step이 조건을 재현하므로
+  `Same`이다. `ProjectedHostOwner`가 owner 선택 시점의 parent edge 위치를
+  기록해 두 사실의 기준이 어긋날 수 없다.
+- 2026-08-24: target capability를 Evaluation IR로 옮겼다(결정 13).
+  `PlannedValue.capability: TargetCapability{StatementRegion,
+  ExpressionBoundary(reason)}`가 owner 종류·owner_reach·Core statement form·
+  schedule의 capture/reference 사실로 결정되고, codegen의
+  `TargetRewritePlan::build`는 이 값을 읽어 statement *모양*만 고른다.
+  `can_structure_value_expr`/`compose_schedule_is_structurable`는 삭제되고
+  Core 모양 술어는 `CoreFile::has_statement_form`으로 Core IR이 소유한다.
+- 2026-08-24: `validate_order`와 `validate_reference`를 실제 pipeline 단계로
+  구현했다(`codegen::lowering_plan`이 plan 직후 실행, 실패는 `raise()`).
+  validate_order는 capability 결정을 신뢰하지 않고 plan에서 독립 재검증한다:
+  owner_reach, 값의 source 순서, slot 의존의 생산-후-소비, conditional region
+  밖으로 나가는 capture(방출 순서 기준 첫 materialization), capture의
+  tt span/상호 겹침, capture 방출 순서의 source 순서 보존.
+  validate_reference는 receiver 없는 member reference, optional call 인자
+  문맥의 member reference, value slot으로 강등된 reference를 거부한다.
+- 2026-08-24: 평가 protocol을 owner-상대적으로 만들었다. host owner 밖의
+  frame(함수 경계 너머의 바깥 표현식)은 그 owner의 평가 의무가 아니므로
+  `finish()`가 owner span에 포함된 frame만 protocol로 합성한다. 콜백 안의
+  initializer(`f(() => { const x = match ...; })`)가 boundary 없이 statement
+  lowering된다 — 완료 기준 7의 한 사례.
+- 2026-08-24: `validate_origin`을 상시 실행으로 바꿨다. `Rope::flatten`의
+  `debug_assert`를 제거하고 `TargetError`를 구조화된 ICE로 변환해 release
+  빌드도 동일하게 실패한다.
+- 2026-08-24: `validate_source_preservation`을 target 단계로 구현했다.
+  `SourcePreservation{owned, relocated, rewritten}`을 Core IR과 plan에서
+  계산한다 — owned는 Core `Opaque`/template raw의 pass-through 집합,
+  relocated는 schedule capture와 prelude로 hoist되는 값 span, rewritten은
+  block arm `HostExit`의 return 프레임. printer 직전에 pass-through 바이트의
+  정확히-한-번·순서 보존·비공백 누락 없음을 target piece로 검증한다. 출력
+  문자열은 읽지 않는다.
+- 2026-08-24: 세 결함의 회귀를 고정했다. capability 단위 테스트 9건과
+  validator 위반-IR 테스트 6건(evaluation_ir), 위반-target 테스트 7건(rope),
+  출력 회귀 7건(compile.rs), 런타임 회귀 3건(integration.rs — 반복 평가,
+  단락 시 인자 미평가, 좌우 순서). 전체 게이트(fmt/clippy/전 스위트 13개,
+  tsgo 포함)가 통과했다.
+
 ## 이슈 및 해결
 
 ### 이슈 1: placeholder 내부 가짜 statement가 owner로 선택됨

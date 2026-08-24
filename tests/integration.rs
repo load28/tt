@@ -2821,3 +2821,63 @@ console.log(String(mutable.count));
 "#);
     assert_eq!(lines, ["tt:1", "1", "1"]);
 }
+
+#[test]
+fn a_loop_header_match_is_evaluated_every_iteration() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    // TASK-160 issue 14: this used to hoist the match out of the loop and
+    // never re-evaluate it.
+    let lines = run(r#"
+let n = 0;
+function next(): number { n = n + 1; return n; }
+function id(v: number): number { return v; }
+const seen: number[] = [];
+while (id(match (next()) { 1 => 1, 2 => 1, _ => 0 })) {
+  seen.push(n);
+}
+console.log(JSON.stringify(seen), n);
+"#);
+    assert_eq!(lines, ["[1,2] 3"]);
+}
+
+#[test]
+fn a_short_circuited_argument_match_does_not_evaluate() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    // TASK-160 issue 15: the match argument (and its subject's effects)
+    // must not run when `&&` short-circuits, and the output must still
+    // typecheck without the capture escaping its region.
+    let lines = run(r#"
+const trace: string[] = [];
+function subject(tag: string): number { trace.push(tag); return 1; }
+function id(v: number): number { return v; }
+declare const globalThis: { flagOn: boolean };
+const on = true as boolean;
+const off = false as boolean;
+const a = on && id(match (subject("on")) { 1 => 10, _ => 0 });
+const b = off && id(match (subject("off")) { 1 => 20, _ => 0 });
+console.log(JSON.stringify(trace), a, b);
+"#);
+    assert_eq!(lines, ["[\"on\"] 10 false"]);
+}
+
+#[test]
+fn sibling_values_beside_a_short_circuit_keep_left_to_right_order() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    // TASK-160 issue 16: this shape used to duplicate and drop source
+    // bytes; now both values evaluate in place, in argument order.
+    let lines = run(r#"
+const trace: number[] = [];
+function mark(n: number): number { trace.push(n); return n; }
+function g(x: unknown, y: unknown): void { console.log(x, y); }
+const a = true as boolean;
+g(a && match (mark(1)) { 1 => 11, _ => 0 }, match (mark(2)) { 2 => 22, _ => 0 });
+console.log(JSON.stringify(trace));
+"#);
+    assert_eq!(lines, ["11 22", "[1,2]"]);
+}

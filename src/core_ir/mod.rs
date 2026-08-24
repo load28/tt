@@ -40,6 +40,43 @@ impl CoreFile {
             })
     }
 
+    /// Whether a value expression has a statement form: a lowering that
+    /// writes its result to a slot through ordinary TypeScript control flow
+    /// rather than through an expression boundary.
+    ///
+    /// This is a fact about the Core shape, so Core owns it. Both the
+    /// Evaluation IR (deciding a value's target capability) and target
+    /// lowering (structuring a nested value under its parent's
+    /// continuation) read it from here instead of each deciding it again.
+    pub(crate) fn has_statement_form(&self, expr: ExprId) -> bool {
+        match &self.exprs[expr.index()] {
+            // Every arm must be able to deliver a value to a continuation.
+            Expr::Decision(decision) => decision
+                .arms
+                .iter()
+                .all(|arm| matches!(arm.action, ArmAction::Yield { .. })),
+            Expr::ResultRegion(_) => true,
+            Expr::Sequence(body) => self
+                .body_value_expr(*body)
+                .is_some_and(|inner| self.has_statement_form(inner)),
+            // A pipeline is worth structuring only when some part of it is.
+            Expr::Apply(apply) => apply.head.is_some_and(|head| {
+                self.has_statement_form(head)
+                    || apply
+                        .steps
+                        .iter()
+                        .any(|step| self.has_statement_form(step.value))
+            }),
+            Expr::Opaque(_) | Expr::Template(_) => false,
+        }
+    }
+
+    /// The value a sequence body delivers: its last value statement, when
+    /// nothing but source trivia follows it.
+    pub(crate) fn body_value_expr(&self, body: BodyId) -> Option<ExprId> {
+        sequence_value(&self.bodies[body.index()].statements).map(|(_, expr)| expr)
+    }
+
     fn expr_requires_host(&self, expr: ExprId) -> bool {
         match &self.exprs[expr.index()] {
             Expr::Opaque(_) => false,
@@ -51,6 +88,22 @@ impl CoreFile {
             }),
         }
     }
+}
+
+/// The index and expression of the value a statement sequence delivers.
+pub(crate) fn sequence_value(statements: &[Statement]) -> Option<(usize, ExprId)> {
+    let (index, expr) = statements
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(index, statement)| match statement {
+            Statement::Expr(expr) => Some((index, *expr)),
+            _ => None,
+        })?;
+    statements[index + 1..]
+        .iter()
+        .all(|statement| matches!(statement, Statement::Opaque(_)))
+        .then_some((index, expr))
 }
 
 #[derive(Debug)]
