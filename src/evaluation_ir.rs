@@ -2251,13 +2251,18 @@ mod tests {
         );
         let mut plan = file.lowering_plan(&core).expect("lowering plan");
         plan.owners[0].values.swap(0, 1);
+        // Isolate the ordinal contract: drop the slot dependency so only
+        // the source-order inversion remains for the validator to see.
+        for value in &mut plan.owners[0].values {
+            for step in &mut value.schedule.steps {
+                step.inputs
+                    .retain(|input| !matches!(input, PlannedEvaluationInput::Slot { .. }));
+            }
+        }
         let error = file.validate_order(&plan).expect_err("must be rejected");
-        assert!(
-            matches!(
-                error.invariant,
-                crate::ice::Invariant::EvaluationOrderChanged
-                    | crate::ice::Invariant::ValueReadBeforeItIsProduced
-            ),
+        assert_eq!(
+            error.invariant,
+            crate::ice::Invariant::EvaluationOrderChanged,
             "{error}"
         );
     }

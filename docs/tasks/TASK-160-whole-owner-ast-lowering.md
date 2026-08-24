@@ -549,6 +549,25 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   `g(1, match …, 2)`가 리터럴 capture 없이, `g(eff(), match …)`는 capture와
   함께 방출됨을 단위·출력 테스트로 고정했다. 전체 게이트 통과.
 
+- 2026-08-24: mutation 검증(7.3)을 수행했다. 작업 코드를 커밋한 상태에서 각
+  규칙을 의도적으로 깨고 테스트가 실제로 실패함을 확인한 뒤 `git restore`로
+  복귀했다(사용자 미커밋 변경 없음 확인). 결과:
+
+  | mutation | 기대 검출 | 결과 |
+  |---|---|---|
+  | M1: `owner_reach`가 항상 `Same` | capability 단위 테스트 + loop 출력 회귀 | 둘 다 실패(검출) — validator ICE `RepetitionRegionLeft`가 컴파일도 중단 |
+  | M2: validate_order의 repetition 검사 제거 | 위반-plan 단위 테스트 | 실패(검출) |
+  | M3: 논리 연산 region의 else 대입 제거 | tsgo 타입 테스트 + 단락 runtime | 둘 다 실패(검출) |
+  | M4: optional call 첫 인자를 검사 밖에서 평가 | this·단락 runtime trace | 실패(검출) |
+  | M5: `is_inert`가 항상 true | capture 출력 테스트 | 실패(검출) |
+  | M5b: 〃 | **처음에는 runtime 순서 테스트가 없어 생존** → `eager_arguments_keep_left_to_right_order_at_runtime` 추가 후 실패(검출) |
+  | M6: preservation 중복 검사 제거 | 위반-target 단위 테스트 | 실패(검출) |
+  | M7: validate_order의 ordinal 검사 제거 | **swap 테스트가 slot-읽기 검사로도 통과해 생존** → slot 의존을 제거하고 ordinal만 남기는 테스트로 강화 후 실패(검출) |
+
+  생존한 mutation 두 건(M5b·M7)은 테스트 공백의 증거였고, 각각 runtime 순서
+  trace 테스트와 격리된 ordinal 위반 테스트를 추가해 닫았다. 명령:
+  `cargo test --lib <validator test>` / `cargo test --test integration <trace test>`.
+
 ## 이슈 및 해결
 
 ### 이슈 1: placeholder 내부 가짜 statement가 owner로 선택됨

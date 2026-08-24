@@ -2941,3 +2941,21 @@ console.log(a, JSON.stringify(b), c);
 "#);
     assert_eq!(lines, ["0 2 0"]);
 }
+
+#[test]
+fn eager_arguments_keep_left_to_right_order_at_runtime() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    // The schedule captures every effectful earlier argument; only a
+    // provably inert one may stay in place (TASK-160 §9). If the effect
+    // judgement overreached, `mark(1)` would run after the match region.
+    let lines = run(r#"
+const trace: number[] = [];
+function mark(n: number): number { trace.push(n); return n; }
+function g(a: number, b: number, c: number): void { console.log(a, b, c); }
+g(mark(1), match (mark(2)) { 2 => 20, _ => 0 }, mark(3));
+console.log(JSON.stringify(trace));
+"#);
+    assert_eq!(lines, ["1 20 3", "[1,2,3]"]);
+}
