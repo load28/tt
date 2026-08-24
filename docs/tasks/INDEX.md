@@ -212,7 +212,7 @@
 | TASK-202 | 에디터 진단의 세대 단위 원자적 발행 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-202-editor-diagnostic-generations.md](./TASK-202-editor-diagnostic-generations.md) |
 | TASK-203 | TASK-202 로컬 개발 환경 재설치 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-203-reinstall-after-diagnostic-fix.md](./TASK-203-reinstall-after-diagnostic-fix.md) |
 | TASK-204 | VS Code 전체 도구 체인 테스트 실패 조사 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-204](./TASK-204-vscode-full-toolchain-test-failures.md) |
-| TASK-205 | VS Code 전체 도구 체인 테스트 복구 | 대기 | — | — | [TASK-205](./TASK-205-vscode-full-toolchain-test-fixes.md) |
+| TASK-205 | VS Code 전체 도구 체인 테스트 복구 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-205](./TASK-205-vscode-full-toolchain-test-fixes.md) |
 | TASK-206 | setup의 Cargo 전체 정리와 tsgo 자식 환경 주입 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-206](./TASK-206-setup-clean-cargo-builds.md) |
 
 ## 다음 태스크 번호

@@ -201,24 +201,19 @@ test("refresh mode updates a sidecar that is already there", { skip }, async () 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("a file that no longer compiles keeps its last good sidecar", { skip }, async () => {
+test("a recoverable malformed node refreshes declarations around it", { skip }, async () => {
   const dir = workspace();
   const tt = path.join(dir, "notice.tt");
 
   await refreshSidecar(COMPILER, tt, "always");
-  const before = fs.readFileSync(`${tt}.d.ts`, "utf8");
-
-  // Recoverable tt errors (a duplicate case, a missing arm) still lower
-  // and still refresh (TASK-120); what blocks a refresh is a file that
-  // cannot become TypeScript at all — a stray `|>` passes through
-  // verbatim, so there is nothing to emit declarations from, and the
-  // editor should keep showing the last good ones rather than lose them
-  // mid-edit.
+  // Parser-owned recovery replaces only the malformed pipeline node in the
+  // editor projection. `--types` still exits with diagnostics, while the
+  // independent declarations remain emit-capable and must stay fresh.
   fs.writeFileSync(tt, `${SOURCE}const broken = 1 |> ;\n`);
   const result = await refreshSidecar(COMPILER, tt, "refresh");
 
-  assert.equal(result.kind, "failed", JSON.stringify(result));
-  assert.equal(fs.readFileSync(`${tt}.d.ts`, "utf8"), before);
+  assert.equal(result.kind, "written", JSON.stringify(result));
+  assert.match(fs.readFileSync(`${tt}.d.ts`, "utf8"), /export type Notice/);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });

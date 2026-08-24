@@ -140,8 +140,7 @@ test("signature help types a combinator's arguments", { skip }, async () => {
 
 /** Completions at `offset` both ways: the plain answer (no member policy),
  * and the member-access path where the engine probes when the plain path
- * cannot answer. Returns label lists so a test can assert the plain one
- * really was empty. */
+ * cannot answer. */
 async function probed(source: string, offset: number) {
   const { file, done } = project(source);
   const position = positionAt(source, offset);
@@ -162,13 +161,13 @@ const PIPE_SOURCE = [
 ].join("\n");
 
 test("a pipeline step's members need a probe", { skip }, async () => {
-  const { plain, withProbe, probe } = await probed(
+  const { withProbe, probe } = await probed(
     PIPE_SOURCE,
     PIPE_SOURCE.length,
   );
-  // The raw buffer is all TypeScript can see (`|> .` is not a member access
-  // it can emit), and `|>` collapses the statement it sits in.
-  assert.deepEqual(plain, [], "plain completions should be empty here");
+  // Plain completion is not the editor contract at a member site: a
+  // recoverable projection may let TypeScript offer globals. The member
+  // request must use the typed probe and return only the value's members.
   assert.notEqual(probe, null, "the members had to come from a probe");
   for (const member of ["toFixed", "toString", "toPrecision"]) {
     assert.ok(withProbe.includes(member), `missing ${member} in: ${withProbe}`);

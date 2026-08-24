@@ -100,7 +100,10 @@ test(
       positionAt(SOURCE, SOURCE.indexOf("disc(radius")),
     );
     assert.equal(defs.length, 1, JSON.stringify(defs));
-    assert.equal(defs[0].path, path.join(dir, "helpers.ts"));
+    assert.equal(
+      fs.realpathSync(defs[0].path),
+      fs.realpathSync(path.join(dir, "helpers.ts")),
+    );
     assert.equal(sliceOf(HELPERS, defs[0].range), "disc");
   },
 );

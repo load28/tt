@@ -813,6 +813,10 @@ struct ProjectionSourceSegment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ProjectionSegmentKind {
     Copied,
+    /// Compiler-written delimiter that closes a copied source fragment.
+    /// A parser stopping here proves that the fragment immediately before
+    /// it was incomplete; the delimiter itself is fixed syntax.
+    SourceBoundary,
     Placeholder,
 }
 
@@ -939,6 +943,36 @@ impl<'a> ProjectionBuilder<'a> {
             marker: OverlayMarker::Identifier,
         });
         Ok(())
+    }
+
+    /// Writes the fixed delimiter after a source fragment embedded in a
+    /// generated owner and records the fragment as the parse cause when SWC
+    /// stops on that delimiter. This is provenance, not diagnostic-message
+    /// inference: only a copied segment ending exactly at this boundary can
+    /// own it.
+    fn push_source_boundary(&mut self, text: &str, segments_since: usize) {
+        let start = ProjectedByte(self.code.len());
+        let source = self.source_segments[segments_since..]
+            .iter()
+            .rev()
+            .find(|segment| {
+                segment.kind == ProjectionSegmentKind::Copied && segment.projected.end == start
+            })
+            .map(|segment| segment.source);
+        self.code.push_str(text);
+        if let Some(source) = source {
+            self.source_segments.push(ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                source: SourceSpan {
+                    start: source.end.saturating_sub(1),
+                    end: source.end,
+                },
+                kind: ProjectionSegmentKind::SourceBoundary,
+            });
+        }
     }
 
     fn emit_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
@@ -1075,14 +1109,16 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("() => {");
         for subject in &decision.subjects {
             self.code.push('(');
+            let segments_since = self.source_segments.len();
             self.emit_expr(subject.value)?;
-            self.code.push_str(");");
+            self.push_source_boundary(");", segments_since);
         }
         for arm in &decision.arms {
             if let Some(guard) = arm.guard {
                 self.code.push('(');
+                let segments_since = self.source_segments.len();
                 self.emit_expr(guard)?;
-                self.code.push_str(");");
+                self.push_source_boundary(");", segments_since);
             }
             let crate::core_ir::ArmAction::Yield { body, kind } = arm.action else {
                 continue;
@@ -1090,13 +1126,15 @@ impl<'a> ProjectionBuilder<'a> {
             match kind {
                 hir::ArmBodyKind::Expression => {
                     self.code.push('(');
+                    let segments_since = self.source_segments.len();
                     self.emit_body(body)?;
-                    self.code.push_str(");");
+                    self.push_source_boundary(");", segments_since);
                 }
                 hir::ArmBodyKind::Block { .. } => {
                     self.code.push('{');
+                    let segments_since = self.source_segments.len();
                     self.emit_body(body)?;
-                    self.code.push('}');
+                    self.push_source_boundary("}", segments_since);
                 }
             }
         }
@@ -1121,8 +1159,9 @@ impl<'a> ProjectionBuilder<'a> {
                 TemplatePart::Raw(node) => self.push_source(*node)?,
                 TemplatePart::Interpolation(expr) => {
                     self.code.push_str("${");
+                    let segments_since = self.source_segments.len();
                     self.emit_expr(*expr)?;
-                    self.code.push('}');
+                    self.push_source_boundary("}", segments_since);
                 }
             }
         }
@@ -2602,10 +2641,16 @@ fn source_byte_for_projection(
     projected: ProjectedByte,
 ) -> Option<usize> {
     segments.iter().find_map(|segment| {
-        (segment.kind == ProjectionSegmentKind::Copied
-            && segment.projected.start <= projected
-            && projected < segment.projected.end)
-            .then(|| segment.source.start + projected.0 - segment.projected.start.0)
+        if !(segment.projected.start <= projected && projected < segment.projected.end) {
+            return None;
+        }
+        match segment.kind {
+            ProjectionSegmentKind::Copied => {
+                Some(segment.source.start + projected.0 - segment.projected.start.0)
+            }
+            ProjectionSegmentKind::SourceBoundary => Some(segment.source.start),
+            ProjectionSegmentKind::Placeholder => None,
+        }
     })
 }
 
@@ -2614,7 +2659,9 @@ fn source_span_for_projection(
     projected: ProjectedSpan,
 ) -> Option<SourceSpan> {
     let start = segments.iter().find_map(|segment| {
-        if projected.start == segment.projected.start {
+        if segment.kind != ProjectionSegmentKind::SourceBoundary
+            && projected.start == segment.projected.start
+        {
             Some(segment.source.start)
         } else if segment.projected.start < projected.start
             && projected.start < segment.projected.end
@@ -2626,7 +2673,9 @@ fn source_span_for_projection(
         }
     })?;
     let end = segments.iter().find_map(|segment| {
-        if projected.end == segment.projected.end {
+        if segment.kind != ProjectionSegmentKind::SourceBoundary
+            && projected.end == segment.projected.end
+        {
             Some(segment.source.end)
         } else if segment.projected.start < projected.end
             && projected.end < segment.projected.end
@@ -2671,6 +2720,25 @@ mod tests {
             panic!("expected a source-caused failure, got {error:?}");
         };
         assert_eq!(&source[at..at + 1], ";");
+    }
+
+    #[test]
+    fn an_incomplete_source_expression_owns_the_generated_closing_boundary() {
+        // SWC reports this at the generated `)` after `radius.`, not on the
+        // copied dot. The owner projection records that fixed delimiter as
+        // the boundary of the copied arm expression, so malformed user text
+        // remains an input failure instead of becoming an ICE.
+        let source = "enum Shape { Circle(radius: number), Point }\n\
+                      declare const shape: Shape;\n\
+                      const label = match (shape) {\n\
+                        Circle(radius) => radius.,\n\
+                        Point => 0,\n\
+                      };\n";
+        let error = build_error(source);
+        let ProgramSyntaxError::SourceNotTypeScript { source: at, .. } = error else {
+            panic!("expected a source-caused failure, got {error:?}");
+        };
+        assert_eq!(&source[at..at + 1], ".");
     }
 
     #[test]

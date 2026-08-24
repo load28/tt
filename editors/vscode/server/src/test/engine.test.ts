@@ -234,7 +234,10 @@ test("definition crosses into the hand-written file on disk", { skip }, async ()
     positionAt(RENDER, RENDER.indexOf("describe(state)")),
   );
   assert.equal(locations.length, 1, JSON.stringify(locations));
-  assert.equal(locations[0].path, path.join(dir, "src/user.ts"));
+  assert.equal(
+    fs.realpathSync(locations[0].path),
+    fs.realpathSync(path.join(dir, "src/user.ts")),
+  );
   // The span names the declaration, in the target file's own coordinates.
   const target = fs.readFileSync(locations[0].path, "utf8");
   assert.equal(sliceOf(target, locations[0].range), "describe");
@@ -279,7 +282,11 @@ test("references find every use, in source coordinates", { skip }, async () => {
   );
   assert.ok(references.length >= 2, JSON.stringify(references));
   for (const reference of references) {
-    assert.equal(reference.path, tt, "all of them in the .tt file");
+    assert.equal(
+      fs.realpathSync(reference.path),
+      fs.realpathSync(tt),
+      "all of them in the .tt file",
+    );
     assert.equal(sliceOf(RENDER, reference.range), "label");
   }
 });
@@ -296,7 +303,7 @@ test("rename names every place the name is written", { skip }, async () => {
   // engine refuses the rename whole if any edit cannot be mapped back.
   assert.equal(edits!.length, 3, JSON.stringify(edits));
   for (const edit of edits!) {
-    assert.equal(edit.path, tt);
+    assert.equal(fs.realpathSync(edit.path), fs.realpathSync(tt));
     assert.equal(sliceOf(RENDER, edit.range), "label");
   }
 });
