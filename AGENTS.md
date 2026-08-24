@@ -1,208 +1,99 @@
 # AGENTS.md — tt 프로젝트 작업 가이드
 
-이 문서는 Codex(및 모든 기여자)가 이 저장소에서 작업할 때 반드시 따라야 하는
-규칙과 컨텍스트를 정의합니다.
+이 파일은 Claude Code와 Codex가 공유하는 저장소 작업 계약입니다. 사람을 위한 상세
+환경 설명은 `CONTRIBUTING.md`, tt 사용자 프로젝트용 언어 컨텍스트는
+`docs/ai/tt.md`에 있습니다.
 
-## 프로젝트 개요
+## 작업 시작 전
 
-**tt**은 TypeScript로 컴파일되는 초경량 전처리 언어이고, **ttc**는 Rust로 작성된
-그 컴파일러입니다. tt은 TypeScript 위에 딱 일곱 가지만 추가합니다:
-Rust 스타일 `enum`(태그드 유니언), `match` 표현식(or-패턴·가드·튜플 match·
-중첩 패턴 포함), 에러 전파 `try` 문, 값 추출 `let-else`·`if let` 문,
-파이프라인 연산자 `|>`(함수 합성 `flow` 포함), `Result` 계산 블록
-`result`(바인딩 `<-`).
+1. 저장소 루트에서 `./scripts/doctor`를 실행해 로컬 환경을 읽기 전용으로 진단합니다.
+2. doctor가 성공하면 setup을 다시 실행하지 않습니다.
+3. doctor가 toolchain 미설정을 보고하면 `--tsgo-root <path>`와 `--tsgo-npm` 중
+   어느 방식을 쓸지 추측하지 말고 사용자에게 확인합니다.
+4. doctor가 재구성을 요구하더라도 `./scripts/setup`은 Cargo 산출물을 정리하고
+   release `ttc`와 VS Code 확장을 다시 설치하므로 사용자가 로컬 setup 또는
+   재설치를 요청한 경우에만 실행합니다.
+5. 저장소 추적 파일을 바꾸는 개발 작업은 아래 태스크 문서를 먼저 만듭니다.
+   doctor 실행, 기존 setup 실행, 설치 상태 확인만 하는 운영 작업은 태스크에서
+   제외합니다.
 
-### 절대 불변 원칙 (설계 계약)
-
-이 세 가지는 어떤 기능 추가·문제 해결·리팩토링에서도 깨뜨릴 수 없는 계약입니다:
-
-1. **모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이다.**
-   컴파일러는 tt `enum`/`match` 구문만 변환하고 나머지는 바이트 단위 그대로
-   통과시킨다. 구문이 완전하게 파싱될 때만 변환하고, 조금이라도 어긋나면 원문
-   그대로 통과시킨다. 유일한 예외는 상대 경로 `.tt` import 지정자의 재작성
-   (TASK-020, `language.md` §9)이다 — 그런 지정자는 tsc가 어차피 해석하지
-   못하므로(`TS2307`) 동작하던 TS가 달라지는 일은 없고, `--rewrite-imports
-   off`로 끌 수 있다. 이 밖의 예외를 추가로 만들지 않는다.
-2. **에러 계층이 분리되어 있다.** tt 수준 에러(중복 케이스, 소진되지 않은 match,
-   잘못된 필드 타입)는 전부 ttc가 `파일:행:열`과 함께 직접 보고한다. 생성되는
-   코드는 타입 트릭 없는 순수 TypeScript이며, ttc가 방출한 코드 때문에 tsc
-   에러가 발생해서는 안 된다. 사용자가 통과 영역에 쓴 TS 코드의 타입 에러는
-   tsc의 책임이다.
-3. **모든 해결은 구조적·아키텍처적이며 일반화되어야 한다.** tt/ttc는 Rust
-   컴파일러와 Svelte 컴파일러에 준하는 품질의 컴파일러를 목표로 한다. 특정 입력,
-   테스트, 파일, 구문 모양만 통과시키는 조건 분기, 임시 예외 처리, 문자열 기반
-   휴리스틱, 진단 억제나 폴백으로 기능을 구현하거나 문제를 덮지 않는다. 원인을
-   문법·AST·HIR·Core IR·이름 해석·의미 분석·타입 시스템·백엔드 중 책임 있는
-   계층의 모델과 계약으로 표현하고, 구조적으로 같은 모든 입력에 적용되는 하나의
-   원리로 해결한다. 불가피한 언어 경계도 이름 있는 타입과 명시적 계약으로 모델링하고
-   회귀 테스트로 고정한다. 이 기준은 기능, 버그 수정, 성능, 진단, 에디터와 빌드
-   도구를 포함한 모든 작업에 적용되며 위 두 계약과 동등한 절대 기준이다.
-
-## 아키텍처 맵
-
-```
-src/
-  main.rs        CLI 진입점 — 인자 파싱, 파일 수집, 컴파일 실행/출력
-  lib.rs         공개 API: compile(source, &Options) -> Result<String, CompileError>
-  error.rs       CompileError(공개) / TtError(내부, 바이트 오프셋) / line_col
-  scanner.rs     바이트 단위 저수준 스캔 (문자열/템플릿/주석/정규식/괄호 매칭)
-  lexer.rs       유의 토큰 스트림 생성 (정규식 휴리스틱, 템플릿 중첩 렉싱)
-  ast.rs         타입드 AST — 단계 간 계약 (Program/Segment/EnumDecl/MatchExpr...)
-  parser/
-    mod.rs       메인 토큰 루프 → Program (무오류 구조 파싱, 템플릿 재귀)
-    cursor.rs    토큰 커서 (Copy 백트래킹, 괄호 매칭, 공용 토큰 스캔)
-    enums.rs     tt enum 구조 파싱 (TS enum 구분 규칙 포함)
-    imports.rs   정적 import/re-export의 상대 경로 .tt 지정자 추출
-    matches.rs   match 표현식 구조 파싱 (scrutinee/arm body 재귀 파싱)
-    tries.rs     try 문 구조 파싱 (유효 TS의 try 형태 배제 규칙 포함)
-    lets.rs      let-else 문 구조 파싱 (발산 판정 포함)
-    iflets.rs    if let 문 구조 파싱 (else 체이닝 포함)
-    pipes.rs     파이프라인 스텝 구조 파싱 (head는 mod.rs의 식-시작 추적,
-                 head가 `flow` 하나면 함수 합성)
-    results.rs   `result { ... }` 계산 블록 구조 파싱 (`<-` 바인딩이 하나도
-                 없으면 통과 — TS의 `result` 식별자 + 블록 문과의 구분)
-  sema.rs        의미 검사 — 중복 케이스/암, 와일드카드 위치, 필드 타입, 소진성
-                 (임포트 선언·내장 Option/Result 포함, 로컬 > 임포트 > 내장 섀도잉)
-  stdlib.rs      표준 라이브러리 — STD_SOURCE(공개) / BUILTIN_ENUMS(내부)
-  stdlib/
-    tt_std.ts    std 모듈 본체 (Option/Result + 콤비네이터, --emit-std로 방출)
-  codegen/
-    mod.rs       backend 경계 — SemanticFile + CoreFile → TypeScript
-    core.rs      전체 Core IR의 TypeScript target lowering
-                 (decision/propagation/ADT/apply/import/template)
-    rope.rs      mapping-aware structured writer와 최종 printer
-  verify.rs      swc 기반 검증 — 타입 조각 검사 + 출력 자가 검사
-tests/
-  compile.rs     컴파일 출력 스냅샷/에러 단위 테스트
-  passthrough.rs "유효한 TS는 바이트 그대로 통과" 계약 테스트
-  stdlib.rs      std 모듈 계약 테스트 (통과 + tt enum 방출 형태와 바이트 일치)
-  integration.rs tsc 타입체크 + node 실행 통합 테스트 (tsc/node 없으면 skip)
-docs/
-  reference/     규범 레퍼런스 — language.md(언어) / cli.md / errors.md / std.md
-  design/        설계 문서 (compiler-architecture.md — 파이프라인 규범 설명)
-  ai/            AI 코딩 도구용 컨텍스트 문서 (tt.md — 레퍼런스의 AI 소비용 압축)
-  tasks/         태스크 관리 (아래 참조)
-```
-
-파이프라인 (swc 스타일 단계 분리): `compile()` = parser::parse(lexer::lex
-토큰화 → 무오류 구조 파싱 → AST) → sema::check(모든 tt 수준 에러 + 소진성) →
-codegen::emit(무오류 방출) → verify_output(swc 파싱 자가 검사, `--no-verify`로
-생략 가능).
-새 기능은 해당 단계에만 손댄다: 새 구문 = ast + parser(+codegen), 새 검사 =
-sema, 방출 형태 변경 = codegen.
-
-## 명령어
+첫 setup은 다음 중 사용자가 선택한 하나만 실행합니다. 이후에는 인자 없는 명령이
+`.tt-dev/toolchain.json`을 재사용합니다.
 
 ```sh
-cargo build                        # 빌드
-cargo test                         # 전체 테스트 (tsc/node 있으면 통합 테스트 포함)
-cargo fmt --check                  # 포매팅 검사 (rustfmt 기본 스타일)
-cargo clippy --all-targets -- -D warnings   # 린트 (경고 = 실패)
-cargo run -- file.tt               # 컴파일 실행
+./scripts/setup --tsgo-root /path/to/typescript-go
+./scripts/setup --tsgo-npm
+./scripts/setup
 ```
 
-## 검증 게이트 (머지 전 필수)
+## 프로젝트와 설계 계약
 
-모든 변경은 커밋 전에 아래를 통과해야 합니다:
+**tt**은 TypeScript로 컴파일되는 초경량 전처리 언어이고, **ttc**는 Rust
+컴파일러입니다. tt은 Rust 스타일 `enum`, `match`, `try`, `let-else`, `if let`,
+`|>`/`flow`, `result` 블록과 `val` 바인딩 수식자를 TypeScript에 추가합니다.
 
-1. `cargo fmt --check`
-2. `cargo clippy --all-targets -- -D warnings`
-3. `cargo test`
+다음 세 계약은 기능·수정·리팩터링에서 깨뜨릴 수 없습니다.
 
-CI(`.github/workflows/ci.yml`)가 동일한 게이트를 강제합니다.
+1. **모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일입니다.** 완전히
+   인식된 tt 구문만 변환하고 나머지는 바이트 단위로 통과시킵니다. 유일한 예외는
+   상대 `.tt`/`.ttx` import 지정자 재작성이며 `--rewrite-imports off`로 끌 수
+   있습니다.
+2. **에러 계층을 분리합니다.** tt 수준 오류는 ttc가 원본 위치와 함께 보고합니다.
+   방출 코드는 타입 트릭 없는 순수 TypeScript여야 하며, 사용자 TypeScript의 타입
+   오류는 TypeScript가 담당합니다.
+3. **해결은 책임 있는 컴파일러 계층에 일반화해 구현합니다.** 특정 테스트나 문자열
+   모양을 겨냥한 분기, 휴리스틱, 진단 억제 또는 폴백으로 문제를 덮지 않습니다.
+   문법·AST·HIR·이름 해석·의미 분석·타입 시스템·백엔드 중 책임 있는 모델과
+   계약으로 표현하고 구조적으로 같은 입력에 적용하며 회귀 테스트로 고정합니다.
 
-## 버저닝 가이드
+## 아키텍처 경계
 
-TypeScript의 릴리스 방식을 따릅니다: **버전은 작업 단위가 아니라 릴리스
-단위로 올립니다.** TypeScript가 커밋/기능마다 버전을 올리지 않고 여러 변경을
-하나의 릴리스로 묶어서만 올리듯, 이 저장소도 태스크 완료는 버전과 무관합니다.
+- `src/main.rs`, `src/server.rs`: CLI와 JSON-lines 서버 진입점
+- `src/lib.rs`, `src/engine/`: 공개 API와 Project/Snapshot 기반 typed engine
+- `src/lexer.rs`, `src/parser/`, `src/ast.rs`, `src/hir/`: 구문 인식과 단계 간 계약
+- `src/resolve/`, `src/analysis/`, `src/sema.rs`, `src/val.rs`: 이름·패턴·의미 분석
+- `src/typescript/`: TypeScript backend seam과 tsgo 도달 방법
+- `src/codegen/`: source-preserving TypeScript 방출과 매핑
+- `tests/`: 출력, 통과, 타입·런타임 통합 계약
 
-- **기준 버전은 `Cargo.toml`의 `version` 하나다.** 개발 배포는
-  `X.Y.Z-dev.N`, 정식 배포는 `X.Y.Z`로 채널을 표현한다. npm 메인 패키지
-  (`npm/tt-lang`)와 설치기(`packages/create-tt`)는 저장소에서 `0.0.0-dev`로
-  두고 배포 시점에 `npm/scripts/stamp-version.mjs`가 Cargo.toml 버전을
-  스탬프한다 — 저장소에서 직접 올리지 않는다. 부속 패키지
-  (`editors/vscode`, `integrations/unplugin`)는
-  독립 버전이며 마찬가지로 각자 배포할 때만 올린다.
-- **태스크 완료 ≠ 버전 올림.** 기능 추가·버그 수정·리팩토링은 버전을 건드리지
-  않고 커밋한다. 버전을 올리는 유일한 시점은 "릴리스를 자른다"는 명시적
-  결정이 있을 때이고, 그 버전 올림 자체를 별도 태스크로 등록한다
-  (예: `TASK-NNN: release 0.4.0-dev.1`, `TASK-NNN: release 0.4.0`).
-- **배포 채널은 버전 형태로 자동 결정한다.** `main`에서 CI가 성공한 뒤
-  `X.Y.Z-dev.N`이 직전 버전보다 증가했으면 npm `dev`와 GitHub VSIX
-  pre-release를 배포한다. `X.Y.Z`가 증가했으면 production npm과 GitHub
-  Release를 배포한다. 같은 버전의 일반 push는 배포하지 않는다.
-- **정식 출시 전에는 `0.MINOR.PATCH`를 유지한다.**
-  - `0.MINOR` +1: 누적된 변경을 묶어 릴리스를 자를 때만.
-  - `PATCH` +1: 이미 릴리스된 버전의 심각한 버그 수정만.
-  - `1.0.0`: 정식 출시 결정이 있을 때만. 그 전에 버전이 이 근처까지 올라가지
-    않도록 릴리스를 아껴서 자른다.
-- 판단이 애매하면 올리지 않는 쪽이 기본값이다.
+typed 경로는 `Engine::open_project` → `Project` → 불변 `Snapshot` 흐름을 사용합니다.
+CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/typescript/` 밖으로
+새면 안 됩니다. 더 자세한 현재 구조는 `docs/design/compiler-architecture.md`와
+관련 설계 문서를 확인합니다.
 
-## 태스크 관리 규칙 (필수)
+새 구문은 AST·parser·HIR·codegen, 새 의미 검사는 resolve·analysis·sema, 방출
+형태는 codegen처럼 책임 있는 단계에만 둡니다. 언어 표면을 바꾸면
+`docs/ai/tt.md`도 갱신하고, 사용자가 처음 접하는 기능이면 영문·한글 README도
+같이 갱신합니다.
 
-**이 저장소의 모든 개발 작업은 태스크 문서로 관리되고 기록되어야 합니다.**
+## 태스크 관리
 
-다만 저장소의 추적 파일을 변경하지 않고 로컬 환경에 기존 산출물을 설치하거나
-재설치하는 운영 작업은 태스크로 만들지 않는다. `scripts/setup` 실행, 로컬
-컴파일러·에디터 확장 재설치, 설치 상태 확인이 여기에 해당한다. 설치 스크립트,
-패키징, 설치 문서 또는 저장소 설정을 변경하는 작업은 개발 작업이므로 반드시
-태스크로 관리한다.
+모든 개발 작업은 `docs/tasks/INDEX.md`와 개별 `docs/tasks/TASK-NNN-<slug>.md`로
+관리합니다.
 
-- 단일 진실 소스: **`docs/tasks/INDEX.md`** — 전체 태스크 목록과 상태.
-- 개별 태스크 문서: `docs/tasks/TASK-NNN-<slug>.md`
-  (`docs/tasks/TEMPLATE.md` 템플릿 사용).
+1. 변경 전에 INDEX의 다음 번호와 `docs/tasks/TEMPLATE.md`로 문서를 만들고
+   `진행 중`으로 등록합니다.
+2. 선택한 대안과 근거, 시간순 작업 내역, 문제의 증상·원인·해결을 기록합니다.
+3. 완료 전에 검증 결과와 변경 파일을 기록하고 INDEX와 문서를 `완료`로 바꿉니다.
+4. 커밋 제목은 `TASK-NNN: subject`로 시작합니다.
 
-### 워크플로
+버전은 작업 단위로 올리지 않습니다. `Cargo.toml` 버전은 명시적인 릴리스 태스크에서만
+변경하며 npm 메인 패키지와 설치기 버전은 배포 스크립트가 스탬프합니다.
 
-1. **작업 시작 전**: `INDEX.md`에서 다음 태스크 번호를 확인하고, 템플릿을 복사해
-   태스크 문서를 만들고 목적/범위를 기록한 뒤 INDEX에 `진행 중`으로 등록한다.
-2. **작업 중**: 아래 "기록 상세 기준"에 따라 의사결정·작업 내역·이슈를
-   태스크 문서에 남긴다.
-3. **작업 완료 시**: 검증 게이트 통과 결과와 변경 파일 요약을 기록하고,
-   상태를 `완료`로 바꾸고 완료일과 커밋 해시를 기입한다.
-   **완료 처리 전 확인**: 이번 변경이 언어 표면·표준 라이브러리·CLI·빌드
-   흐름 등 사용자가 체감하는 동작을 바꿨다면, AI 제공 문서
-   (`docs/ai/tt.md`)에 그 내용이 반영됐는지 확인하고 어긋나면 함께
-   갱신한다. 반영이 필요 없는 변경(내부 리팩토링 등)이면 그대로 완료한다.
-4. **커밋 메시지**는 해당 태스크 ID로 시작한다: `TASK-004: split transform into modules`.
+## 구현과 검증 규칙
 
-### 기록 상세 기준 (필수)
+- Rust MSRV는 `Cargo.toml`의 `rust-version`이며 `unsafe`는 금지합니다.
+- 스캐너와 변환기는 ASCII 바이트만 판단하고 멀티바이트 UTF-8은 불투명하게
+  통과시킵니다.
+- 내부 오류는 바이트 오프셋을 담고 사용자 line/column 변환은 공개 경계에서 합니다.
+- 새 기능은 출력 계약이면 `tests/compile.rs`, TS 통과 계약이면
+  `tests/passthrough.rs`, 타입·런타임 의미이면 통합 테스트를 추가합니다.
+- 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
-태스크 문서는 나중에 처음 보는 사람이 "왜 이렇게 됐는지"를 문서만 읽고 재구성할
-수 있을 만큼 상세해야 한다. 템플릿의 세 섹션을 모두 채운다:
+변경 완료 전 다음 게이트를 모두 실행합니다.
 
-- **의사결정**: 유의미한 결정마다 ① 어떤 선택이 필요했는지(상황),
-  ② 검토한 대안들과 각각의 장단점, ③ 최종 선택과 그 근거를 기록한다.
-  근거가 확인 가능한 것이면 확인 방법(명령, 측정치)까지 남긴다.
-- **작업 내역**: 실제 수행한 작업을 시간순으로, 어떤 파일을 어떻게 바꿨고
-  어떤 명령으로 확인했는지 재현 가능할 만큼 구체적으로.
-- **이슈 및 해결**: 만난 문제마다 증상(에러 메시지 포함) → 원인(조사 과정 포함)
-  → 해결 방법을 기록한다. 우회한 경우 사유와 남은 부채를 명시한다.
-  이슈가 없었다면 "없음"이라고 명시적으로 적는다 (누락과 구분하기 위해).
-
-### 상태 값
-
-| 상태 | 의미 |
-|------|------|
-| 대기 | 등록됐지만 시작 전 |
-| 진행 중 | 작업 중 |
-| 완료 | 검증 게이트 통과 + 기록 완료 |
-| 보류 | 의사결정 대기 / 차단됨 (사유를 문서에 기록) |
-| 취소 | 진행하지 않기로 결정 (사유를 문서에 기록) |
-
-## 코딩 컨벤션
-
-- 포매팅: **rustfmt 기본값** (커스텀 설정 없음). 커밋 전 `cargo fmt`.
-- 린트: clippy 경고 0개 유지. lint 설정은 `Cargo.toml`의 `[lints]`에 선언.
-- `unsafe` 금지 (`#![forbid(unsafe_code)]` 수준으로 유지).
-- 스캐너/변환기는 바이트 기반: ASCII 바이트로만 판단하고 멀티바이트 UTF-8은
-  불투명하게 통과시킨다는 전제를 지킬 것.
-- 에러는 반드시 바이트 오프셋을 담아 `TtError::at`으로 만들고, 위치 변환은
-  `compile()` 경계에서만 한다.
-- 새 기능에는 반드시 세 계층 테스트를 추가: 출력 단위 테스트(compile.rs),
-  통과 계약이 걸리면 passthrough.rs, 타입/런타임 의미가 걸리면 integration.rs.
-- **언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 반드시
-  컴파일러 내장 가이드(`docs/ai/tt.md`)를 함께 갱신한다.** 사용자가 처음
-  접하는 기능이면 영문·한글 README도 같은 커밋에서 갱신한다. 구현과 문서가
-  어긋나면 버그로 취급한다 (태스크 완료 전 확인 — 위 워크플로 3번).
+```sh
+cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
+```

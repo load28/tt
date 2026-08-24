@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# Read-only diagnosis for the local TT development environment.
+
+set -u
+
+TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+CONFIG="$TT_ROOT/.tt-dev/toolchain.json"
+PKG_MARKER="$TT_ROOT/npm/tt-lang/tt-dev.local.json"
+VSIX="$TT_ROOT/.tt-dev/tt-language.vsix"
+MIN_RUST_MAJOR=1
+MIN_RUST_MINOR=88
+FAILURES=0
+WARNINGS=0
+
+pass() {
+  printf 'ok: %s\n' "$*"
+}
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+  FAILURES=$((FAILURES + 1))
+}
+
+warn() {
+  printf 'warning: %s\n' "$*" >&2
+  WARNINGS=$((WARNINGS + 1))
+}
+
+have() {
+  command -v "$1" > /dev/null 2>&1
+}
+
+check_command() {
+  if have "$1"; then
+    pass "$1: $(command -v "$1")"
+  else
+    fail "$1 is not on PATH"
+  fi
+}
+
+rust_is_supported() {
+  local version major minor
+  version="$1"
+  IFS=. read -r major minor _rest <<EOF
+$version
+EOF
+  [ "${major:-0}" -gt "$MIN_RUST_MAJOR" ] \
+    || { [ "${major:-0}" -eq "$MIN_RUST_MAJOR" ] && [ "${minor:-0}" -ge "$MIN_RUST_MINOR" ]; }
+}
+
+printf 'TT development environment\n'
+printf '  root: %s\n\n' "$TT_ROOT"
+
+printf 'Required tools\n'
+check_command cargo
+check_command rustc
+check_command node
+check_command npm
+
+if have rustc; then
+  RUST_VERSION="$(rustc --version 2> /dev/null | awk '{print $2}')"
+  if rust_is_supported "$RUST_VERSION"; then
+    pass "Rust $RUST_VERSION satisfies MSRV 1.88"
+  else
+    fail "Rust $RUST_VERSION is older than the required MSRV 1.88"
+  fi
+fi
+
+printf '\nTypeScript toolchain\n'
+KIND=""
+TSGO_ROOT=""
+if [ ! -f "$CONFIG" ]; then
+  fail "toolchain is not configured: $CONFIG"
+elif ! have node; then
+  fail "cannot read toolchain config without Node.js"
+else
+  KIND="$(node -e '
+    try {
+      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).kind;
+      if (typeof value === "string") process.stdout.write(value);
+    } catch {}
+  ' "$CONFIG")"
+  TSGO_ROOT="$(node -e '
+    try {
+      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).root;
+      if (typeof value === "string") process.stdout.write(value);
+    } catch {}
+  ' "$CONFIG")"
+
+  case "$KIND" in
+    checkout)
+      if [ -z "$TSGO_ROOT" ] || [ ! -d "$TSGO_ROOT" ]; then
+        fail "configured typescript-go checkout does not exist: ${TSGO_ROOT:-<empty>}"
+      else
+        pass "typescript-go checkout: $TSGO_ROOT"
+        check_command go
+        [ -f "$TSGO_ROOT/built/local/tsgo" ] \
+          && pass "tsgo executable is built" \
+          || fail "tsgo executable is missing: $TSGO_ROOT/built/local/tsgo"
+        [ -f "$TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js" ] \
+          && pass "TypeScript API client is built" \
+          || fail "TypeScript API client is missing under $TSGO_ROOT"
+      fi
+      ;;
+    npm)
+      pass "toolchain mode: npm (consuming projects provide typescript@7)"
+      ;;
+    *)
+      fail "toolchain config is unreadable or has an unknown kind: $CONFIG"
+      ;;
+  esac
+fi
+
+printf '\nTT artifacts\n'
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*) TTC_EXE="ttc.exe" ;;
+  *) TTC_EXE="ttc" ;;
+esac
+
+TTC_BIN="$TT_ROOT/target/release/$TTC_EXE"
+if [ -x "$TTC_BIN" ] && "$TTC_BIN" -v > /dev/null 2>&1; then
+  pass "release compiler: target/release/$TTC_EXE"
+else
+  fail "release compiler is missing or not runnable: target/release/$TTC_EXE"
+fi
+
+if [ ! -f "$PKG_MARKER" ]; then
+  fail "local npm launcher marker is missing: $PKG_MARKER"
+elif ! have node; then
+  fail "cannot verify the local npm launcher marker without Node.js"
+else
+  MARKER_ROOT="$(node -e '
+    try {
+      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).root;
+      if (typeof value === "string") process.stdout.write(value);
+    } catch {}
+  ' "$PKG_MARKER")"
+  if [ "$MARKER_ROOT" = "$TT_ROOT" ]; then
+    pass "local npm launcher is linked to this checkout"
+  else
+    fail "local npm launcher points elsewhere: ${MARKER_ROOT:-<unreadable>}"
+  fi
+fi
+[ -f "$VSIX" ] \
+  && pass "VS Code package: .tt-dev/tt-language.vsix" \
+  || warn "VS Code package is missing: $VSIX"
+
+printf '\nSummary\n'
+if [ "$FAILURES" -eq 0 ]; then
+  printf 'ready: local TT development environment is configured'
+  [ "$WARNINGS" -gt 0 ] && printf ' (%s warning(s))' "$WARNINGS"
+  printf '\n'
+  exit 0
+fi
+
+printf 'not ready: %s error(s), %s warning(s)\n' "$FAILURES" "$WARNINGS" >&2
+printf '\nNext action\n' >&2
+if [ ! -f "$CONFIG" ]; then
+  printf '  Choose one setup mode; do not guess the toolchain:\n' >&2
+  printf '    ./scripts/setup --tsgo-root /path/to/typescript-go\n' >&2
+  printf '    ./scripts/setup --tsgo-npm\n' >&2
+else
+  printf '  After resolving prerequisite errors, rebuild the saved configuration with:\n' >&2
+  printf '    ./scripts/setup\n' >&2
+fi
+exit 1

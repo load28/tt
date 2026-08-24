@@ -1,7 +1,7 @@
 # 태스크 인덱스
 
 이 파일은 이 저장소 모든 작업의 **단일 진실 소스**입니다.
-모든 작업은 태스크 문서로 관리·기록되어야 합니다 — 규칙은 [`CLAUDE.md`](../../CLAUDE.md)의
+모든 작업은 태스크 문서로 관리·기록되어야 합니다 — 규칙은 [`AGENTS.md`](../../AGENTS.md)의
 "태스크 관리 규칙" 참조. 새 태스크는 [`TEMPLATE.md`](./TEMPLATE.md)로 만듭니다.
 
 ## 태스크 목록
@@ -218,7 +218,8 @@
 | TASK-208 | 설치 작업을 태스크 관리에서 제외 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-208](./TASK-208-exclude-installation-from-task-tracking.md) |
 | TASK-209 | output verify의 문자열 기반 tt 구문 추정 제거 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-209](./TASK-209-structured-unclaimed-tt-candidates.md) |
 | TASK-210 | 잔여 아키텍처·codegen 개선 묶음 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-210](./TASK-210-deferred-architecture-and-codegen-cleanup.md) |
+| TASK-211 | AI 에이전트의 로컬 개발 환경 탐색 표준화 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-211](./TASK-211-agent-local-setup-discovery.md) |
 
 ## 다음 태스크 번호
 
-**TASK-211**
+**TASK-212**

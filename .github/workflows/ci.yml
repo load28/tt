@@ -29,6 +29,20 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Check agent setup entrypoints
+        run: |
+          test "$(cat CLAUDE.md)" = "@AGENTS.md"
+          grep -Fq './scripts/doctor' AGENTS.md
+          bash -n scripts/doctor
+          before="$(git status --porcelain)"
+          if ./scripts/doctor; then
+            echo "doctor unexpectedly accepted an unconfigured checkout" >&2
+            exit 1
+          else
+            test "$?" -eq 1
+          fi
+          test "$(git status --porcelain)" = "$before"
+
       # `tsc` for the integration tests, which type-check and run ttc's
       # emitted TypeScript. Pinned to major 6 because major 7 *is* the
       # native compiler and takes a different command line; what ttc drives

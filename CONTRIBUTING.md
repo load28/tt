@@ -2,6 +2,13 @@
 
 ## 개발 환경
 
+저장소를 처음 열었거나 로컬 설치 상태가 확실하지 않으면 먼저 읽기 전용 진단을
+실행합니다. 이 명령은 파일, 빌드 산출물, 에디터 설치를 변경하지 않습니다.
+
+```sh
+./scripts/doctor
+```
+
 - Rust stable (MSRV: `Cargo.toml`의 `rust-version` 참조)
 - 선택: Node.js + `typescript` (`npm i -g typescript`) — 없으면 tsc/node 통합
   테스트가 자동으로 skip됩니다. 온전한 검증을 위해 설치를 권장합니다.
@@ -50,7 +57,7 @@ CLI와 동일한 toolchain을 씁니다. 이 계층 전체는 임시 구조입�
 
 ## 절대 불변 원칙
 
-어떤 변경도 이 두 계약을 깨뜨릴 수 없습니다 (자세한 내용은 [`CLAUDE.md`](./CLAUDE.md)):
+어떤 변경도 이 두 계약을 깨뜨릴 수 없습니다 (자세한 내용은 [`AGENTS.md`](./AGENTS.md)):
 
 1. 모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이다 (바이트 단위 통과).
 2. tt 수준 에러는 ttc가 직접 보고하고, 방출 코드는 타입 트릭 없는 순수
