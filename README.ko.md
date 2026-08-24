@@ -93,7 +93,7 @@ cargo install --git https://github.com/load28/tt
 
 나머지는 모두 평범한 TypeScript입니다. 기존 TypeScript의 타입, 모듈, 도구, 런타임 동작을 그대로 기반으로 사용합니다.
 
-언어를 만들게 된 배경은 [tt를 만들게 된 이유](./docs/why-tt.ko.md)에 적어 두었습니다.
+언어를 만들게 된 배경은 [tt를 만든 이유](./docs/why-tt.ko.md)에 적어 두었습니다.
 
 ## tt 개발하기
 
