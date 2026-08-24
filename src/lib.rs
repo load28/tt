@@ -90,7 +90,8 @@ pub use probe::{
 };
 pub use sidecar::{Sidecar, build_sidecar};
 pub use stdlib::{
-    STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE, StdImports, StdModule,
+    RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE,
+    StdImports, StdModule,
 };
 pub use val::{Mutation, ValBinding, ValFn, ValParam, ValPass, ValProbes, is_builtin_mutator_name};
 
@@ -290,6 +291,8 @@ pub struct ModuleScan {
     pub imports: Vec<TtImport>,
     /// Whether the file imports [`STD_SPECIFIER`] — see [`imports_std`].
     pub imports_std: bool,
+    /// Whether this file contains a claimed pipeline or `flow` expression.
+    pub uses_pipeline: bool,
 }
 
 /// Scans a source file's module-level facts in one parse — see
@@ -309,7 +312,10 @@ pub fn scan_module(source: &str) -> ModuleScan {
 /// [`scan_module`] under an explicit TypeScript surface kind.
 pub fn scan_module_with_kind(source: &str, source_kind: SourceKind) -> ModuleScan {
     let program = parser::parse_with_kind(source, source_kind);
-    let mut scan = ModuleScan::default();
+    let mut scan = ModuleScan {
+        uses_pipeline: program_uses_pipeline(&program),
+        ..ModuleScan::default()
+    };
     for segment in &program.segments {
         let ast::Segment::TtImport(decl) = segment else {
             continue;
@@ -329,6 +335,60 @@ pub fn scan_module_with_kind(source: &str, source_kind: SourceKind) -> ModuleSca
         }
     }
     scan
+}
+
+fn program_uses_pipeline(program: &ast::Program) -> bool {
+    program.segments.iter().any(|segment| match segment {
+        ast::Segment::Pipe(_) => true,
+        ast::Segment::Match(expr) => {
+            program_uses_pipeline(&expr.scrutinee)
+                || expr.arms.iter().any(|arm| {
+                    arm.guard
+                        .as_ref()
+                        .is_some_and(|guard| program_uses_pipeline(&guard.expr))
+                        || program_uses_pipeline(&arm.body)
+                })
+        }
+        ast::Segment::TupleMatch(expr) => {
+            expr.scrutinees
+                .iter()
+                .any(|(_, scrutinee)| program_uses_pipeline(scrutinee))
+                || expr.arms.iter().any(|arm| {
+                    arm.guard
+                        .as_ref()
+                        .is_some_and(|guard| program_uses_pipeline(&guard.expr))
+                        || program_uses_pipeline(&arm.body)
+                })
+        }
+        ast::Segment::Try(stmt) => program_uses_pipeline(&stmt.expr),
+        ast::Segment::LetElse(stmt) => {
+            program_uses_pipeline(&stmt.expr) || program_uses_pipeline(&stmt.else_body)
+        }
+        ast::Segment::IfLet(stmt) => if_let_uses_pipeline(stmt),
+        ast::Segment::Template(template) => template.chunks.iter().any(|chunk| match chunk {
+            ast::TemplateChunk::Raw(_) => false,
+            ast::TemplateChunk::Interp(body) => program_uses_pipeline(body),
+        }),
+        ast::Segment::ResultBlock(block) => {
+            block.items.iter().any(|item| match item {
+                ast::ResultItem::Stmts(body) => program_uses_pipeline(body),
+                ast::ResultItem::Bind(bind) => program_uses_pipeline(&bind.expr),
+            }) || program_uses_pipeline(&block.value)
+        }
+        ast::Segment::Verbatim(_)
+        | ast::Segment::Enum(_)
+        | ast::Segment::TtImport(_)
+        | ast::Segment::ValModifier(_) => false,
+    })
+}
+
+fn if_let_uses_pipeline(stmt: &ast::IfLetStmt) -> bool {
+    program_uses_pipeline(&stmt.expr)
+        || program_uses_pipeline(&stmt.body)
+        || stmt.else_part.as_ref().is_some_and(|part| match part {
+            ast::IfLetElse::Block(body) => program_uses_pipeline(body),
+            ast::IfLetElse::IfLet(next) => if_let_uses_pipeline(next),
+        })
 }
 
 /// A tt enum declaration with source positions — the symbol-interface
@@ -750,8 +810,9 @@ pub struct Options<'a> {
     /// Every other tt-level check runs either way: duplicate cases,
     /// misplaced wildcards, bad field types, `val`'s call-capability rule.
     pub defer_to_checker: bool,
-    /// Per-module rewrites for the standard-library package. Missing entries
-    /// leave their bare specifiers untouched for a bundler plugin to resolve.
+    /// Per-module rewrites for compiler-provided support modules. Missing
+    /// entries leave bare specifiers such as `@tt/runtime` untouched for a
+    /// bundler plugin to resolve.
     pub std_imports: StdImports<'a>,
 }
 
@@ -778,6 +839,9 @@ impl Default for Options<'_> {
 /// candidate construct that does not fully parse as tt syntax is passed
 /// through untouched rather than reported as an error.
 /// The output has no generated banner comment (that is added by the CLI).
+/// A pipeline that needs contextual application imports its helper from
+/// `@tt/runtime`; project builders materialize that module once, while a
+/// single-file adapter can replace its specifier through [`Options::std_imports`].
 ///
 /// # Errors
 ///

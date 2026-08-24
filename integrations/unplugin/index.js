@@ -60,6 +60,7 @@ const STD_MODULES = new Map([
   ["@tt/std", "types"],
   ["@tt/std/option", "option"],
   ["@tt/std/result", "result"],
+  ["@tt/runtime", "runtime"],
 ]);
 
 /** Virtual module id for the standard library, per working directory. */
@@ -179,8 +180,8 @@ export const unpluginFactory = (options = {}) => {
       // esbuild resolves and loads through its own filters, and its `load`
       // may only return JavaScript — so narrow the filters to our ids and
       // name the loader for the TypeScript ttc emits.
-      onResolveFilter: /(\.ttx?|^@tt\/std(?:\/(?:option|result))?$|\.\/(?:option|result)\.js$)/,
-      onLoadFilter: /(\.tt\.ts|\.ttx\.tsx|__tt_std__\/(?:types|option|result)\.ts)$/,
+      onResolveFilter: /(\.ttx?|^@tt\/(?:std(?:\/(?:option|result))?|runtime)$|\.\/(?:option|result)\.js$)/,
+      onLoadFilter: /(\.tt\.ts|\.ttx\.tsx|__tt_std__\/(?:types|option|result|runtime)\.ts)$/,
       loader: (_code, id) => (id.endsWith(TSX_SUFFIX) ? "tsx" : "ts"),
     },
   };

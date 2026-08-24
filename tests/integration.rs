@@ -56,10 +56,26 @@ fn write_std(dir: &std::path::Path) {
     }
 }
 
+fn options_with_runtime(specifier: &str) -> Options<'_> {
+    Options {
+        std_imports: ttc::StdImports {
+            runtime: Some(specifier),
+            ..ttc::StdImports::default()
+        },
+        ..Options::default()
+    }
+}
+
+fn write_runtime(dir: &std::path::Path) {
+    fs::write(dir.join("runtime.ts"), ttc::RUNTIME_SOURCE).unwrap();
+}
+
 /// Compile tt source and type-check the output with tsc. Returns (ok, tsc output).
 fn typecheck(src: &str) -> (bool, String) {
-    let code = compile(&as_module(src), &Options::default()).expect("tt compile failed");
+    let code =
+        compile(&as_module(src), &options_with_runtime("./runtime.js")).expect("tt compile failed");
     let dir = tmpdir();
+    write_runtime(&dir);
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
     let out = Command::new("tsc")
@@ -117,13 +133,14 @@ export const render = (state: State) => <main>{match (state) {
 
 /// Type-check code emitted despite recoverable tt diagnostics.
 fn typecheck_recovery(src: &str) -> (bool, String) {
-    let report = ttc::compile_report(&as_module(src), &Options::default());
+    let report = ttc::compile_report(&as_module(src), &options_with_runtime("./runtime.js"));
     assert!(!report.diagnostics.is_empty(), "expected a tt diagnostic");
     let code = report
         .emit
         .expect("recoverable diagnostics still emit")
         .code;
     let dir = tmpdir();
+    write_runtime(&dir);
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
     let out = Command::new("tsc")
@@ -143,7 +160,8 @@ fn typecheck_recovery(src: &str) -> (bool, String) {
 /// written under `tt/` and all files go through tsc (`--noEmit`).
 /// Returns (ok, tsc output + compiled source).
 fn typecheck_with_std(src: &str) -> (bool, String) {
-    let code = compile(&as_module(src), &Options::default()).expect("tt compile failed");
+    let code = compile(&as_module(src), &options_with_runtime("./tt/runtime.js"))
+        .expect("tt compile failed");
     let dir = tmpdir();
     write_std(&dir);
     fs::write(dir.join("main.ts"), &code).unwrap();
@@ -189,8 +207,10 @@ fn recoverable_codegen_errors_do_not_create_tsc_errors() {
 
 /// Compile tt source, emit JS with tsc, execute with node, return stdout lines.
 fn run(src: &str) -> Vec<String> {
-    let code = compile(&as_module(src), &Options::default()).expect("tt compile failed");
+    let code =
+        compile(&as_module(src), &options_with_runtime("./runtime.js")).expect("tt compile failed");
     let dir = tmpdir();
+    write_runtime(&dir);
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
     // the emitted .js contains `export {}` — run it as an ES module
@@ -308,7 +328,7 @@ fn a_block_arm_yields_the_same_value_whether_or_not_it_can_fall_out() {
 /// Compile a snippet that imports the standard library, emit JS for it and
 /// the std package with tsc, execute with node, return stdout lines.
 fn run_with_std(src: &str) -> Vec<String> {
-    let code = compile(src, &Options::default()).expect("tt compile failed");
+    let code = compile(src, &options_with_runtime("./tt/runtime.js")).expect("tt compile failed");
     let dir = tmpdir();
     write_std(&dir);
     fs::write(dir.join("main.ts"), &code).unwrap();
@@ -1890,7 +1910,7 @@ fn cli_build_emits_a_complete_tree_that_runs() {
             .replace("./notice.tt", "./notice.js")
             .replace("@tt/std/option", "./tt/option.js")
     );
-    for module in ttc::StdModule::ALL {
+    for module in ttc::StdModule::STANDARD {
         assert!(dir.join("build/tt").join(module.file_name()).exists());
     }
 
@@ -1971,7 +1991,7 @@ fn cli_types_leaves_nothing_but_the_sidecars() {
     assert!(dir.join(".tt-types/notice.tt.d.ts").exists());
     assert!(dir.join(".tt-types/notice.tt.d.ts.map").exists());
     assert!(dir.join(".tt-types/level.tt.d.ts").exists());
-    for module in ttc::StdModule::ALL {
+    for module in ttc::StdModule::STANDARD {
         assert!(
             dir.join(".tt-types/tt")
                 .join(module.file_name())
@@ -2080,7 +2100,7 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
     );
     assert!(dir.join(".tt-types/notice.tt.d.ts.map").exists());
     assert!(dir.join(".tt-types/level.tt.d.ts").exists());
-    for module in ttc::StdModule::ALL {
+    for module in ttc::StdModule::STANDARD {
         assert!(
             dir.join(".tt-types/tt")
                 .join(module.file_name())
@@ -2171,6 +2191,43 @@ fn pipeline_generic_user_functions_instantiate() {
         "const wrap = <T,>(v: T): T[] => [v];\nconst arr: number[][] = 3 |> wrap |> wrap;\n",
     );
     assert!(ok, "{out}");
+}
+
+#[test]
+fn pipeline_files_import_one_shared_runtime() {
+    require_toolchain!();
+    let dir = tmpdir();
+    let mut files = Vec::new();
+    for suffix in ["a", "b"] {
+        let source = format!(
+            "declare function input_{suffix}(): number;\n\
+             declare const step_{suffix}: (value: number) => number;\n\
+             const value_{suffix} = input_{suffix}() |> step_{suffix};\n\
+             const flow_{suffix} = flow |> step_{suffix} |> step_{suffix};\n"
+        );
+        let code =
+            compile(&source, &options_with_runtime("./runtime.js")).expect("tt compile failed");
+        assert!(!code.lines().any(|line| line.starts_with("function $tt_")));
+        assert!(!code.lines().any(|line| line.starts_with("var $tt_")));
+        assert!(code.contains("from \"./runtime.js\""));
+        let file = dir.join(format!("{suffix}.ts"));
+        fs::write(&file, code).unwrap();
+        files.push(file);
+    }
+    write_runtime(&dir);
+    files.push(dir.join("runtime.ts"));
+
+    let out = Command::new("tsc")
+        .args(&files)
+        .arg("--noEmit")
+        .args(TSC_FLAGS)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
 }
 
 #[test]

@@ -480,6 +480,28 @@ fn the_standard_library_enters_the_graph_as_a_module_of_the_project() {
 }
 
 #[test]
+fn the_pipeline_runtime_enters_the_typed_project_once() {
+    let root = require_emit!();
+    let dir = project(&[
+        (
+            "src/a.tt",
+            "declare const input: number;\ndeclare const step: (value: number) => string;\nexport const value = input |> step;\n",
+        ),
+        (
+            "src/b.tt",
+            "declare const input: number;\ndeclare const step: (value: number) => string;\nexport const value = input |> step;\n",
+        ),
+    ]);
+    let out = run(&dir, &root, &["--check-types", "src"]);
+    assert!(
+        out.status.success(),
+        "@tt/runtime has to resolve once for every pipeline module: {}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+    );
+}
+
+#[test]
 fn a_diagnostic_on_generated_code_is_restated_in_tts_words() {
     let root = require_tsgo!();
     // A plain TypeScript enum is not a tt enum, so matching on one lowers

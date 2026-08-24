@@ -39,7 +39,7 @@ import { Notice, render } from "./notice.tt";
 | 단계 | 하는 일 |
 |------|---------|
 | `resolveId` | `.tt`/`.ttx` 지정자를 파일 경로로 풀고 각각 `.ts`/`.tsx`를 덧붙인 가상 id를 돌려줍니다. `@tt/std`, `@tt/std/option`, `@tt/std/result`는 각각 가상 모듈 id로 바꿉니다 |
-| `load` | `ttc -p --rewrite-imports off`의 출력을 돌려줍니다. 표준 라이브러리는 모듈별 `ttc --emit-std types|option|result` 출력을 사용합니다 |
+| `load` | `ttc -p --rewrite-imports off`의 출력을 돌려줍니다. 표준 라이브러리와 파이프 런타임은 모듈별 `ttc --emit-std types|option|result|runtime` 출력을 사용합니다 |
 
 id에 `.ts` 또는 `.tsx`를 붙이는 이유는 **호스트의 TypeScript 처리에 그대로 태우기**
 위해서입니다. 덕분에 플러그인이 변환을 직접 하지 않습니다. 다만 esbuild의

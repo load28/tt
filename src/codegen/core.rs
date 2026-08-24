@@ -138,19 +138,22 @@ pub(crate) fn emit_with_map<'a>(
         used_flow: Cell::new(false),
     };
     let mut output = emitter.emit_body(core.root);
-    if emitter.used_pipe.get() {
+    let used_pipe = emitter.used_pipe.get();
+    let used_flow = emitter.used_flow.get();
+    if used_pipe || used_flow {
         if !output.ends_with_newline() {
             output.push_lit("\n");
         }
-        output.push_lit("function $tt_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }\n");
-    }
-    if emitter.used_flow.get() {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
-        }
-        output.push_lit(
-            "function $tt_fl<A extends unknown[], B, C>(f: (...a: A) => B, g: (b: B) => C): (...a: A) => C { return (...a: A) => g(f(...a)); }\n",
-        );
+        let names = match (used_pipe, used_flow) {
+            (true, true) => "$tt_ap, $tt_fl",
+            (true, false) => "$tt_ap",
+            (false, true) => "$tt_fl",
+            (false, false) => unreachable!(),
+        };
+        let runtime = std_imports
+            .get(crate::StdModule::Runtime)
+            .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
+        output.push_lit(format!("import {{ {names} }} from \"{runtime}\";\n"));
     }
     if emitter.used_expression_boundary.get() {
         if !output.ends_with_newline() {

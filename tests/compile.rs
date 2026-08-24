@@ -1651,6 +1651,7 @@ fn the_std_specifier_is_rewritten_when_the_caller_places_the_module() {
             types: Some("../tt/index.js"),
             option: Some("../tt/option.js"),
             result: Some("../tt/result.js"),
+            runtime: Some("../tt/runtime.js"),
         },
         ..Options::default()
     };
@@ -1921,6 +1922,10 @@ fn scan_module_answers_both_questions_in_one_pass() {
     assert!(scan.imports_std);
     assert_eq!(scan.imports.len(), 1);
     assert_eq!(scan.imports[0].specifier, "../b.tt");
+
+    let nested = ttc::scan_module("const value = `${input |> step}`;\n");
+    assert!(nested.uses_pipeline);
+    assert!(!ttc::scan_module("const text = 'input |> step';\n").uses_pipeline);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1963,7 +1968,7 @@ fn pipeline_emits_nested_apply_helper_calls() {
         out.contains("const y = $tt_ap($tt_ap(half(4), double), label);"),
         "{out}"
     );
-    assert!(out.contains("function $tt_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }"));
+    assert!(out.contains("import { $tt_ap } from \"@tt/runtime\";"));
 }
 
 #[test]
@@ -2142,11 +2147,10 @@ fn a_postfix_step_parenthesizes_only_a_receiver_that_needs_it() {
 }
 
 #[test]
-fn pipeline_helper_is_emitted_once_per_file() {
+fn pipeline_runtime_is_imported_once_per_file() {
     let out = ok("const a = x |> f;\nconst b = y |> g;\n");
-    assert_eq!(out.matches("function $tt_ap").count(), 1, "{out}");
-    // and appended at the end so original lines keep their positions
-    assert!(out.trim_end().ends_with("{ return f(v); }"), "{out}");
+    assert_eq!(out.matches("$tt_ap(").count(), 2, "{out}");
+    assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }
 
 #[test]
@@ -2288,10 +2292,7 @@ fn flow_emits_nested_composition_helper_calls() {
         out.contains("const f = $tt_fl($tt_fl(parse, double), label);"),
         "{out}"
     );
-    assert!(out.contains(
-        "function $tt_fl<A extends unknown[], B, C>(f: (...a: A) => B, g: (b: B) => C): \
-         (...a: A) => C { return (...a: A) => g(f(...a)); }"
-    ));
+    assert!(out.contains("import { $tt_fl } from \"@tt/runtime\";"));
     // a composition is not a value pipeline — no apply helper
     assert!(!out.contains("$tt_ap"), "{out}");
 }
@@ -2313,10 +2314,10 @@ fn flow_with_a_single_step_is_that_step_and_needs_no_helper() {
 }
 
 #[test]
-fn flow_helper_is_emitted_once_per_file() {
+fn flow_runtime_is_imported_once_per_file() {
     let out = ok("const a = flow |> f |> g;\nconst b = flow |> h |> i;\n");
-    assert_eq!(out.matches("function $tt_fl").count(), 1, "{out}");
-    assert!(out.trim_end().ends_with("g(f(...a)); }"), "{out}");
+    assert_eq!(out.matches("$tt_fl(").count(), 2, "{out}");
+    assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }
 
 #[test]

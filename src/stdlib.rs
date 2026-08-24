@@ -1,8 +1,9 @@
 //! The tt standard library as tree-shakeable TypeScript modules.
 //!
-//! tt itself adds no runtime — the standard library is three TypeScript
-//! modules that the CLI materializes as needed and bundler adapters expose
-//! virtually; imports otherwise pass through the compiler untouched,
+//! The standard library is three TypeScript modules, and pipeline lowering
+//! uses one compiler-owned runtime module. The CLI materializes only the
+//! modules a project needs and bundler adapters expose them virtually;
+//! user-written imports otherwise pass through the compiler untouched,
 //! so the passthrough contract is unaffected. The values inside are
 //! byte-identical to what the corresponding tt `enum`s would compile to
 //! (guarded by `tests/stdlib.rs`), which is what makes `match` — and the
@@ -20,6 +21,9 @@ pub const STD_OPTION_SOURCE: &str = include_str!("stdlib/option.ts");
 
 /// TypeScript source of the `@tt/std/result` runtime module.
 pub const STD_RESULT_SOURCE: &str = include_str!("stdlib/result.ts");
+
+/// TypeScript source of the compiler-owned pipeline runtime module.
+pub const RUNTIME_SOURCE: &str = include_str!("stdlib/runtime.ts");
 
 /// The bare specifier a `.tt` file uses for standard-library types.
 ///
@@ -40,11 +44,20 @@ pub enum StdModule {
     Option,
     /// `@tt/std/result`, the Result constructors and combinators.
     Result,
+    /// `@tt/runtime`, the compiler-owned pipeline helpers.
+    Runtime,
 }
 
 impl StdModule {
+    /// User-facing standard-library modules, excluding compiler runtime.
+    pub const STANDARD: [StdModule; 3] = [StdModule::Types, StdModule::Option, StdModule::Result];
     /// All modules in deterministic materialization order.
-    pub const ALL: [StdModule; 3] = [StdModule::Types, StdModule::Option, StdModule::Result];
+    pub const ALL: [StdModule; 4] = [
+        StdModule::Types,
+        StdModule::Option,
+        StdModule::Result,
+        StdModule::Runtime,
+    ];
 
     /// The bare module specifier users write.
     pub const fn specifier(self) -> &'static str {
@@ -52,6 +65,7 @@ impl StdModule {
             StdModule::Types => STD_SPECIFIER,
             StdModule::Option => "@tt/std/option",
             StdModule::Result => "@tt/std/result",
+            StdModule::Runtime => "@tt/runtime",
         }
     }
 
@@ -61,6 +75,7 @@ impl StdModule {
             StdModule::Types => "index.ts",
             StdModule::Option => "option.ts",
             StdModule::Result => "result.ts",
+            StdModule::Runtime => "runtime.ts",
         }
     }
 
@@ -70,6 +85,7 @@ impl StdModule {
             StdModule::Types => STD_TYPES_SOURCE,
             StdModule::Option => STD_OPTION_SOURCE,
             StdModule::Result => STD_RESULT_SOURCE,
+            StdModule::Runtime => RUNTIME_SOURCE,
         }
     }
 
@@ -80,7 +96,7 @@ impl StdModule {
     }
 }
 
-/// Per-module standard-library rewrites supplied by a build adapter.
+/// Per-module compiler support rewrites supplied by a build adapter.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdImports<'a> {
     /// Replacement for `@tt/std`.
@@ -89,6 +105,8 @@ pub struct StdImports<'a> {
     pub option: Option<&'a str>,
     /// Replacement for `@tt/std/result`.
     pub result: Option<&'a str>,
+    /// Replacement for the compiler-generated `@tt/runtime` import.
+    pub runtime: Option<&'a str>,
 }
 
 impl<'a> StdImports<'a> {
@@ -97,6 +115,7 @@ impl<'a> StdImports<'a> {
             StdModule::Types => self.types,
             StdModule::Option => self.option,
             StdModule::Result => self.result,
+            StdModule::Runtime => self.runtime,
         }
     }
 }

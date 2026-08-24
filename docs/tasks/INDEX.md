@@ -219,7 +219,8 @@
 | TASK-209 | output verify의 문자열 기반 tt 구문 추정 제거 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-209](./TASK-209-structured-unclaimed-tt-candidates.md) |
 | TASK-210 | 잔여 아키텍처·codegen 개선 묶음 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-210](./TASK-210-deferred-architecture-and-codegen-cleanup.md) |
 | TASK-211 | AI 에이전트의 로컬 개발 환경 탐색 표준화 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-211](./TASK-211-agent-local-setup-discovery.md) |
+| TASK-212 | 파이프 헬퍼의 전역 스크립트 충돌 제거 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-212](./TASK-212-pipeline-helper-global-collision.md) |
 
 ## 다음 태스크 번호
 
-**TASK-212**
+**TASK-213**

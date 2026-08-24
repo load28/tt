@@ -149,14 +149,14 @@ pub(crate) enum Segment {
 /// A structurally parsed tt pipeline expression: `head ("|>" step)+`.
 /// `|>` cannot occur anywhere in valid TypeScript (after a `|` an
 /// expression or type must follow, and `>` starts neither), so claiming it
-/// never affects the passthrough contract. Compiles to nested calls of a
-/// per-file two-argument apply helper (`$tt_ap`) — argument position gives
+/// never affects the passthrough contract. Compiles to nested calls of the
+/// project runtime's two-argument apply function (`$tt_ap`) — argument position gives
 /// each step contextual typing, which is what keeps curried combinator
 /// steps fully inferred by tsc; method steps chain as plain postfix text.
 ///
 /// With the head keyword `flow` the same step chain composes *functions*
 /// instead of flowing a value ([`PipeExpr::head`] is then `None`); it
-/// compiles to nested calls of the per-file composition helper (`$tt_fl`).
+/// compiles to nested calls of the project runtime's composition function (`$tt_fl`).
 #[derive(Debug)]
 pub(crate) struct PipeExpr {
     /// Raw span of the head expression — the `flow` keyword for a

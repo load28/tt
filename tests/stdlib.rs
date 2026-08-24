@@ -4,14 +4,27 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-use ttc::{Options, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_TYPES_SOURCE, compile};
+use ttc::{
+    Options, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_TYPES_SOURCE, compile,
+};
 
 #[test]
 fn std_modules_are_plain_typescript_and_pass_through() {
-    for source in [STD_TYPES_SOURCE, STD_OPTION_SOURCE, STD_RESULT_SOURCE] {
+    for source in [
+        STD_TYPES_SOURCE,
+        STD_OPTION_SOURCE,
+        STD_RESULT_SOURCE,
+        RUNTIME_SOURCE,
+    ] {
         let out = compile(source, &Options::default()).expect("std module failed to compile");
         assert_eq!(out, source);
     }
+}
+
+#[test]
+fn pipeline_runtime_exports_both_shared_helpers() {
+    assert!(RUNTIME_SOURCE.contains("export function $tt_ap"));
+    assert!(RUNTIME_SOURCE.contains("export function $tt_fl"));
 }
 
 #[test]

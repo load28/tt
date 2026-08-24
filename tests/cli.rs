@@ -67,6 +67,46 @@ fn handwritten_tsx_is_checked_in_tsx_mode_and_keeps_its_extension() {
     assert!(emitted.ends_with(text), "{emitted}");
 }
 
+#[test]
+fn a_project_writes_one_pipeline_runtime_and_imports_it() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    for name in ["a", "b"] {
+        fs::write(
+            source.join(format!("{name}.tt")),
+            format!(
+                "declare function input_{name}(): number;\n\
+                 declare const step_{name}: (value: number) => number;\n\
+                 export const value_{name} = input_{name}() |> step_{name};\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    let output = ttc(&[
+        "--no-banner",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("tt/runtime.ts").exists());
+    assert!(!out_dir.join("tt/option.ts").exists());
+    for name in ["a", "b"] {
+        let code = fs::read_to_string(out_dir.join(format!("{name}.ts"))).unwrap();
+        assert!(
+            code.contains("import { $tt_ap } from \"./tt/runtime.js\";"),
+            "{code}"
+        );
+    }
+}
+
 /// A small project: one shared module every other file imports (the shape
 /// that exercises the imported-declaration cache), plus a file that fails
 /// to compile so diagnostics are part of what must stay ordered.

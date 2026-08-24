@@ -35,6 +35,8 @@ pub struct ProjectedDocument {
     /// Whether the file imports any `@tt/std` entry — decides whether the
     /// standard-library package joins the project graph.
     pub(crate) imports_std: bool,
+    /// Whether lowering needs the compiler-owned pipeline runtime module.
+    pub(crate) uses_pipeline: bool,
     /// The literal-match exhaustiveness probes of this file.
     pub(crate) literal_probes: Vec<LiteralMatch>,
     /// The tag-match exhaustiveness probes of this file.
@@ -139,9 +141,11 @@ impl ProjectedDocument {
                 report.diagnostics,
             ));
         };
+        let scan = crate::scan_module_with_kind(&source, source_kind);
         Ok(ProjectedDocument {
             module_path: module_path_of(source_path),
-            imports_std: crate::scan_module_with_kind(&source, source_kind).imports_std,
+            imports_std: scan.imports_std,
+            uses_pipeline: scan.uses_pipeline,
             literal_probes: crate::literal_matches_with_kind(&source, source_kind),
             tag_probes: crate::tag_matches_with_kind(&source, source_kind),
             payload_probes: crate::payload_probes_with_kind(&source, source_kind),
@@ -181,7 +185,10 @@ pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
 /// specifier stays bare in the source and in every declaration emitted from
 /// it. Nothing is written to the user's `node_modules`.
 pub(crate) fn std_module_path(module: crate::StdModule) -> PathBuf {
-    Path::new("node_modules/@tt/std").join(module.file_name())
+    match module {
+        crate::StdModule::Runtime => PathBuf::from("node_modules/@tt/runtime/index.ts"),
+        _ => Path::new("node_modules/@tt/std").join(module.file_name()),
+    }
 }
 
 /// The path the compiler emits a lowered module's declarations to:
@@ -210,10 +217,17 @@ pub(crate) fn assemble(
     if files.iter().any(|f| f.imports_std) {
         query
             .modules
-            .extend(crate::StdModule::ALL.map(|module| Module {
+            .extend(crate::StdModule::STANDARD.map(|module| Module {
                 path: root.join(std_module_path(module)),
                 text: module.source().to_string(),
             }));
+    }
+    if files.iter().any(|f| f.uses_pipeline) {
+        let module = crate::StdModule::Runtime;
+        query.modules.push(Module {
+            path: root.join(std_module_path(module)),
+            text: module.source().to_string(),
+        });
     }
 
     for file in files {
