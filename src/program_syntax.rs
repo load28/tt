@@ -117,6 +117,39 @@ pub(crate) struct HostEvaluationStep {
     pub(crate) parent: SourceSpan,
     pub(crate) operation: HostEvaluationOperation,
     pub(crate) inputs: Vec<HostEvaluationInput>,
+    /// The structure of the conditional operation this step belongs to,
+    /// when [`HostEvaluationStep::operation`] is a
+    /// [`HostEvaluationOperation::Conditional`] — everything lowering needs
+    /// to restructure the *whole* operation rather than just its inputs.
+    pub(crate) conditional: Option<ConditionalFacts>,
+}
+
+/// The complete syntactic structure of one conditional operation, read off
+/// the SWC AST: the branch the tt value sits in, the branch the operation
+/// skips, and (for an optional call) the full argument list in evaluation
+/// order. This is what lets target lowering own the operation as one
+/// region instead of promoting an argument out of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConditionalFacts {
+    /// The span of the conditionally-evaluated branch containing the value.
+    pub(crate) branch: SourceSpan,
+    /// The other branch of a ternary — evaluated exactly when the value's
+    /// branch is not. `None` for logical operators (the operation's result
+    /// is then the condition's own value) and for optional calls (the
+    /// result is then `undefined`).
+    pub(crate) skipped: Option<SourceSpan>,
+    /// An optional call's arguments, in order. Empty for other operations.
+    pub(crate) operands: Vec<ConditionalOperand>,
+    /// An optional call's explicit type arguments, verbatim.
+    pub(crate) type_args: Option<SourceSpan>,
+}
+
+/// One argument of an optional call: the argument expression, and whether
+/// the call spreads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ConditionalOperand {
+    pub(crate) span: SourceSpan,
+    pub(crate) spread: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1140,7 +1173,8 @@ enum ProjectedProtocolFrame {
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,
         callee_receiver: Option<ProjectedSpan>,
-        arguments: Vec<ProjectedSpan>,
+        arguments: Vec<(ProjectedSpan, bool)>,
+        type_args: Option<ProjectedSpan>,
         optional: bool,
     },
     Member {
@@ -1151,7 +1185,7 @@ enum ProjectedProtocolFrame {
     Construct {
         parent: ProjectedSpan,
         callee: ProjectedSpan,
-        arguments: Vec<ProjectedSpan>,
+        arguments: Vec<(ProjectedSpan, bool)>,
     },
     TaggedTemplate {
         parent: ProjectedSpan,
@@ -1249,6 +1283,25 @@ fn push_computed_property(positions: &mut Vec<ProjectedSpan>, name: &PropName, s
     if let PropName::Computed(computed) = name {
         positions.push(projected_span(computed.expr.span(), source_start));
     }
+}
+
+/// The evaluation positions of a call's arguments: the argument
+/// *expression* spans (a spread's `...` stays with the call, so a capture
+/// of the position captures a value, not spread syntax), plus whether the
+/// call spreads each.
+fn argument_positions(
+    arguments: &[swc_ecma_ast::ExprOrSpread],
+    source_start: u32,
+) -> Vec<(ProjectedSpan, bool)> {
+    arguments
+        .iter()
+        .map(|argument| {
+            (
+                projected_span(argument.expr.span(), source_start),
+                argument.spread.is_some(),
+            )
+        })
+        .collect()
 }
 
 fn jsx_expression_span(expression: &JSXExpr, source_start: u32) -> Option<ProjectedSpan> {
@@ -1627,11 +1680,11 @@ impl VisitAstPath for ParentCollector {
             )),
             callee_mode,
             callee_receiver: callee_receiver.map(|span| projected_span(span, self.source_start)),
-            arguments: node
-                .args
-                .iter()
-                .map(|argument| projected_span(argument.span(), self.source_start))
-                .collect(),
+            arguments: argument_positions(&node.args, self.source_start),
+            type_args: node
+                .type_args
+                .as_ref()
+                .map(|args| projected_span(args.span(), self.source_start)),
             optional: false,
         });
         <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1700,11 +1753,11 @@ impl VisitAstPath for ParentCollector {
             )),
             callee_mode,
             callee_receiver: callee_receiver.map(|span| projected_span(span, self.source_start)),
-            arguments: node
-                .args
-                .iter()
-                .map(|argument| projected_span(argument.span(), self.source_start))
-                .collect(),
+            arguments: argument_positions(&node.args, self.source_start),
+            type_args: node
+                .type_args
+                .as_ref()
+                .map(|args| projected_span(args.span(), self.source_start)),
             optional: true,
         });
         <OptCall as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1738,10 +1791,9 @@ impl VisitAstPath for ParentCollector {
                 callee: projected_span(reference_value_span(&node.callee), self.source_start),
                 arguments: node
                     .args
-                    .iter()
-                    .flatten()
-                    .map(|argument| projected_span(argument.span(), self.source_start))
-                    .collect(),
+                    .as_deref()
+                    .map(|args| argument_positions(args, self.source_start))
+                    .unwrap_or_default(),
             });
         <NewExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -1875,11 +1927,20 @@ fn evaluation_protocol(
     Ok(HostEvaluationProtocol { steps })
 }
 
+/// The projected shape of one conditional operation, before span mapping.
+struct ProjectedConditionalFacts {
+    branch: ProjectedSpan,
+    skipped: Option<ProjectedSpan>,
+    operands: Vec<(ProjectedSpan, bool)>,
+    type_args: Option<ProjectedSpan>,
+}
+
 fn protocol_step(
     segments: &[ProjectionSourceSegment],
     value: ProjectedSpan,
     frame: &ProjectedProtocolFrame,
 ) -> Result<Option<HostEvaluationStep>, ProgramSyntaxError> {
+    let mut conditional: Option<ProjectedConditionalFacts> = None;
     let (parent, operation, inputs) = match frame {
         ProjectedProtocolFrame::Ordered {
             parent,
@@ -1931,6 +1992,14 @@ fn protocol_step(
                 }
                 _ => HostEvaluationOperation::Eager(EagerPosition::BinaryRight),
             };
+            if matches!(operation, HostEvaluationOperation::Conditional(_)) {
+                conditional = Some(ProjectedConditionalFacts {
+                    branch: *right,
+                    skipped: None,
+                    operands: Vec::new(),
+                    type_args: None,
+                });
+            }
             (
                 *parent,
                 operation,
@@ -1941,22 +2010,38 @@ fn protocol_step(
             parent,
             test,
             consequent,
-            ..
-        } if projected_contains(*consequent, value) => (
-            *parent,
-            HostEvaluationOperation::Conditional(ConditionalBranch::Consequent),
-            vec![(*test, EvaluationInputMode::Value, None)],
-        ),
+            alternate,
+        } if projected_contains(*consequent, value) => {
+            conditional = Some(ProjectedConditionalFacts {
+                branch: *consequent,
+                skipped: Some(*alternate),
+                operands: Vec::new(),
+                type_args: None,
+            });
+            (
+                *parent,
+                HostEvaluationOperation::Conditional(ConditionalBranch::Consequent),
+                vec![(*test, EvaluationInputMode::Value, None)],
+            )
+        }
         ProjectedProtocolFrame::Conditional {
             parent,
             test,
+            consequent,
             alternate,
-            ..
-        } if projected_contains(*alternate, value) => (
-            *parent,
-            HostEvaluationOperation::Conditional(ConditionalBranch::Alternate),
-            vec![(*test, EvaluationInputMode::Value, None)],
-        ),
+        } if projected_contains(*alternate, value) => {
+            conditional = Some(ProjectedConditionalFacts {
+                branch: *alternate,
+                skipped: Some(*consequent),
+                operands: Vec::new(),
+                type_args: None,
+            });
+            (
+                *parent,
+                HostEvaluationOperation::Conditional(ConditionalBranch::Alternate),
+                vec![(*test, EvaluationInputMode::Value, None)],
+            )
+        }
         ProjectedProtocolFrame::Call {
             parent,
             callee: Some(callee),
@@ -1977,15 +2062,24 @@ fn protocol_step(
             callee_mode,
             callee_receiver,
             arguments,
+            type_args,
             optional,
-            ..
         } => {
-            let Some(position) = child_index(arguments, value) else {
+            let Some(position) = arguments
+                .iter()
+                .position(|(argument, _)| projected_contains(*argument, value))
+            else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
             let operation = if *optional {
+                conditional = Some(ProjectedConditionalFacts {
+                    branch: arguments[position].0,
+                    skipped: None,
+                    operands: arguments.clone(),
+                    type_args: *type_args,
+                });
                 HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(index))
             } else {
                 HostEvaluationOperation::Eager(EagerPosition::CallArgument(index))
@@ -1997,8 +2091,7 @@ fn protocol_step(
                 .chain(
                     arguments[..position]
                         .iter()
-                        .copied()
-                        .map(|argument| (argument, EvaluationInputMode::Value, None)),
+                        .map(|(argument, _)| (*argument, EvaluationInputMode::Value, None)),
                 )
                 .collect();
             (*parent, operation, inputs)
@@ -2035,7 +2128,10 @@ fn protocol_step(
             callee,
             arguments,
         } => {
-            let Some(position) = child_index(arguments, value) else {
+            let Some(position) = arguments
+                .iter()
+                .position(|(argument, _)| projected_contains(*argument, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -2044,8 +2140,7 @@ fn protocol_step(
                 .chain(
                     arguments[..position]
                         .iter()
-                        .copied()
-                        .map(|argument| (argument, EvaluationInputMode::Value, None)),
+                        .map(|(argument, _)| (*argument, EvaluationInputMode::Value, None)),
                 )
                 .collect();
             (
@@ -2151,10 +2246,38 @@ fn protocol_step(
             })
         })
         .collect::<Result<Vec<_>, ProgramSyntaxError>>()?;
+    let conditional = conditional
+        .map(|facts| {
+            Ok(ConditionalFacts {
+                // The branch holds the tt value, so it has no contiguous
+                // source mapping; its bounds map endpoint-by-endpoint.
+                branch: map_evaluation_span(segments, facts.branch)?,
+                skipped: facts
+                    .skipped
+                    .map(|span| map_evaluation_span(segments, span))
+                    .transpose()?,
+                operands: facts
+                    .operands
+                    .into_iter()
+                    .map(|(span, spread)| {
+                        Ok(ConditionalOperand {
+                            span: map_evaluation_span(segments, span)?,
+                            spread,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, ProgramSyntaxError>>()?,
+                type_args: facts
+                    .type_args
+                    .map(|span| map_evaluation_span(segments, span))
+                    .transpose()?,
+            })
+        })
+        .transpose()?;
     Ok(Some(HostEvaluationStep {
         parent,
         operation,
         inputs,
+        conditional,
     }))
 }
 

@@ -297,6 +297,50 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   owner/Core root/operation/ValueId/ValueSlotId/BlockId, source span, origin
   chain을 모두 타입으로 담는다. 표시 문자열은 이 타입에서 파생될 뿐이다.
 
+### 결정 17: 조건부 operation은 전체가 하나의 region으로 lowering된다
+
+- **상황**: validator 단계를 세운 뒤 7.4 기준으로 재검증하자, 기존 statement
+  lowering이 `&&`/`||`/`??`/삼항/optional call 전부에서 지시가 금지한 패턴
+  ("값만 slot으로 승격하고 원래 조건 문법을 유지")이었음이 드러났다. 네 형태
+  모두 tsgo가 `T | undefined` 새 오류를 보고했고(계약 7 위반), optional call은
+  선행 인자를 nullish 여부와 무관하게 평가했다(평가 횟수 위반). spread 인자는
+  `ExprOrSpread.span()`을 그대로 capture해 `(...xs)`라는 잘못된 TypeScript를
+  만들었다.
+- **여섯 질문의 답**: ① 사실 계산 책임 — 조건 연산의 구조(활성 branch,
+  건너뛰는 branch, 전체 인자 목록, spread, type args)는 SWC 구문 사실이므로
+  ProgramSyntax가 `ConditionalFacts`로 계산한다. ② 구조적으로 같은 입력 —
+  활성 branch가 조건부로 평가되는 모든 TypeScript 연산: `&&`·`||`·`??`·삼항·
+  optional call(직접·member callee). ③ 이름 있는 타입 —
+  `HostEvaluationStep.conditional: Option<ConditionalFacts>`와 plan의
+  `PlannedConditionalOperation`. ④ 검증 — validate_order(조건부 region 밖
+  capture 금지 규칙은 그대로; op에 소비된 값은 region이 소유),
+  validate_reference(member callee는 receiver가 있어 `.call`로 보존될 때만),
+  그리고 타입 검사 테스트. ⑤ 회귀 — 각 형태의 tsgo 타입체크 + 단락 시 인자
+  미평가 runtime trace. ⑥ mutation — else-branch 대입을 제거하면 타입 테스트가,
+  선행 인자 capture를 검사 밖으로 옮기면 trace 테스트가 실패한다.
+- **검토한 대안**: (a) 조건부 step이 있는 값을 전부 boundary로 보낸다 —
+  의미는 맞지만 완료 기준 6·7(optional operation의 전체 CFG 표현,
+  불필요한 boundary 제거)을 포기한다. (b) 값 slot을 `let r: T | undefined`로
+  두고 소비 지점에 non-null 단언 — 타입 assertion으로 오류를 숨기는 금지
+  방식이다.
+- **선택과 근거**: 값의 schedule이 정확히 "가장 안쪽 step 하나가 Conditional"
+  이고 활성 branch가 값 자신(투명 wrapper 허용)일 때, 그 조건 연산 **전체**를
+  하나의 region으로 lowering한다: 연산의 parent span을 result slot으로
+  대체하고, region은 `조건/callee 평가 → (optional이면 nullish 검사) →
+  활성 branch에서 선행 인자 순서 평가·값 region·후행 인자 → 호출/값을
+  result에 기록 → 비활성 경로는 조건 값(논리), 건너뛴 branch(삼항),
+  `undefined`(optional call)를 result에 기록`으로 방출한다. 모든 경로가
+  result를 대입하므로 TypeScript가 `T | undefined`를 만들지 않고, 인자는
+  검사 안에서만 평가된다. member callee는 TypeScript 컴파일러 자신의
+  downlevel 방출과 같은 `receiver 한 번 평가 + callee.call(receiver, ...)`
+  로 this를 보존한다. 같은 parent를 공유하는 여러 tt 값(삼항 양쪽,
+  여러 인자)은 하나의 operation으로 묶인다. 이 형태로 구조화할 수 없는
+  조건 연산(중첩 조건, 사이에 낀 eager frame의 capture)은 이유 있는
+  `ExpressionBoundary`로 남는다 — "operation 전체를 구조화할 수 있을 때만
+  statement lowering을 선택한다"는 지시 그대로다. 아울러 호출·생성 인자의
+  protocol span을 `ExprOrSpread.span()`에서 표현식 span + spread 사실로
+  바꿔 spread capture가 표현식만 capture하고 `...`는 원 위치에 남긴다.
+
 ## 작업 내역
 
 - 2026-08-22: TASK-160을 등록하고 SWC whole-owner cutover를 시작했다.
@@ -452,6 +496,31 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
   출력 회귀 7건(compile.rs), 런타임 회귀 3건(integration.rs — 반복 평가,
   단락 시 인자 미평가, 좌우 순서). 전체 게이트(fmt/clippy/전 스위트 13개,
   tsgo 포함)가 통과했다.
+
+- 2026-08-24: 조건부 operation의 whole-owner lowering을 구현했다(결정 17).
+  ProgramSyntax가 조건 연산의 구조 사실(`ConditionalFacts` — 활성 branch,
+  건너뛰는 branch, optional call의 전체 인자 목록·spread·type args)을 SWC
+  AST에서 계산하고, Evaluation IR이 같은 parent를 공유하는 단일-step 조건
+  값들을 `PlannedConditionalOperation`(LogicalAnd/Or/Nullish/Ternary/
+  OptionalCall)으로 묶는다. target은 연산의 parent span 전체를 result slot으로
+  대체하고, region이 조건/callee를 한 번 평가한 뒤 모든 경로에서 result를
+  대입한다 — optional call의 인자는 nullish 검사 안에서만 평가되고, member
+  callee는 `callee.call(receiver, ...)`로 this를 보존한다(tsc downlevel과
+  동일한 형태). 구조화 불가능한 조건 연산(중첩 조건, 사이에 낀 capture,
+  member callee + 명시적 type args)은
+  `ExpressionBoundary(ConditionalOperationNotStructurable)`로 남는다.
+- 2026-08-24: 호출·생성 인자의 protocol 위치를 `ExprOrSpread.span()`에서
+  인자 표현식 span + spread 사실로 바꿨다. spread 인자의 capture가
+  `(...xs)`라는 잘못된 TypeScript 대신 표현식만 capture하고 `...`는
+  호출 위치에 남는다.
+- 2026-08-24: 이 전환으로 감사에서 확인된 계약 7 위반 네 건(&&/||/??/삼항의
+  `T | undefined` 새 타입 오류), optional call 선행 인자의 무조건 평가,
+  spread capture 파싱 오류가 모두 해소됐다. tsgo 타입체크 통과를
+  integration 테스트(`conditional_operations_keep_their_types_without_undefined`)
+  로, 단락 시 인자 미평가와 this·검사 순서를 runtime trace 테스트 2건으로,
+  출력 형태를 compile 테스트 4건으로 고정했다. 기존 snapshot 1건
+  (member optional call의 boundary)을 새 계약(whole operation)으로 갱신했다.
+  전체 게이트 13개 스위트가 통과했다.
 
 ## 이슈 및 해결
 

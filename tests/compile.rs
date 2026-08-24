@@ -299,9 +299,17 @@ fn one_owner_schedules_multiple_tt_values_without_expression_boundaries() {
 
 #[test]
 fn reference_protocol_preserves_optional_calls_and_structures_tagged_templates() {
+    // TASK-160 결정 17: a member optional call is one whole operation — the
+    // receiver and callee evaluate once, the argument only past the nullish
+    // check, and the call goes through the receiver.
     let optional = ok("enum E { A(value: number), B }\n\
          const value = receiver.method?.(match (input) { A(value) => value, B => 0 });\n");
-    assert!(optional.contains("$tt_expr(() =>"), "{optional}");
+    assert!(!optional.contains("$tt_expr"), "{optional}");
+    assert!(optional.contains("!= null) {"), "{optional}");
+    assert!(optional.contains(".call("), "{optional}");
+    let check = optional.find("!= null").expect("nullish check");
+    let lowering = optional.find("switch (").expect("value region");
+    assert!(check < lowering, "{optional}");
 
     let tagged = ok("enum E { A(value: number), B }\n\
          const value = receiver.tag`value:${match (input) { A(value) => value, B => 0 }}`;\n");
@@ -4624,4 +4632,50 @@ fn an_initializer_inside_a_callback_still_lowers_to_statements() {
     );
     assert!(out.contains("let $tt_v0;"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
+}
+
+#[test]
+fn a_conditional_operation_lowers_as_one_region() {
+    // TASK-160 결정 17: every path of the operation assigns the result
+    // slot, so TypeScript keeps the operation's type without `undefined`.
+    let out = ok(
+        "declare const flag: boolean;\nexport const a = flag && match (1) { 1 => 1, _ => 0 };\n",
+    );
+    assert!(out.contains("if ($tt_v1) {"), "{out}");
+    assert!(out.contains("$tt_v2 = $tt_v1;"), "{out}");
+    assert!(out.contains("export const a = $tt_v2;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(!out.contains("&&"), "{out}");
+}
+
+#[test]
+fn a_ternary_with_one_tt_branch_relocates_the_other_branch() {
+    let out = ok(
+        "declare const flag: boolean;\nexport const pick = flag ? match (1) { 1 => 1, _ => 0 } : 9;\n",
+    );
+    assert!(out.contains("} else {"), "{out}");
+    assert!(out.contains("= 9;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(!out.contains("?"), "{out}");
+}
+
+#[test]
+fn an_optional_call_evaluates_arguments_only_past_its_check() {
+    let out = ok(
+        "declare const f: ((v: number, w: number) => number) | undefined;\ndeclare function pre(): number;\nexport const r = f?.(pre(), match (1) { 1 => 1, _ => 0 });\n",
+    );
+    let check = out.find("!= null) {").expect("nullish check");
+    let prior = out.find("(pre())").expect("prior argument capture");
+    assert!(check < prior, "{out}");
+    assert!(out.contains("= undefined;"), "{out}");
+    assert!(!out.contains("?."), "{out}");
+}
+
+#[test]
+fn a_spread_argument_capture_takes_the_expression_not_the_dots() {
+    let out = ok(
+        "declare function sum(...xs: number[]): number;\ndeclare const rest: number[];\nexport const r = sum(...rest, match (1) { 1 => 3, _ => 0 });\n",
+    );
+    assert!(out.contains("= (rest);"), "{out}");
+    assert!(out.contains("(...$tt_v"), "{out}");
 }

@@ -2881,3 +2881,63 @@ console.log(JSON.stringify(trace));
 "#);
     assert_eq!(lines, ["11 22", "[1,2]"]);
 }
+
+#[test]
+fn conditional_operations_keep_their_types_without_undefined() {
+    if !have("tsc") {
+        return;
+    }
+    // TASK-160 결정 17: promoting only the value used to widen every
+    // conditional operation's type with `undefined`.
+    let (ok, out) = typecheck(
+        r#"
+declare const flag: boolean;
+declare const maybe: number | undefined;
+export const a: number | boolean = flag && match (1) { 1 => 1, _ => 0 };
+export const b: number | boolean = flag || match (1) { 1 => 2, _ => 0 };
+export const c: number = maybe ?? match (1) { 1 => 3, _ => 0 };
+export const d: number = flag ? match (1) { 1 => 4, _ => 0 } : 9;
+declare const f: ((v: number) => number) | undefined;
+export const e: number | undefined = f?.(match (1) { 1 => 5, _ => 0 });
+declare const host: { g?: (v: number) => number };
+export const g: number | undefined = host.g?.(match (1) { 1 => 6, _ => 0 });
+"#,
+    );
+    assert!(ok, "{out}");
+}
+
+#[test]
+fn an_optional_call_operation_preserves_this_check_order_and_short_circuit() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    let lines = run(r#"
+const trace: string[] = [];
+const live = {
+  base: 7,
+  m(v: number): number { trace.push("call:" + (this === live)); return this.base + v; },
+};
+const dead: { m?: (v: number) => number } = {};
+function arg(tag: string): number { trace.push(tag); return 1; }
+const hit = live.m?.(match (arg("live")) { 1 => 1, _ => 0 });
+const miss = dead.m?.(match (arg("dead")) { 1 => 1, _ => 0 });
+console.log(JSON.stringify(trace), hit, miss);
+"#);
+    assert_eq!(lines, ["[\"live\",\"call:true\"] 8 undefined"]);
+}
+
+#[test]
+fn a_logical_operation_returns_the_condition_value_when_it_short_circuits() {
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    let lines = run(r#"
+const zero = 0 as number;
+const empty = "" as string;
+const a = zero && match (1) { 1 => 1, _ => 0 };
+const b = empty || match (1) { 1 => 2, _ => 0 };
+const c = (zero as number | null) ?? match (1) { 1 => 3, _ => 0 };
+console.log(a, JSON.stringify(b), c);
+"#);
+    assert_eq!(lines, ["0 2 0"]);
+}
