@@ -821,3 +821,165 @@ fn a_missing_backend_still_reports_tt_diagnostics() {
     );
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn a_build_writes_no_source_map_unless_it_is_asked_for() {
+    // TASK-200: emitting a map appends a `sourceMappingURL` line, and a
+    // hand-written `.ts` passes through byte for byte by contract — so the
+    // default has to be off.
+    let dir = tmpdir();
+    let source = dir.join("a.tt");
+    let out_dir = dir.join("out");
+    fs::write(
+        &source,
+        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+    )
+    .unwrap();
+    let out = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        "--no-banner",
+        source.to_str().unwrap(),
+    ]);
+    assert!(out.status.success(), "{out:?}");
+    let code = fs::read_to_string(out_dir.join("a.ts")).unwrap();
+    assert!(!code.contains("sourceMappingURL"), "{code}");
+    assert!(!out_dir.join("a.ts.map").exists());
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_source_map_file_lands_beside_its_output_and_names_the_tt_source() {
+    let dir = tmpdir();
+    let src_dir = dir.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let source = src_dir.join("a.tt");
+    let out_dir = dir.join("out");
+    fs::write(
+        &source,
+        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+    )
+    .unwrap();
+    let out = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        "--source-map",
+        "file",
+        "--no-banner",
+        source.to_str().unwrap(),
+    ]);
+    assert!(out.status.success(), "{out:?}");
+    let code = fs::read_to_string(out_dir.join("a.ts")).unwrap();
+    assert!(code.ends_with("//# sourceMappingURL=a.ts.map\n"), "{code}");
+    let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
+    assert!(map.contains("\"version\":3"), "{map}");
+    assert!(map.contains("\"file\":\"a.ts\""), "{map}");
+    // The map sits in `out/`, the source in `src/`; the name it records has
+    // to resolve from the map's own directory even on a first build, when
+    // `out/` did not exist while the map was being built.
+    assert!(map.contains("\"sources\":[\"../src/a.tt\"]"), "{map}");
+    assert!(map.contains("\"sourcesContent\""), "{map}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn an_inline_source_map_travels_with_printed_output() {
+    let dir = tmpdir();
+    let source = dir.join("a.tt");
+    fs::write(
+        &source,
+        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+    )
+    .unwrap();
+    let out = ttc(&[
+        "-p",
+        "--no-banner",
+        "--source-map",
+        "inline",
+        source.to_str().unwrap(),
+    ]);
+    assert!(out.status.success(), "{out:?}");
+    let code = String::from_utf8(out.stdout).unwrap();
+    let marker = "//# sourceMappingURL=data:application/json;charset=utf-8;base64,";
+    let at = code.find(marker).expect("inline map");
+    let encoded = code[at + marker.len()..].trim_end();
+    let json = String::from_utf8(base64_decode(encoded)).expect("utf-8 map");
+    assert!(json.contains("\"version\":3"), "{json}");
+    assert!(json.contains("a.tt"), "{json}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// Minimal Base64 decoder for the inline-map test — the test decodes what
+/// the compiler encoded rather than comparing encoded text.
+fn base64_decode(text: &str) -> Vec<u8> {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut bits = 0u32;
+    let mut count = 0u32;
+    let mut out = Vec::new();
+    for byte in text.bytes().filter(|b| *b != b'=') {
+        let value = ALPHABET
+            .iter()
+            .position(|c| *c == byte)
+            .unwrap_or_else(|| panic!("not base64: {byte}")) as u32;
+        bits = (bits << 6) | value;
+        count += 6;
+        if count >= 8 {
+            count -= 8;
+            out.push((bits >> count) as u8);
+        }
+    }
+    out
+}
+
+#[test]
+fn a_pass_through_file_keeps_its_bytes_even_when_maps_are_on() {
+    // Invariant 1: a valid `.ts` is copied byte for byte. There is no
+    // translation for a map to describe, so none is written.
+    let dir = tmpdir();
+    let source = dir.join("plain.ts");
+    let out_dir = dir.join("out");
+    let text = "export const x: number = 1;\n";
+    fs::write(&source, text).unwrap();
+    let out = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        "--source-map",
+        "file",
+        "--no-banner",
+        source.to_str().unwrap(),
+    ]);
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(fs::read_to_string(out_dir.join("plain.ts")).unwrap(), text);
+    assert!(!out_dir.join("plain.ts.map").exists());
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_banner_shifts_the_map_so_positions_still_line_up() {
+    let dir = tmpdir();
+    let source = dir.join("a.tt");
+    let out_dir = dir.join("out");
+    fs::write(
+        &source,
+        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+    )
+    .unwrap();
+    let with_banner = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        "--source-map",
+        "file",
+        source.to_str().unwrap(),
+    ]);
+    assert!(with_banner.status.success(), "{with_banner:?}");
+    let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
+    let mappings = map
+        .split("\"mappings\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("mappings");
+    // The banner is one generated line with nothing behind it.
+    assert!(mappings.starts_with(';'), "{mappings}");
+    assert!(!mappings.starts_with(";;"), "{mappings}");
+    fs::remove_dir_all(&dir).ok();
+}

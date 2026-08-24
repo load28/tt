@@ -26,6 +26,7 @@ use std::time::{Duration, SystemTime};
 mod server;
 
 use ttc::engine::collect_sources;
+use ttc::source_map::SourceMapRequest;
 use ttc::{
     EnumSymbol, ExternEnum, ImportRewrite, ModuleScan, Options, StdImports, StdModule, TtImport,
     TtImportNames, compile_report,
@@ -72,6 +73,11 @@ Tooling options (bundler plugins, editors):
   --emit-std <module>   print one std module: types, option, or result
   --no-banner           omit the \"generated\" banner comment
   --no-verify           skip swc validation of types and generated output
+  --source-map <off|file|inline>
+                        emit a source map for each compiled file so a stack
+                        trace and a debugger point at the .tt source:
+                        file = <output>.map beside it (default: off),
+                        inline = a data: URL in the output itself
   --rewrite-imports <js|ts|off>
                         how relative .tt/.ttx specifiers are emitted:
                         js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
@@ -962,6 +968,7 @@ fn main() -> ExitCode {
     let mut server = false;
     let mut node: Option<PathBuf> = None;
     let mut rewrite_imports = ImportRewrite::default();
+    let mut source_map = SourceMapMode::default();
     let mut jobs_limit: Option<usize> = None;
 
     let mut it = argv.iter();
@@ -1045,6 +1052,19 @@ fn main() -> ExitCode {
                 Some(path) => node = Some(PathBuf::from(path)),
                 None => {
                     eprintln!("ttc: --node requires a path to the node binary");
+                    return ExitCode::FAILURE;
+                }
+            },
+            "--source-map" => match it.next().map(String::as_str) {
+                Some("off") => source_map = SourceMapMode::Off,
+                Some("file") => source_map = SourceMapMode::File,
+                Some("inline") => source_map = SourceMapMode::Inline,
+                Some(other) => {
+                    eprintln!("ttc: --source-map expects off, file, or inline (got {other})");
+                    return ExitCode::FAILURE;
+                }
+                None => {
+                    eprintln!("ttc: --source-map requires a value (off, file, or inline)");
                     return ExitCode::FAILURE;
                 }
             },
@@ -1212,6 +1232,7 @@ fn main() -> ExitCode {
         check,
         verify,
         rewrite_imports,
+        source_map,
         out_dir: out_dir.clone(),
         jobs: jobs_limit,
     };
@@ -1228,12 +1249,31 @@ fn main() -> ExitCode {
 }
 
 /// Everything the compile step needs beyond the file list.
+/// `--source-map`: whether the build writes a Source Map v3 for each
+/// compiled file, and where it goes.
+///
+/// The default is [`SourceMapMode::Off`]. Emitting a map appends a
+/// `//# sourceMappingURL=` line to the output, and a hand-written `.ts`
+/// passes through byte for byte by contract — so a map is something a
+/// build asks for, never something it gets by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum SourceMapMode {
+    #[default]
+    Off,
+    /// A `<output>.map` beside the output, named by a relative URL.
+    File,
+    /// A `data:` URL carrying the map, so the output is self-contained —
+    /// what a bundler plugin reading `ttc -p` needs.
+    Inline,
+}
+
 struct BuildOptions {
     banner: bool,
     print: bool,
     check: bool,
     verify: bool,
     rewrite_imports: ImportRewrite,
+    source_map: SourceMapMode,
     /// Output root, when `-o` was given — also where the standard library
     /// module is written if an input imports it.
     out_dir: Option<PathBuf>,
@@ -1515,18 +1555,36 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 out.failed = true;
                 return out;
             }
-            let mut code = match report.emit {
-                Some(emit) => emit.code,
-                None => {
-                    // Unreachable in practice: emission is only withheld for
-                    // an error-severity diagnostic. Stay total.
-                    out.failed = true;
-                    return out;
-                }
+            let Some(emit) = report.emit else {
+                // Unreachable in practice: emission is only withheld for
+                // an error-severity diagnostic. Stay total.
+                out.failed = true;
+                return out;
             };
+            let mut code = emit.code.clone();
             if opts.banner {
                 let base = job.file.file_name().unwrap().to_string_lossy();
                 code = format!("// @generated from {base} by ttc — do not edit directly.\n{code}");
+            }
+            // A map describes a translation. A hand-written `.ts` is not
+            // translated — it passes through byte for byte by contract — so
+            // there is nothing for a map to say about it, and appending a
+            // `sourceMappingURL` line would be the one thing that contract
+            // forbids. Only the surfaces ttc compiles get one.
+            //
+            // The map is built against the emission's own offsets, so the
+            // banner is declared as the lines it prepends rather than
+            // measured back out of the text.
+            let map = match opts.source_map {
+                SourceMapMode::Off => None,
+                _ if ttc::SourceKind::from_tt_path(&job.file).is_none() => None,
+                mode => Some(source_map_for(job, &emit, &loaded.source, opts, mode)),
+            };
+            if let Some(rendered) = &map {
+                if !code.ends_with('\n') {
+                    code.push('\n');
+                }
+                code.push_str(&rendered.comment);
             }
             if opts.print || (!opts.check && contested(job)) {
                 out.pending = Some(code);
@@ -1534,6 +1592,14 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             }
             if !opts.check {
                 if let Err(e) = write_output(&job.out_path, &code) {
+                    out.messages.push(e);
+                    out.failed = true;
+                    return out;
+                }
+                if let Some(rendered) = &map
+                    && let Some(document) = &rendered.document
+                    && let Err(e) = write_output(&map_path(&job.out_path), document)
+                {
                     out.messages.push(e);
                     out.failed = true;
                     return out;
@@ -1573,6 +1639,118 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
 
 /// Writes one compiled output, creating its directory. The error is already
 /// formatted as a diagnostic line.
+/// A built map, ready to attach: the `//# sourceMappingURL=` line the
+/// output ends with, and the document to write beside it (`None` when the
+/// comment carries the map itself).
+struct RenderedSourceMap {
+    comment: String,
+    document: Option<String>,
+}
+
+/// The map file's path: the output's, with `.map` appended — which is what
+/// the relative URL in the comment names.
+fn map_path(out_path: &Path) -> PathBuf {
+    let mut name = out_path.as_os_str().to_os_string();
+    name.push(".map");
+    PathBuf::from(name)
+}
+
+/// Builds one file's source map.
+///
+/// The map names the `.tt` source relative to the map file, so a debugger
+/// resolves it the way it resolves any map beside its output; the source
+/// text is embedded as well, so a consumer that cannot reach the path (a
+/// bundle, a `data:` URL) still shows the original.
+fn source_map_for(
+    job: &Job,
+    emit: &ttc::MappedEmit,
+    source: &str,
+    opts: &BuildOptions,
+    mode: SourceMapMode,
+) -> RenderedSourceMap {
+    let out_name = job
+        .out_path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned());
+    let map_file = map_path(&job.out_path);
+    let source_name = relative_to(&job.file, map_file.parent().unwrap_or(Path::new(".")));
+    let map = emit.source_map(
+        source,
+        &SourceMapRequest {
+            file: out_name.as_deref(),
+            source: &source_name,
+            embed_source: true,
+            generated_line_offset: usize::from(opts.banner),
+        },
+    );
+    match mode {
+        SourceMapMode::Inline | SourceMapMode::Off => RenderedSourceMap {
+            comment: ttc::source_map::SourceMap::url_comment(&map.to_data_url()),
+            document: None,
+        },
+        SourceMapMode::File => RenderedSourceMap {
+            comment: ttc::source_map::SourceMap::url_comment(&format!(
+                "{}.map",
+                out_name.as_deref().unwrap_or("output")
+            )),
+            document: Some(map.to_json()),
+        },
+    }
+}
+
+/// `path` as seen from the directory `base`, as a `/`-separated URL — how
+/// a map beside its output names its source.
+///
+/// The answer is computed from the paths themselves, never from the
+/// filesystem: the output directory usually does not exist yet when the map
+/// is built, and a map whose `sources` depended on that would name the file
+/// correctly or incorrectly depending on whether this is a first build.
+fn relative_to(path: &Path, base: &Path) -> String {
+    let path = lexical_absolute(path);
+    let base = lexical_absolute(base);
+    let shared = path
+        .iter()
+        .zip(base.iter())
+        .take_while(|(left, right)| left == right)
+        .count();
+    let mut out = String::new();
+    for _ in 0..base.len() - shared {
+        out.push_str("../");
+    }
+    out.push_str(&path[shared..].join("/"));
+    if out.is_empty() { path.join("/") } else { out }
+}
+
+/// A path's components against the current directory, with `.` and `..`
+/// folded away. Purely lexical — it neither reads the filesystem nor
+/// resolves symlinks, which is the model a source map's `sources` uses.
+fn lexical_absolute(path: &Path) -> Vec<String> {
+    let mut parts: Vec<String> = Vec::new();
+    let rooted = path.is_absolute();
+    let prefix = if rooted {
+        Vec::new()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_default()
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect()
+    };
+    for component in prefix.into_iter().chain(
+        path.components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+    ) {
+        match component.as_str() {
+            "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(component),
+        }
+    }
+    parts
+}
+
 fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
     if let Some(parent) = out_path.parent()
         && let Err(e) = fs::create_dir_all(parent)

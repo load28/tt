@@ -1,9 +1,9 @@
 # TASK-160: SWC whole-owner 기반 RL→TS 최적 lowering
 
-- **상태**: 진행 중
+- **상태**: 완료
 - **시작일**: 2026-08-22
-- **완료일**: —
-- **커밋**: —
+- **완료일**: 2026-08-24
+- **커밋**: 02a279a, 2f76582, 1e03992, 1dbdc2b, a644a7c, d2dbe6b
 
 ## 목적
 
@@ -20,6 +20,76 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
   불필요한 wrapper/helper/temporary 제거 validator
 - 제외: 사용자 TypeScript가 원래 작성한 IIFE 변경, 출력 포매팅 전면 변경,
   RL 언어 표면 변경
+
+## 2026-08-24 감사 — 남은 아키텍처의 현재 상태
+
+이 절은 TASK-198/TASK-199가 끝난 `c5f3e25` 기준으로 TASK-160의 남은 범위를
+코드에서 다시 확인한 결과다. 조사 대상은 `AGENTS.md`,
+`docs/design/compiler-architecture.md`, `docs/design/lowered-ir.md`,
+`docs/design/program-lowering.md`, TASK-198/199 문서,
+`src/program_syntax.rs`, `src/evaluation_ir.rs`, `src/core_ir/`,
+`src/codegen/core.rs`, `src/codegen/rope.rs`, `src/verify.rs`,
+그리고 compile/integration/native/emit-map 테스트다.
+
+### A. 문서에만 있고 코드에는 없는 계약
+
+`program-lowering.md` §11이 요구하는 여덟 validator 중 실제로 실행되는 것은
+넷뿐이다.
+
+| validator | 상태 |
+|---|---|
+| `validate_projection` | `ProjectionBuilder`가 segment 표를 만들고 span 왕복은 `source_span_for_projection`이 보장 — 사실상 존재 |
+| `validate_program_syntax` | `ProgramSyntax::validate` — 존재 (span 범위·parent 유무·owner 표) |
+| `validate_eval` | `EvaluationFile::validate` — 존재 (종료·도달·결과 정의) |
+| `validate_order` | **없음** |
+| `validate_reference` | **없음** |
+| `validate_origin` | `TargetFile::validate`가 일부 검사하지만 `debug_assert!`로만 실행 — release 경로에서는 아무것도 검증하지 않는다 |
+| `validate_source_preservation` | **없음** |
+| `verify_output` | `verify.rs::verify_output` — 존재 (`--no-verify`로 생략 가능) |
+
+`Effects`(§9)는 타입도 사용처도 없다. 효과 기반 최적화 순서(§9)도 구현되지
+않았다.
+
+### B. 암묵적 fallback으로 남은 경로
+
+`EvaluationOwner`가 target capability를 고른다는 결정 3·11과 달리, 실제
+capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
+(`src/codegen/core.rs`). `can_structure_value_expr`,
+`compose_schedule_is_structurable`, `schedule.steps().is_empty()`,
+`frequency == Once` 같은 술어가 거기서 host 의미를 다시 판단하고, 조건에
+걸리지 않으면 값은 조용히 `emit_expr` → `$tt_expr` 경계로 떨어진다. 이는
+명시적인 capability가 아니라 이름 없는 fallback이고, 불변 계약 8
+("codegen은 의미를 새로 판단하지 않는다")을 위반한다. `LoweringPlan`에는
+"이 값은 왜 expression boundary인가"를 표현하는 타입이 없다.
+
+### C. 동일한 사실을 여러 계층이 중복 계산하는 부분
+
+- `can_structure_value_expr`(codegen)는 Core 모양에 대한 술어인데 codegen이
+  소유한다. Evaluation IR은 같은 질문을 하지 않고 codegen만 한다.
+- `EvaluationContext.frequency`는 `EvaluationOwner`(함수/모듈) 기준으로
+  계산되는데, 실제 prelude가 삽입되는 곳은 `HostOwner`(문장)다. 두 기준이
+  다른데 하나만 계산한다 — 아래 이슈 14의 원인이다.
+
+### D. 조사 중 확인한 실제 결함
+
+감사는 문서 대조에 그치지 않고, 위 구조적 결함이 실제 출력에서 관측되는지를
+`cargo run -- -p --no-banner <file>`로 확인했다. 세 건 모두 재현된다.
+
+1. **loop header의 값이 loop 밖으로 hoist된다** (이슈 14).
+2. **conditional region 안에서 capture한 slot이 region 밖에서 읽힌다**
+   (이슈 15) — 생성 TypeScript가 컴파일되지 않는다.
+3. **capture span이 tt 값 span과 겹친다** (이슈 16) — 생성 TypeScript가
+   파싱되지 않고 원본 바이트가 중복·누락된다.
+
+셋 다 "validator가 없어서 잡히지 않은 계약 위반"이며, 이번 작업의 validator
+설계는 이 세 계약을 먼저 이름 있는 타입으로 만드는 데서 출발한다.
+
+### E. 테스트는 있지만 compiler validator가 없는 불변식
+
+`tests/passthrough.rs`는 "유효한 TypeScript는 바이트 그대로 통과"를 56건의
+입력으로 확인하지만, 컴파일러 자신은 원본 보존을 전혀 검사하지 않는다.
+`tests/compile.rs`의 출력 스냅샷도 같은 성격이다 — 코퍼스에 없는 입력 모양은
+아무도 지키지 않는다. 이슈 16이 그 증거다.
 
 ## 의사결정
 
@@ -151,6 +221,170 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
   평가 위치에서 실행된다. 이는 조용한 legacy fallback이 아니라 검증되는 target
   capability이며, 생성 IIFE는 0개다.
 
+### 결정 12: 평가 빈도는 host owner 기준으로도 계산한다
+
+- **상황**: `EvaluationContext.frequency`는 `EvaluationOwner`(함수/모듈) 기준
+  빈도인데, statement lowering이 prelude를 삽입하는 위치는 `HostOwner`(문장)다.
+  값이 `while (…test…)`처럼 loop **머리**에 있으면 host owner가 loop 문장
+  자신이므로, 함수 기준으로 "Repeated"라는 사실을 알아도 그 사실이 hoist 가능
+  여부를 답해주지 못한다.
+- **검토한 대안**: (a) 기존 `frequency`의 의미를 host owner 기준으로 바꾼다 —
+  한 이름이 두 질문에 쓰이던 것을 하나로 줄이지만, 함수 기준 빈도를 쓰는
+  판단(예: 실행 환경 분류)이 조용히 의미를 바꾼다. (b) codegen에서 owner가
+  loop 문장인지 확인한다 — 구문 모양을 codegen이 다시 판단하는 금지된 방식이다.
+- **선택과 근거**: (c) `HostOwner`까지의 parent path에서 계산한 별도의 이름 있는
+  사실 `EvaluationContext.host_frequency`를 추가한다. `ProgramSyntax`가 host
+  owner를 고르는 바로 그 자리에서 계산하므로 두 사실의 기준이 어긋날 수 없다.
+  이를 위해 `ProjectedHostOwner`에 owner를 push한 시점의 parent path 길이를
+  기록한다 — owner와 값 사이의 edge만 보는 유일한 방법이다.
+
+### 결정 13: target capability는 Evaluation IR이 정하고 codegen은 소비만 한다
+
+- **상황**: capability 판정이 codegen에 흩어져 있고, 조건에 안 맞으면 이름 없는
+  fallback으로 `$tt_expr`에 떨어진다 (감사 B).
+- **검토한 대안**: codegen의 술어들을 그대로 두고 validator만 추가하면, validator가
+  검사할 "계획"이 계획이 아니라 emitter의 부수 효과가 된다. 검증 대상이 없다.
+- **선택과 근거**: `PlannedValue`에 `TargetCapability::{StatementRegion,
+  ExpressionBoundary { reason }}`를 넣는다. `ExpressionBoundaryReason`은 왜
+  statement lowering이 불가능한지를 이름으로 남긴다 — owner가 statement를 받지
+  못함, host owner 기준 반복, conditional region 안의 capture, capture span 겹침,
+  Core 값에 statement 형태가 없음. codegen은 이 값을 읽기만 한다. Core 모양 술어
+  `can_structure_value_expr`는 `CoreFile::has_statement_form`으로 Core IR에
+  옮겨 한 곳이 소유한다.
+
+### 결정 14: conditional region 안에는 source capture를 두지 않는다
+
+- **상황**: schedule의 conditional step은 action을 `if (…) { … }`로 감싼다. 그런데
+  더 안쪽 frame의 source capture(`const $tt_vN = (…)`)도 그 블록 안에 들어가는
+  반면, 그 slot을 읽는 host 표현식은 블록 **밖**에 그대로 남는다. `a && f(match …)`가
+  `Cannot find name '$tt_v1'`로 컴파일되지 않는 이유다 (이슈 15).
+- **검토한 대안**: (a) capture를 `let`으로 owner 수준에 선언하고 블록 안에서 대입 —
+  스코프는 맞지만 TypeScript가 definite assignment를 증명하지 못해 타입이
+  `T | undefined`가 된다. 이 태스크가 금지한 바로 그 결과다. (b) optional call만
+  예외 처리 — 구조적으로 같은 `&&`/`||`/`??`/삼항에서 같은 버그가 남는다.
+- **선택과 근거**: 계약을 한 문장으로 세운다 — **생성된 conditional region 안에서
+  capture한 slot은 그 region 밖에서 읽힐 수 없다.** host 표현식은 원래 자리에
+  그대로 남으므로 region 밖이다. 따라서 conditional 깊이 1 이상에서 source
+  capture가 필요한 값은 statement lowering 대상이 아니다
+  (`CaptureInsideConditionalRegion`). 이 규칙은 조건 입력 자체만 capture하는
+  `x ? match … : y`, `f?.(match …)`, `a && match …`를 그대로 통과시키고,
+  안쪽 frame이 capture를 요구하는 `a && f(match …)`만 거른다.
+  이 규칙은 임시방편이 아니라 **capability의 전제**다: 뒷단계에서 conditional
+  operation 전체(활성 분기의 host source 포함)를 region이 소유하게 되면, capture의
+  host 사용처도 region 안으로 들어오므로 같은 규칙이 그대로 통과시킨다.
+
+### 결정 15: source capture는 tt 값·다른 capture와 겹칠 수 없다
+
+- **상황**: `g(a && match …, match …)`에서 두 번째 값의 "앞선 인자" 입력 span이
+  첫 번째 tt 값을 포함한다. 그 span을 그대로 capture하면 `match` 원문이 생성
+  코드에 복사되고, 겹치는 replacement 때문에 원본 바이트가 중복·누락된다
+  (이슈 16).
+- **검토한 대안**: capture 텍스트에서 tt 값을 찾아 치환한다 — 문자열 기반
+  휴리스틱이고, 중첩된 값마다 예외가 늘어난다.
+- **선택과 근거**: capture span은 어떤 tt 값 span과도, 다른 capture span과도
+  겹치지 않아야 한다는 계약을 세우고, 겹치는 값은 statement lowering에서 제외한다
+  (`CaptureOverlapsValue`). 이 계약은 `validate_source_preservation`이 target에서
+  독립적으로 다시 검사한다.
+
+### 결정 16: validator 실패는 이름 있는 불변식을 가진 구조화된 내부 오류다
+
+- **상황**: 내부 오류가 `panic!("internal compiler error: …")` 문자열로 흩어져 있어
+  어떤 단계의 어떤 불변식이 깨졌는지 타입으로 남지 않는다.
+- **검토한 대안**: 각 validator가 자기 enum을 반환하고 호출자가 문자열로 합친다 —
+  단계·주체·위치가 여전히 문자열이 된다.
+- **선택과 근거**: `src/ice.rs`에 `LoweringStage`, `Invariant`, `LoweringSubject`,
+  `InternalCompilerError`를 둔다. 실패한 단계, 위반한 불변식(이름 있는 enum),
+  owner/Core root/operation/ValueId/ValueSlotId/BlockId, source span, origin
+  chain을 모두 타입으로 담는다. 표시 문자열은 이 타입에서 파생될 뿐이다.
+
+### 결정 17: 조건부 operation은 전체가 하나의 region으로 lowering된다
+
+- **상황**: validator 단계를 세운 뒤 7.4 기준으로 재검증하자, 기존 statement
+  lowering이 `&&`/`||`/`??`/삼항/optional call 전부에서 지시가 금지한 패턴
+  ("값만 slot으로 승격하고 원래 조건 문법을 유지")이었음이 드러났다. 네 형태
+  모두 tsgo가 `T | undefined` 새 오류를 보고했고(계약 7 위반), optional call은
+  선행 인자를 nullish 여부와 무관하게 평가했다(평가 횟수 위반). spread 인자는
+  `ExprOrSpread.span()`을 그대로 capture해 `(...xs)`라는 잘못된 TypeScript를
+  만들었다.
+- **여섯 질문의 답**: ① 사실 계산 책임 — 조건 연산의 구조(활성 branch,
+  건너뛰는 branch, 전체 인자 목록, spread, type args)는 SWC 구문 사실이므로
+  ProgramSyntax가 `ConditionalFacts`로 계산한다. ② 구조적으로 같은 입력 —
+  활성 branch가 조건부로 평가되는 모든 TypeScript 연산: `&&`·`||`·`??`·삼항·
+  optional call(직접·member callee). ③ 이름 있는 타입 —
+  `HostEvaluationStep.conditional: Option<ConditionalFacts>`와 plan의
+  `PlannedConditionalOperation`. ④ 검증 — validate_order(조건부 region 밖
+  capture 금지 규칙은 그대로; op에 소비된 값은 region이 소유),
+  validate_reference(member callee는 receiver가 있어 `.call`로 보존될 때만),
+  그리고 타입 검사 테스트. ⑤ 회귀 — 각 형태의 tsgo 타입체크 + 단락 시 인자
+  미평가 runtime trace. ⑥ mutation — else-branch 대입을 제거하면 타입 테스트가,
+  선행 인자 capture를 검사 밖으로 옮기면 trace 테스트가 실패한다.
+- **검토한 대안**: (a) 조건부 step이 있는 값을 전부 boundary로 보낸다 —
+  의미는 맞지만 완료 기준 6·7(optional operation의 전체 CFG 표현,
+  불필요한 boundary 제거)을 포기한다. (b) 값 slot을 `let r: T | undefined`로
+  두고 소비 지점에 non-null 단언 — 타입 assertion으로 오류를 숨기는 금지
+  방식이다.
+- **선택과 근거**: 값의 schedule이 정확히 "가장 안쪽 step 하나가 Conditional"
+  이고 활성 branch가 값 자신(투명 wrapper 허용)일 때, 그 조건 연산 **전체**를
+  하나의 region으로 lowering한다: 연산의 parent span을 result slot으로
+  대체하고, region은 `조건/callee 평가 → (optional이면 nullish 검사) →
+  활성 branch에서 선행 인자 순서 평가·값 region·후행 인자 → 호출/값을
+  result에 기록 → 비활성 경로는 조건 값(논리), 건너뛴 branch(삼항),
+  `undefined`(optional call)를 result에 기록`으로 방출한다. 모든 경로가
+  result를 대입하므로 TypeScript가 `T | undefined`를 만들지 않고, 인자는
+  검사 안에서만 평가된다. member callee는 TypeScript 컴파일러 자신의
+  downlevel 방출과 같은 `receiver 한 번 평가 + callee.call(receiver, ...)`
+  로 this를 보존한다. 같은 parent를 공유하는 여러 tt 값(삼항 양쪽,
+  여러 인자)은 하나의 operation으로 묶인다. 이 형태로 구조화할 수 없는
+  조건 연산(중첩 조건, 사이에 낀 eager frame의 capture)은 이유 있는
+  `ExpressionBoundary`로 남는다 — "operation 전체를 구조화할 수 있을 때만
+  statement lowering을 선택한다"는 지시 그대로다. 아울러 호출·생성 인자의
+  protocol span을 `ExprOrSpread.span()`에서 표현식 span + spread 사실로
+  바꿔 spread capture가 표현식만 capture하고 `...`는 원 위치에 남긴다.
+
+### 결정 18: Effects는 ProgramSyntax가 소유하고 최적화만 소비한다
+
+- **상황**: §9의 Effects 모델을 어느 계층이 소유할지 결정해야 했다.
+- **검토한 대안**: Core 의미 계층 — tt 구문의 효과는 알지만 host TypeScript
+  표현식은 opaque다. Evaluation IR — 실행 사실의 소비자이지 구문 판정자가
+  아니다.
+- **선택과 근거**: 효과는 host TypeScript **표현식**에 대한 구문 사실이므로
+  SWC AST를 소유한 ProgramSyntax가 `Effects`(may_read_mutable/may_write/
+  may_call/may_throw/may_suspend/may_allocate/requires_reference)를 계산해
+  protocol input마다 붙인다. 판정은 극도로 보수적이다: 평가가 관측 불가능함이
+  구문만으로 증명되는 형태 — 일반 리터럴(정규식 리터럴은 평가마다 새 객체를
+  할당하므로 제외), 투명 TS wrapper 아래의 그것 — 만 `NONE`이고, 식별자는
+  TDZ와 가변 바인딩 때문에, 알 수 없는 모든 표현식은 무조건 `ANY`다. 소비는
+  단 한 곳 — resolve_schedule의 capture 생략(`PlannedEvaluationInput::Stable`)
+  — 이며 correctness는 Effects 없이도 성립한다(모두 capture해도 맞다).
+  이것이 §6의 증명 기반 "한 번만 사용하는 안전한 source capture 제거"다:
+  inert한 입력의 유일한 역할은 순서 보존이었고, 관측 불가능한 평가는 순서를
+  가지지 않으므로 slot과 capture를 함께 제거해도 어떤 trace도 변하지 않는다.
+
+### 결정 19: 값 region의 exit target은 하나이고, label은 필요할 때만 존재한다
+
+- **상황**: TASK-199가 기록한 `do { … } while (false)` + label block 이중 중첩이
+  남아 있었다. if-chain dispatch에서는 두 구조가 같은 region에 두 개의 exit
+  target을 만들고, 실제로는 label이 쓰이지 않는 경우에도 항상 방출됐다
+  (`$tt_y_$tt_v0: { … do { … } while (false); }`).
+- **여섯 질문의 답**: ① 사실 계산 책임 — "이 exit의 `break`가 삼켜지는가"는
+  arm body의 TypeScript 구문 사실이므로 ProgramSyntax가 SWC walk에서 계산한다.
+  ② 구조적으로 같은 입력 — block arm의 `return`이 rewrite되는 모든 match
+  (switch·if-chain·tuple·literal). ③ 이름 있는 타입 — `HostExit.captured_break`.
+  ④ 검증 — 출력 테스트(label 유무)와 runtime 테스트(loop 안 exit). ⑤ 회귀 —
+  `a_block_arm_exit_leaves_the_region_from_inside_a_loop` 등 2건. ⑥ mutation —
+  M8(항상 false)·M9(항상 true) 양방향 모두 실패 확인.
+- **검토한 대안**: (a) 출력에서 label 문자열을 찾아 지우는 사후 정리 — 지시가
+  금지한 문자열 기반 처리다. (b) dispatch 종류로 분기(switch면 label, if-chain이면
+  do-while) — 두 규칙이 되고, arm body가 loop를 쓰면 if-chain도 label이 필요하므로
+  틀린다.
+- **선택과 근거**: 원리는 하나다 — **region이 이미 만드는 dispatch(if-chain의
+  `do { … } while (false)`, 또는 `switch` 자신)가 가장 가까운 `break` 대상이므로,
+  label은 rewrite된 exit이 그 사이의 loop/`switch`에 삼켜질 때에만 필요하다.**
+  `ParentCollector`가 loop·switch를 지나며 `break_capture_depth`를 세고, exit이
+  region 진입 시점보다 깊으면 `captured_break`가 참이 된다. codegen은 이 사실만
+  소비해 label을 방출할지 정하고, exit rewrite는 label이 없으면 unlabeled
+  `break;`를 쓴다. 이로써 어떤 region도 exit target을 둘 갖지 않는다.
+
 ## 작업 내역
 
 - 2026-08-22: TASK-160을 등록하고 SWC whole-owner cutover를 시작했다.
@@ -252,6 +486,125 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
   경로를 추가했다. propagation 안의 중첩 RL 값은 부모의 early-return continuation을 소비한다.
 - 2026-08-22: 최종 게이트에서 unit 156건, compile 292건, mapping 15건, integration 80건,
   native 38건, passthrough 56건을 포함한 전체 테스트와 fmt/clippy가 통과했다.
+
+- 2026-08-24: `c5f3e25` 기준으로 남은 범위를 재감사했다. 문서에만 있는 계약
+  (validate_order/reference/origin/source_preservation, Effects), codegen에 남은
+  이름 없는 capability fallback, host owner 기준 빈도의 부재를 확인하고 위
+  "2026-08-24 감사" 절에 기록했다. 감사 중 세 건의 실제 결함(이슈 14~16)을
+  `cargo run -- -p --no-banner`와 `tsgo --noEmit --strict`로 재현했다.
+
+- 2026-08-24: 구조화된 internal compiler error 계층(`src/ice.rs`)을 추가했다.
+  `LoweringStage`(실패 단계) × `Invariant`(위반한 이름 있는 계약) ×
+  `LoweringSubject`(owner/Core root/slot) × source span × origin chain을 타입으로
+  담고, 표시 문자열은 이 타입에서 파생된다. variant는 실제로 검증되는 계약이
+  있을 때만 존재한다.
+- 2026-08-24: `EvaluationContext`에 host owner 기준 사실
+  `owner_reach: OwnerReach{Same, Repeated, UnmodeledConditional}`를 추가했다
+  (결정 12). loop header는 `Repeated`, switch case test·구조분해 default·
+  optional chain 꼬리는 `UnmodeledConditional`(protocol step이 조건을 재현하지
+  못하는 edge), 삼항·논리 우변·optional call 인자는 step이 조건을 재현하므로
+  `Same`이다. `ProjectedHostOwner`가 owner 선택 시점의 parent edge 위치를
+  기록해 두 사실의 기준이 어긋날 수 없다.
+- 2026-08-24: target capability를 Evaluation IR로 옮겼다(결정 13).
+  `PlannedValue.capability: TargetCapability{StatementRegion,
+  ExpressionBoundary(reason)}`가 owner 종류·owner_reach·Core statement form·
+  schedule의 capture/reference 사실로 결정되고, codegen의
+  `TargetRewritePlan::build`는 이 값을 읽어 statement *모양*만 고른다.
+  `can_structure_value_expr`/`compose_schedule_is_structurable`는 삭제되고
+  Core 모양 술어는 `CoreFile::has_statement_form`으로 Core IR이 소유한다.
+- 2026-08-24: `validate_order`와 `validate_reference`를 실제 pipeline 단계로
+  구현했다(`codegen::lowering_plan`이 plan 직후 실행, 실패는 `raise()`).
+  validate_order는 capability 결정을 신뢰하지 않고 plan에서 독립 재검증한다:
+  owner_reach, 값의 source 순서, slot 의존의 생산-후-소비, conditional region
+  밖으로 나가는 capture(방출 순서 기준 첫 materialization), capture의
+  tt span/상호 겹침, capture 방출 순서의 source 순서 보존.
+  validate_reference는 receiver 없는 member reference, optional call 인자
+  문맥의 member reference, value slot으로 강등된 reference를 거부한다.
+- 2026-08-24: 평가 protocol을 owner-상대적으로 만들었다. host owner 밖의
+  frame(함수 경계 너머의 바깥 표현식)은 그 owner의 평가 의무가 아니므로
+  `finish()`가 owner span에 포함된 frame만 protocol로 합성한다. 콜백 안의
+  initializer(`f(() => { const x = match ...; })`)가 boundary 없이 statement
+  lowering된다 — 완료 기준 7의 한 사례.
+- 2026-08-24: `validate_origin`을 상시 실행으로 바꿨다. `Rope::flatten`의
+  `debug_assert`를 제거하고 `TargetError`를 구조화된 ICE로 변환해 release
+  빌드도 동일하게 실패한다.
+- 2026-08-24: `validate_source_preservation`을 target 단계로 구현했다.
+  `SourcePreservation{owned, relocated, rewritten}`을 Core IR과 plan에서
+  계산한다 — owned는 Core `Opaque`/template raw의 pass-through 집합,
+  relocated는 schedule capture와 prelude로 hoist되는 값 span, rewritten은
+  block arm `HostExit`의 return 프레임. printer 직전에 pass-through 바이트의
+  정확히-한-번·순서 보존·비공백 누락 없음을 target piece로 검증한다. 출력
+  문자열은 읽지 않는다.
+- 2026-08-24: 세 결함의 회귀를 고정했다. capability 단위 테스트 9건과
+  validator 위반-IR 테스트 6건(evaluation_ir), 위반-target 테스트 7건(rope),
+  출력 회귀 7건(compile.rs), 런타임 회귀 3건(integration.rs — 반복 평가,
+  단락 시 인자 미평가, 좌우 순서). 전체 게이트(fmt/clippy/전 스위트 13개,
+  tsgo 포함)가 통과했다.
+
+- 2026-08-24: 조건부 operation의 whole-owner lowering을 구현했다(결정 17).
+  ProgramSyntax가 조건 연산의 구조 사실(`ConditionalFacts` — 활성 branch,
+  건너뛰는 branch, optional call의 전체 인자 목록·spread·type args)을 SWC
+  AST에서 계산하고, Evaluation IR이 같은 parent를 공유하는 단일-step 조건
+  값들을 `PlannedConditionalOperation`(LogicalAnd/Or/Nullish/Ternary/
+  OptionalCall)으로 묶는다. target은 연산의 parent span 전체를 result slot으로
+  대체하고, region이 조건/callee를 한 번 평가한 뒤 모든 경로에서 result를
+  대입한다 — optional call의 인자는 nullish 검사 안에서만 평가되고, member
+  callee는 `callee.call(receiver, ...)`로 this를 보존한다(tsc downlevel과
+  동일한 형태). 구조화 불가능한 조건 연산(중첩 조건, 사이에 낀 capture,
+  member callee + 명시적 type args)은
+  `ExpressionBoundary(ConditionalOperationNotStructurable)`로 남는다.
+- 2026-08-24: 호출·생성 인자의 protocol 위치를 `ExprOrSpread.span()`에서
+  인자 표현식 span + spread 사실로 바꿨다. spread 인자의 capture가
+  `(...xs)`라는 잘못된 TypeScript 대신 표현식만 capture하고 `...`는
+  호출 위치에 남는다.
+- 2026-08-24: 이 전환으로 감사에서 확인된 계약 7 위반 네 건(&&/||/??/삼항의
+  `T | undefined` 새 타입 오류), optional call 선행 인자의 무조건 평가,
+  spread capture 파싱 오류가 모두 해소됐다. tsgo 타입체크 통과를
+  integration 테스트(`conditional_operations_keep_their_types_without_undefined`)
+  로, 단락 시 인자 미평가와 this·검사 순서를 runtime trace 테스트 2건으로,
+  출력 형태를 compile 테스트 4건으로 고정했다. 기존 snapshot 1건
+  (member optional call의 boundary)을 새 계약(whole operation)으로 갱신했다.
+  전체 게이트 13개 스위트가 통과했다.
+
+- 2026-08-24: Effects 모델을 구현했다(결정 18). ProgramSyntax가 protocol
+  input마다 보수적 `Effects`를 계산하고, resolve_schedule이 inert한 Value
+  입력을 `PlannedEvaluationInput::Stable`로 계획해 slot·capture를 생략한다.
+  optional call region의 inert 선행 인자는 재구성된 호출에 인라인되고, inert
+  조건은 branch에서 재평가된다 — 모두 관측 불가능성이 증명된 경우만이다.
+  `g(1, match …, 2)`가 리터럴 capture 없이, `g(eff(), match …)`는 capture와
+  함께 방출됨을 단위·출력 테스트로 고정했다. 전체 게이트 통과.
+
+- 2026-08-24: mutation 검증(7.3)을 수행했다. 작업 코드를 커밋한 상태에서 각
+  규칙을 의도적으로 깨고 테스트가 실제로 실패함을 확인한 뒤 `git restore`로
+  복귀했다(사용자 미커밋 변경 없음 확인). 결과:
+
+  | mutation | 기대 검출 | 결과 |
+  |---|---|---|
+  | M1: `owner_reach`가 항상 `Same` | capability 단위 테스트 + loop 출력 회귀 | 둘 다 실패(검출) — validator ICE `RepetitionRegionLeft`가 컴파일도 중단 |
+  | M2: validate_order의 repetition 검사 제거 | 위반-plan 단위 테스트 | 실패(검출) |
+  | M3: 논리 연산 region의 else 대입 제거 | tsgo 타입 테스트 + 단락 runtime | 둘 다 실패(검출) |
+  | M4: optional call 첫 인자를 검사 밖에서 평가 | this·단락 runtime trace | 실패(검출) |
+  | M5: `is_inert`가 항상 true | capture 출력 테스트 | 실패(검출) |
+  | M5b: 〃 | **처음에는 runtime 순서 테스트가 없어 생존** → `eager_arguments_keep_left_to_right_order_at_runtime` 추가 후 실패(검출) |
+  | M6: preservation 중복 검사 제거 | 위반-target 단위 테스트 | 실패(검출) |
+  | M7: validate_order의 ordinal 검사 제거 | **swap 테스트가 slot-읽기 검사로도 통과해 생존** → slot 의존을 제거하고 ordinal만 남기는 테스트로 강화 후 실패(검출) |
+
+  생존한 mutation 두 건(M5b·M7)은 테스트 공백의 증거였고, 각각 runtime 순서
+  trace 테스트와 격리된 ordinal 위반 테스트를 추가해 닫았다. 명령:
+  `cargo test --lib <validator test>` / `cargo test --test integration <trace test>`.
+
+- 2026-08-24: 값 region의 exit target을 하나로 정리했다(결정 19).
+  `HostExit.captured_break`를 ProgramSyntax가 계산하고, codegen은 그 사실이
+  참인 exit이 있을 때만 region label을 방출한다. `match (e) { A(v) => { use(v);
+  return v; }, B => 0 }`는 이제 `$tt_y_…: { … }` 없이 dispatch 자체로 나가고,
+  arm body가 `for` 안에서 `return`하는 경우에만 label이 남는다. 출력 테스트
+  2건을 새 계약으로 갱신하고 label 유지 케이스 1건, runtime 회귀 2건을
+  추가했다. mutation M8(captured_break를 항상 false)·M9(항상 true) 모두
+  테스트가 실패함을 확인했다.
+- 2026-08-24: `docs/ai/tt.md`의 match 표현식 항목을 갱신했다 — 조건부 연산은
+  operation 전체가 하나의 region으로 낮아지고, expression boundary는 statement가
+  도달할 수 없는 owner(매개변수 기본값, class field, loop header, switch case
+  test, 구조분해 default, 구조화 불가능한 조건 연산)에서만 쓰인다는 계약.
 
 ## 이슈 및 해결
 
@@ -381,12 +734,144 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
   직접 인라인한다. 실행 구문이 남은 sequence는 expression target으로 방출해 wrapper의 평가
   구조와 기존 진단 anchor를 보존한다.
 
+### 이슈 14: loop header의 tt 값이 loop 밖에서 한 번만 평가됨
+
+- **증상**: 다음 입력이 무한 루프가 되는 TypeScript로 컴파일된다.
+
+  ```ts
+  enum E { A, B }
+  let n = 0;
+  function next(): E { n = n + 1; return n < 3 ? E.A : E.B; }
+  while (id(match (next()) { A => 1, B => 0 })) { console.log("tick"); }
+  ```
+
+  생성 코드는 `let $tt_v0; … { const $tt_m = next(); switch … }`를 `while` **앞**에
+  놓고 `while ($tt_v1($tt_v0))`만 남긴다. `next()`가 반복마다 호출되지 않는다.
+  `for` test/update, `do … while` test에서도 동일하게 재현했다.
+- **원인**: capability 판정이 쓰는 `EvaluationContext.frequency`는 함수 기준
+  빈도라 loop 머리를 "Repeated"로 보지만, compose 조건은
+  `!steps.is_empty() || frequency == Once`여서 schedule이 비어 있지 않으면
+  빈도를 아예 보지 않는다. 그리고 빈도를 봤더라도 그 빈도는 prelude가 실제로
+  삽입되는 `HostOwner` 기준이 아니다 (감사 C).
+- **해결**: 결정 12의 `host_frequency`를 도입하고, 결정 13의 capability가
+  `RepeatedInOwner`로 statement lowering을 거부한다. `validate_order`가 계획을
+  다시 검사한다.
+
+### 이슈 15: conditional region 안의 capture가 region 밖에서 읽혀 컴파일되지 않음
+
+- **증상**:
+
+  ```ts
+  enum E { A(v: number), B }
+  export const short = flag && id(match (e) { A(v) => v, B => 0 });
+  ```
+
+  → `sc2.ts(25,32): error TS2552: Cannot find name '$tt_v1'.`
+  `const $tt_v1 = (id);`가 `if ($tt_v2) { … }` 안에 선언되는데
+  `export const short = $tt_v2 && $tt_v1($tt_v0);`는 블록 밖에서 읽는다.
+  (`tsgo --noEmit --strict`로 확인.)
+- **원인**: schedule step이 안쪽 frame부터 바깥쪽 frame 순으로 action을 감싸므로,
+  바깥 conditional step이 안쪽 frame의 prefix 전체를 자기 분기 안으로 넣는다.
+  conditional이 소유하는 실행 영역과 host 표현식이 사는 영역이 어긋난다.
+- **해결**: 결정 14. `validate_order`가 conditional 깊이 1 이상에서 새 source
+  capture가 생기면 계획을 거부한다.
+
+### 이슈 16: capture span이 tt 값 span과 겹쳐 원본이 중복·누락됨
+
+- **증상**:
+
+  ```ts
+  g(a && match (e) { A(v) => v, B => 0 }, match (e) { A(v) => v, B => 1 });
+  ```
+
+  → `generated TypeScript failed to parse: Expression expected.`
+  `--no-verify`로 보면 `const $tt_m = ;`, `$tt_v0 = ;`처럼 scrutinee와 arm 값이
+  사라지고, `const $tt_v4 = (a && match (e) { A(v) => v, B => 0 });`처럼 tt 원문이
+  그대로 복사되며, 마지막 호출은 `$tt_v3($tt_v2$tt_v0, $tt_v1)`로 붙는다.
+- **원인**: 두 번째 값의 schedule은 "앞선 인자"를 입력으로 갖는데, 그 인자 span이
+  첫 번째 tt 값을 포함한다. `source_replacements`가 서로 겹치는 구간을 만들고
+  `source_range_rope`의 cursor가 겹친 구간을 건너뛰면서 원본 바이트를 잃는다.
+- **해결**: 결정 15. 계획 단계에서 겹치는 capture를 거부하고,
+  `validate_source_preservation`이 target에서 중복·누락·겹침을 다시 검사한다.
+
 ## 검증
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test`
+- [x] `TTC_REQUIRE_TSGO=1 cargo test` — 813건 통과 (unit 197, cli 32, compile 323,
+  emit-map 16, engine-cache 3, integration 94, native 39, passthrough 57,
+  resolve 11, sidecar 8, stdlib 5 + doc 25 등 13개 스위트 전부 ok, 실패 0).
+  기준선(c5f3e25) 764건에서 49건 증가.
+  tsgo는 `@typescript/native-preview` 7.0.0-dev를 설치해
+  `TTC_TSGO_API=…/dist/api/sync/api.js`로 연결해 실행했다.
+
+### mutation 검증 결과
+
+| mutation | 기대 검출 | 결과 |
+|---|---|---|
+| M1 `owner_reach`가 항상 `Same` | capability 단위 + loop 출력 회귀 | 실패(검출) |
+| M2 validate_order의 repetition 검사 제거 | 위반-plan 단위 | 실패(검출) |
+| M3 논리 연산 region의 else 대입 제거 | tsgo 타입 + 단락 runtime | 실패(검출) |
+| M4 optional call 첫 인자를 검사 밖에서 평가 | this·단락 runtime trace | 실패(검출) |
+| M5 `is_inert`가 항상 true | capture 출력 | 실패(검출) |
+| M5b 〃 | runtime 인자 순서 | 최초 생존 → 테스트 추가 후 실패(검출) |
+| M6 preservation 중복 검사 제거 | 위반-target 단위 | 실패(검출) |
+| M7 validate_order의 ordinal 검사 제거 | 위반-plan 단위 | 최초 생존 → 테스트 격리 후 실패(검출) |
+| M8 `captured_break`가 항상 false | loop 안 exit runtime + label 출력 | 실패(검출) |
+| M9 `captured_break`가 항상 true | 중복 label 출력 | 실패(검출) |
+
+mutation은 모두 작업 코드를 커밋한 뒤 수행하고 `git restore`로 복귀했다.
+생존한 두 건은 테스트 공백의 증거였고, 각각 회귀 테스트를 추가해 닫았다.
+
+## 완료 기준 점검
+
+| # | 기준 | 상태 | 근거 |
+|---|---|---|---|
+| 1 | `validate_order` 실행 | ✅ | `codegen::lowering_plan`이 plan 직후 호출, 실패 시 `raise()` |
+| 2 | `validate_reference` 실행 | ✅ | 같은 자리 |
+| 3 | `validate_origin` 실행 | ✅ | `Rope::flatten`의 `debug_assert` 제거, release도 상시 실행 |
+| 4 | `validate_source_preservation` 실행 | ✅ | printer 직전 target 단계 |
+| 5 | 구조화된 internal compiler error | ✅ | `src/ice.rs` — stage × invariant × subject × span × origin |
+| 6 | optional operation을 전체 CFG로 표현 | ✅ | `PlannedConditionalOperation` (결정 17) |
+| 7 | statement-lowerable에 불필요한 boundary 없음 | ✅ | 대표 코퍼스에서 `$tt_expr` 0개 |
+| 8 | 진짜 expression-only만 명시적 capability | ✅ | `ExpressionBoundaryReason` 6종, 이유 없는 경로 없음 |
+| 9 | Effects 구현·최적화에만 사용 | ✅ | 결정 18 — 소비처는 capture 생략 한 곳 |
+| 10 | slot·helper·capture 제거를 증명으로 | ✅ | capture는 Effects, region label은 `captured_break` use 분석. 증명 없는 제거는 하지 않음 (join slot은 결정 8이 타입 보존 목적으로 유지) |
+| 11 | TASK-198 레이아웃·괄호 유지 | ✅ | 해당 테스트 통과 |
+| 12 | TASK-199 `completes` 유지 | ✅ | 해당 테스트 통과 |
+| 13 | TS/TSX passthrough 바이트 유지 | ✅ | passthrough 57건 + validator가 상시 강제 |
+| 14 | 기존 진단·위치 유지 | ✅ | native 39 + emit-map 16 |
+| 15 | runtime trace 보존 | ✅ | integration 94 (평가 순서·횟수·this·단락·throw) |
+| 16 | SWC output verification | ✅ | 전 스위트에서 `verify_output` 활성 |
+| 17 | tsgo 타입 검사 | ✅ | native 39 + 신규 타입 테스트 |
+| 18 | mutation에서 테스트 실패 | ✅ | M1~M9, 아래 표 |
+| 19 | `cargo fmt --check` | ✅ | |
+| 20 | `cargo clippy -D warnings` | ✅ | |
+| 21 | `TTC_REQUIRE_TSGO=1 cargo test` | ✅ | 813건 |
+| 22 | 결정·대안·조사·원인·mutation 기록 | ✅ | 이 문서 |
+| 23 | INDEX 갱신 | ✅ | 완료 처리 |
+| 24 | 사용자 문서 갱신 | ✅ | `docs/ai/tt.md` match 표현식 계약 |
 
 ## 결과
 
-진행 중.
+완료. TASK-160이 목표한 "SWC whole-owner 기반 최적 lowering"의 남은 아키텍처를
+모두 세웠다.
+
+- 감사에서 재현한 결함 6종을 구조적으로 해소했다: loop header 값의 loop 밖
+  hoist, conditional region 밖으로 새는 capture(컴파일 불가 TypeScript),
+  tt 값과 겹치는 capture(파싱 불가 TypeScript), `&&`/`||`/`??`/삼항의
+  `T | undefined` 타입 변형, optional call 선행 인자의 무조건 평가,
+  spread 인자 capture의 `(...xs)` 파싱 오류.
+- 계약이 문서에서 코드로 내려왔다: 네 validator가 실제 파이프라인 단계로
+  돌고, 실패는 이름 있는 불변식을 가진 internal compiler error다.
+- 의미 판단이 codegen에서 Evaluation IR로 옮겨졌다. codegen은 capability를
+  읽어 statement *모양*만 고른다.
+
+### 남은 범위 (별도 태스크)
+
+- **일반 compile 출력용 표준 source map** — 지시 §9대로 TASK-160에 섞지 않고
+  후속 태스크로 진행한다. 기반(Rope/TargetPiece/SourceOrigin/EmitMapping/
+  EmitAnchor/`SourcePreservation`의 owned·relocated·rewritten)은 이미 있다.
+- §6의 나머지 최적화 후보(불필요한 receiver temporary, 직접 호출로 대체 가능한
+  `$tt_ap`)는 증명 수단이 갖춰졌으나 이번 범위에서 적용하지 않았다. join slot
+  제거는 결정 8(전체 contextual type 보존)과 상충하므로 의도적으로 하지 않는다.

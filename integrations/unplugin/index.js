@@ -73,17 +73,46 @@ const stdModuleOfId = (id) => {
   return null;
 };
 
+const INLINE_MAP =
+  /\n\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)\n?$/;
+
+/**
+ * Splits ttc's inline source map back out of the printed output.
+ *
+ * The map travels inline because stdout carries one stream; a bundler wants
+ * it as a separate object so it can compose it with everything downstream.
+ * Output without a map is returned unchanged.
+ *
+ * @param {string} code
+ * @returns {{ code: string, map: object | null }}
+ */
+function detachInlineSourceMap(code) {
+  const found = INLINE_MAP.exec(code);
+  if (found === null) return { code, map: null };
+  try {
+    const map = JSON.parse(Buffer.from(found[1], "base64").toString("utf8"));
+    return { code: code.slice(0, found.index + 1), map };
+  } catch {
+    // An unreadable map is not a reason to fail the build; the code is
+    // still exactly what ttc produced.
+    return { code, map: null };
+  }
+}
+
 /**
  * @typedef {object} Options
  * @property {string} [compiler] Path to the ttc binary (default: the
  *   installed `@load28/tt-lang` package's binary, falling back to `"ttc"` on PATH).
  * @property {boolean} [verify] Run ttc's output self-check (default: true).
+ * @property {boolean} [sourcemap] Ask ttc for a source map and hand it to the
+ *   host, so a stack trace and a debugger point at the `.tt` (default: true).
  */
 
 /** @type {import("unplugin").UnpluginFactory<Options | undefined>} */
 export const unpluginFactory = (options = {}) => {
   const compiler = options.compiler ?? defaultCompiler();
   const verify = options.verify ?? true;
+  const sourcemap = options.sourcemap ?? true;
 
   return {
     name: "@load28/unplugin-tt",
@@ -127,12 +156,16 @@ export const unpluginFactory = (options = {}) => {
 
       const args = ["-p", "--rewrite-imports", "off"];
       if (!verify) args.push("--no-verify");
+      // ttc prints the map into the output as a data: URL — the one form
+      // that survives a pipe. It is split back out here so the host gets a
+      // real map object and composes it with its own transforms.
+      if (sourcemap) args.push("--source-map", "inline");
       args.push(file);
 
       try {
         const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
         this.addWatchFile(file);
-        return { code: stdout, map: null };
+        return detachInlineSourceMap(stdout);
       } catch (error) {
         // ttc reports `file:line:col: message` on stderr; surface that as
         // the build error so the host shows the compiler's diagnostic.

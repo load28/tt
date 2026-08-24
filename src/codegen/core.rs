@@ -7,17 +7,18 @@
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
 
-use super::rope::{Flat, Rope};
+use super::rope::{Flat, Rope, SourcePreservation};
 use crate::analysis::SemanticFile;
 use crate::core_ir::*;
 use crate::evaluation_ir::{
-    LoweringPlan, PlannedEvaluationInput, PlannedEvaluationStep, ValueTarget,
+    LoweringPlan, PlannedBranch, PlannedConditionalKind, PlannedConditionalOperation,
+    PlannedEvaluationInput, PlannedEvaluationStep, PlannedOperand, TargetCapability, ValueTarget,
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
 use crate::program_syntax::{
-    ConditionalBranch, EvaluationFrequency, EvaluationInputMode, EvaluationOwner, HostContinuation,
-    HostEvaluationOperation, HostExit, HostOwnerKind, SourceSpan,
+    ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
+    HostOwnerKind, SourceSpan,
 };
 use crate::scanner::{at, ident_end, is_ident_start, scan_type_end, skip_ws_comments};
 use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
@@ -70,9 +71,19 @@ pub(crate) fn lowering_plan(
         crate::evaluation_ir::EvaluationFile::build(&syntax, core).unwrap_or_else(|error| {
             panic!("internal compiler error: Evaluation IR construction failed: {error:?}")
         });
-    Ok(evaluation.lowering_plan().unwrap_or_else(|error| {
+    let plan = evaluation.lowering_plan(core).unwrap_or_else(|error| {
         panic!("internal compiler error: owner lowering plan failed: {error:?}")
-    }))
+    });
+    // The plan validators are pipeline stages, not tests: a violated
+    // evaluation contract fails the build here, before emission starts
+    // (`docs/design/program-lowering.md` §11).
+    if let Err(error) = evaluation.validate_order(&plan) {
+        error.raise();
+    }
+    if let Err(error) = evaluation.validate_reference(&plan) {
+        error.raise();
+    }
+    Ok(plan)
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -83,7 +94,14 @@ pub(crate) fn emit_with_map<'a>(
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
-    let target = TargetRewritePlan::build(lowering_plan, core);
+    let target = TargetRewritePlan::build(lowering_plan);
+    let mut relocated: Vec<SourceSpan> = target
+        .source_replacements
+        .iter()
+        .map(|replacement| replacement.source)
+        .collect();
+    relocated.extend(target.relocated_values.iter().copied());
+    let rewritten_operations = target.rewritten_operations.clone();
     let emitter = Emitter {
         semantic,
         core,
@@ -93,12 +111,14 @@ pub(crate) fn emit_with_map<'a>(
         owner_slot_rewrites: target.owner_slots,
         compose_rewrites: target.composes,
         source_replacements: target.source_replacements,
+        consumed_exprs: target.consumed_exprs,
         arrow_return_rewrites: target.arrow_returns,
         slot_exprs: target.slot_exprs,
         value_slots: target.value_slots,
         scheduled_slots: target.scheduled_slots,
         value_exits: target.value_exits,
         expression_boundary_name: target.expression_boundary_name,
+        conditional_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
         used_flow: Cell::new(false),
@@ -127,13 +147,158 @@ pub(crate) fn emit_with_map<'a>(
             emitter.expression_boundary_name
         ));
     }
-    output.flatten(source.len())
+    // A block arm's `return` frame (the keyword, and anything after the
+    // argument) is claimed by the exit rewrite, as is the operator frame of
+    // a lowered conditional operation; the arguments themselves stay
+    // pass-through.
+    let mut rewritten: Vec<SourceSpan> = emitter
+        .value_exits
+        .values()
+        .flatten()
+        .flat_map(|exit| match exit.argument {
+            Some(argument) => vec![
+                SourceSpan {
+                    start: exit.statement.start,
+                    end: argument.start,
+                },
+                SourceSpan {
+                    start: argument.end,
+                    end: exit.statement.end,
+                },
+            ],
+            None => vec![exit.statement],
+        })
+        .collect();
+    rewritten.extend(rewritten_operations);
+    let preservation = SourcePreservation {
+        owned: pass_through_spans(semantic, core),
+        relocated,
+        rewritten,
+    };
+    output.flatten(source, &preservation)
+}
+
+/// The pass-through ranges of a file, for the target's preservation check
+/// ([`SourcePreservation::owned`]): the source the compiler does not
+/// interpret — Core `Opaque` statements and expressions and template raw
+/// parts, wherever they sit. Read off the Core IR — the same structure the
+/// emitter walks — never off the output.
+fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpan> {
+    fn span(semantic: &SemanticFile, node: NodeId, out: &mut Vec<SourceSpan>) {
+        let span =
+            semantic.hir.source_map.node_span(node).unwrap_or_else(|| {
+                panic!("internal compiler error: target node has no source span")
+            });
+        out.push(span.into());
+    }
+
+    fn walk_body(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        body: hir::BodyId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        for statement in &core.bodies[body.index()].statements {
+            match statement {
+                Statement::Opaque(node) => span(semantic, *node, out),
+                Statement::Adt(_) | Statement::Import(_) => {}
+                Statement::Propagate(propagate) => {
+                    walk_expr(semantic, core, propagate.value, out);
+                }
+                Statement::Decision(decision) => walk_decision(semantic, core, decision, out),
+                Statement::Expr(expr) => walk_expr(semantic, core, *expr, out),
+            }
+        }
+    }
+
+    fn walk_decision(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        decision: &Decision,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        for subject in &decision.subjects {
+            walk_expr(semantic, core, subject.value, out);
+        }
+        for arm in &decision.arms {
+            if let Some(guard) = arm.guard {
+                walk_expr(semantic, core, guard, out);
+            }
+            match arm.action {
+                ArmAction::Yield { body, .. } | ArmAction::Execute(body) => {
+                    walk_body(semantic, core, body, out);
+                }
+                ArmAction::BindThrough(_) => {}
+            }
+        }
+        match &decision.miss {
+            MissAction::Execute(body) => walk_body(semantic, core, *body, out),
+            MissAction::Decision(inner) => walk_decision(semantic, core, inner, out),
+            MissAction::ThrowUnexpected(_) | MissAction::Nothing => {}
+        }
+    }
+
+    fn walk_expr(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        match &core.exprs[expr.index()] {
+            Expr::Opaque(node) => span(semantic, *node, out),
+            Expr::Sequence(body) => walk_body(semantic, core, *body, out),
+            Expr::Decision(decision) => walk_decision(semantic, core, decision, out),
+            Expr::Apply(apply) => {
+                if let Some(head) = apply.head {
+                    walk_expr(semantic, core, head, out);
+                }
+                for step in &apply.steps {
+                    walk_expr(semantic, core, step.value, out);
+                }
+            }
+            Expr::ResultRegion(region) => {
+                for item in &region.items {
+                    match item {
+                        ResultRegionItem::Statements(body) => {
+                            walk_body(semantic, core, *body, out);
+                        }
+                        ResultRegionItem::Propagate(propagate) => {
+                            walk_expr(semantic, core, propagate.value, out);
+                        }
+                    }
+                }
+                walk_expr(semantic, core, region.value, out);
+            }
+            Expr::Template(template) => {
+                for part in &template.parts {
+                    match part {
+                        TemplatePart::Raw(node) => span(semantic, *node, out),
+                        TemplatePart::Interpolation(expr) => walk_expr(semantic, core, *expr, out),
+                    }
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    walk_body(semantic, core, core.root, &mut out);
+    out
 }
 
 struct TargetRewritePlan {
     owner_slots: Vec<OwnerSlotRewrite>,
     composes: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
+    /// The source spans of values whose lowering moves them into a prelude
+    /// before their owner — a planned relocation the preservation check
+    /// must know about ([`SourcePreservation::relocated`]).
+    relocated_values: Vec<SourceSpan>,
+    /// The parent spans of lowered conditional operations: their operator
+    /// tokens are claimed source ([`SourcePreservation::rewritten`]).
+    rewritten_operations: Vec<SourceSpan>,
+    /// tt values a conditional operation consumes; their inline Core
+    /// position emits nothing (the operation's replacement covers it).
+    consumed_exprs: HashSet<ExprId>,
     arrow_returns: Vec<ArrowReturnRewrite>,
     slot_exprs: HashMap<ExprId, String>,
     value_slots: HashMap<ExprId, String>,
@@ -159,7 +324,15 @@ struct ArrowReturnRewrite {
 struct ComposeRewrite {
     owner: SourceSpan,
     owner_kind: HostOwnerKind,
-    values: Vec<ComposeValue>,
+    actions: Vec<ComposeAction>,
+}
+
+/// One unit of a compose prelude, in source order: a plain host value, or a
+/// whole conditional operation (결정 17).
+#[derive(Debug, Clone)]
+enum ComposeAction {
+    Value(ComposeValue),
+    Operation(PlannedConditionalOperation),
 }
 
 #[derive(Debug, Clone)]
@@ -173,6 +346,10 @@ struct ComposeValue {
 struct SourceReplacement {
     source: SourceSpan,
     slot: String,
+    /// The tt value whose construct anchor the replacement's generated
+    /// name carries — a conditional operation's result stands for the whole
+    /// operation, so diagnostics on it belong to its primary tt value.
+    anchor: Option<ExprId>,
 }
 
 #[derive(Debug, Clone)]
@@ -182,7 +359,11 @@ struct LocalSourceEdit {
 }
 
 impl TargetRewritePlan {
-    fn build(lowering: &LoweringPlan, core: &CoreFile) -> Self {
+    fn build(lowering: &LoweringPlan) -> Self {
+        // Whether a value's control flow may become statements in its host
+        // owner was decided by the Evaluation IR and recorded on the value
+        // ([`TargetCapability`]); this plan only picks the statement *shape*
+        // that fits each host continuation.
         let owner_slots: Vec<_> = lowering
             .owners()
             .filter(|rewrite| rewrite.values.len() == 1)
@@ -195,16 +376,12 @@ impl TargetRewritePlan {
                         | HostContinuation::Return
                         | HostContinuation::Discard
                 ) && value.schedule.steps().is_empty()
-                    && !matches!(
-                        value.context.owner,
-                        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
-                    )
-                    && can_structure_value_expr(core, value.expr))
-                .then(|| OwnerSlotRewrite {
-                    owner: rewrite.owner.span,
-                    expr: value.expr,
-                    slot: lowering.slot_name(slot).to_owned(),
-                })
+                    && value.capability == TargetCapability::StatementRegion)
+                    .then(|| OwnerSlotRewrite {
+                        owner: rewrite.owner.span,
+                        expr: value.expr,
+                        slot: lowering.slot_name(slot).to_owned(),
+                    })
             })
             .collect();
         let arrow_returns: Vec<_> = lowering
@@ -215,11 +392,11 @@ impl TargetRewritePlan {
                 let ValueTarget::Slot(slot) = value.target;
                 (value.context.continuation == HostContinuation::ArrowReturn
                     && value.schedule.steps().is_empty()
-                    && can_structure_value_expr(core, value.expr))
-                .then(|| ArrowReturnRewrite {
-                    expr: value.expr,
-                    slot: lowering.slot_name(slot).to_owned(),
-                })
+                    && value.capability == TargetCapability::StatementRegion)
+                    .then(|| ArrowReturnRewrite {
+                        expr: value.expr,
+                        slot: lowering.slot_name(slot).to_owned(),
+                    })
             })
             .collect();
         let composes: Vec<_> = lowering
@@ -228,57 +405,117 @@ impl TargetRewritePlan {
                 let can_compose = !rewrite.values.is_empty()
                     && rewrite.values.iter().all(|value| {
                         value.context.continuation == HostContinuation::Compose
-                            && matches!(
-                                value.context.owner,
-                                EvaluationOwner::Module
-                                    | EvaluationOwner::FunctionBody
-                                    | EvaluationOwner::StaticBlock
-                            )
-                            && (!value.schedule.steps().is_empty()
-                                || value.context.frequency == EvaluationFrequency::Once)
-                            && compose_schedule_is_structurable(value.schedule.steps())
-                            && can_structure_value_expr(core, value.expr)
+                            && value.capability == TargetCapability::StatementRegion
                     });
-                can_compose.then(|| ComposeRewrite {
-                    owner: rewrite.owner.span,
-                    owner_kind: rewrite.owner.kind,
-                    values: rewrite
+                can_compose.then(|| {
+                    // A value consumed by a conditional operation is emitted
+                    // by that operation's region, at the position of the
+                    // operation's first value.
+                    let operation_of: HashMap<ExprId, usize> = rewrite
+                        .operations
+                        .iter()
+                        .enumerate()
+                        .flat_map(|(index, operation)| {
+                            operation.values.iter().map(move |expr| (*expr, index))
+                        })
+                        .collect();
+                    let mut emitted_operations = HashSet::new();
+                    let actions = rewrite
                         .values
                         .iter()
-                        .map(|value| {
-                            let ValueTarget::Slot(slot) = value.target;
-                            ComposeValue {
-                                expr: value.expr,
-                                slot: lowering.slot_name(slot).to_owned(),
-                                steps: value.schedule.steps().to_vec(),
+                        .filter_map(|value| match operation_of.get(&value.expr) {
+                            Some(index) => emitted_operations.insert(*index).then(|| {
+                                ComposeAction::Operation(rewrite.operations[*index].clone())
+                            }),
+                            None => {
+                                let ValueTarget::Slot(slot) = value.target;
+                                Some(ComposeAction::Value(ComposeValue {
+                                    expr: value.expr,
+                                    slot: lowering.slot_name(slot).to_owned(),
+                                    steps: value.schedule.steps().to_vec(),
+                                }))
                             }
                         })
-                        .collect(),
+                        .collect();
+                    ComposeRewrite {
+                        owner: rewrite.owner.span,
+                        owner_kind: rewrite.owner.kind,
+                        actions,
+                    }
                 })
             })
             .collect();
-        let source_replacements = composes
+        let compose_values = || {
+            composes.iter().flat_map(|rewrite| {
+                rewrite.actions.iter().filter_map(|action| match action {
+                    ComposeAction::Value(value) => Some(value),
+                    ComposeAction::Operation(_) => None,
+                })
+            })
+        };
+        let compose_operations = || {
+            composes.iter().flat_map(|rewrite| {
+                rewrite.actions.iter().filter_map(|action| match action {
+                    ComposeAction::Operation(operation) => Some(operation),
+                    ComposeAction::Value(_) => None,
+                })
+            })
+        };
+        // owner-slot and compose rewrites hoist the value's control flow
+        // to a prelude before the owner; arrow-return rewrites restructure
+        // the value in place, so they relocate nothing. A conditional
+        // operation relocates its whole parent expression.
+        let hoisted: HashSet<ExprId> = owner_slots
             .iter()
+            .map(|rewrite| rewrite.expr)
+            .chain(compose_values().map(|value| value.expr))
+            .chain(compose_operations().flat_map(|operation| operation.values.iter().copied()))
+            .collect();
+        let mut relocated_values: Vec<SourceSpan> = lowering
+            .owners()
             .flat_map(|rewrite| &rewrite.values)
+            .filter(|value| hoisted.contains(&value.expr))
+            .map(|value| value.source)
+            .collect();
+        relocated_values.extend(compose_operations().map(|operation| operation.parent));
+        // The operator frame of a lowered conditional operation (its tokens
+        // between the fragments the region re-emits) is claimed source.
+        let rewritten_operations: Vec<SourceSpan> = compose_operations()
+            .map(|operation| operation.parent)
+            .collect();
+        let operation_replacements: Vec<SourceReplacement> = compose_operations()
+            .map(|operation| {
+                let primary = operation.values.first().copied().unwrap_or_else(|| {
+                    panic!("internal compiler error: conditional operation has no value")
+                });
+                SourceReplacement {
+                    source: operation.parent,
+                    slot: lowering.slot_name(operation.result).to_owned(),
+                    anchor: Some(primary),
+                }
+            })
+            .collect();
+        let source_replacements = compose_values()
             .flat_map(|value| &value.steps)
+            .chain(compose_operations().flat_map(|operation| &operation.outer))
             .flat_map(|step| &step.inputs)
             .filter_map(|input| match input {
                 PlannedEvaluationInput::Source { source, target, .. } => Some(SourceReplacement {
                     source: *source,
                     slot: lowering.slot_name(*target).to_owned(),
+                    anchor: None,
                 }),
-                PlannedEvaluationInput::Slot { .. } => None,
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
             })
+            .chain(operation_replacements)
+            .collect();
+        let consumed_exprs: HashSet<ExprId> = compose_operations()
+            .flat_map(|operation| operation.values.iter().copied())
             .collect();
         let slot_exprs = owner_slots
             .iter()
             .map(|rewrite| (rewrite.expr, rewrite.slot.clone()))
-            .chain(
-                composes
-                    .iter()
-                    .flat_map(|rewrite| &rewrite.values)
-                    .map(|value| (value.expr, value.slot.clone())),
-            )
+            .chain(compose_values().map(|value| (value.expr, value.slot.clone())))
             .collect();
         let value_slots = lowering
             .value_slot_names()
@@ -299,6 +536,9 @@ impl TargetRewritePlan {
             owner_slots,
             composes,
             source_replacements,
+            relocated_values,
+            rewritten_operations,
+            consumed_exprs,
             arrow_returns,
             slot_exprs,
             value_slots,
@@ -307,68 +547,6 @@ impl TargetRewritePlan {
             expression_boundary_name,
         }
     }
-}
-
-fn compose_schedule_is_structurable(steps: &[PlannedEvaluationStep]) -> bool {
-    steps.iter().all(|step| {
-        step.inputs.iter().all(|input| match input {
-            PlannedEvaluationInput::Source { mode, receiver, .. } => match mode {
-                EvaluationInputMode::Value | EvaluationInputMode::DirectReference => true,
-                EvaluationInputMode::MemberReference => {
-                    receiver.is_some()
-                        && !matches!(
-                            step.operation,
-                            HostEvaluationOperation::Conditional(
-                                ConditionalBranch::OptionalCallArgument(_)
-                            )
-                        )
-                }
-            },
-            PlannedEvaluationInput::Slot { mode, .. } => {
-                *mode != EvaluationInputMode::MemberReference
-            }
-        })
-    })
-}
-
-fn can_structure_value_expr(core: &CoreFile, expr: ExprId) -> bool {
-    match &core.exprs[expr.index()] {
-        Expr::Decision(decision) => decision
-            .arms
-            .iter()
-            .all(|arm| matches!(arm.action, ArmAction::Yield { .. })),
-        Expr::ResultRegion(_) => true,
-        Expr::Sequence(body) => {
-            body_value_expr(core, *body).is_some_and(|inner| can_structure_value_expr(core, inner))
-        }
-        Expr::Apply(apply) => apply.head.is_some_and(|head| {
-            can_structure_value_expr(core, head)
-                || apply
-                    .steps
-                    .iter()
-                    .any(|step| can_structure_value_expr(core, step.value))
-        }),
-        Expr::Opaque(_) | Expr::Template(_) => false,
-    }
-}
-
-fn body_value_expr(core: &CoreFile, body: hir::BodyId) -> Option<ExprId> {
-    sequence_value(&core.bodies[body.index()].statements).map(|(_, expr)| expr)
-}
-
-fn sequence_value(statements: &[Statement]) -> Option<(usize, ExprId)> {
-    let (index, expr) = statements
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(index, statement)| match statement {
-            Statement::Expr(expr) => Some((index, *expr)),
-            _ => None,
-        })?;
-    statements[index + 1..]
-        .iter()
-        .all(|statement| matches!(statement, Statement::Opaque(_)))
-        .then_some((index, expr))
 }
 
 struct Emitter<'a> {
@@ -380,12 +558,17 @@ struct Emitter<'a> {
     owner_slot_rewrites: Vec<OwnerSlotRewrite>,
     compose_rewrites: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
+    consumed_exprs: HashSet<ExprId>,
     arrow_return_rewrites: Vec<ArrowReturnRewrite>,
     slot_exprs: HashMap<ExprId, String>,
     value_slots: HashMap<ExprId, String>,
     scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     value_exits: HashMap<ExprId, Vec<HostExit>>,
     expression_boundary_name: String,
+    /// How many conditional-operation regions are being emitted right now.
+    /// Inside one, the operation's own host replacement does not apply —
+    /// the region re-emits the operation's fragments itself.
+    conditional_region_depth: Cell<u32>,
     used_expression_boundary: Cell<bool>,
     used_pipe: Cell<bool>,
     used_flow: Cell<bool>,
@@ -564,11 +747,22 @@ impl<'a> Emitter<'a> {
             {
                 rope.append(self.emit_compose_rewrite(rewrite));
             }
+            let in_region = self.conditional_region_depth.get() > 0;
             if let Some(replacement) = self.source_replacements.iter().find(|replacement| {
-                replacement.source.start <= cursor && cursor < replacement.source.end
+                (replacement.anchor.is_none() || !in_region)
+                    && replacement.source.start <= cursor
+                    && cursor < replacement.source.end
             }) {
                 if cursor == replacement.source.start {
-                    rope.push_lit(replacement.slot.clone());
+                    match replacement.anchor {
+                        Some(expr) => {
+                            let (kind, start, end, extent) = self.value_anchor(expr);
+                            let mut name = Rope::new();
+                            name.push_lit(replacement.slot.clone());
+                            rope.anchored(kind, start, end, extent, name);
+                        }
+                        None => rope.push_lit(replacement.slot.clone()),
+                    }
                 }
                 cursor = replacement.source.end.min(span.end);
                 continue;
@@ -586,7 +780,9 @@ impl<'a> Emitter<'a> {
                 .source_replacements
                 .iter()
                 .filter(|replacement| {
-                    cursor < replacement.source.start && replacement.source.start < span.end
+                    (replacement.anchor.is_none() || !in_region)
+                        && cursor < replacement.source.start
+                        && replacement.source.start < span.end
                 })
                 .map(|replacement| replacement.source.start)
                 .min()
@@ -636,8 +832,11 @@ impl<'a> Emitter<'a> {
         body: hir::BodyId,
         exits: &[HostExit],
         continuation: &ValueContinuation<'_>,
-        label: &str,
+        label: Option<&str>,
     ) -> Rope<'a> {
+        // Without a label the region's own dispatch is the nearest `break`
+        // target already ([`HostExit::captured_break`]).
+        let leave = label.map_or_else(|| "break;".to_owned(), |label| format!("break {label};"));
         let mut edits = Vec::new();
         for exit in exits {
             match exit.argument {
@@ -656,16 +855,13 @@ impl<'a> Emitter<'a> {
                             start: argument.end,
                             end: exit.statement.end,
                         },
-                        text: format!(
-                            "{}; break {label};",
-                            continuation.assignment_suffix(grouped)
-                        ),
+                        text: format!("{}; {leave}", continuation.assignment_suffix(grouped)),
                     });
                 }
                 None => edits.push(LocalSourceEdit {
                     span: exit.statement,
                     text: format!(
-                        "{}undefined{}; break {label};",
+                        "{}undefined{}; {leave}",
                         continuation.assignment_prefix(false),
                         continuation.assignment_suffix(false)
                     ),
@@ -689,7 +885,19 @@ impl<'a> Emitter<'a> {
         for statement in statements {
             match statement {
                 Statement::Opaque(node) => out.append(self.source_rope_with_edits(*node, edits)),
-                Statement::Adt(adt) => out.append(emit_adt(adt)),
+                Statement::Adt(adt) => {
+                    // The union type and constructor object are this
+                    // declaration's glue: a frame inside a generated
+                    // constructor belongs to the `enum` that wrote it.
+                    let span = self.span(adt.node);
+                    out.anchored(
+                        AnchorKind::Enum,
+                        span.start,
+                        span.end,
+                        span.end,
+                        emit_adt(adt),
+                    );
+                }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -714,7 +922,7 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
         let statements = &self.core.bodies[body.index()].statements;
-        let (value_index, value) = sequence_value(statements)?;
+        let (value_index, value) = crate::core_ir::sequence_value(statements)?;
         let mut out = self.emit_statements(&statements[..value_index]);
         out.append(self.emit_continued_expr(value, continuation)?);
         out.append(self.emit_statements(&statements[value_index + 1..]));
@@ -722,6 +930,12 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
+        // A value a conditional operation consumed is emitted by the
+        // operation's region; its inline position sits inside the replaced
+        // operation span and prints nothing.
+        if self.consumed_exprs.contains(&expr) {
+            return Rope::new();
+        }
         if let Some(rewrite) = self
             .arrow_return_rewrites
             .iter()
@@ -775,27 +989,326 @@ impl<'a> Emitter<'a> {
             out.push_lit("{");
             out.push_break(0);
         }
-        for value in &rewrite.values {
-            out.push_lit(format!("let {};", value.slot));
+        for action in &rewrite.actions {
+            let slot = match action {
+                ComposeAction::Value(value) => &value.slot,
+                ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
+            };
+            out.push_lit(format!("let {slot};"));
             out.push_break(0);
         }
         let mut captured = HashSet::new();
-        for value in &rewrite.values {
-            let mut action = self
-                .emit_continued_expr(value.expr, &ValueContinuation::assign(&value.slot))
-                .unwrap_or_else(|| {
-                    panic!("internal compiler error: compose value is not structurally emit-able")
-                });
-            for step in &value.steps {
-                action = self.emit_scheduled_step(step, action, &mut captured);
+        for action in &rewrite.actions {
+            match action {
+                ComposeAction::Value(value) => {
+                    let mut lowered = self
+                        .emit_continued_expr(value.expr, &ValueContinuation::assign(&value.slot))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "internal compiler error: compose value is not structurally emit-able"
+                            )
+                        });
+                    for step in &value.steps {
+                        lowered = self.emit_scheduled_step(step, lowered, &mut captured);
+                    }
+                    out.append(lowered);
+                }
+                ComposeAction::Operation(operation) => {
+                    let mut lowered = self.emit_conditional_operation(operation, &mut captured);
+                    for step in &operation.outer {
+                        lowered = self.emit_scheduled_step(step, lowered, &mut captured);
+                    }
+                    out.append(lowered);
+                }
             }
-            out.append(action);
         }
         out.push_break(0);
         if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
             out.push_lit("return ");
         }
         Rope::scoped(out)
+    }
+
+    /// Lowers one whole conditional operation (결정 17): evaluate the
+    /// condition or callee once, branch, run the active branch's
+    /// evaluations — tt regions included — in source order, and write every
+    /// path's result into the operation's slot. All paths assign, so
+    /// TypeScript sees the same definite-assignment correlation the original
+    /// operation had, and an optional call's arguments evaluate only past
+    /// its nullish check.
+    fn emit_conditional_operation(
+        &self,
+        operation: &PlannedConditionalOperation,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        self.conditional_region_depth
+            .set(self.conditional_region_depth.get() + 1);
+        let result = self.value_slot_name(operation.result);
+        let mut out = Rope::new();
+        let condition = self.emit_condition_capture(&operation.condition, captured, &mut out);
+        let deliver_value = |expr: ExprId, target: &str| {
+            self.emit_continued_expr(expr, &ValueContinuation::assign(target))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "internal compiler error: conditional operation value is not structurally emit-able"
+                    )
+                })
+        };
+        let assign_condition = |out: &mut Rope<'a>| {
+            out.push_lit(format!("{result} = {condition};"));
+        };
+        match &operation.kind {
+            PlannedConditionalKind::LogicalAnd => {
+                let value = operation.values[0];
+                out.push_lit(format!("if ({condition}) {{"));
+                out.push_break(1);
+                out.append(Rope::indented(1, deliver_value(value, result)));
+                out.push_break(0);
+                out.push_lit("} else {");
+                out.push_break(1);
+                assign_condition(&mut out);
+                out.push_break(0);
+                out.push_lit("}");
+            }
+            PlannedConditionalKind::LogicalOr => {
+                let value = operation.values[0];
+                out.push_lit(format!("if ({condition}) {{"));
+                out.push_break(1);
+                assign_condition(&mut out);
+                out.push_break(0);
+                out.push_lit("} else {");
+                out.push_break(1);
+                out.append(Rope::indented(1, deliver_value(value, result)));
+                out.push_break(0);
+                out.push_lit("}");
+            }
+            PlannedConditionalKind::Nullish => {
+                let value = operation.values[0];
+                out.push_lit(format!("if ({condition} == null) {{"));
+                out.push_break(1);
+                out.append(Rope::indented(1, deliver_value(value, result)));
+                out.push_break(0);
+                out.push_lit("} else {");
+                out.push_break(1);
+                assign_condition(&mut out);
+                out.push_break(0);
+                out.push_lit("}");
+            }
+            PlannedConditionalKind::Ternary {
+                consequent,
+                alternate,
+            } => {
+                let branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
+                    PlannedBranch::Value(expr) => {
+                        out.append(Rope::indented(1, deliver_value(*expr, result)));
+                    }
+                    PlannedBranch::Source(span) => {
+                        out.push_lit(format!("{result} = "));
+                        let mut source = Rope::new();
+                        source.push_src(&self.source[span.start..span.end], span.start);
+                        push_grouped(out, source);
+                        out.push_lit(";");
+                    }
+                };
+                out.push_lit(format!("if ({condition}) {{"));
+                out.push_break(1);
+                branch(&mut out, consequent);
+                out.push_break(0);
+                out.push_lit("} else {");
+                out.push_break(1);
+                branch(&mut out, alternate);
+                out.push_break(0);
+                out.push_lit("}");
+            }
+            PlannedConditionalKind::OptionalCall {
+                arguments,
+                type_args,
+            } => {
+                out.push_lit(format!("if ({condition} != null) {{"));
+                out.push_break(1);
+                // The active branch: arguments in source order — captures
+                // for those before a tt value, regions for the values —
+                // then the call, through the receiver when the callee is a
+                // member reference.
+                let mut body = Rope::new();
+                for argument in arguments {
+                    match argument {
+                        PlannedOperand::Value(expr) => {
+                            let name = self.value_name_of(*expr);
+                            body.push_lit(format!("let {name};"));
+                            body.push_break(0);
+                            body.append(deliver_value(*expr, name));
+                            body.push_break(0);
+                        }
+                        PlannedOperand::Source {
+                            span,
+                            capture: Some(slot),
+                            ..
+                        } => {
+                            if captured.insert(*slot) {
+                                body.push_lit(format!("const {} = (", self.value_slot_name(*slot)));
+                                body.push_src(&self.source[span.start..span.end], span.start);
+                                body.push_lit(");");
+                                body.push_break(0);
+                            }
+                        }
+                        PlannedOperand::Source { capture: None, .. } => {}
+                    }
+                }
+                body.push_lit(format!("{result} = {condition}"));
+                if let Some(span) = type_args {
+                    body.push_src(&self.source[span.start..span.end], span.start);
+                }
+                let receiver = match &operation.condition {
+                    PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::MemberReference,
+                        receiver,
+                        ..
+                    } => Some(receiver.unwrap_or_else(|| {
+                        panic!("internal compiler error: member callee has no receiver")
+                    })),
+                    _ => None,
+                };
+                match receiver {
+                    Some((_, receiver_slot)) => {
+                        body.push_lit(format!(".call({}", self.value_slot_name(receiver_slot)));
+                        for argument in arguments {
+                            body.push_lit(", ");
+                            self.push_operand(argument, &mut body);
+                        }
+                        body.push_lit(");");
+                    }
+                    None => {
+                        body.push_lit("(");
+                        for (index, argument) in arguments.iter().enumerate() {
+                            if index > 0 {
+                                body.push_lit(", ");
+                            }
+                            self.push_operand(argument, &mut body);
+                        }
+                        body.push_lit(");");
+                    }
+                }
+                out.append(Rope::indented(1, body));
+                out.push_break(0);
+                out.push_lit("} else {");
+                out.push_break(1);
+                out.push_lit(format!("{result} = undefined;"));
+                out.push_break(0);
+                out.push_lit("}");
+            }
+        }
+        out.push_break(0);
+        self.conditional_region_depth
+            .set(self.conditional_region_depth.get() - 1);
+        let primary = operation.values[0];
+        let (kind, start, end, extent) = self.value_anchor(primary);
+        let mut anchored = Rope::new();
+        anchored.anchored(kind, start, end, extent, Rope::scoped(out));
+        anchored
+    }
+
+    /// One rebuilt argument of an optional call.
+    fn push_operand(&self, operand: &PlannedOperand, out: &mut Rope<'a>) {
+        match operand {
+            PlannedOperand::Value(expr) => {
+                out.push_lit(self.value_name_of(*expr).to_owned());
+            }
+            PlannedOperand::Source {
+                spread,
+                capture: Some(slot),
+                ..
+            } => {
+                if *spread {
+                    out.push_lit("...");
+                }
+                out.push_lit(self.value_slot_name(*slot).to_owned());
+            }
+            PlannedOperand::Source {
+                span,
+                spread,
+                capture: None,
+            } => {
+                if *spread {
+                    out.push_lit("...");
+                }
+                out.push_src(&self.source[span.start..span.end], span.start);
+            }
+        }
+    }
+
+    /// Captures the condition (or callee) of a conditional operation and
+    /// returns the name the region tests and calls. A member callee keeps
+    /// its receiver in a slot of its own — the rebuilt call goes through
+    /// `.call(receiver, ...)`, so no `.bind` is written.
+    fn emit_condition_capture(
+        &self,
+        condition: &PlannedEvaluationInput,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        out: &mut Rope<'a>,
+    ) -> String {
+        match condition {
+            PlannedEvaluationInput::Slot { slot, .. } => self.value_slot_name(*slot).to_owned(),
+            // An inert condition needs no capture; re-reading it in each
+            // branch is unobservable and yields the same value.
+            PlannedEvaluationInput::Stable { source } => {
+                format!("({})", &self.source[source.start..source.end])
+            }
+            PlannedEvaluationInput::Source {
+                source,
+                target,
+                receiver: Some((receiver_source, receiver_slot)),
+                mode: EvaluationInputMode::MemberReference,
+            } => {
+                if captured.insert(*target) {
+                    let receiver_name = self.value_slot_name(*receiver_slot);
+                    captured.insert(*receiver_slot);
+                    out.push_lit(format!("const {receiver_name} = ("));
+                    out.push_src(
+                        &self.source[receiver_source.start..receiver_source.end],
+                        receiver_source.start,
+                    );
+                    out.push_lit(");");
+                    out.push_break(0);
+                    out.push_lit(format!("const {} = (", self.value_slot_name(*target)));
+                    if source.start < receiver_source.start {
+                        out.push_src(
+                            &self.source[source.start..receiver_source.start],
+                            source.start,
+                        );
+                    }
+                    out.push_lit(receiver_name.to_owned());
+                    if receiver_source.end < source.end {
+                        out.push_src(
+                            &self.source[receiver_source.end..source.end],
+                            receiver_source.end,
+                        );
+                    }
+                    out.push_lit(");");
+                    out.push_break(0);
+                }
+                self.value_slot_name(*target).to_owned()
+            }
+            PlannedEvaluationInput::Source { source, target, .. } => {
+                if captured.insert(*target) {
+                    out.push_lit(format!("const {} = (", self.value_slot_name(*target)));
+                    out.push_src(&self.source[source.start..source.end], source.start);
+                    out.push_lit(");");
+                    out.push_break(0);
+                }
+                self.value_slot_name(*target).to_owned()
+            }
+        }
+    }
+
+    /// The join slot name of a tt value, from the plan.
+    fn value_name_of(&self, expr: ExprId) -> &str {
+        self.value_slots
+            .get(&expr)
+            .map(String::as_str)
+            .unwrap_or_else(|| {
+                panic!("internal compiler error: conditional operation value has no slot")
+            })
     }
 
     fn emit_compose_suffix(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
@@ -902,9 +1415,13 @@ impl<'a> Emitter<'a> {
                 let condition = match input {
                     PlannedEvaluationInput::Source { target, .. }
                     | PlannedEvaluationInput::Slot { slot: target, .. } => {
-                        self.value_slot_name(*target)
+                        self.value_slot_name(*target).to_owned()
+                    }
+                    PlannedEvaluationInput::Stable { source } => {
+                        format!("({})", &self.source[source.start..source.end])
                     }
                 };
+                let condition = condition.as_str();
                 prefix.push_lit("if (");
                 match branch {
                     ConditionalBranch::LogicalAndRight | ConditionalBranch::Consequent => {
@@ -945,7 +1462,9 @@ impl<'a> Emitter<'a> {
             let Expr::Sequence(body) = &self.core.exprs[expr.index()] else {
                 return None;
             };
-            body_value_expr(self.core, *body).and_then(|value| self.structured_value_slot(value))
+            self.core
+                .body_value_expr(*body)
+                .and_then(|value| self.structured_value_slot(value))
         })
     }
 
@@ -961,7 +1480,7 @@ impl<'a> Emitter<'a> {
                 (AnchorKind::ResultBind, start, end, end)
             }
             Expr::Sequence(body) => {
-                let value = body_value_expr(self.core, *body).unwrap_or_else(|| {
+                let value = self.core.body_value_expr(*body).unwrap_or_else(|| {
                     panic!("internal compiler error: slotted sequence has no value")
                 });
                 self.value_anchor(value)
@@ -1042,7 +1561,7 @@ impl<'a> Emitter<'a> {
 
     fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
         let mut out = Rope::new();
-        if can_structure_value_expr(self.core, value) && self.can_inline_continued_expr(value) {
+        if self.core.has_statement_form(value) && self.can_inline_continued_expr(value) {
             let slot = self.structured_value_slot(value).unwrap_or_else(|| {
                 panic!("internal compiler error: structured propagation value has no slot")
             });
@@ -1069,7 +1588,7 @@ impl<'a> Emitter<'a> {
             return true;
         };
         let statements = &self.core.bodies[body.index()].statements;
-        let Some((value_index, _)) = sequence_value(statements) else {
+        let Some((value_index, _)) = crate::core_ir::sequence_value(statements) else {
             return false;
         };
         statements
@@ -1436,9 +1955,17 @@ impl<'a> Emitter<'a> {
             panic!("internal compiler error: value decision is not a match")
         };
         let mut out = Rope::new();
+        // The region needs a label exactly when a rewritten exit sits
+        // inside a loop or `switch` the arm body wrote, which would swallow
+        // the `break` the rewrite emits. Otherwise the dispatch the region
+        // already generates — an if-chain's `do { … } while (false)`, or
+        // the `switch` itself — is the nearest `break` target, so the
+        // labeled block around it would be a second exit target for the
+        // same region (TASK-199, TASK-160 §6).
         let label = continuation
             .assignment_target()
             .filter(|_| decision_has_block_arm(decision))
+            .filter(|_| exits.iter().any(|exit| exit.captured_break))
             .map(exit_label);
         if let Some(label) = &label {
             out.push_lit(format!("{label}: "));
@@ -1486,7 +2013,7 @@ impl<'a> Emitter<'a> {
         expr: ExprId,
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
-        if !can_structure_value_expr(self.core, expr) {
+        if !self.core.has_statement_form(expr) {
             return None;
         }
         match &self.core.exprs[expr.index()] {
@@ -1536,7 +2063,7 @@ impl<'a> Emitter<'a> {
             inner.push_lit(format!("let {accumulator};"));
         }
         inner.push_break(1);
-        if can_structure_value_expr(self.core, head) {
+        if self.core.has_statement_form(head) {
             inner.append(Rope::indented(
                 1,
                 self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
@@ -1554,7 +2081,7 @@ impl<'a> Emitter<'a> {
         }
         self.used_pipe.set(true);
         for step in &apply.steps {
-            let step_value = if can_structure_value_expr(self.core, step.value) {
+            let step_value = if self.core.has_statement_form(step.value) {
                 let slot = self.structured_value_slot(step.value).unwrap_or_else(|| {
                     panic!("internal compiler error: structured apply step has no value slot")
                 });
@@ -1754,10 +2281,7 @@ impl<'a> Emitter<'a> {
             _ => None,
         };
         let body = if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
-            let label = exit_label.unwrap_or_else(|| {
-                panic!("internal compiler error: statement arm has no exit label")
-            });
-            self.emit_body_with_exits(body, exits, continuation, label)
+            self.emit_body_with_exits(body, exits, continuation, exit_label)
                 .trim()
         } else {
             self.emit_body(body).trim()

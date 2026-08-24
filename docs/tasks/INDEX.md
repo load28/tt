@@ -167,7 +167,7 @@
 | TASK-157 | shadow Evaluation IR과 CFG validator | 완료 | 2026-08-22 | 2026-08-22 | [TASK-157](./TASK-157-shadow-evaluation-ir.md) |
 | TASK-158 | source-preserving target과 printer | 완료 | 2026-08-22 | 2026-08-22 | [TASK-158](./TASK-158-source-preserving-target.md) |
 | TASK-159 | 값 continuation과 direct-return lowering (Phase 4 1/n) | 완료 | 2026-08-22 | 2026-08-22 | [TASK-159](./TASK-159-value-continuation-direct-return.md) |
-| TASK-160 | SWC whole-owner 기반 RL→TS 최적 lowering | 진행 중 | 2026-08-22 | — | [TASK-160](./TASK-160-whole-owner-ast-lowering.md) |
+| TASK-160 | SWC whole-owner 기반 RL→TS 최적 lowering | 완료 | 2026-08-22 | 2026-08-24 | [TASK-160](./TASK-160-whole-owner-ast-lowering.md) |
 | TASK-161 | SWC와 TypeScript 7 책임 경계 주석 | 완료 | 2026-08-22 | 2026-08-22 | [TASK-161](./TASK-161-swc-ts7-responsibility-comments.md) |
 | TASK-162 | 사용된 표준 라이브러리 멤버만 방출 | 완료 | 2026-08-22 | 2026-08-23 | [TASK-162](./TASK-162-stdlib-member-pruning.md) |
 | TASK-163 | `.rlx` — TSX 위의 rl 문법과 React 도구 체인 | 완료 | 2026-08-23 | 2026-08-23 | [TASK-163](./TASK-163-rlx-tsx-support.md) |
@@ -207,7 +207,8 @@
 | TASK-197 | tt 제작 동기 글 한글판 문장 개정 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-197-korean-essay-rewrite.md](./TASK-197-korean-essay-rewrite.md) |
 | TASK-198 | 방출 코드 가독성 — 레이아웃 계층과 그룹핑 규칙 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-198-generated-code-layout.md](./TASK-198-generated-code-layout.md) |
 | TASK-199 | block arm의 도달 불가능한 폴스루 제거 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-199-unreachable-arm-fallthrough.md](./TASK-199-unreachable-arm-fallthrough.md) |
+| TASK-200 | 일반 compile 출력용 표준 source map | 완료 | 2026-08-24 | 2026-08-24 | [TASK-200-standard-source-map.md](./TASK-200-standard-source-map.md) |
 
 ## 다음 태스크 번호
 
-**TASK-200**
+**TASK-201**

@@ -97,6 +97,12 @@ struct OverlayEntry {
 pub(crate) struct HostExit {
     pub(crate) statement: SourceSpan,
     pub(crate) argument: Option<SourceSpan>,
+    /// Whether the exit sits inside a statement that consumes an unlabeled
+    /// `break` — a loop or a `switch` written in the arm body. The rewrite
+    /// turns the `return` into a `break`, so such an exit is the only
+    /// reason a value region needs a label: everywhere else the region's
+    /// own dispatch is already the nearest `break` target.
+    pub(crate) captured_break: bool,
 }
 
 /// Ordered JavaScript evaluation obligations between one TT value and its
@@ -117,6 +123,39 @@ pub(crate) struct HostEvaluationStep {
     pub(crate) parent: SourceSpan,
     pub(crate) operation: HostEvaluationOperation,
     pub(crate) inputs: Vec<HostEvaluationInput>,
+    /// The structure of the conditional operation this step belongs to,
+    /// when [`HostEvaluationStep::operation`] is a
+    /// [`HostEvaluationOperation::Conditional`] — everything lowering needs
+    /// to restructure the *whole* operation rather than just its inputs.
+    pub(crate) conditional: Option<ConditionalFacts>,
+}
+
+/// The complete syntactic structure of one conditional operation, read off
+/// the SWC AST: the branch the tt value sits in, the branch the operation
+/// skips, and (for an optional call) the full argument list in evaluation
+/// order. This is what lets target lowering own the operation as one
+/// region instead of promoting an argument out of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ConditionalFacts {
+    /// The span of the conditionally-evaluated branch containing the value.
+    pub(crate) branch: SourceSpan,
+    /// The other branch of a ternary — evaluated exactly when the value's
+    /// branch is not. `None` for logical operators (the operation's result
+    /// is then the condition's own value) and for optional calls (the
+    /// result is then `undefined`).
+    pub(crate) skipped: Option<SourceSpan>,
+    /// An optional call's arguments, in order. Empty for other operations.
+    pub(crate) operands: Vec<ConditionalOperand>,
+    /// An optional call's explicit type arguments, verbatim.
+    pub(crate) type_args: Option<SourceSpan>,
+}
+
+/// One argument of an optional call: the argument expression, and whether
+/// the call spreads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ConditionalOperand {
+    pub(crate) span: SourceSpan,
+    pub(crate) spread: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,6 +163,8 @@ pub(crate) struct HostEvaluationInput {
     pub(crate) source: SourceSpan,
     pub(crate) mode: EvaluationInputMode,
     pub(crate) receiver: Option<SourceSpan>,
+    /// What evaluating this input may do — an optimization fact only.
+    pub(crate) effects: Effects,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,6 +172,78 @@ pub(crate) enum EvaluationInputMode {
     Value,
     DirectReference,
     MemberReference,
+}
+
+/// What evaluating one host expression may observably do
+/// (`docs/design/program-lowering.md` §9). Owned by this layer because it
+/// is a fact about TypeScript syntax; consumed **only** by optimization
+/// decisions (a capture that may be skipped) — correctness never branches
+/// on it, and an unknown expression is every effect at once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Effects {
+    pub(crate) may_read_mutable: bool,
+    pub(crate) may_write: bool,
+    pub(crate) may_call: bool,
+    pub(crate) may_throw: bool,
+    pub(crate) may_suspend: bool,
+    pub(crate) may_allocate: bool,
+    pub(crate) requires_reference: bool,
+}
+
+impl Effects {
+    /// The conservative default: anything might happen.
+    pub(crate) const ANY: Effects = Effects {
+        may_read_mutable: true,
+        may_write: true,
+        may_call: true,
+        may_throw: true,
+        may_suspend: true,
+        may_allocate: true,
+        requires_reference: false,
+    };
+
+    /// Nothing observable happens and re-evaluation yields the same value.
+    pub(crate) const NONE: Effects = Effects {
+        may_read_mutable: false,
+        may_write: false,
+        may_call: false,
+        may_throw: false,
+        may_suspend: false,
+        may_allocate: false,
+        requires_reference: false,
+    };
+
+    /// Whether evaluating the expression is observable at all — the proof a
+    /// capture of it may be elided: with no reads, writes, calls, throws,
+    /// suspensions, or allocation identity, moving its evaluation to the
+    /// host occurrence changes no trace, no count, and no value.
+    pub(crate) fn is_inert(&self) -> bool {
+        *self == Effects::NONE
+    }
+}
+
+/// The effects one host expression may have, judged from syntax alone.
+///
+/// Only shapes whose evaluation is provably unobservable answer
+/// [`Effects::NONE`]: plain literals (a regex literal allocates a fresh
+/// object per evaluation, so it is not one), possibly under TypeScript's
+/// transparent expression wrappers. Identifiers may read mutable bindings
+/// and may throw (TDZ); user types never prove runtime purity; everything
+/// unknown is [`Effects::ANY`].
+fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
+    use swc_ecma_ast::{Expr as SwcExpr, Lit};
+    match expression {
+        SwcExpr::Lit(Lit::Str(_) | Lit::Bool(_) | Lit::Null(_) | Lit::Num(_) | Lit::BigInt(_)) => {
+            Effects::NONE
+        }
+        SwcExpr::Paren(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsAs(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsSatisfies(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsNonNull(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsTypeAssertion(inner) => expression_effects(&inner.expr),
+        SwcExpr::TsInstantiation(inner) => expression_effects(&inner.expr),
+        _ => Effects::ANY,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -219,6 +332,33 @@ pub(crate) enum EvaluationFrequency {
     Indeterminate,
 }
 
+/// Whether reaching a value's [`HostOwner`] happens exactly as often as
+/// reaching the value.
+///
+/// Statement lowering inserts a value's control flow immediately before its
+/// host owner, so it is sound only when the two are reached equally often.
+/// That is a different question from [`EvaluationContext::frequency`], which
+/// is measured against the enclosing *function*: a value in the body of a
+/// `while` runs once per iteration relative to the function **and** relative
+/// to its owner (the body statement), but a value in the `while` **test**
+/// has the `while` statement itself as its owner, so hoisting to that owner
+/// would run it once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OwnerReach {
+    /// The owner is reached exactly when the value is. Edges the evaluation
+    /// protocol models as [`ConditionalBranch`] steps count as `Same`: the
+    /// schedule reproduces their conditionality in the target.
+    Same,
+    /// A loop header sits between them: the owner is reached once per loop,
+    /// the value once per iteration.
+    Repeated,
+    /// An edge between them makes the value's evaluation conditional in a
+    /// way no protocol step models — a `switch` case test, a destructuring
+    /// default, the tail of an optional chain. Statements hoisted to the
+    /// owner would run unconditionally.
+    UnmodeledConditional,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EvaluationOwner {
     Module,
@@ -247,18 +387,31 @@ pub(crate) enum HostContinuation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct EvaluationContext {
+    /// How often the value runs inside its [`EvaluationOwner`].
     pub(crate) frequency: EvaluationFrequency,
+    /// How often the value runs relative to its [`HostOwner`] — the fact
+    /// that decides whether statements may be hoisted to that owner.
+    pub(crate) owner_reach: OwnerReach,
     pub(crate) owner: EvaluationOwner,
     pub(crate) value_role: ValueRole,
     pub(crate) continuation: HostContinuation,
 }
 
 impl EvaluationContext {
-    fn from_path(category: SyntaxCategory, parents: &[AstParentKind]) -> Self {
+    /// `host_owner_edge` is where the chosen [`HostOwner`]'s own child edges
+    /// begin in `parents`; everything from there down sits between the owner
+    /// and the value.
+    fn from_path(
+        category: SyntaxCategory,
+        parents: &[AstParentKind],
+        host_owner_edge: usize,
+    ) -> Self {
         let (owner, owner_edge) = evaluation_owner(parents);
+        let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
         if category != SyntaxCategory::Expression {
             return Self {
                 frequency: frequency_within_owner(parents, owner_edge),
+                owner_reach,
                 owner,
                 value_role: ValueRole::None,
                 continuation: HostContinuation::Discard,
@@ -271,11 +424,81 @@ impl EvaluationContext {
         let continuation = host_continuation(local_path);
         Self {
             frequency,
+            owner_reach,
             owner,
             value_role,
             continuation,
         }
     }
+}
+
+/// The evaluation regions between a value's host owner and the value.
+///
+/// Only the *header* positions of a loop can make the reach `Repeated`: a
+/// loop body is a statement, and a statement is itself a host owner, so a
+/// value in a body never sees the loop edge from its own owner.
+///
+/// Conditional edges split by who reproduces them. The ternary, logical
+/// right-hand sides, and optional call arguments become
+/// [`ConditionalBranch`] steps whose target regenerates the condition, so
+/// they leave the reach `Same`. A `switch` case test, a destructuring
+/// default, and the tail of an optional chain have no protocol step — a
+/// value behind one of them cannot be hoisted to its owner at all.
+fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
+    let mut reach = OwnerReach::Same;
+    for (index, parent) in local_path.iter().enumerate() {
+        match parent {
+            AstParentKind::ForStmt(
+                fields::ForStmtField::Test
+                | fields::ForStmtField::Update
+                | fields::ForStmtField::Body,
+            )
+            | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
+            | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
+            | AstParentKind::WhileStmt(fields::WhileStmtField::Test | fields::WhileStmtField::Body)
+            | AstParentKind::DoWhileStmt(
+                fields::DoWhileStmtField::Test | fields::DoWhileStmtField::Body,
+            ) => return OwnerReach::Repeated,
+            // Evaluated only when no earlier case matched — and always after
+            // the discriminant, which hoisting would also reorder.
+            AstParentKind::SwitchCase(fields::SwitchCaseField::Test)
+            // A destructuring default: evaluated only when the matched
+            // property or element is undefined.
+            | AstParentKind::AssignPat(fields::AssignPatField::Right)
+            | AstParentKind::AssignPatProp(fields::AssignPatPropField::Value) => {
+                reach = OwnerReach::UnmodeledConditional;
+            }
+            // Inside an optional chain, everything but the base object, the
+            // callee, and the arguments of the chain's own optional call is
+            // skipped when the chain short-circuits. The arguments are the
+            // one position a protocol step models
+            // ([`ConditionalBranch::OptionalCallArgument`]).
+            AstParentKind::OptChainExpr(fields::OptChainExprField::Base) => {
+                let modeled = match local_path.get(index + 1) {
+                    Some(AstParentKind::OptChainBase(fields::OptChainBaseField::Call)) => {
+                        matches!(
+                            local_path.get(index + 2),
+                            Some(AstParentKind::OptCall(
+                                fields::OptCallField::Args(_) | fields::OptCallField::Callee,
+                            ))
+                        )
+                    }
+                    Some(AstParentKind::OptChainBase(fields::OptChainBaseField::Member)) => {
+                        matches!(
+                            local_path.get(index + 2),
+                            Some(AstParentKind::MemberExpr(fields::MemberExprField::Obj))
+                        )
+                    }
+                    _ => false,
+                };
+                if !modeled {
+                    reach = OwnerReach::UnmodeledConditional;
+                }
+            }
+            _ => {}
+        }
+    }
+    reach
 }
 
 fn evaluation_owner(parents: &[AstParentKind]) -> (EvaluationOwner, usize) {
@@ -984,7 +1207,12 @@ struct ParentCollector {
     protocol_frames: Vec<ProjectedProtocolFrame>,
     occupied_names: HashSet<String>,
     function_depth: usize,
-    exit_regions: Vec<(TtNodeId, usize)>,
+    /// How many enclosing statements consume an unlabeled `break`
+    /// (loops and `switch`).
+    break_capture_depth: usize,
+    /// The exit-collecting regions in scope, with the function depth an
+    /// exit must sit at and the break-capture depth the region opened at.
+    exit_regions: Vec<(TtNodeId, usize, usize)>,
 }
 
 struct CollectedProgramSyntax {
@@ -1004,24 +1232,25 @@ struct FoundOverlay {
 struct ProjectedHostExit {
     statement: ProjectedSpan,
     argument: Option<ProjectedSpan>,
+    captured_break: bool,
 }
 
 #[derive(Debug, Clone)]
 enum ProjectedProtocolFrame {
     Ordered {
         parent: ProjectedSpan,
-        positions: Vec<ProjectedSpan>,
+        positions: Vec<(ProjectedSpan, Effects)>,
         kind: OrderedEvaluationKind,
     },
     Binary {
         parent: ProjectedSpan,
         operator: BinaryOp,
-        left: ProjectedSpan,
+        left: (ProjectedSpan, Effects),
         right: ProjectedSpan,
     },
     Conditional {
         parent: ProjectedSpan,
-        test: ProjectedSpan,
+        test: (ProjectedSpan, Effects),
         consequent: ProjectedSpan,
         alternate: ProjectedSpan,
     },
@@ -1030,39 +1259,58 @@ enum ProjectedProtocolFrame {
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,
         callee_receiver: Option<ProjectedSpan>,
-        arguments: Vec<ProjectedSpan>,
+        arguments: Vec<(ProjectedSpan, bool, Effects)>,
+        type_args: Option<ProjectedSpan>,
         optional: bool,
     },
     Member {
         parent: ProjectedSpan,
-        object: ProjectedSpan,
+        object: (ProjectedSpan, Effects),
         property: Option<ProjectedSpan>,
     },
     Construct {
         parent: ProjectedSpan,
         callee: ProjectedSpan,
-        arguments: Vec<ProjectedSpan>,
+        arguments: Vec<(ProjectedSpan, bool, Effects)>,
     },
     TaggedTemplate {
         parent: ProjectedSpan,
         tag: ProjectedSpan,
         tag_mode: EvaluationInputMode,
         tag_receiver: Option<ProjectedSpan>,
-        expressions: Vec<ProjectedSpan>,
+        expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Template {
         parent: ProjectedSpan,
-        expressions: Vec<ProjectedSpan>,
+        expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Jsx {
         parent: ProjectedSpan,
-        expressions: Vec<ProjectedSpan>,
+        expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Suspend {
         parent: ProjectedSpan,
         kind: SuspensionKind,
         value: Option<ProjectedSpan>,
     },
+}
+
+impl ProjectedProtocolFrame {
+    /// The projected span of the node that owns this evaluation frame.
+    fn parent(&self) -> ProjectedSpan {
+        match self {
+            ProjectedProtocolFrame::Ordered { parent, .. }
+            | ProjectedProtocolFrame::Binary { parent, .. }
+            | ProjectedProtocolFrame::Conditional { parent, .. }
+            | ProjectedProtocolFrame::Call { parent, .. }
+            | ProjectedProtocolFrame::Member { parent, .. }
+            | ProjectedProtocolFrame::Construct { parent, .. }
+            | ProjectedProtocolFrame::TaggedTemplate { parent, .. }
+            | ProjectedProtocolFrame::Template { parent, .. }
+            | ProjectedProtocolFrame::Jsx { parent, .. }
+            | ProjectedProtocolFrame::Suspend { parent, .. } => *parent,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1078,25 +1326,41 @@ enum OrderedEvaluationKind {
 struct ProjectedHostOwner {
     kind: HostOwnerKind,
     span: ProjectedSpan,
+    /// How many parent edges precede this owner's own child edges. Slicing
+    /// a value's parent path here leaves exactly the edges between the owner
+    /// and the value ([`owner_reach`]).
+    edge: usize,
 }
 
-fn object_evaluation_positions(node: &ObjectLit, source_start: u32) -> Vec<ProjectedSpan> {
+fn object_evaluation_positions(
+    node: &ObjectLit,
+    source_start: u32,
+) -> Vec<(ProjectedSpan, Effects)> {
     let mut positions = Vec::new();
     for property in &node.props {
         match property {
             PropOrSpread::Spread(spread) => {
-                positions.push(projected_span(spread.expr.span(), source_start));
+                positions.push((
+                    projected_span(spread.expr.span(), source_start),
+                    expression_effects(&spread.expr),
+                ));
             }
             PropOrSpread::Prop(property) => match &**property {
                 Prop::Shorthand(identifier) => {
-                    positions.push(projected_span(identifier.span, source_start));
+                    positions.push((projected_span(identifier.span, source_start), Effects::ANY));
                 }
                 Prop::KeyValue(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
-                    positions.push(projected_span(property.value.span(), source_start));
+                    positions.push((
+                        projected_span(property.value.span(), source_start),
+                        expression_effects(&property.value),
+                    ));
                 }
                 Prop::Assign(property) => {
-                    positions.push(projected_span(property.value.span(), source_start));
+                    positions.push((
+                        projected_span(property.value.span(), source_start),
+                        expression_effects(&property.value),
+                    ));
                 }
                 Prop::Getter(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
@@ -1113,10 +1377,37 @@ fn object_evaluation_positions(node: &ObjectLit, source_start: u32) -> Vec<Proje
     positions
 }
 
-fn push_computed_property(positions: &mut Vec<ProjectedSpan>, name: &PropName, source_start: u32) {
+fn push_computed_property(
+    positions: &mut Vec<(ProjectedSpan, Effects)>,
+    name: &PropName,
+    source_start: u32,
+) {
     if let PropName::Computed(computed) = name {
-        positions.push(projected_span(computed.expr.span(), source_start));
+        positions.push((
+            projected_span(computed.expr.span(), source_start),
+            expression_effects(&computed.expr),
+        ));
     }
+}
+
+/// The evaluation positions of a call's arguments: the argument
+/// *expression* spans (a spread's `...` stays with the call, so a capture
+/// of the position captures a value, not spread syntax), plus whether the
+/// call spreads each.
+fn argument_positions(
+    arguments: &[swc_ecma_ast::ExprOrSpread],
+    source_start: u32,
+) -> Vec<(ProjectedSpan, bool, Effects)> {
+    arguments
+        .iter()
+        .map(|argument| {
+            (
+                projected_span(argument.expr.span(), source_start),
+                argument.spread.is_some(),
+                expression_effects(&argument.expr),
+            )
+        })
+        .collect()
 }
 
 fn jsx_expression_span(expression: &JSXExpr, source_start: u32) -> Option<ProjectedSpan> {
@@ -1221,6 +1512,7 @@ impl ParentCollector {
             protocol_frames: Vec::new(),
             occupied_names: HashSet::new(),
             function_depth: 0,
+            break_capture_depth: 0,
             exit_regions: Vec::new(),
         }
     }
@@ -1295,11 +1587,25 @@ impl ParentCollector {
                 category: entry.category,
                 source: entry.source,
                 projected: entry.projected,
-                context: EvaluationContext::from_path(entry.category, &found.parents),
+                context: EvaluationContext::from_path(
+                    entry.category,
+                    &found.parents,
+                    projected_owner.edge,
+                ),
+                // A frame outside the host owner is not this owner's
+                // evaluation obligation: a statement (or a concise arrow
+                // body) can sit inside an outer expression only across a
+                // function boundary, and the rewrite happens where the owner
+                // executes, not where the enclosing expression does.
                 protocol: evaluation_protocol(
                     &self.source_segments,
                     entry.projected,
-                    &found.protocol_frames,
+                    &found
+                        .protocol_frames
+                        .iter()
+                        .filter(|frame| projected_contains(projected_owner.span, frame.parent()))
+                        .cloned()
+                        .collect::<Vec<_>>(),
                 )?,
                 core_root: entry.core_root,
                 parents: found.parents,
@@ -1316,6 +1622,7 @@ impl ParentCollector {
                                     map_evaluation_span(&self.source_segments, argument)
                                 })
                                 .transpose()?,
+                            captured_break: exit.captured_break,
                         })
                     })
                     .collect::<Result<Vec<_>, ProgramSyntaxError>>()?,
@@ -1338,6 +1645,7 @@ impl VisitAstPath for ParentCollector {
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ModuleItem,
             span: projected_span(item.span(), self.source_start),
+            edge: path.kinds().len(),
         });
         <ModuleItem as VisitWithAstPath<Self>>::visit_children_with_ast_path(item, self, path);
         self.host_owners.pop();
@@ -1347,6 +1655,7 @@ impl VisitAstPath for ParentCollector {
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::Statement,
             span: projected_span(statement.span(), self.source_start),
+            edge: path.kinds().len(),
         });
         <Stmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(statement, self, path);
         self.host_owners.pop();
@@ -1359,7 +1668,12 @@ impl VisitAstPath for ParentCollector {
                 .elems
                 .iter()
                 .flatten()
-                .map(|element| projected_span(element.expr.span(), self.source_start))
+                .map(|element| {
+                    (
+                        projected_span(element.expr.span(), self.source_start),
+                        expression_effects(&element.expr),
+                    )
+                })
                 .collect(),
             kind: OrderedEvaluationKind::Array,
         });
@@ -1388,7 +1702,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
             parent: projected_span(node.span, self.source_start),
-            positions: vec![projected_span(node.right.span(), self.source_start)],
+            positions: vec![(
+                projected_span(node.right.span(), self.source_start),
+                expression_effects(&node.right),
+            )],
             kind: OrderedEvaluationKind::Assignment,
         });
         <AssignExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1401,7 +1718,12 @@ impl VisitAstPath for ParentCollector {
             positions: node
                 .exprs
                 .iter()
-                .map(|expression| projected_span(expression.span(), self.source_start))
+                .map(|expression| {
+                    (
+                        projected_span(expression.span(), self.source_start),
+                        expression_effects(expression),
+                    )
+                })
                 .collect(),
             kind: OrderedEvaluationKind::Sequence,
         });
@@ -1416,7 +1738,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
             parent: projected_span(node.span, self.source_start),
-            positions: vec![projected_span(node.arg.span(), self.source_start)],
+            positions: vec![(
+                projected_span(node.arg.span(), self.source_start),
+                expression_effects(&node.arg),
+            )],
             kind: OrderedEvaluationKind::Unary,
         });
         <UnaryExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1427,7 +1752,10 @@ impl VisitAstPath for ParentCollector {
         self.protocol_frames.push(ProjectedProtocolFrame::Binary {
             parent: projected_span(node.span, self.source_start),
             operator: node.op,
-            left: projected_span(node.left.span(), self.source_start),
+            left: (
+                projected_span(node.left.span(), self.source_start),
+                expression_effects(&node.left),
+            ),
             right: projected_span(node.right.span(), self.source_start),
         });
         <BinExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1438,7 +1766,10 @@ impl VisitAstPath for ParentCollector {
         self.protocol_frames
             .push(ProjectedProtocolFrame::Conditional {
                 parent: projected_span(node.span, self.source_start),
-                test: projected_span(node.test.span(), self.source_start),
+                test: (
+                    projected_span(node.test.span(), self.source_start),
+                    expression_effects(&node.test),
+                ),
                 consequent: projected_span(node.cons.span(), self.source_start),
                 alternate: projected_span(node.alt.span(), self.source_start),
             });
@@ -1452,7 +1783,8 @@ impl VisitAstPath for ParentCollector {
             self.record_overlay(id, path);
             let collects_exits = self.expected_exit_calls.contains(&id);
             if collects_exits {
-                self.exit_regions.push((id, self.function_depth + 1));
+                self.exit_regions
+                    .push((id, self.function_depth + 1, self.break_capture_depth));
             }
             <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
             if collects_exits {
@@ -1479,15 +1811,87 @@ impl VisitAstPath for ParentCollector {
             )),
             callee_mode,
             callee_receiver: callee_receiver.map(|span| projected_span(span, self.source_start)),
-            arguments: node
-                .args
-                .iter()
-                .map(|argument| projected_span(argument.span(), self.source_start))
-                .collect(),
+            arguments: argument_positions(&node.args, self.source_start),
+            type_args: node
+                .type_args
+                .as_ref()
+                .map(|args| projected_span(args.span(), self.source_start)),
             optional: false,
         });
         <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
+    }
+
+    fn visit_for_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::ForStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::ForStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_for_in_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::ForInStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::ForInStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_for_of_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::ForOfStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::ForOfStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_while_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::WhileStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::WhileStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_do_while_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::DoWhileStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::DoWhileStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
+    }
+
+    fn visit_switch_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::SwitchStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.break_capture_depth += 1;
+        <swc_ecma_ast::SwitchStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.break_capture_depth -= 1;
     }
 
     fn visit_arrow_expr<'ast: 'r, 'r>(
@@ -1499,6 +1903,7 @@ impl VisitAstPath for ParentCollector {
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
+            edge: path.kinds().len(),
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.host_owners.pop();
@@ -1526,7 +1931,7 @@ impl VisitAstPath for ParentCollector {
         node: &'ast ReturnStmt,
         path: &mut AstNodePath<'r>,
     ) {
-        if let Some((id, target_depth)) = self.exit_regions.last().copied()
+        if let Some((id, target_depth, region_break_depth)) = self.exit_regions.last().copied()
             && target_depth == self.function_depth
             && let Some(found) = self.found.get_mut(&id)
         {
@@ -1536,6 +1941,7 @@ impl VisitAstPath for ParentCollector {
                     .arg
                     .as_ref()
                     .map(|argument| projected_span(argument.span(), self.source_start)),
+                captured_break: self.break_capture_depth > region_break_depth,
             });
         }
         <ReturnStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1551,11 +1957,11 @@ impl VisitAstPath for ParentCollector {
             )),
             callee_mode,
             callee_receiver: callee_receiver.map(|span| projected_span(span, self.source_start)),
-            arguments: node
-                .args
-                .iter()
-                .map(|argument| projected_span(argument.span(), self.source_start))
-                .collect(),
+            arguments: argument_positions(&node.args, self.source_start),
+            type_args: node
+                .type_args
+                .as_ref()
+                .map(|args| projected_span(args.span(), self.source_start)),
             optional: true,
         });
         <OptCall as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1575,7 +1981,10 @@ impl VisitAstPath for ParentCollector {
         };
         self.protocol_frames.push(ProjectedProtocolFrame::Member {
             parent: projected_span(node.span, self.source_start),
-            object: projected_span(node.obj.span(), self.source_start),
+            object: (
+                projected_span(node.obj.span(), self.source_start),
+                expression_effects(&node.obj),
+            ),
             property,
         });
         <MemberExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1589,10 +1998,9 @@ impl VisitAstPath for ParentCollector {
                 callee: projected_span(reference_value_span(&node.callee), self.source_start),
                 arguments: node
                     .args
-                    .iter()
-                    .flatten()
-                    .map(|argument| projected_span(argument.span(), self.source_start))
-                    .collect(),
+                    .as_deref()
+                    .map(|args| argument_positions(args, self.source_start))
+                    .unwrap_or_default(),
             });
         <NewExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -1614,7 +2022,12 @@ impl VisitAstPath for ParentCollector {
                     .tpl
                     .exprs
                     .iter()
-                    .map(|expression| projected_span(expression.span(), self.source_start))
+                    .map(|expression| {
+                        (
+                            projected_span(expression.span(), self.source_start),
+                            expression_effects(expression),
+                        )
+                    })
                     .collect(),
             });
         <TaggedTpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1627,7 +2040,12 @@ impl VisitAstPath for ParentCollector {
             expressions: node
                 .exprs
                 .iter()
-                .map(|expression| projected_span(expression.span(), self.source_start))
+                .map(|expression| {
+                    (
+                        projected_span(expression.span(), self.source_start),
+                        expression_effects(expression),
+                    )
+                })
                 .collect(),
         });
         <Tpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -1641,7 +2059,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
             parent: projected_span(node.span, self.source_start),
-            expressions: jsx_evaluation_positions(node, self.source_start),
+            expressions: jsx_evaluation_positions(node, self.source_start)
+                .into_iter()
+                .map(|span| (span, Effects::ANY))
+                .collect(),
         });
         <JSXElement as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -1654,7 +2075,10 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.protocol_frames.push(ProjectedProtocolFrame::Jsx {
             parent: projected_span(node.span, self.source_start),
-            expressions: jsx_fragment_positions(node, self.source_start),
+            expressions: jsx_fragment_positions(node, self.source_start)
+                .into_iter()
+                .map(|span| (span, Effects::ANY))
+                .collect(),
         });
         <JSXFragment as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -1726,18 +2150,30 @@ fn evaluation_protocol(
     Ok(HostEvaluationProtocol { steps })
 }
 
+/// The projected shape of one conditional operation, before span mapping.
+struct ProjectedConditionalFacts {
+    branch: ProjectedSpan,
+    skipped: Option<ProjectedSpan>,
+    operands: Vec<(ProjectedSpan, bool)>,
+    type_args: Option<ProjectedSpan>,
+}
+
 fn protocol_step(
     segments: &[ProjectionSourceSegment],
     value: ProjectedSpan,
     frame: &ProjectedProtocolFrame,
 ) -> Result<Option<HostEvaluationStep>, ProgramSyntaxError> {
+    let mut conditional: Option<ProjectedConditionalFacts> = None;
     let (parent, operation, inputs) = match frame {
         ProjectedProtocolFrame::Ordered {
             parent,
             positions,
             kind,
         } => {
-            let Some(position) = child_index(positions, value) else {
+            let Some(position) = positions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -1752,17 +2188,19 @@ fn protocol_step(
             let inputs = positions[..position]
                 .iter()
                 .copied()
-                .map(|input| (input, EvaluationInputMode::Value, None))
+                .map(|(span, effects)| (span, EvaluationInputMode::Value, None, effects))
                 .collect();
             (*parent, operation, inputs)
         }
-        ProjectedProtocolFrame::Binary { parent, left, .. } if projected_contains(*left, value) => {
-            (
-                *parent,
-                HostEvaluationOperation::Eager(EagerPosition::BinaryLeft),
-                Vec::new(),
-            )
-        }
+        ProjectedProtocolFrame::Binary {
+            parent,
+            left: (left, _),
+            ..
+        } if projected_contains(*left, value) => (
+            *parent,
+            HostEvaluationOperation::Eager(EagerPosition::BinaryLeft),
+            Vec::new(),
+        ),
         ProjectedProtocolFrame::Binary {
             parent,
             operator,
@@ -1782,32 +2220,59 @@ fn protocol_step(
                 }
                 _ => HostEvaluationOperation::Eager(EagerPosition::BinaryRight),
             };
+            if matches!(operation, HostEvaluationOperation::Conditional(_)) {
+                conditional = Some(ProjectedConditionalFacts {
+                    branch: *right,
+                    skipped: None,
+                    operands: Vec::new(),
+                    type_args: None,
+                });
+            }
+            let (left, effects) = *left;
             (
                 *parent,
                 operation,
-                vec![(*left, EvaluationInputMode::Value, None)],
+                vec![(left, EvaluationInputMode::Value, None, effects)],
             )
         }
         ProjectedProtocolFrame::Conditional {
             parent,
             test,
             consequent,
-            ..
-        } if projected_contains(*consequent, value) => (
-            *parent,
-            HostEvaluationOperation::Conditional(ConditionalBranch::Consequent),
-            vec![(*test, EvaluationInputMode::Value, None)],
-        ),
+            alternate,
+        } if projected_contains(*consequent, value) => {
+            conditional = Some(ProjectedConditionalFacts {
+                branch: *consequent,
+                skipped: Some(*alternate),
+                operands: Vec::new(),
+                type_args: None,
+            });
+            let (test, effects) = *test;
+            (
+                *parent,
+                HostEvaluationOperation::Conditional(ConditionalBranch::Consequent),
+                vec![(test, EvaluationInputMode::Value, None, effects)],
+            )
+        }
         ProjectedProtocolFrame::Conditional {
             parent,
             test,
+            consequent,
             alternate,
-            ..
-        } if projected_contains(*alternate, value) => (
-            *parent,
-            HostEvaluationOperation::Conditional(ConditionalBranch::Alternate),
-            vec![(*test, EvaluationInputMode::Value, None)],
-        ),
+        } if projected_contains(*alternate, value) => {
+            conditional = Some(ProjectedConditionalFacts {
+                branch: *alternate,
+                skipped: Some(*consequent),
+                operands: Vec::new(),
+                type_args: None,
+            });
+            let (test, effects) = *test;
+            (
+                *parent,
+                HostEvaluationOperation::Conditional(ConditionalBranch::Alternate),
+                vec![(test, EvaluationInputMode::Value, None, effects)],
+            )
+        }
         ProjectedProtocolFrame::Call {
             parent,
             callee: Some(callee),
@@ -1828,15 +2293,27 @@ fn protocol_step(
             callee_mode,
             callee_receiver,
             arguments,
+            type_args,
             optional,
-            ..
         } => {
-            let Some(position) = child_index(arguments, value) else {
+            let Some(position) = arguments
+                .iter()
+                .position(|(argument, _, _)| projected_contains(*argument, value))
+            else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
             let operation = if *optional {
+                conditional = Some(ProjectedConditionalFacts {
+                    branch: arguments[position].0,
+                    skipped: None,
+                    operands: arguments
+                        .iter()
+                        .map(|(span, spread, _)| (*span, *spread))
+                        .collect(),
+                    type_args: *type_args,
+                });
                 HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(index))
             } else {
                 HostEvaluationOperation::Eager(EagerPosition::CallArgument(index))
@@ -1844,33 +2321,30 @@ fn protocol_step(
             let inputs = callee
                 .iter()
                 .copied()
-                .map(|callee| (callee, *callee_mode, *callee_receiver))
-                .chain(
-                    arguments[..position]
-                        .iter()
-                        .copied()
-                        .map(|argument| (argument, EvaluationInputMode::Value, None)),
-                )
+                .map(|callee| (callee, *callee_mode, *callee_receiver, Effects::ANY))
+                .chain(arguments[..position].iter().map(|(argument, _, effects)| {
+                    (*argument, EvaluationInputMode::Value, None, *effects)
+                }))
                 .collect();
             (*parent, operation, inputs)
         }
-        ProjectedProtocolFrame::Member { parent, object, .. }
-            if projected_contains(*object, value) =>
-        {
-            (
-                *parent,
-                HostEvaluationOperation::Reference(ReferencePosition::MemberObject),
-                Vec::new(),
-            )
-        }
         ProjectedProtocolFrame::Member {
             parent,
-            object,
+            object: (object, _),
+            ..
+        } if projected_contains(*object, value) => (
+            *parent,
+            HostEvaluationOperation::Reference(ReferencePosition::MemberObject),
+            Vec::new(),
+        ),
+        ProjectedProtocolFrame::Member {
+            parent,
+            object: (object, effects),
             property: Some(property),
         } if projected_contains(*property, value) => (
             *parent,
             HostEvaluationOperation::Reference(ReferencePosition::MemberProperty),
-            vec![(*object, EvaluationInputMode::Value, None)],
+            vec![(*object, EvaluationInputMode::Value, None, *effects)],
         ),
         ProjectedProtocolFrame::Construct { parent, callee, .. }
             if projected_contains(*callee, value) =>
@@ -1886,18 +2360,18 @@ fn protocol_step(
             callee,
             arguments,
         } => {
-            let Some(position) = child_index(arguments, value) else {
+            let Some(position) = arguments
+                .iter()
+                .position(|(argument, _, _)| projected_contains(*argument, value))
+            else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = std::iter::once((*callee, EvaluationInputMode::Value, None))
-                .chain(
-                    arguments[..position]
-                        .iter()
-                        .copied()
-                        .map(|argument| (argument, EvaluationInputMode::Value, None)),
-                )
+            let inputs = std::iter::once((*callee, EvaluationInputMode::Value, None, Effects::ANY))
+                .chain(arguments[..position].iter().map(|(argument, _, effects)| {
+                    (*argument, EvaluationInputMode::Value, None, *effects)
+                }))
                 .collect();
             (
                 *parent,
@@ -1921,17 +2395,22 @@ fn protocol_step(
             tag_receiver,
             expressions,
         } => {
-            let Some(position) = child_index(expressions, value) else {
+            let Some(position) = expressions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = std::iter::once((*tag, *tag_mode, *tag_receiver))
+            let inputs = std::iter::once((*tag, *tag_mode, *tag_receiver, Effects::ANY))
                 .chain(
                     expressions[..position]
                         .iter()
                         .copied()
-                        .map(|expression| (expression, EvaluationInputMode::Value, None)),
+                        .map(|(expression, effects)| {
+                            (expression, EvaluationInputMode::Value, None, effects)
+                        }),
                 )
                 .collect();
             (
@@ -1944,7 +2423,10 @@ fn protocol_step(
             parent,
             expressions,
         } => {
-            let Some(position) = child_index(expressions, value) else {
+            let Some(position) = expressions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -1952,7 +2434,9 @@ fn protocol_step(
             let inputs = expressions[..position]
                 .iter()
                 .copied()
-                .map(|expression| (expression, EvaluationInputMode::Value, None))
+                .map(|(expression, effects)| {
+                    (expression, EvaluationInputMode::Value, None, effects)
+                })
                 .collect();
             (
                 *parent,
@@ -1964,7 +2448,10 @@ fn protocol_step(
             parent,
             expressions,
         } => {
-            let Some(position) = child_index(expressions, value) else {
+            let Some(position) = expressions
+                .iter()
+                .position(|(span, _)| projected_contains(*span, value))
+            else {
                 return Ok(None);
             };
             let index =
@@ -1972,7 +2459,9 @@ fn protocol_step(
             let inputs = expressions[..position]
                 .iter()
                 .copied()
-                .map(|expression| (expression, EvaluationInputMode::Value, None))
+                .map(|(expression, effects)| {
+                    (expression, EvaluationInputMode::Value, None, effects)
+                })
                 .collect();
             (
                 *parent,
@@ -1992,20 +2481,52 @@ fn protocol_step(
     let parent = map_evaluation_span(segments, parent)?;
     let inputs = inputs
         .into_iter()
-        .map(|(source, mode, receiver)| {
+        .map(|(source, mode, receiver, effects)| {
             Ok(HostEvaluationInput {
                 source: map_evaluation_span(segments, source)?,
                 mode,
                 receiver: receiver
                     .map(|receiver| map_evaluation_span(segments, receiver))
                     .transpose()?,
+                effects: Effects {
+                    requires_reference: mode != EvaluationInputMode::Value,
+                    ..effects
+                },
             })
         })
         .collect::<Result<Vec<_>, ProgramSyntaxError>>()?;
+    let conditional = conditional
+        .map(|facts| {
+            Ok(ConditionalFacts {
+                // The branch holds the tt value, so it has no contiguous
+                // source mapping; its bounds map endpoint-by-endpoint.
+                branch: map_evaluation_span(segments, facts.branch)?,
+                skipped: facts
+                    .skipped
+                    .map(|span| map_evaluation_span(segments, span))
+                    .transpose()?,
+                operands: facts
+                    .operands
+                    .into_iter()
+                    .map(|(span, spread)| {
+                        Ok(ConditionalOperand {
+                            span: map_evaluation_span(segments, span)?,
+                            spread,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, ProgramSyntaxError>>()?,
+                type_args: facts
+                    .type_args
+                    .map(|span| map_evaluation_span(segments, span))
+                    .transpose()?,
+            })
+        })
+        .transpose()?;
     Ok(Some(HostEvaluationStep {
         parent,
         operation,
         inputs,
+        conditional,
     }))
 }
 
@@ -2065,12 +2586,6 @@ fn reference_value_span(expression: &swc_ecma_ast::Expr) -> swc_common::Span {
         SwcExpr::TsSatisfies(expression) => reference_value_span(&expression.expr),
         _ => expression.span(),
     }
-}
-
-fn child_index(children: &[ProjectedSpan], value: ProjectedSpan) -> Option<usize> {
-    children
-        .iter()
-        .position(|child| projected_contains(*child, value))
 }
 
 fn projected_span(span: swc_common::Span, source_start: u32) -> ProjectedSpan {

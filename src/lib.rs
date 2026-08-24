@@ -62,6 +62,7 @@ mod error;
 mod evaluation_ir;
 pub mod flow;
 pub mod hir;
+mod ice;
 mod lexer;
 mod parser;
 mod probe;
@@ -70,6 +71,7 @@ pub mod resolve;
 mod scanner;
 mod sema;
 mod sidecar;
+pub mod source_map;
 mod stdlib;
 pub(crate) mod typescript;
 mod val;
@@ -487,6 +489,8 @@ pub enum AnchorKind {
     /// A pipeline's apply helper (`$tt_ap`) or composition helper
     /// (`$tt_fl`).
     Pipe,
+    /// A tt `enum`'s union type and constructor object.
+    Enum,
 }
 
 /// A stretch of emitted output that ttc wrote itself, and the construct it
@@ -567,6 +571,36 @@ impl MappedEmit {
     /// first. `None` when the byte is not in any construct's glue.
     pub fn anchor_at(&self, out: usize) -> Option<&EmitAnchor> {
         self.anchors.iter().find(|a| a.out <= out && out < a.end)
+    }
+
+    /// The Source Map v3 for this emission, over the `source` it was
+    /// compiled from.
+    ///
+    /// The map is built from [`MappedEmit::mappings`] and
+    /// [`MappedEmit::anchors`] — the emission's own record of which output
+    /// bytes are copied source and which construct wrote each stretch of
+    /// glue. `code` is not searched for anything but line breaks.
+    ///
+    /// ```
+    /// use ttc::{compile_mapped, source_map::SourceMapRequest, Options};
+    ///
+    /// let emit = compile_mapped("const n = 1;\n", &Options::default()).unwrap();
+    /// let map = emit.source_map(
+    ///     "const n = 1;\n",
+    ///     &SourceMapRequest {
+    ///         source: "a.tt",
+    ///         ..SourceMapRequest::default()
+    ///     },
+    /// );
+    /// assert!(map.to_json().contains("\"sources\":[\"a.tt\"]"));
+    /// ```
+    #[must_use]
+    pub fn source_map(
+        &self,
+        source: &str,
+        request: &source_map::SourceMapRequest<'_>,
+    ) -> source_map::SourceMap {
+        source_map::build(source, &self.code, &self.mappings, &self.anchors, request)
     }
 }
 

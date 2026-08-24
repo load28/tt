@@ -299,9 +299,17 @@ fn one_owner_schedules_multiple_tt_values_without_expression_boundaries() {
 
 #[test]
 fn reference_protocol_preserves_optional_calls_and_structures_tagged_templates() {
+    // TASK-160 결정 17: a member optional call is one whole operation — the
+    // receiver and callee evaluate once, the argument only past the nullish
+    // check, and the call goes through the receiver.
     let optional = ok("enum E { A(value: number), B }\n\
          const value = receiver.method?.(match (input) { A(value) => value, B => 0 });\n");
-    assert!(optional.contains("$tt_expr(() =>"), "{optional}");
+    assert!(!optional.contains("$tt_expr"), "{optional}");
+    assert!(optional.contains("!= null) {"), "{optional}");
+    assert!(optional.contains(".call("), "{optional}");
+    let check = optional.find("!= null").expect("nullish check");
+    let lowering = optional.find("switch (").expect("value region");
+    assert!(check < lowering, "{optional}");
 
     let tagged = ok("enum E { A(value: number), B }\n\
          const value = receiver.tag`value:${match (input) { A(value) => value, B => 0 }}`;\n");
@@ -2541,7 +2549,7 @@ fn tuple_match_over_builtin_enums() {
 }
 
 #[test]
-fn tuple_match_block_bodies_and_guards_use_the_label() {
+fn tuple_match_block_bodies_and_guards_leave_through_the_region() {
     let out = ok(r#"
 enum Coin { Heads(), Tails }
 const r = match (a, b) {
@@ -2550,11 +2558,12 @@ const r = match (a, b) {
 };
 "#);
     assert!(out.contains("if (go()) {"), "{out}");
-    // The arm's body always leaves, through the exit label the rewritten
-    // `return` breaks to — so the chain's fall-through label is never
-    // reached and is not written.
-    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
+    // The arm's body always leaves, through the region's own
+    // `do { … } while (false)` — so neither the chain's fall-through label
+    // nor a second exit label around the region is written.
+    assert!(out.contains("$tt_v0 = 1; break;"), "{out}");
     assert!(!out.contains("$tt_b"), "{out}");
+    assert!(!out.contains("$tt_y_"), "{out}");
 }
 
 #[test]
@@ -3318,10 +3327,22 @@ fn literal_match_evaluates_the_scrutinee_once() {
 fn literal_match_block_bodies_break_out_of_the_switch() {
     let out = ok(r#"const v = match (s) { "a" => { return 1; }, _ => 0 };"#);
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(
-        out.contains(r#"case "a": { $tt_v0 = 1; break $tt_y_$tt_v0;"#),
-        "{out}"
+    // The `switch` the region already generates is the nearest `break`
+    // target, so the rewritten `return` leaves through it and the region
+    // needs no label of its own (TASK-160 §6).
+    assert!(out.contains(r#"case "a": { $tt_v0 = 1; break; }"#), "{out}");
+    assert!(!out.contains("$tt_y_"), "{out}");
+}
+
+#[test]
+fn a_block_arm_exit_inside_a_loop_still_needs_the_region_label() {
+    // A `break` written inside the arm's own loop would be swallowed by
+    // it, so this is the one shape that keeps the label.
+    let out = ok(
+        r#"const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };"#,
     );
+    assert!(out.contains("$tt_y_$tt_v0: {"), "{out}");
+    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
 }
 
 #[test]
@@ -4549,4 +4570,138 @@ fn malformed_match_blocks_codegen_even_beside_a_lowered_enum() {
         "{:#?}",
         report.diagnostics
     );
+}
+
+#[test]
+fn a_loop_header_value_is_not_hoisted_out_of_the_loop() {
+    // TASK-160: the value runs once per iteration; statements hoisted to
+    // the `while` owner would run it once. The expression boundary keeps
+    // it in place.
+    let out = ok(
+        "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
+    );
+    let loop_at = out.find("while (").expect("loop");
+    let lowering = out.find("switch").expect("lowering");
+    assert!(loop_at < lowering, "{out}");
+    assert!(out.contains("while (id($tt_expr("), "{out}");
+}
+
+#[test]
+fn a_loop_body_value_still_lowers_to_owner_statements() {
+    let out =
+        ok("let n = 0;\nwhile (n < 3) { const v = match (n) { 0 => 1, _ => 0 }; n = n + v; }\n");
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+}
+
+#[test]
+fn a_capture_never_escapes_a_generated_conditional_region() {
+    // TASK-160 issue 15: promoting this owner to statements would declare
+    // the callee capture inside `if (flag)` while the host expression
+    // reads it outside; the boundary keeps evaluation in place.
+    let out = ok(
+        "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
+    );
+    assert!(out.contains("flag && id($tt_expr("), "{out}");
+    assert!(!out.contains("let $tt_v"), "{out}");
+}
+
+#[test]
+fn a_capture_never_copies_a_sibling_tt_value() {
+    // TASK-160 issue 16: the second value's prior-argument span contains
+    // the first tt value; capturing it would copy tt source into the
+    // output. Both stay in place instead.
+    let out = ok(
+        "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
+    );
+    assert_eq!(out.matches("$tt_expr(() => {").count(), 2, "{out}");
+    assert!(out.contains("g(a && $tt_expr("), "{out}");
+}
+
+#[test]
+fn a_switch_case_test_value_stays_behind_its_case() {
+    let out =
+        ok("declare const n: number;\nswitch (n) { case match (n) { 1 => 1, _ => 0 }: break; }\n");
+    let switch_at = out.find("switch (n)").expect("switch");
+    let lowering = out.find("$tt_expr(").expect("boundary");
+    assert!(switch_at < lowering, "{out}");
+}
+
+#[test]
+fn a_destructuring_default_value_stays_inside_the_default() {
+    let out = ok(
+        "declare const source: { value?: number };\nexport const { value = match (1) { 1 => 1, _ => 0 } } = source;\n",
+    );
+    assert!(out.contains("value = $tt_expr("), "{out}");
+}
+
+#[test]
+fn an_initializer_inside_a_callback_still_lowers_to_statements() {
+    // TASK-160: the evaluation protocol is owner-relative — an enclosing
+    // call frame beyond the function boundary is not this owner's
+    // obligation, so no expression boundary is needed here.
+    let out = ok(
+        "declare function f(cb: () => number): void;\nf(() => { const x = match (1) { 1 => 1, _ => 0 }; return x; });\n",
+    );
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+}
+
+#[test]
+fn a_conditional_operation_lowers_as_one_region() {
+    // TASK-160 결정 17: every path of the operation assigns the result
+    // slot, so TypeScript keeps the operation's type without `undefined`.
+    let out = ok(
+        "declare const flag: boolean;\nexport const a = flag && match (1) { 1 => 1, _ => 0 };\n",
+    );
+    assert!(out.contains("if ($tt_v1) {"), "{out}");
+    assert!(out.contains("$tt_v2 = $tt_v1;"), "{out}");
+    assert!(out.contains("export const a = $tt_v2;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(!out.contains("&&"), "{out}");
+}
+
+#[test]
+fn a_ternary_with_one_tt_branch_relocates_the_other_branch() {
+    let out = ok(
+        "declare const flag: boolean;\nexport const pick = flag ? match (1) { 1 => 1, _ => 0 } : 9;\n",
+    );
+    assert!(out.contains("} else {"), "{out}");
+    assert!(out.contains("= 9;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(!out.contains("?"), "{out}");
+}
+
+#[test]
+fn an_optional_call_evaluates_arguments_only_past_its_check() {
+    let out = ok(
+        "declare const f: ((v: number, w: number) => number) | undefined;\ndeclare function pre(): number;\nexport const r = f?.(pre(), match (1) { 1 => 1, _ => 0 });\n",
+    );
+    let check = out.find("!= null) {").expect("nullish check");
+    let prior = out.find("(pre())").expect("prior argument capture");
+    assert!(check < prior, "{out}");
+    assert!(out.contains("= undefined;"), "{out}");
+    assert!(!out.contains("?."), "{out}");
+}
+
+#[test]
+fn a_spread_argument_capture_takes_the_expression_not_the_dots() {
+    let out = ok(
+        "declare function sum(...xs: number[]): number;\ndeclare const rest: number[];\nexport const r = sum(...rest, match (1) { 1 => 3, _ => 0 });\n",
+    );
+    assert!(out.contains("= (rest);"), "{out}");
+    assert!(out.contains("(...$tt_v"), "{out}");
+}
+
+#[test]
+fn an_inert_argument_is_not_captured_but_an_effectful_one_is() {
+    // TASK-160 §9: capture elision is proven by effects — a literal stays
+    // in place, a call is captured to keep its evaluation order.
+    let out = ok(
+        "declare function g(a: number, b: number, c: number): void;\ndeclare function eff(): number;\ng(1, match (1) { 1 => 1, _ => 0 }, 2);\ng(eff(), match (1) { 1 => 1, _ => 0 }, 2);\n",
+    );
+    assert!(!out.contains("= (1);"), "{out}");
+    assert!(!out.contains("= (2);"), "{out}");
+    assert!(out.contains("= (eff());"), "{out}");
+    assert!(out.contains("(1, $tt_v0, 2);"), "{out}");
 }
