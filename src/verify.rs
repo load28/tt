@@ -105,13 +105,12 @@ pub(crate) fn verify_output(code: &str, source_kind: crate::SourceKind) -> Resul
 /// glue instead — to the construct that wrote the glue
 /// ([`crate::EmitAnchor`]), whose own text is then the error's span.
 ///
-/// The common cause is the documented trap: a construct that *almost*
-/// parsed as tt (a missing `;` after `try`, a `match` without its
-/// scrutinee parens) is passed through verbatim by contract, and then it
-/// is tt syntax sitting in a TypeScript module. That is exactly what the
-/// mapping points at, so the message says so.
+/// A construct that almost parsed as tt may be passed through verbatim by
+/// contract. The parser carries those rolled-back candidates explicitly;
+/// when the mapped failure belongs to one, this layer names that parser
+/// fact rather than rediscovering intent from source strings.
 pub(crate) fn at_source(
-    source: &str,
+    unclaimed: &[crate::ast::UnclaimedTtCandidate],
     mappings: &[crate::EmitMapping],
     anchors: &[crate::EmitAnchor],
     code: &str,
@@ -126,17 +125,22 @@ pub(crate) fn at_source(
         )
     };
     let (message, span) = match crate::typescript::mapper::to_source(mappings, out) {
-        // Copied from the source: the offending text is the user's own,
-        // and a construct that failed to parse as tt may be sitting in it.
-        Some(src) => match tt_construct_at(source, src) {
-            Some((word, at)) => (
-                format!(
-                    "`{word}` here did not parse as a tt `{word}`, so it was passed through as \
+        // Copied from the source: the offending text is the user's own. A
+        // parser-owned rollback fact may identify the exact tt candidate.
+        Some(src) => match unclaimed_candidate_at(unclaimed, src) {
+            Some(candidate) => {
+                let word = match candidate.kind {
+                    crate::ast::UnclaimedTtKind::Try => "try",
+                };
+                (
+                    format!(
+                        "`{word}` here did not parse as a tt `{word}`, so it was passed through as \
                      TypeScript and the generated module no longer parses: {}",
-                    failure.message,
-                ),
-                Some((at, at + word.len())),
-            ),
+                        failure.message,
+                    ),
+                    Some((candidate.keyword.start, candidate.keyword.end)),
+                )
+            }
             None => (generic(), Some((src, src))),
         },
         // Glue: ttc's own output, and the construct that wrote it is the
@@ -182,14 +186,6 @@ fn byte_of(text: &str, line: usize, col: usize) -> usize {
     text.len()
 }
 
-/// The tt keyword the failing text belongs to, when the source around
-/// `at` still holds one: a tt construct that did not parse is passed
-/// through by contract, and it is never valid TypeScript.
-///
-/// Only the line the failure landed on is considered, and only a keyword
-/// standing on its own — a `match` in `dispatch.match(x)` or a string is
-/// not one. Nothing found means the text is ordinary TypeScript that
-/// simply does not parse, and the message stays as it is.
 /// The file's TypeScript, at byte `at`, is not TypeScript — established
 /// before host lowering rather than after emission.
 ///
@@ -201,11 +197,9 @@ fn byte_of(text: &str, line: usize, col: usize) -> usize {
 /// bypassable self-check but the reason the file has no output.
 ///
 /// The message states only what the projection proves: which byte stopped
-/// the parse, and why that ends the compile. It does not guess at a tt
-/// construct nearby the way [`at_source`] does — at this boundary the
-/// claimed constructs are known, so a keyword on the failing line is just as
-/// likely to be one that parsed perfectly well, and the constructs that
-/// failed to claim have diagnostics of their own
+/// the parse, and why that ends the compile. At this boundary the claimed
+/// constructs are known, and constructs that failed to claim have
+/// diagnostics or parser-owned rollback facts of their own
 /// ([`crate::DiagnosticCode::blocks_projection`]).
 pub(crate) fn in_source(
     source: &str,
@@ -220,32 +214,14 @@ pub(crate) fn in_source(
     crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
 }
 
-fn tt_construct_at(source: &str, at: usize) -> Option<(&'static str, usize)> {
-    let at = at.min(source.len());
-    let line_start = source[..at].rfind('\n').map_or(0, |p| p + 1);
-    let line_end = source[at..].find('\n').map_or(source.len(), |p| at + p);
-    let line = &source[line_start..line_end];
-    let mut best: Option<(&'static str, usize)> = None;
-    for word in ["match", "try", "result", "flow"] {
-        let mut from = 0;
-        while let Some(found) = line[from..].find(word) {
-            let start = from + found;
-            let end = start + word.len();
-            let before = line[..start].chars().next_back();
-            let after = line[end..].chars().next();
-            let standalone = before.is_none_or(|c| !is_ident_byte(c) && c != '.')
-                && after.is_none_or(|c| !is_ident_byte(c));
-            if standalone && best.is_none_or(|(_, best_at)| line_start + start < best_at) {
-                best = Some((word, line_start + start));
-            }
-            from = end;
-        }
-    }
-    best
-}
-
-fn is_ident_byte(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_' || c == '$'
+fn unclaimed_candidate_at(
+    candidates: &[crate::ast::UnclaimedTtCandidate],
+    at: usize,
+) -> Option<&crate::ast::UnclaimedTtCandidate> {
+    candidates
+        .iter()
+        .filter(|candidate| candidate.extent.start <= at && at < candidate.extent.end)
+        .min_by_key(|candidate| candidate.extent.end - candidate.extent.start)
 }
 
 #[cfg(test)]
@@ -264,25 +240,20 @@ mod tests {
     }
 
     #[test]
-    fn an_tt_keyword_on_the_failing_line_is_named() {
-        let src = "function f() {\n  return match shape {\n  };\n}\n";
-        let at = src.find("shape {").unwrap();
-        assert_eq!(
-            tt_construct_at(src, at),
-            Some(("match", src.find("match").unwrap()))
-        );
-    }
+    fn the_innermost_structural_candidate_owns_the_failure() {
+        use crate::ast::{Span, UnclaimedTtCandidate, UnclaimedTtKind};
 
-    #[test]
-    fn a_keyword_that_is_part_of_a_name_is_not_one() {
-        // `dispatch.match(x)` is a method call, and `matches` is a name.
-        let src = "const n = dispatch.match(x) + matches.length;\n";
-        assert_eq!(tt_construct_at(src, 10), None);
-    }
-
-    #[test]
-    fn a_line_without_tt_syntax_is_left_to_the_generic_message() {
-        let src = "const n = (1 + ;\n";
-        assert_eq!(tt_construct_at(src, 12), None);
+        let outer = UnclaimedTtCandidate {
+            kind: UnclaimedTtKind::Try,
+            keyword: Span { start: 0, end: 3 },
+            extent: Span { start: 0, end: 30 },
+        };
+        let inner = UnclaimedTtCandidate {
+            kind: UnclaimedTtKind::Try,
+            keyword: Span { start: 10, end: 13 },
+            extent: Span { start: 10, end: 20 },
+        };
+        assert_eq!(unclaimed_candidate_at(&[outer, inner], 15), Some(&inner));
+        assert_eq!(unclaimed_candidate_at(&[outer, inner], 31), None);
     }
 }

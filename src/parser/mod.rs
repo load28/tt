@@ -52,6 +52,10 @@ pub(crate) use cursor::{dotted_at, find_close_at};
 pub(super) enum Claim<T> {
     Parsed(T),
     NotTt,
+    /// Structurally recognized tt intent which did not complete. The source
+    /// still passes through; this fact is consumed only if output verify
+    /// later proves that the verbatim text is not TypeScript either.
+    Unclaimed(UnclaimedTtCandidate),
     Malformed {
         error: crate::error::TtError,
         recovery: RecoveryNode,
@@ -268,6 +272,97 @@ pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
     out
 }
 
+/// Collects structurally recognized, rolled-back tt candidates from every
+/// nested source region. Output verification uses these facts to explain a
+/// passthrough parse failure without scanning source text for keywords.
+pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidate> {
+    fn visit(program: &Program, out: &mut Vec<UnclaimedTtCandidate>) {
+        if let Some(candidates) = &program.unclaimed {
+            out.extend(candidates.0.iter().copied());
+        }
+        for segment in &program.segments {
+            match segment {
+                Segment::Verbatim(_)
+                | Segment::Enum(_)
+                | Segment::TtImport(_)
+                | Segment::ValModifier(_) => {}
+                Segment::Match(expr) => {
+                    visit(&expr.scrutinee, out);
+                    for arm in &expr.arms {
+                        if let Some(guard) = &arm.guard {
+                            visit(&guard.expr, out);
+                        }
+                        visit(&arm.body, out);
+                    }
+                }
+                Segment::TupleMatch(expr) => {
+                    for (_, scrutinee) in &expr.scrutinees {
+                        visit(scrutinee, out);
+                    }
+                    for arm in &expr.arms {
+                        if let Some(guard) = &arm.guard {
+                            visit(&guard.expr, out);
+                        }
+                        visit(&arm.body, out);
+                    }
+                }
+                Segment::Try(stmt) => visit(&stmt.expr, out),
+                Segment::LetElse(stmt) => {
+                    visit(&stmt.expr, out);
+                    visit(&stmt.else_body, out);
+                }
+                Segment::IfLet(stmt) => {
+                    visit(&stmt.expr, out);
+                    visit(&stmt.body, out);
+                    let mut next = stmt.else_part.as_ref();
+                    while let Some(else_part) = next {
+                        match else_part {
+                            IfLetElse::Block(block) => {
+                                visit(block, out);
+                                break;
+                            }
+                            IfLetElse::IfLet(chained) => {
+                                visit(&chained.expr, out);
+                                visit(&chained.body, out);
+                                next = chained.else_part.as_ref();
+                            }
+                        }
+                    }
+                }
+                Segment::Template(template) => {
+                    for chunk in &template.chunks {
+                        if let TemplateChunk::Interp(interp) = chunk {
+                            visit(interp, out);
+                        }
+                    }
+                }
+                Segment::Pipe(pipe) => {
+                    if let Some(head) = &pipe.head {
+                        visit(head, out);
+                    }
+                    for step in &pipe.steps {
+                        visit(&step.body, out);
+                    }
+                }
+                Segment::ResultBlock(block) => {
+                    for item in &block.items {
+                        match item {
+                            ResultItem::Stmts(stmts) => visit(stmts, out),
+                            ResultItem::Bind(bind) => visit(&bind.expr, out),
+                        }
+                    }
+                    visit(&block.value, out);
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::new();
+    visit(program, &mut out);
+    out.sort_by_key(|candidate| (candidate.extent.start, candidate.extent.end));
+    out
+}
+
 /// Shared state for one parse: the source in both views. The parser holds no
 /// mutable state — recursion carries explicit token slices and byte ranges.
 pub(crate) struct Parser<'a> {
@@ -428,6 +523,7 @@ impl Parser<'_> {
     /// verbatim segments.
     pub(crate) fn parse_tokens(&self, tokens: &[Token], start: usize, end: usize) -> Program {
         let mut segments: Vec<Segment> = Vec::new();
+        let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
         let mut stray_pipes: Vec<usize> = Vec::new();
@@ -530,6 +626,7 @@ impl Parser<'_> {
                             malformed.push(error);
                             recoveries.push(recovery);
                         }
+                        Claim::Unclaimed(candidate) => unclaimed.push(candidate),
                         Claim::NotTt => {}
                     }
                 }
@@ -567,6 +664,7 @@ impl Parser<'_> {
                         malformed.push(error);
                         recoveries.push(recovery);
                     }
+                    Claim::Unclaimed(candidate) => unclaimed.push(candidate),
                     Claim::NotTt => {}
                 }
             }
@@ -574,35 +672,38 @@ impl Parser<'_> {
             // `try <expr>;` — never valid TypeScript in expression
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
-            if !dotted
-                && word == "try"
-                && let Some((cur, byte_end, mut stmt)) =
-                    tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span)
-            {
-                if !starts_statement(self.src, tokens, i, expr.1) {
-                    malformed.push(
-                        crate::error::TtError::span(
-                            stmt.span.start,
-                            stmt.span.end,
-                            "`try` is a statement, not an expression — bind its value first with \
-                             `const value = try <expression>;`"
-                                .to_string(),
-                        )
-                        .code(crate::DiagnosticCode::TryPlacement),
-                    );
-                    recoveries.push(RecoveryNode {
-                        span: stmt.span,
-                        kind: RecoveryKind::Expression,
-                    });
-                    i = cur.idx;
-                    continue;
+            if !dotted && word == "try" {
+                match tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span) {
+                    Claim::Parsed((cur, byte_end, mut stmt)) => {
+                        if !starts_statement(self.src, tokens, i, expr.1) {
+                            malformed.push(
+                                crate::error::TtError::span(
+                                    stmt.span.start,
+                                    stmt.span.end,
+                                    "`try` is a statement, not an expression — bind its value first with \
+                                     `const value = try <expression>;`"
+                                        .to_string(),
+                                )
+                                .code(crate::DiagnosticCode::TryPlacement),
+                            );
+                            recoveries.push(RecoveryNode {
+                                span: stmt.span,
+                                kind: RecoveryKind::Expression,
+                            });
+                            i = cur.idx;
+                            continue;
+                        }
+                        stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                        flush_verbatim(&mut segments, seg_start, tok.span.start);
+                        segments.push(Segment::Try(stmt));
+                        seg_start = byte_end;
+                        i = cur.idx;
+                        continue;
+                    }
+                    Claim::Unclaimed(candidate) => unclaimed.push(candidate),
+                    Claim::NotTt => {}
+                    Claim::Malformed { .. } => unreachable!("try rollback is not malformed"),
                 }
-                stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
-                flush_verbatim(&mut segments, seg_start, tok.span.start);
-                segments.push(Segment::Try(stmt));
-                seg_start = byte_end;
-                i = cur.idx;
-                continue;
             }
 
             // `const|let|var <binding> = try <expr>;` — the `= try`
@@ -730,6 +831,7 @@ impl Parser<'_> {
         flush_verbatim(&mut segments, seg_start, end);
         Program {
             segments,
+            unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),
             recoveries,
             malformed,
             stray_pipes,
@@ -814,5 +916,36 @@ impl Parser<'_> {
             })
             .collect();
         Template { chunks }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_incomplete_try_keeps_a_structural_rollback_fact() {
+        let source = "function f() {\n  const n = try g()\n  return n;\n}\n";
+        let program = parse(source);
+        let candidates = unclaimed_candidates(&program);
+        assert_eq!(candidates.len(), 1, "{candidates:#?}");
+        let candidate = candidates[0];
+        assert_eq!(candidate.kind, UnclaimedTtKind::Try);
+        assert_eq!(
+            &source[candidate.keyword.start..candidate.keyword.end],
+            "try"
+        );
+        assert_eq!(
+            &source[candidate.extent.start..candidate.extent.end],
+            "try g()"
+        );
+    }
+
+    #[test]
+    fn valid_typescript_try_shapes_are_not_tt_candidates() {
+        let source = "try { f(); } catch (error) { g(error); }\n\
+                      const object = { try: 1 };\n\
+                      object.try();\n";
+        assert!(unclaimed_candidates(&parse(source)).is_empty());
     }
 }

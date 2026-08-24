@@ -16,8 +16,9 @@
 //! top level (`:` without a ternary `?`, `=`, a bare `{`, closers, `,`).
 //! Anything rejected passes through verbatim, as always.
 
+use super::Claim;
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
-use crate::ast::{Span, TryStmt};
+use crate::ast::{Span, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
 use crate::lexer::{Token, TokenKind};
 
 /// `cur` is positioned just past the `try` keyword (`kw_span`) of a bare
@@ -26,12 +27,24 @@ use crate::lexer::{Token, TokenKind};
 pub(super) fn parse_try_stmt<'t>(
     cur: Cursor<'t>,
     kw_span: Span,
-) -> Option<(Cursor<'t>, usize, TryStmt)> {
-    let (cur, byte_end, expr_span, expr_tokens) = parse_try_tail(cur)?;
+) -> Claim<(Cursor<'t>, usize, TryStmt)> {
+    let Some(first) = cur.peek() else {
+        return Claim::NotTt;
+    };
+    if !is_expr_start(first) {
+        return Claim::NotTt;
+    }
+    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur) else {
+        return Claim::Unclaimed(UnclaimedTtCandidate {
+            kind: UnclaimedTtKind::Try,
+            keyword: kw_span,
+            extent: unclaimed_try_extent(&cur, kw_span),
+        });
+    };
     let expr = cur
         .parser
         .parse_tokens(expr_tokens, expr_span.start, expr_span.end);
-    Some((
+    Claim::Parsed((
         cur,
         byte_end,
         TryStmt {
@@ -51,6 +64,48 @@ pub(super) fn parse_try_stmt<'t>(
             in_function: false,
         },
     ))
+}
+
+/// Bounds a `try <expr>` candidate that rolled back before its required
+/// semicolon. This uses the same token/depth rules as the claim itself and
+/// synchronizes before the next statement; no later phase has to infer the
+/// region from source text.
+fn unclaimed_try_extent(cur: &Cursor, kw_span: Span) -> Span {
+    let mut end = kw_span.end;
+    let mut depth = 0usize;
+    let mut k = cur.idx;
+    while let Some(token) = cur.tokens.get(k) {
+        if depth == 0 {
+            if matches!(token.kind, TokenKind::Punct(b';')) {
+                end = token.span.end;
+                break;
+            }
+            if matches!(
+                token.kind,
+                TokenKind::Punct(b'{' | b'}' | b')' | b']' | b',' | b'=')
+            ) {
+                break;
+            }
+            if k > cur.idx
+                && matches!(token.kind, TokenKind::Ident)
+                && !dotted_at(cur.tokens, cur.idx, k)
+                && STMT_ONLY_WORDS.contains(&cur.text(token))
+            {
+                break;
+            }
+        }
+        end = token.span.end;
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[') => depth += 1,
+            TokenKind::Punct(b')' | b']') => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        k += 1;
+    }
+    Span {
+        start: kw_span.start,
+        end,
+    }
 }
 
 /// `cur` is positioned just past a `const`/`let`/`var` keyword

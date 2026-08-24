@@ -1557,6 +1557,26 @@ fn verify_rejects_invalid_passthrough_typescript() {
 }
 
 #[test]
+fn verify_does_not_invent_tt_intent_from_strings_or_comments() {
+    for source in [
+        "const note = 'try'; const = 5;\n",
+        "/* match result flow */ const = 5;\n",
+    ] {
+        let e = err(source);
+        assert!(
+            e.message.contains("generated TypeScript failed to parse"),
+            "{}",
+            e.message
+        );
+        assert!(
+            !e.message.contains("did not parse as a tt"),
+            "{}",
+            e.message
+        );
+    }
+}
+
+#[test]
 fn no_verify_passes_invalid_typescript_through() {
     let opts = Options {
         verify: false,

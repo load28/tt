@@ -14,7 +14,7 @@
 //! ties semantic errors back to exact `file:line:col` positions.
 
 /// A half-open byte range `[start, end)` into the original source.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Span {
     pub start: usize,
     pub end: usize,
@@ -24,6 +24,11 @@ pub(crate) struct Span {
 #[derive(Debug)]
 pub(crate) struct Program {
     pub segments: Vec<Segment>,
+    /// Structurally recognized tt intent that did not fully parse and was
+    /// therefore left verbatim. Unlike [`Self::malformed`], these facts do
+    /// not diagnose by themselves: output verification consumes them only
+    /// when the verbatim text proves not to be TypeScript either.
+    pub unclaimed: Option<Box<UnclaimedTtCandidates>>,
     /// Structurally identified tt syntax that cannot be emitted as written.
     /// Normal compilation still copies it verbatim; the project engine uses
     /// these nodes to build a type-checkable recovery projection without
@@ -57,6 +62,26 @@ pub(crate) struct Program {
     /// reporting story as [`Self::stray_pipes`]: the shape is never valid
     /// TypeScript, so it cannot pass through either.
     pub result_nested_binds: Vec<Span>,
+}
+
+/// A tt-shaped source region which the parser deliberately left verbatim.
+///
+/// The kind and spans are parser facts, so later diagnostics never need to
+/// rediscover construct intent from source strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UnclaimedTtCandidate {
+    pub kind: UnclaimedTtKind,
+    pub keyword: Span,
+    pub extent: Span,
+}
+
+/// Rare rollback facts kept out of every nested [`Program`]'s inline size.
+#[derive(Debug)]
+pub(crate) struct UnclaimedTtCandidates(pub Vec<UnclaimedTtCandidate>);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UnclaimedTtKind {
+    Try,
 }
 
 /// A parser-owned error node used only by the typed projection.

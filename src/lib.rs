@@ -871,8 +871,13 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         // the source — and where the failure fell in a construct's glue,
         // that construct is named. (Without this the error arrives with no
         // position at all and an editor pins it to line 1.)
-        let failure =
-            verify::at_source(source, &flat.mappings, &flat.anchors, &flat.code, &failure);
+        let failure = verify::at_source(
+            &parser::unclaimed_candidates(&program),
+            &flat.mappings,
+            &flat.anchors,
+            &flat.code,
+            &failure,
+        );
         return Err(
             diagnostics::Diagnostic::from_tt(failure).to_compile_error(source, options.filename)
         );
@@ -1135,7 +1140,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         // reappears on its own once they are fixed.
         if errors.is_empty() {
             errors.push(verify::at_source(
-                source,
+                &parser::unclaimed_candidates(&program),
                 &flat.mappings,
                 &flat.anchors,
                 &flat.code,
