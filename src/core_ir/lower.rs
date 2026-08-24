@@ -472,11 +472,15 @@ fn pattern_has_literal(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
 }
 
 fn match_kind(decision: &Decision) -> DecisionKind {
+    // The label exists for a block arm that *falls out* of its body — the
+    // one thing that needs a way back to the end of the chain. An arm whose
+    // body always leaves never uses it, so a match made only of those needs
+    // no label at all.
     let needs_label = decision.arms.iter().any(|arm| {
         matches!(
             arm.action,
             ArmAction::Yield {
-                kind: ArmBodyKind::Block,
+                kind: ArmBodyKind::Block { completes: true },
                 ..
             }
         )
@@ -669,7 +673,7 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
             ArmAction::Yield { body, kind } => {
                 validate_body(body, file);
                 match kind {
-                    ArmBodyKind::Expression | ArmBodyKind::Block => {}
+                    ArmBodyKind::Expression | ArmBodyKind::Block { .. } => {}
                 }
             }
             ArmAction::Execute(body) => validate_body(body, file),

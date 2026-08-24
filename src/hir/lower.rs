@@ -210,7 +210,7 @@ impl Lower {
                     &arm.pattern,
                     arm.pattern_span,
                     &arm.guard,
-                    Some((&arm.body, arm.block)),
+                    Some((&arm.body, arm.block, arm.diverges)),
                 )
             })
             .collect();
@@ -267,11 +267,7 @@ impl Lower {
                     pattern,
                     guard,
                     body: Some(body),
-                    body_kind: Some(if arm.block {
-                        ArmBodyKind::Block
-                    } else {
-                        ArmBodyKind::Expression
-                    }),
+                    body_kind: Some(arm_body_kind(arm.block, arm.diverges)),
                 }
             })
             .collect();
@@ -294,19 +290,13 @@ impl Lower {
         pattern: &ast::Pattern,
         pattern_span: ast::Span,
         guard: &Option<ast::GuardExpr>,
-        body: Option<(&ast::Program, bool)>,
+        body: Option<(&ast::Program, bool, bool)>,
     ) -> SiteArm {
         let pattern_id = self.lower_pattern(pattern, pattern_span.start);
         let node = self.node(Self::span(pattern_span), AstOrigin::Arm);
         let guard = guard.as_ref().map(|g| self.lower_guard(g));
-        let body_kind = body.map(|(_, block)| {
-            if block {
-                ArmBodyKind::Block
-            } else {
-                ArmBodyKind::Expression
-            }
-        });
-        let body = body.map(|(body, _)| self.lower_body(body));
+        let body_kind = body.map(|(_, block, diverges)| arm_body_kind(block, diverges));
+        let body = body.map(|(body, _, _)| self.lower_body(body));
         SiteArm {
             node,
             pattern: pattern_id,
@@ -503,7 +493,9 @@ impl Lower {
                 pattern,
                 guard: None,
                 body: Some(body),
-                body_kind: Some(ArmBodyKind::Block),
+                // An `if let` body is executed, not yielded, so nothing
+                // reads this fact; it claims no divergence it has not proven.
+                body_kind: Some(ArmBodyKind::Block { completes: true }),
             }],
         });
         let else_part = stmt.else_part.as_ref().map(|else_part| match else_part {
@@ -601,6 +593,19 @@ impl Lower {
         self.hir
             .exprs
             .alloc(Expr::ResultBlock { node, items, value })
+    }
+}
+
+/// The arm body's kind, carrying the parser's flow answer for a block:
+/// `completes` is false only when every path out of the block leaves it,
+/// so nothing after the body can run.
+fn arm_body_kind(block: bool, diverges: bool) -> ArmBodyKind {
+    if block {
+        ArmBodyKind::Block {
+            completes: !diverges,
+        }
+    } else {
+        ArmBodyKind::Expression
     }
 }
 

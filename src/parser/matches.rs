@@ -233,7 +233,7 @@ fn parse_arms(mut cur: Cursor) -> Option<Vec<Arm>> {
         // Only tag and literal patterns take a guard — `_ if` never parses,
         // so it passes through.
         let allow_guard = !matches!(pattern, Pattern::Wildcard);
-        let (guard, body_span, body, block) = parse_arm_tail(&mut cur, allow_guard)?;
+        let tail = parse_arm_tail(&mut cur, allow_guard)?;
 
         arms.push(Arm {
             pattern,
@@ -241,10 +241,11 @@ fn parse_arms(mut cur: Cursor) -> Option<Vec<Arm>> {
                 start: pattern_start,
                 end: pattern_end,
             },
-            guard,
-            body_span,
-            body,
-            block,
+            guard: tail.guard,
+            body_span: tail.body_span,
+            body: tail.body,
+            block: tail.block,
+            diverges: tail.diverges,
         });
 
         if cur.peek().is_none() {
@@ -281,7 +282,7 @@ fn parse_tuple_arms(mut cur: Cursor) -> Option<Vec<TupleArm>> {
         let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
 
         let allow_guard = matches!(pattern, TuplePattern::Elems(_));
-        let (guard, body_span, body, block) = parse_arm_tail(&mut cur, allow_guard)?;
+        let tail = parse_arm_tail(&mut cur, allow_guard)?;
 
         arms.push(TupleArm {
             pattern_span: Span {
@@ -289,10 +290,11 @@ fn parse_tuple_arms(mut cur: Cursor) -> Option<Vec<TupleArm>> {
                 end: pattern_end,
             },
             pattern,
-            guard,
-            body_span,
-            body,
-            block,
+            guard: tail.guard,
+            body_span: tail.body_span,
+            body: tail.body,
+            block: tail.block,
+            diverges: tail.diverges,
         });
 
         if cur.peek().is_none() {
@@ -345,10 +347,7 @@ fn parse_tag_alternatives(cur: &mut Cursor) -> Option<Vec<TagPattern>> {
 /// (refused when `allow_guard` is false), the `=>`, and the expression or
 /// block body. Shared between single-match and tuple-match arms.
 #[allow(clippy::type_complexity)]
-fn parse_arm_tail(
-    cur: &mut Cursor,
-    allow_guard: bool,
-) -> Option<(Option<GuardExpr>, Span, crate::ast::Program, bool)> {
+fn parse_arm_tail(cur: &mut Cursor, allow_guard: bool) -> Option<ArmTail> {
     let mut guard = None;
     if allow_guard
         && matches!(cur.peek(), Some(t) if matches!(t.kind, TokenKind::Ident) && cur.text(t) == "if")
@@ -410,7 +409,33 @@ fn parse_arm_tail(
     let body = cur
         .parser
         .parse_tokens(body_tokens, body_span.start, body_span.end);
-    Some((guard, body_span, body, block))
+    // Whether control can reach the end of a block body is the same
+    // question let-else asks of its `else` block, answered on the same CFG
+    // (`crate::flow`). An expression body always yields, so the question
+    // only arises for a block.
+    let diverges = block && crate::flow::program_diverges(cur.parser.src, body_tokens, &body);
+    Some(ArmTail {
+        guard,
+        body_span,
+        body,
+        block,
+        diverges,
+    })
+}
+
+/// What follows an arm's pattern: its guard, its body, and the two facts
+/// about that body the later phases need.
+struct ArmTail {
+    guard: Option<GuardExpr>,
+    body_span: Span,
+    body: crate::ast::Program,
+    /// True for a `{ ... }` block body.
+    block: bool,
+    /// True when every path out of a block body leaves it — the value the
+    /// arm yields is always written, so a lowering's fall-through to
+    /// `undefined` is unreachable. Always false for an expression body,
+    /// which yields by being evaluated.
+    diverges: bool,
 }
 
 /// Parses one `Tag` / `Tag(bindings...)` alternative starting at the

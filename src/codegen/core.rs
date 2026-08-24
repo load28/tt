@@ -495,7 +495,7 @@ fn decision_has_block_arm(decision: &Decision) -> bool {
         matches!(
             arm.action,
             ArmAction::Yield {
-                kind: ArmBodyKind::Block,
+                kind: ArmBodyKind::Block { .. },
                 ..
             }
         )
@@ -1753,7 +1753,7 @@ impl<'a> Emitter<'a> {
             [Statement::Expr(expr)] => Some(*expr),
             _ => None,
         };
-        let body = if kind == ArmBodyKind::Block && continuation.assigns() {
+        let body = if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
             let label = exit_label.unwrap_or_else(|| {
                 panic!("internal compiler error: statement arm has no exit label")
             });
@@ -1779,32 +1779,39 @@ impl<'a> Emitter<'a> {
                     action.append(self.emit_value_delivery(body, close, continuation));
                 }
             }
-            ArmBodyKind::Block if chain => {
+            // A block that always leaves has written the arm's value on
+            // every path it takes, so neither the fall-through to
+            // `undefined` nor the exit after it can be reached.
+            ArmBodyKind::Block { completes } if chain => {
                 action.push_lit("{ ");
                 action.append(body);
-                if continuation.assigns() {
+                if completes {
+                    if continuation.assigns() {
+                        action.push_break(depth + 1);
+                        action.push_lit(format!(
+                            "{} = undefined;",
+                            continuation.assignment_target().unwrap()
+                        ));
+                    }
                     action.push_break(depth + 1);
-                    action.push_lit(format!(
-                        "{} = undefined;",
-                        continuation.assignment_target().unwrap()
-                    ));
+                    action.push_lit("break $tt_b;");
                 }
-                action.push_break(depth + 1);
-                action.push_lit("break $tt_b;");
                 action.push_break(depth);
                 action.push_lit("}");
             }
-            ArmBodyKind::Block => {
+            ArmBodyKind::Block { completes } => {
                 action.append(body);
-                if continuation.assigns() {
+                if completes {
+                    if continuation.assigns() {
+                        action.push_break(depth + 1);
+                        action.push_lit(format!(
+                            "{} = undefined;",
+                            continuation.assignment_target().unwrap()
+                        ));
+                    }
                     action.push_break(depth + 1);
-                    action.push_lit(format!(
-                        "{} = undefined;",
-                        continuation.assignment_target().unwrap()
-                    ));
+                    action.push_lit("break;");
                 }
-                action.push_break(depth + 1);
-                action.push_lit("break;");
             }
         }
         if let Some(guard) = arm.guard {

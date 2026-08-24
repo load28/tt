@@ -35,7 +35,7 @@ const area = match (shape) {
 ```
 - Expression: use after `=`, in `return`, in `${...}`. The compiler uses owner-scoped slots and `switch`/`if`; parameter defaults and class fields use one hygiene-safe named expression-boundary helper. Scrutinee parens mandatory, non-empty.
 - Bindings by field name, NEVER position; subset ok, any order.
-- Arm body: expr, or block `{ ... return v; }` (no return → undefined). Object literal body needs parens: `Tag => ({a: 1})`.
+- Arm body: expr, or block `{ ... return v; }` (no return → undefined; a block whose every path returns or throws gets no fall-through in the output). Object literal body needs parens: `Tag => ({a: 1})`.
 - `_` arm must be LAST.
 - Literal patterns: string/number/boolean literals match the scrutinee VALUE (`===`), e.g. `match (dir) { "north" => "N", _ => "?" }`. NEVER mix tag and literal patterns in one match (compile error); `_` works in both. See "literal match" below.
 - or-pattern: `A | B => body` (never `||`); all alternatives must bind same (field,name) set.

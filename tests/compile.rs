@@ -2549,9 +2549,12 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("$tt_b: {"), "{out}");
     assert!(out.contains("if (go()) {"), "{out}");
-    assert!(out.contains("break $tt_b;"), "{out}");
+    // The arm's body always leaves, through the exit label the rewritten
+    // `return` breaks to — so the chain's fall-through label is never
+    // reached and is not written.
+    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_b"), "{out}");
 }
 
 #[test]

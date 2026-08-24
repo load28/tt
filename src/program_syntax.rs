@@ -870,7 +870,7 @@ impl<'a> ProjectionBuilder<'a> {
                     self.emit_body(body)?;
                     self.code.push_str(");");
                 }
-                hir::ArmBodyKind::Block => {
+                hir::ArmBodyKind::Block { .. } => {
                     self.code.push('{');
                     self.emit_body(body)?;
                     self.code.push('}');
