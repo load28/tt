@@ -204,7 +204,8 @@
 | TASK-194 | projection parse 실패의 원인 분류 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-194-projection-parse-source-cause.md](./TASK-194-projection-parse-source-cause.md) |
 | TASK-195 | tt 제작 동기 글 (영문·한글) | 완료 | 2026-08-24 | 2026-08-24 | [TASK-195-motivation-essay.md](./TASK-195-motivation-essay.md) |
 | TASK-196 | 웹사이트 배경 글 페이지 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-196-website-background-essay.md](./TASK-196-website-background-essay.md) |
+| TASK-197 | tt 제작 동기 글 한글판 문장 개정 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-197-korean-essay-rewrite.md](./TASK-197-korean-essay-rewrite.md) |
 
 ## 다음 태스크 번호
 
-**TASK-197**
+**TASK-198**
