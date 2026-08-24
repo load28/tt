@@ -89,21 +89,23 @@ TASK-058/059의 후속으로 등록됐다. **다만 이것은 이미 두 번 기
 - 2026-08-24: 필수 게이트 3개와 확장 테스트를 실행했다. `cargo test`는
   827건을 통과했고, 확장 테스트는 39건 통과·73건 도구 부재로 건너뜀·실패
   0건이었다.
+- 2026-08-24: `.tt-dev/toolchain.json`의 checkout 값을 `TTC_TSGO_ROOT`·
+  `TTC_TSGO_BIN`·`TTC_TSGO_API`로 명시해 typed-check 확장 테스트 4건을
+  건너뜀 없이 통과시켰다.
 
 ## 이슈 및 해결
 
-### 이슈 1: 로컬 확장 테스트에 전체 TypeScript 도구 체인이 없다
+### 이슈 1: 첫 확장 테스트 실행이 로컬 TypeScript 도구 체인을 전달하지 않았다
 
 - **증상**: 기본 확장 테스트는 `ttc not on PATH`로 73건을 건너뛰었다. 빌드된
-  `target/debug/ttc`만 PATH에 추가하면 `tsgo`가 필요한 테스트는 계속
-  건너뛰고 typed-check 테스트 2건은 빈 진단으로 실패했다.
-- **원인**: 현재 셸에는 `ttc`와 함께 사용할 `tsgo` 실행 파일이 없다. 컴파일러
-  하나만 강제로 노출한 실행은 확장 테스트가 요구하는 도구 체인을 완성하지
-  않는다.
-- **해결**: 저장소의 표준 확장 테스트 명령을 도구 탐지 상태 그대로 실행해
-  지원되는 skip 계약과 실패 0건을 확인했다. 프로젝트 설정 계약 자체는 실제
-  `tsconfig.json` 픽스처를 쓰는 테스트 소스와 Rust 엔진/네이티브 테스트로
-  함께 확인했다.
+  `target/debug/ttc`만 PATH에 추가한 실행에서는 typed-check 테스트 2건이 빈
+  진단으로 실패했다.
+- **원인**: tsgo는 `.tt-dev/toolchain.json`에 정상 설정돼 있었지만 테스트의
+  컴파일러 상수는 경로 없는 `ttc`다. `ttcSpawnEnv("ttc")`는 컴파일러 위치에서
+  설정 파일을 역탐색할 수 없어 `TTC_TSGO_*`를 자식 프로세스에 전달하지 않았다.
+- **해결**: 설정 파일의 root에서 `TTC_TSGO_ROOT`·`TTC_TSGO_BIN`·
+  `TTC_TSGO_API`를 명시적으로 주입했다. TASK-060의 에디터 typed-check 테스트
+  4건이 통과했고 건너뜀과 실패는 없었다.
 
 ## 검증
 
@@ -111,6 +113,8 @@ TASK-058/059의 후속으로 등록됐다. **다만 이것은 이미 두 번 기
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
 - [x] 확장 테스트 (`npm test --prefix editors/vscode`, 39 통과·73 건너뜀)
+- [x] tsgo 주입 typed-check 테스트 (`node --test
+  editors/vscode/server/out/test/typedcheck.test.js`, 4 통과)
 
 ## 결과
 
