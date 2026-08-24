@@ -409,7 +409,8 @@ enum ValueWrapper {
 }
 
 struct ArmEmissionContext<'context, 'name> {
-    indent: &'static str,
+    /// Indentation depth of the arm's own line inside the lowering.
+    depth: u16,
     chain: bool,
     continuation: &'context ValueContinuation<'name>,
     exits: &'context [HostExit],
@@ -457,29 +458,34 @@ impl<'name> ValueContinuation<'name> {
         }
     }
 
-    fn assignment_prefix(&self) -> String {
+    /// The text an early exit's `return ` becomes. `grouped` says whether
+    /// the value it returns has to keep its parentheses ([`push_grouped`]).
+    fn assignment_prefix(&self, grouped: bool) -> String {
         let target = self.assignment_target().unwrap_or_else(|| {
             panic!("internal compiler error: expression continuation cannot rewrite an exit")
         });
-        let mut prefix = format!("{target} = (");
+        let mut prefix = format!("{target} = ");
         for wrapper in &self.wrappers {
             match wrapper {
                 ValueWrapper::ResultOk => {
-                    prefix.push_str("{ kind: \"Ok\" as const, value: (");
+                    prefix.push_str("{ kind: \"Ok\" as const, value: ");
                 }
             }
+        }
+        if grouped {
+            prefix.push('(');
         }
         prefix
     }
 
-    fn assignment_suffix(&self) -> String {
+    fn assignment_suffix(&self, grouped: bool) -> String {
         let mut suffix = String::new();
-        for wrapper in self.wrappers.iter().rev() {
-            match wrapper {
-                ValueWrapper::ResultOk => suffix.push_str(") }"),
-            }
+        if grouped {
+            suffix.push(')');
         }
-        suffix.push(')');
+        for _ in self.wrappers.iter().rev() {
+            suffix.push_str(" }");
+        }
         suffix
     }
 }
@@ -489,7 +495,7 @@ fn decision_has_block_arm(decision: &Decision) -> bool {
         matches!(
             arm.action,
             ArmAction::Yield {
-                kind: ArmBodyKind::Block,
+                kind: ArmBodyKind::Block { .. },
                 ..
             }
         )
@@ -636,27 +642,32 @@ impl<'a> Emitter<'a> {
         for exit in exits {
             match exit.argument {
                 Some(argument) => {
+                    let grouped =
+                        grouping_required(self.source[argument.start..argument.end].trim());
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
                             end: argument.start,
                         },
-                        text: continuation.assignment_prefix(),
+                        text: continuation.assignment_prefix(grouped),
                     });
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: argument.end,
                             end: exit.statement.end,
                         },
-                        text: format!("{}; break {label};", continuation.assignment_suffix()),
+                        text: format!(
+                            "{}; break {label};",
+                            continuation.assignment_suffix(grouped)
+                        ),
                     });
                 }
                 None => edits.push(LocalSourceEdit {
                     span: exit.statement,
                     text: format!(
                         "{}undefined{}; break {label};",
-                        continuation.assignment_prefix(),
-                        continuation.assignment_suffix()
+                        continuation.assignment_prefix(false),
+                        continuation.assignment_suffix(false)
                     ),
                 }),
             }
@@ -678,7 +689,7 @@ impl<'a> Emitter<'a> {
         for statement in statements {
             match statement {
                 Statement::Opaque(node) => out.append(self.source_rope_with_edits(*node, edits)),
-                Statement::Adt(adt) => out.push_lit(emit_adt_text(adt)),
+                Statement::Adt(adt) => out.append(emit_adt(adt)),
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -751,19 +762,22 @@ impl<'a> Emitter<'a> {
                 panic!("internal compiler error: initializer rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        out.push_lit(format!("let {};\n", rewrite.slot));
+        out.push_lit(format!("let {};", rewrite.slot));
+        out.push_break(0);
         out.append(anchored);
-        out.push_lit("\n");
-        out
+        out.push_break(0);
+        Rope::scoped(out)
     }
 
     fn emit_compose_rewrite(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         let mut out = Rope::new();
         if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
-            out.push_lit("{\n");
+            out.push_lit("{");
+            out.push_break(0);
         }
         for value in &rewrite.values {
-            out.push_lit(format!("let {};\n", value.slot));
+            out.push_lit(format!("let {};", value.slot));
+            out.push_break(0);
         }
         let mut captured = HashSet::new();
         for value in &rewrite.values {
@@ -777,19 +791,20 @@ impl<'a> Emitter<'a> {
             }
             out.append(action);
         }
+        out.push_break(0);
         if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
-            out.push_lit("\nreturn ");
-        } else {
-            out.push_lit("\n");
+            out.push_lit("return ");
         }
-        out
+        Rope::scoped(out)
     }
 
     fn emit_compose_suffix(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         debug_assert_eq!(rewrite.owner_kind, HostOwnerKind::ArrowExpression);
         let mut out = Rope::new();
-        out.push_lit(";\n}");
-        out
+        out.push_lit(";");
+        out.push_break(0);
+        out.push_lit("}");
+        Rope::scoped(out)
     }
 
     fn emit_scheduled_step(
@@ -822,7 +837,8 @@ impl<'a> Emitter<'a> {
                     &self.source[receiver_source.start..receiver_source.end],
                     receiver_source.start,
                 );
-                prefix.push_lit(");\n");
+                prefix.push_lit(");");
+                prefix.push_break(0);
                 let optional_reference = matches!(
                     step.operation,
                     HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
@@ -849,17 +865,25 @@ impl<'a> Emitter<'a> {
                 }
                 if optional_reference {
                     let target_name = self.value_slot_name(*target);
-                    prefix.push_lit(format!(");\nif ({target_name} != null) {{\n"));
+                    prefix.push_lit(");");
+                    prefix.push_break(0);
+                    prefix.push_lit(format!("if ({target_name} != null) {{"));
+                    prefix.push_break(1);
                     prefix.push_lit(format!(
-                        "  {target_name} = {target_name}.bind({receiver_name});\n}}\n"
+                        "{target_name} = {target_name}.bind({receiver_name});"
                     ));
+                    prefix.push_break(0);
+                    prefix.push_lit("}");
+                    prefix.push_break(0);
                 } else {
-                    prefix.push_lit(format!(").bind({receiver_name});\n"));
+                    prefix.push_lit(format!(").bind({receiver_name});"));
+                    prefix.push_break(0);
                 }
             } else {
                 prefix.push_lit(format!("const {} = (", self.value_slot_name(*target)));
                 prefix.push_src(&self.source[source.start..source.end], source.start);
-                prefix.push_lit(");\n");
+                prefix.push_lit(");");
+                prefix.push_break(0);
             }
         }
         match step.operation {
@@ -896,9 +920,12 @@ impl<'a> Emitter<'a> {
                         prefix.push_lit(format!("{condition} == null"));
                     }
                 }
-                prefix.push_lit(") {\n");
-                prefix.append(action);
-                prefix.push_lit("\n}\n");
+                prefix.push_lit(") {");
+                prefix.push_break(1);
+                prefix.append(Rope::indented(1, action));
+                prefix.push_break(0);
+                prefix.push_lit("}");
+                prefix.push_break(0);
                 prefix
             }
         }
@@ -984,12 +1011,20 @@ impl<'a> Emitter<'a> {
                 )
             });
         let mut out = Rope::new();
-        out.push_lit(format!("{{\nlet {};\n", rewrite.slot));
-        out.append(anchored);
-        out.push_lit(format!("\nreturn {};\n}}", rewrite.slot));
-        out
+        out.push_lit("{");
+        out.push_break(1);
+        out.push_lit(format!("let {};", rewrite.slot));
+        out.push_break(1);
+        out.append(Rope::indented(1, anchored));
+        out.push_break(1);
+        out.push_lit(format!("return {};", rewrite.slot));
+        out.push_break(0);
+        out.push_lit("}");
+        Rope::scoped(out)
     }
 
+    /// The lowering of one `try`. It opens its own layout scope: a
+    /// structured propagation value writes block structure into it.
     fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
         let temp = temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
@@ -1002,7 +1037,7 @@ impl<'a> Emitter<'a> {
             out.append(self.source_rope(binding.node));
             out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
         }
-        out
+        Rope::scoped(out)
     }
 
     fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
@@ -1011,18 +1046,20 @@ impl<'a> Emitter<'a> {
             let slot = self.structured_value_slot(value).unwrap_or_else(|| {
                 panic!("internal compiler error: structured propagation value has no slot")
             });
-            out.push_lit(format!("let {slot};\n"));
+            out.push_lit(format!("let {slot};"));
+            out.push_break(0);
             out.append(
                 self.emit_continued_expr(value, &ValueContinuation::assign(slot))
                     .unwrap_or_else(|| {
                         panic!("internal compiler error: propagation value was not emitted")
                     }),
             );
-            out.push_lit(format!("\nconst {temp} = ({slot});"));
+            out.push_break(0);
+            out.push_lit(format!("const {temp} = {slot};"));
         } else {
-            out.push_lit(format!("const {temp} = ("));
-            out.append(self.emit_expr(value).trim());
-            out.push_lit(");");
+            out.push_lit(format!("const {temp} = "));
+            push_grouped(&mut out, self.emit_expr(value).trim());
+            out.push_lit(";");
         }
         out
     }
@@ -1059,7 +1096,7 @@ impl<'a> Emitter<'a> {
         for item in &region.items {
             match item {
                 ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(self.emit_body(*body)));
+                    out.append(guard_line_comment(self.emit_body(*body), 0));
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -1078,13 +1115,12 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        out.push_lit("return { kind: \"Ok\" as const, value: (");
-        out.append(guard_line_comment(self.emit_expr(region.value)));
-        out.push_lit(if region.is_async {
-            ") }; }))"
-        } else {
-            ") }; })"
-        });
+        out.push_lit("return { kind: \"Ok\" as const, value: ");
+        push_grouped(
+            &mut out,
+            guard_line_comment(self.emit_expr(region.value).trim(), 0),
+        );
+        out.push_lit(if region.is_async { " }; }))" } else { " }; })" });
         out
     }
 
@@ -1094,15 +1130,13 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        out.push_lit(if continuation.assigns() {
-            "do {\n"
-        } else {
-            "{\n"
-        });
+        // The block's own source follows, leading whitespace included, so
+        // the opener does not break the line the region body starts on.
+        out.push_lit(if continuation.assigns() { "do {" } else { "{" });
         for item in &region.items {
             match item {
                 ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(self.emit_body(*body)));
+                    out.append(guard_line_comment(self.emit_body(*body), 0));
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -1129,15 +1163,16 @@ impl<'a> Emitter<'a> {
             }
         } else {
             out.append(self.emit_value_delivery(
-                guard_line_comment(self.emit_expr(region.value)),
-                "",
+                guard_line_comment(self.emit_expr(region.value).trim(), 0),
+                None,
                 &success,
             ));
         }
+        out.push_break(0);
         out.push_lit(if continuation.assigns() {
-            "\n} while (false);"
+            "} while (false);"
         } else {
-            "\n}"
+            "}"
         });
         let (binding_start, binding_end) = self.result_bind_anchor(region);
         let mut anchored = Rope::new();
@@ -1146,7 +1181,7 @@ impl<'a> Emitter<'a> {
             binding_start,
             binding_end,
             binding_end,
-            out,
+            Rope::scoped(out),
         );
         anchored
     }
@@ -1164,7 +1199,7 @@ impl<'a> Emitter<'a> {
         ));
         let mut value = Rope::new();
         value.push_lit(temp.clone());
-        out.append(self.emit_value_delivery(value, "", continuation));
+        out.append(self.emit_value_delivery(value, None, continuation));
         out.push_lit(" }");
         if let Some(binding) = propagate.binding {
             out.push_lit(format!(" {} ", binding_keyword(binding.mode)));
@@ -1178,26 +1213,21 @@ impl<'a> Emitter<'a> {
         let inner = match apply.head {
             Some(head) => {
                 self.used_pipe.set(true);
-                let mut acc = Rope::new();
-                acc.push_lit("(");
-                acc.append(guard_line_comment(self.emit_expr(head).trim()));
-                acc.push_lit(")");
+                let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0);
                 for step in &apply.steps {
-                    let body = guard_line_comment(self.emit_expr(step.value).trim());
+                    let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
                     let mut next = Rope::new();
                     match step.mode {
                         ApplyMode::Postfix => {
-                            next.push_lit("(");
-                            next.append(acc);
-                            next.push_lit(")");
+                            push_receiver(&mut next, acc);
                             next.append(body);
                         }
                         ApplyMode::Call => {
                             next.push_lit("$tt_ap(");
-                            next.append(acc);
-                            next.push_lit(", (");
-                            next.append(body);
-                            next.push_lit("))");
+                            push_grouped(&mut next, acc);
+                            next.push_lit(", ");
+                            push_grouped(&mut next, body);
+                            next.push_lit(")");
                         }
                     }
                     acc = next;
@@ -1222,12 +1252,13 @@ impl<'a> Emitter<'a> {
             .next()
             .unwrap_or_else(|| panic!("internal compiler error: flow has no step"));
         let mut acc = Rope::new();
-        acc.push_lit("(");
-        acc.append(guard_line_comment(self.emit_expr(first.value).trim()));
-        acc.push_lit(")");
+        push_grouped(
+            &mut acc,
+            guard_line_comment(self.emit_expr(first.value).trim(), 0),
+        );
         for step in steps {
             self.used_flow.set(true);
-            let body = guard_line_comment(self.emit_expr(step.value).trim());
+            let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
             let mut next = Rope::new();
             next.push_lit("$tt_fl(");
             next.append(acc);
@@ -1238,9 +1269,9 @@ impl<'a> Emitter<'a> {
                     next.push_lit("))");
                 }
                 ApplyMode::Call => {
-                    next.push_lit(", (");
-                    next.append(body);
-                    next.push_lit("))");
+                    next.push_lit(", ");
+                    push_grouped(&mut next, body);
+                    next.push_lit(")");
                 }
             }
             acc = next;
@@ -1318,9 +1349,9 @@ impl<'a> Emitter<'a> {
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = Rope::new();
-        out.push_lit(format!("const {temp} = ("));
-        out.append(self.emit_expr(subject.value).trim());
-        out.push_lit("); if (");
+        out.push_lit(format!("const {temp} = "));
+        push_grouped(&mut out, self.emit_expr(subject.value).trim());
+        out.push_lit("; if (");
         let DecisionKind::LetElse {
             direct_variants, ..
         } = &decision.kind
@@ -1364,9 +1395,9 @@ impl<'a> Emitter<'a> {
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = Rope::new();
-        out.push_lit(format!("{{ const {temp} = ("));
-        out.append(self.emit_expr(subject.value).trim());
-        out.push_lit("); if (");
+        out.push_lit(format!("{{ const {temp} = "));
+        push_grouped(&mut out, self.emit_expr(subject.value).trim());
+        out.push_lit("; if (");
         out.append(self.emit_condition(&arm.pattern, decision));
         out.push_lit(") { ");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
@@ -1374,12 +1405,12 @@ impl<'a> Emitter<'a> {
         let ArmAction::Execute(body) = arm.action else {
             panic!("internal compiler error: if-let has no then body")
         };
-        out.append(guard_line_comment(self.emit_body(body).trim()));
+        out.append(guard_line_comment(self.emit_body(body).trim(), 0));
         out.push_lit(" }");
         match &decision.miss {
             MissAction::Execute(body) => {
                 out.push_lit(" else { ");
-                out.append(guard_line_comment(self.emit_body(*body).trim()));
+                out.append(guard_line_comment(self.emit_body(*body).trim(), 0));
                 out.push_lit(" }");
             }
             MissAction::Decision(inner) => {
@@ -1423,27 +1454,31 @@ impl<'a> Emitter<'a> {
             out.push_lit("{");
         }
         for subject in &decision.subjects {
-            out.push_lit("\n  const ");
+            out.push_break(1);
+            out.push_lit("const ");
             out.push_mark(self.span(decision.head).start);
-            out.push_lit(format!("{} = (", temp_name(subject.temporary)));
-            out.append(self.emit_expr(subject.value).trim());
-            out.push_lit(");");
+            out.push_lit(format!("{} = ", temp_name(subject.temporary)));
+            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            out.push_lit(";");
         }
-        out.push_lit("\n");
-        out.append(match dispatch {
-            MatchDispatch::Conditional => {
-                self.emit_if_chain(decision, continuation, exits, label.as_deref())
-            }
-            MatchDispatch::VariantSwitch | MatchDispatch::LiteralSwitch => {
-                self.emit_switch(decision, continuation, exits, label.as_deref())
-            }
-        });
+        out.append(Rope::indented(
+            1,
+            match dispatch {
+                MatchDispatch::Conditional => {
+                    self.emit_if_chain(decision, continuation, exits, label.as_deref())
+                }
+                MatchDispatch::VariantSwitch | MatchDispatch::LiteralSwitch => {
+                    self.emit_switch(decision, continuation, exits, label.as_deref())
+                }
+            },
+        ));
+        out.push_break(0);
         out.push_lit(if continuation.is_expression() {
             if decision.is_async { "}))" } else { "})" }
         } else {
             "}"
         });
-        out
+        Rope::scoped(out)
     }
 
     fn emit_continued_expr(
@@ -1495,22 +1530,27 @@ impl<'a> Emitter<'a> {
             .get(&expr)
             .is_some_and(|slot| slot == accumulator);
         let mut inner = Rope::new();
-        inner.push_lit("do {\n");
+        inner.push_lit("do {");
         if !accumulator_is_host_slot {
-            inner.push_lit(format!("let {accumulator};\n"));
+            inner.push_break(1);
+            inner.push_lit(format!("let {accumulator};"));
         }
+        inner.push_break(1);
         if can_structure_value_expr(self.core, head) {
-            inner.append(
+            inner.append(Rope::indented(
+                1,
                 self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
                     .unwrap_or_else(|| {
                         panic!("internal compiler error: structured apply head was not emitted")
                     }),
-            );
-            inner.push_lit("\n");
+            ));
         } else {
-            inner.push_lit(format!("{accumulator} = ("));
-            inner.append(guard_line_comment(self.emit_expr(head).trim()));
-            inner.push_lit(");\n");
+            inner.push_lit(format!("{accumulator} = "));
+            push_grouped(
+                &mut inner,
+                guard_line_comment(self.emit_expr(head).trim(), 1),
+            );
+            inner.push_lit(";");
         }
         self.used_pipe.set(true);
         for step in &apply.steps {
@@ -1518,48 +1558,53 @@ impl<'a> Emitter<'a> {
                 let slot = self.structured_value_slot(step.value).unwrap_or_else(|| {
                     panic!("internal compiler error: structured apply step has no value slot")
                 });
-                inner.push_lit(format!("let {slot};\n"));
-                inner.append(
+                inner.push_break(1);
+                inner.push_lit(format!("let {slot};"));
+                inner.push_break(1);
+                inner.append(Rope::indented(
+                    1,
                     self.emit_continued_expr(step.value, &ValueContinuation::assign(slot))
                         .unwrap_or_else(|| {
                             panic!("internal compiler error: structured apply step was not emitted")
                         }),
-                );
-                inner.push_lit("\n");
+                ));
                 let mut value = Rope::new();
                 value.push_lit(slot.clone());
                 value
             } else {
-                guard_line_comment(self.emit_expr(step.value).trim())
+                guard_line_comment(self.emit_expr(step.value).trim(), 1)
             };
+            inner.push_break(1);
             match step.mode {
                 ApplyMode::Postfix => {
-                    inner.push_lit(format!("{accumulator} = ({accumulator})"));
+                    inner.push_lit(format!("{accumulator} = {accumulator}"));
                     inner.append(step_value);
-                    inner.push_lit(";\n");
+                    inner.push_lit(";");
                 }
                 ApplyMode::Call => {
-                    inner.push_lit(format!("{accumulator} = $tt_ap({accumulator}, ("));
-                    inner.append(step_value);
-                    inner.push_lit("));\n");
+                    inner.push_lit(format!("{accumulator} = $tt_ap({accumulator}, "));
+                    push_grouped(&mut inner, step_value);
+                    inner.push_lit(");");
                 }
             }
         }
+        inner.push_break(1);
         if continuation.is_unwrapped_assignment_to(accumulator) {
             inner.push_lit("break;");
         } else {
             let mut value = Rope::new();
             value.push_lit(accumulator.clone());
-            inner.append(self.emit_value_delivery(value, "", continuation));
+            inner.append(self.emit_value_delivery(value, None, continuation));
         }
-        inner.push_lit("\n} while (false);");
+        inner.push_break(0);
+        inner.push_lit("} while (false);");
         let start = self.span(apply.node).start;
         let end = apply.steps.last().map_or_else(
             || self.span(apply.node).end,
             |step| self.span(step.node).end,
         );
         let mut out = Rope::new();
-        out.anchored(AnchorKind::Pipe, start, end, end, inner);
+        out.anchored(AnchorKind::Pipe, start, end, end, Rope::scoped(inner));
         Some(out)
     }
 
@@ -1576,14 +1621,15 @@ impl<'a> Emitter<'a> {
         let literal = dispatch == MatchDispatch::LiteralSwitch;
         let temp = temp_name(decision.subjects[0].temporary);
         let mut out = Rope::new();
+        out.push_break(0);
         out.push_lit(if literal {
-            format!("  switch ({temp}) {{\n")
+            format!("switch ({temp}) {{")
         } else {
-            format!("  switch ({temp}.kind) {{\n")
+            format!("switch ({temp}.kind) {{")
         });
         let mut wildcard = false;
         for arm in &decision.arms {
-            out.push_lit("    ");
+            out.push_break(1);
             if matches!(arm.pattern, PatternPlan::Any) {
                 wildcard = true;
                 out.push_lit("default");
@@ -1604,7 +1650,7 @@ impl<'a> Emitter<'a> {
             self.emit_arm_action(
                 arm,
                 &ArmEmissionContext {
-                    indent: "    ",
+                    depth: 1,
                     chain: false,
                     continuation,
                     exits,
@@ -1614,9 +1660,11 @@ impl<'a> Emitter<'a> {
             );
         }
         if !wildcard {
+            out.push_break(1);
             out.push_lit(unexpected_switch(literal));
         }
-        out.push_lit("  }\n");
+        out.push_break(0);
+        out.push_lit("}");
         out
     }
 
@@ -1631,20 +1679,25 @@ impl<'a> Emitter<'a> {
             panic!("internal compiler error: conditional decision is not a match")
         };
         let mut out = Rope::new();
+        let mut depth = 0;
         if continuation.assigns() {
-            out.push_lit("  do {\n");
+            out.push_break(depth);
+            out.push_lit("do {");
+            depth += 1;
         }
         if needs_label {
-            out.push_lit("  $tt_b: {\n");
+            out.push_break(depth);
+            out.push_lit("$tt_b: {");
+            depth += 1;
         }
         let mut unconditional = false;
         for arm in &decision.arms {
             let is_any = !pattern_has_test(&arm.pattern);
+            out.push_break(depth);
             if is_any && arm.guard.is_none() {
                 unconditional = true;
-                out.push_lit("  ");
             } else {
-                out.push_lit("  if (");
+                out.push_lit("if (");
                 out.append(self.emit_condition(&arm.pattern, decision));
                 out.push_lit(") { ");
                 let mut recovery = BindingRecovery::new(self, &arm.pattern);
@@ -1653,7 +1706,7 @@ impl<'a> Emitter<'a> {
             self.emit_arm_action(
                 arm,
                 &ArmEmissionContext {
-                    indent: "  ",
+                    depth,
                     chain: true,
                     continuation,
                     exits,
@@ -1662,19 +1715,22 @@ impl<'a> Emitter<'a> {
                 &mut out,
             );
             if !is_any || arm.guard.is_some() {
-                out.push_lit(" }\n");
-            } else {
-                out.push_lit("\n");
+                out.push_lit(" }");
             }
         }
         if !unconditional {
+            out.push_break(depth);
             out.push_lit(self.unexpected_throw(decision));
         }
         if needs_label {
-            out.push_lit("  }\n");
+            depth -= 1;
+            out.push_break(depth);
+            out.push_lit("}");
         }
         if continuation.assigns() {
-            out.push_lit("  } while (false);\n");
+            depth -= 1;
+            out.push_break(depth);
+            out.push_lit("} while (false);");
         }
         out
     }
@@ -1685,7 +1741,7 @@ impl<'a> Emitter<'a> {
         context: &ArmEmissionContext<'_, '_>,
         out: &mut Rope<'a>,
     ) {
-        let indent = context.indent;
+        let depth = context.depth;
         let chain = context.chain;
         let continuation = context.continuation;
         let exits = context.exits;
@@ -1697,7 +1753,7 @@ impl<'a> Emitter<'a> {
             [Statement::Expr(expr)] => Some(*expr),
             _ => None,
         };
-        let body = if kind == ArmBodyKind::Block && continuation.assigns() {
+        let body = if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
             let label = exit_label.unwrap_or_else(|| {
                 panic!("internal compiler error: statement arm has no exit label")
             });
@@ -1719,46 +1775,54 @@ impl<'a> Emitter<'a> {
                         action.push_lit(" break;");
                     }
                 } else {
-                    let newline = if body.last_line_has_line_comment() {
-                        if indent == "    " { "\n    " } else { "\n  " }
-                    } else {
-                        ""
-                    };
-                    action.append(self.emit_value_delivery(body, newline, continuation));
+                    let close = body.last_line_has_line_comment().then_some(depth);
+                    action.append(self.emit_value_delivery(body, close, continuation));
                 }
             }
-            ArmBodyKind::Block if chain => {
+            // A block that always leaves has written the arm's value on
+            // every path it takes, so neither the fall-through to
+            // `undefined` nor the exit after it can be reached.
+            ArmBodyKind::Block { completes } if chain => {
                 action.push_lit("{ ");
                 action.append(body);
-                if continuation.assigns() {
-                    action.push_lit(format!(
-                        "\n{} = (undefined);",
-                        continuation.assignment_target().unwrap()
-                    ));
+                if completes {
+                    if continuation.assigns() {
+                        action.push_break(depth + 1);
+                        action.push_lit(format!(
+                            "{} = undefined;",
+                            continuation.assignment_target().unwrap()
+                        ));
+                    }
+                    action.push_break(depth + 1);
+                    action.push_lit("break $tt_b;");
                 }
-                action.push_lit("\n    break $tt_b; }");
+                action.push_break(depth);
+                action.push_lit("}");
             }
-            ArmBodyKind::Block => {
+            ArmBodyKind::Block { completes } => {
                 action.append(body);
-                if continuation.assigns() {
-                    action.push_lit(format!(
-                        "\n{} = (undefined);",
-                        continuation.assignment_target().unwrap()
-                    ));
+                if completes {
+                    if continuation.assigns() {
+                        action.push_break(depth + 1);
+                        action.push_lit(format!(
+                            "{} = undefined;",
+                            continuation.assignment_target().unwrap()
+                        ));
+                    }
+                    action.push_break(depth + 1);
+                    action.push_lit("break;");
                 }
-                action.push_lit("\n      break;");
             }
         }
         if let Some(guard) = arm.guard {
             let guard = self.emit_expr(guard).trim();
-            let newline = if guard.last_line_has_line_comment() {
-                "\n  "
-            } else {
-                ""
-            };
-            out.push_lit("if ((");
+            let guarded = guard.last_line_has_line_comment();
+            out.push_lit("if (");
             out.append(guard);
-            out.push_lit(format!("{newline})) "));
+            if guarded {
+                out.push_break(depth);
+            }
+            out.push_lit(") ");
             if continuation.assigns() {
                 out.push_lit("{ ");
             }
@@ -1768,33 +1832,48 @@ impl<'a> Emitter<'a> {
             out.push_lit(" }");
         }
         if !chain {
-            out.push_lit(" }\n");
+            out.push_lit(" }");
         }
     }
 
+    /// Delivers one value to its continuation. `close` breaks the line
+    /// before the closing `);` at that depth — the delivered body ends with
+    /// a `//` comment that would otherwise swallow it.
     fn emit_value_delivery(
         &self,
         body: Rope<'a>,
-        newline: &str,
+        close: Option<u16>,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
-        let mut out = Rope::new();
-        match continuation.destination {
-            ValueDestination::Expression => out.push_lit("return ("),
-            ValueDestination::Assign(target) => out.push_lit(format!("{target} = (")),
-        }
-        for wrapper in &continuation.wrappers {
-            match wrapper {
-                ValueWrapper::ResultOk => out.push_lit("{ kind: \"Ok\" as const, value: ("),
-            }
-        }
-        out.append(body);
+        let mut value = body;
         for wrapper in continuation.wrappers.iter().rev() {
             match wrapper {
-                ValueWrapper::ResultOk => out.push_lit(") }"),
+                ValueWrapper::ResultOk => {
+                    let mut wrapped = Rope::new();
+                    wrapped.push_lit("{ kind: \"Ok\" as const, value: ");
+                    push_grouped(&mut wrapped, value);
+                    wrapped.push_lit(" }");
+                    value = wrapped;
+                }
             }
         }
-        out.push_lit(format!("{newline});"));
+        let grouped = needs_grouping(&value);
+        let mut out = Rope::new();
+        match continuation.destination {
+            ValueDestination::Expression => out.push_lit("return "),
+            ValueDestination::Assign(target) => out.push_lit(format!("{target} = ")),
+        }
+        if grouped {
+            out.push_lit("(");
+        }
+        out.append(value);
+        if let Some(depth) = close {
+            out.push_break(depth);
+        }
+        if grouped {
+            out.push_lit(")");
+        }
+        out.push_lit(";");
         if continuation.assigns() {
             out.push_lit(" break;");
         }
@@ -2000,15 +2079,15 @@ impl<'a> Emitter<'a> {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "  throw new Error(\"tt match: unexpected case \" + JSON.stringify([{temps}]));\n"
+                    "throw new Error(\"tt match: unexpected case \" + JSON.stringify([{temps}]));"
                 )
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
-                "  throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));\n"
+                "throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));"
                     .to_owned()
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
-                "  throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));\n"
+                "throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"
                     .to_owned()
             }
             _ => panic!("internal compiler error: match has non-match miss action"),
@@ -2016,9 +2095,62 @@ impl<'a> Emitter<'a> {
     }
 }
 
-fn guard_line_comment(mut rope: Rope<'_>) -> Rope<'_> {
+/// Appends `value` to `out` in a position that can only regroup it across
+/// a comma — an initializer, an assignment right-hand side, a `return`
+/// operand, or a single call argument — wrapping it in parentheses only
+/// when it has a top-level comma to protect.
+///
+/// The parentheses codegen writes around a lowered value are grouping, not
+/// syntax: everything else in the expression binds tighter than the
+/// position it lands in, so the pair is noise the reader has to see past.
+/// A value whose text is not resolved yet (it carries layout breaks, so it
+/// is a lowering rather than one expression) keeps its parentheses.
+fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
+    if needs_grouping(&value) {
+        out.push_lit("(");
+        out.append(value);
+        out.push_lit(")");
+    } else {
+        out.append(value);
+    }
+}
+
+/// Appends `value` as the receiver of a postfix step (`value.map(f)`).
+/// Member access binds tighter than every operator, so the parentheses are
+/// needed unless the receiver is already one primary expression.
+fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
+    let primary = value
+        .resolved_text()
+        .is_some_and(|text| crate::scanner::is_primary_expression(text.as_bytes(), 0, text.len()));
+    if primary {
+        out.append(value);
+    } else {
+        out.push_lit("(");
+        out.append(value);
+        out.push_lit(")");
+    }
+}
+
+/// Whether a value delivered to one of those positions has to keep the
+/// parentheses codegen wraps it in. See [`push_grouped`].
+fn needs_grouping(value: &Rope<'_>) -> bool {
+    match value.resolved_text() {
+        Some(text) => grouping_required(&text),
+        None => true,
+    }
+}
+
+/// The same question about text codegen has not yet made a rope of.
+fn grouping_required(text: &str) -> bool {
+    crate::scanner::has_top_level_comma(text.as_bytes(), 0, text.len())
+}
+
+/// Ends the line when `rope` finishes inside a `//` comment, so whatever
+/// codegen appends next is not swallowed by it. `depth` is where the
+/// continued line starts inside the enclosing lowering.
+fn guard_line_comment(mut rope: Rope<'_>, depth: u16) -> Rope<'_> {
     if rope.last_line_has_line_comment() {
-        rope.push_lit("\n");
+        rope.push_break(depth);
     }
     rope
 }
@@ -2182,13 +2314,15 @@ impl BindingRecovery {
 
 fn unexpected_switch(literal: bool) -> &'static str {
     if literal {
-        "    default: { throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m)); }\n"
+        "default: { throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m)); }"
     } else {
-        "    default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }\n"
+        "default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }"
     }
 }
 
-fn emit_adt_text(adt: &Adt) -> String {
+/// The union type and constructor object one tt `enum` becomes, laid out
+/// from the line the declaration sits on.
+fn emit_adt<'a>(adt: &Adt) -> Rope<'a> {
     let export = if adt.exported { "export " } else { "" };
     let arms = adt
         .variants
@@ -2210,9 +2344,7 @@ fn emit_adt_text(adt: &Adt) -> String {
             ),
             _ => format!("{{ kind: \"{}\" }}", variant.name),
         })
-        .collect::<Vec<_>>()
-        .join("\n  | ");
-    let type_decl = format!("{export}type {}{} =\n  | {arms};", adt.name, adt.generics);
+        .collect::<Vec<_>>();
     let type_args = if adt.generics.is_empty() {
         String::new()
     } else {
@@ -2227,7 +2359,7 @@ fn emit_adt_text(adt: &Adt) -> String {
             }
             Some(match &variant.fields {
                 None => format!(
-                    "  {}: {{ kind: \"{}\" }} as const,",
+                    "{}: {{ kind: \"{}\" }} as const,",
                     variant.name, variant.name
                 ),
                 Some(fields) => {
@@ -2248,18 +2380,29 @@ fn emit_adt_text(adt: &Adt) -> String {
                         .collect::<Vec<_>>()
                         .join(", ");
                     format!(
-                        "  {}: {}({params}): {}{type_args} => ({{ {object} }}),",
+                        "{}: {}({params}): {}{type_args} => ({{ {object} }}),",
                         variant.name, adt.generics, adt.name
                     )
                 }
             })
         })
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!(
-        "{type_decl}\n{export}const {} = {{\n{constructors}\n}};",
-        adt.name
-    )
+        .collect::<Vec<_>>();
+    let mut out = Rope::new();
+    out.push_lit(format!("{export}type {}{} =", adt.name, adt.generics));
+    for arm in arms {
+        out.push_break(1);
+        out.push_lit(format!("| {arm}"));
+    }
+    out.push_lit(";");
+    out.push_break(0);
+    out.push_lit(format!("{export}const {} = {{", adt.name));
+    for constructor in constructors {
+        out.push_break(1);
+        out.push_lit(constructor);
+    }
+    out.push_break(0);
+    out.push_lit("};");
+    Rope::scoped(out)
 }
 
 fn generic_param_names(generics: &str) -> Vec<String> {

@@ -149,8 +149,27 @@ concise arrow의 expression body는 이름 있는 `ArrowExpression` host owner�
 [`../reference/language.md`](../reference/language.md)). `await` 감지는
 AST에 남긴 원시 Span 위로 `scanner::contains_await`를 돌려 수행한다.
 
-방출은 내부적으로 Lit(컴파일러 글루)/Src(원본, 오프셋 유지) 조각의
-로프(`codegen/rope.rs`)로 조립된다 — 조각은 원본을 **빌려오고**(복사하지
+방출된 코드의 **레이아웃은 프린터가 소유한다**(TASK-198). 방출부는 공백을
+쓰지 않고 구조만 말한다 — `push_break(depth)`는 "여기서 줄을 끝내고 이
+lowering 안쪽 depth만큼에서 다시 시작"이라는 뜻이고, 실제 들여쓰기는
+평탄화 시점에 정해진다: 기준(base)은 그 구문의 스코프가 열린 **줄의 선행
+공백**이고(`Rope::anchored`가 구문마다 스코프를 연다), 거기에 depth만큼
+단위 들여쓰기를 더한다. 그래서 함수 안에 놓인 match든 중첩 블록 안에 놓인
+`result`든 자기가 대체한 문장과 같은 자리에서 블록이 시작한다. 조각은 자기
+기준의 상대 depth로 조립되고 중첩은 `Rope::indented`가 옮긴다. **verbatim
+구간은 재포맷하지 않는다** — 계약 1과 원본↔출력 매핑이 우선이므로,
+레이아웃은 컴파일러가 쓴 글루에만 적용된다.
+
+값을 감싸는 괄호도 규칙으로 정해진다. 초기화식·대입 우변·`return`
+피연산자·인자 하나 — lower된 값이 놓이는 이 위치들에서 값보다 느슨하게
+묶이는 연산자는 콤마뿐이므로, `scanner::has_top_level_comma`가 참일 때만
+괄호를 남긴다. postfix 스텝의 수신자(`x |> .trim()`)는 다른 질문이라
+`scanner::is_primary_expression`으로 답한다(`(await p).then(g)`는 괄호가
+필요하고 `s.trim()`은 아니다). 두 술어 모두 판정이 애매하면 괄호를 남기는
+쪽으로 답한다 — 틀려도 잉여 괄호일 뿐 의미는 잃지 않는다.
+
+방출은 내부적으로 Lit(컴파일러 글루)/Src(원본, 오프셋 유지)/Break·Scope
+(레이아웃) 조각의 로프(`codegen/rope.rs`)로 조립된다 — 조각은 원본을 **빌려오고**(복사하지
 않고) 평탄화 한 번에만 텍스트를 쓴다 — `compile()`은 평탄화한 텍스트만 쓰고,
 언어 도구용 `emit_mapped()`(`ttc --emit-map`)는 원본↔출력 바이트 매핑까지
 받아 에디터의 가상 TypeScript 문서에 쓴다(TASK-050). 이 도구 경로는

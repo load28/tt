@@ -35,6 +35,17 @@ enum Piece<'a> {
     /// codegen is about to write stands for the construct at source offset
     /// `src`. Carries no text, so it changes nothing about the output.
     Mark { src: usize, kind: MarkKind },
+    /// A hard line break in generated glue: a newline, the enclosing layout
+    /// scope's base indentation, and `depth` further indentation units.
+    /// The text is resolved when the target is printed, because the base is
+    /// the indentation of the output line the scope opened on.
+    Break { depth: u16 },
+    /// Opens a layout scope. The printer reads the base indentation off the
+    /// line it opens on, so a lowering lays its glue out from the line the
+    /// construct sits on. Nests.
+    ScopeOpen,
+    /// Closes the innermost open layout scope.
+    ScopeClose,
     /// A zero-length note that everything up to the matching [`Piece::Close`]
     /// is glue one construct wrote ([`EmitAnchor`]). Nests.
     Open {
@@ -85,6 +96,11 @@ enum TargetPiece<'a> {
         src: usize,
         kind: MarkKind,
     },
+    Break {
+        depth: u16,
+    },
+    ScopeOpen,
+    ScopeClose,
     Open {
         src: usize,
         src_end: usize,
@@ -95,11 +111,18 @@ enum TargetPiece<'a> {
 }
 
 impl TargetPiece<'_> {
+    /// The piece's *fixed* text. A [`TargetPiece::Break`] has none — its
+    /// text is resolved against the layout scope while printing.
     fn text(&self) -> &str {
         match self {
             TargetPiece::Generated { text, .. } => text,
             TargetPiece::Source { text, .. } => text,
-            TargetPiece::Mark { .. } | TargetPiece::Open { .. } | TargetPiece::Close => "",
+            TargetPiece::Mark { .. }
+            | TargetPiece::Break { .. }
+            | TargetPiece::ScopeOpen
+            | TargetPiece::ScopeClose
+            | TargetPiece::Open { .. }
+            | TargetPiece::Close => "",
         }
     }
 }
@@ -112,10 +135,26 @@ struct TargetFile<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TargetError {
-    LengthMismatch { expected: usize, actual: usize },
-    SourceOutOfBounds { start: usize, end: usize },
+    LengthMismatch {
+        expected: usize,
+        actual: usize,
+    },
+    SourceOutOfBounds {
+        start: usize,
+        end: usize,
+    },
     CloseWithoutOpen,
-    UnclosedAnchors { count: usize },
+    UnclosedAnchors {
+        count: usize,
+    },
+    /// A line break with no layout scope to indent from — the emitter that
+    /// wrote it never said where its block structure starts, so the break
+    /// would silently fall back to column 0.
+    BreakOutsideScope,
+    ScopeCloseWithoutOpen,
+    UnclosedScopes {
+        count: usize,
+    },
 }
 
 impl<'a> TargetFile<'a> {
@@ -165,6 +204,9 @@ impl<'a> TargetFile<'a> {
                     },
                 }),
                 Piece::Mark { src, kind } => pieces.push(TargetPiece::Mark { src, kind }),
+                Piece::Break { depth } => pieces.push(TargetPiece::Break { depth }),
+                Piece::ScopeOpen => pieces.push(TargetPiece::ScopeOpen),
+                Piece::ScopeClose => pieces.push(TargetPiece::ScopeClose),
                 Piece::Open {
                     src,
                     src_end,
@@ -206,6 +248,7 @@ impl<'a> TargetFile<'a> {
             });
         }
         let mut open = 0usize;
+        let mut scopes = 0usize;
         for piece in &self.pieces {
             match piece {
                 TargetPiece::Source {
@@ -220,6 +263,14 @@ impl<'a> TargetFile<'a> {
                 TargetPiece::Open { .. } => open += 1,
                 TargetPiece::Close if open == 0 => return Err(TargetError::CloseWithoutOpen),
                 TargetPiece::Close => open -= 1,
+                TargetPiece::ScopeOpen => scopes += 1,
+                TargetPiece::ScopeClose if scopes == 0 => {
+                    return Err(TargetError::ScopeCloseWithoutOpen);
+                }
+                TargetPiece::ScopeClose => scopes -= 1,
+                TargetPiece::Break { .. } if scopes == 0 => {
+                    return Err(TargetError::BreakOutsideScope);
+                }
                 TargetPiece::Generated { origin, .. } => match origin {
                     SourceOrigin::Construct {
                         src,
@@ -242,17 +293,23 @@ impl<'a> TargetFile<'a> {
                     }
                     SourceOrigin::Construct { .. } | SourceOrigin::Synthetic { .. } => {}
                 },
-                TargetPiece::Source { .. } | TargetPiece::Mark { .. } => {}
+                TargetPiece::Source { .. }
+                | TargetPiece::Mark { .. }
+                | TargetPiece::Break { .. } => {}
             }
         }
         if open != 0 {
             return Err(TargetError::UnclosedAnchors { count: open });
         }
+        if scopes != 0 {
+            return Err(TargetError::UnclosedScopes { count: scopes });
+        }
         Ok(())
     }
 
     fn print(self) -> Flat {
-        let mut out = String::with_capacity(self.len);
+        let mut out = String::with_capacity(self.len + self.len / 8);
+        let mut scopes: Vec<String> = Vec::new();
         let mut mappings: Vec<EmitMapping> = Vec::new();
         let mut marks: Vec<ScrutineeTemp> = Vec::new();
         let mut payloads: Vec<PayloadTemp> = Vec::new();
@@ -292,6 +349,19 @@ impl<'a> TargetFile<'a> {
                     src: *src,
                     out: out.len(),
                 }),
+                TargetPiece::ScopeOpen => scopes.push(line_indent(&out).to_owned()),
+                TargetPiece::ScopeClose => {
+                    scopes.pop();
+                }
+                TargetPiece::Break { depth } => {
+                    out.push('\n');
+                    if let Some(base) = scopes.last() {
+                        out.push_str(base);
+                    }
+                    for _ in 0..*depth {
+                        out.push_str(INDENT);
+                    }
+                }
                 TargetPiece::Generated { text, .. } => out.push_str(text),
                 TargetPiece::Source {
                     text,
@@ -326,13 +396,52 @@ impl<'a> TargetFile<'a> {
     }
 }
 
+/// One level of generated indentation.
+const INDENT: &str = "  ";
+
+/// The whitespace a line starts with — the base a lowering's generated
+/// block structure is laid out from.
+fn line_indent(out: &str) -> &str {
+    let line = match out.rfind('\n') {
+        Some(newline) => &out[newline + 1..],
+        None => out,
+    };
+    let end = line
+        .find(|byte: char| byte != ' ' && byte != '\t')
+        .unwrap_or(line.len());
+    &line[..end]
+}
+
 impl<'a> Piece<'a> {
     fn text(&self) -> &str {
         match self {
             Piece::Lit(t) => t,
             Piece::Src { text, .. } => text,
-            Piece::Mark { .. } | Piece::Open { .. } | Piece::Close => "",
+            Piece::Mark { .. }
+            | Piece::Break { .. }
+            | Piece::ScopeOpen
+            | Piece::ScopeClose
+            | Piece::Open { .. }
+            | Piece::Close => "",
         }
+    }
+
+    /// True for a piece that ends the output line it sits on. A break's
+    /// text is resolved at print time, so it never reaches [`Piece::text`].
+    fn ends_line(&self) -> bool {
+        match self {
+            Piece::Break { .. } => true,
+            piece => piece.text().ends_with('\n'),
+        }
+    }
+
+    fn is_break(&self) -> bool {
+        matches!(self, Piece::Break { .. })
+    }
+
+    /// True for a piece that carries text a caller can trim.
+    fn is_text(&self) -> bool {
+        matches!(self, Piece::Lit(_) | Piece::Src { .. })
     }
 
     /// Drops the first `cut` bytes (a char boundary) from the piece.
@@ -344,7 +453,12 @@ impl<'a> Piece<'a> {
                 *text = &text[cut..];
                 *src += cut;
             }
-            Piece::Mark { .. } | Piece::Open { .. } | Piece::Close => {}
+            Piece::Mark { .. }
+            | Piece::Break { .. }
+            | Piece::ScopeOpen
+            | Piece::ScopeClose
+            | Piece::Open { .. }
+            | Piece::Close => {}
         }
     }
 
@@ -354,7 +468,12 @@ impl<'a> Piece<'a> {
             Piece::Lit(Cow::Borrowed(t)) => *t = &t[..keep],
             Piece::Lit(Cow::Owned(t)) => t.truncate(keep),
             Piece::Src { text, .. } => *text = &text[..keep],
-            Piece::Mark { .. } | Piece::Open { .. } | Piece::Close => {}
+            Piece::Mark { .. }
+            | Piece::Break { .. }
+            | Piece::ScopeOpen
+            | Piece::ScopeClose
+            | Piece::Open { .. }
+            | Piece::Close => {}
         }
     }
 }
@@ -377,6 +496,52 @@ impl<'a> Rope<'a> {
             self.len += text.len();
             self.pieces.push(Piece::Lit(text));
         }
+    }
+
+    /// Ends the current line of generated glue and opens the next one
+    /// `depth` indentation units inside the enclosing layout scope. The
+    /// whitespace itself is resolved when the target is printed
+    /// ([`Rope::scoped`]), because it depends on where the scope opened.
+    pub(crate) fn push_break(&mut self, depth: u16) {
+        self.pieces.push(Piece::Break { depth });
+    }
+
+    /// Wraps `inner` in a layout scope: every [`Rope::push_break`] inside it
+    /// indents from the line the scope opens on. This is how a lowering's
+    /// generated block structure lines up with the statement it replaces
+    /// without any emitter knowing the column it will be printed at.
+    ///
+    /// A scope is a different boundary from [`Rope::anchored`], which says
+    /// which construct owns a stretch of glue so a diagnostic can be traced
+    /// back to it. The two coincide for most lowerings, but they answer
+    /// different questions, so each emitter that writes breaks opens its
+    /// own scope — and [`TargetError::BreakOutsideScope`] catches one that
+    /// forgets rather than letting the break fall back to column 0.
+    pub(crate) fn scoped(inner: Rope<'a>) -> Rope<'a> {
+        let mut out = Rope::new();
+        out.pieces.push(Piece::ScopeOpen);
+        out.append(inner);
+        out.pieces.push(Piece::ScopeClose);
+        out
+    }
+
+    /// Nests `inner` `depth` indentation units deeper: every break `inner`
+    /// wrote in its *own* layout scope moves in by `depth`. Breaks inside a
+    /// scope `inner` opened keep their depth — that scope has its own base.
+    ///
+    /// This is what lets each construct's emitter write its fragment at
+    /// depths relative to itself and leave nesting to whoever appends it.
+    pub(crate) fn indented(depth: u16, mut inner: Rope<'a>) -> Rope<'a> {
+        let mut nested = 0usize;
+        for piece in &mut inner.pieces {
+            match piece {
+                Piece::ScopeOpen => nested += 1,
+                Piece::ScopeClose => nested = nested.saturating_sub(1),
+                Piece::Break { depth: at } if nested == 0 => *at += depth,
+                _ => {}
+            }
+        }
+        inner
     }
 
     /// Notes that the next thing pushed is the name codegen writes for the
@@ -431,13 +596,38 @@ impl<'a> Rope<'a> {
         self.pieces.append(&mut other.pieces);
     }
 
+    /// The rope's text, when every piece of it is already resolved. A rope
+    /// carrying layout breaks answers `None`: its text depends on where it
+    /// is printed, and a caller inspecting text is deciding something the
+    /// layout must not change.
+    pub(crate) fn resolved_text(&self) -> Option<Cow<'_, str>> {
+        if self.pieces.iter().any(|piece| piece.is_break()) {
+            return None;
+        }
+        let mut texts = self
+            .pieces
+            .iter()
+            .map(Piece::text)
+            .filter(|t| !t.is_empty());
+        let first = texts.next().unwrap_or("");
+        match texts.next() {
+            None => Some(Cow::Borrowed(first)),
+            Some(second) => {
+                let mut out = String::with_capacity(self.len);
+                out.push_str(first);
+                out.push_str(second);
+                out.extend(texts);
+                Some(Cow::Owned(out))
+            }
+        }
+    }
+
     pub(crate) fn ends_with_newline(&self) -> bool {
         self.pieces
             .iter()
             .rev()
-            .map(Piece::text)
-            .find(|text| !text.is_empty())
-            .is_some_and(|text| text.ends_with('\n'))
+            .find(|piece| !piece.text().is_empty() || matches!(piece, Piece::Break { .. }))
+            .is_some_and(Piece::ends_line)
     }
 
     /// True when the rope's last line carries a `//` line comment — it would
@@ -449,6 +639,9 @@ impl<'a> Rope<'a> {
         // back together before the search — it is one line, not the rope.
         let mut tail: Vec<&str> = Vec::new();
         for piece in self.pieces.iter().rev() {
+            if matches!(piece, Piece::Break { .. }) {
+                break;
+            }
             let text = piece.text();
             match text.rfind('\n') {
                 Some(nl) => {
@@ -480,7 +673,11 @@ impl<'a> Rope<'a> {
         // front
         let mut front = 0;
         while let Some(first) = self.pieces.get_mut(front) {
-            if first.text().is_empty() && !matches!(first, Piece::Lit(_) | Piece::Src { .. }) {
+            if matches!(first, Piece::Break { .. }) {
+                self.pieces.remove(front);
+                continue;
+            }
+            if first.text().is_empty() && !first.is_text() {
                 front += 1;
                 continue;
             }
@@ -502,7 +699,12 @@ impl<'a> Rope<'a> {
         let mut back = self.pieces.len();
         while back > 0 {
             let last = &mut self.pieces[back - 1];
-            if last.text().is_empty() && !matches!(last, Piece::Lit(_) | Piece::Src { .. }) {
+            if matches!(last, Piece::Break { .. }) {
+                self.pieces.remove(back - 1);
+                back -= 1;
+                continue;
+            }
+            if last.text().is_empty() && !last.is_text() {
                 back -= 1;
                 continue;
             }
@@ -608,6 +810,24 @@ mod tests {
             target.validate(),
             Err(TargetError::SourceOutOfBounds { start: 2, end: 3 })
         );
+    }
+
+    #[test]
+    fn target_rejects_a_break_with_no_layout_scope() {
+        // A break's indentation is meaningless without a scope to measure
+        // it from, so the target refuses one — an emitter that writes block
+        // structure has to say where that structure starts.
+        let mut loose = Rope::new();
+        loose.push_lit("x");
+        loose.push_break(1);
+        let target = TargetFile::from_rope(loose, 0);
+        assert_eq!(target.validate(), Err(TargetError::BreakOutsideScope));
+
+        let mut scoped = Rope::new();
+        scoped.push_lit("x");
+        scoped.push_break(1);
+        let target = TargetFile::from_rope(Rope::scoped(scoped), 0);
+        assert_eq!(target.validate(), Ok(()));
     }
 
     #[test]

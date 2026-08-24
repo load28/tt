@@ -525,7 +525,15 @@ pub enum ArmBodyKind {
     /// `pattern => expression`.
     Expression,
     /// `pattern => { statements }`.
-    Block,
+    Block {
+        /// Whether control can reach the end of the block. `false` — every
+        /// path leaves through an exit that yields the arm's value or
+        /// throws — makes the lowering's fall-through to `undefined`
+        /// unreachable, so it is not written. Answered on the flow graph
+        /// by the parser ([`crate::ast::Arm::diverges`]), whose contract is
+        /// that it never claims a divergence that is not there.
+        completes: bool,
+    },
 }
 
 /// One pattern node. Or-patterns are a node with alternatives; nested

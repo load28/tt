@@ -286,6 +286,169 @@ pub(crate) fn scan_type_end(src: &[u8], mut i: usize, end: usize) -> usize {
 
 /// True if the range contains an `await` token in code position (including
 /// inside template interpolations, excluding strings and comments).
+/// True when `src[i..end]` has a `,` outside every bracket, string,
+/// template and comment — the one operator that binds looser than an
+/// initializer, an assignment right-hand side, a `return` operand or a
+/// single call argument, and so the one reason such a position has to keep
+/// the parentheses codegen wrapped a value in.
+///
+/// A `,` inside type arguments (`a as Map<K, V>`) counts as top level here:
+/// the answer is only ever used to *keep* parentheses, so erring that way
+/// costs a pair of parentheses and never a meaning.
+pub(crate) fn has_top_level_comma(src: &[u8], mut i: usize, end: usize) -> bool {
+    let mut prev_word = "";
+    let mut prev_sig = 0u8;
+    while i < end {
+        let c = src[i];
+        if c == b'/' && at(src, i + 1, end) == Some(b'/') {
+            i = line_end(src, i, end);
+            continue;
+        }
+        if c == b'/' && at(src, i + 1, end) == Some(b'*') {
+            i = match find_subslice(src, b"*/", i + 2, end) {
+                Some(e) => e + 2,
+                None => end,
+            };
+            continue;
+        }
+        if c == b'"' || c == b'\'' {
+            i = scan_string(src, i, end);
+            prev_word = "";
+            prev_sig = c;
+            continue;
+        }
+        if c == b'`' {
+            i = skip_template(src, i, end);
+            prev_word = "";
+            prev_sig = b'`';
+            continue;
+        }
+        if c == b'/'
+            && regex_allowed(prev_sig, prev_word)
+            && let Some(regex_end) = scan_regex(src, i, end)
+        {
+            i = regex_end;
+            prev_word = "";
+            prev_sig = b'/';
+            continue;
+        }
+        if is_ident_start(c) {
+            let word_end = ident_end(src, i, end);
+            prev_word = std::str::from_utf8(&src[i..word_end]).unwrap_or("");
+            prev_sig = src[word_end - 1];
+            i = word_end;
+            continue;
+        }
+        if matches!(c, b'(' | b'[' | b'{') {
+            match find_matching(src, i, end) {
+                Some(close) => {
+                    i = close + 1;
+                    prev_word = "";
+                    prev_sig = src[close];
+                    continue;
+                }
+                // Unbalanced: this pass cannot see the top level any more.
+                None => return true,
+            }
+        }
+        if c == b',' {
+            return true;
+        }
+        prev_word = "";
+        prev_sig = c;
+        i += 1;
+    }
+    false
+}
+
+/// True when `src[i..end]` is one *primary* expression — a single operand
+/// with nothing at its top level but member access, calls, indexing,
+/// non-null assertions and tagged templates.
+///
+/// This is the question a receiver position asks: member access binds
+/// tighter than every operator, so only a primary receiver can lose the
+/// parentheses codegen wrapped it in. A keyword operand (`await x`,
+/// `new C`, `x as T`) is not primary — `(await x).f` and `await x.f` are
+/// different expressions.
+pub(crate) fn is_primary_expression(src: &[u8], from: usize, end: usize) -> bool {
+    let mut i = skip_ws_comments(src, from, end);
+    if i >= end {
+        return false;
+    }
+    let head = src[i];
+    if is_ident_start(head) {
+        let word_end = ident_end(src, i, end);
+        let word = std::str::from_utf8(&src[i..word_end]).unwrap_or("");
+        // An operand-taking keyword binds looser than member access.
+        if matches!(
+            word,
+            "await"
+                | "class"
+                | "delete"
+                | "function"
+                | "new"
+                | "typeof"
+                | "void"
+                | "yield"
+                | "async"
+        ) {
+            return false;
+        }
+        i = word_end;
+    } else if matches!(head, b'(' | b'[' | b'{') {
+        match find_matching(src, i, end) {
+            Some(close) => i = close + 1,
+            None => return false,
+        }
+    } else if head == b'`' {
+        i = skip_template(src, i, end);
+    } else if head == b'"' || head == b'\'' {
+        i = scan_string(src, i, end);
+    } else if head.is_ascii_digit() {
+        while i < end && (src[i].is_ascii_alphanumeric() || src[i] == b'.' || src[i] == b'_') {
+            i += 1;
+        }
+    } else {
+        return false;
+    }
+    loop {
+        let next = skip_ws_comments(src, i, end);
+        if next >= end {
+            return true;
+        }
+        match src[next] {
+            b'.' => {
+                let name = skip_ws_comments(src, next + 1, end);
+                if name < end && is_ident_start(src[name]) {
+                    i = ident_end(src, name, end);
+                } else {
+                    return false;
+                }
+            }
+            b'?' if at(src, next + 1, end) == Some(b'.') => {
+                let after = skip_ws_comments(src, next + 2, end);
+                if after < end && is_ident_start(src[after]) {
+                    i = ident_end(src, after, end);
+                } else if after < end && matches!(src[after], b'(' | b'[') {
+                    match find_matching(src, after, end) {
+                        Some(close) => i = close + 1,
+                        None => return false,
+                    }
+                } else {
+                    return false;
+                }
+            }
+            b'!' if at(src, next + 1, end) != Some(b'=') => i = next + 1,
+            b'(' | b'[' => match find_matching(src, next, end) {
+                Some(close) => i = close + 1,
+                None => return false,
+            },
+            b'`' => i = skip_template(src, next, end),
+            _ => return false,
+        }
+    }
+}
+
 pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {
     while i < end {
         let c = src[i];

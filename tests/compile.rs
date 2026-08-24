@@ -221,9 +221,9 @@ const area = match (shape) {
 "#);
     assert!(out.contains("switch ($tt_m.kind)"));
     assert!(out.contains(
-        "case \"Circle\": { const { radius } = $tt_m; $tt_v0 = (3.14 * radius * radius); break; }"
+        "case \"Circle\": { const { radius } = $tt_m; $tt_v0 = 3.14 * radius * radius; break; }"
     ));
-    assert!(out.contains("case \"Point\": { $tt_v0 = (0); break; }"));
+    assert!(out.contains("case \"Point\": { $tt_v0 = 0; break; }"));
     // The output is plain TypeScript: a runtime guard, no type-level tricks.
     assert!(out.contains(
         "default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }"
@@ -234,7 +234,7 @@ const area = match (shape) {
 #[test]
 fn match_wildcard_becomes_default() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };");
-    assert!(out.contains("default: { $tt_v0 = (0); break; }"));
+    assert!(out.contains("default: { $tt_v0 = 0; break; }"));
     assert!(!out.contains("never"));
 }
 
@@ -243,7 +243,7 @@ fn whole_initializer_match_uses_a_statement_slot_without_an_iife() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("let $tt_v0;"), "{out}");
-    assert!(out.contains("$tt_v0 = (1);"), "{out}");
+    assert!(out.contains("$tt_v0 = 1;"), "{out}");
     assert!(out.contains("const r = $tt_v0;"), "{out}");
 }
 
@@ -251,8 +251,11 @@ fn whole_initializer_match_uses_a_statement_slot_without_an_iife() {
 fn expression_bodied_arrow_match_becomes_a_block_without_an_iife() {
     let out = ok("enum E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("const f = (e: E) => {\nlet $tt_v0;"), "{out}");
-    assert!(out.contains("return $tt_v0;\n};"), "{out}");
+    assert!(
+        out.contains("const f = (e: E) => {\n  let $tt_v0;"),
+        "{out}"
+    );
+    assert!(out.contains("  return $tt_v0;\n};"), "{out}");
 }
 
 #[test]
@@ -327,7 +330,7 @@ fn direct_return_match_keeps_await_in_the_host_function() {
         "async function f(x: T) { return match (x) { A(url) => await fetch(url), _ => null }; }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$tt_v0 = (await fetch(url));"), "{out}");
+    assert!(out.contains("$tt_v0 = await fetch(url);"), "{out}");
     assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
@@ -392,7 +395,7 @@ const action = match (key) {
 };
 "#);
     assert!(
-        out.contains("case \"Escape\": case \"Tab\": { $tt_v0 = (\"cancel\"); break; }"),
+        out.contains("case \"Escape\": case \"Tab\": { $tt_v0 = \"cancel\"; break; }"),
         "{out}"
     );
 }
@@ -401,7 +404,7 @@ const action = match (key) {
 fn or_pattern_with_identical_bindings_shares_destructuring() {
     let out = ok("const r = match (x) { A(v) | B(v) => v, _ => 0 };");
     assert!(
-        out.contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0 = (v); break; }"),
+        out.contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
         "{out}"
     );
 }
@@ -541,13 +544,13 @@ const grade = match (s) {
     assert!(!out.contains("switch ("), "{out}");
     assert!(
         out.contains(
-            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if ((points >= 90)) { $tt_v0 = (\"A\"); break; } }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if (points >= 90) { $tt_v0 = \"A\"; break; } }"
         ),
         "{out}"
     );
     assert!(
         out.contains(
-            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0 = (\"F\"); break; }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0 = \"F\"; break; }"
         ),
         "{out}"
     );
@@ -606,7 +609,7 @@ fn guard_with_or_pattern_emits_combined_condition() {
     let out = ok("const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };");
     assert!(
         out.contains(
-            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if ((v > 0)) { $tt_v0 = (v); break; } }"
+            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if (v > 0) { $tt_v0 = v; break; } }"
         ),
         "{out}"
     );
@@ -626,7 +629,7 @@ fn await_in_guard_makes_match_async() {
     );
     assert!(!out.contains("async () =>"), "{out}");
     assert!(
-        out.contains("if ((await allowed(u))) { $tt_v0 = (1); break; }"),
+        out.contains("if (await allowed(u)) { $tt_v0 = 1; break; }"),
         "{out}"
     );
     assert!(out.contains("return $tt_v0;"), "{out}");
@@ -638,7 +641,7 @@ fn nested_await_match_keeps_its_expression_boundary() {
         "async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$tt_v0 = (await fetch(url));"), "{out}");
+    assert!(out.contains("$tt_v0 = await fetch(url);"), "{out}");
     assert!(out.contains("return $tt_v1($tt_v0);"), "{out}");
 }
 
@@ -830,7 +833,7 @@ fn try_decl_emits_early_return_and_bind() {
     let out = ok("function f(): X {\n  const n = try g();\n  return h(n);\n}\n");
     assert!(
         out.contains(
-            "const $tt_t0 = (g()); if ($tt_t0.kind !== \"Ok\") return $tt_t0; const n = $tt_t0.value;"
+            "const $tt_t0 = g(); if ($tt_t0.kind !== \"Ok\") return $tt_t0; const n = $tt_t0.value;"
         ),
         "{out}"
     );
@@ -840,7 +843,7 @@ fn try_decl_emits_early_return_and_bind() {
 fn try_bare_statement_emits_early_return_only() {
     let out = ok("function f(): X {\n  try g();\n  return h();\n}\n");
     assert!(
-        out.contains("const $tt_t0 = (g()); if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("const $tt_t0 = g(); if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
         "{out}"
     );
     assert!(!out.contains("$tt_t0.value"), "{out}");
@@ -866,7 +869,7 @@ fn try_expression_may_contain_a_match() {
     let out = ok(
         "function f(): X {\n  const x = try match (m) { Ok(value) => wrap(value), Err(error) => rewrap(error) };\n  return x;\n}\n",
     );
-    assert!(out.contains("const $tt_t0 = ("), "{out}");
+    assert!(out.contains("const $tt_t0 = $tt_v0;"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
@@ -998,7 +1001,7 @@ fn let_else_emits_guard_and_bind() {
     );
     assert!(
         out.contains(
-            "const $tt_t0 = (find()); if ($tt_t0.kind !== \"Some\") { return 0; } const { value } = $tt_t0;"
+            "const $tt_t0 = find(); if ($tt_t0.kind !== \"Some\") { return 0; } const { value } = $tt_t0;"
         ),
         "{out}"
     );
@@ -1156,7 +1159,7 @@ fn let_else_shares_try_temp_counter() {
     );
     assert!(out.contains("if ($tt_t0.kind !== \"Ok\")"), "{out}");
     assert!(
-        out.contains("const $tt_t1 = (h(n)); if ($tt_t1.kind !== \"Some\")"),
+        out.contains("const $tt_t1 = h(n); if ($tt_t1.kind !== \"Some\""),
         "{out}"
     );
 }
@@ -1929,7 +1932,7 @@ fn enum_symbols_carries_positions_and_field_shapes() {
 fn pipeline_emits_nested_apply_helper_calls() {
     let out = ok("const y = half(4) |> double |> label;\n");
     assert!(
-        out.contains("const y = $tt_ap($tt_ap((half(4)), (double)), (label));"),
+        out.contains("const y = $tt_ap($tt_ap(half(4), double), label);"),
         "{out}"
     );
     assert!(out.contains("function $tt_ap<A, B>(v: A, f: (v: A) => B): B { return f(v); }"));
@@ -1939,9 +1942,175 @@ fn pipeline_emits_nested_apply_helper_calls() {
 fn pipeline_method_step_chains_postfix() {
     let out = ok("const t = s |> .trim() |> .split(\",\") |> f;\n");
     assert!(
-        out.contains("const t = $tt_ap((((s)).trim()).split(\",\"), (f));"),
+        out.contains("const t = $tt_ap(s.trim().split(\",\"), f);"),
         "{out}"
     );
+}
+
+#[test]
+fn a_lowering_is_laid_out_from_the_line_it_replaces() {
+    // Generated block structure indents from the statement the construct
+    // sits on, at every nesting depth, so the output reads as TypeScript
+    // written where the tt source was.
+    let out = ok(
+        "enum E { A(v: number), B }\ndeclare const e: E;\nfunction f(): number {\n  if (true) {\n    const r = match (e) { A(v) => v, B => 0 };\n    return r;\n  }\n  return 0;\n}\n",
+    );
+    assert!(out.contains("\n    let $tt_v0;\n    {\n"), "{out}");
+    assert!(out.contains("\n      const $tt_m = e;"), "{out}");
+    assert!(out.contains("\n      switch ($tt_m.kind) {\n"), "{out}");
+    assert!(
+        out.contains("\n        case \"A\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
+        "{out}"
+    );
+    assert!(out.contains("\n    }\n    const r = $tt_v0;"), "{out}");
+}
+
+/// The output offset the source byte at `src` was copied to.
+fn output_of(emit: &ttc::MappedEmit, src: usize) -> usize {
+    emit.mappings
+        .iter()
+        .find(|m| m.src <= src && src < m.src + m.len)
+        .map(|m| m.out + (src - m.src))
+        .unwrap_or_else(|| panic!("source byte {src} was not copied to the output"))
+}
+
+/// The lines codegen *started* — lines whose first non-whitespace byte is
+/// glue rather than copied source — between two source landmarks. That is
+/// exactly the set layout decides the indentation of: a line beginning
+/// inside a verbatim block keeps whatever indentation the source gave it.
+fn generated_lines(source: &str, after: &str, before: &str) -> Vec<String> {
+    let emit = ttc::emit_mapped(source);
+    let mut verbatim = vec![false; emit.code.len()];
+    for mapping in &emit.mappings {
+        for byte in &mut verbatim[mapping.out..mapping.out + mapping.len] {
+            *byte = true;
+        }
+    }
+    let from = output_of(
+        &emit,
+        source.find(after).expect("landmark") + after.len() - 1,
+    );
+    let to = output_of(&emit, source.find(before).expect("landmark"));
+    let mut lines = Vec::new();
+    let mut at = 0usize;
+    for line in emit.code.split_inclusive('\n') {
+        let head = line.len() - line.trim_start().len();
+        if at > from && at + head < to && !line.trim().is_empty() && !verbatim[at + head] {
+            lines.push(line.trim_end_matches('\n').to_string());
+        }
+        at += line.len();
+    }
+    lines
+}
+
+#[test]
+fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
+    // The layout rule, checked as a rule instead of once per construct:
+    // put each construct at four different indentations and assert every
+    // line codegen wrote starts at that indentation plus whole levels, and
+    // that indenting the construct changes nothing but the indentation —
+    // the same lowering, the same number of generated lines.
+    let constructs = [
+        "const r = match (e) { A(v) => v, B => 0 };",
+        "const r = match (e) { A(v) if v > 0 => v, B => 0, _ => 1 };",
+        "const r = match (e) { A(v) => { return v; }, B => 0 };",
+        "const r = match (n) { 1 => \"one\", _ => \"other\" };",
+        "const r = match (e, e) { (A(v), B) => v, (_, _) => 0 };",
+        // A pipeline whose head is itself a lowering, so the steps get a
+        // region rather than one inline call.
+        "const r = match (e) { A(v) => v, B => 0 } |> pick |> .toString();",
+        "const r = result { const v <- ask(); v };",
+        // These two lower inline; the rule still has to hold for them,
+        // which here means staying inline at every indentation.
+        "if let A(v) = e { use(v); }",
+        "const A(v) = e else { throw new Error(\"no\"); };",
+        "enum Inner { X(a: number), Y }",
+    ];
+    let prelude = "enum E { A(v: number), B }\ndeclare const e: E;\ndeclare const n: number;\n\
+                   declare function use(v: unknown): void;\ndeclare function pick(v: E): string;\n\
+                   declare function ask(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n";
+    let mut with_block_structure = 0;
+    for construct in constructs {
+        let mut counts = Vec::new();
+        for base in ["", "  ", "      ", "\t\t"] {
+            // A block gives the construct a line of its own to sit on; the
+            // brace itself is source, so only the lowering answers here.
+            let source =
+                format!("{prelude}function host() {{\n{base}{construct}\n{base}return null;\n}}\n");
+            let lines = generated_lines(&source, "function host() {", "return null;");
+            counts.push(lines.len());
+            for line in lines {
+                let indent: String = line
+                    .chars()
+                    .take_while(|c| *c == ' ' || *c == '\t')
+                    .collect();
+                assert!(
+                    indent.starts_with(base),
+                    "line {line:?} does not start at the construct's indentation {base:?}\n\
+                     construct: {construct}"
+                );
+                let inside = &indent[base.len()..];
+                assert!(
+                    inside.chars().all(|c| c == ' ') && inside.len().is_multiple_of(2),
+                    "line {line:?} is indented {inside:?} past the base, not whole levels\n\
+                     construct: {construct}"
+                );
+            }
+        }
+        assert!(
+            counts.iter().all(|count| *count == counts[0]),
+            "indenting the construct changed how many lines it lowers to: {counts:?}\n\
+             construct: {construct}"
+        );
+        if counts[0] > 0 {
+            with_block_structure += 1;
+        }
+    }
+    // Constructs that lower inline contribute no generated lines, so the
+    // corpus has to prove it is exercising block structure at all.
+    assert!(
+        with_block_structure >= 7,
+        "only {with_block_structure} constructs produced block structure — the probe went blind"
+    );
+}
+
+#[test]
+fn a_nested_enum_declaration_is_laid_out_from_its_own_line() {
+    let out = ok("function make() {\n  enum Inner { A(x: number), B }\n  return Inner.B;\n}\n");
+    assert!(
+        out.contains("\n  type Inner =\n    | { kind: \"A\"; x: number }"),
+        "{out}"
+    );
+    assert!(
+        out.contains("\n  const Inner = {\n    A: (x: number): Inner => ({ kind: \"A\", x }),"),
+        "{out}"
+    );
+    assert!(out.contains("\n  };\n  return Inner.B;"), "{out}");
+}
+
+#[test]
+fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
+    // Everything but the comma operator binds tighter than the position a
+    // lowered value lands in, so the parentheses go where they mean
+    // something and nowhere else.
+    let out = ok(
+        "enum E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
+    );
+    assert!(out.contains("$tt_v0 = v + 1; break;"), "{out}");
+    assert!(out.contains("$tt_v0 = 0; break;"), "{out}");
+    assert!(out.contains("$tt_v1 = (v, v + 1); break;"), "{out}");
+}
+
+#[test]
+fn a_postfix_step_parenthesizes_only_a_receiver_that_needs_it() {
+    // Member access binds tighter than every operator: a primary receiver
+    // can lose the parentheses, `await p` and `a + b` cannot.
+    let out = ok(
+        "const a = s |> .trim();\nconst b = (x + y) |> .toFixed(2);\nconst c = await p |> .then(g);\n",
+    );
+    assert!(out.contains("const a = s.trim();"), "{out}");
+    assert!(out.contains("const b = (x + y).toFixed(2);"), "{out}");
+    assert!(out.contains("const c = (await p).then(g);"), "{out}");
 }
 
 #[test]
@@ -1963,7 +2132,7 @@ fn pipeline_head_reclaims_a_lifted_template() {
     // The template token is lifted as a segment before the `|>` is seen —
     // the claim must rewind it into the head sub-program.
     let out = ok("const a = `v=${n}` |> f;\n");
-    assert!(out.contains("const a = $tt_ap((`v=${n}`), (f));"), "{out}");
+    assert!(out.contains("const a = $tt_ap(`v=${n}`, f);"), "{out}");
 }
 
 #[test]
@@ -1972,7 +2141,7 @@ fn pipeline_head_reclaims_a_lifted_match() {
         ok("enum E { A(v: number), B }\nconst a = match (e) { A(v) => v, B => 0, } |> double;\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("$tt_v0 = $tt_ap($tt_v0, (double));"), "{out}");
+    assert!(out.contains("$tt_v0 = $tt_ap($tt_v0, double);"), "{out}");
     assert!(out.contains("const a = $tt_v0;"), "{out}");
 }
 
@@ -1981,7 +2150,7 @@ fn pipeline_head_is_the_whole_call_not_the_inner_argument() {
     // Bracket tracking must restore the enclosing expression's start:
     // the head of `a(b) |> g` is `a(b)`, not `b`.
     let out = ok("const y = f(a(b) |> g);\n");
-    assert!(out.contains("const y = f($tt_ap((a(b)), (g)));"), "{out}");
+    assert!(out.contains("const y = f($tt_ap(a(b), g));"), "{out}");
 }
 
 #[test]
@@ -1989,15 +2158,9 @@ fn pipeline_inside_match_scrutinee_arm_and_template() {
     let out = ok(
         "enum E { A(v: number), B }\nconst r = match (x |> norm) {\n  A(v) => v |> double,\n  B => 0,\n};\nconst t = `n=${x |> f}`;\n",
     );
-    assert!(
-        out.contains("const $tt_m = ($tt_ap((x), (norm)));"),
-        "{out}"
-    );
-    assert!(
-        out.contains("$tt_v0 = ($tt_ap((v), (double))); break;"),
-        "{out}"
-    );
-    assert!(out.contains("`n=${$tt_ap((x), (f))}`"), "{out}");
+    assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
+    assert!(out.contains("$tt_v0 = $tt_ap(v, double); break;"), "{out}");
+    assert!(out.contains("`n=${$tt_ap(x, f)}`"), "{out}");
 }
 
 #[test]
@@ -2006,7 +2169,7 @@ fn pipeline_composes_with_try() {
         "function f(): Result<number, string> {\n  const a = try readCfg() |> norm;\n  return Result.Ok(a);\n}\n",
     );
     assert!(
-        out.contains("const $tt_t0 = ($tt_ap((readCfg()), (norm)));"),
+        out.contains("const $tt_t0 = $tt_ap(readCfg(), norm);"),
         "{out}"
     );
 }
@@ -2014,7 +2177,7 @@ fn pipeline_composes_with_try() {
 #[test]
 fn pipeline_await_in_head_needs_no_async_wrapper() {
     let out = ok("async function f(p: Promise<string>) {\n  return await p |> norm;\n}\n");
-    assert!(out.contains("return $tt_ap((await p), (norm));"), "{out}");
+    assert!(out.contains("return $tt_ap(await p, norm);"), "{out}");
     assert!(!out.contains("async () =>"), "{out}");
 }
 
@@ -2028,7 +2191,7 @@ fn unparenthesized_ternary_next_to_pipeline_is_an_error() {
 #[test]
 fn parenthesized_ternary_head_compiles() {
     let out = ok("const a = (c ? x : y) |> f;\n");
-    assert!(out.contains("$tt_ap(((c ? x : y)), (f))"), "{out}");
+    assert!(out.contains("$tt_ap((c ? x : y), f"), "{out}");
 }
 
 #[test]
@@ -2068,7 +2231,7 @@ fn try_inside_a_function_inside_a_pipeline_step_is_allowed() {
 fn flow_emits_nested_composition_helper_calls() {
     let out = ok("const f = flow |> parse |> double |> label;\n");
     assert!(
-        out.contains("const f = $tt_fl($tt_fl((parse), (double)), (label));"),
+        out.contains("const f = $tt_fl($tt_fl(parse, double), label);"),
         "{out}"
     );
     assert!(out.contains(
@@ -2083,7 +2246,7 @@ fn flow_emits_nested_composition_helper_calls() {
 fn flow_method_step_becomes_a_contextually_typed_arrow() {
     let out = ok("const f = flow |> parse |> .toFixed(1);\n");
     assert!(
-        out.contains("const f = $tt_fl((parse), (($tt_v) => ($tt_v).toFixed(1)));"),
+        out.contains("const f = $tt_fl(parse, (($tt_v) => ($tt_v).toFixed(1)));"),
         "{out}"
     );
 }
@@ -2091,7 +2254,7 @@ fn flow_method_step_becomes_a_contextually_typed_arrow() {
 #[test]
 fn flow_with_a_single_step_is_that_step_and_needs_no_helper() {
     let out = ok("const f = flow |> parse;\n");
-    assert!(out.contains("const f = (parse);"), "{out}");
+    assert!(out.contains("const f = parse;"), "{out}");
     assert!(!out.contains("$tt_fl"), "{out}");
 }
 
@@ -2113,9 +2276,9 @@ fn flow_is_a_contextual_keyword_only_at_a_pipeline_head() {
     // a `flow` variable still pipes when parenthesized, and a dotted or
     // called head is an ordinary value head
     let out = ok("const a = (flow) |> f;\nconst b = o.flow |> f;\nconst c = flow() |> f;\n");
-    assert!(out.contains("const a = $tt_ap(((flow)), (f));"), "{out}");
-    assert!(out.contains("const b = $tt_ap((o.flow), (f));"), "{out}");
-    assert!(out.contains("const c = $tt_ap((flow()), (f));"), "{out}");
+    assert!(out.contains("const a = $tt_ap((flow), f);"), "{out}");
+    assert!(out.contains("const b = $tt_ap(o.flow, f);"), "{out}");
+    assert!(out.contains("const c = $tt_ap(flow(), f);"), "{out}");
     assert!(!out.contains("$tt_fl"), "{out}");
 }
 
@@ -2123,17 +2286,17 @@ fn flow_is_a_contextual_keyword_only_at_a_pipeline_head() {
 fn flow_composes_inside_expressions() {
     let out = ok("const a = xs.map(flow |> parse |> double);\nconst b = `${flow |> f |> g}`;\n");
     assert!(
-        out.contains("const a = xs.map($tt_fl((parse), (double)));"),
+        out.contains("const a = xs.map($tt_fl(parse, double));"),
         "{out}"
     );
-    assert!(out.contains("const b = `${$tt_fl((f), (g))}`;"), "{out}");
+    assert!(out.contains("const b = `${$tt_fl(f, g)}`;"), "{out}");
 }
 
 #[test]
 fn flow_step_can_be_a_parenthesized_arrow() {
     let out = ok("const f = flow |> parse |> (n => n + 1);\n");
     assert!(
-        out.contains("const f = $tt_fl((parse), ((n => n + 1)));"),
+        out.contains("const f = $tt_fl(parse, (n => n + 1));"),
         "{out}"
     );
 }
@@ -2170,16 +2333,16 @@ const step = match (dir, speed) {
   (South, _) => -1,
 };
 "#);
-    assert!(out.contains("const $tt_m0 = (dir);"), "{out}");
-    assert!(out.contains("const $tt_m1 = (speed);"), "{out}");
+    assert!(out.contains("const $tt_m0 = dir;"), "{out}");
+    assert!(out.contains("const $tt_m1 = speed;"), "{out}");
     assert!(
         out.contains(
-            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0 = (2); break; }"
+            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0 = 2; break; }"
         ),
         "{out}"
     );
     assert!(
-        out.contains("if ($tt_m0.kind === \"South\") { $tt_v0 = (-1); break; }"),
+        out.contains("if ($tt_m0.kind === \"South\") { $tt_v0 = -1; break; }"),
         "{out}"
     );
     assert!(out.contains("JSON.stringify([$tt_m0, $tt_m1])"), "{out}");
@@ -2195,7 +2358,7 @@ const r = match (a, b) {
 "#);
     assert!(
         out.contains(
-            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0 = (x + y); break; }"
+            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0 = x + y; break; }"
         ),
         "{out}"
     );
@@ -2208,8 +2371,9 @@ fn comma_expression_scrutinee_is_still_a_single_match() {
     let out = ok(
         "const r = match ((a, b)) { A => 1, _ => 0 };\nconst s = match (a, b) { A => 1, _ => 0 };\n",
     );
-    assert!(out.contains("const $tt_m = ((a, b));"), "{out}");
-    assert!(out.contains("const $tt_m = (a, b);"), "{out}");
+    // The scrutinee is a comma expression, so the parentheses codegen
+    // writes around it are the ones that keep it one value.
+    assert_eq!(out.matches("const $tt_m = (a, b);").count(), 2, "{out}");
     assert!(!out.contains("$tt_m0"), "{out}");
 }
 
@@ -2247,7 +2411,7 @@ const step = match (d, s) {
     assert!(out.contains("$tt_m0"), "{out}");
     assert!(
         out.contains(
-            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0 = (1); break; }"
+            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0 = 1; break; }"
         ),
         "{out}"
     );
@@ -2280,7 +2444,7 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("$tt_v0 = (0); break;"), "{out}");
+    assert!(out.contains("$tt_v0 = 0; break;"), "{out}");
 
     let e = err("const r = match (a, b) {\n  _ => 0,\n  (A, B) => 1,\n};\n");
     assert!(e.message.contains("must be the last arm"), "{}", e.message);
@@ -2385,9 +2549,12 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("$tt_b: {"), "{out}");
-    assert!(out.contains("if ((go()))"), "{out}");
-    assert!(out.contains("break $tt_b;"), "{out}");
+    assert!(out.contains("if (go()) {"), "{out}");
+    // The arm's body always leaves, through the exit label the rewritten
+    // `return` breaks to — so the chain's fall-through label is never
+    // reached and is not written.
+    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_b"), "{out}");
 }
 
 #[test]
@@ -2396,7 +2563,7 @@ fn tuple_match_await_in_scrutinee_makes_it_async() {
         "async function f() {\n  return match (await a, b) {\n    (X, Y) => 1,\n    _ => 0,\n  };\n}\n",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("const $tt_m0 = (await a);"), "{out}");
+    assert!(out.contains("const $tt_m0 = await a;"), "{out}");
 }
 
 #[test]
@@ -2426,12 +2593,12 @@ const n = match (r) {
 };
 "#);
     assert!(
-        out.contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0 = (v); break; }"),
+        out.contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0 = v; break; }"),
         "{out}"
     );
     assert!(
         out.contains(
-            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0 = (0); break; }"
+            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0 = 0; break; }"
         ),
         "{out}"
     );
@@ -2464,7 +2631,7 @@ const n = match (r) {
 "#);
     assert!(
         out.contains(
-            "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0 = (left + value); break; }"
+            "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0 = left + value; break; }"
         ),
         "{out}"
     );
@@ -2565,10 +2732,7 @@ const n = match (r) {
   _ => 0,
 };
 "#);
-    assert!(
-        out.contains("if ((v > 0)) { $tt_v0 = (v); break; }"),
-        "{out}"
-    );
+    assert!(out.contains("if (v > 0) { $tt_v0 = v; break; }"), "{out}");
 }
 
 #[test]
@@ -2593,7 +2757,7 @@ fn if_let_emits_a_self_contained_block() {
     let out =
         ok("function f() {\n  if let Some(value: user) = find() {\n    greet(user);\n  }\n}\n");
     assert!(
-        out.contains("{ const $tt_t0 = (find()); if ($tt_t0.kind === \"Some\") { const { value: user } = $tt_t0; greet(user); } }"),
+        out.contains("{ const $tt_t0 = find(); if ($tt_t0.kind === \"Some\") { const { value: user } = $tt_t0; greet(user); } }"),
         "{out}"
     );
 }
@@ -2612,7 +2776,7 @@ function f() {
 }
 "#);
     assert!(
-        out.contains("} else { const $tt_t1 = (b()); if ($tt_t1.kind === \"Ok\")"),
+        out.contains("} else { const $tt_t1 = b(); if ($tt_t1.kind === \"Ok\""),
         "{out}"
     );
     assert!(out.contains("else { fallback(); } } }"), "{out}");
@@ -2633,7 +2797,7 @@ fn if_let_shares_the_temp_counter_with_try() {
         "function f(): Result<number, string> {\n  const a = try g();\n  if let Some(value) = h(a) { use(value); }\n  return Result.Ok(a);\n}\n",
     );
     assert!(out.contains("$tt_t0"), "{out}");
-    assert!(out.contains("const $tt_t1 = (h(a));"), "{out}");
+    assert!(out.contains("const $tt_t1 = h(a);"), "{out}");
 }
 
 #[test]
@@ -2733,20 +2897,20 @@ const data = result {
     assert!(out.contains("let $tt_v0;\ndo {"), "{out}");
     assert!(
         out.contains(
-            "const $tt_r0 = (getUser(id)); if ($tt_r0.kind !== \"Ok\") { $tt_v0 = ($tt_r0); break; } \
+            "const $tt_r0 = getUser(id); if ($tt_r0.kind !== \"Ok\") { $tt_v0 = $tt_r0; break; } \
              const user = $tt_r0.value;"
         ),
         "{out}"
     );
     assert!(
         out.contains(
-            "const $tt_r1 = (getCompany(user.companyId)); if ($tt_r1.kind !== \"Ok\") \
-             { $tt_v0 = ($tt_r1); break; } const company = $tt_r1.value;"
+            "const $tt_r1 = getCompany(user.companyId); if ($tt_r1.kind !== \"Ok\") \
+             { $tt_v0 = $tt_r1; break; } const company = $tt_r1.value;"
         ),
         "{out}"
     );
     assert!(
-        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: ({ user, company }"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: { user, company } };"),
         "{out}"
     );
     assert!(out.contains("const data = $tt_v0;"), "{out}");
@@ -2765,7 +2929,7 @@ const data = result {
 "#);
     assert!(out.contains("// normalize before the next step"), "{out}");
     assert!(
-        out.contains("const name = (((user.name)).trim()).toLowerCase();"),
+        out.contains("const name = user.name.trim().toLowerCase();"),
         "{out}"
     );
 }
@@ -2795,7 +2959,7 @@ const data = async () => result {
 "#);
     assert!(!out.contains("(async () =>"), "{out}");
     assert!(out.contains("const data = async () => {"), "{out}");
-    assert!(out.contains("const $tt_r0 = (await getUser(id));"), "{out}");
+    assert!(out.contains("const $tt_r0 = await getUser(id);"), "{out}");
 }
 
 #[test]
@@ -2819,7 +2983,7 @@ fn result_block_can_be_a_pipeline_head() {
     let out = ok("const a = result {\n  const x <- f();\n  x\n} |> Result.mapP(double);\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("$tt_v0 = $tt_ap($tt_v0, (Result.mapP(double)));"),
+        out.contains("$tt_v0 = $tt_ap($tt_v0, Result.mapP(double));"),
         "{out}"
     );
     assert!(out.contains("const a = $tt_v0;"), "{out}");
@@ -2838,7 +3002,7 @@ const a = result {
 "#);
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: (value) });"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: value };"),
         "{out}"
     );
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
@@ -2851,11 +3015,11 @@ fn direct_return_result_region_uses_the_host_function_without_an_iife() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = ($tt_r0); break; }"),
+        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = $tt_r0; break; }"),
         "{out}"
     );
     assert!(
-        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: (value + 1"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: value + 1"),
         "{out}"
     );
     assert!(out.contains("return $tt_v0;"), "{out}");
@@ -2868,11 +3032,11 @@ fn result_region_in_a_match_arm_inherits_the_parent_slot() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = ($tt_r0); break; }"),
+        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = $tt_r0; break; }"),
         "{out}"
     );
     assert!(
-        out.contains("$tt_v0 = ({ kind: \"Ok\" as const, value: (x"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: x"),
         "{out}"
     );
 }
@@ -3006,7 +3170,7 @@ fn a_nested_result_block_answers_for_its_own_runs() {
     );
     assert_eq!(out.matches("(() => {").count(), 0, "{out}");
     assert!(out.contains("let $tt_v0;\ndo {"), "{out}");
-    assert!(out.contains("let $tt_v1;\ndo {"), "{out}");
+    assert!(out.contains("  let $tt_v1;\n  do {"), "{out}");
 }
 
 #[test]
@@ -3079,12 +3243,12 @@ const label = match (dir) {
   _ => "?",
 };
 "#);
-    assert!(out.contains("const $tt_m = (dir);"));
+    assert!(out.contains("const $tt_m = dir;"));
     assert!(out.contains("switch ($tt_m) {"));
     assert!(!out.contains("$tt_m.kind"));
-    assert!(out.contains(r#"case "north": { $tt_v0 = ("N"); break; }"#));
-    assert!(out.contains(r#"case "south": { $tt_v0 = ("S"); break; }"#));
-    assert!(out.contains(r#"default: { $tt_v0 = ("?"); break; }"#));
+    assert!(out.contains(r#"case "north": { $tt_v0 = "N"; break; }"#));
+    assert!(out.contains(r#"case "south": { $tt_v0 = "S"; break; }"#));
+    assert!(out.contains(r#"default: { $tt_v0 = "?"; break; }"#));
 }
 
 #[test]
@@ -3098,17 +3262,17 @@ const message = match (status) {
 };
 "#);
     assert!(out.contains("switch ($tt_m) {"));
-    assert!(out.contains(r#"case 200: { $tt_v0 = ("ok"); break; }"#));
-    assert!(out.contains(r#"case 404: { $tt_v0 = ("not found"); break; }"#));
-    assert!(out.contains(r#"case 500: { $tt_v0 = ("error"); break; }"#));
+    assert!(out.contains(r#"case 200: { $tt_v0 = "ok"; break; }"#));
+    assert!(out.contains(r#"case 404: { $tt_v0 = "not found"; break; }"#));
+    assert!(out.contains(r#"case 500: { $tt_v0 = "error"; break; }"#));
 }
 
 #[test]
 fn literal_boolean_match_emits_true_and_false_cases() {
     let out = ok("const v = match (flag) { true => 1, false => 0 };");
     assert!(out.contains("switch ($tt_m) {"));
-    assert!(out.contains("case true: { $tt_v0 = (1); break; }"));
-    assert!(out.contains("case false: { $tt_v0 = (0); break; }"));
+    assert!(out.contains("case true: { $tt_v0 = 1; break; }"));
+    assert!(out.contains("case false: { $tt_v0 = 0; break; }"));
 }
 
 #[test]
@@ -3120,10 +3284,10 @@ const kind = match (code) {
   _ => "unknown",
 };
 "#);
-    assert!(out.contains(r#"case 200: case 201: case 204: { $tt_v0 = ("success"); break; }"#));
-    assert!(out.contains(r#"case 400: case 404: { $tt_v0 = ("client error"); break; }"#));
+    assert!(out.contains(r#"case 200: case 201: case 204: { $tt_v0 = "success"; break; }"#));
+    assert!(out.contains(r#"case 400: case 404: { $tt_v0 = "client error"; break; }"#));
     // one body per arm, never duplicated per alternative
-    assert_eq!(out.matches(r#"$tt_v0 = ("success")"#).count(), 1);
+    assert_eq!(out.matches(r#"$tt_v0 = "success""#).count(), 1);
 }
 
 #[test]
@@ -3147,7 +3311,7 @@ fn literal_match_without_a_wildcard_gets_a_runtime_guard() {
 fn literal_match_evaluates_the_scrutinee_once() {
     let out = ok(r#"const v = match (getValue()) { "a" => foo(), _ => bar() };"#);
     assert_eq!(out.matches("getValue()").count(), 1);
-    assert!(out.contains("const $tt_m = (getValue());"));
+    assert!(out.contains("const $tt_m = getValue();"));
 }
 
 #[test]
@@ -3155,7 +3319,7 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
     let out = ok(r#"const v = match (s) { "a" => { return 1; }, _ => 0 };"#);
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains(r#"case "a": { $tt_v0 = (1); break $tt_y_$tt_v0;"#),
+        out.contains(r#"case "a": { $tt_v0 = 1; break $tt_y_$tt_v0;"#),
         "{out}"
     );
 }
@@ -3164,8 +3328,8 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
 fn literal_match_with_a_guard_becomes_an_if_chain() {
     let out = ok("const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };");
     assert!(!out.contains("switch ("));
-    assert!(out.contains("if ($tt_m === 200) { if ((ok)) { $tt_v0 = (1); break; } }"));
-    assert!(out.contains("if ($tt_m === 200) { $tt_v0 = (2); break; }"));
+    assert!(out.contains("if ($tt_m === 200) { if (ok) { $tt_v0 = 1; break; } }"));
+    assert!(out.contains("if ($tt_m === 200) { $tt_v0 = 2; break; }"));
 }
 
 #[test]
@@ -3277,7 +3441,7 @@ const v = match (a) {
 fn direct_return_literal_match_keeps_await_in_the_host_function() {
     let out = ok(r#"async function f() { return match (s) { "a" => await g(), _ => null }; }"#);
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$tt_v0 = (await g());"), "{out}");
+    assert!(out.contains("$tt_v0 = await g();"), "{out}");
     assert!(out.contains("return $tt_v0;"), "{out}");
 }
 

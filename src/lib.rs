@@ -455,7 +455,7 @@ pub struct EmitMapping {
 /// let emit = ttc::emit_mapped(source);
 /// let temp = emit.scrutinee_temps[0];
 /// assert_eq!(&source[temp.src..temp.src + 5], "match");
-/// assert!(emit.code[temp.out..].starts_with("$tt_m = (f())"));
+/// assert!(emit.code[temp.out..].starts_with("$tt_m = f()"));
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScrutineeTemp {

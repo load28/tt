@@ -468,6 +468,9 @@ pub(crate) struct TupleArm {
     pub body: Program,
     /// True for a `{ ... }` block body.
     pub block: bool,
+    /// Whether every path out of a block body leaves it — see
+    /// [`Arm::diverges`].
+    pub diverges: bool,
 }
 
 /// A tuple arm's pattern.
@@ -498,6 +501,12 @@ pub(crate) struct Arm {
     pub body: Program,
     /// True for a `{ ... }` block body, false for an expression body.
     pub block: bool,
+    /// Whether every path out of a block body leaves it, answered on the
+    /// flow graph ([`crate::flow::program_diverges`]) — the same question
+    /// let-else asks of its `else` block. A block that always leaves has
+    /// already yielded the arm's value, so the lowering's fall-through to
+    /// `undefined` can never run. False for an expression body.
+    pub diverges: bool,
 }
 
 /// The `if <cond>` guard of a match arm.
