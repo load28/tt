@@ -207,7 +207,7 @@
 | TASK-197 | tt 제작 동기 글 한글판 문장 개정 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-197-korean-essay-rewrite.md](./TASK-197-korean-essay-rewrite.md) |
 | TASK-198 | 방출 코드 가독성 — 레이아웃 계층과 그룹핑 규칙 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-198-generated-code-layout.md](./TASK-198-generated-code-layout.md) |
 | TASK-199 | block arm의 도달 불가능한 폴스루 제거 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-199-unreachable-arm-fallthrough.md](./TASK-199-unreachable-arm-fallthrough.md) |
-| TASK-200 | 일반 compile 출력용 표준 source map | 대기 | — | — | [TASK-200-standard-source-map.md](./TASK-200-standard-source-map.md) |
+| TASK-200 | 일반 compile 출력용 표준 source map | 완료 | 2026-08-24 | 2026-08-24 | [TASK-200-standard-source-map.md](./TASK-200-standard-source-map.md) |
 
 ## 다음 태스크 번호
 
