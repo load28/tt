@@ -214,7 +214,8 @@
 | TASK-204 | VS Code 전체 도구 체인 테스트 실패 조사 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-204](./TASK-204-vscode-full-toolchain-test-failures.md) |
 | TASK-205 | VS Code 전체 도구 체인 테스트 복구 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-205](./TASK-205-vscode-full-toolchain-test-fixes.md) |
 | TASK-206 | setup의 Cargo 전체 정리와 tsgo 자식 환경 주입 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-206](./TASK-206-setup-clean-cargo-builds.md) |
+| TASK-207 | TASK-205 로컬 개발 환경 재설치 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-207](./TASK-207-reinstall-after-task-205.md) |
 
 ## 다음 태스크 번호
 
-**TASK-207**
+**TASK-208**
