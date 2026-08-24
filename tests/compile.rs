@@ -1965,6 +1965,115 @@ fn a_lowering_is_laid_out_from_the_line_it_replaces() {
     assert!(out.contains("\n    }\n    const r = $tt_v0;"), "{out}");
 }
 
+/// The output offset the source byte at `src` was copied to.
+fn output_of(emit: &ttc::MappedEmit, src: usize) -> usize {
+    emit.mappings
+        .iter()
+        .find(|m| m.src <= src && src < m.src + m.len)
+        .map(|m| m.out + (src - m.src))
+        .unwrap_or_else(|| panic!("source byte {src} was not copied to the output"))
+}
+
+/// The lines codegen *started* — lines whose first non-whitespace byte is
+/// glue rather than copied source — between two source landmarks. That is
+/// exactly the set layout decides the indentation of: a line beginning
+/// inside a verbatim block keeps whatever indentation the source gave it.
+fn generated_lines(source: &str, after: &str, before: &str) -> Vec<String> {
+    let emit = ttc::emit_mapped(source);
+    let mut verbatim = vec![false; emit.code.len()];
+    for mapping in &emit.mappings {
+        for byte in &mut verbatim[mapping.out..mapping.out + mapping.len] {
+            *byte = true;
+        }
+    }
+    let from = output_of(
+        &emit,
+        source.find(after).expect("landmark") + after.len() - 1,
+    );
+    let to = output_of(&emit, source.find(before).expect("landmark"));
+    let mut lines = Vec::new();
+    let mut at = 0usize;
+    for line in emit.code.split_inclusive('\n') {
+        let head = line.len() - line.trim_start().len();
+        if at > from && at + head < to && !line.trim().is_empty() && !verbatim[at + head] {
+            lines.push(line.trim_end_matches('\n').to_string());
+        }
+        at += line.len();
+    }
+    lines
+}
+
+#[test]
+fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
+    // The layout rule, checked as a rule instead of once per construct:
+    // put each construct at four different indentations and assert every
+    // line codegen wrote starts at that indentation plus whole levels, and
+    // that indenting the construct changes nothing but the indentation —
+    // the same lowering, the same number of generated lines.
+    let constructs = [
+        "const r = match (e) { A(v) => v, B => 0 };",
+        "const r = match (e) { A(v) if v > 0 => v, B => 0, _ => 1 };",
+        "const r = match (e) { A(v) => { return v; }, B => 0 };",
+        "const r = match (n) { 1 => \"one\", _ => \"other\" };",
+        "const r = match (e, e) { (A(v), B) => v, (_, _) => 0 };",
+        // A pipeline whose head is itself a lowering, so the steps get a
+        // region rather than one inline call.
+        "const r = match (e) { A(v) => v, B => 0 } |> pick |> .toString();",
+        "const r = result { const v <- ask(); v };",
+        // These two lower inline; the rule still has to hold for them,
+        // which here means staying inline at every indentation.
+        "if let A(v) = e { use(v); }",
+        "const A(v) = e else { throw new Error(\"no\"); };",
+        "enum Inner { X(a: number), Y }",
+    ];
+    let prelude = "enum E { A(v: number), B }\ndeclare const e: E;\ndeclare const n: number;\n\
+                   declare function use(v: unknown): void;\ndeclare function pick(v: E): string;\n\
+                   declare function ask(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n";
+    let mut with_block_structure = 0;
+    for construct in constructs {
+        let mut counts = Vec::new();
+        for base in ["", "  ", "      ", "\t\t"] {
+            // A block gives the construct a line of its own to sit on; the
+            // brace itself is source, so only the lowering answers here.
+            let source =
+                format!("{prelude}function host() {{\n{base}{construct}\n{base}return null;\n}}\n");
+            let lines = generated_lines(&source, "function host() {", "return null;");
+            counts.push(lines.len());
+            for line in lines {
+                let indent: String = line
+                    .chars()
+                    .take_while(|c| *c == ' ' || *c == '\t')
+                    .collect();
+                assert!(
+                    indent.starts_with(base),
+                    "line {line:?} does not start at the construct's indentation {base:?}\n\
+                     construct: {construct}"
+                );
+                let inside = &indent[base.len()..];
+                assert!(
+                    inside.chars().all(|c| c == ' ') && inside.len() % 2 == 0,
+                    "line {line:?} is indented {inside:?} past the base, not whole levels\n\
+                     construct: {construct}"
+                );
+            }
+        }
+        assert!(
+            counts.iter().all(|count| *count == counts[0]),
+            "indenting the construct changed how many lines it lowers to: {counts:?}\n\
+             construct: {construct}"
+        );
+        if counts[0] > 0 {
+            with_block_structure += 1;
+        }
+    }
+    // Constructs that lower inline contribute no generated lines, so the
+    // corpus has to prove it is exercising block structure at all.
+    assert!(
+        with_block_structure >= 7,
+        "only {with_block_structure} constructs produced block structure — the probe went blind"
+    );
+}
+
 #[test]
 fn a_nested_enum_declaration_is_laid_out_from_its_own_line() {
     let out = ok("function make() {\n  enum Inner { A(x: number), B }\n  return Inner.B;\n}\n");
