@@ -123,9 +123,10 @@ TASK-195에서 쓴 제작 동기 글(`docs/why-tt.md`, `docs/why-tt.ko.md`)이 �
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test --no-fail-fast` — TASK-195에 기록한 기존 실패
-  (`engine_cache::an_error_node_keeps_its_file_and_other_files_checkable`) 1건
-  그대로, 나머지 전부 통과. 이 태스크는 Rust 코드를 건드리지 않는다.
+- [x] `cargo test --no-fail-fast` — 이 태스크는 Rust 코드를 건드리지 않는다.
+  `engine_cache::an_error_node_keeps_its_file_and_other_files_checkable` 실패는
+  작업 환경에 `TTC_TSGO_API`가 없어서였고(TASK-195 이슈 1), 클라이언트를 지정하면
+  통과한다.
 - [x] `bun run typecheck` (website)
 - [x] `bun run build` (website) — `/why`, `/ko/why` 프리렌더 확인
 - [x] 정적 결과물 렌더링 육안 확인 (데스크톱·모바일 × 영문·한글)

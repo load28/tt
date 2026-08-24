@@ -78,7 +78,21 @@ README는 소개 분량상 동기를 한 문장 이상 담기 어렵다. 처음 
 
 ## 이슈 및 해결
 
-### 이슈 1: 인용한 진단 출력을 처음에 두 줄로 줄바꿈해 적었다
+### 이슈 1: 작업 환경에 TypeScript 7 API 클라이언트가 없어 테스트 1건이 실패했다
+
+- **증상**: `cargo test`에서
+  `engine_cache::an_error_node_keeps_its_file_and_other_files_checkable`가
+  진단 2건을 기대하는데 1건(`stray-pipe`)만 받아 실패했다.
+- **원인**: 처음에는 브랜치의 기존 실패로 보고 별도 태스크 후보로 적었으나,
+  실제 원인은 실행 환경이었다. CI의 `fmt / clippy / test` 잡은 `typescript@7`을
+  설치하고 `TTC_TSGO_API`를 그 API 클라이언트로 지정하는데(`ci.yml`), 이 컨테이너에는
+  그 클라이언트가 없어 엔진이 백엔드 답을 받지 못했다.
+- **해결**: `npm install --no-save typescript@7` 후
+  `TTC_TSGO_API=.../dist/api/sync/api.js`를 지정해 재실행하니
+  `test result: ok. 3 passed`로 통과했다. 저장소 결함이 아니므로 후속 태스크는
+  등록하지 않는다. PR #49의 CI도 같은 커밋(`26a3d67`)에서 네 잡 모두 통과했다.
+
+### 이슈 2: 인용한 진단 출력을 처음에 두 줄로 줄바꿈해 적었다
 
 - **증상**: 초안에서 소진성 진단을 마크다운 폭에 맞춰
   `missing "Rect"` / `(add the missing arms...)` 두 줄로 나눠 적었다. 실제 `ttc`
@@ -93,11 +107,7 @@ README는 소개 분량상 동기를 한 문장 이상 담기 어렵다. 처음 
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test --no-fail-fast` — 이 변경과 무관한 기존 실패 1건을 제외하고 전부 통과.
-  `engine_cache::an_error_node_keeps_its_file_and_other_files_checkable`가
-  진단 2건을 기대하는데 1건(`stray-pipe`)만 나온다. `git stash -u`로 작업 트리를
-  비운 브랜치 기준에서도 동일하게 실패하므로 이 태스크의 회귀가 아니다
-  (문서 전용 변경이라 코드 경로를 건드리지 않는다). 별도 태스크로 다뤄야 한다.
+- [x] `cargo test --no-fail-fast`
 
 ## 결과
 
