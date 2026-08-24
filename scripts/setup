@@ -15,15 +15,16 @@
 #   2. save that choice to .tt-dev/toolchain.json (local, never committed)
 #   3. checkout mode only: build the current typescript-go checkout
 #      (native compiler + API client) and verify both artifacts
-#   4. build the current TT checkout (cargo build --release) and verify ttc
+#   4. clean all TT Cargo artifacts (debug + release), rebuild the current
+#      checkout in release mode, and verify ttc
 #   5. stamp npm/tt-lang for local `file:` installs (tt-dev.local.json)
 #   6. build the VSCode extension and reinstall it (uninstall first when an
 #      old install exists; skipped when the `code` CLI is not on PATH)
 #
 # What it never does: touch git state (pull/checkout/reset — updating either
-# repository is the user's move), or write to your shell profile. Toolchain
-# environment variables exist only inside the ttc processes the launcher
-# spawns (npm/tt-lang/dev.js).
+# repository is the user's move), or write to your shell profile. In checkout
+# mode, setup exports the toolchain variables to its own shell and child
+# processes; later local installs inject the same values when they spawn ttc.
 #
 # This whole layer is temporary (docs/tasks/TASK-090): once TT ships a
 # verified TypeScript 7 inside its own package, delete this script, .tt-dev/
@@ -184,11 +185,17 @@ if [ "$KIND" = "checkout" ]; then
   missing: $TSGO_BIN"
   [ -f "$TSGO_API" ] || fail "failed to build TypeScript API client.
   missing: $TSGO_API"
+
+  export TTC_TSGO_ROOT="$TSGO_ROOT"
+  export TTC_TSGO_BIN="$TSGO_BIN"
+  export TTC_TSGO_API="$TSGO_API"
 else
   echo "==> TypeScript toolchain: npm (consuming projects install typescript@7)"
 fi
 
 # ------------------------------------------------------------------ build TT --
+echo "==> cleaning ttc build artifacts (cargo clean: debug + release)"
+(cd "$TT_ROOT" && cargo clean) || fail "failed to clean ttc build artifacts."
 echo "==> building ttc (cargo build --release)"
 (cd "$TT_ROOT" && cargo build --release) || fail "failed to build ttc."
 case "$(uname -s)" in
