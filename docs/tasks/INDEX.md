@@ -205,7 +205,8 @@
 | TASK-195 | tt 제작 동기 글 (영문·한글) | 완료 | 2026-08-24 | 2026-08-24 | [TASK-195-motivation-essay.md](./TASK-195-motivation-essay.md) |
 | TASK-196 | 웹사이트 배경 글 페이지 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-196-website-background-essay.md](./TASK-196-website-background-essay.md) |
 | TASK-197 | tt 제작 동기 글 한글판 문장 개정 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-197-korean-essay-rewrite.md](./TASK-197-korean-essay-rewrite.md) |
+| TASK-198 | 방출 코드 가독성 — 레이아웃 계층과 그룹핑 규칙 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-198-generated-code-layout.md](./TASK-198-generated-code-layout.md) |
 
 ## 다음 태스크 번호
 
-**TASK-198**
+**TASK-199**
