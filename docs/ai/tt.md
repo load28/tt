@@ -195,6 +195,7 @@ Bundler alternative: `@load28/unplugin-tt` (`import tt from "@load28/unplugin-tt
 - Build: `npm run build` (ttc emits TS tree then tsc) or bundler build. CI: `ttc --check src && tsc --noEmit` + tests.
 - `ttc <dir>`: `.tt`→`.ts`, `.ttx`→`.tsx`, hand-written `.ts`/`.tsx` passthrough; `-o <dir>` separate tree (in-place overwrite refused); `@tt/std` auto-materialized when imported. `ttc -w` watches and also recompiles importers of changed files (cross-file exhaustiveness). Files compile in parallel (one per core) with identical output/diagnostics either way; `-j <n>` sets the count, `-j 1` = sequential.
 - Emitted `.ts`/`.tsx` starts with `// @generated` — NEVER edit output or `.tt-types/`; edit the `.tt`/`.ttx` source.
+- Source maps: `--source-map file` writes `<output>.map` beside each compiled file and appends `//# sourceMappingURL=`; `inline` puts the map in the output as a `data:` URL (what `-p` and bundler plugins use). Default `off` — a map appends a line, and hand-written `.ts` passes through byte for byte, so only compiled `.tt`/`.ttx` ever get one. With `node --enable-source-maps` a stack frame names the `.tt` line and column; a frame in generated glue names the construct that wrote it (the `match`, `try`, pipeline or `enum`). `@load28/unplugin-tt` asks for a map by default (`sourcemap: false` opts out) and hands it to the bundler.
 - Offline docs: `npx ttc help` lists topics; `npx ttc help <topic>` (e.g. `match`, `try`, `install`) prints that section of this guide; `npx ttc help all` prints it whole. `npx ttc -h` = CLI options.
 
 ## Errors

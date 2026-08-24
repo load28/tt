@@ -885,7 +885,19 @@ impl<'a> Emitter<'a> {
         for statement in statements {
             match statement {
                 Statement::Opaque(node) => out.append(self.source_rope_with_edits(*node, edits)),
-                Statement::Adt(adt) => out.append(emit_adt(adt)),
+                Statement::Adt(adt) => {
+                    // The union type and constructor object are this
+                    // declaration's glue: a frame inside a generated
+                    // constructor belongs to the `enum` that wrote it.
+                    let span = self.span(adt.node);
+                    out.anchored(
+                        AnchorKind::Enum,
+                        span.start,
+                        span.end,
+                        span.end,
+                        emit_adt(adt),
+                    );
+                }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
                     let span = self.span(propagate.node);

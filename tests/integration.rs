@@ -3009,3 +3009,104 @@ console.log(choose(Pick.Some(21)), choose(Pick.None), guarded(0), guarded(5));
 "#);
     assert_eq!(lines, ["42 0 1 105"]);
 }
+
+#[test]
+fn a_node_stack_trace_points_at_the_tt_source() {
+    if !have("node") {
+        return;
+    }
+    // TASK-200's whole point: the frame a user sees names the construct
+    // they wrote, at the line and column they wrote it, not a position in
+    // a file nobody authored.
+    let dir = tmpdir();
+    let src_dir = dir.join("src");
+    fs::create_dir_all(&src_dir).unwrap();
+    let source = src_dir.join("app.tt");
+    fs::write(
+        &source,
+        "enum Shape { Circle(r: number), Rect(w: number, h: number) }\n\
+         \n\
+         function area(s: Shape): number {\n\
+         \x20 return match (s) {\n\
+         \x20   Circle(r) => { throw new Error(\"boom\"); },\n\
+         \x20   Rect(w, h) => w * h,\n\
+         \x20 };\n\
+         }\n\
+         \n\
+         area(Shape.Circle(1));\n",
+    )
+    .unwrap();
+    let out_dir = dir.join("out");
+    let compiled = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", out_dir.to_str().unwrap()])
+        .args(["--source-map", "file"])
+        .arg("--no-banner")
+        .arg(&source)
+        .output()
+        .expect("failed to run ttc");
+    assert!(compiled.status.success(), "{compiled:?}");
+
+    let script = out_dir.join("app.ts");
+    let run = Command::new("node")
+        .arg("--enable-source-maps")
+        .arg("--experimental-strip-types")
+        .arg(&script)
+        .output()
+        .expect("failed to run node");
+    let trace = format!(
+        "{}{}",
+        String::from_utf8_lossy(&run.stdout),
+        String::from_utf8_lossy(&run.stderr)
+    );
+    // The throw sits on line 5 of the `.tt`, inside the arm body.
+    assert!(trace.contains("app.tt:5:"), "{trace}");
+    // And the call that reached it is line 10.
+    assert!(trace.contains("app.tt:10:"), "{trace}");
+    // No frame should name the generated file.
+    assert!(!trace.contains("app.ts:"), "{trace}");
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
+    if !have("node") {
+        return;
+    }
+    // A throw the compiler itself wrote — the unexhausted-case guard —
+    // has no source text of its own, so it maps to the `match` that owns
+    // it rather than to nothing.
+    let dir = tmpdir();
+    let source = dir.join("app.tt");
+    fs::write(
+        &source,
+        "enum E { A(v: number), B }\n\
+         function pick(e: E): number {\n\
+         \x20 return match (e) {\n\
+         \x20   A(v) => v,\n\
+         \x20   B => 2,\n\
+         \x20 };\n\
+         }\n\
+         pick({ kind: \"C\" } as unknown as E);\n",
+    )
+    .unwrap();
+    let out_dir = dir.join("out");
+    let compiled = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", out_dir.to_str().unwrap()])
+        .args(["--source-map", "file"])
+        .arg("--no-banner")
+        .arg(&source)
+        .output()
+        .expect("failed to run ttc");
+    assert!(compiled.status.success(), "{compiled:?}");
+    let run = Command::new("node")
+        .arg("--enable-source-maps")
+        .arg("--experimental-strip-types")
+        .arg(out_dir.join("app.ts"))
+        .output()
+        .expect("failed to run node");
+    let trace = String::from_utf8_lossy(&run.stderr).into_owned();
+    assert!(trace.contains("unexpected case"), "{trace}");
+    // Line 3 is `return match (e) {` — the construct the guard belongs to.
+    assert!(trace.contains("app.tt:3:"), "{trace}");
+    fs::remove_dir_all(&dir).ok();
+}
