@@ -119,7 +119,7 @@
           "scope": "resource",
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Report the tt errors that only a type can decide — a mutation through a `val` binding, exhaustiveness over the type a scrutinee actually has. The language server runs `ttc --check-types` over the buffer as part of its project, so the messages are the compiler's own. It opens the project and runs the TypeScript compiler, so it may trail the other diagnostics briefly; turn it off in a project with no TypeScript installed."
+          "markdownDescription": "Report the tt errors that only a type can decide — a mutation through a `val` binding, exhaustiveness over the type a scrutinee actually has. The language server runs `ttc --check-types` over the buffer as part of its project, so the messages are the compiler's own. All diagnostic layers for one buffer version are published together, so an unrelated error does not disappear while this slower check catches up. Turn it off in a project with no TypeScript installed."
         },
         "tt.sidecar": {
           "scope": "resource",

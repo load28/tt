@@ -273,6 +273,7 @@ function enginePath(doc: TextDocument): string | null {
 
 const pendingValidation = new Map<string, NodeJS.Timeout>();
 const VALIDATION_DELAY_MS = 300;
+const validationGeneration = new Map<string, number>();
 
 /* ------------------------------------------------------------------------
  * The typed tt layer.
@@ -280,27 +281,19 @@ const VALIDATION_DELAY_MS = 300;
  * `ttc --check` answers from the text; what needs a *type* to decide — a
  * mutation through a `val` binding, exhaustiveness over the type a scrutinee
  * actually has — is the engine's typed pass. The engine keeps the compiler
- * session alive and answers incrementally (TASK-076), so the pass runs on a
- * debounce close to the base layer's and publishes again when it lands.
+ * session alive and answers incrementally (TASK-076). All enabled layers are
+ * collected for one validation generation and published together: an LSP
+ * diagnostic notification replaces the file's complete list, so publishing a
+ * partial generation would temporarily erase every slower-layer diagnostic.
  *
- * Both layers are cached per document *version*. A typed answer computed for
- * an older version is not shown: its positions describe text that is no
- * longer there, and a `val` error pointing at the wrong token is worse than
- * one that arrives a moment later.
+ * A result computed for an older generation is not shown. The previous list
+ * stays in the editor while the new generation is pending, and VS Code keeps
+ * its ranges attached to the edited text until the replacement arrives.
  * --------------------------------------------------------------------- */
-const pendingTypedCheck = new Map<string, NodeJS.Timeout>();
-const TYPED_CHECK_DELAY_MS = 250;
-
-interface VersionedDiagnostics {
-  version: number;
+interface TypedDiagnostics {
   diagnostics: Diagnostic[];
-  replacesTypes?: boolean;
+  replacesTypes: boolean;
 }
-
-/** What `--check` and the TypeScript layer found, as last published. */
-const baseDiagnostics = new Map<string, VersionedDiagnostics>();
-/** What the typed tt layer found, for the version it ran on. */
-const typedDiagnostics = new Map<string, VersionedDiagnostics>();
 let warnedTypedCheckUnavailable = false;
 
 /**
@@ -308,8 +301,9 @@ let warnedTypedCheckUnavailable = false;
  *
  * The two passes overlap: enum exhaustiveness is decided from the text by
  * `--check` and from the type by the typed pass, and both report it at the
- * same place. One squiggle per position, and the pass that already ran wins
- * — its message is the one the user has been reading.
+ * same place. One squiggle per position: the authoritative compiler result
+ * replaces the matching provisional checker result before the generation is
+ * published.
  */
 function mergeTyped(
   into: Diagnostic[],
@@ -346,52 +340,20 @@ function mergeTyped(
   }
 }
 
-/** Publishes the base layer plus the typed layer, when the latter was
- * computed for this very version. */
-function publish(uri: string, version: number, base: Diagnostic[]): void {
-  const diagnostics = [...base];
-  const typed = typedDiagnostics.get(uri);
-  if (typed?.version === version) {
-    mergeTyped(diagnostics, typed.diagnostics, typed.replacesTypes);
-  }
-  void connection.sendDiagnostics({ uri, diagnostics });
-}
-
-function scheduleTypedCheck(
+async function typedDiagnosticsFor(
   doc: TextDocument,
   compiler: string,
   includeTypes: boolean,
   includeTypedTt: boolean,
-): void {
-  const existing = pendingTypedCheck.get(doc.uri);
-  if (existing !== undefined) clearTimeout(existing);
-  pendingTypedCheck.set(
-    doc.uri,
-    setTimeout(() => {
-      pendingTypedCheck.delete(doc.uri);
-      void typedCheck(doc, compiler, includeTypes, includeTypedTt);
-    }, TYPED_CHECK_DELAY_MS),
-  );
-}
-
-async function typedCheck(
-  doc: TextDocument,
-  compiler: string,
-  includeTypes: boolean,
-  includeTypedTt: boolean,
-): Promise<void> {
+): Promise<TypedDiagnostics | null> {
   const uri = URI.parse(doc.uri);
-  if (uri.scheme !== "file") return;
+  if (uri.scheme !== "file") return null;
   const result = await ttc.runTypedCheck(
     compiler,
     doc.getText(),
     uri.fsPath,
     includeTypes,
   );
-
-  // The buffer may have moved on while the compiler ran.
-  const fresh = documents.get(doc.uri);
-  if (!fresh || fresh.version !== doc.version) return;
 
   if (result.kind === "unavailable") {
     // A project with no TypeScript toolchain is a normal state, not an
@@ -406,33 +368,40 @@ async function typedCheck(
           "tt.typedChecks to false to stop trying.",
       );
     }
-    return;
+    return null;
   }
 
-  typedDiagnostics.set(doc.uri, {
-    version: doc.version,
+  return {
     replacesTypes: includeTypes,
     diagnostics: result.diagnostics
       .filter((d) => includeTypedTt || String(d.code ?? "").startsWith("ts"))
-      .map((d) => toDiagnostic(fresh, d)),
-  });
-  const base = baseDiagnostics.get(doc.uri);
-  if (base?.version === doc.version) publish(doc.uri, doc.version, base.diagnostics);
+      .map((d) => toDiagnostic(doc, d)),
+  };
 }
 
 function scheduleValidation(doc: TextDocument): void {
   const existing = pendingValidation.get(doc.uri);
   if (existing !== undefined) clearTimeout(existing);
+  const generation = (validationGeneration.get(doc.uri) ?? 0) + 1;
+  validationGeneration.set(doc.uri, generation);
   pendingValidation.set(
     doc.uri,
     setTimeout(() => {
       pendingValidation.delete(doc.uri);
-      void validate(doc);
+      void validate(doc, generation);
     }, VALIDATION_DELAY_MS),
   );
 }
 
-async function validate(doc: TextDocument): Promise<void> {
+function isCurrentValidation(doc: TextDocument, generation: number): boolean {
+  const current = documents.get(doc.uri);
+  return (
+    current?.version === doc.version &&
+    validationGeneration.get(doc.uri) === generation
+  );
+}
+
+async function validate(doc: TextDocument, generation: number): Promise<void> {
   const settings = await getSettings(doc.uri);
   const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const uri = URI.parse(doc.uri);
@@ -447,8 +416,8 @@ async function validate(doc: TextDocument): Promise<void> {
   );
 
   // The buffer may have changed while ttc ran; drop stale results.
-  const current = documents.get(doc.uri);
-  if (!current || current.version !== doc.version) return;
+  if (!isCurrentValidation(doc, generation)) return;
+  const current = documents.get(doc.uri)!;
 
   if (result.kind === "not-found") {
     if (!warnedCompilerMissing) {
@@ -463,58 +432,59 @@ async function validate(doc: TextDocument): Promise<void> {
           "Set `tt.compilerPath` or install ttc (cargo install --path .).",
       );
     }
-    forget(doc.uri);
-    void connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
+    void connection.sendDiagnostics({
+      uri: doc.uri,
+      version: doc.version,
+      diagnostics: [],
+    });
     return;
   }
   if (result.kind === "failed") {
     connection.console.error(`tt: ${result.detail}`);
-    forget(doc.uri);
-    void connection.sendDiagnostics({ uri: doc.uri, diagnostics: [] });
+    void connection.sendDiagnostics({
+      uri: doc.uri,
+      version: doc.version,
+      diagnostics: [],
+    });
     return;
   }
 
   const diagnostics = result.diagnostics.map((d) => toDiagnostic(current, d));
+  const typed =
+    settings.typedChecks || settings.typeDiagnostics
+      ? typedDiagnosticsFor(
+          doc,
+          compiler,
+          settings.typeDiagnostics,
+          settings.typedChecks,
+        )
+      : Promise.resolve(null);
+  const serviceTypes = settings.typeDiagnostics
+    ? typeDiagnostics(doc, compiler)
+    : Promise.resolve([]);
+  // Hints are not diagnostics of the compile: ttc never fails on one, and
+  // they only reach the user here (`engine::hints`). Run every slower layer
+  // together, then publish one complete generation.
+  const [typedResult, typeResults, hints] = await Promise.all([
+    typed,
+    serviceTypes,
+    ttHints(doc, compiler),
+  ]);
+  if (!isCurrentValidation(doc, generation)) return;
 
-  // The typed layer trails on its own debounce; schedule it before awaiting
-  // the TypeScript diagnostics so that wait does not push it further out.
-  // Publication order is safe either way: publish() merges the typed layer
-  // only when both layers were computed for this very version.
-  if (settings.typedChecks || settings.typeDiagnostics) {
-    scheduleTypedCheck(
-      doc,
-      compiler,
-      settings.typeDiagnostics,
-      settings.typedChecks,
+  diagnostics.push(...typeResults, ...hints);
+  if (typedResult !== null) {
+    mergeTyped(
+      diagnostics,
+      typedResult.diagnostics,
+      typedResult.replacesTypes,
     );
   }
-
-  if (settings.typeDiagnostics) {
-    diagnostics.push(...(await typeDiagnostics(doc, compiler)));
-    // Awaiting gave the buffer another chance to move on.
-    const fresh = documents.get(doc.uri);
-    if (!fresh || fresh.version !== doc.version) return;
-  }
-
-  // Hints are not diagnostics of the compile: ttc never fails on one, and
-  // they only reach the user here (`engine::hints`).
-  diagnostics.push(...(await ttHints(doc, compiler)));
-  const settled = documents.get(doc.uri);
-  if (!settled || settled.version !== doc.version) return;
-
-  baseDiagnostics.set(doc.uri, { version: doc.version, diagnostics });
-  publish(doc.uri, doc.version, diagnostics);
-}
-
-/** Drops every cached diagnostic layer for a document. */
-function forget(uri: string): void {
-  baseDiagnostics.delete(uri);
-  typedDiagnostics.delete(uri);
-  const pending = pendingTypedCheck.get(uri);
-  if (pending !== undefined) {
-    clearTimeout(pending);
-    pendingTypedCheck.delete(uri);
-  }
+  void connection.sendDiagnostics({
+    uri: doc.uri,
+    version: doc.version,
+    diagnostics,
+  });
 }
 
 /**
@@ -676,13 +646,17 @@ documents.onDidClose((e) => {
   }
   analysisCache.delete(e.document.uri);
   declCache.delete(e.document.uri);
-  forget(e.document.uri);
+  validationGeneration.delete(e.document.uri);
   const pending = pendingValidation.get(e.document.uri);
   if (pending !== undefined) {
     clearTimeout(pending);
     pendingValidation.delete(e.document.uri);
   }
-  void connection.sendDiagnostics({ uri: e.document.uri, diagnostics: [] });
+  void connection.sendDiagnostics({
+    uri: e.document.uri,
+    version: e.document.version,
+    diagnostics: [],
+  });
 });
 
 // -------------------------------------------------------------- completion

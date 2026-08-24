@@ -560,6 +560,64 @@ async function published(source: string): Promise<any[]> {
 }
 
 test(
+  "a new diagnostic generation never drops an untouched typed error",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "val const scores = new Map<string, number>();",
+      'scores.set("a", 1);',
+      "function read(o: TOption<number>): number {",
+      "  const Some(value) = o else {",
+      '    console.log("missing");',
+      "  };",
+      "  return value;",
+      "}",
+      "",
+    ].join("\n");
+    const fixed = source.replace(
+      '    console.log("missing");',
+      "    return 0;",
+    );
+    const { client, uri, stop } = await open(source);
+    try {
+      await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (p) =>
+          p.uri === uri &&
+          p.diagnostics.some((d: any) => d.code === "val-mutation") &&
+          p.diagnostics.some(
+            (d: any) => d.code === "let-else-not-diverging",
+          ),
+      );
+
+      const firstNewGeneration = client.waitFor(
+        "textDocument/publishDiagnostics",
+        (p) => p.uri === uri,
+      );
+      client.notify("textDocument/didChange", {
+        textDocument: { uri, version: 2 },
+        contentChanges: [{ text: fixed }],
+      });
+      const published = await firstNewGeneration;
+
+      assert.equal(published.version, 2);
+      assert.ok(
+        published.diagnostics.some((d: any) => d.code === "val-mutation"),
+        `untouched typed error disappeared: ${JSON.stringify(published)}`,
+      );
+      assert.ok(
+        !published.diagnostics.some(
+          (d: any) => d.code === "let-else-not-diverging",
+        ),
+        `fixed text error remained: ${JSON.stringify(published)}`,
+      );
+    } finally {
+      stop();
+    }
+  },
+);
+
+test(
   "a diagnostic underlines the construct it is about",
   { skip, timeout },
   async () => {

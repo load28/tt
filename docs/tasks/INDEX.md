@@ -208,7 +208,10 @@
 | TASK-198 | 방출 코드 가독성 — 레이아웃 계층과 그룹핑 규칙 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-198-generated-code-layout.md](./TASK-198-generated-code-layout.md) |
 | TASK-199 | block arm의 도달 불가능한 폴스루 제거 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-199-unreachable-arm-fallthrough.md](./TASK-199-unreachable-arm-fallthrough.md) |
 | TASK-200 | 일반 compile 출력용 표준 source map | 완료 | 2026-08-24 | 2026-08-24 | [TASK-200-standard-source-map.md](./TASK-200-standard-source-map.md) |
+| TASK-201 | 로컬 재설치와 tour 패키지 갱신 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-201-local-reinstall-and-tour-package-refresh.md](./TASK-201-local-reinstall-and-tour-package-refresh.md) |
+| TASK-202 | 에디터 진단의 세대 단위 원자적 발행 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-202-editor-diagnostic-generations.md](./TASK-202-editor-diagnostic-generations.md) |
+| TASK-203 | TASK-202 로컬 개발 환경 재설치 | 완료 | 2026-08-24 | 2026-08-24 | [TASK-203-reinstall-after-diagnostic-fix.md](./TASK-203-reinstall-after-diagnostic-fix.md) |
 
 ## 다음 태스크 번호
 
-**TASK-201**
+**TASK-204**
