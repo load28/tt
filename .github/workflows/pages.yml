@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "website/**"
+      - "docs/why-tt.md"
+      - "docs/why-tt.ko.md"
       - "editors/vscode/syntaxes/tt.tmLanguage.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:

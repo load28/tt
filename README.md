@@ -94,6 +94,8 @@ Run `ttc --help` for compiler options or `ttc help <topic>` for the built-in lan
 
 The rest of the file is ordinary TypeScript. Existing TypeScript types, modules, tooling, and runtime behavior remain the foundation.
 
+For the reasoning behind the language, read [Why I built tt](./docs/why-tt.md).
+
 ## Develop tt
 
 The compiler is a Rust crate with a small public API and an `ttc` CLI. Rust

@@ -128,7 +128,7 @@ const area = (shape: Shape): number =>
   };
 ```
 
-```
+```text
 ttc: shape.tt:7:3: match on enum Shape is not exhaustive: missing "Rect" (add the missing arms or a final `_` arm)
 ```
 

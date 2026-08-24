@@ -87,6 +87,18 @@ pre { margin: 0; padding: 24px; overflow-x: auto; color: var(--code-ink); font-f
 .guide-section p { max-width: 700px; margin: 12px 0 18px; color: #514d46; font-size: 15px; line-height: 1.65; }
 .guide-section__link { display: inline-block; margin: 0 0 18px; color: #514d46; font-size: 14px; font-weight: 700; text-underline-offset: 3px; }
 .guide-section pre { border-radius: 10px; background: var(--code); }
+.essay-title { font-size: clamp(36px, 5vw, 62px); }
+.essay-body { max-width: 700px; margin-top: 44px; }
+.essay-heading { margin: 52px 0 0; font-size: 22px; letter-spacing: -.02em; }
+.essay-paragraph { margin: 18px 0 0; color: #3f3b35; font-size: 17px; line-height: 1.72; }
+.essay-inline-code {
+  padding: 1px 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em;
+}
+.essay-link { color: var(--positive); text-underline-offset: 3px; }
+.essay-code { max-width: 700px; margin-top: 28px; }
+.essay-code pre { padding: 20px; font-size: 13px; }
+.essay-source { display: inline-block; margin-top: 44px; color: var(--muted); font-size: 14px; text-underline-offset: 3px; }
 .next-topic { display: flex; align-items: end; justify-content: space-between; width: 100%; margin-top: 50px; padding: 24px 0; border: 0; border-top: 1px solid var(--line); background: none; color: inherit; text-align: left; cursor: pointer; text-decoration: none; }
 .next-topic__label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
 .next-topic__name { font-size: 22px; font-weight: 750; }
@@ -106,6 +118,8 @@ pre { margin: 0; padding: 24px; overflow-x: auto; color: var(--code-ink); font-f
   .reference-article { min-height: auto; padding: 52px 20px 72px; }
   .reference-title { font-size: clamp(38px, 12vw, 58px); }
   .reference-summary { font-size: 18px; }
+  .essay-body, .essay-code { max-width: none; }
+  .essay-paragraph { font-size: 16px; }
   .github-link { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
