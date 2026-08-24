@@ -315,6 +315,12 @@ tsgo는 타입과 심볼 사실을 제공하지만 runtime effect oracle로 쓰�
 5. effect-free로 증명된 미사용 region 제거
 6. proof가 있는 경우에만 PURE annotation 또는 bundler hint 허용
 
+TASK-210의 두 target 최적화도 이 순서를 따른다. member receiver는
+`Effects::NONE`일 때만 별도 capture slot을 생략하고, pipeline call은 입력이 이미
+compiler slot에 materialize됐거나 입력 재배치가 `Effects::NONE`으로 증명될 때만
+`$tt_ap(v, f)`를 직접 `f(v)`로 낮춘다. 그 밖의 receiver와 pipeline은 기존 capture와
+helper가 평가 순서를 보존한다.
+
 모든 IIFE에 PURE를 붙이는 방식은 채택하지 않는다. arm, scrutinee, getter, fallback throw의
 효과를 지울 수 있기 때문이다. 출력 모양이 자연스러워져 번들러 분석이 쉬워지는 것과
 프로그램이 순수하다는 것은 별개의 판단이다.

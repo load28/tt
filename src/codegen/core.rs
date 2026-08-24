@@ -12,7 +12,8 @@ use crate::analysis::SemanticFile;
 use crate::core_ir::*;
 use crate::evaluation_ir::{
     LoweringPlan, PlannedBranch, PlannedConditionalKind, PlannedConditionalOperation,
-    PlannedEvaluationInput, PlannedEvaluationStep, PlannedOperand, TargetCapability, ValueTarget,
+    PlannedEvaluationInput, PlannedEvaluationStep, PlannedOperand, PlannedReceiver,
+    TargetCapability, ValueTarget,
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
@@ -90,22 +91,35 @@ pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
     source: &'a str,
+    source_kind: SourceKind,
     lowering_plan: &LoweringPlan,
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
     let target = TargetRewritePlan::build(lowering_plan);
+    let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
         .iter()
         .map(|replacement| replacement.source)
         .collect();
     relocated.extend(target.relocated_values.iter().copied());
+    relocated.extend(direct_apply_inputs.iter().filter_map(|expr| {
+        let Expr::Opaque(node) = &core.exprs[expr.index()] else {
+            return None;
+        };
+        semantic
+            .hir
+            .source_map
+            .node_span(*node)
+            .map(SourceSpan::from)
+    }));
     let rewritten_operations = target.rewritten_operations.clone();
     let emitter = Emitter {
         semantic,
         core,
         source,
+        direct_apply_inputs,
         rewrite_imports,
         std_imports,
         owner_slot_rewrites: target.owner_slots,
@@ -176,6 +190,39 @@ pub(crate) fn emit_with_map<'a>(
         rewritten,
     };
     output.flatten(source, &preservation)
+}
+
+/// Inline `$tt_ap(v, f)` as `f(v)` exactly when moving the input behind the
+/// callee is proven unobservable. ProgramSyntax owns the effect proof; these
+/// ExprIds also register the corresponding source relocation.
+fn direct_apply_inputs(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> HashSet<ExprId> {
+    core.exprs
+        .iter()
+        .filter_map(|expr| {
+            let Expr::Apply(apply) = expr else {
+                return None;
+            };
+            if !matches!(
+                apply.steps.first().map(|step| step.mode),
+                Some(ApplyMode::Call)
+            ) {
+                return None;
+            }
+            let head = apply.head?;
+            let Expr::Opaque(node) = &core.exprs[head.index()] else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            crate::program_syntax::source_expression_effects(source, span, source_kind)
+                .is_inert()
+                .then_some(head)
+        })
+        .collect()
 }
 
 /// The pass-through ranges of a file, for the target's preservation check
@@ -553,6 +600,7 @@ struct Emitter<'a> {
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
     source: &'a str,
+    direct_apply_inputs: HashSet<ExprId>,
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
     owner_slot_rewrites: Vec<OwnerSlotRewrite>,
@@ -598,6 +646,11 @@ struct ArmEmissionContext<'context, 'name> {
     continuation: &'context ValueContinuation<'name>,
     exits: &'context [HostExit],
     exit_label: Option<&'context str>,
+    /// The single target that leaves a conditional dispatch after it has
+    /// delivered a value. A fall-through block arm already requires
+    /// `$tt_b`; in that case expression arms use the same label instead of
+    /// adding a nested `do { ... } while (false)` target.
+    chain_exit_label: Option<&'context str>,
 }
 
 impl<'name> ValueContinuation<'name> {
@@ -686,7 +739,14 @@ fn decision_has_block_arm(decision: &Decision) -> bool {
 }
 
 fn exit_label(target: &str) -> String {
-    format!("$tt_y_{target}")
+    format!("$tt_y_{}", target.strip_prefix("$tt_").unwrap_or(target))
+}
+
+fn push_region_break(out: &mut Rope<'_>, label: Option<&str>) {
+    match label {
+        Some(label) => out.push_lit(format!(" break {label};")),
+        None => out.push_lit(" break;"),
+    }
 }
 
 impl<'a> Emitter<'a> {
@@ -1170,8 +1230,9 @@ impl<'a> Emitter<'a> {
                     _ => None,
                 };
                 match receiver {
-                    Some((_, receiver_slot)) => {
-                        body.push_lit(format!(".call({}", self.value_slot_name(receiver_slot)));
+                    Some(receiver) => {
+                        body.push_lit(".call(");
+                        self.push_planned_receiver(&receiver, false, &mut body);
                         for argument in arguments {
                             body.push_lit(", ");
                             self.push_operand(argument, &mut body);
@@ -1257,19 +1318,11 @@ impl<'a> Emitter<'a> {
             PlannedEvaluationInput::Source {
                 source,
                 target,
-                receiver: Some((receiver_source, receiver_slot)),
+                receiver: Some(receiver),
                 mode: EvaluationInputMode::MemberReference,
             } => {
                 if captured.insert(*target) {
-                    let receiver_name = self.value_slot_name(*receiver_slot);
-                    captured.insert(*receiver_slot);
-                    out.push_lit(format!("const {receiver_name} = ("));
-                    out.push_src(
-                        &self.source[receiver_source.start..receiver_source.end],
-                        receiver_source.start,
-                    );
-                    out.push_lit(");");
-                    out.push_break(0);
+                    let receiver_source = self.capture_planned_receiver(receiver, captured, out);
                     out.push_lit(format!("const {} = (", self.value_slot_name(*target)));
                     if source.start < receiver_source.start {
                         out.push_src(
@@ -1277,7 +1330,7 @@ impl<'a> Emitter<'a> {
                             source.start,
                         );
                     }
-                    out.push_lit(receiver_name.to_owned());
+                    self.push_planned_receiver(receiver, true, out);
                     if receiver_source.end < source.end {
                         out.push_src(
                             &self.source[receiver_source.end..source.end],
@@ -1297,6 +1350,42 @@ impl<'a> Emitter<'a> {
                     out.push_break(0);
                 }
                 self.value_slot_name(*target).to_owned()
+            }
+        }
+    }
+
+    fn capture_planned_receiver(
+        &self,
+        receiver: &PlannedReceiver,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        out: &mut Rope<'a>,
+    ) -> SourceSpan {
+        match *receiver {
+            PlannedReceiver::Captured { source, slot } => {
+                if captured.insert(slot) {
+                    out.push_lit(format!("const {} = (", self.value_slot_name(slot)));
+                    out.push_src(&self.source[source.start..source.end], source.start);
+                    out.push_lit(");");
+                    out.push_break(0);
+                }
+                source
+            }
+            PlannedReceiver::Stable { source } => source,
+        }
+    }
+
+    fn push_planned_receiver(&self, receiver: &PlannedReceiver, mapped: bool, out: &mut Rope<'a>) {
+        match *receiver {
+            PlannedReceiver::Captured { slot, .. } => {
+                out.push_lit(self.value_slot_name(slot).to_owned());
+            }
+            PlannedReceiver::Stable { source } => {
+                let text = &self.source[source.start..source.end];
+                if mapped {
+                    out.push_src(text, source.start);
+                } else {
+                    out.push_lit(text.to_owned());
+                }
             }
         }
     }
@@ -1341,17 +1430,11 @@ impl<'a> Emitter<'a> {
                 continue;
             }
             if *mode == EvaluationInputMode::MemberReference {
-                let (receiver_source, receiver_target) = receiver.unwrap_or_else(|| {
+                let receiver = receiver.unwrap_or_else(|| {
                     panic!("internal compiler error: member reference has no receiver")
                 });
-                let receiver_name = self.value_slot_name(receiver_target);
-                prefix.push_lit(format!("const {receiver_name} = ("));
-                prefix.push_src(
-                    &self.source[receiver_source.start..receiver_source.end],
-                    receiver_source.start,
-                );
-                prefix.push_lit(");");
-                prefix.push_break(0);
+                let receiver_source =
+                    self.capture_planned_receiver(&receiver, captured, &mut prefix);
                 let optional_reference = matches!(
                     step.operation,
                     HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
@@ -1369,7 +1452,7 @@ impl<'a> Emitter<'a> {
                         source.start,
                     );
                 }
-                prefix.push_lit(receiver_name.to_owned());
+                self.push_planned_receiver(&receiver, true, &mut prefix);
                 if receiver_source.end < source.end {
                     prefix.push_src(
                         &self.source[receiver_source.end..source.end],
@@ -1382,14 +1465,16 @@ impl<'a> Emitter<'a> {
                     prefix.push_break(0);
                     prefix.push_lit(format!("if ({target_name} != null) {{"));
                     prefix.push_break(1);
-                    prefix.push_lit(format!(
-                        "{target_name} = {target_name}.bind({receiver_name});"
-                    ));
+                    prefix.push_lit(format!("{target_name} = {target_name}.bind("));
+                    self.push_planned_receiver(&receiver, false, &mut prefix);
+                    prefix.push_lit(");");
                     prefix.push_break(0);
                     prefix.push_lit("}");
                     prefix.push_break(0);
                 } else {
-                    prefix.push_lit(format!(").bind({receiver_name});"));
+                    prefix.push_lit(").bind(");
+                    self.push_planned_receiver(&receiver, false, &mut prefix);
+                    prefix.push_lit(");");
                     prefix.push_break(0);
                 }
             } else {
@@ -1731,8 +1816,8 @@ impl<'a> Emitter<'a> {
     fn emit_apply(&self, apply: &Apply) -> Rope<'a> {
         let inner = match apply.head {
             Some(head) => {
-                self.used_pipe.set(true);
                 let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0);
+                let mut accumulator_is_inert = self.expression_is_inert(head);
                 for step in &apply.steps {
                     let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
                     let mut next = Rope::new();
@@ -1742,14 +1827,26 @@ impl<'a> Emitter<'a> {
                             next.append(body);
                         }
                         ApplyMode::Call => {
-                            next.push_lit("$tt_ap(");
-                            push_grouped(&mut next, acc);
-                            next.push_lit(", ");
-                            push_grouped(&mut next, body);
-                            next.push_lit(")");
+                            if accumulator_is_inert {
+                                push_grouped(&mut next, body);
+                                next.push_lit("(");
+                                push_grouped(&mut next, acc);
+                                next.push_lit(")");
+                            } else {
+                                self.used_pipe.set(true);
+                                next.push_lit("$tt_ap(");
+                                push_grouped(&mut next, acc);
+                                next.push_lit(", ");
+                                push_grouped(&mut next, body);
+                                next.push_lit(")");
+                            }
                         }
                     }
                     acc = next;
+                    // A call or member operation can return any value and
+                    // can have arbitrary effects. Only the original head's
+                    // syntax proof can authorize inline reordering.
+                    accumulator_is_inert = false;
                 }
                 acc
             }
@@ -2079,7 +2176,6 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
-        self.used_pipe.set(true);
         for step in &apply.steps {
             let step_value = if self.core.has_statement_form(step.value) {
                 let slot = self.structured_value_slot(step.value).unwrap_or_else(|| {
@@ -2109,9 +2205,13 @@ impl<'a> Emitter<'a> {
                     inner.push_lit(";");
                 }
                 ApplyMode::Call => {
-                    inner.push_lit(format!("{accumulator} = $tt_ap({accumulator}, "));
+                    // The accumulator has already been evaluated into a
+                    // collision-free compiler slot. Reading that slot is
+                    // unobservable, so the callee can occupy its natural
+                    // call position without changing source evaluation.
+                    inner.push_lit(format!("{accumulator} = "));
                     push_grouped(&mut inner, step_value);
-                    inner.push_lit(");");
+                    inner.push_lit(format!("({accumulator});"));
                 }
             }
         }
@@ -2133,6 +2233,10 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.anchored(AnchorKind::Pipe, start, end, end, Rope::scoped(inner));
         Some(out)
+    }
+
+    fn expression_is_inert(&self, expr: ExprId) -> bool {
+        self.direct_apply_inputs.contains(&expr)
     }
 
     fn emit_switch(
@@ -2182,6 +2286,7 @@ impl<'a> Emitter<'a> {
                     continuation,
                     exits,
                     exit_label,
+                    chain_exit_label: None,
                 },
                 &mut out,
             );
@@ -2207,14 +2312,14 @@ impl<'a> Emitter<'a> {
         };
         let mut out = Rope::new();
         let mut depth = 0;
-        if continuation.assigns() {
-            out.push_break(depth);
-            out.push_lit("do {");
-            depth += 1;
-        }
+        let chain_exit_label = needs_label.then_some("$tt_b");
         if needs_label {
             out.push_break(depth);
             out.push_lit("$tt_b: {");
+            depth += 1;
+        } else if continuation.assigns() {
+            out.push_break(depth);
+            out.push_lit("do {");
             depth += 1;
         }
         let mut unconditional = false;
@@ -2238,6 +2343,7 @@ impl<'a> Emitter<'a> {
                     continuation,
                     exits,
                     exit_label,
+                    chain_exit_label,
                 },
                 &mut out,
             );
@@ -2253,8 +2359,7 @@ impl<'a> Emitter<'a> {
             depth -= 1;
             out.push_break(depth);
             out.push_lit("}");
-        }
-        if continuation.assigns() {
+        } else if continuation.assigns() {
             depth -= 1;
             out.push_break(depth);
             out.push_lit("} while (false);");
@@ -2273,6 +2378,7 @@ impl<'a> Emitter<'a> {
         let continuation = context.continuation;
         let exits = context.exits;
         let exit_label = context.exit_label;
+        let chain_exit_label = context.chain_exit_label;
         let ArmAction::Yield { body, kind } = arm.action else {
             panic!("internal compiler error: match arm does not yield")
         };
@@ -2296,11 +2402,16 @@ impl<'a> Emitter<'a> {
                 }) {
                     action.append(structured);
                     if continuation.assigns() {
-                        action.push_lit(" break;");
+                        push_region_break(&mut action, chain_exit_label);
                     }
                 } else {
                     let close = body.last_line_has_line_comment().then_some(depth);
-                    action.append(self.emit_value_delivery(body, close, continuation));
+                    action.append(self.emit_value_delivery_with_exit(
+                        body,
+                        close,
+                        continuation,
+                        chain_exit_label,
+                    ));
                 }
             }
             // A block that always leaves has written the arm's value on
@@ -2318,7 +2429,7 @@ impl<'a> Emitter<'a> {
                         ));
                     }
                     action.push_break(depth + 1);
-                    action.push_lit("break $tt_b;");
+                    push_region_break(&mut action, chain_exit_label);
                 }
                 action.push_break(depth);
                 action.push_lit("}");
@@ -2369,6 +2480,16 @@ impl<'a> Emitter<'a> {
         close: Option<u16>,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
+        self.emit_value_delivery_with_exit(body, close, continuation, None)
+    }
+
+    fn emit_value_delivery_with_exit(
+        &self,
+        body: Rope<'a>,
+        close: Option<u16>,
+        continuation: &ValueContinuation<'_>,
+        break_label: Option<&str>,
+    ) -> Rope<'a> {
         let mut value = body;
         for wrapper in continuation.wrappers.iter().rev() {
             match wrapper {
@@ -2399,7 +2520,7 @@ impl<'a> Emitter<'a> {
         }
         out.push_lit(";");
         if continuation.assigns() {
-            out.push_lit(" break;");
+            push_region_break(&mut out, break_label);
         }
         out
     }

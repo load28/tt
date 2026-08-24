@@ -2183,6 +2183,13 @@ fn pipeline_type_error_in_a_step_is_reported_on_user_text() {
 }
 
 #[test]
+fn a_direct_pipeline_call_keeps_contextual_typing() {
+    require_toolchain!();
+    let (ok, out) = typecheck("const value: number = 1 |> (x => x + 1);\n");
+    assert!(ok, "{out}");
+}
+
+#[test]
 fn pipeline_runs_left_to_right() {
     require_toolchain!();
     let lines = run(r#"
@@ -2192,6 +2199,23 @@ const out = (order.push("head"), 10) |> tap("s1") |> .toFixed(0) |> tap("s2");
 console.log(order.join(","), out);
 "#);
     assert_eq!(lines, ["head,s1,s2 10"]);
+}
+
+#[test]
+fn a_materialized_pipeline_keeps_head_before_callee() {
+    require_toolchain!();
+    let lines = run(r#"
+enum E { A(value: number), B }
+const order: string[] = [];
+const head = (): E => { order.push("head"); return E.A(2); };
+const step = () => { order.push("step"); return (value: number) => {
+  order.push("call");
+  return value + 1;
+}; };
+const value = match (head()) { A(value) => value, B => 0 } |> step();
+console.log(order.join(","), value);
+"#);
+    assert_eq!(lines, ["head,step,call 3"]);
 }
 
 #[test]

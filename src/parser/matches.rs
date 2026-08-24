@@ -413,7 +413,7 @@ fn parse_arm_tail(cur: &mut Cursor, allow_guard: bool) -> Option<ArmTail> {
     // question let-else asks of its `else` block, answered on the same CFG
     // (`crate::flow`). An expression body always yields, so the question
     // only arises for a block.
-    let diverges = block && crate::flow::program_diverges(cur.parser.src, body_tokens, &body);
+    let diverges = block && cur.parser.body_diverges(body_span, body_tokens, &body);
     Some(ArmTail {
         guard,
         body_span,

@@ -162,7 +162,8 @@ pub(crate) struct ConditionalOperand {
 pub(crate) struct HostEvaluationInput {
     pub(crate) source: SourceSpan,
     pub(crate) mode: EvaluationInputMode,
-    pub(crate) receiver: Option<SourceSpan>,
+    /// A member reference's receiver and its independent effect proof.
+    pub(crate) receiver: Option<(SourceSpan, Effects)>,
     /// What evaluating this input may do — an optimization fact only.
     pub(crate) effects: Effects,
 }
@@ -244,6 +245,37 @@ fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
         SwcExpr::TsInstantiation(inner) => expression_effects(&inner.expr),
         _ => Effects::ANY,
     }
+}
+
+/// Computes the conservative effect fact for one source-backed expression.
+/// The span comes from HIR; SWC owns the expression classification, so
+/// target optimization never guesses purity from source text.
+pub(crate) fn source_expression_effects(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> Effects {
+    let Some(text) = source.get(span.start..span.end) else {
+        return Effects::ANY;
+    };
+    let source_map: Lrc<SourceMap> = Default::default();
+    let file = source_map.new_source_file(Lrc::new(FileName::Anon), text.to_owned());
+    let lexer = Lexer::new(
+        Syntax::Typescript(TsSyntax {
+            tsx: source_kind.is_tsx(),
+            decorators: true,
+            ..Default::default()
+        }),
+        Default::default(),
+        StringInput::from(&*file),
+        None,
+    );
+    let mut parser = Parser::new_from(lexer);
+    let expression = match parser.parse_expr() {
+        Ok(expression) if parser.take_errors().is_empty() => expression,
+        Ok(_) | Err(_) => return Effects::ANY,
+    };
+    expression_effects(&expression)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1297,7 +1329,7 @@ enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,
-        callee_receiver: Option<ProjectedSpan>,
+        callee_receiver: Option<(ProjectedSpan, Effects)>,
         arguments: Vec<(ProjectedSpan, bool, Effects)>,
         type_args: Option<ProjectedSpan>,
         optional: bool,
@@ -1316,7 +1348,7 @@ enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         tag: ProjectedSpan,
         tag_mode: EvaluationInputMode,
-        tag_receiver: Option<ProjectedSpan>,
+        tag_receiver: Option<(ProjectedSpan, Effects)>,
         expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Template {
@@ -1849,7 +1881,12 @@ impl VisitAstPath for ParentCollector {
                 self.source_start,
             )),
             callee_mode,
-            callee_receiver: callee_receiver.map(|span| projected_span(span, self.source_start)),
+            callee_receiver: callee_receiver.map(|receiver| {
+                (
+                    projected_span(receiver.span(), self.source_start),
+                    expression_effects(receiver),
+                )
+            }),
             arguments: argument_positions(&node.args, self.source_start),
             type_args: node
                 .type_args
@@ -1995,7 +2032,12 @@ impl VisitAstPath for ParentCollector {
                 self.source_start,
             )),
             callee_mode,
-            callee_receiver: callee_receiver.map(|span| projected_span(span, self.source_start)),
+            callee_receiver: callee_receiver.map(|receiver| {
+                (
+                    projected_span(receiver.span(), self.source_start),
+                    expression_effects(receiver),
+                )
+            }),
             arguments: argument_positions(&node.args, self.source_start),
             type_args: node
                 .type_args
@@ -2056,7 +2098,12 @@ impl VisitAstPath for ParentCollector {
                 parent: projected_span(node.span, self.source_start),
                 tag: projected_span(reference_value_span(&node.tag), self.source_start),
                 tag_mode,
-                tag_receiver: tag_receiver.map(|span| projected_span(span, self.source_start)),
+                tag_receiver: tag_receiver.map(|receiver| {
+                    (
+                        projected_span(receiver.span(), self.source_start),
+                        expression_effects(receiver),
+                    )
+                }),
                 expressions: node
                     .tpl
                     .exprs
@@ -2525,7 +2572,9 @@ fn protocol_step(
                 source: map_evaluation_span(segments, source)?,
                 mode,
                 receiver: receiver
-                    .map(|receiver| map_evaluation_span(segments, receiver))
+                    .map(|(receiver, effects)| {
+                        Ok((map_evaluation_span(segments, receiver)?, effects))
+                    })
                     .transpose()?,
                 effects: Effects {
                     requires_reference: mode != EvaluationInputMode::Value,
@@ -2587,20 +2636,16 @@ fn projected_contains(container: ProjectedSpan, value: ProjectedSpan) -> bool {
 
 fn call_callee_mode(
     expression: &swc_ecma_ast::Expr,
-) -> (EvaluationInputMode, Option<swc_common::Span>) {
+) -> (EvaluationInputMode, Option<&swc_ecma_ast::Expr>) {
     use swc_ecma_ast::{Expr as SwcExpr, OptChainBase};
 
     match expression {
-        SwcExpr::Member(member) => (
-            EvaluationInputMode::MemberReference,
-            Some(member.obj.span()),
-        ),
+        SwcExpr::Member(member) => (EvaluationInputMode::MemberReference, Some(&member.obj)),
         SwcExpr::SuperProp(_) => (EvaluationInputMode::MemberReference, None),
         SwcExpr::OptChain(chain) => match &*chain.base {
-            OptChainBase::Member(member) => (
-                EvaluationInputMode::MemberReference,
-                Some(member.obj.span()),
-            ),
+            OptChainBase::Member(member) => {
+                (EvaluationInputMode::MemberReference, Some(&member.obj))
+            }
             OptChainBase::Call(_) => (EvaluationInputMode::DirectReference, None),
         },
         SwcExpr::Paren(paren) => call_callee_mode(&paren.expr),

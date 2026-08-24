@@ -291,7 +291,7 @@ pub(crate) enum PlannedEvaluationInput {
         source: SourceSpan,
         mode: EvaluationInputMode,
         target: ValueSlotId,
-        receiver: Option<(SourceSpan, ValueSlotId)>,
+        receiver: Option<PlannedReceiver>,
     },
     Slot {
         slot: ValueSlotId,
@@ -304,6 +304,20 @@ pub(crate) enum PlannedEvaluationInput {
     /// proof-based capture elision of `docs/design/program-lowering.md` §9,
     /// decided here and only here — never re-derived by the target.
     Stable { source: SourceSpan },
+}
+
+/// How a member reference preserves its `this` receiver. A provably inert
+/// receiver can be re-read when the captured callee is invoked; every other
+/// receiver is evaluated once into its own slot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlannedReceiver {
+    Captured {
+        source: SourceSpan,
+        slot: ValueSlotId,
+    },
+    Stable {
+        source: SourceSpan,
+    },
 }
 
 struct PendingPlannedValue {
@@ -327,7 +341,7 @@ struct HostBinding {
 #[derive(Debug, Clone, Copy)]
 struct PlannedSourceSlot {
     target: ValueSlotId,
-    receiver: Option<(SourceSpan, ValueSlotId)>,
+    receiver: Option<PlannedReceiver>,
 }
 
 impl LoweringPlan {
@@ -941,15 +955,19 @@ fn resolve_schedule(
                                     allocate_value_slot(next_slot, slot_names, occupied_names)?;
                                 let receiver = input
                                     .receiver
-                                    .map(|receiver| {
-                                        Ok((
-                                            receiver,
-                                            allocate_value_slot(
-                                                next_slot,
-                                                slot_names,
-                                                occupied_names,
-                                            )?,
-                                        ))
+                                    .map(|(source, effects)| {
+                                        if effects.is_inert() {
+                                            Ok(PlannedReceiver::Stable { source })
+                                        } else {
+                                            Ok(PlannedReceiver::Captured {
+                                                source,
+                                                slot: allocate_value_slot(
+                                                    next_slot,
+                                                    slot_names,
+                                                    occupied_names,
+                                                )?,
+                                            })
+                                        }
                                     })
                                     .transpose()?;
                                 source_slots

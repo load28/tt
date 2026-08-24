@@ -179,95 +179,102 @@ pub(crate) fn lex_and_parse_with_kind(
     let parser = Parser {
         src,
         bytes: src.as_bytes(),
+        flow_queries: crate::flow::FlowBodyQueries::default(),
     };
     let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
     let program = parser.parse_tokens(&tokens, 0, src.len());
     (program, tokens)
 }
 
-/// Collects parser-owned recovery nodes from the recursively nested AST.
-pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
-    fn visit(program: &Program, out: &mut Vec<RecoveryNode>) {
-        out.extend(program.recoveries.iter().cloned());
-        for segment in &program.segments {
-            match segment {
-                Segment::Verbatim(_)
-                | Segment::Enum(_)
-                | Segment::TtImport(_)
-                | Segment::ValModifier(_) => {}
-                Segment::Match(expr) => {
-                    visit(&expr.scrutinee, out);
-                    for arm in &expr.arms {
-                        if let Some(guard) = &arm.guard {
-                            visit(&guard.expr, out);
+/// Visits every recursively nested parse region exactly once.
+///
+/// Parser side tables use one structural traversal so adding a new nested
+/// [`Program`] shape cannot make recovery and rollback collection drift.
+fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)) {
+    visit(program);
+    for segment in &program.segments {
+        match segment {
+            Segment::Verbatim(_)
+            | Segment::Enum(_)
+            | Segment::TtImport(_)
+            | Segment::ValModifier(_) => {}
+            Segment::Match(expr) => {
+                visit_programs(&expr.scrutinee, visit);
+                for arm in &expr.arms {
+                    if let Some(guard) = &arm.guard {
+                        visit_programs(&guard.expr, visit);
+                    }
+                    visit_programs(&arm.body, visit);
+                }
+            }
+            Segment::TupleMatch(expr) => {
+                for (_, scrutinee) in &expr.scrutinees {
+                    visit_programs(scrutinee, visit);
+                }
+                for arm in &expr.arms {
+                    if let Some(guard) = &arm.guard {
+                        visit_programs(&guard.expr, visit);
+                    }
+                    visit_programs(&arm.body, visit);
+                }
+            }
+            Segment::Try(stmt) => visit_programs(&stmt.expr, visit),
+            Segment::LetElse(stmt) => {
+                visit_programs(&stmt.expr, visit);
+                visit_programs(&stmt.else_body, visit);
+            }
+            Segment::IfLet(stmt) => {
+                visit_programs(&stmt.expr, visit);
+                visit_programs(&stmt.body, visit);
+                let mut next = stmt.else_part.as_ref();
+                while let Some(else_part) = next {
+                    match else_part {
+                        IfLetElse::Block(block) => {
+                            visit_programs(block, visit);
+                            break;
                         }
-                        visit(&arm.body, out);
-                    }
-                }
-                Segment::TupleMatch(expr) => {
-                    for (_, scrutinee) in &expr.scrutinees {
-                        visit(scrutinee, out);
-                    }
-                    for arm in &expr.arms {
-                        if let Some(guard) = &arm.guard {
-                            visit(&guard.expr, out);
-                        }
-                        visit(&arm.body, out);
-                    }
-                }
-                Segment::Try(stmt) => visit(&stmt.expr, out),
-                Segment::LetElse(stmt) => {
-                    visit(&stmt.expr, out);
-                    visit(&stmt.else_body, out);
-                }
-                Segment::IfLet(stmt) => {
-                    visit(&stmt.expr, out);
-                    visit(&stmt.body, out);
-                    let mut next = stmt.else_part.as_ref();
-                    while let Some(else_part) = next {
-                        match else_part {
-                            IfLetElse::Block(block) => {
-                                visit(block, out);
-                                break;
-                            }
-                            IfLetElse::IfLet(chained) => {
-                                visit(&chained.expr, out);
-                                visit(&chained.body, out);
-                                next = chained.else_part.as_ref();
-                            }
-                        }
-                    }
-                }
-                Segment::Template(template) => {
-                    for chunk in &template.chunks {
-                        if let TemplateChunk::Interp(interp) = chunk {
-                            visit(interp, out);
+                        IfLetElse::IfLet(chained) => {
+                            visit_programs(&chained.expr, visit);
+                            visit_programs(&chained.body, visit);
+                            next = chained.else_part.as_ref();
                         }
                     }
                 }
-                Segment::Pipe(pipe) => {
-                    if let Some(head) = &pipe.head {
-                        visit(head, out);
-                    }
-                    for step in &pipe.steps {
-                        visit(&step.body, out);
+            }
+            Segment::Template(template) => {
+                for chunk in &template.chunks {
+                    if let TemplateChunk::Interp(interp) = chunk {
+                        visit_programs(interp, visit);
                     }
                 }
-                Segment::ResultBlock(block) => {
-                    for item in &block.items {
-                        match item {
-                            ResultItem::Stmts(stmts) => visit(stmts, out),
-                            ResultItem::Bind(bind) => visit(&bind.expr, out),
-                        }
-                    }
-                    visit(&block.value, out);
+            }
+            Segment::Pipe(pipe) => {
+                if let Some(head) = &pipe.head {
+                    visit_programs(head, visit);
                 }
+                for step in &pipe.steps {
+                    visit_programs(&step.body, visit);
+                }
+            }
+            Segment::ResultBlock(block) => {
+                for item in &block.items {
+                    match item {
+                        ResultItem::Stmts(stmts) => visit_programs(stmts, visit),
+                        ResultItem::Bind(bind) => visit_programs(&bind.expr, visit),
+                    }
+                }
+                visit_programs(&block.value, visit);
             }
         }
     }
+}
 
+/// Collects parser-owned recovery nodes from the recursively nested AST.
+pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
     let mut out = Vec::new();
-    visit(program, &mut out);
+    visit_programs(program, &mut |program| {
+        out.extend(program.recoveries.iter().cloned());
+    });
     out.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end)));
     out
 }
@@ -276,98 +283,28 @@ pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
 /// nested source region. Output verification uses these facts to explain a
 /// passthrough parse failure without scanning source text for keywords.
 pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidate> {
-    fn visit(program: &Program, out: &mut Vec<UnclaimedTtCandidate>) {
+    let mut out = Vec::new();
+    visit_programs(program, &mut |program| {
         if let Some(candidates) = &program.unclaimed {
             out.extend(candidates.0.iter().copied());
         }
-        for segment in &program.segments {
-            match segment {
-                Segment::Verbatim(_)
-                | Segment::Enum(_)
-                | Segment::TtImport(_)
-                | Segment::ValModifier(_) => {}
-                Segment::Match(expr) => {
-                    visit(&expr.scrutinee, out);
-                    for arm in &expr.arms {
-                        if let Some(guard) = &arm.guard {
-                            visit(&guard.expr, out);
-                        }
-                        visit(&arm.body, out);
-                    }
-                }
-                Segment::TupleMatch(expr) => {
-                    for (_, scrutinee) in &expr.scrutinees {
-                        visit(scrutinee, out);
-                    }
-                    for arm in &expr.arms {
-                        if let Some(guard) = &arm.guard {
-                            visit(&guard.expr, out);
-                        }
-                        visit(&arm.body, out);
-                    }
-                }
-                Segment::Try(stmt) => visit(&stmt.expr, out),
-                Segment::LetElse(stmt) => {
-                    visit(&stmt.expr, out);
-                    visit(&stmt.else_body, out);
-                }
-                Segment::IfLet(stmt) => {
-                    visit(&stmt.expr, out);
-                    visit(&stmt.body, out);
-                    let mut next = stmt.else_part.as_ref();
-                    while let Some(else_part) = next {
-                        match else_part {
-                            IfLetElse::Block(block) => {
-                                visit(block, out);
-                                break;
-                            }
-                            IfLetElse::IfLet(chained) => {
-                                visit(&chained.expr, out);
-                                visit(&chained.body, out);
-                                next = chained.else_part.as_ref();
-                            }
-                        }
-                    }
-                }
-                Segment::Template(template) => {
-                    for chunk in &template.chunks {
-                        if let TemplateChunk::Interp(interp) = chunk {
-                            visit(interp, out);
-                        }
-                    }
-                }
-                Segment::Pipe(pipe) => {
-                    if let Some(head) = &pipe.head {
-                        visit(head, out);
-                    }
-                    for step in &pipe.steps {
-                        visit(&step.body, out);
-                    }
-                }
-                Segment::ResultBlock(block) => {
-                    for item in &block.items {
-                        match item {
-                            ResultItem::Stmts(stmts) => visit(stmts, out),
-                            ResultItem::Bind(bind) => visit(&bind.expr, out),
-                        }
-                    }
-                    visit(&block.value, out);
-                }
-            }
-        }
-    }
-
-    let mut out = Vec::new();
-    visit(program, &mut out);
+    });
     out.sort_by_key(|candidate| (candidate.extent.start, candidate.extent.end));
     out
 }
 
-/// Shared state for one parse: the source in both views. The parser holds no
-/// mutable state — recursion carries explicit token slices and byte ranges.
+/// Shared state for one parse: the source in both views and memoized semantic
+/// queries. Recursion carries explicit token slices and byte ranges.
 pub(crate) struct Parser<'a> {
     pub src: &'a str,
     pub bytes: &'a [u8],
+    flow_queries: crate::flow::FlowBodyQueries,
+}
+
+impl Parser<'_> {
+    pub(super) fn body_diverges(&self, span: Span, tokens: &[Token], program: &Program) -> bool {
+        self.flow_queries.diverges(self.src, span, tokens, program)
+    }
 }
 
 fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
@@ -947,5 +884,12 @@ mod tests {
                       const object = { try: 1 };\n\
                       object.try();\n";
         assert!(unclaimed_candidates(&parse(source)).is_empty());
+    }
+
+    #[test]
+    fn a_template_interpolation_recovery_is_collected_once() {
+        let program = parse("const value = `x=${1 |> }`;\n");
+        let recoveries = projection_recoveries(&program);
+        assert_eq!(recoveries.len(), 1, "{recoveries:#?}");
     }
 }

@@ -33,6 +33,7 @@
 //! statement) lives here too, moved from the let-else parser — one
 //! implementation, shared by statement splitting wherever flow looks.
 
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 
 use crate::ast::{IfLetElse, IfLetStmt, Program, Segment};
@@ -45,6 +46,39 @@ pub struct FlowBody {
     pub blocks: Vec<BasicBlock>,
     /// Where execution enters.
     pub entry: BlockId,
+}
+
+/// Memoized `flow_body` queries for one parse. The key is the complete body
+/// text: flow lowering is translation-invariant, so structurally identical
+/// bodies at different byte offsets share one answer.
+#[derive(Debug, Default)]
+pub(crate) struct FlowBodyQueries {
+    cache: RefCell<HashMap<String, bool>>,
+    hits: Cell<usize>,
+}
+
+impl FlowBodyQueries {
+    pub(crate) fn diverges(
+        &self,
+        src: &str,
+        span: crate::ast::Span,
+        tokens: &[Token],
+        program: &Program,
+    ) -> bool {
+        let text = &src[span.start..span.end];
+        if let Some(answer) = self.cache.borrow().get(text).copied() {
+            self.hits.set(self.hits.get() + 1);
+            return answer;
+        }
+        let answer = program_diverges(src, tokens, program);
+        self.cache.borrow_mut().insert(text.to_owned(), answer);
+        answer
+    }
+
+    #[cfg(test)]
+    pub(crate) fn hits(&self) -> usize {
+        self.hits.get()
+    }
 }
 
 /// Index into [`FlowBody::blocks`].
@@ -1361,6 +1395,21 @@ mod tests {
     fn check(body: &str) -> bool {
         let tokens = crate::lexer::lex(body, 0, body.len());
         program_diverges(body, &tokens, &crate::parser::parse(body))
+    }
+
+    #[test]
+    fn a_flow_body_query_reuses_the_same_structural_body() {
+        let source = "if (ready) return 1; else throw error;";
+        let tokens = crate::lexer::lex(source, 0, source.len());
+        let program = crate::parser::parse(source);
+        let queries = FlowBodyQueries::default();
+        let span = crate::ast::Span {
+            start: 0,
+            end: source.len(),
+        };
+        assert!(queries.diverges(source, span, &tokens, &program));
+        assert!(queries.diverges(source, span, &tokens, &program));
+        assert_eq!(queries.hits(), 1);
     }
 
     #[test]

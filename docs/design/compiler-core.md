@@ -313,7 +313,7 @@ compiler API가 대체한 뒤 VSCode 확장의 정규식/마스킹 tt 구현(D6)
 | 3 | typed pattern: 해석의 단일화 — analysis가 resolver 소비(1/2), Table 구축도 resolver 위로(2/2) | TASK-123·129 | 완료 |
 | 4 | 타입 query: TypedFacts 경계 확정 — 백엔드 실패 강등 | TASK-124 | 완료 |
 | 5 | flow/effect: 최소 CFG — let-else 발산부터 | TASK-125 | 완료 (1/n) |
-| 6 | query engine: cross-snapshot semantic cache + 무효화 | TASK-126 | 완료 (1/n) |
+| 6 | query engine: cross-snapshot pattern cache + flow-body query | TASK-126·210 | 완료 |
 | 7 | codegen 정리 | TASK-127에서 실측 정산 | 재계산 없음 확인 |
 | — | 에디터 shadow 제거 (D6, 완료 기준의 마지막 항목) | TASK-127·128 | 완료 |
 
@@ -340,9 +340,10 @@ INDEX 상태에 따라 조정될 수 있다 — 확정 번호는 INDEX가 진실
   허용이라(§10.2 표) 지연 초기화가 이미 성립하고, 불변 지연 초기화
   (`val const x;` + 분기별 1회 대입)는 새 언어 표면 제안이 필요하다 —
   flow가 판정할 준비는 되어 있다.
-- **Phase 6 잔여** — query 세분화(pattern_analysis/flow_body 단위).
-  에디터 semantic API의 cache 소비는 TASK-130에서 완료(typed 패스와
-  에디터 폴백이 `Project`의 한 캐시를 공유).
+- ~~Phase 6 query 세분화~~ — TASK-210에서 project cache를 이름 있는
+  `pattern_analysis` query로 고정하고, parser의 동일 구조 body를
+  `FlowBodyQueries`가 memoize하도록 분리했다. 에디터와 typed pass는
+  TASK-130부터 같은 pattern query를 공유한다.
 - ~~Phase 7 실체~~ — TASK-150에서 전체 tt 표면을 `SemanticFile → CoreFile →
   TypeScript target IR → printer`로 전환하고 AST 기반 emitter를 삭제했다.
 - ~~let-else·`if let`의 or-패턴~~ — TASK-133에서 구현(GAP-6 마지막 항목 해소).

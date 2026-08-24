@@ -85,11 +85,11 @@ pub struct Project {
     /// importer's entry valid; a change to its exported declarations
     /// invalidates exactly the importers — the invalidation boundary of
     /// `docs/design/compiler-core.md` §11.
-    semantics_cache: RefCell<HashMap<PathBuf, CachedSemantics>>,
+    pattern_analysis_cache: RefCell<HashMap<PathBuf, CachedPatternAnalysis>>,
     /// How many per-file semantic computations the cache answered without
     /// recomputing, over the project's lifetime — observability for the
     /// invalidation contract (and its tests).
-    semantic_cache_hits: Cell<usize>,
+    pattern_analysis_cache_hits: Cell<usize>,
     next_snapshot: u64,
     /// The language-service half — the running `tsgo --lsp` conversation —
     /// started by the first editor question ([`crate::engine::language`]).
@@ -116,8 +116,8 @@ impl Project {
             overlays: HashMap::new(),
             cache: HashMap::new(),
             backend,
-            semantics_cache: RefCell::new(HashMap::new()),
-            semantic_cache_hits: Cell::new(0),
+            pattern_analysis_cache: RefCell::new(HashMap::new()),
+            pattern_analysis_cache_hits: Cell::new(0),
             next_snapshot: 0,
             service: None,
         }
@@ -228,7 +228,7 @@ impl Project {
     /// its importers' entries; an exported-declaration change invalidates
     /// them — this counter is how that contract is observed and tested.
     pub fn semantic_cache_hits(&self) -> usize {
-        self.semantic_cache_hits.get()
+        self.pattern_analysis_cache_hits.get()
     }
 
     /// The per-file semantics of a snapshot, served from the
@@ -239,7 +239,7 @@ impl Project {
         let mut out = HashMap::with_capacity(files.len());
         for file in files {
             let externs = semantics::externs_of(snapshot, file);
-            let value = self.cached_semantics(&file.source_path, &file.source, externs);
+            let value = self.pattern_analysis(&file.source_path, &file.source, externs);
             out.insert(file.source_path.clone(), value);
         }
         out
@@ -251,7 +251,7 @@ impl Project {
     /// editor's semantic fallbacks ([`Project::semantic_analyses`]) go
     /// through, so the two surfaces share one cache instead of each
     /// recomputing the other's answer.
-    fn cached_semantics(
+    fn pattern_analysis(
         &self,
         path: &Path,
         source: &str,
@@ -260,20 +260,20 @@ impl Project {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         source.hash(&mut hasher);
         let source_hash = hasher.finish();
-        let mut cache = self.semantics_cache.borrow_mut();
+        let mut cache = self.pattern_analysis_cache.borrow_mut();
         if let Some(cached) = cache.get(path)
             && cached.source_hash == source_hash
             && cached.value.externs == externs
         {
-            self.semantic_cache_hits
-                .set(self.semantic_cache_hits.get() + 1);
+            self.pattern_analysis_cache_hits
+                .set(self.pattern_analysis_cache_hits.get() + 1);
             return cached.value.clone();
         }
         let analyses = crate::pattern_analyses(source, &externs);
         let value = Arc::new(FileSemantics { externs, analyses });
         cache.insert(
             path.to_path_buf(),
-            CachedSemantics {
+            CachedPatternAnalysis {
                 source_hash,
                 value: value.clone(),
             },
@@ -320,7 +320,7 @@ impl Project {
                 )
             },
         );
-        self.cached_semantics(path, source, externs)
+        self.pattern_analysis(path, source, externs)
     }
 
     /// Checks a snapshot: asks the running compiler about it and returns
@@ -363,7 +363,7 @@ impl Project {
 /// One cached [`FileSemantics`] with the half of its key the value does
 /// not carry (the content hash; the externs are compared on the value).
 #[derive(Debug)]
-struct CachedSemantics {
+struct CachedPatternAnalysis {
     source_hash: u64,
     value: Arc<FileSemantics>,
 }

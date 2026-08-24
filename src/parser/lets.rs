@@ -98,7 +98,14 @@ pub(super) fn parse_let_else<'t>(
     let else_body = cur
         .parser
         .parse_tokens(body_tokens, body_range.0, body_range.1);
-    let diverges = crate::flow::program_diverges(cur.parser.src, body_tokens, &else_body);
+    let diverges = cur.parser.body_diverges(
+        Span {
+            start: body_range.0,
+            end: body_range.1,
+        },
+        body_tokens,
+        &else_body,
+    );
     Some((
         cur,
         semi.end,

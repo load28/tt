@@ -2150,6 +2150,21 @@ fn pipeline_helper_is_emitted_once_per_file() {
 }
 
 #[test]
+fn an_inert_pipeline_input_uses_a_direct_call() {
+    let out = ok("const value = 1 |> String;\n");
+    assert!(out.contains("const value = String(1);"), "{out}");
+    assert!(!out.contains("$tt_ap"), "{out}");
+}
+
+#[test]
+fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
+    let out = ok("enum E { A(value: number), B }\n\
+         const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
+    assert!(out.contains("$tt_v0 = String($tt_v0);"), "{out}");
+    assert!(!out.contains("$tt_ap"), "{out}");
+}
+
+#[test]
 fn file_without_pipeline_gets_no_helper() {
     let out = ok("const a = f(x);\n");
     assert!(!out.contains("$tt_ap"), "{out}");
@@ -2164,12 +2179,23 @@ fn pipeline_head_reclaims_a_lifted_template() {
 }
 
 #[test]
+fn an_inert_member_receiver_needs_no_receiver_slot() {
+    let out = ok("enum E { A(value: string), B }\n\
+         const value = \"abc\".replace(\
+           match (E.A(\"a\")) { A(value) => value, B => \"b\" },\
+           \"x\",\
+         );\n");
+    assert!(out.contains("(\"abc\".replace).bind(\"abc\")"), "{out}");
+    assert_eq!(out.matches("const $tt_v").count(), 1, "{out}");
+}
+
+#[test]
 fn pipeline_head_reclaims_a_lifted_match() {
     let out =
         ok("enum E { A(v: number), B }\nconst a = match (e) { A(v) => v, B => 0, } |> double;\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("$tt_v0 = $tt_ap($tt_v0, double);"), "{out}");
+    assert!(out.contains("$tt_v0 = double($tt_v0);"), "{out}");
     assert!(out.contains("const a = $tt_v0;"), "{out}");
 }
 
@@ -3012,7 +3038,7 @@ fn result_block_can_be_a_pipeline_head() {
     let out = ok("const a = result {\n  const x <- f();\n  x\n} |> Result.mapP(double);\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("$tt_v0 = $tt_ap($tt_v0, Result.mapP(double));"),
+        out.contains("$tt_v0 = Result.mapP(double)($tt_v0);"),
         "{out}"
     );
     assert!(out.contains("const a = $tt_v0;"), "{out}");
@@ -3361,8 +3387,19 @@ fn a_block_arm_exit_inside_a_loop_still_needs_the_region_label() {
     let out = ok(
         r#"const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };"#,
     );
-    assert!(out.contains("$tt_y_$tt_v0: {"), "{out}");
-    assert!(out.contains("break $tt_y_$tt_v0;"), "{out}");
+    assert!(out.contains("$tt_y_v0: {"), "{out}");
+    assert!(out.contains("break $tt_y_v0;"), "{out}");
+}
+
+#[test]
+fn a_conditional_match_uses_one_exit_target() {
+    let out = ok("const value = match (item) {\n\
+         \x20 A if ready => { consume(); },\n\
+         \x20 _ => 0,\n\
+         };\n");
+    assert!(out.contains("$tt_b: {"), "{out}");
+    assert!(!out.contains("do {"), "{out}");
+    assert!(out.contains("break $tt_b;"), "{out}");
 }
 
 #[test]
