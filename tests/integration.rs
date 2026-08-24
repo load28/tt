@@ -222,6 +222,38 @@ fn run(src: &str) -> Vec<String> {
         .collect()
 }
 
+#[test]
+fn a_grouped_value_still_evaluates_to_what_the_arm_wrote() {
+    // The parentheses codegen keeps around a lowered value are load
+    // bearing: a comma expression delivered without them would take the
+    // wrong operand, and a non-primary pipeline receiver would rebind the
+    // member access. Both are executed here, not just matched as text.
+    if !have("tsc") || !have("node") {
+        return;
+    }
+    let out = run("enum E { A(v: number), B }\n\
+         const e: E = E.A(1);\n\
+         const seen: number[] = [];\n\
+         const note = (n: number): number => { seen.push(n); return n; };\n\
+         const seq = match (e) {\n\
+           A(v) => {\n\
+             return note(v), v + 10;\n\
+           },\n\
+           B => 0,\n\
+         };\n\
+         const width = 3;\n\
+         const receiver = width + 0.5 |> .toFixed(1);\n\
+         const chained = \"  pad  \" |> .trim() |> .length;\n\
+         console.log(seq, seen.join(\",\"), receiver, chained);\n");
+    // 11, not 1: the arm's `return` is rewritten into an assignment, and a
+    // comma expression assigned without parentheses would take the LEFT
+    // operand — `$tt_v = note(v), v + 10;` still parses, so only running it
+    // catches that. "3.5", not "30.5": the receiver rule has to write
+    // `(width + 0.5).toFixed(1)` — the head carries no parentheses of its
+    // own, and `width + 0.5.toFixed(1)` type-checks just as well.
+    assert_eq!(out, ["11 1 3.5 3"], "{out:?}");
+}
+
 /// Compile a snippet that imports the standard library, emit JS for it and
 /// the std package with tsc, execute with node, return stdout lines.
 fn run_with_std(src: &str) -> Vec<String> {
