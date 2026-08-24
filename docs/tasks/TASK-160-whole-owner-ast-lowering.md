@@ -1,9 +1,9 @@
 # TASK-160: SWC whole-owner 기반 RL→TS 최적 lowering
 
-- **상태**: 진행 중
+- **상태**: 완료
 - **시작일**: 2026-08-22
-- **완료일**: —
-- **커밋**: —
+- **완료일**: 2026-08-24
+- **커밋**: 02a279a, 2f76582, 1e03992, 1dbdc2b, a644a7c, d2dbe6b
 
 ## 목적
 
@@ -798,8 +798,80 @@ capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test`
+- [x] `TTC_REQUIRE_TSGO=1 cargo test` — 813건 통과 (unit 197, cli 32, compile 323,
+  emit-map 16, engine-cache 3, integration 94, native 39, passthrough 57,
+  resolve 11, sidecar 8, stdlib 5 + doc 25 등 13개 스위트 전부 ok, 실패 0).
+  기준선(c5f3e25) 764건에서 49건 증가.
+  tsgo는 `@typescript/native-preview` 7.0.0-dev를 설치해
+  `TTC_TSGO_API=…/dist/api/sync/api.js`로 연결해 실행했다.
+
+### mutation 검증 결과
+
+| mutation | 기대 검출 | 결과 |
+|---|---|---|
+| M1 `owner_reach`가 항상 `Same` | capability 단위 + loop 출력 회귀 | 실패(검출) |
+| M2 validate_order의 repetition 검사 제거 | 위반-plan 단위 | 실패(검출) |
+| M3 논리 연산 region의 else 대입 제거 | tsgo 타입 + 단락 runtime | 실패(검출) |
+| M4 optional call 첫 인자를 검사 밖에서 평가 | this·단락 runtime trace | 실패(검출) |
+| M5 `is_inert`가 항상 true | capture 출력 | 실패(검출) |
+| M5b 〃 | runtime 인자 순서 | 최초 생존 → 테스트 추가 후 실패(검출) |
+| M6 preservation 중복 검사 제거 | 위반-target 단위 | 실패(검출) |
+| M7 validate_order의 ordinal 검사 제거 | 위반-plan 단위 | 최초 생존 → 테스트 격리 후 실패(검출) |
+| M8 `captured_break`가 항상 false | loop 안 exit runtime + label 출력 | 실패(검출) |
+| M9 `captured_break`가 항상 true | 중복 label 출력 | 실패(검출) |
+
+mutation은 모두 작업 코드를 커밋한 뒤 수행하고 `git restore`로 복귀했다.
+생존한 두 건은 테스트 공백의 증거였고, 각각 회귀 테스트를 추가해 닫았다.
+
+## 완료 기준 점검
+
+| # | 기준 | 상태 | 근거 |
+|---|---|---|---|
+| 1 | `validate_order` 실행 | ✅ | `codegen::lowering_plan`이 plan 직후 호출, 실패 시 `raise()` |
+| 2 | `validate_reference` 실행 | ✅ | 같은 자리 |
+| 3 | `validate_origin` 실행 | ✅ | `Rope::flatten`의 `debug_assert` 제거, release도 상시 실행 |
+| 4 | `validate_source_preservation` 실행 | ✅ | printer 직전 target 단계 |
+| 5 | 구조화된 internal compiler error | ✅ | `src/ice.rs` — stage × invariant × subject × span × origin |
+| 6 | optional operation을 전체 CFG로 표현 | ✅ | `PlannedConditionalOperation` (결정 17) |
+| 7 | statement-lowerable에 불필요한 boundary 없음 | ✅ | 대표 코퍼스에서 `$tt_expr` 0개 |
+| 8 | 진짜 expression-only만 명시적 capability | ✅ | `ExpressionBoundaryReason` 6종, 이유 없는 경로 없음 |
+| 9 | Effects 구현·최적화에만 사용 | ✅ | 결정 18 — 소비처는 capture 생략 한 곳 |
+| 10 | slot·helper·capture 제거를 증명으로 | ✅ | capture는 Effects, region label은 `captured_break` use 분석. 증명 없는 제거는 하지 않음 (join slot은 결정 8이 타입 보존 목적으로 유지) |
+| 11 | TASK-198 레이아웃·괄호 유지 | ✅ | 해당 테스트 통과 |
+| 12 | TASK-199 `completes` 유지 | ✅ | 해당 테스트 통과 |
+| 13 | TS/TSX passthrough 바이트 유지 | ✅ | passthrough 57건 + validator가 상시 강제 |
+| 14 | 기존 진단·위치 유지 | ✅ | native 39 + emit-map 16 |
+| 15 | runtime trace 보존 | ✅ | integration 94 (평가 순서·횟수·this·단락·throw) |
+| 16 | SWC output verification | ✅ | 전 스위트에서 `verify_output` 활성 |
+| 17 | tsgo 타입 검사 | ✅ | native 39 + 신규 타입 테스트 |
+| 18 | mutation에서 테스트 실패 | ✅ | M1~M9, 아래 표 |
+| 19 | `cargo fmt --check` | ✅ | |
+| 20 | `cargo clippy -D warnings` | ✅ | |
+| 21 | `TTC_REQUIRE_TSGO=1 cargo test` | ✅ | 813건 |
+| 22 | 결정·대안·조사·원인·mutation 기록 | ✅ | 이 문서 |
+| 23 | INDEX 갱신 | ✅ | 완료 처리 |
+| 24 | 사용자 문서 갱신 | ✅ | `docs/ai/tt.md` match 표현식 계약 |
 
 ## 결과
 
-진행 중.
+완료. TASK-160이 목표한 "SWC whole-owner 기반 최적 lowering"의 남은 아키텍처를
+모두 세웠다.
+
+- 감사에서 재현한 결함 6종을 구조적으로 해소했다: loop header 값의 loop 밖
+  hoist, conditional region 밖으로 새는 capture(컴파일 불가 TypeScript),
+  tt 값과 겹치는 capture(파싱 불가 TypeScript), `&&`/`||`/`??`/삼항의
+  `T | undefined` 타입 변형, optional call 선행 인자의 무조건 평가,
+  spread 인자 capture의 `(...xs)` 파싱 오류.
+- 계약이 문서에서 코드로 내려왔다: 네 validator가 실제 파이프라인 단계로
+  돌고, 실패는 이름 있는 불변식을 가진 internal compiler error다.
+- 의미 판단이 codegen에서 Evaluation IR로 옮겨졌다. codegen은 capability를
+  읽어 statement *모양*만 고른다.
+
+### 남은 범위 (별도 태스크)
+
+- **일반 compile 출력용 표준 source map** — 지시 §9대로 TASK-160에 섞지 않고
+  후속 태스크로 진행한다. 기반(Rope/TargetPiece/SourceOrigin/EmitMapping/
+  EmitAnchor/`SourcePreservation`의 owned·relocated·rewritten)은 이미 있다.
+- §6의 나머지 최적화 후보(불필요한 receiver temporary, 직접 호출로 대체 가능한
+  `$tt_ap`)는 증명 수단이 갖춰졌으나 이번 범위에서 적용하지 않았다. join slot
+  제거는 결정 8(전체 contextual type 보존)과 상충하므로 의도적으로 하지 않는다.
