@@ -21,6 +21,76 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
 - 제외: 사용자 TypeScript가 원래 작성한 IIFE 변경, 출력 포매팅 전면 변경,
   RL 언어 표면 변경
 
+## 2026-08-24 감사 — 남은 아키텍처의 현재 상태
+
+이 절은 TASK-198/TASK-199가 끝난 `c5f3e25` 기준으로 TASK-160의 남은 범위를
+코드에서 다시 확인한 결과다. 조사 대상은 `AGENTS.md`,
+`docs/design/compiler-architecture.md`, `docs/design/lowered-ir.md`,
+`docs/design/program-lowering.md`, TASK-198/199 문서,
+`src/program_syntax.rs`, `src/evaluation_ir.rs`, `src/core_ir/`,
+`src/codegen/core.rs`, `src/codegen/rope.rs`, `src/verify.rs`,
+그리고 compile/integration/native/emit-map 테스트다.
+
+### A. 문서에만 있고 코드에는 없는 계약
+
+`program-lowering.md` §11이 요구하는 여덟 validator 중 실제로 실행되는 것은
+넷뿐이다.
+
+| validator | 상태 |
+|---|---|
+| `validate_projection` | `ProjectionBuilder`가 segment 표를 만들고 span 왕복은 `source_span_for_projection`이 보장 — 사실상 존재 |
+| `validate_program_syntax` | `ProgramSyntax::validate` — 존재 (span 범위·parent 유무·owner 표) |
+| `validate_eval` | `EvaluationFile::validate` — 존재 (종료·도달·결과 정의) |
+| `validate_order` | **없음** |
+| `validate_reference` | **없음** |
+| `validate_origin` | `TargetFile::validate`가 일부 검사하지만 `debug_assert!`로만 실행 — release 경로에서는 아무것도 검증하지 않는다 |
+| `validate_source_preservation` | **없음** |
+| `verify_output` | `verify.rs::verify_output` — 존재 (`--no-verify`로 생략 가능) |
+
+`Effects`(§9)는 타입도 사용처도 없다. 효과 기반 최적화 순서(§9)도 구현되지
+않았다.
+
+### B. 암묵적 fallback으로 남은 경로
+
+`EvaluationOwner`가 target capability를 고른다는 결정 3·11과 달리, 실제
+capability 판정은 codegen의 `TargetRewritePlan::build`에 있다
+(`src/codegen/core.rs`). `can_structure_value_expr`,
+`compose_schedule_is_structurable`, `schedule.steps().is_empty()`,
+`frequency == Once` 같은 술어가 거기서 host 의미를 다시 판단하고, 조건에
+걸리지 않으면 값은 조용히 `emit_expr` → `$tt_expr` 경계로 떨어진다. 이는
+명시적인 capability가 아니라 이름 없는 fallback이고, 불변 계약 8
+("codegen은 의미를 새로 판단하지 않는다")을 위반한다. `LoweringPlan`에는
+"이 값은 왜 expression boundary인가"를 표현하는 타입이 없다.
+
+### C. 동일한 사실을 여러 계층이 중복 계산하는 부분
+
+- `can_structure_value_expr`(codegen)는 Core 모양에 대한 술어인데 codegen이
+  소유한다. Evaluation IR은 같은 질문을 하지 않고 codegen만 한다.
+- `EvaluationContext.frequency`는 `EvaluationOwner`(함수/모듈) 기준으로
+  계산되는데, 실제 prelude가 삽입되는 곳은 `HostOwner`(문장)다. 두 기준이
+  다른데 하나만 계산한다 — 아래 이슈 14의 원인이다.
+
+### D. 조사 중 확인한 실제 결함
+
+감사는 문서 대조에 그치지 않고, 위 구조적 결함이 실제 출력에서 관측되는지를
+`cargo run -- -p --no-banner <file>`로 확인했다. 세 건 모두 재현된다.
+
+1. **loop header의 값이 loop 밖으로 hoist된다** (이슈 14).
+2. **conditional region 안에서 capture한 slot이 region 밖에서 읽힌다**
+   (이슈 15) — 생성 TypeScript가 컴파일되지 않는다.
+3. **capture span이 tt 값 span과 겹친다** (이슈 16) — 생성 TypeScript가
+   파싱되지 않고 원본 바이트가 중복·누락된다.
+
+셋 다 "validator가 없어서 잡히지 않은 계약 위반"이며, 이번 작업의 validator
+설계는 이 세 계약을 먼저 이름 있는 타입으로 만드는 데서 출발한다.
+
+### E. 테스트는 있지만 compiler validator가 없는 불변식
+
+`tests/passthrough.rs`는 "유효한 TypeScript는 바이트 그대로 통과"를 56건의
+입력으로 확인하지만, 컴파일러 자신은 원본 보존을 전혀 검사하지 않는다.
+`tests/compile.rs`의 출력 스냅샷도 같은 성격이다 — 코퍼스에 없는 입력 모양은
+아무도 지키지 않는다. 이슈 16이 그 증거다.
+
 ## 의사결정
 
 ### 결정 1: SWC AST는 분류기가 아니라 host rewrite와 최적화의 단일 골격이다
@@ -151,6 +221,82 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
   평가 위치에서 실행된다. 이는 조용한 legacy fallback이 아니라 검증되는 target
   capability이며, 생성 IIFE는 0개다.
 
+### 결정 12: 평가 빈도는 host owner 기준으로도 계산한다
+
+- **상황**: `EvaluationContext.frequency`는 `EvaluationOwner`(함수/모듈) 기준
+  빈도인데, statement lowering이 prelude를 삽입하는 위치는 `HostOwner`(문장)다.
+  값이 `while (…test…)`처럼 loop **머리**에 있으면 host owner가 loop 문장
+  자신이므로, 함수 기준으로 "Repeated"라는 사실을 알아도 그 사실이 hoist 가능
+  여부를 답해주지 못한다.
+- **검토한 대안**: (a) 기존 `frequency`의 의미를 host owner 기준으로 바꾼다 —
+  한 이름이 두 질문에 쓰이던 것을 하나로 줄이지만, 함수 기준 빈도를 쓰는
+  판단(예: 실행 환경 분류)이 조용히 의미를 바꾼다. (b) codegen에서 owner가
+  loop 문장인지 확인한다 — 구문 모양을 codegen이 다시 판단하는 금지된 방식이다.
+- **선택과 근거**: (c) `HostOwner`까지의 parent path에서 계산한 별도의 이름 있는
+  사실 `EvaluationContext.host_frequency`를 추가한다. `ProgramSyntax`가 host
+  owner를 고르는 바로 그 자리에서 계산하므로 두 사실의 기준이 어긋날 수 없다.
+  이를 위해 `ProjectedHostOwner`에 owner를 push한 시점의 parent path 길이를
+  기록한다 — owner와 값 사이의 edge만 보는 유일한 방법이다.
+
+### 결정 13: target capability는 Evaluation IR이 정하고 codegen은 소비만 한다
+
+- **상황**: capability 판정이 codegen에 흩어져 있고, 조건에 안 맞으면 이름 없는
+  fallback으로 `$tt_expr`에 떨어진다 (감사 B).
+- **검토한 대안**: codegen의 술어들을 그대로 두고 validator만 추가하면, validator가
+  검사할 "계획"이 계획이 아니라 emitter의 부수 효과가 된다. 검증 대상이 없다.
+- **선택과 근거**: `PlannedValue`에 `TargetCapability::{StatementRegion,
+  ExpressionBoundary { reason }}`를 넣는다. `ExpressionBoundaryReason`은 왜
+  statement lowering이 불가능한지를 이름으로 남긴다 — owner가 statement를 받지
+  못함, host owner 기준 반복, conditional region 안의 capture, capture span 겹침,
+  Core 값에 statement 형태가 없음. codegen은 이 값을 읽기만 한다. Core 모양 술어
+  `can_structure_value_expr`는 `CoreFile::has_statement_form`으로 Core IR에
+  옮겨 한 곳이 소유한다.
+
+### 결정 14: conditional region 안에는 source capture를 두지 않는다
+
+- **상황**: schedule의 conditional step은 action을 `if (…) { … }`로 감싼다. 그런데
+  더 안쪽 frame의 source capture(`const $tt_vN = (…)`)도 그 블록 안에 들어가는
+  반면, 그 slot을 읽는 host 표현식은 블록 **밖**에 그대로 남는다. `a && f(match …)`가
+  `Cannot find name '$tt_v1'`로 컴파일되지 않는 이유다 (이슈 15).
+- **검토한 대안**: (a) capture를 `let`으로 owner 수준에 선언하고 블록 안에서 대입 —
+  스코프는 맞지만 TypeScript가 definite assignment를 증명하지 못해 타입이
+  `T | undefined`가 된다. 이 태스크가 금지한 바로 그 결과다. (b) optional call만
+  예외 처리 — 구조적으로 같은 `&&`/`||`/`??`/삼항에서 같은 버그가 남는다.
+- **선택과 근거**: 계약을 한 문장으로 세운다 — **생성된 conditional region 안에서
+  capture한 slot은 그 region 밖에서 읽힐 수 없다.** host 표현식은 원래 자리에
+  그대로 남으므로 region 밖이다. 따라서 conditional 깊이 1 이상에서 source
+  capture가 필요한 값은 statement lowering 대상이 아니다
+  (`CaptureInsideConditionalRegion`). 이 규칙은 조건 입력 자체만 capture하는
+  `x ? match … : y`, `f?.(match …)`, `a && match …`를 그대로 통과시키고,
+  안쪽 frame이 capture를 요구하는 `a && f(match …)`만 거른다.
+  이 규칙은 임시방편이 아니라 **capability의 전제**다: 뒷단계에서 conditional
+  operation 전체(활성 분기의 host source 포함)를 region이 소유하게 되면, capture의
+  host 사용처도 region 안으로 들어오므로 같은 규칙이 그대로 통과시킨다.
+
+### 결정 15: source capture는 tt 값·다른 capture와 겹칠 수 없다
+
+- **상황**: `g(a && match …, match …)`에서 두 번째 값의 "앞선 인자" 입력 span이
+  첫 번째 tt 값을 포함한다. 그 span을 그대로 capture하면 `match` 원문이 생성
+  코드에 복사되고, 겹치는 replacement 때문에 원본 바이트가 중복·누락된다
+  (이슈 16).
+- **검토한 대안**: capture 텍스트에서 tt 값을 찾아 치환한다 — 문자열 기반
+  휴리스틱이고, 중첩된 값마다 예외가 늘어난다.
+- **선택과 근거**: capture span은 어떤 tt 값 span과도, 다른 capture span과도
+  겹치지 않아야 한다는 계약을 세우고, 겹치는 값은 statement lowering에서 제외한다
+  (`CaptureOverlapsValue`). 이 계약은 `validate_source_preservation`이 target에서
+  독립적으로 다시 검사한다.
+
+### 결정 16: validator 실패는 이름 있는 불변식을 가진 구조화된 내부 오류다
+
+- **상황**: 내부 오류가 `panic!("internal compiler error: …")` 문자열로 흩어져 있어
+  어떤 단계의 어떤 불변식이 깨졌는지 타입으로 남지 않는다.
+- **검토한 대안**: 각 validator가 자기 enum을 반환하고 호출자가 문자열로 합친다 —
+  단계·주체·위치가 여전히 문자열이 된다.
+- **선택과 근거**: `src/ice.rs`에 `LoweringStage`, `Invariant`, `LoweringSubject`,
+  `InternalCompilerError`를 둔다. 실패한 단계, 위반한 불변식(이름 있는 enum),
+  owner/Core root/operation/ValueId/ValueSlotId/BlockId, source span, origin
+  chain을 모두 타입으로 담는다. 표시 문자열은 이 타입에서 파생될 뿐이다.
+
 ## 작업 내역
 
 - 2026-08-22: TASK-160을 등록하고 SWC whole-owner cutover를 시작했다.
@@ -252,6 +398,12 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
   경로를 추가했다. propagation 안의 중첩 RL 값은 부모의 early-return continuation을 소비한다.
 - 2026-08-22: 최종 게이트에서 unit 156건, compile 292건, mapping 15건, integration 80건,
   native 38건, passthrough 56건을 포함한 전체 테스트와 fmt/clippy가 통과했다.
+
+- 2026-08-24: `c5f3e25` 기준으로 남은 범위를 재감사했다. 문서에만 있는 계약
+  (validate_order/reference/origin/source_preservation, Effects), codegen에 남은
+  이름 없는 capability fallback, host owner 기준 빈도의 부재를 확인하고 위
+  "2026-08-24 감사" 절에 기록했다. 감사 중 세 건의 실제 결함(이슈 14~16)을
+  `cargo run -- -p --no-banner`와 `tsgo --noEmit --strict`로 재현했다.
 
 ## 이슈 및 해결
 
@@ -380,6 +532,66 @@ TypeScript 제어 흐름·표현식·선언으로 낮춘다. IIFE 제거는 이 
 - **해결**: propagation 입력에서 주변 `Opaque` 조각이 실제로 공백뿐일 때만 continuation을
   직접 인라인한다. 실행 구문이 남은 sequence는 expression target으로 방출해 wrapper의 평가
   구조와 기존 진단 anchor를 보존한다.
+
+### 이슈 14: loop header의 tt 값이 loop 밖에서 한 번만 평가됨
+
+- **증상**: 다음 입력이 무한 루프가 되는 TypeScript로 컴파일된다.
+
+  ```ts
+  enum E { A, B }
+  let n = 0;
+  function next(): E { n = n + 1; return n < 3 ? E.A : E.B; }
+  while (id(match (next()) { A => 1, B => 0 })) { console.log("tick"); }
+  ```
+
+  생성 코드는 `let $tt_v0; … { const $tt_m = next(); switch … }`를 `while` **앞**에
+  놓고 `while ($tt_v1($tt_v0))`만 남긴다. `next()`가 반복마다 호출되지 않는다.
+  `for` test/update, `do … while` test에서도 동일하게 재현했다.
+- **원인**: capability 판정이 쓰는 `EvaluationContext.frequency`는 함수 기준
+  빈도라 loop 머리를 "Repeated"로 보지만, compose 조건은
+  `!steps.is_empty() || frequency == Once`여서 schedule이 비어 있지 않으면
+  빈도를 아예 보지 않는다. 그리고 빈도를 봤더라도 그 빈도는 prelude가 실제로
+  삽입되는 `HostOwner` 기준이 아니다 (감사 C).
+- **해결**: 결정 12의 `host_frequency`를 도입하고, 결정 13의 capability가
+  `RepeatedInOwner`로 statement lowering을 거부한다. `validate_order`가 계획을
+  다시 검사한다.
+
+### 이슈 15: conditional region 안의 capture가 region 밖에서 읽혀 컴파일되지 않음
+
+- **증상**:
+
+  ```ts
+  enum E { A(v: number), B }
+  export const short = flag && id(match (e) { A(v) => v, B => 0 });
+  ```
+
+  → `sc2.ts(25,32): error TS2552: Cannot find name '$tt_v1'.`
+  `const $tt_v1 = (id);`가 `if ($tt_v2) { … }` 안에 선언되는데
+  `export const short = $tt_v2 && $tt_v1($tt_v0);`는 블록 밖에서 읽는다.
+  (`tsgo --noEmit --strict`로 확인.)
+- **원인**: schedule step이 안쪽 frame부터 바깥쪽 frame 순으로 action을 감싸므로,
+  바깥 conditional step이 안쪽 frame의 prefix 전체를 자기 분기 안으로 넣는다.
+  conditional이 소유하는 실행 영역과 host 표현식이 사는 영역이 어긋난다.
+- **해결**: 결정 14. `validate_order`가 conditional 깊이 1 이상에서 새 source
+  capture가 생기면 계획을 거부한다.
+
+### 이슈 16: capture span이 tt 값 span과 겹쳐 원본이 중복·누락됨
+
+- **증상**:
+
+  ```ts
+  g(a && match (e) { A(v) => v, B => 0 }, match (e) { A(v) => v, B => 1 });
+  ```
+
+  → `generated TypeScript failed to parse: Expression expected.`
+  `--no-verify`로 보면 `const $tt_m = ;`, `$tt_v0 = ;`처럼 scrutinee와 arm 값이
+  사라지고, `const $tt_v4 = (a && match (e) { A(v) => v, B => 0 });`처럼 tt 원문이
+  그대로 복사되며, 마지막 호출은 `$tt_v3($tt_v2$tt_v0, $tt_v1)`로 붙는다.
+- **원인**: 두 번째 값의 schedule은 "앞선 인자"를 입력으로 갖는데, 그 인자 span이
+  첫 번째 tt 값을 포함한다. `source_replacements`가 서로 겹치는 구간을 만들고
+  `source_range_rope`의 cursor가 겹친 구간을 건너뛰면서 원본 바이트를 잃는다.
+- **해결**: 결정 15. 계획 단계에서 겹치는 capture를 거부하고,
+  `validate_source_preservation`이 target에서 중복·누락·겹침을 다시 검사한다.
 
 ## 검증
 
