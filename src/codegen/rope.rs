@@ -135,10 +135,26 @@ struct TargetFile<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TargetError {
-    LengthMismatch { expected: usize, actual: usize },
-    SourceOutOfBounds { start: usize, end: usize },
+    LengthMismatch {
+        expected: usize,
+        actual: usize,
+    },
+    SourceOutOfBounds {
+        start: usize,
+        end: usize,
+    },
     CloseWithoutOpen,
-    UnclosedAnchors { count: usize },
+    UnclosedAnchors {
+        count: usize,
+    },
+    /// A line break with no layout scope to indent from — the emitter that
+    /// wrote it never said where its block structure starts, so the break
+    /// would silently fall back to column 0.
+    BreakOutsideScope,
+    ScopeCloseWithoutOpen,
+    UnclosedScopes {
+        count: usize,
+    },
 }
 
 impl<'a> TargetFile<'a> {
@@ -232,6 +248,7 @@ impl<'a> TargetFile<'a> {
             });
         }
         let mut open = 0usize;
+        let mut scopes = 0usize;
         for piece in &self.pieces {
             match piece {
                 TargetPiece::Source {
@@ -246,6 +263,14 @@ impl<'a> TargetFile<'a> {
                 TargetPiece::Open { .. } => open += 1,
                 TargetPiece::Close if open == 0 => return Err(TargetError::CloseWithoutOpen),
                 TargetPiece::Close => open -= 1,
+                TargetPiece::ScopeOpen => scopes += 1,
+                TargetPiece::ScopeClose if scopes == 0 => {
+                    return Err(TargetError::ScopeCloseWithoutOpen);
+                }
+                TargetPiece::ScopeClose => scopes -= 1,
+                TargetPiece::Break { .. } if scopes == 0 => {
+                    return Err(TargetError::BreakOutsideScope);
+                }
                 TargetPiece::Generated { origin, .. } => match origin {
                     SourceOrigin::Construct {
                         src,
@@ -270,13 +295,14 @@ impl<'a> TargetFile<'a> {
                 },
                 TargetPiece::Source { .. }
                 | TargetPiece::Mark { .. }
-                | TargetPiece::Break { .. }
-                | TargetPiece::ScopeOpen
-                | TargetPiece::ScopeClose => {}
+                | TargetPiece::Break { .. } => {}
             }
         }
         if open != 0 {
             return Err(TargetError::UnclosedAnchors { count: open });
+        }
+        if scopes != 0 {
+            return Err(TargetError::UnclosedScopes { count: scopes });
         }
         Ok(())
     }
@@ -484,6 +510,13 @@ impl<'a> Rope<'a> {
     /// indents from the line the scope opens on. This is how a lowering's
     /// generated block structure lines up with the statement it replaces
     /// without any emitter knowing the column it will be printed at.
+    ///
+    /// A scope is a different boundary from [`Rope::anchored`], which says
+    /// which construct owns a stretch of glue so a diagnostic can be traced
+    /// back to it. The two coincide for most lowerings, but they answer
+    /// different questions, so each emitter that writes breaks opens its
+    /// own scope — and [`TargetError::BreakOutsideScope`] catches one that
+    /// forgets rather than letting the break fall back to column 0.
     pub(crate) fn scoped(inner: Rope<'a>) -> Rope<'a> {
         let mut out = Rope::new();
         out.pieces.push(Piece::ScopeOpen);
@@ -547,10 +580,7 @@ impl<'a> Rope<'a> {
             owner_end,
             kind,
         });
-        // A construct's glue is a layout scope of its own: it lays its block
-        // structure out from the line the lowering starts on, whatever
-        // column the surrounding source put it at.
-        self.append(Rope::scoped(inner));
+        self.append(inner);
         self.pieces.push(Piece::Close);
     }
 
@@ -739,10 +769,8 @@ mod tests {
                 ..
             }
         ));
-        // `anchored` wraps the construct's glue in a layout scope, so the
-        // generated text sits one piece further in than the `Open`.
         assert!(matches!(
-            target.pieces[3],
+            target.pieces[2],
             TargetPiece::Generated {
                 origin: SourceOrigin::Construct {
                     kind: AnchorKind::Match,
@@ -752,7 +780,7 @@ mod tests {
             }
         ));
         assert!(matches!(
-            target.pieces[6],
+            target.pieces[4],
             TargetPiece::Generated {
                 origin: SourceOrigin::Synthetic {
                     reason: SyntheticReason::UnanchoredGenerated,
@@ -782,6 +810,24 @@ mod tests {
             target.validate(),
             Err(TargetError::SourceOutOfBounds { start: 2, end: 3 })
         );
+    }
+
+    #[test]
+    fn target_rejects_a_break_with_no_layout_scope() {
+        // A break's indentation is meaningless without a scope to measure
+        // it from, so the target refuses one — an emitter that writes block
+        // structure has to say where that structure starts.
+        let mut loose = Rope::new();
+        loose.push_lit("x");
+        loose.push_break(1);
+        let target = TargetFile::from_rope(loose, 0);
+        assert_eq!(target.validate(), Err(TargetError::BreakOutsideScope));
+
+        let mut scoped = Rope::new();
+        scoped.push_lit("x");
+        scoped.push_break(1);
+        let target = TargetFile::from_rope(Rope::scoped(scoped), 0);
+        assert_eq!(target.validate(), Ok(()));
     }
 
     #[test]

@@ -1023,6 +1023,8 @@ impl<'a> Emitter<'a> {
         Rope::scoped(out)
     }
 
+    /// The lowering of one `try`. It opens its own layout scope: a
+    /// structured propagation value writes block structure into it.
     fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
         let temp = temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
@@ -1035,7 +1037,7 @@ impl<'a> Emitter<'a> {
             out.append(self.source_rope(binding.node));
             out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
         }
-        out
+        Rope::scoped(out)
     }
 
     fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
@@ -1179,7 +1181,7 @@ impl<'a> Emitter<'a> {
             binding_start,
             binding_end,
             binding_end,
-            out,
+            Rope::scoped(out),
         );
         anchored
     }
@@ -1476,7 +1478,7 @@ impl<'a> Emitter<'a> {
         } else {
             "}"
         });
-        out
+        Rope::scoped(out)
     }
 
     fn emit_continued_expr(
@@ -1602,7 +1604,7 @@ impl<'a> Emitter<'a> {
             |step| self.span(step.node).end,
         );
         let mut out = Rope::new();
-        out.anchored(AnchorKind::Pipe, start, end, end, inner);
+        out.anchored(AnchorKind::Pipe, start, end, end, Rope::scoped(inner));
         Some(out)
     }
 

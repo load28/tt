@@ -2051,7 +2051,7 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
                 );
                 let inside = &indent[base.len()..];
                 assert!(
-                    inside.chars().all(|c| c == ' ') && inside.len() % 2 == 0,
+                    inside.chars().all(|c| c == ' ') && inside.len().is_multiple_of(2),
                     "line {line:?} is indented {inside:?} past the base, not whole levels\n\
                      construct: {construct}"
                 );
