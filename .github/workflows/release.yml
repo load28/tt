@@ -1,117 +1,129 @@
-# Release — build prebuilt ttc binaries and publish the npm packages.
-#
-# Trigger: a stable Cargo.toml version bump on main after CI, or a matching
-# `vX.Y.Z` tag. Publishing needs the NPM_TOKEN
-# repository secret (an npm automation token with publish rights to the
-# @load28 scope).
-#
-# Pipeline: classify/verify Cargo.toml version → build 5 targets → assemble npm
-# platform packages + stamp versions → publish (platform packages first,
-# then tt-lang and create-tt, so neither points at missing dependencies) →
-# GitHub Release with binary archives.
-name: Release
+# Prepare a stable release from a successful Dev tag without changing main.
+name: Prepare Production Release
 
 on:
-  push:
-    tags: ["v*"]
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Optional X.Y.Z to promote (empty selects latest unpromoted Dev)
+        required: false
+        type: string
 
 permissions:
-  contents: write # create the GitHub Release
-  id-token: write # npm --provenance
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  verify:
-    name: detect production version bump
-    if: >-
-      github.event_name == 'push' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
+  prepare:
+    name: select Dev and prepare stable branch
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      publish: ${{ steps.version.outputs.publish }}
-      source_sha: ${{ steps.version.outputs.source_sha }}
+      version: ${{ steps.release.outputs.version }}
+      branch: ${{ steps.release.outputs.branch }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 2
-
-      - name: Detect and verify production version
-        id: version
-        shell: bash
+          ref: main
+          fetch-depth: 0
+      - run: git fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*' --prune
+      - name: Create or resume the release branch
+        id: release
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          CARGO_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          SOURCE_SHA="$(git rev-parse HEAD)"
-          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
-            PREVIOUS_VERSION="$(git show HEAD^:Cargo.toml | sed -n 's/^version = "\([^"]*\)"/\1/p' | head -1)"
-            CHANNEL="$(node npm/scripts/release-channel.mjs "$PREVIOUS_VERSION" "$CARGO_VERSION")"
-            if [ "$CHANNEL" != "production" ]; then
-              echo "publish=false" >> "$GITHUB_OUTPUT"
-              echo "release channel is $CHANNEL; no production release"
-              exit 0
-            fi
-          else
-            TAG_VERSION="${GITHUB_REF_NAME#v}"
-            echo "tag: $TAG_VERSION / Cargo.toml: $CARGO_VERSION"
-            if [ "$TAG_VERSION" != "$CARGO_VERSION" ]; then
-              echo "::error::tag v$TAG_VERSION does not match Cargo.toml version $CARGO_VERSION"
-              exit 1
-            fi
-            node npm/scripts/release-channel.mjs --production "$CARGO_VERSION" >/dev/null
+          node npm/scripts/release-plan.mjs prod "$REQUESTED_VERSION" > /tmp/release-plan.json
+          VERSION="$(jq -r .version /tmp/release-plan.json)"
+          BRANCH="$(jq -r .branch /tmp/release-plan.json)"
+          SOURCE_SHA="$(jq -r .sourceSha /tmp/release-plan.json)"
+          RESUME="$(jq -r .resume /tmp/release-plan.json)"
+          if ! git merge-base --is-ancestor origin/main "$SOURCE_SHA"; then
+            echo "main advanced after the selected Dev release; prepare and publish a new Dev first" >&2
+            exit 1
           fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if [ "$RESUME" = true ]; then
+            git checkout -B "$BRANCH" "$SOURCE_SHA"
+            test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$VERSION"
+          else
+            git checkout -b "$BRANCH" "$SOURCE_SHA"
+            node npm/scripts/release-version.mjs "$VERSION"
+            git add Cargo.toml Cargo.lock npm/tt-lang/package.json packages/create-tt/package.json
+            git commit -m "chore(release): $VERSION"
+            git push origin "HEAD:refs/heads/$BRANCH"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-          echo "publish=true" >> "$GITHUB_OUTPUT"
-          echo "version=$CARGO_VERSION" >> "$GITHUB_OUTPUT"
+  check:
+    name: fmt / clippy / test with tsgo
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/typescript-go
+          ref: c6b013f5706d58582f566df778cc0df2683b58f5
+          path: typescript-go
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: typescript-go/go.mod
+          cache-dependency-path: typescript-go/go.sum
+      - name: Build tsgo and its API client
+        working-directory: typescript-go
+        run: |
+          go build -o built/local/tsgo ./cmd/tsgo
+          npm ci
+          npx tsc -b _packages/native-preview
+      - run: npm install -g typescript@6 rolldown@1.2.5
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - name: Test with the directly built tsgo
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_REQUIRE_TSGO: "1"
+        run: cargo test
+      - run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
 
   build:
     name: build ${{ matrix.key }}
-    needs: verify
-    if: needs.verify.outputs.publish == 'true'
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
         include:
-          - key: linux-x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-          - key: linux-arm64
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
-          - key: darwin-x64
-            os: macos-latest
-            target: x86_64-apple-darwin
-          - key: darwin-arm64
-            os: macos-latest
-            target: aarch64-apple-darwin
-          - key: win32-x64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
+          - { key: linux-x64, os: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { key: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+          - { key: darwin-x64, os: macos-latest, target: x86_64-apple-darwin }
+          - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { key: win32-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.verify.outputs.source_sha }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+          ref: ${{ needs.prepare.outputs.source_sha }}
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Install target for pinned toolchain
-        run: rustup target add ${{ matrix.target }}
-
-      # Static musl binaries run on every Linux distro regardless of libc;
-      # musl-gcc compiles the one C/asm dependency (psm, via stacker).
+      - run: rustup target add ${{ matrix.target }}
       - name: Install musl toolchain
         if: contains(matrix.target, 'musl')
         run: |
@@ -120,109 +132,45 @@ jobs:
           echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
         env:
           TARGET: ${{ matrix.target }}
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-
-      - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }}
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
+          key: release-${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
         with:
           name: ttc-${{ matrix.key }}
           path: target/${{ matrix.target }}/release/ttc${{ matrix.key == 'win32-x64' && '.exe' || '' }}
           if-no-files-found: error
 
-  publish:
-    name: publish npm packages + GitHub Release
-    needs: [verify, build]
-    if: needs.verify.outputs.publish == 'true'
+  ready:
+    name: mark branch ready for approval
+    needs: [prepare, check, build]
     runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.verify.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.verify.outputs.source_sha }}
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Download binaries
-        uses: actions/download-artifact@v4
-        with:
-          path: binaries
-
-      - name: Assemble platform packages
-        run: |
-          mkdir -p dist/packages dist/assets
-          for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
-            exe=ttc; [ "$key" = "win32-x64" ] && exe=ttc.exe
-            package_dir="$(node npm/scripts/make-platform-package.mjs \
-              "$key" "binaries/ttc-$key/$exe" dist/packages "$VERSION")"
-            # Release archive alongside the npm package.
-            if [ "$key" = "win32-x64" ]; then
-              (cd "$package_dir/bin" && zip -q "$OLDPWD/dist/assets/ttc-v$VERSION-$key.zip" "$exe")
-            else
-              tar -C "$package_dir/bin" -czf "dist/assets/ttc-v$VERSION-$key.tar.gz" "$exe"
-            fi
-          done
-
-      - name: Smoke-test the linux-x64 binary
-        run: |
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version
-          # A tt-only enum (fields), so the output proves actual compilation
-          # rather than TS passthrough.
-          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/smoke.tt
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/smoke.tt | grep -q 'kind: "A"'
-
-      - name: Stamp version into tt-lang
-        run: node npm/scripts/stamp-version.mjs "$VERSION"
-
-      # Platform packages first: the main package's optionalDependencies
-      # must be resolvable the moment tt-lang@VERSION appears.
-      - name: Publish platform packages
-        run: |
-          for package_dir in dist/packages/@load28/tt-lang-*; do
-            npm publish "$package_dir" --provenance --access public
-          done
+      - name: Record the exact successful SHA and artifact run
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish tt-lang
-        run: npm publish ./npm/tt-lang --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      # unplugin-tt has an independent version. Publish it only when that
-      # exact version is not already present, so compiler-only releases do
-      # not try to overwrite an immutable npm version.
-      - name: Publish unplugin-tt when needed
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          UNPLUGIN_VERSION="$(node -p "require('./integrations/unplugin/package.json').version")"
-          if npm view "@load28/unplugin-tt@$UNPLUGIN_VERSION" version >/dev/null 2>&1; then
-            echo "@load28/unplugin-tt@$UNPLUGIN_VERSION is already published"
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$SOURCE_SHA" \
+            -f state=success \
+            -f context=release/prod-prepare \
+            -f description="Production $VERSION is ready to publish" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+      - name: Open the Production release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+        run: |
+          if [ "$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" --state open --json number --jq length)" = 0 ]; then
+            gh pr create --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(release): $VERSION" \
+              --body "Production release prepared from \`$SOURCE_SHA\`. Merging this PR approves and publishes \`$VERSION\`."
           else
-            npm publish ./integrations/unplugin --provenance --access public
+            echo "an open Production PR already exists for $BRANCH"
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish create-tt
-        run: npm publish ./packages/create-tt --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ needs.verify.outputs.version }}
-          target_commitish: ${{ needs.verify.outputs.source_sha }}
-          files: dist/assets/*
-          generate_release_notes: true

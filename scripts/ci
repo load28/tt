@@ -291,7 +291,7 @@ stage_extension() {
   # checkout can, so with one configured the whole suite must run — the same
   # split CI draws between its `extension` and `native` jobs.
   if [ "$TSGO_KIND" = "checkout" ]; then
-    grep -q "^# skipped 0$" "$log" || {
+    grep -Eq "^(#|ℹ) skipped 0$" "$log" || {
       fail "the extension suite skipped a test a built checkout can satisfy (see $log)"
       return 1
     }

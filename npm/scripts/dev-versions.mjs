@@ -2,8 +2,7 @@
  * dev-versions.mjs — derive immutable registry versions for a development run.
  *
  *   node dev-versions.mjs \
- *     <compiler-dev-version> <extension-base> <unplugin-base> \
- *     <YYYYMMDDHHMMSS> <run-number> <run-attempt>
+ *     <compiler-dev-version> <extension-base> <unplugin-base> <YYYYMMDDHHMMSS>
  *
  * Prints GitHub Actions output lines. npm accepts prerelease identifiers, while
  * VS Code extension manifests use three numeric components, so the same UTC
@@ -15,42 +14,32 @@ import { pathToFileURL } from "node:url";
 const RELEASE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const DEVELOPMENT = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-dev\.([1-9]\d*)$/;
 const STAMP = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
-const POSITIVE_INTEGER = /^[1-9]\d*$/;
-
 export function devVersions({
   compilerBase,
   extensionBase,
   unpluginBase,
   timestamp,
-  runNumber,
-  runAttempt,
 }) {
   const compiler = DEVELOPMENT.exec(compilerBase);
   if (!compiler) {
     throw new Error(`compiler version must be major.minor.patch-dev.N: ${compilerBase}`);
   }
   const extension = requireRelease("extension", extensionBase);
-  requireRelease("unplugin", unpluginBase);
+  const unplugin = requireRelease("unplugin", unpluginBase);
 
   const stamp = STAMP.exec(timestamp);
   if (!stamp || !isUtcTimestamp(stamp)) {
     throw new Error(`invalid UTC timestamp: ${timestamp}`);
   }
-  if (!POSITIVE_INTEGER.test(runNumber) || !POSITIVE_INTEGER.test(runAttempt)) {
-    throw new Error("run number and attempt must be positive integers");
-  }
-
   const [, year, month, day, hour, minute, second] = stamp;
-  const date = `${year}${month}${day}`;
   const time = `${hour}${minute}${second}`;
-  const runSuffix = `${date}.${time}.${runNumber}.${runAttempt}`;
-  const dependentSuffix = `dev.${compiler[4]}.${runSuffix}`;
+  const dependentSuffix = `dev.${compiler[1]}.${compiler[2]}.${compiler[3]}.${compiler[4]}`;
 
   return {
     timestamp,
-    npmVersion: `${compilerBase}.${runSuffix}`,
-    unpluginVersion: `${unpluginBase}-${dependentSuffix}`,
-    // Keep the VSIX manifest version numeric and place the channel in GitHub.
+    npmVersion: compilerBase,
+    unpluginVersion: `${unplugin[1]}.${unplugin[2]}.${unplugin[3]}-${dependentSuffix}`,
+    // The release commit timestamp is immutable, so retries reuse this VSIX version.
     vscodeVersion: `${extension[1]}.${year.slice(2)}${month}${day}.${time}`,
   };
 }
@@ -68,10 +57,10 @@ function isUtcTimestamp(match) {
 }
 
 function main(args) {
-  if (args.length !== 6) {
+  if (args.length !== 4) {
     throw new Error(
       "usage: dev-versions.mjs <compiler-dev-version> <extension-base> " +
-        "<unplugin-base> <YYYYMMDDHHMMSS> <run-number> <run-attempt>",
+        "<unplugin-base> <YYYYMMDDHHMMSS>",
     );
   }
   const versions = devVersions({
@@ -79,8 +68,6 @@ function main(args) {
     extensionBase: args[1],
     unpluginBase: args[2],
     timestamp: args[3],
-    runNumber: args[4],
-    runAttempt: args[5],
   });
   console.log(`timestamp=${versions.timestamp}`);
   console.log(`npm_version=${versions.npmVersion}`);

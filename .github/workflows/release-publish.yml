@@ -1,0 +1,143 @@
+# The only automatic deployment: merging a prepared release/vX.Y.Z PR into
+# main approves and publishes the exact artifacts built for that branch SHA.
+name: Publish Merged Production Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: write
+  statuses: read
+  id-token: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    name: verify merged prepared release
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      branch: ${{ steps.release.outputs.branch }}
+      source_sha: ${{ steps.release.outputs.source_sha }}
+      prepare_run_id: ${{ steps.release.outputs.prepare_run_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Verify the merged SHA passed preparation
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          VERSION="${BRANCH#release/v}"
+          node npm/scripts/release-channel.mjs --production "$VERSION" >/dev/null
+          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$VERSION"
+          git fetch origin main
+          git diff --quiet "$SOURCE_SHA" "$MERGE_SHA" -- || {
+            echo "merged main tree differs from the prepared Production tree" >&2
+            exit 1
+          }
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/status" > /tmp/statuses.json
+          jq -e '[.statuses[] | select(.context == "release/prod-prepare" and .state == "success")] | first' \
+            /tmp/statuses.json > /tmp/ready-status.json
+          RUN_URL="$(jq -r .target_url /tmp/ready-status.json)"
+          case "$RUN_URL" in
+            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/"*) ;;
+            *) echo "invalid preparation run URL: $RUN_URL" >&2; exit 1 ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "prepare_run_id=${RUN_URL##*/}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: publish npm packages and GitHub Release
+    needs: approve
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.approve.outputs.version }}
+      SOURCE_SHA: ${{ needs.approve.outputs.source_sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.approve.outputs.source_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+      - name: Download prepared binaries
+        run: gh run download "${{ needs.approve.outputs.prepare_run_id }}" --repo "$GITHUB_REPOSITORY" --pattern 'ttc-*' --dir binaries
+      - name: Assemble packages and release archives
+        run: |
+          mkdir -p dist/packages dist/assets
+          for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
+            exe=ttc; [ "$key" = win32-x64 ] && exe=ttc.exe
+            package_dir="$(node npm/scripts/make-platform-package.mjs "$key" "binaries/ttc-$key/$exe" dist/packages "$VERSION")"
+            if [ "$key" = win32-x64 ]; then
+              (cd "$package_dir/bin" && zip -q "$OLDPWD/dist/assets/ttc-v$VERSION-$key.zip" "$exe")
+            else
+              tar -C "$package_dir/bin" -czf "dist/assets/ttc-v$VERSION-$key.tar.gz" "$exe"
+            fi
+          done
+          node npm/scripts/stamp-version.mjs "$VERSION"
+      - name: Smoke-test linux-x64 package
+        run: |
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version
+          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/smoke.tt
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/smoke.tt | grep -q 'kind: "A"'
+      - name: Publish packages unless the immutable version exists
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          publish_latest() {
+            package_dir="$1"
+            mode="${2:-release}"
+            name="$(node -p "require('./$package_dir/package.json').name")"
+            version="$(node -p "require('./$package_dir/package.json').version")"
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              git_head="$(npm view "$name@$version" gitHead)"
+              if [ "$mode" = release ] && [ -n "$git_head" ] && [ "$git_head" != "$SOURCE_SHA" ]; then
+                echo "$name@$version was published from $git_head, not $SOURCE_SHA" >&2
+                exit 1
+              fi
+              echo "$name@$version already exists"
+            else
+              npm publish "./$package_dir" --provenance --access public
+            fi
+          }
+          for package_dir in dist/packages/@load28/tt-lang-*; do publish_latest "$package_dir"; done
+          publish_latest npm/tt-lang
+          publish_latest integrations/unplugin independent
+          publish_latest packages/create-tt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.approve.outputs.version }}
+          target_commitish: ${{ needs.approve.outputs.source_sha }}
+          files: dist/assets/*
+          generate_release_notes: true
+
+  cleanup:
+    name: remove completed release branch
+    needs: [approve, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          if git ls-remote --exit-code origin "refs/heads/${{ needs.approve.outputs.branch }}"; then
+            git push origin --delete "${{ needs.approve.outputs.branch }}"
+          fi

@@ -7,11 +7,9 @@
 # contributor's machine, and this workflow is dispatched by hand when a
 # hosted run is actually wanted.
 #
-# One consequence to know about: `Release` and `Dev Release` both wait on a
-# successful run of *this* workflow on `main` (`workflow_run`). A
-# `workflow_dispatch` run counts, so a release still means "bump the version
-# on main, dispatch CI there, let it pass" — the extra step is starting CI,
-# not a different pipeline.
+# Releases use separate preparation and approval steps. Dev approval publishes
+# a tag without changing main. Production preparation opens a release PR, and
+# merging that prepared PR is the only event that publishes Production.
 name: CI
 
 on:

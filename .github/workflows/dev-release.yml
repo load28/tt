@@ -1,23 +1,20 @@
-# Development release — publish timestamped npm packages and attach a VSIX to
-# a GitHub pre-release after an X.Y.Z-dev.N bump on main passes CI.
-#
-# Required repository secrets:
-#   NPM_TOKEN — npm automation token with publish rights to the @load28 scope
-name: Dev Release
+# Prepare a development release without publishing or changing main.
+name: Prepare Dev Release
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      version:
+        description: Optional X.Y.Z core (empty continues latest SemVer)
+        required: false
+        type: string
 
 permissions:
-  contents: read
-  id-token: write
+  contents: write
+  statuses: write
 
 concurrency:
-  group: dev-release
+  group: release
   cancel-in-progress: false
 
 env:
@@ -25,95 +22,110 @@ env:
 
 jobs:
   prepare:
-    name: detect development version bump and derive versions
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push')
+    name: prepare release branch
     runs-on: ubuntu-latest
     outputs:
-      publish: ${{ steps.release.outputs.publish }}
+      version: ${{ steps.release.outputs.version }}
+      branch: ${{ steps.release.outputs.branch }}
       source_sha: ${{ steps.release.outputs.source_sha }}
-      npm_version: ${{ steps.release.outputs.npm_version }}
       unplugin_version: ${{ steps.release.outputs.unplugin_version }}
       vscode_version: ${{ steps.release.outputs.vscode_version }}
-      timestamp: ${{ steps.release.outputs.timestamp }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
-          fetch-depth: 2
-
-      - name: Detect bump and derive immutable registry versions
+          ref: main
+          fetch-depth: 0
+      - run: git fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*' --prune
+      - name: Create or resume the release branch
         id: release
-        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          BASE_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          if [ -z "$BASE_VERSION" ]; then
-            echo "::error::Cargo.toml package version was not found"
-            exit 1
-          fi
-
-          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ]; then
-            PREVIOUS_VERSION="$(git show HEAD^:Cargo.toml | sed -n 's/^version = "\([^"]*\)"/\1/p' | head -1)"
-            CHANNEL="$(node npm/scripts/release-channel.mjs "$PREVIOUS_VERSION" "$BASE_VERSION")"
-            if [ "$CHANNEL" != "development" ]; then
-              echo "publish=false" >> "$GITHUB_OUTPUT"
-              echo "release channel is $CHANNEL; no development release"
-              exit 0
-            fi
+          node npm/scripts/release-plan.mjs dev "$REQUESTED_VERSION" > /tmp/release-plan.json
+          VERSION="$(jq -r .version /tmp/release-plan.json)"
+          BRANCH="$(jq -r .branch /tmp/release-plan.json)"
+          SOURCE_SHA="$(jq -r .sourceSha /tmp/release-plan.json)"
+          RESUME="$(jq -r .resume /tmp/release-plan.json)"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          if [ "$RESUME" = true ]; then
+            git checkout -B "$BRANCH" "$SOURCE_SHA"
+            test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$VERSION"
           else
-            node npm/scripts/release-channel.mjs --manual-dev "$BASE_VERSION" >/dev/null
+            git checkout -b "$BRANCH" "$SOURCE_SHA"
+            node npm/scripts/release-version.mjs "$VERSION"
+            git add Cargo.toml Cargo.lock npm/tt-lang/package.json packages/create-tt/package.json
+            git commit -m "chore(release): $VERSION"
+            git push origin "HEAD:refs/heads/$BRANCH"
           fi
-
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
           EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"
-          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version")"
-          TIMESTAMP="$(date -u +%Y%m%d%H%M%S)"
-          echo "publish=true" >> "$GITHUB_OUTPUT"
-          node npm/scripts/dev-versions.mjs \
-            "$BASE_VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" \
-            "$TIMESTAMP" "$GITHUB_RUN_NUMBER" "$GITHUB_RUN_ATTEMPT" \
-            >> "$GITHUB_OUTPUT"
+          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version.split('-')[0]")"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          node npm/scripts/dev-versions.mjs "$VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" "$TIMESTAMP" >> "$GITHUB_OUTPUT"
+
+  check:
+    name: fmt / clippy / test with tsgo
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.source_sha }}
+      - run: rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/checkout@v4
+        with:
+          repository: microsoft/typescript-go
+          ref: c6b013f5706d58582f566df778cc0df2683b58f5
+          path: typescript-go
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: typescript-go/go.mod
+          cache-dependency-path: typescript-go/go.sum
+      - name: Build tsgo and its API client
+        working-directory: typescript-go
+        run: |
+          go build -o built/local/tsgo ./cmd/tsgo
+          npm ci
+          npx tsc -b _packages/native-preview
+      - run: npm install -g typescript@6 rolldown@1.2.5
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - name: Test with the directly built tsgo
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_REQUIRE_TSGO: "1"
+        run: cargo test
+      - run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
 
   build:
     name: build ${{ matrix.key }}
     needs: prepare
-    if: needs.prepare.outputs.publish == 'true'
     strategy:
       fail-fast: false
       matrix:
         include:
-          - key: linux-x64
-            os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-          - key: linux-arm64
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
-          - key: darwin-x64
-            os: macos-latest
-            target: x86_64-apple-darwin
-          - key: darwin-arm64
-            os: macos-latest
-            target: aarch64-apple-darwin
-          - key: win32-x64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
+          - { key: linux-x64, os: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { key: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+          - { key: darwin-x64, os: macos-latest, target: x86_64-apple-darwin }
+          - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { key: win32-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.source_sha }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-
-      - name: Install target for pinned toolchain
-        run: rustup target add ${{ matrix.target }}
-
+      - run: rustup target add ${{ matrix.target }}
       - name: Install musl toolchain
         if: contains(matrix.target, 'musl')
         run: |
@@ -122,122 +134,54 @@ jobs:
           echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
         env:
           TARGET: ${{ matrix.target }}
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
         with:
           key: dev-${{ matrix.target }}
-
-      - name: Build
-        run: cargo build --release --locked --target ${{ matrix.target }}
-
-      - name: Upload binary
-        uses: actions/upload-artifact@v4
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
         with:
           name: dev-ttc-${{ matrix.key }}
           path: target/${{ matrix.target }}/release/ttc${{ matrix.key == 'win32-x64' && '.exe' || '' }}
           if-no-files-found: error
 
-  publish-npm:
-    name: publish npm development packages
-    needs: [prepare, build]
+  build-vsix:
+    name: build VSIX
+    needs: prepare
     runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.prepare.outputs.npm_version }}
-      UNPLUGIN_VERSION: ${{ needs.prepare.outputs.unplugin_version }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.prepare.outputs.source_sha }}
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          registry-url: https://registry.npmjs.org
-
-      - name: Download binaries
-        uses: actions/download-artifact@v4
-        with:
-          pattern: dev-ttc-*
-          path: binaries
-
-      - name: Assemble and stamp packages
-        run: |
-          mkdir -p dist/packages
-          for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
-            exe=ttc
-            [ "$key" = "win32-x64" ] && exe=ttc.exe
-            node npm/scripts/make-platform-package.mjs \
-              "$key" "binaries/dev-ttc-$key/$exe" dist/packages "$VERSION"
-          done
-          node npm/scripts/stamp-version.mjs "$VERSION" \
-            --unplugin-version "$UNPLUGIN_VERSION"
-
-      - name: Smoke-test linux-x64 package
-        run: |
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version
-          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/dev-smoke.tt
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/dev-smoke.tt | grep -q 'kind: "A"'
-
-      - name: Publish platform packages
-        run: |
-          for package_dir in dist/packages/@load28/tt-lang-*; do
-            npm publish "$package_dir" --tag dev --provenance --access public
-          done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish user-facing packages
-        run: |
-          npm publish ./npm/tt-lang --tag dev --provenance --access public
-          npm publish ./integrations/unplugin --tag dev --provenance --access public
-          npm publish ./packages/create-tt --tag dev --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  publish-vsix:
-    name: publish VSIX GitHub pre-release
-    needs: [prepare, build, publish-npm]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    env:
-      VSCODE_VERSION: ${{ needs.prepare.outputs.vscode_version }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.prepare.outputs.source_sha }}
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Stamp, build, and package extension
+      - name: Package extension
+        working-directory: editors/vscode
         run: |
           npm ci
-          node ../../npm/scripts/stamp-version.mjs "${{ needs.prepare.outputs.npm_version }}" \
-            --vscode-version "$VSCODE_VERSION"
+          node ../../npm/scripts/stamp-version.mjs "${{ needs.prepare.outputs.version }}" --vscode-version "${{ needs.prepare.outputs.vscode_version }}"
           npm run grammar:check
           npm run compile
-          npx --yes @vscode/vsce@3.9.2 package \
-            --no-dependencies --out "../../tt-language-$VSCODE_VERSION.vsix"
-        working-directory: editors/vscode
-
-      - name: Create GitHub pre-release
-        uses: softprops/action-gh-release@v2
+          npx --yes @vscode/vsce@3.9.2 package --no-dependencies --out "../../tt-language-${{ needs.prepare.outputs.vscode_version }}.vsix"
+      - uses: actions/upload-artifact@v4
         with:
-          tag_name: dev-v${{ needs.prepare.outputs.npm_version }}
-          target_commitish: ${{ needs.prepare.outputs.source_sha }}
-          name: tt dev ${{ needs.prepare.outputs.npm_version }}
-          prerelease: true
-          make_latest: false
-          fail_on_unmatched_files: true
-          files: tt-language-${{ needs.prepare.outputs.vscode_version }}.vsix
-          body: |
-            Development build from `${{ needs.prepare.outputs.source_sha }}`.
+          name: dev-vsix
+          path: tt-language-${{ needs.prepare.outputs.vscode_version }}.vsix
+          if-no-files-found: error
 
-            npm: `npm install --save-dev @load28/tt-lang@dev @load28/unplugin-tt@dev`
-
-            VS Code: download the `.vsix`, then run **Extensions: Install from VSIX...**.
+  ready:
+    name: mark branch ready for approval
+    needs: [prepare, check, build, build-vsix]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record the exact successful SHA and artifact run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.prepare.outputs.source_sha }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$SOURCE_SHA" \
+            -f state=success \
+            -f context=release/dev-prepare \
+            -f description="Dev $VERSION is ready to publish" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
