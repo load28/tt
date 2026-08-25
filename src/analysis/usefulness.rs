@@ -120,6 +120,39 @@ impl Witness {
         self.write(false)
     }
 
+    /// The witness as the **arm a user would write for it** — the same
+    /// pattern, except that a field the witness does not constrain is
+    /// written as a binding of that field's name rather than dropped.
+    ///
+    /// `render` answers "which value is unhandled", so it names only what
+    /// makes the value distinct. An arm answers "handle it", and its body
+    /// needs the payload: `Circle` says enough in a message, while the arm
+    /// worth inserting is `Circle(radius)`. Both readings come from the
+    /// same witness — every declared field is already here, wildcard or
+    /// not — so there is no second source of field names to keep in sync.
+    ///
+    /// Only the arm's own level binds. Deeper, `field: Name` is how a
+    /// nested pattern is written, so a binding there would change what the
+    /// pattern tests; nested positions keep `render`'s form.
+    pub(super) fn arm(&self) -> String {
+        match self {
+            Witness::Wild | Witness::Unknown => "_".to_string(),
+            Witness::Ctor { tag, args } => {
+                if args.is_empty() {
+                    return tag.clone();
+                }
+                let fields: Vec<String> = args
+                    .iter()
+                    .map(|(name, w)| match w {
+                        Witness::Wild | Witness::Unknown => name.clone(),
+                        _ => format!("{name}: {}", w.write(true)),
+                    })
+                    .collect();
+                format!("{tag}({})", fields.join(", "))
+            }
+        }
+    }
+
     fn write(&self, nested: bool) -> String {
         match self {
             Witness::Wild | Witness::Unknown => "_".to_string(),

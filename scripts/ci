@@ -15,6 +15,15 @@
 #   native      the type checking modes against TypeScript 7
 #   extension   the VS Code extension build and its server tests
 #
+# Two more exist but are not in the default run, because each takes minutes
+# and neither answers a question about *this* change on its own:
+#
+#   coverage    line coverage must not fall below the recorded baseline
+#   bench       this revision against its merge base, on this machine
+#
+# Ask for them by name (`./scripts/ci coverage`), the way the hosted
+# workflow's jobs are dispatched by hand.
+#
 # Usage:
 #   ./scripts/ci                     every stage
 #   ./scripts/ci rust npm            only the named stages
@@ -29,6 +38,8 @@ CONFIG="$TT_ROOT/.tt-dev/toolchain.json"
 LOG_DIR="$TT_ROOT/.tt-dev"
 
 ALL_STAGES="agents rust npm native extension"
+# Runnable, but only when asked for by name (see the header).
+EXTRA_STAGES="coverage bench"
 SELECTED=""
 SKIPPED=""
 FAIL_FAST=0
@@ -76,6 +87,7 @@ while [ "$#" -gt 0 ]; do
       ;;
     --list)
       for stage in $ALL_STAGES; do printf '%s\n' "$stage"; done
+      for stage in $EXTRA_STAGES; do printf '%s (on request)\n' "$stage"; done
       exit 0
       ;;
     --fail-fast)
@@ -113,8 +125,8 @@ contains() {
 }
 
 for stage in $SELECTED $SKIPPED; do
-  contains "$stage" "$ALL_STAGES" || {
-    fail "unknown stage: $stage (known: $ALL_STAGES)"
+  contains "$stage" "$ALL_STAGES $EXTRA_STAGES" || {
+    fail "unknown stage: $stage (known: $ALL_STAGES $EXTRA_STAGES)"
     exit 2
   }
 done
@@ -294,6 +306,33 @@ stage_extension() {
     }
   fi
   return 0
+}
+
+# The floor is the measured baseline, not a target: "do not drop" is a rule a
+# contributor can follow, while a round number invites tests written to move
+# it. A toolchain is required for the same reason the hosted job requires one
+# — without it the number is six points lower and describes a different
+# program (docs/tasks/TASK-224).
+stage_coverage() {
+  command -v cargo-llvm-cov > /dev/null 2>&1 || {
+    fail "cargo-llvm-cov is not installed:
+  rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked"
+    return 1
+  }
+  [ -n "${TTC_TSGO_API:-}" ] || {
+    fail "no TypeScript 7 toolchain: the baseline was measured with one, so a run
+  without one would compare two different programs"
+    return 1
+  }
+  run env TTC_REQUIRE_TSGO=1 cargo llvm-cov --workspace --summary-only \
+    --fail-under-lines 86.9 || return 1
+}
+
+# Both revisions are built and measured here, in one run, on one machine: the
+# ratio between them is the only number that carries across machines
+# (docs/tasks/TASK-225).
+stage_bench() {
+  run ./scripts/bench-compare || return 1
 }
 
 # ------------------------------------------------------------------- run --

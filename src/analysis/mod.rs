@@ -210,6 +210,13 @@ pub struct MatchAnalysis {
     /// excluded. The head is what a diagnostic about the match as a whole
     /// (a hole in its coverage) is drawn over.
     pub head_end: usize,
+    /// Byte offset of the body's opening `{`.
+    pub body_open: usize,
+    /// Byte offset of the body's closing `}`. With [`MatchAnalysis::
+    /// body_open`] this is where an arm the compiler authors goes — a
+    /// coverage hole's fix is an edit, and the edit needs the braces
+    /// (TASK-216).
+    pub body_close: usize,
     /// One subject per scrutinee position: one entry for a single match,
     /// one per position for a tuple match. `None` when the position's arm
     /// tags belong to no known enum — the match still analyzes, its
@@ -377,6 +384,12 @@ pub struct Coverage {
 pub struct Uncovered {
     /// The pattern text, one entry per scrutinee position.
     pub pattern: Vec<String>,
+    /// The same witness written as an **arm pattern**: a field the witness
+    /// does not constrain is bound by name rather than dropped, so the
+    /// text can be inserted as an arm and its body can use the payload
+    /// (`Circle` in a message is `Circle(radius)` in an arm). One entry
+    /// per scrutinee position, like [`Uncovered::pattern`].
+    pub arm: Vec<String>,
     /// Whether every position was decided from a **known** constructor
     /// set.
     ///
@@ -591,13 +604,13 @@ fn validate_semantic(file: &SemanticFile) {
     for node in file.resolution.uses.keys() {
         assert!(
             file.hir.source_map.node_span(*node).is_some(),
-            "internal compiler error: resolved HIR use has no source span"
+            "resolved HIR use has no source span"
         );
     }
     for unresolved in &file.resolution.unresolved {
         assert!(
             file.hir.source_map.node_span(unresolved.node).is_some(),
-            "internal compiler error: unresolved HIR use has no source span"
+            "unresolved HIR use has no source span"
         );
     }
     for analysis in &file.patterns.matches {
@@ -608,7 +621,7 @@ fn validate_semantic(file: &SemanticFile) {
                     .node_span(site.node)
                     .is_some_and(|span| span.start == analysis.keyword_off)
             }),
-            "internal compiler error: match analysis has no HIR pattern site"
+            "match analysis has no HIR pattern site"
         );
     }
 }
@@ -1004,6 +1017,8 @@ fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> MatchAnalysis
     MatchAnalysis {
         keyword_off: expr.keyword_off,
         head_end: expr.scrutinee_span.end + 1,
+        body_open: expr.body_open,
+        body_close: expr.body_close,
         subjects: vec![subject.map(to_subject)],
         arms,
         coverage,
@@ -1068,6 +1083,8 @@ fn analyze_tuple_match(expr: &TupleMatchExpr, table: &Table, depth: Depth) -> Ma
             .scrutinees
             .last()
             .map_or(expr.keyword_off, |(span, _)| span.end + 1),
+        body_open: expr.body_open,
+        body_close: expr.body_close,
         subjects: subjects.into_iter().map(|s| s.map(to_subject)).collect(),
         arms,
         coverage: tuple_coverage_of(expr, table),
@@ -1771,6 +1788,7 @@ fn render_witnesses(found: &[Vec<usefulness::Witness>]) -> Vec<Uncovered> {
         .iter()
         .map(|row| Uncovered {
             pattern: row.iter().map(usefulness::Witness::render).collect(),
+            arm: row.iter().map(usefulness::Witness::arm).collect(),
             certain: row.iter().all(usefulness::Witness::certain),
         })
         .collect()

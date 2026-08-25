@@ -4,7 +4,8 @@ error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rec
 4 | export const a = match (s) {
   |                  ^^^^^^^^^
   |
-  = help: add the missing arms or a final `_` arm
+  = help: add the missing arms: `Rect(w, h) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
 
 error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
   --> input.tt:10:3

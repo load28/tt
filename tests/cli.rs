@@ -3,9 +3,8 @@
 //! contract is that parallelism changes nothing an observer can see.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn ttc(args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_ttc"))
@@ -14,16 +13,13 @@ fn ttc(args: &[&str]) -> std::process::Output {
         .expect("failed to run ttc")
 }
 
-static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
+mod common;
+use common::Workspace;
 
-fn tmpdir() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "tt-cli-{}-{}",
-        std::process::id(),
-        DIR_SEQ.fetch_add(1, Ordering::SeqCst)
-    ));
-    fs::create_dir_all(&dir).unwrap();
-    dir
+/// A directory for one case, removed when the case ends — and kept, with
+/// its path printed, when the case failed (`tests/common/mod.rs`).
+fn tmpdir() -> Workspace {
+    Workspace::new("cli")
 }
 
 #[test]
@@ -859,7 +855,6 @@ fn a_missing_backend_still_reports_tt_diagnostics() {
         stderr.contains("only tt-level diagnostics are shown"),
         "{stderr}"
     );
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -885,7 +880,6 @@ fn a_build_writes_no_source_map_unless_it_is_asked_for() {
     let code = fs::read_to_string(out_dir.join("a.ts")).unwrap();
     assert!(!code.contains("sourceMappingURL"), "{code}");
     assert!(!out_dir.join("a.ts.map").exists());
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -919,7 +913,6 @@ fn a_source_map_file_lands_beside_its_output_and_names_the_tt_source() {
     // `out/` did not exist while the map was being built.
     assert!(map.contains("\"sources\":[\"../src/a.tt\"]"), "{map}");
     assert!(map.contains("\"sourcesContent\""), "{map}");
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -946,7 +939,6 @@ fn an_inline_source_map_travels_with_printed_output() {
     let json = String::from_utf8(base64_decode(encoded)).expect("utf-8 map");
     assert!(json.contains("\"version\":3"), "{json}");
     assert!(json.contains("a.tt"), "{json}");
-    fs::remove_dir_all(&dir).ok();
 }
 
 /// Minimal Base64 decoder for the inline-map test — the test decodes what
@@ -991,7 +983,6 @@ fn a_pass_through_file_keeps_its_bytes_even_when_maps_are_on() {
     assert!(out.status.success(), "{out:?}");
     assert_eq!(fs::read_to_string(out_dir.join("plain.ts")).unwrap(), text);
     assert!(!out_dir.join("plain.ts.map").exists());
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -1021,7 +1012,6 @@ fn a_banner_shifts_the_map_so_positions_still_line_up() {
     // The banner is one generated line with nothing behind it.
     assert!(mappings.starts_with(';'), "{mappings}");
     assert!(!mappings.starts_with(";;"), "{mappings}");
-    fs::remove_dir_all(&dir).ok();
 }
 
 /* ------------------------------------------------------------------ */

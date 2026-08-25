@@ -24,7 +24,9 @@ macro_rules! define_ids {
 
             impl Idx for $name {
                 fn new(index: usize) -> Self {
-                    $name(u32::try_from(index).expect("arena index fits u32"))
+                    // Arena indices count nodes lowered from one file's syntax,
+            // and a file with u32::MAX of them would not fit in memory.
+            $name(u32::try_from(index).expect("a file has fewer than u32::MAX nodes"))
                 }
                 fn index(self) -> usize {
                     self.0 as usize

@@ -12,9 +12,14 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { runTypedCheck } from "../ttc";
-import { COMPILER, compilerAvailable } from "./toolchain";
+import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 
 const skip = compilerAvailable() ? false : "ttc not on PATH";
+/** A case that needs a real typed answer, not just a compiler that runs.
+ * Without this the two cases below fail — rather than skip — on a machine
+ * with no TypeScript 7, which is the difference between "the tool is
+ * missing" and "the feature is broken" (TASK-217). */
+const skipTyped = skip || (findTsgo() ? false : "no tsgo executable");
 /** A typed check opens a project and starts the TypeScript compiler. */
 const timeout = 60_000;
 
@@ -42,7 +47,7 @@ test("a buffer that was never saved has no place in the project", async () => {
 
 test(
   "the buffer is what gets checked, and the message is the compiler's",
-  { skip, timeout },
+  { skip: skipTyped, timeout },
   async () => {
     const dir = tmpProject();
     const file = path.join(dir, "main.tt");
@@ -98,7 +103,7 @@ test(
 
 test(
   "the authoritative editor pass uses the compiler's structured type message",
-  { skip, timeout },
+  { skip: skipTyped, timeout },
   async () => {
     const dir = tmpProject();
     const file = path.join(dir, "main.tt");

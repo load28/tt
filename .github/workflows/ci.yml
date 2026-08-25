@@ -104,6 +104,115 @@ jobs:
           test -f "$TTC_TSGO_API"
           cargo test --test native
 
+  bench:
+    name: performance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The comparison needs the revision this branch started from, and
+          # a shallow clone has no merge base to find.
+          fetch-depth: 0
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Both revisions are built and measured here, in one job, on one
+      # machine: the ratio between them is the only number a shared runner
+      # can report honestly (docs/tasks/TASK-225).
+      - name: Compare against the merge base
+        run: ./scripts/bench-compare
+
+      - name: Record this revision's numbers
+        if: always()
+        run: cat /tmp/tt-bench-head.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-report
+          path: |
+            /tmp/tt-bench-head.json
+            /tmp/tt-bench-base.json
+          if-no-files-found: warn
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      # The instrumentation lives in the toolchain, not in the crate.
+      - name: Install the coverage tooling
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The same pinned revision the `native` job builds. Coverage measured
+      # without a TypeScript toolchain is six points lower and describes a
+      # different program — the editor and backend layers simply do not run
+      # — so the number would not be comparable between runs
+      # (docs/tasks/TASK-224).
+      - name: Check out typescript-go
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/typescript-go
+          ref: c6b013f5706d58582f566df778cc0df2683b58f5
+          path: typescript-go
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: typescript-go/go.mod
+          cache-dependency-path: typescript-go/go.sum
+
+      - name: Build the compiler and its API client
+        working-directory: typescript-go
+        run: |
+          go build -o built/local/tsgo ./cmd/tsgo
+          npm ci
+          npx tsc -b _packages/native-preview
+
+      # The floor is the measured baseline, not a target: "do not drop" is
+      # a rule that can be followed, while an arbitrary goal invites tests
+      # written to move a number. Raising it belongs to the change that
+      # earns the higher coverage.
+      - name: Measure, and refuse to go below the baseline
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          # A missing toolchain would silently lower the number instead of
+          # failing the job, which is the one way this gate could lie.
+          TTC_REQUIRE_TSGO: "1"
+        run: |
+          cargo llvm-cov --workspace --summary-only --fail-under-lines 86.9
+          cargo llvm-cov report --lcov --output-path lcov.info
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: warn
+
   extension:
     name: vscode extension
     runs-on: ubuntu-latest
@@ -217,6 +326,16 @@ jobs:
           # Nothing here may skip: this job builds the compiler itself.
           TTC_REQUIRE_TSGO: "1"
         run: cargo test --test native
+
+      # The checkout above is also a corpus: TypeScript's own conformance
+      # cases and its bundled library declarations. Every file in it that is
+      # valid TypeScript has to come back byte-for-byte (docs/tasks/TASK-223).
+      # A sample here, the whole thing on the soak schedule.
+      - name: Test — real TypeScript comes back unchanged
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_REQUIRE_CORPUS: "1"
+        run: cargo test --test corpus -- --nocapture
 
       - name: Build the extension
         working-directory: editors/vscode

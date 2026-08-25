@@ -562,7 +562,16 @@ impl<'a> ExternCache<'a> {
     }
 
     fn exported_enums(&self, path: &Path) -> Arc<Vec<ExternEnum>> {
-        if let Some(hit) = self.decls.lock().expect("extern cache").get(path) {
+        // A poisoned lock means another job already panicked, and that
+        // panic is the failure being reported — a second one here would
+        // bury it. The map's contents are sound either way: it is only
+        // ever inserted into, never left half-written (TASK-221).
+        if let Some(hit) = self
+            .decls
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(path)
+        {
             return Arc::clone(hit);
         }
         // Parsed outside the lock: a slow miss must not stall other jobs.
@@ -579,7 +588,7 @@ impl<'a> ExternCache<'a> {
         Arc::clone(
             self.decls
                 .lock()
-                .expect("extern cache")
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .entry(path.to_path_buf())
                 .or_insert(decls),
         )
@@ -620,7 +629,9 @@ fn collect_extern_enums(file: &Path, imports: &[TtImport], cache: &ExternCache) 
                     }
                 }
             }
-            TtImportNames::None => unreachable!(),
+            // Skipped by the guard at the top of the loop: an import
+            // that brings no names in has no declarations to collect.
+            TtImportNames::None => unreachable!("a nameless import was skipped above"),
         }
     }
     externs
@@ -703,7 +714,10 @@ where
     }
     slots
         .into_iter()
-        .map(|r| r.expect("every index is produced exactly once"))
+        // Each worker writes the slot of the index it was given, and the
+        // indices are `0..items.len()` exactly once, so every slot is
+        // filled before this runs.
+        .map(|r| r.expect("each index produced its own result"))
         .collect()
 }
 
@@ -794,7 +808,7 @@ fn typed_pass(
             // header and the location are the whole report.
             eprintln!(
                 "{}",
-                ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path))
+                ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path), styles())
             );
             return Ok(TypedReport {
                 reported: 1,
@@ -832,6 +846,7 @@ fn typed_pass(
                 diagnostic,
                 snapshot.source_of(&diagnostic.path),
                 &shown(&diagnostic.path),
+                styles(),
             )
         );
     }
@@ -977,6 +992,18 @@ fn shown(path: &Path) -> String {
         .unwrap_or_else(|| path.to_path_buf())
         .display()
         .to_string()
+}
+
+/// What diagnostics are painted with, decided once for the process.
+///
+/// Every diagnostic this binary prints goes to stderr, so one question
+/// settles it: is stderr a terminal, and does the reader want colour
+/// there ([`ttc::render::Styles::for_stderr`]). Deciding once also means a
+/// parallel job's report cannot be painted differently from the one before
+/// it.
+fn styles() -> ttc::render::Styles {
+    static STYLES: std::sync::OnceLock<ttc::render::Styles> = std::sync::OnceLock::new();
+    *STYLES.get_or_init(ttc::render::Styles::for_stderr)
 }
 
 fn main() -> ExitCode {
@@ -1453,7 +1480,13 @@ fn build_jobs(
                             .unwrap_or(&out_name)
                             .to_path_buf()
                     } else {
-                        PathBuf::from(out_name.file_name().unwrap())
+                        // A named input is a file, so it has a file name.
+                        // A path is still user input and this is the CLI,
+                        // so an odd shape gets the whole path rather than a
+                        // crash (TASK-221).
+                        out_name
+                            .file_name()
+                            .map_or_else(|| out_name.clone(), PathBuf::from)
                     };
                     dir.join(rel)
                 }
@@ -1638,7 +1671,12 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                         // read as one.
                         out.messages.push(format!(
                             "{}\n",
-                            ttc::render::diagnostic(diagnostic, &loaded.source, &filename)
+                            ttc::render::diagnostic(
+                                diagnostic,
+                                &loaded.source,
+                                &filename,
+                                styles(),
+                            )
                         ));
                     }
                     out.failed = true;
@@ -1652,7 +1690,11 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 };
                 let mut code = emit.code.clone();
                 if opts.banner {
-                    let base = job.file.file_name().unwrap().to_string_lossy();
+                    let base = job
+                        .file
+                        .file_name()
+                        .unwrap_or(job.file.as_os_str())
+                        .to_string_lossy();
                     code =
                         format!("// @generated from {base} by ttc — do not edit directly.\n{code}");
                 }

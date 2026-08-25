@@ -113,7 +113,7 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
             Ok(response) => response,
             Err(message) => serde_json::json!({
                 "id": request_id(&line),
-                "error": format!("internal compiler error: {message}"),
+                "error": ttc::ice::bug_message(&message),
             }),
         };
         let mut out = stdout.lock();

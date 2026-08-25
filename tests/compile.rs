@@ -10,6 +10,16 @@ fn err(src: &str) -> ttc::CompileError {
     compile(src, &Options::default()).expect_err("expected a compile error")
 }
 
+/// Every `help:` sentence the diagnostics of `src` carry. A rule's advice
+/// lives in this channel and nowhere else (TASK-218), so a test that is
+/// about the advice reads it from here rather than from a message.
+fn advice(src: &str) -> Vec<String> {
+    ttc::analyze(src, &Options::default())
+        .iter()
+        .flat_map(|d| d.suggestions.iter().map(|s| s.message.clone()))
+        .collect()
+}
+
 fn ok_tsx(src: &str) -> String {
     compile(
         src,
@@ -2240,10 +2250,76 @@ fn pipeline_await_in_head_needs_no_async_wrapper() {
 }
 
 #[test]
+fn the_runtime_import_is_written_where_an_import_belongs() {
+    // Which helpers a file needs is only known once it is emitted; where
+    // an import goes is not a question about that (TASK-219).
+    let out = ok(
+        "declare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
+    );
+    assert!(out.starts_with("import { $tt_ap } from "), "{out}");
+}
+
+#[test]
+fn the_runtime_import_never_displaces_a_directive_or_a_shebang() {
+    // A directive is only a directive while nothing precedes it, so an
+    // import above one would turn it into a string expression and a
+    // bundler would stop seeing the boundary the author declared.
+    let out = ok(
+        "\"use client\";\ndeclare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
+    );
+    assert!(
+        out.starts_with("\"use client\";\nimport { $tt_ap } from "),
+        "{out}"
+    );
+
+    let out = ok(
+        "#!/usr/bin/env node\ndeclare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
+    );
+    assert!(
+        out.starts_with("#!/usr/bin/env node\nimport { $tt_ap } from "),
+        "{out}"
+    );
+
+    // A leading string that is *not* a directive is an expression, and an
+    // import may precede it.
+    let out = ok(
+        "declare const b: string;\n\"a\" + b;\ndeclare function f(n: number): number;\nexport const a = f(4) |> f |> .toFixed(1);\n",
+    );
+    assert!(out.starts_with("import { $tt_ap } from "), "{out}");
+}
+
+#[test]
+fn a_block_arm_keeps_the_layout_its_author_wrote() {
+    // The lowering writes the braces around a block arm's body, so the
+    // line break and indentation after the author's own `{` is what the
+    // rest of their block lines up against — dropping it put the first
+    // statement in one column and the rest in another (TASK-219).
+    let out = ok(
+        "enum E { A(n: number), B }\ndeclare const e: E;\nconst v = match (e) {\n  A(n) => {\n    const m = n + 1;\n    return m;\n  },\n  B => 0,\n};\n",
+    );
+    let block: Vec<&str> = out
+        .lines()
+        .skip_while(|line| !line.contains("const m = n + 1;"))
+        .take(2)
+        .collect();
+    assert_eq!(block.len(), 2, "{out}");
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    assert_eq!(indent(block[0]), indent(block[1]), "{out}");
+}
+
+#[test]
 fn unparenthesized_ternary_next_to_pipeline_is_an_error() {
-    let e = err("const a = c ? x : y |> f;\n");
-    assert!(e.message.contains("parenthesize"), "{}", e.message);
+    let src = "const a = c ? x : y |> f;\n";
+    let e = err(src);
+    // The message says what is wrong; how to fix it rides in the
+    // suggestion channel, where every rule's advice lives (TASK-218).
+    assert!(e.message.contains("could not be parsed"), "{}", e.message);
     assert_eq!((e.line, e.col), (1, 21));
+    assert!(
+        advice(src).iter().any(|a| a.contains("parenthesize")),
+        "{:?}",
+        advice(src)
+    );
 }
 
 #[test]
@@ -2254,8 +2330,14 @@ fn parenthesized_ternary_head_compiles() {
 
 #[test]
 fn unparenthesized_arrow_step_is_an_error() {
-    let e = err("const a = x |> n => n + 1;\n");
-    assert!(e.message.contains("parenthesize"), "{}", e.message);
+    let src = "const a = x |> n => n + 1;\n";
+    let e = err(src);
+    assert!(e.message.contains("could not be parsed"), "{}", e.message);
+    assert!(
+        advice(src).iter().any(|a| a.contains("parenthesize")),
+        "{:?}",
+        advice(src)
+    );
 }
 
 #[test]
@@ -2546,12 +2628,21 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
 
 #[test]
 fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
-    let e = err("const r = match value { A => 1, _ => 0 };\n");
-    assert!(
-        e.message.contains("wrap the scrutinee in parentheses"),
-        "{e}"
-    );
+    let src = "const r = match value { A => 1, _ => 0 };\n";
+    let e = err(src);
+    assert!(e.message.contains("could not be parsed"), "{e}");
     assert_eq!((e.line, e.col), (1, 11));
+    // The one malformed-match shape whose fix the parser can write: the
+    // scrutinee text is there, it only lacks its parentheses.
+    let d = &ttc::analyze(src, &Options::default())[0];
+    assert_eq!(d.code, ttc::DiagnosticCode::MalformedMatch);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(&src[edit.start..edit.end], "value");
+    assert_eq!(edit.replacement, "(value)");
+    assert_eq!(
+        with_suggestion_applied(src, d, 0),
+        "const r = match (value) { A => 1, _ => 0 };\n"
+    );
 }
 
 #[test]
@@ -3099,13 +3190,18 @@ fn result_region_in_a_match_arm_inherits_the_parent_slot() {
 
 #[test]
 fn try_and_let_else_are_rejected_inside_a_result_block() {
-    let e = err("const a = result {\n  const x <- f();\n  const y = try g();\n  x + y\n};\n");
+    let src = "const a = result {\n  const x <- f();\n  const y = try g();\n  x + y\n};\n";
+    let e = err(src);
     assert!(
         e.message.contains("`try` cannot be used here"),
         "{}",
         e.message
     );
-    assert!(e.message.contains("`<-` binding"), "{}", e.message);
+    assert!(
+        advice(src).iter().any(|a| a.contains("`<-` binding")),
+        "{:?}",
+        advice(src)
+    );
 
     let e = err(
         "const a = result {\n  const x <- f();\n  const Some(v) = o else { return 0; };\n  v\n};\n",
@@ -4011,19 +4107,20 @@ if let Circel(radius) = s { log(radius); }
     assert_eq!((e.line, e.col), (2, 8));
 }
 
-/// Applies a diagnostic's edits to `source`, back to front so earlier
-/// offsets stay valid — what an editor's quick fix does.
-fn with_suggestions_applied(source: &str, diagnostic: &ttc::Diagnostic) -> String {
-    let mut edits: Vec<&ttc::Edit> = diagnostic
-        .suggestions
-        .iter()
-        .filter_map(|s| s.edit.as_ref())
-        .collect();
-    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+/// Applies one of a diagnostic's suggestions to `source` — what an
+/// editor's quick fix does when the reader picks that action.
+///
+/// One suggestion, not all of them: the suggestions on a diagnostic are
+/// *alternative* ways to resolve it (`Suggestion`'s own contract), and
+/// closing a match's holes by writing the arms and by writing `_` are two
+/// of them.
+fn with_suggestion_applied(source: &str, diagnostic: &ttc::Diagnostic, which: usize) -> String {
+    let edit = diagnostic.suggestions[which]
+        .edit
+        .as_ref()
+        .expect("an applicable edit");
     let mut out = source.to_string();
-    for edit in edits {
-        out.replace_range(edit.start..edit.end, &edit.replacement);
-    }
+    out.replace_range(edit.start..edit.end, &edit.replacement);
     out
 }
 
@@ -4060,7 +4157,7 @@ fn applying_a_suggested_edit_resolves_the_diagnostic_it_came_from() {
     // write is what makes the error go away.
     let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
     let diagnostics = ttc::analyze(src, &Options::default());
-    let fixed = with_suggestions_applied(src, &diagnostics[0]);
+    let fixed = with_suggestion_applied(src, &diagnostics[0], 0);
     assert!(
         ttc::analyze(&fixed, &Options::default()).is_empty(),
         "{fixed}\n{:#?}",
@@ -4068,24 +4165,91 @@ fn applying_a_suggested_edit_resolves_the_diagnostic_it_came_from() {
     );
 }
 
-#[test]
-fn a_match_with_holes_carries_advice_that_names_no_edit() {
-    // Not every fix is a replacement. "Add the missing arms" is real
-    // advice with no text the compiler can write, and it travels in the
-    // same channel so a consumer has one place to look.
-    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (s) { Circle(r) => r };\n";
-    let diagnostics = ttc::analyze(src, &Options::default());
-    let d = diagnostics
-        .iter()
+/// The `match-not-exhaustive` diagnostic of `src`, or a panic.
+fn hole(src: &str) -> ttc::Diagnostic {
+    ttc::analyze(src, &Options::default())
+        .into_iter()
         .find(|d| d.code == ttc::DiagnosticCode::MatchNotExhaustive)
-        .expect("the hole is reported");
+        .expect("the hole is reported")
+}
+
+#[test]
+fn a_match_with_holes_carries_the_arms_that_close_them() {
+    // The compiler writes the arms: it is the only party that knows what
+    // is missing, what each case's payload is called, and where the body's
+    // braces are (TASK-216).
+    let src =
+        "enum Shape { Circle(r: number), Empty }\nconst a = match (s) {\n  Circle(r) => r,\n};\n";
+    let d = hole(src);
     assert!(!d.message.contains("add the missing arms"), "{}", d.message);
-    assert_eq!(d.suggestions.len(), 1);
-    assert_eq!(
-        d.suggestions[0].message,
-        "add the missing arms or a final `_` arm"
+    assert_eq!(d.suggestions.len(), 2);
+    assert_eq!(d.suggestions[0].message, "add the missing arms");
+    assert_eq!(d.suggestions[1].message, "or add a final `_` arm");
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(edit.replacement, "  Empty => undefined,\n");
+    // Inserted above the closing brace, so the arms land inside the body.
+    assert_eq!(&src[edit.start..edit.start + 2], "};");
+}
+
+#[test]
+fn an_authored_arm_binds_the_payload_the_body_will_need() {
+    // The message names the value (`Circle`); the arm has to bind what the
+    // body will use, and the field name comes from the declaration the
+    // analysis already read.
+    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (s) {\n  Empty => 0,\n};\n";
+    let d = hole(src);
+    assert!(d.message.contains("missing \"Circle\""), "{}", d.message);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(edit.replacement, "  Circle(r) => undefined,\n");
+}
+
+#[test]
+fn applying_the_authored_arms_makes_the_match_exhaustive() {
+    // The contract that makes the edit worth carrying, for a rule whose
+    // fix is an insertion rather than a replacement.
+    for src in [
+        "enum Shape { Circle(r: number), Square(s: number), Empty }\nconst a = match (v) {\n  Empty => 0,\n};\n",
+        "enum Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0 };\n",
+        // A tuple match: the fix is a combination per position.
+        "enum Dir { North(), South }\nenum Speed { Fast(), Slow }\nconst step = match (d, s) {\n  (North, Fast) => 2,\n  (North, Slow) => 1,\n  (South, Fast) => -1,\n};\n",
+        // A payload hole: the witness constrains one field and binds the rest.
+        "enum Inner { Yes, No }\nenum Outer { Wrap(inner: Inner, tag: number), Empty }\nconst a = match (v) {\n  Wrap(inner: Yes()) => 1,\n  Empty => 0,\n};\n",
+    ] {
+        let d = hole(src);
+        let fixed = with_suggestion_applied(src, &d, 0);
+        let left = ttc::analyze(&fixed, &Options::default());
+        assert!(
+            left.iter()
+                .all(|d| d.code != ttc::DiagnosticCode::MatchNotExhaustive),
+            "{fixed}\n{left:#?}"
+        );
+    }
+}
+
+#[test]
+fn the_wildcard_arm_closes_the_hole_too() {
+    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (v) {\n  Empty => 0,\n};\n";
+    let d = hole(src);
+    let fixed = with_suggestion_applied(src, &d, 1);
+    assert!(fixed.contains("  _ => undefined,"), "{fixed}");
+    assert!(
+        ttc::analyze(&fixed, &Options::default())
+            .iter()
+            .all(|d| d.code != ttc::DiagnosticCode::MatchNotExhaustive),
+        "{fixed}"
     );
-    assert!(d.suggestions[0].edit.is_none());
+}
+
+#[test]
+fn an_authored_arm_keeps_a_one_line_match_on_one_line() {
+    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0 };\n";
+    let d = hole(src);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(edit.replacement, ", Circle(r) => undefined, ");
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "enum Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0, Circle(r) => undefined, };\n"
+    );
 }
 
 #[test]

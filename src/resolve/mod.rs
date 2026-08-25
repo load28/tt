@@ -628,7 +628,10 @@ impl Resolver {
             .position(|v| v.name == path.name)
             .map(|index| VariantRef {
                 enum_def,
-                index: u32::try_from(index).expect("variant count fits u32"),
+                // One variant per `Case` the parser produced, so this
+                // counts syntax in a file — 4 billion of them would need a
+                // source larger than any file system offers.
+                index: u32::try_from(index).expect("a file has fewer than u32::MAX variants"),
             });
         match found {
             Some(variant) => {
@@ -643,7 +646,12 @@ impl Resolver {
                 // Same-domain suggestions only: the candidates are this
                 // enum's variants, never another enum's homonyms.
                 let suggestion = {
-                    let (_, data) = self.resolution.enum_of(enum_def).expect("still an enum");
+                    // `enum_def` was just read out of the resolution's
+                    // own enum table, and nothing removes from it.
+                    let (_, data) = self
+                        .resolution
+                        .enum_of(enum_def)
+                        .expect("the id came from the enum table");
                     nearest(&path.name, data.variants.iter().map(|v| v.name.as_str()))
                 };
                 self.resolution.uses.insert(path.node, Res::Unresolved);
@@ -694,7 +702,7 @@ impl Resolver {
                 Some(index) => {
                     let field_ref = FieldRef {
                         variant,
-                        index: u32::try_from(index).expect("field count fits u32"),
+                        index: u32::try_from(index).expect("a case has fewer than u32::MAX fields"),
                     };
                     self.resolution
                         .uses

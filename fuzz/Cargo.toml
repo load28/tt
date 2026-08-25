@@ -1,0 +1,41 @@
+# The fuzzing crate is deliberately outside the compiler's own workspace.
+#
+# `cargo fuzz` needs a nightly toolchain (libFuzzer's instrumentation is a
+# nightly `-Z` flag), and this repository pins one stable version for every
+# gate on purpose (`rust-toolchain.toml`). Keeping the fuzzers in a package
+# of their own means the pin keeps meaning what it says, and `cargo build`,
+# `cargo test` and `cargo clippy --all-targets` never reach for a toolchain
+# nobody asked for.
+#
+#     cargo +nightly fuzz run compile_any_bytes -- -max_total_time=60
+#     cargo +nightly fuzz run generated_tt_compiles -- -max_total_time=60
+[package]
+name = "ttc-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+ttc = { path = ".." }
+
+[[bin]]
+name = "compile_any_bytes"
+path = "fuzz_targets/compile_any_bytes.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "generated_tt_compiles"
+path = "fuzz_targets/generated_tt_compiles.rs"
+test = false
+doc = false
+bench = false
+
+# Standalone: this package is not a member of the compiler's workspace.
+[workspace]

@@ -59,7 +59,9 @@
 
 use crate::analysis::{CoveredEnum, NameKind, Origin, has_nested};
 use crate::ast::*;
-use crate::diagnostics::{DiagnosticCode, NON_EXHAUSTIVE_HELP, non_exhaustive_message};
+use crate::diagnostics::{
+    DiagnosticCode, MatchSite, non_exhaustive_message, non_exhaustive_suggestions,
+};
 use crate::error::TtError;
 use crate::verify;
 
@@ -72,6 +74,7 @@ use crate::verify;
 /// ([`crate::Options::defer_to_checker`]); every other tt-level rule is
 /// checked either way.
 pub(crate) fn check_all(
+    source: &str,
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
@@ -91,7 +94,12 @@ pub(crate) fn check_all(
     // typo's business.
     report_resolution(analyses, &mut checker.errors);
     if !defer_to_checker {
-        report_coverage(analyses, &checker.coverage_suppressed, &mut checker.errors);
+        report_coverage(
+            source,
+            analyses,
+            &checker.coverage_suppressed,
+            &mut checker.errors,
+        );
     }
     // Source order, whatever order the categories ran in — the reader fixes
     // a file top to bottom. Stable, so equal positions keep report order.
@@ -279,11 +287,10 @@ impl Checker {
                 TtError::span(
                     off,
                     off + "|>".len(),
-                    "pipeline: `|>` could not be parsed here (steps must be expressions; \
-                     parenthesize ternaries and arrow functions)"
-                        .to_string(),
+                    "pipeline: `|>` could not be parsed here".to_string(),
                 )
-                .code(DiagnosticCode::StrayPipe),
+                .code(DiagnosticCode::StrayPipe)
+                .help("a step is an expression — parenthesize a ternary or an arrow function"),
             );
         }
         for &off in &program.stray_if_lets {
@@ -291,11 +298,13 @@ impl Checker {
                 TtError::span(
                     off,
                     off + "if".len(),
-                    "`if let` could not be parsed here (pattern parens are mandatory, and the \
-                     `else` must be a block or another `if let`)"
-                        .to_string(),
+                    "`if let` could not be parsed here".to_string(),
                 )
-                .code(DiagnosticCode::StrayIfLet),
+                .code(DiagnosticCode::StrayIfLet)
+                .help(
+                    "the pattern parens are mandatory, and the `else` must be a block or \
+                     another `if let`",
+                ),
             );
         }
         for &off in &program.stray_results {
@@ -303,12 +312,13 @@ impl Checker {
                 TtError::span(
                     off,
                     off + "result".len(),
-                    "`result` block could not be parsed here (every binding is \
-                     `const <binding> <- <expression>;`, and the block must end with an \
-                     expression)"
-                        .to_string(),
+                    "`result` block could not be parsed here".to_string(),
                 )
-                .code(DiagnosticCode::StrayResult),
+                .code(DiagnosticCode::StrayResult)
+                .help(
+                    "every binding is `const <binding> <- <expression>;`, and the block must \
+                     end with an expression",
+                ),
             );
         }
         for &span in &program.result_missing_kw {
@@ -316,11 +326,19 @@ impl Checker {
                 TtError::span(
                     span.start,
                     span.end,
-                    "`result` binding is missing its declaration keyword \
-                     (write `const <binding> <- <expression>;`, or `let`/`var`)"
-                        .to_string(),
+                    "`result` binding is missing its declaration keyword".to_string(),
                 )
-                .code(DiagnosticCode::ResultMissingKeyword),
+                .code(DiagnosticCode::ResultMissingKeyword)
+                // The keyword goes in front of the binding, so the fix is
+                // one insertion the reporter can write. `const` is the
+                // suggested one; `let` and `var` bind the same way and the
+                // message names them.
+                .suggest(
+                    "declare the binding — `const` (or `let`/`var`) in front of it",
+                    span.start,
+                    span.start,
+                    "const ",
+                ),
             );
         }
         for &span in &program.result_nested_binds {
@@ -330,11 +348,11 @@ impl Checker {
                     span.end,
                     "`<-` binding must be a top-level statement of the `result` block — \
                      nested inside a block or a function it cannot early-return the \
-                     block's `Err`. Hoist it to the top level, or use `match` on the \
-                     `Result` instead"
+                     block's `Err`"
                         .to_string(),
                 )
-                .code(DiagnosticCode::ResultNestedBinding),
+                .code(DiagnosticCode::ResultNestedBinding)
+                .help("hoist it to the block's top level, or `match` on the `Result` instead"),
             );
         }
         for segment in &program.segments {
@@ -360,11 +378,14 @@ impl Checker {
                                 first.span.start,
                                 first.span.end,
                                 "`flow`: the first step cannot be a method step — it is the \
-                                 composed function's input, so it must be a function \
-                                 (`flow |> ((s: string) => s.trim()) |> ...`)"
+                                 composed function's input, so it must be a function"
                                     .to_string(),
                             )
-                            .code(DiagnosticCode::FlowFirstStepMethod),
+                            .code(DiagnosticCode::FlowFirstStepMethod)
+                            .help(
+                                "write the step as a function — \
+                                 `flow |> ((s: string) => s.trim()) |> ...`",
+                            ),
                         );
                     }
                     // Head and steps are expressions — `try` inside them is
@@ -397,19 +418,26 @@ impl Checker {
     /// module's top level, where there is nothing to return from.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
         if !stmt.in_function && place != Place::Function {
-            let message = if place == Place::Module {
-                "`try` must be inside a function — it compiles to a `return` that \
-                 propagates the `Err`, and at the top level of a module there is no \
-                 function to return from"
+            let (message, help) = if place == Place::Module {
+                (
+                    "`try` must be inside a function — it compiles to a `return` that \
+                     propagates the `Err`, and at the top level of a module there is no \
+                     function to return from",
+                    "move the code into a function whose `Err` this can return, or `match` \
+                     on the `Result` instead",
+                )
             } else {
-                "`try` cannot be used here — it compiles to a `return`, which would exit \
-                 this construct's own IIFE instead of the enclosing function. Extract the \
-                 logic into a function (a `try` inside a function written here is fine), \
-                 or use a `<-` binding in a `result` block"
+                (
+                    "`try` cannot be used here — it compiles to a `return`, which would \
+                     exit this construct's own IIFE instead of the enclosing function",
+                    "extract the logic into a function (a `try` inside a function written \
+                     here is fine), or use a `<-` binding in a `result` block",
+                )
             };
             self.error(
                 TtError::span(stmt.span.start, stmt.span.end, message.to_string())
-                    .code(DiagnosticCode::TryPlacement),
+                    .code(DiagnosticCode::TryPlacement)
+                    .help(help),
             );
         }
         self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
@@ -428,11 +456,14 @@ impl Checker {
                     stmt.head_span.end,
                     "let-else cannot be used here — its `else` block's exit (`return`, \
                      `break`, `continue`) would leave this construct's own IIFE instead of \
-                     the enclosing function. Extract the logic into a function (a let-else \
-                     inside a function written here is fine), or match the value instead"
+                     the enclosing function"
                         .to_string(),
                 )
-                .code(DiagnosticCode::LetElsePlacement),
+                .code(DiagnosticCode::LetElsePlacement)
+                .help(
+                    "extract the logic into a function (a let-else inside a function \
+                     written here is fine), or `match` on the value instead",
+                ),
             );
         }
         if !stmt.diverges {
@@ -440,12 +471,13 @@ impl Checker {
                 TtError::span(
                     stmt.else_off,
                     stmt.else_off + "else".len(),
-                    "let-else: every path through the `else` block must diverge — end it \
-                     with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts \
-                     when both branches do)"
-                        .to_string(),
+                    "let-else: every path through the `else` block must diverge".to_string(),
                 )
-                .code(DiagnosticCode::LetElseNotDiverging),
+                .code(DiagnosticCode::LetElseNotDiverging)
+                .help(
+                    "end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` \
+                     counts when both branches do)",
+                ),
             );
         }
         self.check_leaf_bindings(&stmt.alternatives[0]);
@@ -467,13 +499,16 @@ impl Checker {
                 TtError::span(
                     stmt.head_span.start,
                     stmt.head_span.end,
-                    "`if let` cannot be used in expression position (a template interpolation, \
-                     a scrutinee or guard, an expression arm body, a `try` expression, or a \
-                     pipeline) — it compiles to a block statement. Inside a function written \
-                     here it is fine"
+                    "`if let` cannot be used in expression position (a template \
+                     interpolation, a scrutinee or guard, an expression arm body, a `try` \
+                     expression, or a pipeline) — it compiles to a block statement"
                         .to_string(),
                 )
-                .code(DiagnosticCode::IfLetPlacement),
+                .code(DiagnosticCode::IfLetPlacement)
+                .help(
+                    "write it inside a function here (an `if let` in one is fine), or \
+                     `match` on the value instead",
+                ),
             );
         }
         self.check_leaf_bindings(&stmt.alternatives[0]);
@@ -501,8 +536,7 @@ impl Checker {
         if alts.len() < 2 {
             return;
         }
-        if alts.iter().any(has_nested) {
-            let at = alts.iter().find(|a| has_nested(a)).unwrap();
+        if let Some(at) = alts.iter().find(|a| has_nested(a)) {
             self.error(
                 TtError::span(
                     at.tag_off,
@@ -599,11 +633,10 @@ impl Checker {
                     TtError::span(
                         alt.tag_off,
                         alt.tag_off + alt.tag.len(),
-                        format!(
-                            "match: binding `{name}` is used more than once in this pattern (rename one with `field: alias`)"
-                        ),
+                        format!("match: binding `{name}` is used more than once in this pattern"),
                     )
-                    .code(DiagnosticCode::PatternDuplicateBinding),
+                    .code(DiagnosticCode::PatternDuplicateBinding)
+                    .help("rename one of them with `field: alias`"),
                 );
             }
         }
@@ -628,12 +661,13 @@ impl Checker {
                     other.pattern_span.start,
                     other.pattern_span.end,
                     format!(
-                        "match: cannot mix tag patterns and literal patterns in the same match \
-                         (this match starts with {first} patterns) — the two compare different \
-                         things (`$tt_m.kind` vs `$tt_m`); split them into two matches"
+                        "match: cannot mix tag patterns and literal patterns in the same \
+                         match (this match starts with {first} patterns) — the two compare \
+                         different things (`$tt_m.kind` vs `$tt_m`)"
                     ),
                 )
                 .code(DiagnosticCode::MatchMixedPatterns)
+                .help("split them into two matches")
                 .owner(expr.keyword_off, expr.body_close + 1),
             );
             // A mixed match has no one discriminant, so its coverage answer
@@ -705,8 +739,9 @@ impl Checker {
                     // must bind the exact same (field, name) set — which is
                     // also why a nested pattern (per-alternative conditions
                     // and paths) cannot appear inside an or-pattern.
-                    if alts.len() > 1 && alts.iter().any(has_nested) {
-                        let at = alts.iter().find(|a| has_nested(a)).unwrap();
+                    if alts.len() > 1
+                        && let Some(at) = alts.iter().find(|a| has_nested(a))
+                    {
                         self.error(
                             TtError::span(
                                 at.tag_off,
@@ -814,8 +849,9 @@ impl Checker {
                     let mut bound: Vec<&str> = Vec::new();
                     for elem in elems {
                         let Pattern::Tags(alts) = elem else { continue };
-                        if alts.len() > 1 && alts.iter().any(has_nested) {
-                            let at = alts.iter().find(|a| has_nested(a)).unwrap();
+                        if alts.len() > 1
+                            && let Some(at) = alts.iter().find(|a| has_nested(a))
+                        {
                             self.error(
                                 TtError::span(
                                     at.tag_off,
@@ -851,10 +887,11 @@ impl Checker {
                                         alts[0].tag_off,
                                         alts[0].tag_off + alts[0].tag.len(),
                                         format!(
-                                            "match: binding `{name}` is used more than once in this tuple pattern (rename one with `field: alias`)"
+                                            "match: binding `{name}` is used more than once in this tuple pattern"
                                         ),
                                     )
-                                    .code(DiagnosticCode::PatternDuplicateBinding),
+                                    .code(DiagnosticCode::PatternDuplicateBinding)
+                                    .help("rename one of them with `field: alias`"),
                                 );
                                 continue;
                             }
@@ -889,6 +926,7 @@ impl Checker {
 /// cause and its coverage hole the effect, so only the cause is reported
 /// for that match — while every *other* match keeps its own answer.
 fn report_coverage(
+    source: &str,
     analyses: &crate::analysis::PatternAnalyses,
     suppressed: &[usize],
     errors: &mut Vec<TtError>,
@@ -897,14 +935,11 @@ fn report_coverage(
         .matches
         .iter()
         .filter(|m| !m.has_unresolved && !suppressed.contains(&m.keyword_off))
-        .filter_map(|m| {
-            m.coverage
-                .as_ref()
-                .map(|c| ((m.keyword_off, m.head_end), c))
-        })
+        .filter_map(|m| m.coverage.as_ref().map(|c| (m, c)))
         .filter(|(_, c)| !c.missing.is_empty());
 
-    for ((offset, head_end), coverage) in uncovered {
+    for (analysis, coverage) in uncovered {
+        let (offset, head_end) = (analysis.keyword_off, analysis.head_end);
         let message = if coverage.positions.len() == 1 {
             // A single match's one position always resolved — that is what
             // makes it a coverage answer at all.
@@ -931,11 +966,33 @@ fn report_coverage(
                 .collect();
             non_exhaustive_message(Some(&format!("({names})")), &combinations, true)
         };
-        errors.push(
-            TtError::span(offset, head_end, message)
-                .code(DiagnosticCode::MatchNotExhaustive)
-                .help(NON_EXHAUSTIVE_HELP),
+        // The arms that close the hole, written out: one per witness, each
+        // position's binding form joined the way a tuple pattern is
+        // written. Everything in the text comes from the analysis, so the
+        // edit and the message answer from one model.
+        let arms: Vec<String> = coverage
+            .missing
+            .iter()
+            .map(|row| {
+                if row.arm.len() > 1 {
+                    format!("({})", row.arm.join(", "))
+                } else {
+                    row.arm.first().cloned().unwrap_or_else(|| "_".to_string())
+                }
+            })
+            .collect();
+        let mut error =
+            TtError::span(offset, head_end, message).code(DiagnosticCode::MatchNotExhaustive);
+        error.suggestions = non_exhaustive_suggestions(
+            source,
+            MatchSite {
+                keyword_off: offset,
+                body_open: analysis.body_open,
+                body_close: analysis.body_close,
+            },
+            &arms,
         );
+        errors.push(error);
     }
 }
 

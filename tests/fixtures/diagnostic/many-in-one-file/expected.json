@@ -8,8 +8,24 @@
     "message": "match on enum Shape is not exhaustive: missing \"Rect\"",
     "suggestions": [
       {
-        "edit": null,
-        "message": "add the missing arms or a final `_` arm"
+        "edit": {
+          "col": 1,
+          "endCol": 1,
+          "endLine": 6,
+          "line": 6,
+          "replacement": "  Rect(w, h) => undefined,\n"
+        },
+        "message": "add the missing arms"
+      },
+      {
+        "edit": {
+          "col": 1,
+          "endCol": 1,
+          "endLine": 6,
+          "line": 6,
+          "replacement": "  _ => undefined,\n"
+        },
+        "message": "or add a final `_` arm"
       }
     ]
   },

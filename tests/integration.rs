@@ -4,9 +4,7 @@
 //! These tests skip silently when `tsc` or `node` is not installed.
 
 use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ttc::{Options, SourceKind, compile};
 
@@ -29,16 +27,13 @@ fn have(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
+mod common;
+use common::Workspace;
 
-fn tmpdir() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "tt-test-{}-{}",
-        std::process::id(),
-        DIR_SEQ.fetch_add(1, Ordering::SeqCst)
-    ));
-    fs::create_dir_all(&dir).unwrap();
-    dir
+/// A directory for one case, removed when the case ends — and kept, with
+/// its path printed, when the case failed (`tests/common/mod.rs`).
+fn tmpdir() -> Workspace {
+    Workspace::new("test")
 }
 
 /// Appended to every snippet so it is a module (like real tt files with
@@ -70,6 +65,27 @@ fn write_runtime(dir: &std::path::Path) {
     fs::write(dir.join("runtime.ts"), ttc::RUNTIME_SOURCE).unwrap();
 }
 
+/// Everything the child said, so a failure that is not a type error still
+/// names itself.
+///
+/// `tsc`'s diagnostics go to stdout, and printing only those makes a run
+/// that never got that far — killed for memory, missing from PATH, dead on
+/// a signal — look like a check that simply found nothing. An intermittent
+/// failure that leaves no evidence is one nobody can act on
+/// (docs/tasks/TASK-222).
+fn tsc_report(out: &std::process::Output) -> String {
+    let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    if !stderr.trim().is_empty() {
+        text.push_str("\n---tsc stderr---\n");
+        text.push_str(&stderr);
+    }
+    if !out.status.success() {
+        text.push_str(&format!("\n---tsc exit: {}---\n", out.status));
+    }
+    text
+}
+
 /// Compile tt source and type-check the output with tsc. Returns (ok, tsc output).
 fn typecheck(src: &str) -> (bool, String) {
     let code =
@@ -84,7 +100,7 @@ fn typecheck(src: &str) -> (bool, String) {
         .args(TSC_FLAGS)
         .output()
         .expect("failed to run tsc");
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let text = tsc_report(&out);
     (
         out.status.success(),
         format!("{text}\n---compiled---\n{code}"),
@@ -127,7 +143,7 @@ export const render = (state: State) => <main>{match (state) {
     assert!(
         out.status.success(),
         "{}\n---compiled---\n{code}",
-        String::from_utf8_lossy(&out.stdout)
+        tsc_report(&out)
     );
 }
 
@@ -149,7 +165,7 @@ fn typecheck_recovery(src: &str) -> (bool, String) {
         .args(TSC_FLAGS)
         .output()
         .expect("failed to run tsc");
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let text = tsc_report(&out);
     (
         out.status.success(),
         format!("{text}\n---compiled---\n{code}"),
@@ -182,7 +198,7 @@ fn typecheck_with_std(src: &str) -> (bool, String) {
         ])
         .output()
         .expect("failed to run tsc");
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let text = tsc_report(&out);
     (
         out.status.success(),
         format!("{text}\n---compiled---\n{code}"),
@@ -3155,7 +3171,6 @@ fn a_node_stack_trace_points_at_the_tt_source() {
     assert!(trace.contains("app.tt:10:"), "{trace}");
     // No frame should name the generated file.
     assert!(!trace.contains("app.ts:"), "{trace}");
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -3199,5 +3214,4 @@ fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
     assert!(trace.contains("unexpected case"), "{trace}");
     // Line 3 is `return match (e) {` — the construct the guard belongs to.
     assert!(trace.contains("app.tt:3:"), "{trace}");
-    fs::remove_dir_all(&dir).ok();
 }

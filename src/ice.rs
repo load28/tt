@@ -360,6 +360,34 @@ fn report(message: &str, location: Option<String>, file: Option<&Path>) -> Strin
     out
 }
 
+/// The one-line form of a compiler bug, for a consumer that receives a
+/// message instead of reading a terminal — `--server`'s error field.
+///
+/// The prefix lives here, next to [`report`]'s, so the two cannot drift
+/// and no reporting site has to remember it.
+pub fn bug_message(message: &str) -> String {
+    format!("internal compiler error: {message}")
+}
+
+/// Ends compilation because the compiler broke its own contract.
+///
+/// Every panic reaches the user through [`install_reporter`], which writes
+/// `error: internal compiler error: <message>` and the whole "this is a bug
+/// in ttc" apparatus around it. So the message here is only the *what* —
+/// writing the prefix again produced `internal compiler error: internal
+/// compiler error: …` at 53 sites before this existed (TASK-221).
+///
+/// Use it where a lowering finds a shape that cannot arise from any input:
+/// a plain `panic!` says the same thing to the runtime and nothing to the
+/// reader about which kind of failure this is. A *validator* contract has
+/// a name of its own instead — see [`InternalCompilerError`].
+macro_rules! bug {
+    ($($arg:tt)*) => {
+        ::std::panic!("{}", ::std::format_args!($($arg)*))
+    };
+}
+pub(crate) use bug;
+
 /// Replaces the runtime's panic message with the compiler's own report.
 ///
 /// Call once, before any work. Every panic — a validator's
@@ -423,6 +451,61 @@ pub fn catching<T>(work: impl FnOnce() -> T) -> Result<T, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_prefix_is_written_in_exactly_one_place() {
+        // `report` and `bug_message` both open with it, and every reporting
+        // site relies on that. A site that writes it too renders
+        // `internal compiler error: internal compiler error: …`, which is
+        // what 53 sites did before TASK-221 — a mistake no reviewer catches
+        // by reading one line of a lowering, so the crate's own text is
+        // what checks it.
+        const PREFIX: &str = "internal compiler error:";
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut offenders = Vec::new();
+        let mut stack = vec![src];
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("the crate's own sources are readable") {
+                let path = entry.expect("a readable directory entry").path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs")
+                    || path.file_name() == Some(std::ffi::OsStr::new("ice.rs"))
+                {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("a readable source file");
+                for (number, line) in text.lines().enumerate() {
+                    let code = line.trim_start();
+                    if code.starts_with("//") || !line.contains(PREFIX) {
+                        continue;
+                    }
+                    offenders.push(format!("{}:{}", path.display(), number + 1));
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "these sites write the prefix the reporter already writes \
+             (use `ice::bug!` or `ice::bug_message`): {offenders:?}"
+        );
+    }
+
+    #[test]
+    fn a_bug_is_reported_with_one_prefix() {
+        let raised = std::panic::catch_unwind(|| bug!("a shape that cannot arise: {}", 7));
+        let message = payload_message(raised.expect_err("bug! panics").as_ref());
+        assert_eq!(message, "a shape that cannot arise: 7");
+        assert!(
+            report(&message, None, None).starts_with("error: internal compiler error: a shape"),
+        );
+        assert_eq!(
+            bug_message(&message),
+            "internal compiler error: a shape that cannot arise: 7"
+        );
+    }
 
     #[test]
     fn a_report_says_what_broke_where_and_whose_fault_it_is_not() {

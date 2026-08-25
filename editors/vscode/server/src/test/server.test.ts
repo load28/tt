@@ -683,7 +683,10 @@ test(
     const diagnostics = await published(source);
     const failed = diagnostics.find((d: any) => d.code === "malformed-match");
     assert.ok(failed, `no parse report in: ${JSON.stringify(diagnostics)}`);
-    assert.match(failed.message, /wrap the scrutinee in parentheses/);
+    assert.match(failed.message, /tt `match` could not be parsed/);
+    // The fix travels as a suggestion with an edit, not as a sentence in
+    // the message (TASK-218), so the editor can offer it as a quick fix.
+    assert.deepEqual(failed.data?.suggestions?.[0]?.edit?.replacement, "(shape)");
     assert.equal(failed.range.start.line, 2);
     assert.equal(covered(source, failed.range), "match");
   },
@@ -743,7 +746,11 @@ test(
         context: { diagnostics: [diagnostic] },
       });
       const actions = (response.result ?? []) as any[];
-      const fix = actions.find((a) => a.title.includes("Circle"));
+      // The action is titled with the compiler's own sentence, not with a
+      // phrase the editor builds out of the replacement (TASK-216).
+      const fix = actions.find(
+        (a) => a.title === "a case with a similar name exists",
+      );
       assert.ok(fix, `no replacement quick fix in: ${JSON.stringify(actions)}`);
       const edits = fix.edit.changes[uri];
       assert.equal(edits.length, 1);
@@ -756,7 +763,7 @@ test(
 );
 
 test(
-  "a match with holes still offers arm insertion, keyed by the rule's code",
+  "a match with holes offers the arms the compiler wrote for it",
   { skip, timeout },
   async () => {
     const source = [
@@ -784,13 +791,20 @@ test(
         context: { diagnostics: [diagnostic] },
       });
       const actions = (response.result ?? []) as any[];
-      const armFix = actions.find((a) => a.title.includes("Rect"));
+      // Nothing here reads the message: the arms, their payload bindings
+      // and the insertion point all arrive as an edit on the diagnostic,
+      // so the extension has no rule-specific branch left (TASK-216).
+      const armFix = actions.find((a) => a.title === "add the missing arms");
       assert.ok(armFix, `no arm quick fix in: ${JSON.stringify(actions)}`);
       const inserted = armFix.edit.changes[uri][0].newText;
-      assert.match(inserted, /Rect\(w, h\) => undefined,/);
-      assert.ok(
-        actions.some((a) => a.title.includes("_")),
-        "the wildcard fix is still offered",
+      assert.match(inserted, /^ {2}Rect\(w, h\) => undefined,\n$/);
+      const wildcard = actions.find(
+        (a) => a.title === "or add a final `_` arm",
+      );
+      assert.ok(wildcard, "the wildcard fix is still offered");
+      assert.match(
+        wildcard.edit.changes[uri][0].newText,
+        /^ {2}_ => undefined,\n$/,
       );
     } finally {
       stop();

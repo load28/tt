@@ -14,7 +14,7 @@ use crate::ast::{
     Arm, Binding, GuardExpr, MatchExpr, Pattern, RecoveryKind, RecoveryNode, Span, TagPattern,
     TupleArm, TupleMatchExpr, TuplePattern,
 };
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind};
 
 /// What [`parse_match`] found: a single match or a tuple match. The arms
 /// decide — a tuple match needs every arm to be a parenthesized tuple
@@ -37,7 +37,9 @@ pub(super) fn parse_match<'t>(
         return Claim::Parsed(parsed);
     }
     let committed = match cur.peek() {
-        Some(token) if matches!(token.kind, TokenKind::Ident) => true,
+        Some(token) if matches!(token.kind, TokenKind::Ident) => (cur.idx..cur.tokens.len())
+            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
+            .is_some_and(|open| body_reads_as_arms(cur.parser.src, cur.tokens, open)),
         Some(token) if matches!(token.kind, TokenKind::Punct(b'(')) => cur
             .find_close()
             .filter(|close| {
@@ -46,39 +48,50 @@ pub(super) fn parse_match<'t>(
                     Some(TokenKind::Punct(b'{'))
                 )
             })
-            .and_then(|close| {
-                let body = Cursor {
-                    idx: close + 1,
-                    ..cur
-                };
-                body.find_close().map(|body_close| (close + 2, body_close))
-            })
-            .is_some_and(|(start, end)| {
-                cur.tokens[start..end]
-                    .iter()
-                    .any(|token| matches!(token.kind, TokenKind::Arrow))
-            }),
+            .is_some_and(|close| body_reads_as_arms(cur.parser.src, cur.tokens, close + 1)),
         _ => false,
     };
     if committed {
-        let message = if matches!(cur.peek(), Some(token) if matches!(token.kind, TokenKind::Ident))
-        {
-            "`match` could not be parsed here — wrap the scrutinee in parentheses: \
-             `match (<expression>) { ... }`"
-                .to_string()
-        } else {
-            "tt `match` could not be parsed (write `match (<scrutinee>) { <pattern> => <body> }`; \
-             tuple patterns must match the scrutinee arity)"
-                .to_string()
-        };
-        let end = (cur.idx..cur.tokens.len())
-            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
+        // The token index of the `{` that opens the body — the end of the
+        // scrutinee text, and the start of the range the recovery covers.
+        let body_open = (cur.idx..cur.tokens.len())
+            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')));
+        let end = body_open
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
             .map_or(cur.range_end, |token| token.span.end);
+        let mut error = crate::error::TtError::span(
+            kw_span.start,
+            kw_span.end,
+            "tt `match` could not be parsed".to_string(),
+        )
+        .code(crate::DiagnosticCode::MalformedMatch);
+        // A scrutinee that starts with a bare identifier is the one shape
+        // whose fix the parser can write: the text between the keyword and
+        // the body is the expression, and it only needs parentheses around
+        // it. Anything else gets the rule's form, which is advice.
+        error = match (cur.peek(), body_open) {
+            (Some(token), Some(open))
+                if matches!(token.kind, TokenKind::Ident)
+                    && token.span.start < cur.tokens[open].span.start =>
+            {
+                let scrutinee = cur.parser.src[token.span.start..cur.tokens[open].span.start]
+                    .trim_end()
+                    .to_string();
+                error.suggest(
+                    "a match scrutinee is parenthesized — `match (<expression>) { ... }`",
+                    token.span.start,
+                    token.span.start + scrutinee.len(),
+                    format!("({scrutinee})"),
+                )
+            }
+            _ => error.help(
+                "write `match (<scrutinee>) { <pattern> => <body> }`; a tuple pattern must \
+                 match the scrutinee arity",
+            ),
+        };
         Claim::Malformed {
-            error: crate::error::TtError::span(kw_span.start, kw_span.end, message)
-                .code(crate::DiagnosticCode::MalformedMatch),
+            error,
             recovery: RecoveryNode {
                 span: Span {
                     start: kw_span.start,
@@ -90,6 +103,58 @@ pub(super) fn parse_match<'t>(
     } else {
         Claim::NotTt
     }
+}
+
+/// Whether the braces opening at `open` hold **arms** rather than
+/// statements — the one question that separates a near-miss tt match from
+/// TypeScript that merely looks like one.
+///
+/// `match` is not a reserved word, so it is an ordinary name in TypeScript:
+/// a method (`class C { match(x) { ... } }`), a binding (`for (const match
+/// of xs)`), a function. Every one of those is `match`, something, and a
+/// block — the same silhouette a match has. What is *not* the same is what
+/// the block contains, and that is where the answer has to come from
+/// (TASK-229).
+///
+/// An arm list is `<pattern> => <body>`, comma-separated. So at the body's
+/// own brace level:
+///
+/// - the first token cannot be a statement keyword (`return`, `const`, …),
+///   because a pattern is a tag, a literal, `_`, or a tuple. `true` and
+///   `false` are reserved words *and* literal patterns, so they stay.
+/// - a `=>` must appear before any `;`, because a statement list separates
+///   with semicolons and an arm list never reaches one at its own level.
+///
+/// Depth matters: the arrow in `return f(y => y)` belongs to a call, not to
+/// the block, which is exactly why "contains an arrow anywhere" claimed
+/// every un-annotated method whose body happened to use one.
+fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
+    let Some(first) = tokens.get(open + 1) else {
+        return false;
+    };
+    if matches!(first.kind, TokenKind::Ident) {
+        let word = &src[first.span.start..first.span.end];
+        if is_reserved(word) && word != "true" && word != "false" {
+            return false;
+        }
+    }
+    let mut depth = 0usize;
+    for token in &tokens[open + 1..] {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']') => depth = depth.saturating_sub(1),
+            TokenKind::Punct(b'}') => {
+                if depth == 0 {
+                    return false; // the body ended with no arm in it
+                }
+                depth -= 1;
+            }
+            TokenKind::Punct(b';') if depth == 0 => return false,
+            TokenKind::Arrow if depth == 0 => return true,
+            _ => {}
+        }
+    }
+    false
 }
 
 fn parse_match_complete<'t>(

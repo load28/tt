@@ -223,20 +223,21 @@
 | TASK-213 | 진단 표현 계층 — 렌더러, 코드 노출, 구조화된 제안 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-213](./TASK-213-diagnostic-presentation.md) |
 | TASK-214 | 패닉 안전망 — 컴파일러 버그를 버그로 보고 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-214](./TASK-214-panic-safety-net.md) |
 | TASK-215 | 스냅샷 픽스처 — 방출과 진단 전체 고정 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-215](./TASK-215-snapshot-fixtures.md) |
-| TASK-216 | exhaustiveness 수정을 컴파일러 저작 편집으로 | 대기 | — | — | [TASK-216](./TASK-216-compiler-authored-arm-edits.md) |
-| TASK-217 | VS Code 확장 completion 테스트 불안정성 조사 | 대기 | — | — | [TASK-217](./TASK-217-completion-test-instability.md) |
-| TASK-218 | 남은 규칙의 수정 조언을 Suggestion으로 | 대기 | — | — | [TASK-218](./TASK-218-suggestions-for-remaining-rules.md) |
-| TASK-219 | 방출 코드 가독성 — 블록 암 들여쓰기와 런타임 import 위치 | 대기 | — | — | [TASK-219](./TASK-219-generated-code-readability.md) |
-| TASK-220 | 진단 렌더러의 ANSI 색상 | 대기 | — | — | [TASK-220](./TASK-220-diagnostic-colour.md) |
-| TASK-221 | unwrap/expect 감사 | 대기 | — | — | [TASK-221](./TASK-221-panic-surface-audit.md) |
-| TASK-222 | 부하 시 integration 스위트의 간헐적 실패 | 대기 | — | — | [TASK-222](./TASK-222-integration-suite-flakiness.md) |
-| TASK-223 | 실세계 코퍼스 차등 테스트와 퍼징 | 대기 | — | — | [TASK-223](./TASK-223-corpus-and-fuzzing.md) |
-| TASK-224 | 커버리지 측정과 게이트 | 대기 | — | — | [TASK-224](./TASK-224-coverage-gate.md) |
-| TASK-225 | 성능 벤치마크와 회귀 게이트 | 대기 | — | — | [TASK-225](./TASK-225-performance-benchmarks.md) |
+| TASK-216 | exhaustiveness 수정을 컴파일러 저작 편집으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-216](./TASK-216-compiler-authored-arm-edits.md) |
+| TASK-217 | VS Code 확장 completion 테스트 불안정성 조사 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-217](./TASK-217-completion-test-instability.md) |
+| TASK-218 | 남은 규칙의 수정 조언을 Suggestion으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-218](./TASK-218-suggestions-for-remaining-rules.md) |
+| TASK-219 | 방출 코드 가독성 — 블록 암 들여쓰기와 런타임 import 위치 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-219](./TASK-219-generated-code-readability.md) |
+| TASK-220 | 진단 렌더러의 ANSI 색상 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-220](./TASK-220-diagnostic-colour.md) |
+| TASK-221 | unwrap/expect 감사 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-221](./TASK-221-panic-surface-audit.md) |
+| TASK-222 | 부하 시 integration 스위트의 간헐적 실패 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-222](./TASK-222-integration-suite-flakiness.md) |
+| TASK-223 | 실세계 코퍼스 차등 테스트와 퍼징 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-223](./TASK-223-corpus-and-fuzzing.md) |
+| TASK-224 | 커버리지 측정과 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-224](./TASK-224-coverage-gate.md) |
+| TASK-225 | 성능 벤치마크와 회귀 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-225](./TASK-225-performance-benchmarks.md) |
 | TASK-226 | 로컬과 CI의 Rust 툴체인 격차 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-226](./TASK-226-local-ci-toolchain-parity.md) |
 | TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 진행 중 | 2026-08-25 | — | [TASK-227](./TASK-227-local-only-ci.md) |
-| TASK-228 | 부분 스냅샷에서 정상 파일의 tt 진단이 사라짐 | 대기 | — | — | [TASK-228](./TASK-228-partial-snapshot-diagnostics.md) |
+| TASK-228 | 부분 스냅샷에서 정상 파일의 tt 진단이 사라짐 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-228](./TASK-228-partial-snapshot-diagnostics.md) |
+| TASK-229 | 바인딩 이름 `match`가 tt match로 오인된다 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-229](./TASK-229-match-claimed-as-a-binding-name.md) |
 
 ## 다음 태스크 번호
 
-**TASK-229**
+**TASK-230**

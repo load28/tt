@@ -110,11 +110,20 @@ export function findCompiler(
  * missing" — and skip, not fail, on the latter.
  */
 export function findTsgo(workspaceRoots: string[]): string {
+  // The order the compiler itself resolves in (`src/typescript/service.rs`
+  // `service_binary`). A guard that mirrors only part of it answers "no
+  // toolchain" where the compiler finds one — and then a suite skips, or
+  // an unguarded case fails, depending on which half of the rules the
+  // machine happens to satisfy (TASK-217).
+  const named = process.env.TTC_TSGO_BIN;
+  if (named && exists(named)) return named;
   const root = process.env.TTC_TSGO_ROOT;
   if (root) {
     const built = path.join(root, "built/local/tsgo");
     if (exists(built)) return built;
   }
+  const sibling = path.join("..", "typescript-go", "built/local/tsgo");
+  if (exists(sibling)) return sibling;
   const platform = `${process.platform}-${process.arch}`;
   for (const start of [...workspaceRoots, process.cwd()]) {
     let dir = start;

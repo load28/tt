@@ -13,7 +13,8 @@ export function describe(r: Reading): string {
     const $tt_m = r;
     do {
       if ($tt_m.kind === "Value") { const { n } = $tt_m; if (n > 100) { $tt_v0 = "high"; break; } }
-      if ($tt_m.kind === "Value") { const { n } = $tt_m; { const label = n.toFixed(1);
+      if ($tt_m.kind === "Value") { const { n } = $tt_m; {
+      const label = n.toFixed(1);
       $tt_v0 = `value ${label}`; break;
       } }
       if ($tt_m.kind === "Missing") { $tt_v0 = "missing"; break; }

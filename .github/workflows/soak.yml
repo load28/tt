@@ -1,0 +1,90 @@
+# The gates that look for bugs rather than confirming known answers: the
+# whole corpus, and the two fuzz targets (docs/tasks/TASK-223).
+#
+# Manual, like `CI` — this repository is on the free plan, and a weekly run
+# of a full differential plus two quarter-hour fuzzers is real money for a
+# yield nobody can predict. Dispatch it when a change deserves it: the
+# parser, the scanner, codegen, or anything else that decides what tt claims.
+#
+# Locally, without spending anything:
+#
+#     TTC_CORPUS_FULL=1 TTC_REQUIRE_CORPUS=1 cargo test --test corpus --release
+#     cd fuzz && cargo +nightly fuzz run compile_any_bytes -- -max_total_time=900
+#     cd fuzz && cargo +nightly fuzz run generated_tt_compiles -- -max_total_time=900
+name: Soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      fuzz_seconds:
+        description: "Seconds to run each fuzz target"
+        default: "900"
+
+jobs:
+  corpus:
+    name: differential — the whole corpus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      # Pinned for the same reason the type-checking job pins it: a
+      # floating `main` would break this gate on someone else's commit.
+      - name: Check out typescript-go
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/typescript-go
+          ref: c6b013f5706d58582f566df778cc0df2683b58f5
+          path: typescript-go
+
+      - name: Every file, not a sample
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_CORPUS_FULL: "1"
+          TTC_REQUIRE_CORPUS: "1"
+        run: cargo test --test corpus --release -- --nocapture
+
+  fuzz:
+    name: fuzz — ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [compile_any_bytes, generated_tt_compiles]
+    steps:
+      - uses: actions/checkout@v4
+
+      # libFuzzer's instrumentation is a nightly flag, which is why the
+      # fuzzers are a package of their own — the repository's pinned stable
+      # toolchain stays the one every other gate runs on.
+      - name: Install nightly
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+
+      - name: Fuzz
+        working-directory: fuzz
+        run: |
+          cargo +nightly fuzz run ${{ matrix.target }} -- \
+            -max_total_time=${{ github.event.inputs.fuzz_seconds || 900 }} \
+            -rss_limit_mb=4096
+
+      # A crash is a file. Without this the run says "failed" and the input
+      # that caused it is gone with the runner.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts-${{ matrix.target }}
+          path: fuzz/artifacts
+          if-no-files-found: ignore

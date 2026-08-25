@@ -197,7 +197,10 @@ fn rendered_diagnostics_match_their_fixture() {
         let rendered: Vec<String> = report
             .diagnostics
             .iter()
-            .map(|d| ttc::render::diagnostic(d, &source, &name))
+            // Plain on purpose: a fixture is the diagnostic's text, and
+            // the renderer's contract is that no styling means the same
+            // bytes it has always written (TASK-220).
+            .map(|d| ttc::render::diagnostic(d, &source, &name, ttc::render::Styles::PLAIN))
             .collect();
         expect(
             &case.join("expected.stderr"),

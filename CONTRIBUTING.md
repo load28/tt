@@ -124,6 +124,37 @@ TypeScript 7 경로를 실제로 도는 것이기 때문입니다.
 처음 접하는 기능이면 영문·한글 README에도 반영하세요. 공개 Rust API를 바꾸면
 rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실행됩니다.
 
+### 요청할 때만 도는 두 단계
+
+기본 실행에는 없습니다. 각각 몇 분이 걸리고, 둘 다 "이 변경이 옳은가"에 혼자
+답하지는 못하기 때문입니다. 이름을 대면 돕니다.
+
+```sh
+./scripts/ci coverage   # 줄 커버리지가 기준선 아래로 떨어지면 실패
+./scripts/ci bench      # 이 revision과 merge base를 한 기계에서 비교
+```
+
+- **커버리지 하한선**은 목표치가 아니라 "떨어뜨리지 않는다"는 규칙입니다.
+  TypeScript 툴체인이 있어야 기준선과 같은 숫자가 나옵니다(없으면 6포인트
+  낮습니다). 기준선과 취약 목록은
+  [`docs/tasks/TASK-224`](./docs/tasks/TASK-224-coverage-gate.md).
+- **성능 비교**는 두 revision을 **한 기계에서** 재서 비율만 읽습니다. 다른
+  기계에 기록된 기준선은 아무 뜻이 없기 때문입니다. 숫자만 보려면
+  `cargo bench`. 임계값의 근거는
+  [`docs/tasks/TASK-225`](./docs/tasks/TASK-225-performance-benchmarks.md).
+
+`CI` 워크플로에도 같은 두 잡이 있고, 워크플로 자체가 수동이므로 dispatch하면
+함께 돕니다.
+
+### 버그를 찾으러 가는 것 — `Soak`
+
+[`Soak`](./.github/workflows/soak.yml) 워크플로는 전체 코퍼스 차등 테스트와
+퍼저 두 개를 돌립니다. 알려진 답을 확인하는 게 아니라 **모르는 것을 찾는**
+쪽이라 시간이 들고 수확은 예측할 수 없습니다 — 파서·스캐너·codegen처럼 tt가
+무엇을 주장하는지를 바꾼 변경에 dispatch하세요. 로컬 실행 명령은 그 파일의
+머리말에 있습니다. 무엇을 어떻게 찾는지는
+[`docs/tasks/TASK-223`](./docs/tasks/TASK-223-corpus-and-fuzzing.md).
+
 ## 개발 버전 배포
 
 `Cargo.toml` 버전을 `X.Y.Z-dev.N` 형식으로 올려 `main`에 push한 뒤, Actions

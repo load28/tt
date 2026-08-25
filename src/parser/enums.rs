@@ -49,10 +49,10 @@ pub(super) fn parse_enum<'t>(
             error: crate::error::TtError::span(
                 keyword,
                 keyword + "enum".len(),
-                "tt `enum` could not be parsed (cases are `Case` or `Case(field: Type)`)"
-                    .to_string(),
+                "tt `enum` could not be parsed".to_string(),
             )
-            .code(crate::DiagnosticCode::MalformedEnum),
+            .code(crate::DiagnosticCode::MalformedEnum)
+            .help("a case is `Case` or `Case(field: Type)`"),
             recovery: RecoveryNode {
                 span: Span { start, end },
                 kind: RecoveryKind::EnumDecl { name, exported },

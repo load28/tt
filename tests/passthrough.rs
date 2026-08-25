@@ -45,6 +45,45 @@ fn optional_chaining_match() {
 }
 
 #[test]
+fn binding_named_match() {
+    // `match` is not a reserved word, so it is an ordinary name — and a
+    // `for…of` binding is `match`, a token, and a block, which is the
+    // silhouette of a match expression (TASK-229). The corpus differential
+    // found this one in this repository's own TypeScript.
+    assert_passthrough(
+        "declare const xs: string[];\nfor (const match of xs) {\n  console.log(match);\n}\n",
+    );
+    assert_passthrough(
+        "declare const xs: string[];\nfor (const match of xs) {\n  xs.map((x) => x);\n}\n",
+    );
+}
+
+#[test]
+fn function_and_method_named_match_with_an_arrow_in_the_body() {
+    // Without a return-type annotation, `match(x) { ... }` is `match`,
+    // parens, and a block. What settles it is the block: a statement list,
+    // not an arm list — and the arrow inside a call belongs to the call.
+    assert_passthrough(
+        "declare function f(g: (n: number) => number): number;\n\
+         function match(x: number) { return f((y) => y + x); }\n",
+    );
+    assert_passthrough(
+        "declare function f(g: (n: number) => number): number;\n\
+         class C { match(x: number) { return f((y) => y + x); } }\n",
+    );
+    assert_passthrough(
+        "declare function f(g: (n: number) => number): number;\n\
+         const o = { match(x: number) { return f((y) => y + x); } };\n",
+    );
+    // A body that opens with a statement keyword is a statement list
+    // whatever else it contains.
+    assert_passthrough(
+        "declare const xs: number[];\n\
+         class C { match(x: number) { const f = (y: number) => y; return f(x); } }\n",
+    );
+}
+
+#[test]
 fn class_method_named_match() {
     assert_passthrough(
         r#"

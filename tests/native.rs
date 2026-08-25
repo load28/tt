@@ -15,7 +15,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 const BIN_IN_TREE: &str = "built/local/tsgo";
 const API_IN_TREE: &str = "_packages/native-preview/dist/api/sync/api.js";
@@ -90,16 +89,13 @@ macro_rules! require_emit {
     };
 }
 
-static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
+mod common;
+use common::Workspace;
 
-fn tmpdir() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "tt-native-{}-{}",
-        std::process::id(),
-        DIR_SEQ.fetch_add(1, Ordering::SeqCst)
-    ));
-    fs::create_dir_all(dir.join("src")).unwrap();
-    dir
+/// A directory for one case, with its `src/` tree — removed when the case
+/// ends, kept when it failed (`tests/common/mod.rs`).
+fn tmpdir() -> Workspace {
+    Workspace::with_subdir("native", "src")
 }
 
 fn write(dir: &Path, name: &str, text: &str) {
@@ -108,7 +104,7 @@ fn write(dir: &Path, name: &str, text: &str) {
 
 /// A project whose `tsconfig.json` globs `src` — the lowered `.tt` modules
 /// have to enter the program through the user's own configuration.
-fn project(files: &[(&str, &str)]) -> PathBuf {
+fn project(files: &[(&str, &str)]) -> Workspace {
     let dir = tmpdir();
     write(
         &dir,
@@ -791,15 +787,15 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
         "the first tt error remains visible: {out}"
     );
     assert!(
-        out.contains("`match` could not be parsed here"),
-        "the malformed construct remains visible: {out}"
+        out.contains("tt `match` could not be parsed")
+            && out.contains("a match scrutinee is parenthesized"),
+        "the malformed construct remains visible, with its fix: {out}"
     );
     assert!(
         out.contains("type mismatch: expected `TResult<number, string>`")
             && out.contains("Err<number>"),
         "the independent bindNonResult type error survives recovery: {out}"
     );
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -1335,5 +1331,57 @@ fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
     assert!(
         !out.contains("not exhaustive"),
         "South is impossible: {out}"
+    );
+}
+
+/// The editor's hardest question, at the compiler layer: completion at a
+/// `.` the user has just typed, in a pipeline whose value is a `Result`.
+///
+/// The buffer does not parse — `|> .` is half a step — so nothing about it
+/// can be decided by parsing it. The probe mends it, and the mended form
+/// emits `$tt_ap`, so `@tt/runtime` has to already be resolvable in the
+/// workspace or the whole expression comes back untyped and the answer is
+/// empty (TASK-217).
+#[test]
+fn a_probe_answers_in_a_pipeline_the_buffer_cannot_parse_yet() {
+    // The engine runs in-process, resolving the toolchain by the same
+    // rules this guard mirrors — so a pass here means the compiler found
+    // one, not that the test pointed it at one.
+    let _ = require_tsgo!();
+    let source = "import type { TResult } from \"@tt/std\";\n\
+                  import * as Result from \"@tt/std/result\";\n\
+                  \n\
+                  declare const r: TResult<number, string>;\n\
+                  const out = r\n\
+                  \x20 |> Result.mapP((n) => n + 1)\n\
+                  \x20 |> .";
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    let file = dir.join("src/probe.tt");
+    fs::write(&file, source).unwrap();
+
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[file.to_string_lossy().to_string()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .expect("the project opens");
+    let lines: Vec<&str> = source.split('\n').collect();
+    let position = ttc::engine::Position {
+        line: lines.len() as u32 - 1,
+        character: lines[lines.len() - 1].chars().count() as u32,
+    };
+    let answer = project
+        .completion(&file, position, true)
+        .expect("the probe answers");
+    let labels: Vec<&str> = answer.items.iter().map(|i| i.label.as_str()).collect();
+    assert!(
+        answer.probe.is_some(),
+        "the members had to come from a probe: {labels:?}"
+    );
+    assert!(
+        labels.contains(&"kind"),
+        "the value at the last step is a Result: {labels:?}"
     );
 }

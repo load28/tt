@@ -229,8 +229,9 @@ ttc는 아무 타입 판단도 하지 않는다 — 에러 계층 분리 계약 
 `errors.md`에 추가할 메시지 (형태):
 
 ```
-ttc: file.tt:3:9: "|>" pipeline could not be parsed here
-     (steps must be expressions; parenthesize ternaries and arrow functions)
+error[stray-pipe]: pipeline: `|>` could not be parsed here
+ --> file.tt:3:9
+  = help: a step is an expression — parenthesize a ternary or an arrow function
 ```
 
 ### 5.2 기존 구문과의 상호작용

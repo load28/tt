@@ -969,6 +969,7 @@ fn tt_errors(
     semantics: &analysis::SemanticFile,
 ) -> Vec<TtError> {
     let mut errors = sema::check_all(
+        source,
         program,
         options.verify,
         options.defer_to_checker,
@@ -1136,7 +1137,11 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
         };
         overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
     }
-    let recovered_source = String::from_utf8(recovered).expect("recovery preserves UTF-8 source");
+    // Every overwrite replaces a whole node's byte range with ASCII, and
+    // a node's range is a char boundary on both ends, so what is left is
+    // still the UTF-8 it started as.
+    let recovered_source =
+        String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII");
     let recovered_report = compile_report(&recovered_source, options);
     ProjectionReport {
         emit: recovered_report.emit,
