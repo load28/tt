@@ -86,6 +86,11 @@ CI가 동일한 게이트를 강제합니다. 새 기능에는 반드시 테스�
 - 출력 형태 → `tests/compile.rs`
 - TS 통과 계약 → `tests/passthrough.rs`
 - 타입/런타임 의미 → `tests/integration.rs`
+- **산출물 전체**가 계약인 것(방출된 TypeScript, 렌더된 진단) →
+  `tests/fixtures/` 스냅샷. 픽스처 디렉터리에 `input.tt`를 넣고
+  `UPDATE_EXPECT=1 cargo test --test snapshot`으로 기대 파일을 만든 뒤 **그 diff를
+  읽으세요** — 그 diff가 리뷰 대상입니다. 부분 문자열 어서션은 여분의 문장이나
+  어긋난 들여쓰기를 잡지 못합니다.
 
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가

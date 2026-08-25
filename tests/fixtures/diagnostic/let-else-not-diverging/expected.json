@@ -1,0 +1,11 @@
+[
+  {
+    "code": "let-else-not-diverging",
+    "col": 38,
+    "endCol": 42,
+    "endLine": 5,
+    "line": 5,
+    "message": "let-else: every path through the `else` block must diverge — end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)",
+    "suggestions": []
+  }
+]

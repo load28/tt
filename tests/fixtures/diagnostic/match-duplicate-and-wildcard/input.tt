@@ -1,0 +1,4 @@
+declare const code: number;
+
+export const a = match (code) { 200 => "a", 0xc8 => "b", _ => "c" };
+export const b = match (code) { _ => "a", 404 => "b" };

@@ -1,0 +1,16 @@
+[
+  {
+    "code": "match-not-exhaustive",
+    "col": 21,
+    "endCol": 30,
+    "endLine": 8,
+    "line": 8,
+    "message": "match on enum Shape is not exhaustive: missing \"Rect\", \"Point\"",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "add the missing arms or a final `_` arm"
+      }
+    ]
+  }
+]

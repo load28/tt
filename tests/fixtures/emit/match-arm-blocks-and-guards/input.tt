@@ -1,0 +1,13 @@
+enum Reading { Value(n: number), Missing }
+declare const reading: Reading;
+
+export function describe(r: Reading): string {
+  return match (r) {
+    Value(n) if n > 100 => "high",
+    Value(n) => {
+      const label = n.toFixed(1);
+      return `value ${label}`;
+    },
+    Missing => "missing",
+  };
+}

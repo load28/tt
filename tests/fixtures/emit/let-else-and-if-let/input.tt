@@ -1,0 +1,14 @@
+import type { TOption } from "@tt/std";
+
+declare function find(id: string): TOption<string>;
+
+export function greet(id: string): string {
+  const Some(value: name) = find(id) else {
+    return "who?";
+  };
+  if let Some(value: other) = find(name) {
+    return `${name} and ${other}`;
+  } else {
+    return name;
+  }
+}

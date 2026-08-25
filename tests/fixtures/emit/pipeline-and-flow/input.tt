@@ -1,0 +1,6 @@
+declare function half(n: number): number;
+declare function twice(n: number): number;
+
+export const once = half(4) |> twice |> .toFixed(1);
+export const composed = flow |> half |> twice |> .toFixed(2);
+export const inline = 3 |> (n => n + 1) |> twice;

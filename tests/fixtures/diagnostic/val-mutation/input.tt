@@ -1,0 +1,6 @@
+export function go(): void {
+  val const state = { count: 0, inner: { n: 1 } };
+  state.count = 1;
+  state.inner.n += 1;
+  delete (state as { count?: number }).count;
+}

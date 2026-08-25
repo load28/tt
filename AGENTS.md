@@ -88,6 +88,9 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
 - 내부 오류는 바이트 오프셋을 담고 사용자 line/column 변환은 공개 경계에서 합니다.
 - 새 기능은 출력 계약이면 `tests/compile.rs`, TS 통과 계약이면
   `tests/passthrough.rs`, 타입·런타임 의미이면 통합 테스트를 추가합니다.
+  방출된 TypeScript나 렌더된 진단처럼 **산출물 전체**가 계약인 것은
+  `tests/fixtures/` 스냅샷으로 고정하고(`UPDATE_EXPECT=1 cargo test --test
+  snapshot`), 갱신된 diff를 읽고 검토합니다.
 - 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
 변경 완료 전 다음 게이트를 모두 실행합니다.

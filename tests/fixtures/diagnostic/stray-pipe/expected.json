@@ -1,0 +1,11 @@
+[
+  {
+    "code": "stray-pipe",
+    "col": 34,
+    "endCol": 36,
+    "endLine": 4,
+    "line": 4,
+    "message": "pipeline: `|>` could not be parsed here (steps must be expressions; parenthesize ternaries and arrow functions)",
+    "suggestions": []
+  }
+]

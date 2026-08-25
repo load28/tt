@@ -1,0 +1,10 @@
+enum Dir { North(dx: number), South }
+enum Speed { Fast(v: number), Slow }
+declare const d: Dir;
+declare const s: Speed;
+
+export const rating = match (d, s) {
+  (North(dx), Fast(v)) => dx + v,
+  (North(dx), Slow) => dx,
+  (South, _) => 0,
+};

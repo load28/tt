@@ -1,0 +1,45 @@
+[
+  {
+    "code": "match-not-exhaustive",
+    "col": 18,
+    "endCol": 27,
+    "endLine": 4,
+    "line": 4,
+    "message": "match on enum Shape is not exhaustive: missing \"Rect\"",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "add the missing arms or a final `_` arm"
+      }
+    ]
+  },
+  {
+    "code": "val-mutation",
+    "col": 3,
+    "endCol": 8,
+    "endLine": 10,
+    "line": 10,
+    "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
+    "suggestions": []
+  },
+  {
+    "code": "unknown-case",
+    "col": 30,
+    "endCol": 36,
+    "endLine": 13,
+    "line": 13,
+    "message": "enum Shape has no case `Circel`",
+    "suggestions": [
+      {
+        "edit": {
+          "col": 30,
+          "endCol": 36,
+          "endLine": 13,
+          "line": 13,
+          "replacement": "Circle"
+        },
+        "message": "a case with a similar name exists"
+      }
+    ]
+  }
+]
