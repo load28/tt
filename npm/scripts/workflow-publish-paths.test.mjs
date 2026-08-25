@@ -16,6 +16,8 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.match(ci, /merge_group:\n    branches: \[main, "release-\*"\]/);
   assert.match(ci, /name: release build/);
   assert.match(ci, /name: release-metadata/);
+  assert.match(ci, /repository: microsoft\/typescript-go/);
+  assert.match(ci, /go build -o built\/local\/tsgo \.\/cmd\/tsgo/);
   assert.doesNotMatch(ci, /npm publish|action-gh-release/);
 });
 

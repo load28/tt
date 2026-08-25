@@ -65,14 +65,28 @@ jobs:
       - name: Install Rolldown for std tree-shaking regression
         run: npm install -g rolldown@1.2.5
 
-      # What `--check-types`/`--types` drive: TypeScript 7's own compiler,
-      # through its API client. Without one the `tests/native.rs` suite
-      # skips silently, so the gate installs it and points ttc at it.
-      - name: Install TypeScript 7 for the type checking modes
+      # The native suite also exercises the language server and declaration
+      # emit, so the npm preview package is insufficient. Build one pinned
+      # typescript-go checkout and use its executable and API client together.
+      - name: Check out typescript-go
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/typescript-go
+          ref: c6b013f5706d58582f566df778cc0df2683b58f5
+          path: typescript-go
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: typescript-go/go.mod
+          cache-dependency-path: typescript-go/go.sum
+
+      - name: Build TypeScript 7 for the type checking modes
+        working-directory: typescript-go
         run: |
-          mkdir -p "$HOME/ts7" && cd "$HOME/ts7"
-          npm install --no-save typescript@7
-          echo "TTC_TSGO_API=$HOME/ts7/node_modules/typescript/dist/api/sync/api.js" >> "$GITHUB_ENV"
+          go build -o built/local/tsgo ./cmd/tsgo
+          npm ci
+          npx tsc -b _packages/native-preview
 
       - name: Check formatting
         run: cargo fmt --check
@@ -81,6 +95,9 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Test
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          TTC_REQUIRE_TSGO: "1"
         run: cargo test
 
       - name: Test npm release tooling and project initializer
@@ -92,14 +109,13 @@ jobs:
       # which went stale every time a test was added.)
       - name: Guard — integration tests must not have been skipped
         env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           TTC_REQUIRE_TSGO: "1"
         run: |
           tsc --version
           node --version
-          # The native suite needs a TypeScript 7 API client to check
-          # against; declaration emit needs more than a release has, and is
-          # covered by the `native` job below.
-          test -f "$TTC_TSGO_API"
+          test -x "$TTC_TSGO_ROOT/built/local/tsgo"
+          test -f "$TTC_TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js"
           cargo test --test native
 
   bench:

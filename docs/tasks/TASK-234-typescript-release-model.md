@@ -83,6 +83,15 @@
 - **해결**: 자동 CI, 장기 릴리스 브랜치, run ID 승격, 무재빌드 계약을 검증하도록
   테스트를 교체했다.
 
+### 이슈 3: PR CI의 일반 cargo test가 npm TypeScript 7만 사용함
+
+- **증상**: PR #56의 `fmt / clippy / test`에서 native probe 테스트가 tsgo language
+  server를 찾지 못해 실패했다.
+- **원인**: 해당 잡은 API client만 있는 npm TypeScript 7을 설치해 `cargo test`를
+  실행했다. probe 테스트에는 같은 checkout에서 빌드한 tsgo 실행 파일도 필요하다.
+- **해결**: 일반 테스트 잡도 고정된 typescript-go checkout의 실행 파일과 API client를
+  직접 빌드하고 `TTC_TSGO_ROOT`로 함께 사용하게 했다.
+
 ## 검증
 
 - [x] `./scripts/ci` — agents, rust, npm, native, extension 전체 통과
