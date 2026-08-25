@@ -98,6 +98,20 @@ CI가 동일한 게이트를 강제합니다. 새 기능에는 반드시 테스�
 처음 접하는 기능이면 영문·한글 README에도 반영하세요. 공개 Rust API를 바꾸면
 rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실행됩니다.
 
+### CI가 추가로 재는 것
+
+로컬 게이트는 위 셋으로 충분합니다. CI는 여기에 두 개의 자를 더 댑니다.
+
+- **커버리지 하한선** (`coverage` 잡). 줄 커버리지가 기준선 아래로 떨어지면
+  실패합니다. 목표치가 아니라 "떨어뜨리지 않는다"는 규칙입니다. 로컬에서
+  재보려면 `cargo llvm-cov --workspace --summary-only` — 단, TypeScript
+  툴체인이 붙어 있어야 CI와 같은 숫자가 나옵니다(없으면 6포인트 낮습니다).
+  기준선과 취약 목록은 [`docs/tasks/TASK-224`](./docs/tasks/TASK-224-coverage-gate.md).
+- **성능 회귀** (`performance` 잡). `./scripts/bench-compare`가 이 revision과
+  merge base를 **한 기계에서** 재서 비교합니다. 로컬에서는 `cargo bench`로
+  숫자만 볼 수 있습니다. 임계값의 근거는
+  [`docs/tasks/TASK-225`](./docs/tasks/TASK-225-performance-benchmarks.md).
+
 ## 개발 버전 배포
 
 `Cargo.toml` 버전을 `X.Y.Z-dev.N` 형식으로 올려 `main`에 push하고 `CI`가

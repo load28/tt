@@ -123,10 +123,16 @@ fn an_error_node_keeps_its_file_and_other_files_checkable() {
     let blocked = dir.join("a-blocked.tt");
     let valid = dir.join("b-valid.tt");
     fs::write(&blocked, "const broken = 1 |> ;\n").unwrap();
+    // A rule the tt layer answers on its own. Exhaustiveness would not do:
+    // the engine defers that to the checker, so on a machine with no
+    // TypeScript toolchain this file would have no diagnostic and the case
+    // would fail for a reason that has nothing to do with what it tests
+    // (TASK-224). The subject here is the *partial snapshot* — a blocked
+    // file keeps its own diagnostics and its neighbour still reports.
     fs::write(
         &valid,
         "enum E { A(value: number), B }\n\
-         const value = match (E.A(1)) { A(value) => value };\n",
+         const value = match (E.A(1)) { A(value) => value, A(value) => 0, B => 1 };\n",
     )
     .unwrap();
 

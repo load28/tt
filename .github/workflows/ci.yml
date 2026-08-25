@@ -132,6 +132,75 @@ jobs:
             /tmp/tt-bench-base.json
           if-no-files-found: warn
 
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      # The instrumentation lives in the toolchain, not in the crate.
+      - name: Install the coverage tooling
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # The same pinned revision the `native` job builds. Coverage measured
+      # without a TypeScript toolchain is six points lower and describes a
+      # different program — the editor and backend layers simply do not run
+      # — so the number would not be comparable between runs
+      # (docs/tasks/TASK-224).
+      - name: Check out typescript-go
+        uses: actions/checkout@v4
+        with:
+          repository: microsoft/typescript-go
+          ref: c6b013f5706d58582f566df778cc0df2683b58f5
+          path: typescript-go
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: typescript-go/go.mod
+          cache-dependency-path: typescript-go/go.sum
+
+      - name: Build the compiler and its API client
+        working-directory: typescript-go
+        run: |
+          go build -o built/local/tsgo ./cmd/tsgo
+          npm ci
+          npx tsc -b _packages/native-preview
+
+      # The floor is the measured baseline, not a target: "do not drop" is
+      # a rule that can be followed, while an arbitrary goal invites tests
+      # written to move a number. Raising it belongs to the change that
+      # earns the higher coverage.
+      - name: Measure, and refuse to go below the baseline
+        env:
+          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
+          # A missing toolchain would silently lower the number instead of
+          # failing the job, which is the one way this gate could lie.
+          TTC_REQUIRE_TSGO: "1"
+        run: |
+          cargo llvm-cov --workspace --summary-only --fail-under-lines 86.8
+          cargo llvm-cov report --lcov --output-path lcov.info
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-lcov
+          path: lcov.info
+          if-no-files-found: warn
+
   extension:
     name: vscode extension
     runs-on: ubuntu-latest
