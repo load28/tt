@@ -234,7 +234,7 @@
 | TASK-224 | 커버리지 측정과 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-224](./TASK-224-coverage-gate.md) |
 | TASK-225 | 성능 벤치마크와 회귀 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-225](./TASK-225-performance-benchmarks.md) |
 | TASK-226 | 로컬과 CI의 Rust 툴체인 격차 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-226](./TASK-226-local-ci-toolchain-parity.md) |
-| TASK-227 | 바인딩 이름 `match`가 tt match로 오인된다 | 대기 | — | — | [TASK-227](./TASK-227-match-claimed-as-a-binding-name.md) |
+| TASK-227 | 바인딩 이름 `match`가 tt match로 오인된다 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-227](./TASK-227-match-claimed-as-a-binding-name.md) |
 
 ## 다음 태스크 번호
 
