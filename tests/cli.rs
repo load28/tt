@@ -1139,3 +1139,105 @@ fn the_rendered_code_is_the_one_explain_answers_to() {
     let explained = ttc(&["explain", &code]);
     assert!(explained.status.success(), "`ttc explain {code}` failed");
 }
+
+/* ------------------------------------------------------------------ */
+/* the panic safety net (TASK-214)                                    */
+/* ------------------------------------------------------------------ */
+
+/// `ttc` with the environment a test needs. `TTC_PANIC_FOR_TEST` makes a
+/// debug build fail at a named point, which is the only way to observe
+/// what the compiler does when the compiler itself is wrong.
+fn ttc_failing_at(point: &str, args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(args)
+        .env("TTC_PANIC_FOR_TEST", point)
+        // The report offers a backtrace; a test reads the report.
+        .env_remove("RUST_BACKTRACE")
+        .output()
+        .expect("failed to run ttc")
+}
+
+#[test]
+fn a_compiler_bug_is_reported_as_a_bug_and_names_the_file() {
+    let dir = tmpdir();
+    let source = dir.join("main.tt");
+    fs::write(&source, "const a = 1;\n").unwrap();
+    let out = ttc_failing_at("compile", &["--check", source.to_str().unwrap()]);
+
+    // 101 is what a Rust panic exits with; keeping it means a caller that
+    // already distinguishes "crashed" from "your code is wrong" still can.
+    assert_eq!(out.status.code(), Some(101), "{out:?}");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.starts_with("error: internal compiler error:"),
+        "the report has to lead, not a backtrace: {err}"
+    );
+    assert!(
+        err.contains(&format!("while compiling: {}", source.display())),
+        "the report names the file it was working on: {err}"
+    );
+    assert!(
+        err.contains("This is a bug in ttc, not in the code it was given"),
+        "a reader must not think their own file is at fault: {err}"
+    );
+    assert!(err.contains("github.com/load28/tt/issues"), "{err}");
+    assert!(
+        err.contains("RUST_BACKTRACE=1"),
+        "and must be told how to attach a backtrace: {err}"
+    );
+}
+
+#[test]
+fn the_server_answers_a_failed_request_and_keeps_the_session() {
+    // The protocol promises a failed request never ends the session. A
+    // panic is a failed request, so it may not be the exception.
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .env("TTC_PANIC_FOR_TEST", "server")
+        .env_remove("RUST_BACKTRACE")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("failed to spawn the server");
+    let requests = "{\"id\":1,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n\
+                    {\"id\":2,\"method\":\"check\",\"params\":{\"text\":\"const b = 2;\\n\"}}\n";
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(requests.as_bytes())
+        .unwrap();
+    drop(child.stdin.take());
+    let out = child.wait_with_output().unwrap();
+
+    // Both questions were answered, in order, each with its own id — the
+    // second one is the whole point: the session outlived the first panic.
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let answers: Vec<&str> = stdout.lines().collect();
+    assert_eq!(answers.len(), 2, "both requests answered: {stdout}");
+    for (index, answer) in answers.iter().enumerate() {
+        let value: serde_json::Value = serde_json::from_str(answer).unwrap();
+        assert_eq!(value["id"], serde_json::json!(index + 1), "{answer}");
+        assert!(
+            value["error"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("internal compiler error"),
+            "{answer}"
+        );
+    }
+    // Stdin closing is the only thing that ends the session.
+    assert_eq!(out.status.code(), Some(0), "{out:?}");
+    // And the bug still reached a human, on the stream that is not the
+    // protocol's.
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        err.matches("This is a bug in ttc").count(),
+        2,
+        "one report per panic: {err}"
+    );
+}

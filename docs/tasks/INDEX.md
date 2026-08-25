@@ -221,6 +221,8 @@
 | TASK-211 | AI 에이전트의 로컬 개발 환경 탐색 표준화 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-211](./TASK-211-agent-local-setup-discovery.md) |
 | TASK-212 | 파이프 헬퍼의 전역 스크립트 충돌 제거 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-212](./TASK-212-pipeline-helper-global-collision.md) |
 | TASK-213 | 진단 표현 계층 — 렌더러, 코드 노출, 구조화된 제안 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-213](./TASK-213-diagnostic-presentation.md) |
+| TASK-214 | 패닉 안전망 — 컴파일러 버그를 버그로 보고 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-214](./TASK-214-panic-safety-net.md) |
+| TASK-215 | 스냅샷 픽스처 — 방출과 진단 전체 고정 | 진행 중 | 2026-08-25 | — | [TASK-215](./TASK-215-snapshot-fixtures.md) |
 | TASK-216 | exhaustiveness 수정을 컴파일러 저작 편집으로 | 대기 | — | — | [TASK-216](./TASK-216-compiler-authored-arm-edits.md) |
 
 ## 다음 태스크 번호

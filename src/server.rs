@@ -99,7 +99,23 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         if line.trim().is_empty() {
             continue;
         }
-        let response = respond(&mut sessions, &line);
+        // A panic in one request is a bug in the compiler, not the end of
+        // the session: the protocol promises that a failed request never
+        // ends the session, and a panic is a failed request. The report is
+        // already on stderr; stdout carries the answer, so the consumer
+        // sees an error for this id and can ask the next question.
+        //
+        // Unwind safety: the sessions map is kept. A panic aborts the work
+        // of one request, and what that work builds — a snapshot — is
+        // immutable and installed whole or not at all, so the projects the
+        // map holds are the ones the last successful request left.
+        let response = match ttc::ice::catching(|| respond(&mut sessions, &line)) {
+            Ok(response) => response,
+            Err(message) => serde_json::json!({
+                "id": request_id(&line),
+                "error": format!("internal compiler error: {message}"),
+            }),
+        };
         let mut out = stdout.lock();
         if writeln!(out, "{response}")
             .and_then(|_| out.flush())
@@ -112,8 +128,20 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
 }
 
 /// One request, one answer — errors included, so the session survives them.
+/// The `id` of a request the server could not answer.
+///
+/// A response has to carry the id it answers or the consumer cannot match
+/// it to its question; when the request did not even parse, `null` is the
+/// protocol's own answer for "no id".
+fn request_id(line: &str) -> serde_json::Value {
+    serde_json::from_str::<serde_json::Value>(line)
+        .map(|request| request["id"].clone())
+        .unwrap_or(serde_json::Value::Null)
+}
+
 fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
     use serde_json::json;
+    ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
         Ok(value) => value,
         Err(e) => return json!({ "id": null, "error": format!("malformed request: {e}") }),
@@ -384,10 +412,15 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
         ..ttc::Options::default()
     };
     // Every tt-level diagnostic of the buffer, in source order (TASK-120).
+    // Wrapped in `working_on` so a panic in here names the buffer it was
+    // reading rather than "some file" (TASK-214).
     // `endLine`/`endCol` close the range the diagnostic covers — the
     // construct as written. Zero means "position only": the consumer
     // decides the width. `code` is the rule's stable identity.
-    let diagnostics: Vec<_> = ttc::compile_report(text, &options)
+    let report = ttc::ice::working_on(Path::new(filename.unwrap_or("<buffer>")), || {
+        ttc::compile_report(text, &options)
+    });
+    let diagnostics: Vec<_> = report
         .diagnostics
         .iter()
         .map(|d| {
