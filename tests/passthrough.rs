@@ -48,7 +48,7 @@ fn optional_chaining_match() {
 fn binding_named_match() {
     // `match` is not a reserved word, so it is an ordinary name — and a
     // `for…of` binding is `match`, a token, and a block, which is the
-    // silhouette of a match expression (TASK-227). The corpus differential
+    // silhouette of a match expression (TASK-229). The corpus differential
     // found this one in this repository's own TypeScript.
     assert_passthrough(
         "declare const xs: string[];\nfor (const match of xs) {\n  console.log(match);\n}\n",

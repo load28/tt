@@ -114,7 +114,7 @@ pub(super) fn parse_match<'t>(
 /// of xs)`), a function. Every one of those is `match`, something, and a
 /// block — the same silhouette a match has. What is *not* the same is what
 /// the block contains, and that is where the answer has to come from
-/// (TASK-227).
+/// (TASK-229).
 ///
 /// An arm list is `<pattern> => <body>`, comma-separated. So at the body's
 /// own brace level:

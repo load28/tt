@@ -71,7 +71,11 @@ source or a ttc bug". 하지만 **테스트는 구분할 수 있다**:
 
 - `check` 잡의 `cargo test`: 저장소 자신의 TypeScript (툴체인 불필요, 공짜)
 - `native` 잡: typescript-go 코퍼스의 표본 250개, `TTC_REQUIRE_CORPUS=1`
-- `Soak` 워크플로(주 1회 + 수동): 전부
+- `Soak` 워크플로: 전부. TASK-227이 무료 플랜을 이유로 hosted 실행을 수동으로
+  돌렸으므로 이것도 예약이 아니라 **수동**이다 — 주 1회 전체 차등 + 15분짜리
+  퍼저 두 개는 예측할 수 없는 수확에 실제 비용을 쓰는 일이다. 파서·스캐너·
+  codegen처럼 tt가 무엇을 주장하는지 바꾼 변경에 dispatch한다. 로컬 실행
+  명령은 워크플로 머리말에 적어 두었다.
 
 ### 4. 퍼저는 **별도 패키지**다
 
@@ -105,8 +109,8 @@ match, 파이프라인, `try`, `result` 블록, `if let`. 그리고 두 가지�
    `fuzz_targets/compile_any_bytes.rs`(임의 텍스트 → `analyze`/`compile`,
    두 `SourceKind` 모두), `fuzz_targets/generated_tt_compiles.rs`(구조적 생성기).
 3. `.github/workflows/ci.yml` — `native` 잡에 표본 코퍼스 단계 추가.
-4. `.github/workflows/soak.yml` — 주 1회 전체 코퍼스 + 두 퍼저(각 15분),
-   크래시 입력을 artifact로 남긴다.
+4. `.github/workflows/soak.yml` — 수동 dispatch로 전체 코퍼스 + 두 퍼저(각
+   15분), 크래시 입력을 artifact로 남긴다. 로컬 실행 명령이 머리말에 있다.
 
 ## 이슈 및 해결
 
@@ -127,9 +131,9 @@ match, 파이프라인, `try`, `result` 블록, `if let`. 그리고 두 가지�
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test` — 전체 초록 (TASK-227 수정 후)
+- [x] `cargo test` — 전체 초록 (TASK-229 수정 후)
 - [x] 코퍼스 실행이 초록이거나, 실패가 전부 태스크로 등록됨 →
-      **TASK-227로 등록하고 같은 브랜치에서 고쳤다**
+      **TASK-229로 등록하고 같은 브랜치에서 고쳤다**
 - [x] `cargo +nightly fuzz build` — 두 타깃 모두 빌드
 - [x] `compile_any_bytes` 91초 / 152,437회 — 크래시 없음
 - [x] `generated_tt_compiles` 151초 / 26,138회 — 생성기 수정 후 발견 없음
@@ -148,7 +152,7 @@ for (const match of xs) { ... }
 
 `match`가 바인딩 이름인 경우다. 손으로 쓴 `passthrough.rs`는 메서드 이름과
 프로퍼티는 고정하고 있었지만 바인딩 이름은 빠뜨렸다 — 표본 조사가 놓치는
-것이 정확히 이런 종류다. **TASK-227**로 등록했다.
+것이 정확히 이런 종류다. **TASK-229**로 등록했다.
 
 ### 변경 파일
 
@@ -156,6 +160,6 @@ for (const match of xs) { ... }
 - `fuzz/Cargo.toml`, `fuzz/.gitignore`,
   `fuzz/fuzz_targets/compile_any_bytes.rs`,
   `fuzz/fuzz_targets/generated_tt_compiles.rs` (신규)
-- `.github/workflows/ci.yml`, `.github/workflows/soak.yml`
-- `docs/tasks/TASK-227-match-claimed-as-a-binding-name.md` (신규)
+- `.github/workflows/ci.yml`, `.github/workflows/soak.yml`, `CONTRIBUTING.md`
+- `docs/tasks/TASK-229-match-claimed-as-a-binding-name.md` (신규)
 - `docs/tasks/INDEX.md`

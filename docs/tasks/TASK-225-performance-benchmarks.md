@@ -88,6 +88,9 @@ merge base를 **한 기계에서, 한 실행 안에** 빌드하고 잰다(git wo
    머지되기 전의 merge base가 정확히 그 경우다).
 3. `.github/workflows/ci.yml`에 `performance` 잡 추가 — `fetch-depth: 0`으로
    merge base를 찾고, 비교하고, 두 리포트를 artifact로 남긴다.
+   `scripts/ci`에 같은 비교를 `bench` 단계로 두었다: TASK-227이 CI를 로컬
+   실행으로 옮겼으므로 워크플로에만 있는 게이트는 돌지 않는다. 기본 실행
+   밖이고 이름을 대면 돈다 — `./scripts/ci bench`.
 
 ## 이슈 및 해결
 
@@ -123,5 +126,6 @@ merge base를 **한 기계에서, 한 실행 안에** 빌드하고 잰다(git wo
 - `benches/compile.rs` (신규)
 - `scripts/bench-compare` (신규)
 - `Cargo.toml`
-- `.github/workflows/ci.yml`
+- `.github/workflows/ci.yml`, `scripts/ci`
+- `CONTRIBUTING.md`
 - `docs/tasks/INDEX.md`

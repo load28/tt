@@ -1,0 +1,369 @@
+#!/usr/bin/env bash
+# scripts/ci — run the merge gates on this machine.
+#
+# GitHub Actions no longer runs CI per push or per pull request; the workflow
+# is manual (see .github/workflows/ci.yml). The gates did not shrink, they
+# moved here, which makes this script the gate rather than a convenience. It
+# mirrors ci.yml stage by stage and every deliberate difference is a comment
+# saying why.
+#
+# The stages, in the order they run:
+#
+#   agents      the agent entrypoint contract (CLAUDE.md, doctor)
+#   rust        cargo fmt --check, clippy -D warnings, cargo test
+#   npm         the npm release tooling and project initializer tests
+#   native      the type checking modes against TypeScript 7
+#   extension   the VS Code extension build and its server tests
+#
+# Two more exist but are not in the default run, because each takes minutes
+# and neither answers a question about *this* change on its own:
+#
+#   coverage    line coverage must not fall below the recorded baseline
+#   bench       this revision against its merge base, on this machine
+#
+# Ask for them by name (`./scripts/ci coverage`), the way the hosted
+# workflow's jobs are dispatched by hand.
+#
+# Usage:
+#   ./scripts/ci                     every stage
+#   ./scripts/ci rust npm            only the named stages
+#   ./scripts/ci --skip extension    every stage but the named ones
+#   ./scripts/ci --fail-fast         stop at the first failing stage
+#   ./scripts/ci --list              print the stage names and exit
+
+set -u
+
+TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+CONFIG="$TT_ROOT/.tt-dev/toolchain.json"
+LOG_DIR="$TT_ROOT/.tt-dev"
+
+ALL_STAGES="agents rust npm native extension"
+# Runnable, but only when asked for by name (see the header).
+EXTRA_STAGES="coverage bench"
+SELECTED=""
+SKIPPED=""
+FAIL_FAST=0
+
+WARNINGS=""
+PASSED=""
+FAILED=""
+
+# ------------------------------------------------------------- reporting --
+note() { printf '%s\n' "$*"; }
+
+warn() {
+  printf 'warning: %s\n' "$*" >&2
+  WARNINGS="$WARNINGS
+  $*"
+}
+
+fail() {
+  printf 'error: %s\n' "$*" >&2
+}
+
+heading() {
+  printf '\n==> %s\n' "$*"
+}
+
+# Echo the command before running it: a local gate is only useful if you can
+# copy the failing line out of the log and run it again by hand.
+run() {
+  printf '  $ %s\n' "$*"
+  "$@"
+}
+
+# The header comment above is the help text — printed from the file itself so
+# the two cannot drift apart.
+usage() {
+  awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "$0"
+}
+
+# --------------------------------------------------------------- arguments --
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    --list)
+      for stage in $ALL_STAGES; do printf '%s\n' "$stage"; done
+      for stage in $EXTRA_STAGES; do printf '%s (on request)\n' "$stage"; done
+      exit 0
+      ;;
+    --fail-fast)
+      FAIL_FAST=1
+      shift
+      ;;
+    --skip)
+      [ "$#" -ge 2 ] || {
+        fail "--skip needs a stage name"
+        exit 2
+      }
+      SKIPPED="$SKIPPED $(printf '%s' "$2" | tr ',' ' ')"
+      shift 2
+      ;;
+    -*)
+      fail "unknown option: $1"
+      usage >&2
+      exit 2
+      ;;
+    *)
+      SELECTED="$SELECTED $1"
+      shift
+      ;;
+  esac
+done
+
+contains() {
+  # contains <needle> <haystack...>
+  needle="$1"
+  shift
+  for item in $*; do
+    [ "$item" = "$needle" ] && return 0
+  done
+  return 1
+}
+
+for stage in $SELECTED $SKIPPED; do
+  contains "$stage" "$ALL_STAGES $EXTRA_STAGES" || {
+    fail "unknown stage: $stage (known: $ALL_STAGES $EXTRA_STAGES)"
+    exit 2
+  }
+done
+
+[ -n "$SELECTED" ] || SELECTED="$ALL_STAGES"
+
+STAGES=""
+for stage in $SELECTED; do
+  contains "$stage" "$SKIPPED" || STAGES="$STAGES $stage"
+done
+[ -n "$STAGES" ] || {
+  fail "every selected stage was skipped"
+  exit 2
+}
+
+cd "$TT_ROOT" || exit 1
+
+# ----------------------------------------------------------- prerequisites --
+have() { command -v "$1" > /dev/null 2>&1; }
+
+require() {
+  have "$1" || {
+    fail "$1 is not on PATH; run ./scripts/doctor"
+    exit 1
+  }
+}
+
+require cargo
+require node
+require npm
+
+# The TypeScript 7 toolchain, resolved the way doctor and the extension
+# resolve it — from the setup choice saved in .tt-dev/toolchain.json. CI
+# installs one per job; here it is whatever this checkout was set up with,
+# and naming it explicitly is what keeps the native suite from skipping.
+TSGO_KIND=""
+if [ -f "$CONFIG" ]; then
+  TSGO_KIND="$(node -e '
+    try {
+      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).kind;
+      if (typeof value === "string") process.stdout.write(value);
+    } catch {}
+  ' "$CONFIG")"
+  TSGO_ROOT="$(node -e '
+    try {
+      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).root;
+      if (typeof value === "string") process.stdout.write(value);
+    } catch {}
+  ' "$CONFIG")"
+  if [ "$TSGO_KIND" = "checkout" ]; then
+    TSGO_BIN="$TSGO_ROOT/built/local/tsgo"
+    TSGO_API="$TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js"
+    if [ -f "$TSGO_BIN" ] && [ -f "$TSGO_API" ]; then
+      export TTC_TSGO_ROOT="$TSGO_ROOT"
+      export TTC_TSGO_BIN="$TSGO_BIN"
+      export TTC_TSGO_API="$TSGO_API"
+    else
+      TSGO_KIND="unbuilt"
+    fi
+  fi
+fi
+
+heading "environment"
+note "  root:  $TT_ROOT"
+note "  rust:  $(rustc --version 2> /dev/null || echo 'unknown')"
+note "  node:  $(node --version)"
+case "$TSGO_KIND" in
+  checkout) note "  tsgo:  $TTC_TSGO_ROOT" ;;
+  unbuilt) warn "the configured typescript-go checkout is not built; run ./scripts/setup" ;;
+  npm) warn "toolchain mode is 'npm': there is no local TypeScript 7, so the native stage cannot run" ;;
+  *) warn "no toolchain configured ($CONFIG); run ./scripts/setup" ;;
+esac
+
+# Tools CI installs before testing. Without them the suites do not fail —
+# they skip, and a skipped suite is green in every other way, which is the
+# thing this repository keeps guarding against. So name what goes missing.
+have tsc \
+  || warn "tsc is not on PATH: the integration tests will skip their type checks (npm i -g typescript@6)"
+if ! have rolldown && [ ! -x "$TT_ROOT/website/node_modules/.bin/rolldown" ]; then
+  warn "rolldown is not on PATH: the std tree-shaking regression will skip (npm i -g rolldown@1.2.5)"
+fi
+
+# ----------------------------------------------------------------- stages --
+
+# CI asserts that doctor *rejects* an unconfigured checkout; a configured one
+# is expected to pass, so what carries over here is the rest: the entrypoint
+# contract, that the script parses, and that diagnosing changes nothing.
+stage_agents() {
+  run test "$(cat CLAUDE.md)" = "@AGENTS.md" || return 1
+  run grep -Fq './scripts/doctor' AGENTS.md || return 1
+  run bash -n scripts/doctor || return 1
+  before="$(git status --porcelain)"
+  printf '  $ %s\n' "./scripts/doctor"
+  ./scripts/doctor > /dev/null
+  status="$?"
+  # 0 (ready) and 1 (not ready) are both answers; anything else is a crash.
+  [ "$status" -le 1 ] || {
+    fail "doctor exited with $status"
+    return 1
+  }
+  [ "$(git status --porcelain)" = "$before" ] || {
+    fail "doctor modified the working tree; it must be read-only"
+    return 1
+  }
+  [ "$status" -eq 0 ] || warn "doctor reports this checkout is not ready (see ./scripts/doctor)"
+}
+
+stage_rust() {
+  run cargo fmt --check || return 1
+  run cargo clippy --all-targets -- -D warnings || return 1
+  run cargo test || return 1
+}
+
+stage_npm() {
+  # Unquoted on purpose: the shell expands the globs, as it does in CI.
+  run node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs || return 1
+}
+
+# The reason this stage exists is to actually drive TypeScript 7, so a
+# missing toolchain is a failure rather than a warning — passing it without
+# one would undo the guard CI put here.
+stage_native() {
+  [ -n "${TTC_TSGO_API:-}" ] || {
+    fail "no TypeScript 7 toolchain: set one up with ./scripts/setup --tsgo-root <path>,
+  or exclude this stage with ./scripts/ci --skip native"
+    return 1
+  }
+  run env TTC_REQUIRE_TSGO=1 cargo test --test native || return 1
+}
+
+# npm ci deletes node_modules, so an unconditional run would make every
+# local gate pay a full install (scripts/setup takes the same care).
+npm_install_if_stale() {
+  if [ ! -d node_modules ] \
+    || [ package-lock.json -nt node_modules/.package-lock.json ]; then
+    run npm ci || return 1
+  else
+    note "  (npm ci skipped: node_modules is newer than package-lock.json)"
+  fi
+}
+
+stage_extension() {
+  # The server tests invoke `ttc` from PATH; without a build they skip, and
+  # the guards below would then pass on nothing.
+  run cargo build || return 1
+
+  (cd "$TT_ROOT/editors/vscode" && npm_install_if_stale) || return 1
+  (cd "$TT_ROOT/editors/vscode" && run npx tsc -b) || return 1
+
+  mkdir -p "$LOG_DIR"
+  log="$LOG_DIR/extension.log"
+  printf '  $ %s\n' "node --test server/out/test/*.test.js"
+  (
+    cd "$TT_ROOT/editors/vscode" || exit 1
+    PATH="$TT_ROOT/target/debug:$PATH" node --test "server/out/test/*.test.js"
+  ) 2>&1 | tee "$log"
+  status="${PIPESTATUS[0]}"
+  [ "$status" -eq 0 ] || return 1
+
+  # A skip is not a pass. Which skips are legitimate depends on the
+  # toolchain: a released TypeScript 7 cannot emit declarations, but a built
+  # checkout can, so with one configured the whole suite must run — the same
+  # split CI draws between its `extension` and `native` jobs.
+  if [ "$TSGO_KIND" = "checkout" ]; then
+    grep -q "^# skipped 0$" "$log" || {
+      fail "the extension suite skipped a test a built checkout can satisfy (see $log)"
+      return 1
+    }
+  else
+    grep -q "SKIP ttc not on PATH" "$log" && {
+      fail "the extension suite could not find ttc (see $log)"
+      return 1
+    }
+    grep -q "SKIP no tsgo executable" "$log" && {
+      fail "the extension suite could not find tsgo (see $log)"
+      return 1
+    }
+  fi
+  return 0
+}
+
+# The floor is the measured baseline, not a target: "do not drop" is a rule a
+# contributor can follow, while a round number invites tests written to move
+# it. A toolchain is required for the same reason the hosted job requires one
+# — without it the number is six points lower and describes a different
+# program (docs/tasks/TASK-224).
+stage_coverage() {
+  command -v cargo-llvm-cov > /dev/null 2>&1 || {
+    fail "cargo-llvm-cov is not installed:
+  rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked"
+    return 1
+  }
+  [ -n "${TTC_TSGO_API:-}" ] || {
+    fail "no TypeScript 7 toolchain: the baseline was measured with one, so a run
+  without one would compare two different programs"
+    return 1
+  }
+  run env TTC_REQUIRE_TSGO=1 cargo llvm-cov --workspace --summary-only \
+    --fail-under-lines 86.9 || return 1
+}
+
+# Both revisions are built and measured here, in one run, on one machine: the
+# ratio between them is the only number that carries across machines
+# (docs/tasks/TASK-225).
+stage_bench() {
+  run ./scripts/bench-compare || return 1
+}
+
+# ------------------------------------------------------------------- run --
+for stage in $STAGES; do
+  heading "$stage"
+  if "stage_$stage"; then
+    PASSED="$PASSED $stage"
+  else
+    FAILED="$FAILED $stage"
+    fail "stage failed: $stage"
+    if [ "$FAIL_FAST" -eq 1 ]; then
+      note ""
+      note "stopping after the first failure (--fail-fast)"
+      break
+    fi
+  fi
+done
+
+# --------------------------------------------------------------- summary --
+heading "summary"
+[ -n "$PASSED" ] && note "  passed:$PASSED"
+[ -n "$FAILED" ] && note "  failed:$FAILED"
+if [ -n "$WARNINGS" ]; then
+  note "  warnings — these turn checks into silent skips:$WARNINGS"
+fi
+
+if [ -n "$FAILED" ]; then
+  note ""
+  fail "local CI failed"
+  exit 1
+fi
+note ""
+note "local CI passed"
+exit 0

@@ -1,17 +1,19 @@
-# The gates that are too slow to run on every push, and too valuable to
-# not run at all (docs/tasks/TASK-223).
+# The gates that look for bugs rather than confirming known answers: the
+# whole corpus, and the two fuzz targets (docs/tasks/TASK-223).
 #
-# Both of these look for bugs rather than confirming known answers, so
-# their cost is time and their yield is unpredictable — which is exactly
-# the shape of work that belongs on a schedule instead of in a PR's
-# critical path. What runs when is written down here so nobody has to
-# guess which gate a change did or did not face.
+# Manual, like `CI` — this repository is on the free plan, and a weekly run
+# of a full differential plus two quarter-hour fuzzers is real money for a
+# yield nobody can predict. Dispatch it when a change deserves it: the
+# parser, the scanner, codegen, or anything else that decides what tt claims.
+#
+# Locally, without spending anything:
+#
+#     TTC_CORPUS_FULL=1 TTC_REQUIRE_CORPUS=1 cargo test --test corpus --release
+#     cd fuzz && cargo +nightly fuzz run compile_any_bytes -- -max_total_time=900
+#     cd fuzz && cargo +nightly fuzz run generated_tt_compiles -- -max_total_time=900
 name: Soak
 
 on:
-  schedule:
-    # Weekly, early Monday UTC.
-    - cron: "17 3 * * 1"
   workflow_dispatch:
     inputs:
       fuzz_seconds:

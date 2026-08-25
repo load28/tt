@@ -77,12 +77,38 @@ CLI와 동일한 toolchain을 씁니다. 이 계층 전체는 임시 구조입�
 ## 머지 전 검증 게이트
 
 ```sh
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
+./scripts/ci
 ```
 
-CI가 동일한 게이트를 강제합니다. 새 기능에는 반드시 테스트를 추가하세요:
+GitHub Actions의 [`CI`](./.github/workflows/ci.yml)는 **자동으로 돌지 않습니다.**
+저장소가 무료 플랜이라 push·PR마다 세 잡을 돌리는 비용을 감당하지 않고,
+`workflow_dispatch` 전용으로 두었습니다. 게이트가 줄어든 것이 아니라 실행 장소가
+로컬로 옮겨졌고, `scripts/ci`가 그 잡들을 다섯 단계로 그대로 재현합니다.
+
+| 단계 | 내용 |
+| --- | --- |
+| `agents` | 에이전트 진입점 계약(`CLAUDE.md`, `scripts/doctor`) |
+| `rust` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
+| `npm` | npm 릴리스 도구와 프로젝트 초기화기 테스트 |
+| `native` | TypeScript 7을 실제로 구동하는 타입 검사 모드 |
+| `extension` | VS Code 확장 빌드와 서버 테스트 |
+
+단계를 골라 돌릴 수 있습니다.
+
+```sh
+./scripts/ci rust              # Rust 게이트만
+./scripts/ci --skip extension  # 확장 테스트만 빼고
+./scripts/ci --list            # 단계 이름
+```
+
+`tsc`, rolldown, TypeScript 7 툴체인이 없으면 관련 테스트는 **실패가 아니라
+조용히 스킵됩니다.** `scripts/ci`는 시작할 때 무엇이 없어서 어떤 검증이 사라지는지
+경고하고 요약에서 한 번 더 알립니다 — 경고가 붙은 통과는 CI와 같은 통과가
+아닙니다. `native` 단계만은 경고가 아니라 실패입니다. 그 단계의 존재 이유가
+TypeScript 7 경로를 실제로 도는 것이기 때문입니다.
+
+호스팅된 실행이 필요하면 Actions 탭에서 `CI` → **Run workflow**로 직접 시작합니다.
+새 기능에는 반드시 테스트를 추가하세요:
 
 - 출력 형태 → `tests/compile.rs`
 - TS 통과 계약 → `tests/passthrough.rs`
@@ -98,25 +124,44 @@ CI가 동일한 게이트를 강제합니다. 새 기능에는 반드시 테스�
 처음 접하는 기능이면 영문·한글 README에도 반영하세요. 공개 Rust API를 바꾸면
 rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실행됩니다.
 
-### CI가 추가로 재는 것
+### 요청할 때만 도는 두 단계
 
-로컬 게이트는 위 셋으로 충분합니다. CI는 여기에 두 개의 자를 더 댑니다.
+기본 실행에는 없습니다. 각각 몇 분이 걸리고, 둘 다 "이 변경이 옳은가"에 혼자
+답하지는 못하기 때문입니다. 이름을 대면 돕니다.
 
-- **커버리지 하한선** (`coverage` 잡). 줄 커버리지가 기준선 아래로 떨어지면
-  실패합니다. 목표치가 아니라 "떨어뜨리지 않는다"는 규칙입니다. 로컬에서
-  재보려면 `cargo llvm-cov --workspace --summary-only` — 단, TypeScript
-  툴체인이 붙어 있어야 CI와 같은 숫자가 나옵니다(없으면 6포인트 낮습니다).
-  기준선과 취약 목록은 [`docs/tasks/TASK-224`](./docs/tasks/TASK-224-coverage-gate.md).
-- **성능 회귀** (`performance` 잡). `./scripts/bench-compare`가 이 revision과
-  merge base를 **한 기계에서** 재서 비교합니다. 로컬에서는 `cargo bench`로
-  숫자만 볼 수 있습니다. 임계값의 근거는
+```sh
+./scripts/ci coverage   # 줄 커버리지가 기준선 아래로 떨어지면 실패
+./scripts/ci bench      # 이 revision과 merge base를 한 기계에서 비교
+```
+
+- **커버리지 하한선**은 목표치가 아니라 "떨어뜨리지 않는다"는 규칙입니다.
+  TypeScript 툴체인이 있어야 기준선과 같은 숫자가 나옵니다(없으면 6포인트
+  낮습니다). 기준선과 취약 목록은
+  [`docs/tasks/TASK-224`](./docs/tasks/TASK-224-coverage-gate.md).
+- **성능 비교**는 두 revision을 **한 기계에서** 재서 비율만 읽습니다. 다른
+  기계에 기록된 기준선은 아무 뜻이 없기 때문입니다. 숫자만 보려면
+  `cargo bench`. 임계값의 근거는
   [`docs/tasks/TASK-225`](./docs/tasks/TASK-225-performance-benchmarks.md).
+
+`CI` 워크플로에도 같은 두 잡이 있고, 워크플로 자체가 수동이므로 dispatch하면
+함께 돕니다.
+
+### 버그를 찾으러 가는 것 — `Soak`
+
+[`Soak`](./.github/workflows/soak.yml) 워크플로는 전체 코퍼스 차등 테스트와
+퍼저 두 개를 돌립니다. 알려진 답을 확인하는 게 아니라 **모르는 것을 찾는**
+쪽이라 시간이 들고 수확은 예측할 수 없습니다 — 파서·스캐너·codegen처럼 tt가
+무엇을 주장하는지를 바꾼 변경에 dispatch하세요. 로컬 실행 명령은 그 파일의
+머리말에 있습니다. 무엇을 어떻게 찾는지는
+[`docs/tasks/TASK-223`](./docs/tasks/TASK-223-corpus-and-fuzzing.md).
 
 ## 개발 버전 배포
 
-`Cargo.toml` 버전을 `X.Y.Z-dev.N` 형식으로 올려 `main`에 push하고 `CI`가
-성공하면 [`Dev Release`](./.github/workflows/dev-release.yml)가 자동으로 개발
-빌드를 배포합니다. `N`이 같은 일반 코드 push는 배포하지 않습니다. 수동 실행도
+`Cargo.toml` 버전을 `X.Y.Z-dev.N` 형식으로 올려 `main`에 push한 뒤, Actions
+탭에서 `CI`를 **수동 실행**합니다. 그 실행이 성공하면
+[`Dev Release`](./.github/workflows/dev-release.yml)가 자동으로 개발 빌드를
+배포합니다 — 배포는 CI 성공을 기다리고(`workflow_run`), 이제 그 성공을 사람이
+시작해야 합니다. `N`이 같은 일반 코드 push는 배포하지 않습니다. 수동 실행도
 현재 Cargo 버전이 `X.Y.Z-dev.N`일 때만 허용합니다.
 
 npm 버전은 `<개발버전>.<UTC 날짜>.<UTC 시간>.<run>.<attempt>`이며 모두 `dev`
@@ -124,9 +169,10 @@ dist-tag로 격리됩니다. 확장은 `0.<YYMMDD>.<HHMMSS>` 버전의 VSIX로 �
 같은 실행의 GitHub pre-release에 첨부합니다. GitHub Releases에서 VSIX를
 내려받아 VS Code의 `Extensions: Install from VSIX...`로 설치합니다.
 
-`Cargo.toml` 버전을 선행 식별자 없는 `X.Y.Z`로 올리면 `CI` 성공 뒤
-[`Release`](./.github/workflows/release.yml)가 production npm 패키지와 GitHub
-Release를 배포합니다. 저장소에는 대상 패키지 게시 권한의 `NPM_TOKEN` secret이
+`Cargo.toml` 버전을 선행 식별자 없는 `X.Y.Z`로 올리면, 같은 방식으로 `main`에서
+`CI`를 수동 실행해 성공시킨 뒤 [`Release`](./.github/workflows/release.yml)가
+production npm 패키지와 GitHub Release를 배포합니다. `vX.Y.Z` 태그를 push하는
+경로는 CI와 무관하게 그대로 동작합니다. 저장소에는 대상 패키지 게시 권한의 `NPM_TOKEN` secret이
 필요합니다.
 
 ```sh
