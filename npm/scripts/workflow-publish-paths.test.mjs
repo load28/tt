@@ -16,3 +16,9 @@ test("release workflows publish fixed package directories as explicit local path
     }
   }
 });
+
+test("release workflows install targets into the pinned Rust toolchain", () => {
+  for (const workflow of workflows) {
+    assert.match(workflow, /run: rustup target add \$\{\{ matrix\.target \}\}/);
+  }
+});

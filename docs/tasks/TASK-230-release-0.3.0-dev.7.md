@@ -42,6 +42,8 @@ TASK-194부터 TASK-229까지 완료된 변경을 npm `dev` 채널과 GitHub VSI
 - 2026-08-25: Rust 검증 게이트와 npm 릴리스 도구·`create-tt` 테스트를
   통과했다.
 - 2026-08-25: 자동 트리거를 변경하지 않고 Dev Release를 수동 실행하기로 했다.
+- 2026-08-25: Dev Release run `32855328176`의 크로스 타깃 빌드 실패를
+  확인하고 두 릴리스 workflow가 고정 toolchain에 타깃을 설치하도록 수정했다.
 
 ## 이슈 및 해결
 
@@ -51,6 +53,15 @@ TASK-194부터 TASK-229까지 완료된 변경을 npm `dev` 채널과 GitHub VSI
 - **원인**: 작업 중 원격에 TASK-213부터 TASK-229까지의 변경이 병합됐다.
 - **해결**: 원격 변경 위로 릴리스 커밋을 rebase하고 태스크 번호를 TASK-230으로
   조정했다.
+
+### 이슈 2: 고정 toolchain에 크로스 컴파일 타깃 누락
+
+- **증상**: Dev Release run `32855328176`에서 linux-x64, linux-arm64,
+  darwin-x64 빌드가 `can't find crate for std`로 실패했다.
+- **원인**: `dtolnay/rust-toolchain@stable`이 타깃을 stable toolchain에
+  설치했지만 저장소의 `rust-toolchain.toml` 때문에 Cargo는 고정된 1.98을 썼다.
+- **해결**: 개발·정식 릴리스 workflow가 `rustup target add`로 활성 고정
+  toolchain에도 matrix 타깃을 설치하게 했다.
 
 ## 검증
 
