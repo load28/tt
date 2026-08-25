@@ -80,10 +80,9 @@ CLI와 동일한 toolchain을 씁니다. 이 계층 전체는 임시 구조입�
 ./scripts/ci
 ```
 
-GitHub Actions의 [`CI`](./.github/workflows/ci.yml)는 **자동으로 돌지 않습니다.**
-저장소가 무료 플랜이라 push·PR마다 세 잡을 돌리는 비용을 감당하지 않고,
-`workflow_dispatch` 전용으로 두었습니다. 게이트가 줄어든 것이 아니라 실행 장소가
-로컬로 옮겨졌고, `scripts/ci`가 그 잡들을 다섯 단계로 그대로 재현합니다.
+GitHub Actions의 [`CI`](./.github/workflows/ci.yml)는 `main`과 `release-X.Y`의
+push·PR에서 자동으로 돕니다. `scripts/ci`는 같은 핵심 게이트를 로컬에서 재현하며,
+PR을 열기 전에 먼저 실행해야 합니다.
 
 | 단계 | 내용 |
 | --- | --- |
@@ -107,7 +106,8 @@ GitHub Actions의 [`CI`](./.github/workflows/ci.yml)는 **자동으로 돌지 �
 아닙니다. `native` 단계만은 경고가 아니라 실패입니다. 그 단계의 존재 이유가
 TypeScript 7 경로를 실제로 도는 것이기 때문입니다.
 
-호스팅된 실행이 필요하면 Actions 탭에서 `CI` → **Run workflow**로 직접 시작합니다.
+호스팅된 실행을 다시 확인해야 하면 Actions 탭에서 `CI` → **Run workflow**로도
+시작할 수 있습니다.
 새 기능에는 반드시 테스트를 추가하세요:
 
 - 출력 형태 → `tests/compile.rs`
@@ -155,27 +155,23 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
 머리말에 있습니다. 무엇을 어떻게 찾는지는
 [`docs/tasks/TASK-223`](./docs/tasks/TASK-223-corpus-and-fuzzing.md).
 
-## 개발 버전 배포
+## 릴리스 모델
 
-`Cargo.toml` 버전을 `X.Y.Z-dev.N` 형식으로 올려 `main`에 push한 뒤, Actions
-탭에서 `CI`를 **수동 실행**합니다. 그 실행이 성공하면
-[`Dev Release`](./.github/workflows/dev-release.yml)가 자동으로 개발 빌드를
-배포합니다 — 배포는 CI 성공을 기다리고(`workflow_run`), 이제 그 성공을 사람이
-시작해야 합니다. `N`이 같은 일반 코드 push는 배포하지 않습니다. 수동 실행도
-현재 Cargo 버전이 `X.Y.Z-dev.N`일 때만 허용합니다.
+tt은 Microsoft TypeScript와 같이 `main`을 Nightly와 일반 개발의 기준으로 사용합니다.
+작업 브랜치의 PR은 `main`에 squash merge합니다. Beta를 만들 때 장기 브랜치
+`release-X.Y`를 한 번 만들고, 같은 브랜치를 RC·Stable·Patch까지 유지합니다.
 
-npm 버전은 `<개발버전>.<UTC 날짜>.<UTC 시간>.<run>.<attempt>`이며 모두 `dev`
-dist-tag로 격리됩니다. 확장은 `0.<YYMMDD>.<HHMMSS>` 버전의 VSIX로 패키징해
-같은 실행의 GitHub pre-release에 첨부합니다. GitHub Releases에서 VSIX를
-내려받아 VS Code의 `Extensions: Install from VSIX...`로 설치합니다.
+- Nightly: `main`의 성공한 push CI 산출물, `X.Y.Z-dev.YYYYMMDD`, npm `next`
+- Beta: `release-X.Y`의 `X.Y.0-beta`, npm `beta`
+- RC: `main`을 릴리스 브랜치에 동기화한 `X.Y.1-rc`, npm `rc`
+- Stable/Patch: 같은 릴리스 브랜치의 `X.Y.2`, `X.Y.3`…, npm `latest`
 
-`Cargo.toml` 버전을 선행 식별자 없는 `X.Y.Z`로 올리면, 같은 방식으로 `main`에서
-`CI`를 수동 실행해 성공시킨 뒤 [`Release`](./.github/workflows/release.yml)가
-production npm 패키지와 GitHub Release를 배포합니다. `vX.Y.Z` 태그를 push하는
-경로는 CI와 무관하게 그대로 동작합니다. 저장소에는 대상 패키지 게시 권한의 `NPM_TOKEN` secret이
-필요합니다.
+[`Advance Release Branch`](./.github/workflows/release.yml)는 릴리스 브랜치 생성·동기화와
+버전 커밋만 합니다. 그 push로 실행된 CI가 모든 플랫폼 바이너리와 VSIX를 만듭니다.
+[`Publish Release`](./.github/workflows/release-publish.yml)는 성공한 CI run ID를 입력받아
+그 산출물만 수동 게시하며 다시 빌드하지 않습니다. 자동 배포는 없습니다.
 
 ```sh
-bun add -d @load28/tt-lang@dev @load28/unplugin-tt@dev
-bunx @load28/create-tt@dev my-app
+bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
+bunx @load28/create-tt@next my-app
 ```

@@ -12,7 +12,10 @@ const versions = {
 }
 
 export function dependencyChannel(packageVersion) {
-  return /-dev\./.test(packageVersion) ? 'dev' : 'latest'
+  if (/-dev\./.test(packageVersion)) return 'next'
+  if (/-beta(?:\.|$)/.test(packageVersion)) return 'beta'
+  if (/-rc(?:\.|$)/.test(packageVersion)) return 'rc'
+  return 'latest'
 }
 
 const bundlers = {

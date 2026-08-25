@@ -44,8 +44,8 @@ from the same shell. The executable and API client must come from the same
 checkout.
 
 ```sh
-bunx @load28/create-tt@dev my-app
-bunx @load28/create-tt@dev init       # in an existing TypeScript project
+bunx @load28/create-tt@next my-app
+bunx @load28/create-tt@next init       # in an existing TypeScript project
 ```
 
 The automatic installer uses Bun for new projects. The complete automatic and
@@ -64,7 +64,7 @@ For a manual compiler-only install, first complete the typescript-go build
 above and keep `TTC_TSGO_ROOT` exported:
 
 ```sh
-bun add -d @load28/tt-lang@dev
+bun add -d @load28/tt-lang@next
 ```
 
 Compile a file or source tree, or check it without writing output:

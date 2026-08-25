@@ -25,3 +25,17 @@ test("stamps the release branch version into Cargo and published package manifes
   });
   assert.equal(JSON.parse(fs.readFileSync(path.join(root, "packages", "create-tt", "package.json"))).version, "0.3.0-dev.8");
 });
+
+test("accepts TypeScript-style beta and RC versions", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-stage-"));
+  fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
+  fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
+  fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\nname = "ttc"\nversion = "0.3.0-dev.7"\n');
+  fs.writeFileSync(path.join(root, "Cargo.lock"), '[[package]]\nname = "ttc"\nversion = "0.3.0-dev.7"\n');
+  fs.writeFileSync(path.join(root, "npm", "tt-lang", "package.json"), JSON.stringify({ version: "old", optionalDependencies: {} }));
+  fs.writeFileSync(path.join(root, "packages", "create-tt", "package.json"), JSON.stringify({ version: "old" }));
+
+  setReleaseVersion("0.3.0-beta", root);
+  setReleaseVersion("0.3.1-rc", root);
+  assert.match(fs.readFileSync(path.join(root, "Cargo.toml"), "utf8"), /version = "0\.3\.1-rc"/);
+});

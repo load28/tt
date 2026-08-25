@@ -3,14 +3,14 @@
 Create a ready-to-run Vite + TypeScript + tt project:
 
 ```sh
-bunx @load28/create-tt@dev my-app
+bunx @load28/create-tt@next my-app
 ```
 
 Add tt to an existing TypeScript project. The initializer detects Vite,
 Rollup, Rolldown, webpack, Rspack, esbuild, or Farm from `package.json`:
 
 ```sh
-bunx @load28/create-tt@dev init
+bunx @load28/create-tt@next init
 ```
 
 The initializer updates `package.json` structurally. For bundlers with a

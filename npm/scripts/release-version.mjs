@@ -4,10 +4,12 @@ import { pathToFileURL } from "node:url";
 
 import { stampVersion } from "./stamp-version.mjs";
 
-const VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-dev\.[1-9]\d*)?$/;
+const VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev\.[1-9]\d*|beta|rc))?$/;
 
 export function setReleaseVersion(version, repositoryRoot = process.cwd()) {
-  if (!VERSION.test(version)) throw new Error(`release version must be X.Y.Z or X.Y.Z-dev.N: ${version}`);
+  if (!VERSION.test(version)) {
+    throw new Error(`release version must be X.Y.Z, X.Y.Z-dev.N, X.Y.0-beta, or X.Y.1-rc: ${version}`);
+  }
   replaceOnce(
     path.join(repositoryRoot, "Cargo.toml"),
     /(^\[package\]\nname = "ttc"\nversion = ")[^"]+("$)/m,
@@ -30,7 +32,7 @@ function replaceOnce(file, pattern, replacement) {
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    if (process.argv.length !== 3) throw new Error("usage: release-version.mjs <X.Y.Z[-dev.N]>");
+    if (process.argv.length !== 3) throw new Error("usage: release-version.mjs <release-version>");
     setReleaseVersion(process.argv[2]);
   } catch (error) {
     console.error(`release-version: ${error.message}`);

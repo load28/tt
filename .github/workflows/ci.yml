@@ -1,19 +1,19 @@
-# CI — the merge gates, run on GitHub's runners.
-#
-# Manual only. This repository is on the free plan, where every push and
-# every pull request commit would spend runner minutes on three jobs, two of
-# which build typescript-go or install npm trees from scratch. The gates did
-# not shrink; they moved. `./scripts/ci` runs the same stages on a
-# contributor's machine, and this workflow is dispatched by hand when a
-# hosted run is actually wanted.
-#
-# Releases use separate preparation and approval steps. Dev approval publishes
-# a tag without changing main. Production preparation opens a release PR, and
-# merging that prepared PR is the only event that publishes Production.
+# TypeScript-style merge gate. main and release-X.Y are always expected to
+# build cleanly. Pushes to those branches also produce immutable release
+# artifacts; publishing is a separate manual promotion and never rebuilds.
 name: CI
 
 on:
+  push:
+    branches: [main, "release-*"]
+  pull_request:
+    branches: [main, "release-*"]
+  merge_group:
+    branches: [main, "release-*"]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -352,3 +352,131 @@ jobs:
           # on PATH, it can serve a language server, and it can emit
           # declarations — so a skip means the wiring broke.
           grep -q "^# skipped 0$" /tmp/extension-native.log
+
+  release-build:
+    name: release build (${{ matrix.key }})
+    if: >-
+      github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { key: linux-x64, os: ubuntu-latest, target: x86_64-unknown-linux-musl }
+          - { key: linux-arm64, os: ubuntu-24.04-arm, target: aarch64-unknown-linux-musl }
+          - { key: darwin-x64, os: macos-latest, target: x86_64-apple-darwin }
+          - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { key: win32-x64, os: windows-latest, target: x86_64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - run: rustup target add ${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Stamp the artifact version
+        shell: bash
+        run: |
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP")"
+          fi
+          node npm/scripts/release-version.mjs "$VERSION"
+      - name: Install musl toolchain
+        if: contains(matrix.target, 'musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+        env:
+          TARGET: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-ttc-${{ matrix.key }}
+          path: target/${{ matrix.target }}/release/ttc${{ matrix.key == 'win32-x64' && '.exe' || '' }}
+          if-no-files-found: error
+          retention-days: 30
+
+  release-vsix:
+    name: release VSIX
+    if: >-
+      github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Derive artifact versions
+        id: versions
+        run: |
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP")"
+          fi
+          EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"
+          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version.split('-')[0]")"
+          node npm/scripts/release-artifacts.mjs describe "$VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" "$TIMESTAMP" >> "$GITHUB_OUTPUT"
+      - name: Package extension
+        working-directory: editors/vscode
+        run: |
+          npm ci
+          node ../../npm/scripts/stamp-version.mjs "${{ steps.versions.outputs.version }}" --vscode-version "${{ steps.versions.outputs.vscode_version }}"
+          npm run grammar:check
+          npm run compile
+          npx --yes @vscode/vsce@3.9.2 package --no-dependencies --out "../../tt-language-${{ steps.versions.outputs.vscode_version }}.vsix"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-vsix
+          path: tt-language-${{ steps.versions.outputs.vscode_version }}.vsix
+          if-no-files-found: error
+          retention-days: 30
+
+  release-metadata:
+    name: releasable artifact
+    if: >-
+      github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    needs: [check, bench, coverage, extension, native, release-build, release-vsix]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Write immutable release metadata
+        run: |
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP")"
+          fi
+          EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"
+          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version.split('-')[0]")"
+          node npm/scripts/release-artifacts.mjs describe "$VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" "$TIMESTAMP" > /tmp/versions.env
+          . /tmp/versions.env
+          jq -n \
+            --arg sourceSha "$GITHUB_SHA" \
+            --arg sourceBranch "$GITHUB_REF_NAME" \
+            --arg version "$version" \
+            --arg npmTag "$npm_tag" \
+            --arg unpluginVersion "$unplugin_version" \
+            --arg vscodeVersion "$vscode_version" \
+            '{sourceSha:$sourceSha,sourceBranch:$sourceBranch,version:$version,npmTag:$npmTag,unpluginVersion:$unpluginVersion,vscodeVersion:$vscodeVersion}' \
+            > release-metadata.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-metadata
+          path: release-metadata.json
+          if-no-files-found: error
+          retention-days: 30

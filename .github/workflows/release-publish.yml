@@ -1,143 +1,145 @@
-# The only automatic deployment: merging a prepared release/vX.Y.Z PR into
-# main approves and publishes the exact artifacts built for that branch SHA.
-name: Publish Merged Production Release
+# Manual promotion of one successful CI artifact set. This workflow downloads
+# a prior build and never compiles source.
+name: Publish Release
 
 on:
-  pull_request:
-    types: [closed]
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful CI run ID containing release-metadata
+        required: true
+        type: string
+      npm_tag:
+        description: npm dist-tag to publish
+        required: true
+        type: choice
+        options: [next, beta, rc, latest]
 
 permissions:
   actions: read
   contents: write
-  statuses: read
   id-token: write
 
 concurrency:
-  group: release
+  group: release-publish
   cancel-in-progress: false
 
 jobs:
-  approve:
-    name: verify merged prepared release
-    if: >-
-      github.event.pull_request.merged == true &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      startsWith(github.event.pull_request.head.ref, 'release/v')
+  verify:
+    name: verify promoted CI build
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.release.outputs.version }}
-      branch: ${{ steps.release.outputs.branch }}
       source_sha: ${{ steps.release.outputs.source_sha }}
-      prepare_run_id: ${{ steps.release.outputs.prepare_run_id }}
+      source_branch: ${{ steps.release.outputs.source_branch }}
+      version: ${{ steps.release.outputs.version }}
+      npm_tag: ${{ steps.release.outputs.npm_tag }}
+      unplugin_version: ${{ steps.release.outputs.unplugin_version }}
+      vscode_version: ${{ steps.release.outputs.vscode_version }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - name: Verify the merged SHA passed preparation
+      - name: Download and verify metadata
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
-          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          RUN_ID: ${{ inputs.run_id }}
+          REQUESTED_TAG: ${{ inputs.npm_tag }}
         run: |
-          VERSION="${BRANCH#release/v}"
-          node npm/scripts/release-channel.mjs --production "$VERSION" >/dev/null
-          test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$VERSION"
-          git fetch origin main
-          git diff --quiet "$SOURCE_SHA" "$MERGE_SHA" -- || {
-            echo "merged main tree differs from the prepared Production tree" >&2
-            exit 1
-          }
-          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/status" > /tmp/statuses.json
-          jq -e '[.statuses[] | select(.context == "release/prod-prepare" and .state == "success")] | first' \
-            /tmp/statuses.json > /tmp/ready-status.json
-          RUN_URL="$(jq -r .target_url /tmp/ready-status.json)"
-          case "$RUN_URL" in
-            "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/"*) ;;
-            *) echo "invalid preparation run URL: $RUN_URL" >&2; exit 1 ;;
-          esac
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json name,status,conclusion,event,headSha,headBranch > /tmp/run.json
+          test "$(jq -r .name /tmp/run.json)" = CI
+          test "$(jq -r .status /tmp/run.json)" = completed
+          test "$(jq -r .conclusion /tmp/run.json)" = success
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-metadata --dir metadata
+          SOURCE_SHA="$(jq -r .sourceSha metadata/release-metadata.json)"
+          SOURCE_BRANCH="$(jq -r .sourceBranch metadata/release-metadata.json)"
+          VERSION="$(jq -r .version metadata/release-metadata.json)"
+          NPM_TAG="$(jq -r .npmTag metadata/release-metadata.json)"
+          test "$SOURCE_SHA" = "$(jq -r .headSha /tmp/run.json)"
+          test "$SOURCE_BRANCH" = "$(jq -r .headBranch /tmp/run.json)"
+          test "$NPM_TAG" = "$REQUESTED_TAG"
+          if [ "$NPM_TAG" = next ]; then
+            test "$SOURCE_BRANCH" = main
+          else
+            case "$SOURCE_BRANCH" in release-*) ;; *) exit 1 ;; esac
+          fi
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
-          echo "prepare_run_id=${RUN_URL##*/}" >> "$GITHUB_OUTPUT"
+          echo "source_branch=$SOURCE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "npm_tag=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "unplugin_version=$(jq -r .unpluginVersion metadata/release-metadata.json)" >> "$GITHUB_OUTPUT"
+          echo "vscode_version=$(jq -r .vscodeVersion metadata/release-metadata.json)" >> "$GITHUB_OUTPUT"
 
   publish:
-    name: publish npm packages and GitHub Release
-    needs: approve
+    name: publish verified artifacts
+    needs: verify
     runs-on: ubuntu-latest
     env:
-      VERSION: ${{ needs.approve.outputs.version }}
-      SOURCE_SHA: ${{ needs.approve.outputs.source_sha }}
       GH_TOKEN: ${{ github.token }}
+      RUN_ID: ${{ inputs.run_id }}
+      SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+      VERSION: ${{ needs.verify.outputs.version }}
+      NPM_TAG: ${{ needs.verify.outputs.npm_tag }}
+      UNPLUGIN_VERSION: ${{ needs.verify.outputs.unplugin_version }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.approve.outputs.source_sha }}
+          ref: ${{ needs.verify.outputs.source_sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           registry-url: https://registry.npmjs.org
-      - name: Download prepared binaries
-        run: gh run download "${{ needs.approve.outputs.prepare_run_id }}" --repo "$GITHUB_REPOSITORY" --pattern 'ttc-*' --dir binaries
+      - name: Download the promoted build
+        run: |
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'release-ttc-*' --dir binaries
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-vsix --dir vsix
       - name: Assemble packages and release archives
         run: |
           mkdir -p dist/packages dist/assets
           for key in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64; do
             exe=ttc; [ "$key" = win32-x64 ] && exe=ttc.exe
-            package_dir="$(node npm/scripts/make-platform-package.mjs "$key" "binaries/ttc-$key/$exe" dist/packages "$VERSION")"
+            package_dir="$(node npm/scripts/make-platform-package.mjs "$key" "binaries/release-ttc-$key/$exe" dist/packages "$VERSION")"
             if [ "$key" = win32-x64 ]; then
               (cd "$package_dir/bin" && zip -q "$OLDPWD/dist/assets/ttc-v$VERSION-$key.zip" "$exe")
             else
               tar -C "$package_dir/bin" -czf "dist/assets/ttc-v$VERSION-$key.tar.gz" "$exe"
             fi
           done
-          node npm/scripts/stamp-version.mjs "$VERSION"
-      - name: Smoke-test linux-x64 package
+          node npm/scripts/stamp-version.mjs "$VERSION" --unplugin-version "$UNPLUGIN_VERSION"
+      - name: Smoke-test the promoted compiler
         run: |
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version
-          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/smoke.tt
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/smoke.tt | grep -q 'kind: "A"'
-      - name: Publish packages unless the immutable version exists
+          test "$(dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version)" = "$VERSION"
+          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/release-smoke.tt
+          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/release-smoke.tt | grep -q 'kind: "A"'
+      - name: Publish immutable npm packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          publish_latest() {
+          publish_package() {
             package_dir="$1"
             mode="${2:-release}"
             name="$(node -p "require('./$package_dir/package.json').name")"
             version="$(node -p "require('./$package_dir/package.json').version")"
             if npm view "$name@$version" version >/dev/null 2>&1; then
               git_head="$(npm view "$name@$version" gitHead)"
-              if [ "$mode" = release ] && [ -n "$git_head" ] && [ "$git_head" != "$SOURCE_SHA" ]; then
-                echo "$name@$version was published from $git_head, not $SOURCE_SHA" >&2
-                exit 1
+              if [ "$mode" = release ]; then
+                test -z "$git_head" || test "$git_head" = "$SOURCE_SHA"
               fi
               echo "$name@$version already exists"
             else
-              npm publish "./$package_dir" --provenance --access public
+              npm publish "./$package_dir" --tag "$NPM_TAG" --provenance --access public
             fi
           }
-          for package_dir in dist/packages/@load28/tt-lang-*; do publish_latest "$package_dir"; done
-          publish_latest npm/tt-lang
-          publish_latest integrations/unplugin independent
-          publish_latest packages/create-tt
+          for package_dir in dist/packages/@load28/tt-lang-*; do publish_package "$package_dir"; done
+          publish_package npm/tt-lang
+          publish_package integrations/unplugin independent
+          publish_package packages/create-tt
       - uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.approve.outputs.version }}
-          target_commitish: ${{ needs.approve.outputs.source_sha }}
-          files: dist/assets/*
+          tag_name: ${{ needs.verify.outputs.npm_tag == 'next' && format('next-v{0}', needs.verify.outputs.version) || format('v{0}', needs.verify.outputs.version) }}
+          target_commitish: ${{ needs.verify.outputs.source_sha }}
+          name: tt ${{ needs.verify.outputs.version }}
+          prerelease: ${{ needs.verify.outputs.npm_tag != 'latest' }}
+          make_latest: ${{ needs.verify.outputs.npm_tag == 'latest' }}
           generate_release_notes: true
-
-  cleanup:
-    name: remove completed release branch
-    needs: [approve, publish]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: |
-          if git ls-remote --exit-code origin "refs/heads/${{ needs.approve.outputs.branch }}"; then
-            git push origin --delete "${{ needs.approve.outputs.branch }}"
-          fi
+          fail_on_unmatched_files: true
+          files: |
+            dist/assets/*
+            vsix/*.vsix
