@@ -1,8 +1,8 @@
 # TASK-226: 로컬과 CI의 Rust 툴체인 격차
 
-- **상태**: 진행 중
+- **상태**: 완료
 - **시작일**: 2026-08-25
-- **완료일**: —
+- **완료일**: 2026-08-25
 - **커밋**: —
 
 ## 목적
@@ -84,16 +84,29 @@ PR #53의 `fmt / clippy / test` 잡이 `manual_option_zip` 린트로 실패했�
 - **선택과 근거**: 사용자 지시("툴체인을 1.98로 설정했으니 이걸로 다 써야 한다")에
   따라 예외를 없애고 `build on MSRV` 잡을 제거했다. CI는 `check`·`extension`·
   `native` 세 잡이며 모두 핀을 쓴다.
-- **남은 문제 (미해결)**: `Cargo.toml`의 `rust-version = "1.88"`과 README 영문·한글의
-  "Rust 1.88 or newer" 문구를 **이제 아무것도 검증하지 않는다.** 1.88 이후에 들어온
-  기능을 쓰면 CI는 초록인데 1.88 사용자는 알 수 없는 컴파일 에러를 본다. 정합적인
-  선택지는 둘이고, 사용자 약속을 바꾸는 결정이라 임의로 정하지 않았다:
-  - **(a)** `rust-version`을 1.98로 올린다 — 선언과 실제가 일치한다. 1.88~1.97
-    사용자는 쓸 수 없게 되므로 `Cargo.toml`과 README 두 개를 함께 고쳐야 한다.
-  - **(b)** MSRV 잡을 되살린다 — 1.88 약속을 계속 검증한다. 그 잡만
-    `cargo +<msrv>`로 핀을 무시한다.
+- **뒤따른 문제**: 잡을 없애면 `Cargo.toml`의 `rust-version = "1.88"`과 README
+  영문·한글의 "Rust 1.88 or newer" 문구를 아무것도 검증하지 않게 된다. 1.88 이후에
+  들어온 기능을 쓰면 CI는 초록인데 1.88 사용자는 알 수 없는 컴파일 에러를 본다.
+  → 결정 4.
 
-  이 태스크는 위 둘 중 하나가 정해지기 전에는 완료되지 않는다.
+### 결정 4: 선언을 실제와 맞춘다 — `rust-version`을 1.98로
+
+- **상황**: 결정 3 이후 "선언된 최소 버전"과 "실제로 컴파일해 보는 버전"이 어긋났다.
+- **검토한 대안**:
+  - **(a)** `rust-version`을 1.98로 올린다. 선언과 실제가 일치한다. 대신 1.88~1.97
+    사용자는 더 이상 쓸 수 없다.
+  - **(b)** MSRV 잡을 되살린다. 1.88 약속을 계속 검증하지만, "핀을 쓰지 않는 유일한
+    잡"이라는 예외가 돌아온다.
+  - (c) 그대로 둔다 — 선언은 남고 확인만 없는 상태. 셋 중 가장 나쁘다: 아무도
+    검증하지 않는 약속은 어긴 줄도 모르고 어기게 된다.
+- **선택과 근거**: (a). 사용자 결정이며, tt이 아직 `0.3.0-dev`이라 지원 하한을
+  올리는 비용이 작다는 점이 근거다. 무엇보다 이 태스크의 주제 자체가 "확인되지 않는
+  기준은 기준이 아니다"였으므로, 개발 툴체인만 고정하고 소비자 하한은 확인 없이
+  남겨 두는 것은 같은 실수의 반복이 된다. 이제 한 버전이 개발·CI·소비자 하한
+  셋 모두를 뜻하고, 핀을 올리면 소비자 요구도 함께 올라간다 — 핀 상향이 태스크여야
+  하는 이유가 하나 더 늘었다.
+- **함께 바꾼 것**: `Cargo.toml`의 `rust-version`, `README.md`, `README.ko.md`,
+  그리고 `rust-toolchain.toml`의 주석.
 
 ## 작업 내역
 
@@ -106,7 +119,10 @@ PR #53의 `fmt / clippy / test` 잡이 `manual_option_zip` 린트로 실패했�
 - 2026-08-25: `scripts/doctor`가 MSRV 하한 대신 **활성 툴체인이 핀과 같은지**
   확인하도록 변경. `MIN_RUST_MAJOR/MINOR` 상수와 `rust_is_supported()` 제거,
   `pinned_rust()` 추가. 이제 `ok: Rust 1.98.0 matches rust-toolchain.toml`.
-- 2026-08-25: `AGENTS.md`, `CONTRIBUTING.md`에 핀과 MSRV의 구분을 적었다.
+- 2026-08-25: `AGENTS.md`, `CONTRIBUTING.md`에 핀과 `rust-version`의 관계를 적었다.
+- 2026-08-25: 결정 4에 따라 `rust-version`을 1.98로 올리고 README 영문·한글과
+  `rust-toolchain.toml` 주석을 맞췄다. 1.88을 언급하던 곳은 저장소 전체에서
+  세 군데였고(`Cargo.toml`, 두 README) 모두 갱신했다.
 
 ## 이슈 및 해결
 
@@ -114,10 +130,25 @@ PR #53의 `fmt / clippy / test` 잡이 `manual_option_zip` 린트로 실패했�
 
 ## 검증
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] 선택한 방식이 실제로 격차를 드러내는지 확인 (예: 의도적으로 낮은 툴체인에서
-      doctor가 경고하는지)
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings` — 경고 0
+- [x] `cargo test` — 14개 스위트 전부 통과, skip 없음
+- [x] `rustup show active-toolchain` →
+      `1.98.0-x86_64-unknown-linux-gnu (overridden by '.../rust-toolchain.toml')`
+- [x] `./scripts/doctor` → `ok: Rust 1.98.0 matches rust-toolchain.toml`
+- [x] `.github/workflows/ci.yml`이 유효한 YAML이고 남은 세 잡이 모두 핀을 쓰는지
+      파싱해서 확인
 
 ## 결과
+
+### 변경된 파일
+
+- `rust-toolchain.toml` (신규) — 개발 툴체인 고정
+- `.github/workflows/ci.yml` — 세 잡이 핀을 쓰도록, `build on MSRV` 잡 제거
+- `scripts/doctor` — MSRV 하한 검사를 핀 일치 검사로 교체
+- `Cargo.toml`, `README.md`, `README.ko.md` — 선언된 최소 버전을 1.98로
+- `AGENTS.md`, `CONTRIBUTING.md` — 핀과 `rust-version`의 관계
+
+### 후속
+
+- 핀 상향은 별도 태스크로 한다. 이제 소비자 하한까지 함께 올라가므로 더욱 그렇다.

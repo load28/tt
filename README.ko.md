@@ -97,8 +97,9 @@ cargo install --git https://github.com/load28/tt
 
 ## tt 개발하기
 
-컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.88
-이상이 필요합니다. 전체 로컬 환경에는 Bun, Node.js, Go, typescript-go
+컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.98
+이상이 필요합니다 — `rust-toolchain.toml`이 고정한, 그리고 모든 빌드가 실제로
+검증되는 그 버전입니다. 전체 로컬 환경에는 Bun, Node.js, Go, typescript-go
 체크아웃도 필요합니다.
 
 ```sh
