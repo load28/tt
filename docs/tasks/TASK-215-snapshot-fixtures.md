@@ -156,8 +156,10 @@ toolchain 구성 후(`TTC_TSGO_ROOT`, `TTC_REQUIRE_TSGO=1`) 실행.
 
 ### 후속
 
-- 위 관찰: 남은 규칙들의 수정 조언을 `Suggestion`으로 옮기기
-- 방출 가독성: 블록 암 본문 들여쓰기와 파일 끝 런타임 import(위 관찰 두 건). 이제
-  기준선이 파일로 있으니 개선 태스크가 diff로 검토할 수 있다.
+- [TASK-218](./TASK-218-suggestions-for-remaining-rules.md) — 남은 규칙들의
+  수정 조언을 `Suggestion`으로 옮기기 (위 관찰)
+- [TASK-219](./TASK-219-generated-code-readability.md) — 블록 암 본문 들여쓰기와
+  파일 끝 런타임 import (위 관찰 두 건). 이제 기준선이 파일로 있으니 diff로
+  검토할 수 있다.
 - 픽스처 확장은 점진적으로. 새 구문·새 진단이 생길 때 케이스를 하나 추가하는 것이
   기본 동선이 되도록 `AGENTS.md`에 적었다.

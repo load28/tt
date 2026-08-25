@@ -168,5 +168,7 @@ $ echo $?
 
 ### 후속
 
-- `unwrap`/`expect` 감사: 안전망은 사고를 보고할 뿐 없애지 않는다. 255개소를
-  줄이는 것은 별도 태스크로 남는다.
+- [TASK-221](./TASK-221-panic-surface-audit.md) — `unwrap`/`expect` 감사.
+  안전망은 사고를 보고할 뿐 없애지 않는다.
+- [TASK-222](./TASK-222-integration-suite-flakiness.md) — 이슈 2의 간헐적
+  실패.

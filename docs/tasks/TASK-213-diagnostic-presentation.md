@@ -272,5 +272,7 @@ toolchain 구성 후(`TTC_TSGO_ROOT=/home/user/tsgo-src`, `TTC_REQUIRE_TSGO=1`) 
 
 - [TASK-216](./TASK-216-compiler-authored-arm-edits.md) — arm 삽입을 컴파일러가
   저작하는 편집으로 (결정 8)
-- 진단 렌더러의 ANSI 색상 (결정 3) — 스냅샷 게이트 이후
-- 확장 `completion` 테스트 불안정성 조사 (이슈 4)
+- [TASK-220](./TASK-220-diagnostic-colour.md) — 진단 렌더러의 ANSI 색상 (결정 3).
+  선행 조건이던 스냅샷 게이트는 TASK-215로 갖춰졌다
+- [TASK-217](./TASK-217-completion-test-instability.md) — 확장 `completion`
+  테스트 불안정성 조사 (이슈 4)
