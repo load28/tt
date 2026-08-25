@@ -237,7 +237,8 @@
 | TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 진행 중 | 2026-08-25 | — | [TASK-227](./TASK-227-local-only-ci.md) |
 | TASK-228 | 부분 스냅샷에서 정상 파일의 tt 진단이 사라짐 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-228](./TASK-228-partial-snapshot-diagnostics.md) |
 | TASK-229 | 바인딩 이름 `match`가 tt match로 오인된다 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-229](./TASK-229-match-claimed-as-a-binding-name.md) |
+| TASK-230 | release 0.3.0-dev.7 | 진행 중 | 2026-08-25 | — | [TASK-230](./TASK-230-release-0.3.0-dev.7.md) |
 
 ## 다음 태스크 번호
 
-**TASK-230**
+**TASK-231**
