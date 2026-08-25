@@ -14,7 +14,7 @@
 //! case here.
 //!
 //! ```
-//! use ttc::render::{Position, Report, Span, render};
+//! use ttc::render::{Position, Report, Span, Styles, render};
 //!
 //! let out = render(
 //!     &Report {
@@ -29,6 +29,7 @@
 //!         suggestions: &[],
 //!     },
 //!     Some("match (shape) {\n}\n"),
+//!     Styles::PLAIN,
 //! );
 //! assert!(out.starts_with("error[match-not-exhaustive]: match on enum Shape"));
 //! assert!(out.contains("1 | match (shape) {"));
@@ -47,6 +48,109 @@ const TAB_WIDTH: usize = 4;
 /// How many source lines a multi-line span draws before it elides the
 /// middle. A span that covers a whole file is a position, not a picture.
 const MAX_SPAN_LINES: usize = 8;
+
+/// The ANSI sequences a rendered diagnostic is painted with.
+///
+/// Colour is a property of the *medium*, not of the diagnostic: the same
+/// report is a picture in a terminal, plain text in a build log, and
+/// structured data in an editor. So the renderer is told what to paint
+/// with instead of deciding — and [`Styles::PLAIN`], whose every field is
+/// empty, produces output byte-for-byte identical to no styling at all.
+/// That is what lets `tests/fixtures/` stand as this module's regression
+/// net whatever the terminal the tests run in.
+///
+/// ```
+/// use ttc::render::Styles;
+///
+/// // A pipe, a file, a CI log: no escape sequences anywhere.
+/// assert_eq!(Styles::for_stderr().is_plain(), !std::io::IsTerminal::is_terminal(&std::io::stderr()));
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Styles {
+    /// `error[rule]` and the carets under the span it is about.
+    pub error: &'static str,
+    /// `warning[rule]`, and its carets.
+    pub warning: &'static str,
+    /// The sentence on the header line.
+    pub message: &'static str,
+    /// The frame: `-->`, the `|` bars, the line numbers, the span
+    /// bracket a multi-line report draws.
+    pub gutter: &'static str,
+    /// The `help:` label a suggestion opens with.
+    pub help: &'static str,
+    /// What returns the terminal to its own colours. Empty exactly when
+    /// every other field is.
+    pub reset: &'static str,
+}
+
+impl Styles {
+    /// No styling: the renderer writes the same bytes it always has.
+    pub const PLAIN: Styles = Styles {
+        error: "",
+        warning: "",
+        message: "",
+        gutter: "",
+        help: "",
+        reset: "",
+    };
+
+    /// The colours a terminal gets — the layers rustc separates, so
+    /// severity, frame and advice are told apart before the words are
+    /// read.
+    pub const ANSI: Styles = Styles {
+        error: "\x1b[1;31m",
+        warning: "\x1b[1;33m",
+        message: "\x1b[1m",
+        gutter: "\x1b[1;34m",
+        help: "\x1b[1;36m",
+        reset: "\x1b[0m",
+    };
+
+    /// What to paint diagnostics with when they go to stderr: colour when
+    /// stderr is a terminal and `NO_COLOR` is not set, plain otherwise.
+    ///
+    /// Both conditions are about the *destination*, which is why nothing
+    /// here is a flag: a pipe, a redirect and a CI log are all "not a
+    /// terminal", and a reader who wants no colour anywhere says so once
+    /// in their environment (<https://no-color.org>).
+    pub fn for_stderr() -> Styles {
+        Styles::for_terminal(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+    }
+
+    /// The same decision with the terminal question already answered —
+    /// what `for_stderr` is, minus the global it reads.
+    pub fn for_terminal(is_terminal: bool) -> Styles {
+        let suppressed = std::env::var_os("NO_COLOR").is_some_and(|v| !v.is_empty());
+        if is_terminal && !suppressed {
+            Styles::ANSI
+        } else {
+            Styles::PLAIN
+        }
+    }
+
+    /// Whether this style set writes no escape sequences.
+    pub fn is_plain(&self) -> bool {
+        *self == Styles::PLAIN
+    }
+
+    /// The colour a report of `severity` is drawn in.
+    fn severity(&self, severity: Severity) -> &'static str {
+        match severity {
+            Severity::Error => self.error,
+            Severity::Warning => self.warning,
+        }
+    }
+
+    /// `text` wrapped in `style`, or `text` itself when the style is
+    /// empty — the one place an empty style becomes "no bytes at all".
+    fn paint(&self, style: &str, text: &str) -> String {
+        if style.is_empty() {
+            text.to_string()
+        } else {
+            format!("{style}{text}{}", self.reset)
+        }
+    }
+}
 
 /// A 1-based line and column, columns counted in characters — the
 /// coordinates [`crate::line_col`] produces.
@@ -112,40 +216,38 @@ impl Severity {
 /// report.
 ///
 /// The result carries no trailing newline.
-pub fn render(report: &Report<'_>, source: Option<&str>) -> String {
+pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> String {
     let mut out = String::new();
-    match report.code {
-        Some(code) => {
-            let _ = write!(
-                out,
-                "{}[{}]: {}",
-                report.severity.label(),
-                code,
-                report.message
-            );
-        }
-        None => {
-            let _ = write!(out, "{}: {}", report.severity.label(), report.message);
-        }
-    }
+    let severity = styles.severity(report.severity);
+    let header = match report.code {
+        Some(code) => format!("{}[{code}]", report.severity.label()),
+        None => report.severity.label().to_string(),
+    };
+    let _ = write!(
+        out,
+        "{}: {}",
+        styles.paint(severity, &header),
+        styles.paint(styles.message, report.message)
+    );
 
     // A snippet needs both a place to point at and the text to quote.
     let Some((span, source)) = report.span.zip(source) else {
         // No span, or no text to quote it from: name the file (and the
         // position, when there is one) and stop.
+        let arrow = styles.paint(styles.gutter, "-->");
         match report.span {
             Some(span) => {
                 let _ = write!(
                     out,
-                    "\n --> {}:{}:{}",
+                    "\n {arrow} {}:{}:{}",
                     report.path, span.start.line, span.start.col
                 );
             }
             None => {
-                let _ = write!(out, "\n --> {}", report.path);
+                let _ = write!(out, "\n {arrow} {}", report.path);
             }
         }
-        write_suggestions(&mut out, report.suggestions, 0, false);
+        write_suggestions(&mut out, report.suggestions, 0, false, styles);
         return out;
     };
 
@@ -173,25 +275,38 @@ pub fn render(report: &Report<'_>, source: Option<&str>) -> String {
     let end_line = end.line.min(lines.len().max(1)).max(start.line);
 
     let width = end_line.max(start.line).to_string().len();
-    let bar = format!("{:width$} |", "", width = width);
     let _ = write!(
         out,
-        "\n{:width$}--> {}:{}:{}\n{bar}",
+        "\n{:width$}{} {}:{}:{}\n{}",
         "",
+        styles.paint(styles.gutter, "-->"),
         report.path,
         start.line,
         start.col,
+        bar(width, styles),
         width = width
     );
 
     if end_line == start.line {
-        write_single_line(&mut out, &lines, width, start, end);
+        write_single_line(&mut out, &lines, width, start, end, severity, styles);
     } else {
-        write_multi_line(&mut out, &lines, width, start, end_line, end.col);
+        write_multi_line(
+            &mut out, &lines, width, start, end_line, end.col, severity, styles,
+        );
     }
 
-    write_suggestions(&mut out, report.suggestions, width, true);
+    write_suggestions(&mut out, report.suggestions, width, true, styles);
     out
+}
+
+/// The empty gutter line — `  |` — painted as the frame.
+fn bar(width: usize, styles: Styles) -> String {
+    styles.paint(styles.gutter, &format!("{:width$} |", "", width = width))
+}
+
+/// A gutter carrying a line number — `12 |` — painted as the frame.
+fn numbered_bar(line: usize, width: usize, styles: Styles) -> String {
+    styles.paint(styles.gutter, &format!("{:>width$} |", line, width = width))
 }
 
 /// Draws a [`crate::Diagnostic`] found in `source`, named as `path`.
@@ -199,7 +314,12 @@ pub fn render(report: &Report<'_>, source: Option<&str>) -> String {
 /// The byte offsets the untyped pipeline reports in are converted here, so
 /// a caller holding a compile report does not have to know that the
 /// renderer works in line/column.
-pub fn diagnostic(diagnostic: &crate::Diagnostic, source: &str, path: &str) -> String {
+pub fn diagnostic(
+    diagnostic: &crate::Diagnostic,
+    source: &str,
+    path: &str,
+    styles: Styles,
+) -> String {
     let at = |offset: usize| {
         let (line, col) = crate::line_col(source, offset);
         Position { line, col }
@@ -218,6 +338,7 @@ pub fn diagnostic(diagnostic: &crate::Diagnostic, source: &str, path: &str) -> S
             suggestions: &diagnostic.suggestions,
         },
         Some(source),
+        styles,
     )
 }
 
@@ -227,7 +348,12 @@ pub fn diagnostic(diagnostic: &crate::Diagnostic, source: &str, path: &str) -> S
 /// A `CompileError` carries no rule code, so the header opens with the
 /// severity alone. `source` is the text it was found in, when the caller
 /// holds it.
-pub fn compile_error(error: &crate::CompileError, source: Option<&str>, path: &str) -> String {
+pub fn compile_error(
+    error: &crate::CompileError,
+    source: Option<&str>,
+    path: &str,
+    styles: Styles,
+) -> String {
     let span = (error.line > 0).then(|| Span {
         start: Position {
             line: error.line,
@@ -248,6 +374,7 @@ pub fn compile_error(error: &crate::CompileError, source: Option<&str>, path: &s
             suggestions: &[],
         },
         source,
+        styles,
     )
 }
 
@@ -262,6 +389,7 @@ pub fn engine_diagnostic(
     diagnostic: &crate::engine::Diagnostic,
     source: Option<&str>,
     path: &str,
+    styles: Styles,
 ) -> String {
     let at = |(line, col): (usize, usize)| Position { line, col };
     let span = diagnostic.position.map(|start| Span {
@@ -280,6 +408,7 @@ pub fn engine_diagnostic(
             suggestions: &diagnostic.suggestions,
         },
         source,
+        styles,
     )
 }
 
@@ -316,19 +445,20 @@ fn write_single_line(
     width: usize,
     start: Position,
     end: Position,
+    severity: &str,
+    styles: Styles,
 ) {
     let from = display_col(lines, start.line, start.col);
     let to = display_col(lines, start.line, end.col);
     let carets = to.saturating_sub(from).max(1);
     let _ = write!(
         out,
-        "\n{:>width$} | {}\n{:width$} | {}{}",
-        start.line,
+        "\n{} {}\n{} {}{}",
+        numbered_bar(start.line, width, styles),
         shown_line(lines, start.line),
-        "",
+        bar(width, styles),
         " ".repeat(from - 1),
-        "^".repeat(carets),
-        width = width
+        styles.paint(severity, &"^".repeat(carets)),
     );
 }
 
@@ -341,6 +471,7 @@ fn write_single_line(
 /// 14 | | }
 ///    | |_^
 /// ```
+#[allow(clippy::too_many_arguments)]
 fn write_multi_line(
     out: &mut String,
     lines: &[&str],
@@ -348,18 +479,23 @@ fn write_multi_line(
     start: Position,
     end_line: usize,
     end_col: usize,
+    severity: &str,
+    styles: Styles,
 ) {
     let from = display_col(lines, start.line, start.col);
     let _ = write!(
         out,
-        "\n{:>width$} |   {}\n{:width$} |  {}^",
-        start.line,
+        "\n{}   {}\n{}  {}",
+        numbered_bar(start.line, width, styles),
         shown_line(lines, start.line),
-        "",
-        "_".repeat(from),
-        width = width
+        bar(width, styles),
+        styles.paint(severity, &format!("{}^", "_".repeat(from))),
     );
 
+    // The bracket down the left of the quoted block belongs to the span,
+    // not to the frame, so it is painted with the severity — which is
+    // what makes "these lines are the construct" readable at a glance.
+    let bracket = styles.paint(severity, "|");
     // Long spans show their head and their tail; the middle is elided
     // rather than scrolled past.
     let body: Vec<usize> = if end_line - start.line + 1 > MAX_SPAN_LINES {
@@ -371,35 +507,53 @@ fn write_multi_line(
     };
     for (index, line) in body.iter().enumerate() {
         if index > 0 && *line > body[index - 1] + 1 {
-            let _ = write!(out, "\n{:<width$} | |", "...", width = width);
+            let _ = write!(
+                out,
+                "\n{} {bracket}",
+                styles.paint(
+                    styles.gutter,
+                    &format!("{:<width$} |", "...", width = width)
+                ),
+            );
         }
         let _ = write!(
             out,
-            "\n{:>width$} | | {}",
-            line,
+            "\n{} {bracket} {}",
+            numbered_bar(*line, width, styles),
             shown_line(lines, *line),
-            width = width
         );
     }
 
     let to = display_col(lines, end_line, end_col.saturating_sub(1).max(1));
-    let _ = write!(out, "\n{:width$} | |{}^", "", "_".repeat(to), width = width);
+    let _ = write!(
+        out,
+        "\n{} {}",
+        bar(width, styles),
+        styles.paint(severity, &format!("|{}^", "_".repeat(to))),
+    );
 }
 
 /// The `= help:` lines. A suggestion that names a replacement shows it, so
 /// the reader can apply the fix without opening an editor's lightbulb.
-fn write_suggestions(out: &mut String, suggestions: &[Suggestion], width: usize, spaced: bool) {
+fn write_suggestions(
+    out: &mut String,
+    suggestions: &[Suggestion],
+    width: usize,
+    spaced: bool,
+    styles: Styles,
+) {
     if suggestions.is_empty() {
         return;
     }
     if spaced {
-        let _ = write!(out, "\n{:width$} |", "", width = width);
+        let _ = write!(out, "\n{}", bar(width, styles));
     }
     for suggestion in suggestions {
         let _ = write!(
             out,
-            "\n{:width$} = help: {}",
+            "\n{:width$} = {} {}",
             "",
+            styles.paint(styles.help, "help:"),
             suggestion.message,
             width = width
         );
@@ -417,7 +571,7 @@ fn write_suggestions(out: &mut String, suggestions: &[Suggestion], width: usize,
                 // indentation the edit writes, so what the reader sees is
                 // what the file would get.
                 for line in text.lines() {
-                    let _ = write!(out, "\n{:width$} | {line}", "", width = width);
+                    let _ = write!(out, "\n{} {line}", bar(width, styles));
                 }
             } else {
                 let _ = write!(out, ": `{}`", text.trim_matches(' '));
@@ -449,12 +603,99 @@ mod tests {
     }
 
     #[test]
+    fn no_styling_writes_the_same_bytes_it_always_has() {
+        // The contract `tests/fixtures/` rests on: adding colour cannot
+        // move a byte of the uncoloured picture.
+        let span = Span {
+            start: at(4, 3),
+            end: Some(at(4, 9)),
+        };
+        let fix = [Suggestion {
+            message: "a case with a similar name exists".to_string(),
+            edit: Some(Edit {
+                start: 0,
+                end: 0,
+                replacement: "Circle".to_string(),
+            }),
+        }];
+        let plain = render(&report(Some(span), &fix), Some(SOURCE), Styles::PLAIN);
+        assert!(!plain.contains('\x1b'));
+        let painted = render(&report(Some(span), &fix), Some(SOURCE), Styles::ANSI);
+        assert_eq!(strip(&painted), plain);
+    }
+
+    #[test]
+    fn colour_separates_severity_frame_and_advice() {
+        let span = Span {
+            start: at(4, 3),
+            end: Some(at(4, 9)),
+        };
+        let fix = [Suggestion {
+            message: "a case with a similar name exists".to_string(),
+            edit: None,
+        }];
+        let out = render(&report(Some(span), &fix), Some(SOURCE), Styles::ANSI);
+        assert!(
+            out.starts_with("\x1b[1;31merror[unknown-case]\x1b[0m: "),
+            "{out}"
+        );
+        assert!(out.contains("\x1b[1;34m -->\x1b[0m") || out.contains("\x1b[1;34m-->\x1b[0m"));
+        assert!(out.contains("\x1b[1;31m^^^^^^\x1b[0m"), "{out}");
+        assert!(out.contains("\x1b[1;36mhelp:\x1b[0m"), "{out}");
+    }
+
+    #[test]
+    fn a_warning_is_painted_in_its_own_colour() {
+        let out = render(
+            &Report {
+                severity: Severity::Warning,
+                code: None,
+                message: "the output failed the TypeScript self-check",
+                path: "shapes.tt",
+                span: None,
+                suggestions: &[],
+            },
+            Some(SOURCE),
+            Styles::ANSI,
+        );
+        assert!(out.starts_with("\x1b[1;33mwarning\x1b[0m: "), "{out}");
+    }
+
+    #[test]
+    fn a_multi_line_span_survives_the_paint_unchanged() {
+        let source = "const a = match (s) {\n  Circel(r) => r,\n};\n";
+        let span = Span {
+            start: at(1, 11),
+            end: Some(at(3, 2)),
+        };
+        let plain = render(&report(Some(span), &[]), Some(source), Styles::PLAIN);
+        let painted = render(&report(Some(span), &[]), Some(source), Styles::ANSI);
+        assert_eq!(strip(&painted), plain);
+    }
+
+    /// Every SGR sequence removed — what the drawing says once the colour
+    /// is taken off it.
+    fn strip(text: &str) -> String {
+        let mut out = String::new();
+        let mut rest = text;
+        while let Some(at) = rest.find('\x1b') {
+            out.push_str(&rest[..at]);
+            let Some(end) = rest[at..].find('m') else {
+                break;
+            };
+            rest = &rest[at + end + 1..];
+        }
+        out.push_str(rest);
+        out
+    }
+
+    #[test]
     fn a_single_line_span_underlines_exactly_the_construct() {
         let span = Span {
             start: at(4, 3),
             end: Some(at(4, 9)),
         };
-        let out = render(&report(Some(span), &[]), Some(SOURCE));
+        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
         assert_eq!(
             out,
             "error[unknown-case]: enum Shape has no case `Circel`\n \
@@ -471,7 +712,7 @@ mod tests {
             start: at(3, 11),
             end: Some(at(5, 2)),
         };
-        let out = render(&report(Some(span), &[]), Some(SOURCE));
+        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
         assert!(out.contains("3 |   const a = match (s) {\n"), "{out}");
         assert!(out.contains("  |  ___________^\n"), "{out}");
         assert!(out.contains("4 | |   Circel(r) => r,\n"), "{out}");
@@ -492,7 +733,7 @@ mod tests {
                 replacement: "Circle".to_string(),
             }),
         }];
-        let out = render(&report(Some(span), &fix), Some(SOURCE));
+        let out = render(&report(Some(span), &fix), Some(SOURCE), Styles::PLAIN);
         assert!(
             out.ends_with("  = help: a case with a similar name exists: `Circle`"),
             "{out}",
@@ -505,7 +746,7 @@ mod tests {
             message: "add the missing arms or a final `_` arm".to_string(),
             edit: None,
         }];
-        let out = render(&report(None, &fix), None);
+        let out = render(&report(None, &fix), None, Styles::PLAIN);
         assert!(
             out.ends_with(" = help: add the missing arms or a final `_` arm"),
             "{out}",
@@ -518,7 +759,7 @@ mod tests {
             start: at(4, 3),
             end: Some(at(4, 9)),
         };
-        let out = render(&report(Some(span), &[]), None);
+        let out = render(&report(Some(span), &[]), None, Styles::PLAIN);
         assert_eq!(
             out,
             "error[unknown-case]: enum Shape has no case `Circel`\n --> shapes.tt:4:3",
@@ -537,6 +778,7 @@ mod tests {
                 suggestions: &[],
             },
             Some(SOURCE),
+            Styles::PLAIN,
         );
         assert_eq!(
             out,
@@ -551,7 +793,7 @@ mod tests {
             start: at(2, 3),
             end: Some(at(2, 9)),
         };
-        let out = render(&report(Some(span), &[]), Some(source));
+        let out = render(&report(Some(span), &[]), Some(source), Styles::PLAIN);
         let lines: Vec<&str> = out.lines().collect();
         let text = lines.iter().find(|l| l.starts_with("2 |")).unwrap();
         let carets = lines.iter().find(|l| l.contains('^')).unwrap();
@@ -568,7 +810,7 @@ mod tests {
             start: at(4, 3),
             end: Some(at(2, 1)),
         };
-        let out = render(&report(Some(span), &[]), Some(SOURCE));
+        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
         assert!(out.ends_with("  |   ^"), "{out}");
     }
 
@@ -578,7 +820,7 @@ mod tests {
             start: at(400, 90),
             end: Some(at(900, 3)),
         };
-        let out = render(&report(Some(span), &[]), Some(SOURCE));
+        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
         assert!(out.contains("--> shapes.tt:400:90"), "{out}");
     }
 
@@ -589,7 +831,7 @@ mod tests {
             start: at(2, 1),
             end: Some(at(30, 2)),
         };
-        let out = render(&report(Some(span), &[]), Some(&source));
+        let out = render(&report(Some(span), &[]), Some(&source), Styles::PLAIN);
         assert!(out.contains("| |_^"), "{out}");
         assert!(out.contains("... | |"), "{out}");
         assert!(out.contains("30 | | line 30"), "{out}");

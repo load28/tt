@@ -794,7 +794,7 @@ fn typed_pass(
             // header and the location are the whole report.
             eprintln!(
                 "{}",
-                ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path))
+                ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path), styles())
             );
             return Ok(TypedReport {
                 reported: 1,
@@ -832,6 +832,7 @@ fn typed_pass(
                 diagnostic,
                 snapshot.source_of(&diagnostic.path),
                 &shown(&diagnostic.path),
+                styles(),
             )
         );
     }
@@ -977,6 +978,18 @@ fn shown(path: &Path) -> String {
         .unwrap_or_else(|| path.to_path_buf())
         .display()
         .to_string()
+}
+
+/// What diagnostics are painted with, decided once for the process.
+///
+/// Every diagnostic this binary prints goes to stderr, so one question
+/// settles it: is stderr a terminal, and does the reader want colour
+/// there ([`ttc::render::Styles::for_stderr`]). Deciding once also means a
+/// parallel job's report cannot be painted differently from the one before
+/// it.
+fn styles() -> ttc::render::Styles {
+    static STYLES: std::sync::OnceLock<ttc::render::Styles> = std::sync::OnceLock::new();
+    *STYLES.get_or_init(ttc::render::Styles::for_stderr)
 }
 
 fn main() -> ExitCode {
@@ -1638,7 +1651,12 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                         // read as one.
                         out.messages.push(format!(
                             "{}\n",
-                            ttc::render::diagnostic(diagnostic, &loaded.source, &filename)
+                            ttc::render::diagnostic(
+                                diagnostic,
+                                &loaded.source,
+                                &filename,
+                                styles(),
+                            )
                         ));
                     }
                     out.failed = true;
