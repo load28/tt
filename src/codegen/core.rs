@@ -141,9 +141,6 @@ pub(crate) fn emit_with_map<'a>(
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
     if used_pipe || used_flow {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
-        }
         let names = match (used_pipe, used_flow) {
             (true, true) => "$tt_ap, $tt_fl",
             (true, false) => "$tt_ap",
@@ -153,7 +150,17 @@ pub(crate) fn emit_with_map<'a>(
         let runtime = std_imports
             .get(crate::StdModule::Runtime)
             .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
-        output.push_lit(format!("import {{ {names} }} from \"{runtime}\";\n"));
+        // Which helpers the file needs is only known once the whole file
+        // is emitted, but where an import belongs is the top — after
+        // anything that has to come before one (TASK-219).
+        let at = directive_prologue_end(source);
+        // A prologue that runs to the end of the file leaves nothing to
+        // insert before, so the import lands at the end and needs the
+        // line break the source did not write.
+        if at >= source.len() && !output.ends_with_newline() {
+            output.push_lit("\n");
+        }
+        output.insert_lit_at_source(at, format!("import {{ {names} }} from \"{runtime}\";\n"));
     }
     if emitter.used_expression_boundary.get() {
         if !output.ends_with_newline() {
@@ -198,6 +205,98 @@ pub(crate) fn emit_with_map<'a>(
 /// Inline `$tt_ap(v, f)` as `f(v)` exactly when moving the input behind the
 /// callee is proven unobservable. ProgramSyntax owns the effect proof; these
 /// ExprIds also register the corresponding source relocation.
+/// The byte offset a generated `import` may be written at: past a shebang
+/// and past the file's directive prologue.
+///
+/// A directive (`"use client"`, `"use strict"`) is only a directive while
+/// it is the first thing in the file, so an import written above one would
+/// silently turn it into a string expression — a bundler would stop seeing
+/// the boundary the author declared. Everything else about the top of a
+/// file (a license comment, a blank line) is ordinary text an import may
+/// precede, so the scan stops at the first statement that is not one of
+/// these two.
+///
+/// ASCII bytes decide, and multi-byte UTF-8 is opaque: a string's contents
+/// are skipped by its quotes, not read.
+fn directive_prologue_end(source: &str) -> usize {
+    let bytes = source.as_bytes();
+    let mut at = 0;
+    // A shebang is not a statement, but nothing may precede it either.
+    if bytes.starts_with(b"#!") {
+        at = source.find('\n').map_or(bytes.len(), |nl| nl + 1);
+    }
+    let mut end = at;
+    loop {
+        let open = skip_trivia(bytes, at);
+        let Some(&quote) = bytes.get(open) else { break };
+        if quote != b'"' && quote != b'\'' {
+            break;
+        }
+        let Some(close) = string_literal_end(bytes, open) else {
+            break;
+        };
+        // What follows decides whether that string was a directive or the
+        // start of an expression (`"a" + b`).
+        let mut after = close;
+        while matches!(bytes.get(after), Some(b' ' | b'\t' | b'\r')) {
+            after += 1;
+        }
+        let directive_end = match bytes.get(after) {
+            Some(b';') => after + 1,
+            None | Some(b'\n') => close,
+            _ => break,
+        };
+        // Past the rest of that line, so what is written next opens a line
+        // of its own rather than trailing the directive.
+        end = match bytes[directive_end..].iter().position(|&b| b == b'\n') {
+            Some(nl) => directive_end + nl + 1,
+            None => bytes.len(),
+        };
+        at = end;
+    }
+    end
+}
+
+/// The offset past whitespace and comments starting at `at`.
+fn skip_trivia(bytes: &[u8], mut at: usize) -> usize {
+    loop {
+        while matches!(bytes.get(at), Some(b) if b.is_ascii_whitespace()) {
+            at += 1;
+        }
+        match (bytes.get(at), bytes.get(at + 1)) {
+            (Some(b'/'), Some(b'/')) => {
+                at = match bytes[at..].iter().position(|&b| b == b'\n') {
+                    Some(nl) => at + nl + 1,
+                    None => bytes.len(),
+                };
+            }
+            (Some(b'/'), Some(b'*')) => {
+                at = match bytes[at + 2..].windows(2).position(|w| w == b"*/") {
+                    Some(close) => at + 2 + close + 2,
+                    None => bytes.len(),
+                };
+            }
+            _ => return at,
+        }
+    }
+}
+
+/// The offset just past the string literal opening at `at`, or `None` when
+/// it is unterminated.
+fn string_literal_end(bytes: &[u8], at: usize) -> Option<usize> {
+    let quote = bytes[at];
+    let mut i = at + 1;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i += 2,
+            b'\n' => return None,
+            b if b == quote => return Some(i + 1),
+            _ => i += 1,
+        }
+    }
+    None
+}
+
 fn direct_apply_inputs(
     semantic: &SemanticFile,
     core: &CoreFile,
@@ -2389,11 +2488,25 @@ impl<'a> Emitter<'a> {
             [Statement::Expr(expr)] => Some(*expr),
             _ => None,
         };
+        // A block arm's body sits between braces this lowering writes, and
+        // the author's own line break and indentation after their `{` is
+        // the layout the rest of their block is written against — so it
+        // stays (TASK-219). Every other body is spliced into a line.
+        let block_layout = matches!(kind, ArmBodyKind::Block { .. }) && chain;
         let body = if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
-            self.emit_body_with_exits(body, exits, continuation, exit_label)
-                .trim()
+            let body = self.emit_body_with_exits(body, exits, continuation, exit_label);
+            if block_layout {
+                body.trim_end()
+            } else {
+                body.trim()
+            }
         } else {
-            self.emit_body(body).trim()
+            let body = self.emit_body(body);
+            if block_layout {
+                body.trim_end()
+            } else {
+                body.trim()
+            }
         };
         let mut action = Rope::new();
         match kind {
@@ -2421,7 +2534,7 @@ impl<'a> Emitter<'a> {
             // every path it takes, so neither the fall-through to
             // `undefined` nor the exit after it can be reached.
             ArmBodyKind::Block { completes } if chain => {
-                action.push_lit("{ ");
+                action.push_lit("{");
                 action.append(body);
                 if completes {
                     if continuation.assigns() {

@@ -753,6 +753,66 @@ impl<'a> Rope<'a> {
         }
     }
 
+    /// Inserts `text` immediately before the first source byte at or after
+    /// `at` that this rope prints at its top level, or appends it when the
+    /// rope prints no such byte.
+    ///
+    /// The one thing codegen cannot know while emitting is what the
+    /// emission will *need* — a pipeline helper's import is decided by the
+    /// last pipeline in the file. Appending it was valid (imports hoist)
+    /// but read as a stray line at the bottom of the file; this puts it
+    /// where a reader looks for an import.
+    ///
+    /// Only the top level is considered: a piece inside a construct's own
+    /// glue belongs to that lowering's arrangement, and a statement cannot
+    /// go there anyway. Splitting a pass-through piece in two keeps both
+    /// halves pointing at the bytes they always did, so the emission still
+    /// covers the source exactly once and still in order.
+    pub(crate) fn insert_lit_at_source(&mut self, at: usize, text: impl Into<Cow<'a, str>>) {
+        let text = text.into();
+        if text.is_empty() {
+            return;
+        }
+        let mut depth = 0usize;
+        let mut found: Option<(usize, Option<usize>)> = None;
+        for (index, piece) in self.pieces.iter().enumerate() {
+            match piece {
+                Piece::Open { .. } | Piece::ScopeOpen => depth += 1,
+                Piece::Close | Piece::ScopeClose => depth = depth.saturating_sub(1),
+                Piece::Src { text, src } if depth == 0 && src + text.len() > at => {
+                    found = Some((index, (*src < at).then(|| at - src)));
+                    break;
+                }
+                _ => {}
+            }
+        }
+        let Some((index, split)) = found else {
+            self.push_lit(text);
+            return;
+        };
+        self.len += text.len();
+        match split {
+            None => self.pieces.insert(index, Piece::Lit(text)),
+            Some(cut) => {
+                let Piece::Src { text: whole, src } = self.pieces[index] else {
+                    unreachable!("the piece was matched as a source piece")
+                };
+                self.pieces[index] = Piece::Src {
+                    text: &whole[..cut],
+                    src,
+                };
+                self.pieces.insert(
+                    index + 1,
+                    Piece::Src {
+                        text: &whole[cut..],
+                        src: src + cut,
+                    },
+                );
+                self.pieces.insert(index + 1, Piece::Lit(text));
+            }
+        }
+    }
+
     pub(crate) fn append(&mut self, mut other: Rope<'a>) {
         self.len += other.len;
         self.pieces.append(&mut other.pieces);
@@ -831,6 +891,20 @@ impl<'a> Rope<'a> {
     /// Marks carry no text, so they are stepped over rather than trimmed
     /// away — a mark at the edge of a trimmed rope still points at the byte
     /// that ends up there.
+    /// The rope with trailing whitespace removed, but with whatever the
+    /// source wrote at the front left alone.
+    ///
+    /// A block arm's body is copied between braces the lowering writes, so
+    /// the newline and indentation the author put after their own `{` are
+    /// exactly the layout the rest of their block is written against.
+    /// Dropping them and opening the block from generated layout puts the
+    /// first statement in one column and every following one in another
+    /// (TASK-219).
+    pub(crate) fn trim_end(mut self) -> Rope<'a> {
+        self.trim_back();
+        self
+    }
+
     pub(crate) fn trim(mut self) -> Rope<'a> {
         // front
         let mut front = 0;
@@ -857,7 +931,11 @@ impl<'a> Rope<'a> {
             }
             break;
         }
-        // back
+        self.trim_back();
+        self
+    }
+
+    fn trim_back(&mut self) {
         let mut back = self.pieces.len();
         while back > 0 {
             let last = &mut self.pieces[back - 1];
@@ -883,7 +961,6 @@ impl<'a> Rope<'a> {
             last.truncate(keep);
             break;
         }
-        self
     }
 
     /// Builds, validates, and prints the source-preserving target.

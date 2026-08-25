@@ -2250,6 +2250,64 @@ fn pipeline_await_in_head_needs_no_async_wrapper() {
 }
 
 #[test]
+fn the_runtime_import_is_written_where_an_import_belongs() {
+    // Which helpers a file needs is only known once it is emitted; where
+    // an import goes is not a question about that (TASK-219).
+    let out = ok(
+        "declare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
+    );
+    assert!(out.starts_with("import { $tt_ap } from "), "{out}");
+}
+
+#[test]
+fn the_runtime_import_never_displaces_a_directive_or_a_shebang() {
+    // A directive is only a directive while nothing precedes it, so an
+    // import above one would turn it into a string expression and a
+    // bundler would stop seeing the boundary the author declared.
+    let out = ok(
+        "\"use client\";\ndeclare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
+    );
+    assert!(
+        out.starts_with("\"use client\";\nimport { $tt_ap } from "),
+        "{out}"
+    );
+
+    let out = ok(
+        "#!/usr/bin/env node\ndeclare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
+    );
+    assert!(
+        out.starts_with("#!/usr/bin/env node\nimport { $tt_ap } from "),
+        "{out}"
+    );
+
+    // A leading string that is *not* a directive is an expression, and an
+    // import may precede it.
+    let out = ok(
+        "declare const b: string;\n\"a\" + b;\ndeclare function f(n: number): number;\nexport const a = f(4) |> f |> .toFixed(1);\n",
+    );
+    assert!(out.starts_with("import { $tt_ap } from "), "{out}");
+}
+
+#[test]
+fn a_block_arm_keeps_the_layout_its_author_wrote() {
+    // The lowering writes the braces around a block arm's body, so the
+    // line break and indentation after the author's own `{` is what the
+    // rest of their block lines up against — dropping it put the first
+    // statement in one column and the rest in another (TASK-219).
+    let out = ok(
+        "enum E { A(n: number), B }\ndeclare const e: E;\nconst v = match (e) {\n  A(n) => {\n    const m = n + 1;\n    return m;\n  },\n  B => 0,\n};\n",
+    );
+    let block: Vec<&str> = out
+        .lines()
+        .skip_while(|line| !line.contains("const m = n + 1;"))
+        .take(2)
+        .collect();
+    assert_eq!(block.len(), 2, "{out}");
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    assert_eq!(indent(block[0]), indent(block[1]), "{out}");
+}
+
+#[test]
 fn unparenthesized_ternary_next_to_pipeline_is_an_error() {
     let src = "const a = c ? x : y |> f;\n";
     let e = err(src);
