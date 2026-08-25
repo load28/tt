@@ -909,7 +909,14 @@ impl Project {
         if !self.service.as_ref().is_some_and(|s| s.client.alive()) {
             // (Re)start: the previous conversation, if any, is gone — served
             // state with it. The next questions rebuild both.
+            //
+            // Both of tt's own packages go in now, before the service can
+            // resolve anything. Which of them a *file* needs is not a
+            // property this layer may wait on: a probe mends a buffer the
+            // user is in the middle of typing, and the mended text can use
+            // a pipeline the unparseable original did not (TASK-217).
             ensure_std_module(&self.root);
+            ensure_runtime_module(&self.root);
             let binary = service_binary(&self.root)?;
             let client = Service::start(&binary, &self.root)?;
             self.service = Some(ServiceSession {
@@ -922,14 +929,11 @@ impl Project {
             });
         }
         let Project {
-            service,
-            overlays,
-            root,
-            ..
+            service, overlays, ..
         } = self;
         let session = service.as_mut().expect("just ensured");
 
-        let doc = serve_one(session, overlays, root, &canonical)
+        let doc = serve_one(session, overlays, &canonical)
             .ok_or_else(|| format!("cannot read {}", canonical.display()))?;
 
         // The `.tt` modules it imports are served too, transitively. That is
@@ -951,7 +955,7 @@ impl Project {
                 if !seen.insert(target.clone()) {
                     continue;
                 }
-                if let Some(imported) = serve_one(session, overlays, root, &target) {
+                if let Some(imported) = serve_one(session, overlays, &target) {
                     stack.push((target, imported));
                 }
             }
@@ -1003,17 +1007,12 @@ fn service_doc(path: &Path, text: String) -> ServiceDoc {
 fn serve_one(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,
-    root: &Path,
     path: &Path,
 ) -> Option<Arc<ServiceDoc>> {
     let text = match overlays.get(path) {
         Some(text) => text.clone(),
         None => std::fs::read_to_string(path).ok()?,
     };
-    let source_kind = crate::SourceKind::from_path(path).unwrap_or_default();
-    if crate::scan_module_with_kind(&text, source_kind).uses_pipeline {
-        ensure_runtime_module(root);
-    }
     let doc = match session.docs.get(path) {
         Some(doc) if doc.source == text => doc.clone(),
         _ => {
@@ -1562,7 +1561,15 @@ fn ensure_std_module(root: &Path) {
     }
 }
 
-/// Makes the pipeline runtime resolvable when a served document needs it.
+/// Makes the pipeline runtime resolvable in `root`, next to `@tt/std`.
+///
+/// Written at session start rather than when a served file is seen to use
+/// a pipeline: "does this text use one" is answered by parsing it, and the
+/// editor's hardest question — completion at a `.` the user has just typed
+/// — is asked exactly when the text does *not* parse. The probe mends the
+/// buffer, the mended form emits `$tt_ap`, and a module that was not there
+/// when the service resolved makes the whole expression untyped, so the
+/// answer comes back empty (TASK-217).
 fn ensure_runtime_module(root: &Path) {
     let runtime_pkg = root.join("node_modules/@tt/runtime");
     if !runtime_pkg.exists() && std::fs::create_dir_all(&runtime_pkg).is_ok() {
@@ -1583,7 +1590,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn language_support_materializes_the_runtime_only_when_requested() {
+    fn language_support_materializes_both_tt_packages() {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -1593,12 +1600,20 @@ mod tests {
             std::process::id()
         ));
 
+        // Both, and before the service resolves anything: which one a file
+        // needs is a question about text that may not parse yet (TASK-217).
         ensure_std_module(&root);
-        assert!(root.join("node_modules/@tt/std/index.ts").exists());
-        assert!(!root.join("node_modules/@tt/runtime").exists());
-
         ensure_runtime_module(&root);
+        assert!(root.join("node_modules/@tt/std/index.ts").exists());
         assert!(root.join("node_modules/@tt/runtime/index.ts").exists());
+
+        // Neither is written over one the project already has.
+        std::fs::write(root.join("node_modules/@tt/runtime/index.ts"), "// mine\n").unwrap();
+        ensure_runtime_module(&root);
+        assert_eq!(
+            std::fs::read_to_string(root.join("node_modules/@tt/runtime/index.ts")).unwrap(),
+            "// mine\n"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
