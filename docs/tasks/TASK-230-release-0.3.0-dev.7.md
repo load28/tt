@@ -1,9 +1,9 @@
 # TASK-230: release 0.3.0-dev.7
 
-- **상태**: 진행 중
+- **상태**: 완료
 - **시작일**: 2026-08-25
-- **완료일**: —
-- **커밋**: —
+- **완료일**: 2026-08-25
+- **커밋**: `2c94b31`, `928dbc3`
 
 ## 목적
 
@@ -44,6 +44,8 @@ TASK-194부터 TASK-229까지 완료된 변경을 npm `dev` 채널과 GitHub VSI
 - 2026-08-25: 자동 트리거를 변경하지 않고 Dev Release를 수동 실행하기로 했다.
 - 2026-08-25: Dev Release run `32855328176`의 크로스 타깃 빌드 실패를
   확인하고 두 릴리스 workflow가 고정 toolchain에 타깃을 설치하도록 수정했다.
+- 2026-08-25: Dev Release run `32855777128`이 성공했고 npm 패키지 8개와
+  VSIX pre-release의 공개 상태를 확인했다.
 
 ## 이슈 및 해결
 
@@ -70,9 +72,10 @@ TASK-194부터 TASK-229까지 완료된 변경을 npm `dev` 채널과 GitHub VSI
 - [x] `cargo test`
 - [x] `node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs`
 - [x] VS Code 확장 빌드·테스트 114건
-- [ ] GitHub Actions Dev Release
-- [ ] npm `dev` dist-tag와 GitHub VSIX pre-release
+- [x] GitHub Actions Dev Release run `32855777128`
+- [x] npm `dev` dist-tag와 GitHub VSIX pre-release
 
 ## 결과
 
-진행 중.
+`0.3.0-dev.7.20260825.135039.30.1` 개발 패키지 8개를 npm `dev` 태그로
+게시했다. GitHub pre-release에 `tt-language-0.260825.135039.vsix`를 첨부했다.
