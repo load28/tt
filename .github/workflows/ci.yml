@@ -191,7 +191,7 @@ jobs:
           # failing the job, which is the one way this gate could lie.
           TTC_REQUIRE_TSGO: "1"
         run: |
-          cargo llvm-cov --workspace --summary-only --fail-under-lines 86.8
+          cargo llvm-cov --workspace --summary-only --fail-under-lines 87.0
           cargo llvm-cov report --lcov --output-path lcov.info
 
       - uses: actions/upload-artifact@v4
