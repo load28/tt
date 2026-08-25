@@ -65,16 +65,14 @@ pub(crate) fn lowering_plan(
                 return Err(SourceNotTypeScript { message, source });
             }
             Err(error) => {
-                panic!("internal compiler error: TypeScript owner construction failed: {error:?}")
+                crate::ice::bug!("TypeScript owner construction failed: {error:?}")
             }
         };
-    let evaluation =
-        crate::evaluation_ir::EvaluationFile::build(&syntax, core).unwrap_or_else(|error| {
-            panic!("internal compiler error: Evaluation IR construction failed: {error:?}")
-        });
-    let plan = evaluation.lowering_plan(core).unwrap_or_else(|error| {
-        panic!("internal compiler error: owner lowering plan failed: {error:?}")
-    });
+    let evaluation = crate::evaluation_ir::EvaluationFile::build(&syntax, core)
+        .unwrap_or_else(|error| crate::ice::bug!("Evaluation IR construction failed: {error:?}"));
+    let plan = evaluation
+        .lowering_plan(core)
+        .unwrap_or_else(|error| crate::ice::bug!("owner lowering plan failed: {error:?}"));
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts
     // (`docs/design/program-lowering.md` §11).
@@ -145,7 +143,8 @@ pub(crate) fn emit_with_map<'a>(
             (true, true) => "$tt_ap, $tt_fl",
             (true, false) => "$tt_ap",
             (false, true) => "$tt_fl",
-            (false, false) => unreachable!(),
+            // The enclosing `if` is `used_pipe || used_flow`.
+            (false, false) => unreachable!("no helper is needed, so no import is written"),
         };
         let runtime = std_imports
             .get(crate::StdModule::Runtime)
@@ -334,10 +333,11 @@ fn direct_apply_inputs(
 /// emitter walks — never off the output.
 fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpan> {
     fn span(semantic: &SemanticFile, node: NodeId, out: &mut Vec<SourceSpan>) {
-        let span =
-            semantic.hir.source_map.node_span(node).unwrap_or_else(|| {
-                panic!("internal compiler error: target node has no source span")
-            });
+        let span = semantic
+            .hir
+            .source_map
+            .node_span(node)
+            .unwrap_or_else(|| crate::ice::bug!("target node has no source span"));
         out.push(span.into());
     }
 
@@ -634,9 +634,11 @@ impl TargetRewritePlan {
             .collect();
         let operation_replacements: Vec<SourceReplacement> = compose_operations()
             .map(|operation| {
-                let primary = operation.values.first().copied().unwrap_or_else(|| {
-                    panic!("internal compiler error: conditional operation has no value")
-                });
+                let primary = operation
+                    .values
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| crate::ice::bug!("conditional operation has no value"));
                 SourceReplacement {
                     source: operation.parent,
                     slot: lowering.slot_name(operation.result).to_owned(),
@@ -799,9 +801,9 @@ impl<'name> ValueContinuation<'name> {
     /// The text an early exit's `return ` becomes. `grouped` says whether
     /// the value it returns has to keep its parentheses ([`push_grouped`]).
     fn assignment_prefix(&self, grouped: bool) -> String {
-        let target = self.assignment_target().unwrap_or_else(|| {
-            panic!("internal compiler error: expression continuation cannot rewrite an exit")
-        });
+        let target = self
+            .assignment_target()
+            .unwrap_or_else(|| crate::ice::bug!("expression continuation cannot rewrite an exit"));
         let mut prefix = format!("{target} = ");
         for wrapper in &self.wrappers {
             match wrapper {
@@ -857,7 +859,7 @@ impl<'a> Emitter<'a> {
             .hir
             .source_map
             .node_span(node)
-            .unwrap_or_else(|| panic!("internal compiler error: target node has no source span"))
+            .unwrap_or_else(|| crate::ice::bug!("target node has no source span"))
     }
 
     fn source_node(&self, node: NodeId) -> (&'a str, usize) {
@@ -1135,7 +1137,7 @@ impl<'a> Emitter<'a> {
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
             .unwrap_or_else(|| {
-                panic!("internal compiler error: initializer rewrite is not structurally emit-able")
+                crate::ice::bug!("initializer rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
         out.push_lit(format!("let {};", rewrite.slot));
@@ -1166,9 +1168,7 @@ impl<'a> Emitter<'a> {
                     let mut lowered = self
                         .emit_continued_expr(value.expr, &ValueContinuation::assign(&value.slot))
                         .unwrap_or_else(|| {
-                            panic!(
-                                "internal compiler error: compose value is not structurally emit-able"
-                            )
+                            crate::ice::bug!("compose value is not structurally emit-able")
                         });
                     for step in &value.steps {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
@@ -1211,9 +1211,7 @@ impl<'a> Emitter<'a> {
         let deliver_value = |expr: ExprId, target: &str| {
             self.emit_continued_expr(expr, &ValueContinuation::assign(target))
                 .unwrap_or_else(|| {
-                    panic!(
-                        "internal compiler error: conditional operation value is not structurally emit-able"
-                    )
+                    crate::ice::bug!("conditional operation value is not structurally emit-able")
                 })
         };
         let assign_condition = |out: &mut Rope<'a>| {
@@ -1326,9 +1324,10 @@ impl<'a> Emitter<'a> {
                         mode: EvaluationInputMode::MemberReference,
                         receiver,
                         ..
-                    } => Some(receiver.unwrap_or_else(|| {
-                        panic!("internal compiler error: member callee has no receiver")
-                    })),
+                    } => Some(
+                        receiver
+                            .unwrap_or_else(|| crate::ice::bug!("member callee has no receiver")),
+                    ),
                     _ => None,
                 };
                 match receiver {
@@ -1497,9 +1496,7 @@ impl<'a> Emitter<'a> {
         self.value_slots
             .get(&expr)
             .map(String::as_str)
-            .unwrap_or_else(|| {
-                panic!("internal compiler error: conditional operation value has no slot")
-            })
+            .unwrap_or_else(|| crate::ice::bug!("conditional operation value has no slot"))
     }
 
     fn emit_compose_suffix(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
@@ -1532,9 +1529,8 @@ impl<'a> Emitter<'a> {
                 continue;
             }
             if *mode == EvaluationInputMode::MemberReference {
-                let receiver = receiver.unwrap_or_else(|| {
-                    panic!("internal compiler error: member reference has no receiver")
-                });
+                let receiver = receiver
+                    .unwrap_or_else(|| crate::ice::bug!("member reference has no receiver"));
                 let receiver_source =
                     self.capture_planned_receiver(&receiver, captured, &mut prefix);
                 let optional_reference = matches!(
@@ -1596,9 +1592,10 @@ impl<'a> Emitter<'a> {
                 prefix
             }
             HostEvaluationOperation::Conditional(branch) => {
-                let input = step.inputs.first().unwrap_or_else(|| {
-                    panic!("internal compiler error: conditional schedule has no condition")
-                });
+                let input = step
+                    .inputs
+                    .first()
+                    .unwrap_or_else(|| crate::ice::bug!("conditional schedule has no condition"));
                 let condition = match input {
                     PlannedEvaluationInput::Source { target, .. }
                     | PlannedEvaluationInput::Slot { slot: target, .. } => {
@@ -1639,9 +1636,7 @@ impl<'a> Emitter<'a> {
         self.scheduled_slots
             .get(&slot)
             .map(String::as_str)
-            .unwrap_or_else(|| {
-                panic!("internal compiler error: scheduled value slot has no generated name")
-            })
+            .unwrap_or_else(|| crate::ice::bug!("scheduled value slot has no generated name"))
     }
 
     fn structured_value_slot(&self, expr: ExprId) -> Option<&String> {
@@ -1667,9 +1662,10 @@ impl<'a> Emitter<'a> {
                 (AnchorKind::ResultBind, start, end, end)
             }
             Expr::Sequence(body) => {
-                let value = self.core.body_value_expr(*body).unwrap_or_else(|| {
-                    panic!("internal compiler error: slotted sequence has no value")
-                });
+                let value = self
+                    .core
+                    .body_value_expr(*body)
+                    .unwrap_or_else(|| crate::ice::bug!("slotted sequence has no value"));
                 self.value_anchor(value)
             }
             Expr::Apply(apply) => {
@@ -1681,7 +1677,7 @@ impl<'a> Emitter<'a> {
                 (AnchorKind::Pipe, start, end, end)
             }
             Expr::Opaque(_) | Expr::Template(_) => {
-                panic!("internal compiler error: unstructured expression owns a join slot")
+                crate::ice::bug!("unstructured expression owns a join slot")
             }
         }
     }
@@ -1703,18 +1699,14 @@ impl<'a> Emitter<'a> {
                     trimmed_end(self.source, binding_span.start, span.end),
                 ))
             })
-            .unwrap_or_else(|| {
-                panic!("internal compiler error: result region has no propagation binding")
-            })
+            .unwrap_or_else(|| crate::ice::bug!("result region has no propagation binding"))
     }
 
     fn emit_arrow_return_rewrite(&self, rewrite: &ArrowReturnRewrite) -> Rope<'a> {
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
             .unwrap_or_else(|| {
-                panic!(
-                    "internal compiler error: arrow return rewrite is not structurally emit-able"
-                )
+                crate::ice::bug!("arrow return rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
         out.push_lit("{");
@@ -1749,16 +1741,14 @@ impl<'a> Emitter<'a> {
     fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
         let mut out = Rope::new();
         if self.core.has_statement_form(value) && self.can_inline_continued_expr(value) {
-            let slot = self.structured_value_slot(value).unwrap_or_else(|| {
-                panic!("internal compiler error: structured propagation value has no slot")
-            });
+            let slot = self
+                .structured_value_slot(value)
+                .unwrap_or_else(|| crate::ice::bug!("structured propagation value has no slot"));
             out.push_lit(format!("let {slot};"));
             out.push_break(0);
             out.append(
                 self.emit_continued_expr(value, &ValueContinuation::assign(slot))
-                    .unwrap_or_else(|| {
-                        panic!("internal compiler error: propagation value was not emitted")
-                    }),
+                    .unwrap_or_else(|| crate::ice::bug!("propagation value was not emitted")),
             );
             out.push_break(0);
             out.push_lit(format!("const {temp} = {slot};"));
@@ -1806,9 +1796,9 @@ impl<'a> Emitter<'a> {
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
-                    let binding = propagate.binding.unwrap_or_else(|| {
-                        panic!("internal compiler error: result propagation has no binding")
-                    });
+                    let binding = propagate
+                        .binding
+                        .unwrap_or_else(|| crate::ice::bug!("result propagation has no binding"));
                     let binding_span = self.span(binding.node);
                     let one = self.emit_propagate(propagate);
                     out.anchored(
@@ -1846,9 +1836,9 @@ impl<'a> Emitter<'a> {
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
-                    let binding = propagate.binding.unwrap_or_else(|| {
-                        panic!("internal compiler error: result propagation has no binding")
-                    });
+                    let binding = propagate
+                        .binding
+                        .unwrap_or_else(|| crate::ice::bug!("result propagation has no binding"));
                     let binding_span = self.span(binding.node);
                     let lowered = self.emit_region_propagate(propagate, continuation);
                     out.anchored(
@@ -1968,7 +1958,7 @@ impl<'a> Emitter<'a> {
         let mut steps = apply.steps.iter();
         let first = steps
             .next()
-            .unwrap_or_else(|| panic!("internal compiler error: flow has no step"));
+            .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
         let mut acc = Rope::new();
         push_grouped(
             &mut acc,
@@ -2056,7 +2046,7 @@ impl<'a> Emitter<'a> {
             ),
             DecisionKind::IfLet => (AnchorKind::IfLet, self.emit_if_let(decision)),
             DecisionKind::Match { .. } => {
-                panic!("internal compiler error: expression decision in statement position")
+                crate::ice::bug!("expression decision in statement position")
             }
         };
         out.anchored(kind, span.start, span.end, span.end, inner);
@@ -2074,7 +2064,7 @@ impl<'a> Emitter<'a> {
             direct_variants, ..
         } = &decision.kind
         else {
-            panic!("internal compiler error: let-else has wrong Core decision kind")
+            crate::ice::bug!("let-else has wrong Core decision kind")
         };
         if let Some(variants) = direct_variants {
             for (index, constructor) in variants.iter().enumerate() {
@@ -2093,7 +2083,7 @@ impl<'a> Emitter<'a> {
         }
         out.push_lit(") { ");
         let MissAction::Execute(body) = decision.miss else {
-            panic!("internal compiler error: let-else has no else body")
+            crate::ice::bug!("let-else has no else body")
         };
         let body = self.emit_body(body).trim();
         let newline = if body.last_line_has_line_comment() {
@@ -2121,7 +2111,7 @@ impl<'a> Emitter<'a> {
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
         out.append(self.emit_bindings(&arm.pattern, decision, None, &mut recovery));
         let ArmAction::Execute(body) = arm.action else {
-            panic!("internal compiler error: if-let has no then body")
+            crate::ice::bug!("if-let has no then body")
         };
         out.append(guard_line_comment(self.emit_body(body).trim(), 0));
         out.push_lit(" }");
@@ -2137,7 +2127,7 @@ impl<'a> Emitter<'a> {
             }
             MissAction::Nothing => {}
             MissAction::ThrowUnexpected(_) => {
-                panic!("internal compiler error: if-let has match miss action")
+                crate::ice::bug!("if-let has match miss action")
             }
         }
         out.push_lit(" }");
@@ -2151,7 +2141,7 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
     ) -> Rope<'a> {
         let DecisionKind::Match { dispatch, .. } = decision.kind else {
-            panic!("internal compiler error: value decision is not a match")
+            crate::ice::bug!("value decision is not a match")
         };
         let mut out = Rope::new();
         // The region needs a label exactly when a rewritten exit sits
@@ -2248,9 +2238,10 @@ impl<'a> Emitter<'a> {
             return None;
         }
         let head = apply.head?;
-        let accumulator = self.value_slots.get(&expr).unwrap_or_else(|| {
-            panic!("internal compiler error: structured apply has no value slot")
-        });
+        let accumulator = self
+            .value_slots
+            .get(&expr)
+            .unwrap_or_else(|| crate::ice::bug!("structured apply has no value slot"));
         let accumulator_is_host_slot = self
             .slot_exprs
             .get(&expr)
@@ -2266,9 +2257,7 @@ impl<'a> Emitter<'a> {
             inner.append(Rope::indented(
                 1,
                 self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
-                    .unwrap_or_else(|| {
-                        panic!("internal compiler error: structured apply head was not emitted")
-                    }),
+                    .unwrap_or_else(|| crate::ice::bug!("structured apply head was not emitted")),
             ));
         } else {
             inner.push_lit(format!("{accumulator} = "));
@@ -2280,9 +2269,9 @@ impl<'a> Emitter<'a> {
         }
         for step in &apply.steps {
             let step_value = if self.core.has_statement_form(step.value) {
-                let slot = self.structured_value_slot(step.value).unwrap_or_else(|| {
-                    panic!("internal compiler error: structured apply step has no value slot")
-                });
+                let slot = self
+                    .structured_value_slot(step.value)
+                    .unwrap_or_else(|| crate::ice::bug!("structured apply step has no value slot"));
                 inner.push_break(1);
                 inner.push_lit(format!("let {slot};"));
                 inner.push_break(1);
@@ -2290,7 +2279,7 @@ impl<'a> Emitter<'a> {
                     1,
                     self.emit_continued_expr(step.value, &ValueContinuation::assign(slot))
                         .unwrap_or_else(|| {
-                            panic!("internal compiler error: structured apply step was not emitted")
+                            crate::ice::bug!("structured apply step was not emitted")
                         }),
                 ));
                 let mut value = Rope::new();
@@ -2349,7 +2338,7 @@ impl<'a> Emitter<'a> {
         exit_label: Option<&str>,
     ) -> Rope<'a> {
         let DecisionKind::Match { dispatch, .. } = decision.kind else {
-            panic!("internal compiler error: switch decision is not a match")
+            crate::ice::bug!("switch decision is not a match")
         };
         let literal = dispatch == MatchDispatch::LiteralSwitch;
         let temp = temp_name(decision.subjects[0].temporary);
@@ -2410,7 +2399,7 @@ impl<'a> Emitter<'a> {
         exit_label: Option<&str>,
     ) -> Rope<'a> {
         let DecisionKind::Match { needs_label, .. } = decision.kind else {
-            panic!("internal compiler error: conditional decision is not a match")
+            crate::ice::bug!("conditional decision is not a match")
         };
         let mut out = Rope::new();
         let mut depth = 0;
@@ -2482,7 +2471,7 @@ impl<'a> Emitter<'a> {
         let exit_label = context.exit_label;
         let chain_exit_label = context.chain_exit_label;
         let ArmAction::Yield { body, kind } = arm.action else {
-            panic!("internal compiler error: match arm does not yield")
+            crate::ice::bug!("match arm does not yield")
         };
         let body_expr = match self.core.bodies[body.index()].statements.as_slice() {
             [Statement::Expr(expr)] => Some(*expr),
@@ -2541,7 +2530,11 @@ impl<'a> Emitter<'a> {
                         action.push_break(depth + 1);
                         action.push_lit(format!(
                             "{} = undefined;",
-                            continuation.assignment_target().unwrap()
+                            // `assigns()` is exactly "this continuation has
+                            // an assignment target", tested one line above.
+                            continuation
+                                .assignment_target()
+                                .expect("an assigning continuation names its target")
                         ));
                     }
                     action.push_break(depth + 1);
@@ -2557,7 +2550,11 @@ impl<'a> Emitter<'a> {
                         action.push_break(depth + 1);
                         action.push_lit(format!(
                             "{} = undefined;",
-                            continuation.assignment_target().unwrap()
+                            // `assigns()` is exactly "this continuation has
+                            // an assignment target", tested one line above.
+                            continuation
+                                .assignment_target()
+                                .expect("an assigning continuation names its target")
                         ));
                     }
                     action.push_break(depth + 1);
@@ -2697,7 +2694,7 @@ impl<'a> Emitter<'a> {
                     .hir
                     .source_map
                     .pattern_span(*pattern)
-                    .unwrap_or_else(|| panic!("internal compiler error: literal has no span"));
+                    .unwrap_or_else(|| crate::ice::bug!("literal has no span"));
                 let (literal, at) = self.source_span(span);
                 out.push_src(literal, at);
                 out
@@ -2778,7 +2775,7 @@ impl<'a> Emitter<'a> {
             .source
             .fields
             .last()
-            .unwrap_or_else(|| panic!("internal compiler error: binding has no source field"));
+            .unwrap_or_else(|| crate::ice::bug!("binding has no source field"));
         let field_node = field_node(field);
         let field_text = self.field_name(field);
         if mapped {
@@ -2810,9 +2807,14 @@ impl<'a> Emitter<'a> {
 
     fn literal_label(&self, plan: &PatternPlan) -> Rope<'a> {
         let PatternPlan::Test(Test::Literal { pattern, .. }) = plan else {
-            panic!("internal compiler error: switch literal alternative is not literal")
+            crate::ice::bug!("switch literal alternative is not literal")
         };
-        let span = self.semantic.hir.source_map.pattern_span(*pattern).unwrap();
+        // Every pattern the lowering kept came from source text the HIR
+        // recorded a span for; one without a span is a broken lowering, not
+        // an input the user can write.
+        let Some(span) = self.semantic.hir.source_map.pattern_span(*pattern) else {
+            crate::ice::bug!("switch literal pattern has no source span")
+        };
         let (text, at) = self.source_span(span);
         let mut out = Rope::new();
         out.push_src(text, at);
@@ -2821,13 +2823,19 @@ impl<'a> Emitter<'a> {
 
     fn variant_label(&self, plan: &PatternPlan) -> String {
         let PatternPlan::AllOf(parts) = plan else {
-            panic!("internal compiler error: switch variant alternative is not constructor")
+            crate::ice::bug!("switch variant alternative is not constructor")
         };
         let constructor = parts.iter().find_map(|part| match part {
             PatternPlan::Test(Test::Variant { constructor, .. }) => Some(constructor),
             _ => None,
         });
-        self.constructor_name(constructor.unwrap())
+        // A switch is only built over variant tests, so an alternative with
+        // no variant part is a plan this emitter should never have been
+        // handed.
+        let Some(constructor) = constructor else {
+            crate::ice::bug!("switch variant alternative tests no constructor")
+        };
+        self.constructor_name(constructor)
     }
 
     fn unexpected_throw(&self, decision: &Decision) -> String {
@@ -2851,7 +2859,7 @@ impl<'a> Emitter<'a> {
                 "throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"
                     .to_owned()
             }
-            _ => panic!("internal compiler error: match has non-match miss action"),
+            _ => crate::ice::bug!("match has non-match miss action"),
         }
     }
 }

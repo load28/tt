@@ -433,9 +433,11 @@ impl<'a> TargetFile<'a> {
             }
             last_ordered = Some((*start, *end));
         }
+        // `flatten` sets the source before it validates, and this
+        // validator only runs from there.
         let source = self
             .source
-            .expect("preservation validation requires the source");
+            .expect("flatten installs the source before validating against it");
         for span in &preservation.owned {
             let clipped = span.start..span.end.min(self.source_len);
             for (at, &count) in clipped.clone().zip(&printed[clipped]) {

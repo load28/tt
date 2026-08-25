@@ -604,13 +604,13 @@ fn validate_semantic(file: &SemanticFile) {
     for node in file.resolution.uses.keys() {
         assert!(
             file.hir.source_map.node_span(*node).is_some(),
-            "internal compiler error: resolved HIR use has no source span"
+            "resolved HIR use has no source span"
         );
     }
     for unresolved in &file.resolution.unresolved {
         assert!(
             file.hir.source_map.node_span(unresolved.node).is_some(),
-            "internal compiler error: unresolved HIR use has no source span"
+            "unresolved HIR use has no source span"
         );
     }
     for analysis in &file.patterns.matches {
@@ -621,7 +621,7 @@ fn validate_semantic(file: &SemanticFile) {
                     .node_span(site.node)
                     .is_some_and(|span| span.start == analysis.keyword_off)
             }),
-            "internal compiler error: match analysis has no HIR pattern site"
+            "match analysis has no HIR pattern site"
         );
     }
 }

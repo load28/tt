@@ -62,7 +62,7 @@ impl Lower {
             "const" => BindingMode::Const,
             "let" => BindingMode::Let,
             "var" => BindingMode::Var,
-            _ => panic!("internal compiler error: parser produced unknown binding mode"),
+            _ => crate::ice::bug!("parser produced unknown binding mode"),
         }
     }
 
@@ -130,7 +130,10 @@ impl Lower {
     }
 
     fn lower_enum(&mut self, decl: &ast::EnumDecl) -> OwnerId {
-        let owner = OwnerId(u32::try_from(self.hir.items.len()).expect("item count fits u32"));
+        // One owner per item lowered from this file's syntax.
+        let owner = OwnerId(
+            u32::try_from(self.hir.items.len()).expect("a file has fewer than u32::MAX items"),
+        );
         let node = self.node(
             Span::new(decl.name_off, decl.name_off + decl.name.len()),
             AstOrigin::EnumDecl,
@@ -181,7 +184,10 @@ impl Lower {
     }
 
     fn lower_import(&mut self, decl: &ast::TtImportDecl) -> OwnerId {
-        let owner = OwnerId(u32::try_from(self.hir.items.len()).expect("item count fits u32"));
+        // One owner per item lowered from this file's syntax.
+        let owner = OwnerId(
+            u32::try_from(self.hir.items.len()).expect("a file has fewer than u32::MAX items"),
+        );
         let node = self.node(Self::span(decl.spec), AstOrigin::Import);
         self.hir.items.push(Item::Import(ImportItem {
             node,

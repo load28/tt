@@ -282,8 +282,9 @@ fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredEnum]) 
         && differences
             .iter()
             .all(|pair| Some(pair.0.as_str()) == leaf_expected);
-    if one_expected {
-        let expected_leaf = leaf_expected.expect("checked above");
+    // `one_expected` is `leaf_expected.is_some() && …`, so the binding is
+    // the same test read as a value.
+    if let Some(expected_leaf) = leaf_expected.filter(|_| one_expected) {
         let mut found_leaves: Vec<&str> = Vec::new();
         for (_, leaf) in &differences {
             if !found_leaves.contains(&leaf.as_str()) {

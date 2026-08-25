@@ -31,7 +31,7 @@ pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile 
         bodies,
         exprs,
         temporary_count: u32::try_from(cx.temp_ordinals.len())
-            .unwrap_or_else(|_| panic!("internal compiler error: Core IR temporary overflow")),
+            .unwrap_or_else(|_| crate::ice::bug!("Core IR temporary overflow")),
     };
     validate(&file, semantic);
     file
@@ -45,9 +45,10 @@ struct Lowering<'a> {
 
 impl Lowering<'_> {
     fn temp(&self, node: NodeId, result: bool) -> TempId {
-        let sequence = *self.temp_ordinals.get(&node).unwrap_or_else(|| {
-            panic!("internal compiler error: semantic temporary has no assigned ordinal")
-        });
+        let sequence = *self
+            .temp_ordinals
+            .get(&node)
+            .unwrap_or_else(|| crate::ice::bug!("semantic temporary has no assigned ordinal"));
         if result {
             TempId::Result(sequence)
         } else {
@@ -159,12 +160,11 @@ impl Lowering<'_> {
                     site,
                     *extent,
                     |arm, kind| ArmAction::Yield {
-                        body: arm.body.unwrap_or_else(|| {
-                            panic!("internal compiler error: match arm has no body")
-                        }),
-                        kind: kind.unwrap_or_else(|| {
-                            panic!("internal compiler error: match arm has no body kind")
-                        }),
+                        body: arm
+                            .body
+                            .unwrap_or_else(|| crate::ice::bug!("match arm has no body")),
+                        kind: kind
+                            .unwrap_or_else(|| crate::ice::bug!("match arm has no body kind")),
                     },
                     MissAction::ThrowUnexpected(if site.subjects.len() > 1 {
                         UnexpectedKind::Tuple
@@ -244,23 +244,23 @@ impl Lowering<'_> {
         file_unique_temps: bool,
         kind: DecisionKind,
     ) -> Decision {
-        let subjects = site
-            .subjects
-            .iter()
-            .enumerate()
-            .map(|(index, value)| Subject {
-                value: *value,
-                temporary: if file_unique_temps {
-                    self.temp(extent, false)
-                } else if site.subjects.len() == 1 {
-                    TempId::Decision
-                } else {
-                    TempId::DecisionElement(u32::try_from(index).unwrap_or_else(|_| {
-                        panic!("internal compiler error: decision subject index overflow")
-                    }))
-                },
-            })
-            .collect();
+        let subjects =
+            site.subjects
+                .iter()
+                .enumerate()
+                .map(|(index, value)| Subject {
+                    value: *value,
+                    temporary: if file_unique_temps {
+                        self.temp(extent, false)
+                    } else if site.subjects.len() == 1 {
+                        TempId::Decision
+                    } else {
+                        TempId::DecisionElement(u32::try_from(index).unwrap_or_else(|_| {
+                            crate::ice::bug!("decision subject index overflow")
+                        }))
+                    },
+                })
+                .collect();
         let arms = site
             .arms
             .iter()
@@ -295,9 +295,8 @@ impl Lowering<'_> {
             stmt.node,
             |arm, _| {
                 ArmAction::Execute(
-                    arm.body.unwrap_or_else(|| {
-                        panic!("internal compiler error: if-let arm has no body")
-                    }),
+                    arm.body
+                        .unwrap_or_else(|| crate::ice::bug!("if-let arm has no body")),
                 )
             },
             miss,
@@ -397,9 +396,7 @@ impl Lowering<'_> {
             .hir
             .source_map
             .node_span(node)
-            .unwrap_or_else(|| {
-                panic!("internal compiler error: Core IR async node has no source span")
-            });
+            .unwrap_or_else(|| crate::ice::bug!("Core IR async node has no source span"));
         contains_await(self.source.as_bytes(), span.start, span.end)
     }
 }
@@ -446,9 +443,8 @@ fn temp_ordinals(semantic: &SemanticFile) -> HashMap<NodeId, u32> {
         .map(|(index, node)| {
             (
                 node,
-                u32::try_from(index).unwrap_or_else(|_| {
-                    panic!("internal compiler error: Core IR temporary overflow")
-                }),
+                u32::try_from(index)
+                    .unwrap_or_else(|_| crate::ice::bug!("Core IR temporary overflow")),
             )
         })
         .collect()
@@ -555,7 +551,7 @@ fn direct_variant_alternatives(plan: &PatternPlan) -> Option<Vec<Constructor>> {
 fn validate(file: &CoreFile, semantic: &SemanticFile) {
     assert!(
         file.root.index() < file.bodies.len(),
-        "internal compiler error: Core IR root body is invalid"
+        "Core IR root body is invalid"
     );
     for body in &file.bodies {
         for statement in &body.statements {
@@ -572,10 +568,7 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
                 if let Some(head) = apply.head {
                     validate_expr(head, file);
                 }
-                assert!(
-                    !apply.steps.is_empty(),
-                    "internal compiler error: Core IR apply has no steps"
-                );
+                assert!(!apply.steps.is_empty(), "Core IR apply has no steps");
                 for step in &apply.steps {
                     validate_node(step.node, semantic);
                     validate_expr(step.value, file);
@@ -614,14 +607,8 @@ fn validate_statement(statement: &Statement, file: &CoreFile, semantic: &Semanti
     match statement {
         Statement::Opaque(node) => validate_node(*node, semantic),
         Statement::Adt(adt) => {
-            assert!(
-                !adt.name.is_empty(),
-                "internal compiler error: empty Core ADT"
-            );
-            assert!(
-                !adt.variants.is_empty(),
-                "internal compiler error: Core ADT has no variants"
-            );
+            assert!(!adt.name.is_empty(), "empty Core ADT");
+            assert!(!adt.variants.is_empty(), "Core ADT has no variants");
         }
         Statement::Import(import) => {
             validate_node(import.specifier, semantic);
@@ -638,7 +625,7 @@ fn validate_statement(statement: &Statement, file: &CoreFile, semantic: &Semanti
 fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFile) {
     assert!(
         !decision.subjects.is_empty(),
-        "internal compiler error: Core IR decision has no subject"
+        "Core IR decision has no subject"
     );
     for subject in &decision.subjects {
         validate_temp(subject.temporary, file);
@@ -661,7 +648,7 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
                 .arms
                 .iter()
                 .any(|arm| matches!(arm.action, ArmAction::Yield { .. })),
-            "internal compiler error: statement decision cannot be async"
+            "statement decision cannot be async"
         );
     }
     for arm in &decision.arms {
@@ -692,16 +679,13 @@ fn validate_pattern_plan(plan: &PatternPlan, semantic: &SemanticFile) {
             if let Some(field) = binding.source_field {
                 assert!(
                     field.index() < semantic.hir.fields.len(),
-                    "internal compiler error: Core IR binding field is invalid"
+                    "Core IR binding field is invalid"
                 );
             }
             validate_node(binding.binding, semantic);
         }
         PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
-            assert!(
-                !parts.is_empty(),
-                "internal compiler error: Core IR boolean pattern is empty"
-            );
+            assert!(!parts.is_empty(), "Core IR boolean pattern is empty");
             for part in parts {
                 validate_pattern_plan(part, semantic);
             }
@@ -729,15 +713,12 @@ fn validate_test(test: &Test, semantic: &SemanticFile) {
                     validate_node(*node, semantic);
                     assert!(
                         semantic.resolution.variant(*reference).is_some(),
-                        "internal compiler error: Core IR variant is invalid"
+                        "Core IR variant is invalid"
                     );
                 }
                 Constructor::Recovery { node, name } => {
                     validate_node(*node, semantic);
-                    assert!(
-                        !name.is_empty(),
-                        "internal compiler error: empty recovery tag"
-                    );
+                    assert!(!name.is_empty(), "empty recovery tag");
                 }
             }
         }
@@ -745,7 +726,7 @@ fn validate_test(test: &Test, semantic: &SemanticFile) {
             validate_place(place, semantic);
             assert!(
                 pattern.index() < semantic.hir.patterns.len(),
-                "internal compiler error: Core IR literal pattern is invalid"
+                "Core IR literal pattern is invalid"
             );
         }
     }
@@ -758,15 +739,12 @@ fn validate_place(place: &Place, semantic: &SemanticFile) {
                 validate_node(*node, semantic);
                 assert!(
                     semantic.resolution.field(*reference).is_some(),
-                    "internal compiler error: Core IR field is invalid"
+                    "Core IR field is invalid"
                 );
             }
             FieldAccess::Recovery { node, name } => {
                 validate_node(*node, semantic);
-                assert!(
-                    !name.is_empty(),
-                    "internal compiler error: empty recovery field"
-                );
+                assert!(!name.is_empty(), "empty recovery field");
             }
         }
     }
@@ -789,7 +767,7 @@ fn validate_propagate(propagate: &Propagate, file: &CoreFile, semantic: &Semanti
         !propagate.layout.success_tag.is_empty()
             && !propagate.layout.discriminant_field.is_empty()
             && !propagate.layout.payload_field.is_empty(),
-        "internal compiler error: Core IR Result layout is empty"
+        "Core IR Result layout is empty"
     );
 }
 
@@ -802,21 +780,21 @@ fn validate_binding_mode(mode: BindingMode) {
 fn validate_node(node: NodeId, semantic: &SemanticFile) {
     assert!(
         semantic.hir.source_map.node_span(node).is_some(),
-        "internal compiler error: Core IR node has no source span"
+        "Core IR node has no source span"
     );
 }
 
 fn validate_body(body: BodyId, file: &CoreFile) {
     assert!(
         body.index() < file.bodies.len(),
-        "internal compiler error: Core IR body ID is invalid"
+        "Core IR body ID is invalid"
     );
 }
 
 fn validate_expr(expr: ExprId, file: &CoreFile) {
     assert!(
         expr.index() < file.exprs.len(),
-        "internal compiler error: Core IR expression ID is invalid"
+        "Core IR expression ID is invalid"
     );
 }
 
@@ -824,7 +802,7 @@ fn validate_temp(temp: TempId, file: &CoreFile) {
     match temp {
         TempId::Statement(sequence) | TempId::Result(sequence) => assert!(
             sequence < file.temporary_count,
-            "internal compiler error: Core IR temporary ID is invalid"
+            "Core IR temporary ID is invalid"
         ),
         TempId::Decision | TempId::DecisionElement(_) => {}
     }

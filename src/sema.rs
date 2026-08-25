@@ -536,8 +536,7 @@ impl Checker {
         if alts.len() < 2 {
             return;
         }
-        if alts.iter().any(has_nested) {
-            let at = alts.iter().find(|a| has_nested(a)).unwrap();
+        if let Some(at) = alts.iter().find(|a| has_nested(a)) {
             self.error(
                 TtError::span(
                     at.tag_off,
@@ -740,8 +739,9 @@ impl Checker {
                     // must bind the exact same (field, name) set — which is
                     // also why a nested pattern (per-alternative conditions
                     // and paths) cannot appear inside an or-pattern.
-                    if alts.len() > 1 && alts.iter().any(has_nested) {
-                        let at = alts.iter().find(|a| has_nested(a)).unwrap();
+                    if alts.len() > 1
+                        && let Some(at) = alts.iter().find(|a| has_nested(a))
+                    {
                         self.error(
                             TtError::span(
                                 at.tag_off,
@@ -849,8 +849,9 @@ impl Checker {
                     let mut bound: Vec<&str> = Vec::new();
                     for elem in elems {
                         let Pattern::Tags(alts) = elem else { continue };
-                        if alts.len() > 1 && alts.iter().any(has_nested) {
-                            let at = alts.iter().find(|a| has_nested(a)).unwrap();
+                        if alts.len() > 1
+                            && let Some(at) = alts.iter().find(|a| has_nested(a))
+                        {
                             self.error(
                                 TtError::span(
                                     at.tag_off,

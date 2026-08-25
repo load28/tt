@@ -228,7 +228,7 @@
 | TASK-218 | 남은 규칙의 수정 조언을 Suggestion으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-218](./TASK-218-suggestions-for-remaining-rules.md) |
 | TASK-219 | 방출 코드 가독성 — 블록 암 들여쓰기와 런타임 import 위치 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-219](./TASK-219-generated-code-readability.md) |
 | TASK-220 | 진단 렌더러의 ANSI 색상 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-220](./TASK-220-diagnostic-colour.md) |
-| TASK-221 | unwrap/expect 감사 | 대기 | — | — | [TASK-221](./TASK-221-panic-surface-audit.md) |
+| TASK-221 | unwrap/expect 감사 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-221](./TASK-221-panic-surface-audit.md) |
 | TASK-222 | 부하 시 integration 스위트의 간헐적 실패 | 대기 | — | — | [TASK-222](./TASK-222-integration-suite-flakiness.md) |
 | TASK-223 | 실세계 코퍼스 차등 테스트와 퍼징 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-223](./TASK-223-corpus-and-fuzzing.md) |
 | TASK-224 | 커버리지 측정과 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-224](./TASK-224-coverage-gate.md) |

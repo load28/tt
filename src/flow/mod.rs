@@ -344,7 +344,11 @@ struct Builder {
 
 impl Builder {
     fn block(&mut self, terminator: Terminator) -> BlockId {
-        let id = BlockId(u32::try_from(self.blocks.len()).expect("block count fits u32"));
+        // Blocks come from statements in one function body; a file with
+        // 4 billion of them cannot be read into memory in the first place.
+        let id = BlockId(
+            u32::try_from(self.blocks.len()).expect("a body has fewer than u32::MAX blocks"),
+        );
         self.blocks.push(BasicBlock { terminator });
         id
     }
