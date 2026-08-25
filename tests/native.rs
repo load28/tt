@@ -15,7 +15,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 const BIN_IN_TREE: &str = "built/local/tsgo";
 const API_IN_TREE: &str = "_packages/native-preview/dist/api/sync/api.js";
@@ -90,16 +89,13 @@ macro_rules! require_emit {
     };
 }
 
-static DIR_SEQ: AtomicUsize = AtomicUsize::new(0);
+mod common;
+use common::Workspace;
 
-fn tmpdir() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
-        "tt-native-{}-{}",
-        std::process::id(),
-        DIR_SEQ.fetch_add(1, Ordering::SeqCst)
-    ));
-    fs::create_dir_all(dir.join("src")).unwrap();
-    dir
+/// A directory for one case, with its `src/` tree — removed when the case
+/// ends, kept when it failed (`tests/common/mod.rs`).
+fn tmpdir() -> Workspace {
+    Workspace::with_subdir("native", "src")
 }
 
 fn write(dir: &Path, name: &str, text: &str) {
@@ -108,7 +104,7 @@ fn write(dir: &Path, name: &str, text: &str) {
 
 /// A project whose `tsconfig.json` globs `src` — the lowered `.tt` modules
 /// have to enter the program through the user's own configuration.
-fn project(files: &[(&str, &str)]) -> PathBuf {
+fn project(files: &[(&str, &str)]) -> Workspace {
     let dir = tmpdir();
     write(
         &dir,
@@ -800,7 +796,6 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
             && out.contains("Err<number>"),
         "the independent bindNonResult type error survives recovery: {out}"
     );
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -1389,5 +1384,4 @@ fn a_probe_answers_in_a_pipeline_the_buffer_cannot_parse_yet() {
         labels.contains(&"kind"),
         "the value at the last step is a Result: {labels:?}"
     );
-    fs::remove_dir_all(&dir).ok();
 }
