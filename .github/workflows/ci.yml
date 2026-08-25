@@ -15,10 +15,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Install the pinned Rust toolchain
+        # rust-toolchain.toml decides the version, so nothing here names
+        # one. `rustup show active-toolchain` installs it if the runner
+        # does not have it and prints which file it came from, so the log
+        # says what was used rather than leaving it inferred.
+        run: rustup show active-toolchain
 
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
@@ -96,8 +98,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install the pinned Rust toolchain
+        # rust-toolchain.toml decides the version, so nothing here names
+        # one. `rustup show active-toolchain` installs it if the runner
+        # does not have it and prints which file it came from, so the log
+        # says what was used rather than leaving it inferred.
+        run: rustup show active-toolchain
 
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
@@ -151,8 +157,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install the pinned Rust toolchain
+        # rust-toolchain.toml decides the version, so nothing here names
+        # one. `rustup show active-toolchain` installs it if the runner
+        # does not have it and prints which file it came from, so the log
+        # says what was used rather than leaving it inferred.
+        run: rustup show active-toolchain
 
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
@@ -213,20 +223,3 @@ jobs:
           # on PATH, it can serve a language server, and it can emit
           # declarations — so a skip means the wiring broke.
           grep -q "^# skipped 0$" /tmp/extension-native.log
-
-  msrv:
-    name: build on MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install MSRV toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.88"
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build
-        run: cargo build

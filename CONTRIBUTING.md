@@ -9,7 +9,8 @@
 ./scripts/doctor
 ```
 
-- Rust stable (MSRV: `Cargo.toml`의 `rust-version` 참조)
+- Rust — 버전은 `rust-toolchain.toml`이 고정하며 rustup이 자동으로 선택합니다
+  (소비자에게 필요한 최소 버전은 `Cargo.toml`의 `rust-version`)
 - 선택: Node.js + `typescript` (`npm i -g typescript`) — 없으면 tsc/node 통합
   테스트가 자동으로 skip됩니다. 온전한 검증을 위해 설치를 권장합니다.
 

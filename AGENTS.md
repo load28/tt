@@ -82,7 +82,12 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
 
 ## 구현과 검증 규칙
 
-- Rust MSRV는 `Cargo.toml`의 `rust-version`이며 `unsafe`는 금지합니다.
+- 개발 툴체인은 `rust-toolchain.toml`이 고정합니다. rustup이 이 저장소에서 그
+  버전을 자동으로 고르므로 따로 할 일은 없고, `./scripts/doctor`가 활성 버전이
+  핀과 같은지 확인합니다. 로컬과 CI가 같은 clippy를 써야 "게이트를 먼저
+  통과시켜라"가 성립합니다 — 핀을 올리는 것은 부수 효과가 아니라 태스크입니다.
+- `Cargo.toml`의 `rust-version`은 소비자에게 필요한 최소 버전 선언이며 `unsafe`는
+  금지합니다.
 - 스캐너와 변환기는 ASCII 바이트만 판단하고 멀티바이트 UTF-8은 불투명하게
   통과시킵니다.
 - 내부 오류는 바이트 오프셋을 담고 사용자 line/column 변환은 공개 경계에서 합니다.

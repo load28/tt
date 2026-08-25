@@ -1,0 +1,25 @@
+# The development toolchain, pinned.
+#
+# `cargo clippy --all-targets -- -D warnings` is a gate every contributor is
+# asked to pass before finishing (AGENTS.md, CONTRIBUTING.md). A gate whose
+# verdict depends on which `stable` the person happens to have installed is
+# not a gate: clippy gains lints between releases, so the same code passes
+# here and fails in CI. That is exactly what happened in PR #53 —
+# `manual_option_zip` was invisible to a local 1.94.1 and fatal on CI's
+# 1.98.0 (TASK-226).
+#
+# rustup reads this file and installs the toolchain, with the components
+# below, on the first cargo invocation. Nobody has to remember anything.
+#
+# Raising it is a task, not a side effect — the same rule the pinned
+# typescript-go revision follows in .github/workflows/ci.yml. A bump can
+# turn new clippy lints into build failures, and that belongs in a change
+# that is reviewed as such rather than arriving with someone else's commit.
+#
+# One version, everywhere: local development and every CI job compile with
+# what this file names. Note that `rust-version` in Cargo.toml (the minimum
+# a consumer needs) is a separate declaration, and nothing verifies it any
+# more — see TASK-226.
+[toolchain]
+channel = "1.98.0"
+components = ["rustfmt", "clippy"]
