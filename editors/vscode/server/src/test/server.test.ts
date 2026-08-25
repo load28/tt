@@ -683,7 +683,10 @@ test(
     const diagnostics = await published(source);
     const failed = diagnostics.find((d: any) => d.code === "malformed-match");
     assert.ok(failed, `no parse report in: ${JSON.stringify(diagnostics)}`);
-    assert.match(failed.message, /wrap the scrutinee in parentheses/);
+    assert.match(failed.message, /tt `match` could not be parsed/);
+    // The fix travels as a suggestion with an edit, not as a sentence in
+    // the message (TASK-218), so the editor can offer it as a quick fix.
+    assert.deepEqual(failed.data?.suggestions?.[0]?.edit?.replacement, "(shape)");
     assert.equal(failed.range.start.line, 2);
     assert.equal(covered(source, failed.range), "match");
   },

@@ -61,24 +61,46 @@ pub(super) fn parse_match<'t>(
         _ => false,
     };
     if committed {
-        let message = if matches!(cur.peek(), Some(token) if matches!(token.kind, TokenKind::Ident))
-        {
-            "`match` could not be parsed here — wrap the scrutinee in parentheses: \
-             `match (<expression>) { ... }`"
-                .to_string()
-        } else {
-            "tt `match` could not be parsed (write `match (<scrutinee>) { <pattern> => <body> }`; \
-             tuple patterns must match the scrutinee arity)"
-                .to_string()
-        };
-        let end = (cur.idx..cur.tokens.len())
-            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
+        // The token index of the `{` that opens the body — the end of the
+        // scrutinee text, and the start of the range the recovery covers.
+        let body_open = (cur.idx..cur.tokens.len())
+            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')));
+        let end = body_open
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
             .map_or(cur.range_end, |token| token.span.end);
+        let mut error = crate::error::TtError::span(
+            kw_span.start,
+            kw_span.end,
+            "tt `match` could not be parsed".to_string(),
+        )
+        .code(crate::DiagnosticCode::MalformedMatch);
+        // A scrutinee that starts with a bare identifier is the one shape
+        // whose fix the parser can write: the text between the keyword and
+        // the body is the expression, and it only needs parentheses around
+        // it. Anything else gets the rule's form, which is advice.
+        error = match (cur.peek(), body_open) {
+            (Some(token), Some(open))
+                if matches!(token.kind, TokenKind::Ident)
+                    && token.span.start < cur.tokens[open].span.start =>
+            {
+                let scrutinee = cur.parser.src[token.span.start..cur.tokens[open].span.start]
+                    .trim_end()
+                    .to_string();
+                error.suggest(
+                    "a match scrutinee is parenthesized — `match (<expression>) { ... }`",
+                    token.span.start,
+                    token.span.start + scrutinee.len(),
+                    format!("({scrutinee})"),
+                )
+            }
+            _ => error.help(
+                "write `match (<scrutinee>) { <pattern> => <body> }`; a tuple pattern must \
+                 match the scrutinee arity",
+            ),
+        };
         Claim::Malformed {
-            error: crate::error::TtError::span(kw_span.start, kw_span.end, message)
-                .code(crate::DiagnosticCode::MalformedMatch),
+            error,
             recovery: RecoveryNode {
                 span: Span {
                     start: kw_span.start,

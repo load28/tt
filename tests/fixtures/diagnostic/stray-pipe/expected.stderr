@@ -1,5 +1,7 @@
-error[stray-pipe]: pipeline: `|>` could not be parsed here (steps must be expressions; parenthesize ternaries and arrow functions)
+error[stray-pipe]: pipeline: `|>` could not be parsed here
  --> input.tt:4:34
   |
 4 | export const bad = ready ? 1 : 2 |> f;
   |                                  ^^
+  |
+  = help: a step is an expression — parenthesize a ternary or an arrow function

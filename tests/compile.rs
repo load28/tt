@@ -10,6 +10,16 @@ fn err(src: &str) -> ttc::CompileError {
     compile(src, &Options::default()).expect_err("expected a compile error")
 }
 
+/// Every `help:` sentence the diagnostics of `src` carry. A rule's advice
+/// lives in this channel and nowhere else (TASK-218), so a test that is
+/// about the advice reads it from here rather than from a message.
+fn advice(src: &str) -> Vec<String> {
+    ttc::analyze(src, &Options::default())
+        .iter()
+        .flat_map(|d| d.suggestions.iter().map(|s| s.message.clone()))
+        .collect()
+}
+
 fn ok_tsx(src: &str) -> String {
     compile(
         src,
@@ -2241,9 +2251,17 @@ fn pipeline_await_in_head_needs_no_async_wrapper() {
 
 #[test]
 fn unparenthesized_ternary_next_to_pipeline_is_an_error() {
-    let e = err("const a = c ? x : y |> f;\n");
-    assert!(e.message.contains("parenthesize"), "{}", e.message);
+    let src = "const a = c ? x : y |> f;\n";
+    let e = err(src);
+    // The message says what is wrong; how to fix it rides in the
+    // suggestion channel, where every rule's advice lives (TASK-218).
+    assert!(e.message.contains("could not be parsed"), "{}", e.message);
     assert_eq!((e.line, e.col), (1, 21));
+    assert!(
+        advice(src).iter().any(|a| a.contains("parenthesize")),
+        "{:?}",
+        advice(src)
+    );
 }
 
 #[test]
@@ -2254,8 +2272,14 @@ fn parenthesized_ternary_head_compiles() {
 
 #[test]
 fn unparenthesized_arrow_step_is_an_error() {
-    let e = err("const a = x |> n => n + 1;\n");
-    assert!(e.message.contains("parenthesize"), "{}", e.message);
+    let src = "const a = x |> n => n + 1;\n";
+    let e = err(src);
+    assert!(e.message.contains("could not be parsed"), "{}", e.message);
+    assert!(
+        advice(src).iter().any(|a| a.contains("parenthesize")),
+        "{:?}",
+        advice(src)
+    );
 }
 
 #[test]
@@ -2546,12 +2570,21 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
 
 #[test]
 fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
-    let e = err("const r = match value { A => 1, _ => 0 };\n");
-    assert!(
-        e.message.contains("wrap the scrutinee in parentheses"),
-        "{e}"
-    );
+    let src = "const r = match value { A => 1, _ => 0 };\n";
+    let e = err(src);
+    assert!(e.message.contains("could not be parsed"), "{e}");
     assert_eq!((e.line, e.col), (1, 11));
+    // The one malformed-match shape whose fix the parser can write: the
+    // scrutinee text is there, it only lacks its parentheses.
+    let d = &ttc::analyze(src, &Options::default())[0];
+    assert_eq!(d.code, ttc::DiagnosticCode::MalformedMatch);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(&src[edit.start..edit.end], "value");
+    assert_eq!(edit.replacement, "(value)");
+    assert_eq!(
+        with_suggestions_applied(src, d),
+        "const r = match (value) { A => 1, _ => 0 };\n"
+    );
 }
 
 #[test]
@@ -3099,13 +3132,18 @@ fn result_region_in_a_match_arm_inherits_the_parent_slot() {
 
 #[test]
 fn try_and_let_else_are_rejected_inside_a_result_block() {
-    let e = err("const a = result {\n  const x <- f();\n  const y = try g();\n  x + y\n};\n");
+    let src = "const a = result {\n  const x <- f();\n  const y = try g();\n  x + y\n};\n";
+    let e = err(src);
     assert!(
         e.message.contains("`try` cannot be used here"),
         "{}",
         e.message
     );
-    assert!(e.message.contains("`<-` binding"), "{}", e.message);
+    assert!(
+        advice(src).iter().any(|a| a.contains("`<-` binding")),
+        "{:?}",
+        advice(src)
+    );
 
     let e = err(
         "const a = result {\n  const x <- f();\n  const Some(v) = o else { return 0; };\n  v\n};\n",

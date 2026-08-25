@@ -791,8 +791,9 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
         "the first tt error remains visible: {out}"
     );
     assert!(
-        out.contains("`match` could not be parsed here"),
-        "the malformed construct remains visible: {out}"
+        out.contains("tt `match` could not be parsed")
+            && out.contains("a match scrutinee is parenthesized"),
+        "the malformed construct remains visible, with its fix: {out}"
     );
     assert!(
         out.contains("type mismatch: expected `TResult<number, string>`")

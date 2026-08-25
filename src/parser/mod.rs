@@ -617,11 +617,13 @@ impl Parser<'_> {
                                 crate::error::TtError::span(
                                     stmt.span.start,
                                     stmt.span.end,
-                                    "`try` is a statement, not an expression — bind its value first with \
-                                     `const value = try <expression>;`"
-                                        .to_string(),
+                                    "`try` is a statement, not an expression".to_string(),
                                 )
-                                .code(crate::DiagnosticCode::TryPlacement),
+                                .code(crate::DiagnosticCode::TryPlacement)
+                                .help(
+                                    "bind its value first with \
+                                     `const value = try <expression>;`",
+                                ),
                             );
                             recoveries.push(RecoveryNode {
                                 span: stmt.span,
