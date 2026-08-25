@@ -6,6 +6,9 @@ import test from 'node:test'
 
 import { createProject, dependencyChannel, detectBundler, initializeExisting, run } from '../src/installer.js'
 
+const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+const expectedDependencyChannel = dependencyChannel(ownManifest.version)
+
 test('keeps dependencies on the installer release channel', () => {
   assert.equal(dependencyChannel('0.3.0-dev.20260823.143015.42.1'), 'dev')
   assert.equal(dependencyChannel('0.3.0'), 'latest')
@@ -20,7 +23,7 @@ test('creates a complete Vite project without installing', async () => {
   assert.equal(result.bundler, 'vite')
   assert.equal(result.packageManager, 'bun')
   assert.equal(manifest.scripts.check, 'ttc --check-types src')
-  assert.equal(manifest.devDependencies['@load28/unplugin-tt'], 'latest')
+  assert.equal(manifest.devDependencies['@load28/unplugin-tt'], expectedDependencyChannel)
   assert.equal('typescript' in manifest.devDependencies, false)
   assert.match(await readFile(join(root, 'vite.config.ts'), 'utf8'), /@load28\/unplugin-tt\/vite/)
   assert.equal(await readFile(join(root, 'src/main.ts'), 'utf8'), "import './app.tt'\n")
@@ -58,7 +61,7 @@ test('initializes Vite through a wrapper and preserves the user config', async (
   assert.equal(await readFile(join(root, 'vite.config.ts'), 'utf8'), original)
   assert.equal(manifest.scripts.dev, 'vite')
   assert.match(manifest.scripts['tt:build'], /tt\.vite\.config\.mjs/)
-  assert.equal(manifest.devDependencies['@load28/tt-lang'], 'latest')
+  assert.equal(manifest.devDependencies['@load28/tt-lang'], expectedDependencyChannel)
   assert.equal('typescript' in manifest.devDependencies, false)
   const wrapper = await readFile(join(root, 'tt.vite.config.mjs'), 'utf8')
   assert.match(wrapper, /import base from '.\/vite\.config\.ts'/)
