@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# ----------------------------------------------------------------------------
+# scripts/bench-compare — is this revision slower than the one it started from?
+#
+#   ./scripts/bench-compare                # against origin/main's merge base
+#   ./scripts/bench-compare <ref>          # against any revision
+#
+# Both sides are built and run **on this machine, in this run**. A baseline
+# recorded elsewhere says nothing: the same benchmark is twice as fast on a
+# laptop as on a shared runner, and the number that matters is the ratio
+# between two revisions, not either revision's absolute time.
+#
+# The threshold comes from the benchmark's own measured noise rather than
+# from a guess (docs/tasks/TASK-225): a case is a regression only when the
+# median AND the fastest sample both moved past it. Contention can only make
+# a run slower, so the fastest sample of each side is the one a busy runner
+# distorts least — requiring both is what keeps a loaded machine from
+# failing a build that is not slower.
+# ----------------------------------------------------------------------------
+set -euo pipefail
+
+TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+WORKTREE="$TT_ROOT/.tt-dev/bench-base"
+BASE_REF="${1:-}"
+
+fail() {
+  echo "error: $*" >&2
+  exit 1
+}
+
+command -v cargo > /dev/null 2>&1 || fail "Rust (cargo) is required."
+command -v node > /dev/null 2>&1 || fail "Node.js is required to compare the reports."
+
+if [ -z "$BASE_REF" ]; then
+  BASE_REF="$(git -C "$TT_ROOT" merge-base HEAD origin/main 2> /dev/null || true)"
+  [ -n "$BASE_REF" ] || fail "no merge base with origin/main — pass a revision explicitly."
+fi
+BASE_SHA="$(git -C "$TT_ROOT" rev-parse "$BASE_REF")"
+
+echo "==> head: $(git -C "$TT_ROOT" rev-parse --short HEAD)"
+echo "==> base: $(git -C "$TT_ROOT" rev-parse --short "$BASE_SHA")"
+
+echo "==> measuring head"
+(cd "$TT_ROOT" && cargo bench --bench compile -- --json > /tmp/tt-bench-head.json)
+
+if [ "$BASE_SHA" = "$(git -C "$TT_ROOT" rev-parse HEAD)" ]; then
+  # A push to the base branch itself: the numbers are the record, and
+  # there is nothing to compare them against.
+  cp /tmp/tt-bench-head.json /tmp/tt-bench-base.json
+  echo "head is the base revision — recorded, nothing to compare."
+  exit 0
+fi
+
+# A worktree, not a checkout: the working tree stays exactly as it is, which
+# matters when this runs over a dirty tree during development.
+git -C "$TT_ROOT" worktree remove --force "$WORKTREE" 2> /dev/null || true
+mkdir -p "$(dirname "$WORKTREE")"
+git -C "$TT_ROOT" worktree add --detach --quiet "$WORKTREE" "$BASE_SHA"
+cleanup() { git -C "$TT_ROOT" worktree remove --force "$WORKTREE" 2> /dev/null || true; }
+trap cleanup EXIT
+
+if [ ! -f "$WORKTREE/benches/compile.rs" ]; then
+  echo "the base revision has no benchmark to compare against — nothing to do."
+  exit 0
+fi
+
+echo "==> measuring base"
+(cd "$WORKTREE" && cargo bench --bench compile -- --json > /tmp/tt-bench-base.json)
+
+node -e '
+  const fs = require("fs");
+  const read = (p) => JSON.parse(fs.readFileSync(p, "utf8")).benchmarks;
+  const head = read("/tmp/tt-bench-head.json");
+  const base = new Map(read("/tmp/tt-bench-base.json").map((b) => [b.name, b]));
+
+  // Never below this: two medians of a few dozen samples are not precise
+  // enough for a smaller difference to mean anything.
+  const FLOOR = 0.10;
+  let regressed = false;
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  const ms = (ns) => `${(ns / 1e6).toFixed(2)}ms`;
+
+  console.log(
+    ["case", "base", "head", "median", "fastest", "budget"]
+      .map((h, i) => (i === 0 ? h.padEnd(28) : h.padStart(11)))
+      .join(""),
+  );
+  for (const h of head) {
+    const b = base.get(h.name);
+    if (!b) {
+      console.log(`${h.name.padEnd(28)}${"(new)".padStart(11)}`);
+      continue;
+    }
+    const budget = Math.max(FLOOR, 2 * Math.max(h.noise, b.noise));
+    const median = h.median_ns / b.median_ns - 1;
+    const fastest = h.min_ns / b.min_ns - 1;
+    const bad = median > budget && fastest > budget;
+    regressed ||= bad;
+    console.log(
+      h.name.padEnd(28) +
+        ms(b.median_ns).padStart(11) +
+        ms(h.median_ns).padStart(11) +
+        pct(median).padStart(11) +
+        pct(fastest).padStart(11) +
+        pct(budget).padStart(11) +
+        (bad ? "  SLOWER" : ""),
+    );
+  }
+  if (regressed) {
+    console.error(
+      "\nA case got slower by more than its measured noise allows, in both " +
+        "its median and its fastest sample. Either the change costs this " +
+        "much and the number is the news, or it does not and something " +
+        "regressed.",
+    );
+    process.exit(1);
+  }
+  console.log("\nNo case is slower than its own noise floor allows.");
+'

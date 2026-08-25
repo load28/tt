@@ -92,6 +92,46 @@ jobs:
           test -f "$TTC_TSGO_API"
           cargo test --test native
 
+  bench:
+    name: performance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The comparison needs the revision this branch started from, and
+          # a shallow clone has no merge base to find.
+          fetch-depth: 0
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Both revisions are built and measured here, in one job, on one
+      # machine: the ratio between them is the only number a shared runner
+      # can report honestly (docs/tasks/TASK-225).
+      - name: Compare against the merge base
+        run: ./scripts/bench-compare
+
+      - name: Record this revision's numbers
+        if: always()
+        run: cat /tmp/tt-bench-head.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bench-report
+          path: |
+            /tmp/tt-bench-head.json
+            /tmp/tt-bench-base.json
+          if-no-files-found: warn
+
   extension:
     name: vscode extension
     runs-on: ubuntu-latest
