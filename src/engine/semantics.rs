@@ -64,9 +64,25 @@ pub struct Diagnostic {
 /// The typed pass's copy of the advice that closes a match — the same
 /// constant the untyped pass attaches, so the two pipelines cannot drift
 /// apart on the fix any more than they can on the wording.
+/// Where the match a probe asked about is written — the shape the shared
+/// arm-insertion authoring takes.
+fn site_of(anchor: &projection::MatchAnchor) -> crate::diagnostics::MatchSite {
+    crate::diagnostics::MatchSite {
+        keyword_off: anchor.anchor.offset,
+        body_open: anchor.body_open,
+        body_close: anchor.body_close,
+    }
+}
+
+/// The advice with no edit behind it — what a match whose body braces did
+/// not reach this pass still gets to say.
 fn non_exhaustive_help() -> crate::Suggestion {
     crate::Suggestion {
-        message: crate::diagnostics::NON_EXHAUSTIVE_HELP.to_string(),
+        message: format!(
+            "{} {}",
+            crate::diagnostics::NON_EXHAUSTIVE_HELP,
+            crate::diagnostics::NON_EXHAUSTIVE_WILDCARD_HELP
+        ),
         edit: None,
     }
 }
@@ -799,20 +815,23 @@ pub(crate) fn report(
         let Some(anchor) = probes.literals.get(missing.index) else {
             continue;
         };
-        let Some(file) = files.iter().find(|f| f.source_path == anchor.source_path) else {
+        let Some(file) = files
+            .iter()
+            .find(|f| f.source_path == anchor.anchor.source_path)
+        else {
             continue;
         };
+        // A literal arm is written as the value itself, so the witness the
+        // checker names *is* the arm pattern — the same text the message
+        // quotes, which is why both come from `display_literal`.
+        let uncovered: Vec<String> = missing.missing.iter().map(display_literal).collect();
         out.push(Diagnostic {
             path: file.source_path.clone(),
-            position: Some(crate::line_col(&file.source, anchor.offset)),
-            end: Some(crate::line_col(&file.source, anchor.end)),
+            position: Some(crate::line_col(&file.source, anchor.anchor.offset)),
+            end: Some(crate::line_col(&file.source, anchor.anchor.end)),
             message: crate::diagnostics::non_exhaustive_message(
                 Some("literal union"),
-                &missing
-                    .missing
-                    .iter()
-                    .map(display_literal)
-                    .collect::<Vec<_>>(),
+                &uncovered,
                 false,
             ),
             code: Some(
@@ -820,7 +839,11 @@ pub(crate) fn report(
                     .as_str()
                     .to_string(),
             ),
-            suggestions: vec![non_exhaustive_help()],
+            suggestions: crate::diagnostics::non_exhaustive_suggestions(
+                &file.source,
+                site_of(anchor),
+                &uncovered,
+            ),
         });
     }
 
@@ -842,16 +865,32 @@ pub(crate) fn report(
     let mut payloads: HashMap<PathBuf, Vec<PayloadAlphabet>> = HashMap::new();
     // `(file, match keyword) -> end of `match (scrutinee)``.
     let mut match_ends: HashMap<(PathBuf, usize), usize> = HashMap::new();
+    // The same key -> where the match's body braces are, so a coverage
+    // hole's fix can be written as an edit on this path too.
+    let mut sites: HashMap<(PathBuf, usize), crate::diagnostics::MatchSite> = HashMap::new();
     for members in &answers.tag_members {
         if let Some(anchor) = probes.tags.get(members.index) {
-            let per_match = by_file.entry(anchor.source_path.clone()).or_default();
-            match per_match.iter_mut().find(|(at, _)| *at == anchor.offset) {
+            let per_match = by_file
+                .entry(anchor.anchor.source_path.clone())
+                .or_default();
+            match per_match
+                .iter_mut()
+                .find(|(at, _)| *at == anchor.anchor.offset)
+            {
                 Some((_, positions)) => positions.push(members.tags.clone()),
-                None => per_match.push((anchor.offset, vec![members.tags.clone()])),
+                None => per_match.push((anchor.anchor.offset, vec![members.tags.clone()])),
             }
             // The keyword offset keys the alphabets; the range it opens is
-            // what the diagnostic underlines.
-            match_ends.insert((anchor.source_path.clone(), anchor.offset), anchor.end);
+            // what the diagnostic underlines, and the braces are where its
+            // fix is written.
+            sites.insert(
+                (anchor.anchor.source_path.clone(), anchor.anchor.offset),
+                site_of(anchor),
+            );
+            match_ends.insert(
+                (anchor.anchor.source_path.clone(), anchor.anchor.offset),
+                anchor.anchor.end,
+            );
             continue;
         }
         let Some(anchor) = probes
@@ -914,6 +953,20 @@ pub(crate) fn report(
             if uncovered.is_empty() {
                 continue;
             }
+            // The arms that close the hole, from the same witnesses in
+            // their binding form — one authoring, both pipelines.
+            let arms: Vec<String> = coverage
+                .missing
+                .iter()
+                .filter(|m| m.certain)
+                .map(|m| {
+                    if m.arm.len() > 1 {
+                        format!("({})", m.arm.join(", "))
+                    } else {
+                        m.arm.first().cloned().unwrap_or_else(|| "_".to_string())
+                    }
+                })
+                .collect();
             // The typed pass knows the alphabet but not the declaration,
             // so the shared renderer gets no subject — one renderer, one
             // wording, on both pipelines (TASK-120).
@@ -930,7 +983,12 @@ pub(crate) fn report(
                         .as_str()
                         .to_string(),
                 ),
-                suggestions: vec![non_exhaustive_help()],
+                suggestions: match sites.get(&(file.source_path.clone(), offset)) {
+                    Some(site) => {
+                        crate::diagnostics::non_exhaustive_suggestions(&file.source, *site, &arms)
+                    }
+                    None => vec![non_exhaustive_help()],
+                },
             });
         }
     }

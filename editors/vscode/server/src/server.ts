@@ -1256,10 +1256,13 @@ function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
       },
     };
     actions.push({
-      title: `\`${edit.replacement}\`(으)로 바꾸기`,
+      // The compiler's own sentence names the fix. A title built from the
+      // replacement text was readable while every fix was one identifier;
+      // an inserted arm block is not a title (TASK-216).
+      title: suggestion.message,
       kind: CodeActionKind.QuickFix,
       diagnostics: [diag],
-      isPreferred: true,
+      isPreferred: actions.length === 0,
       edit: {
         changes: {
           [doc.uri]: [{ range, newText: edit.replacement }],
@@ -1270,100 +1273,16 @@ function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
   return actions;
 }
 
-// Which cases a match is still missing. The rule is identified by its
-// code, never by the message's shape; the tags are read off the list the
-// message renders. Replacing that last step with edits the compiler
-// authors is TASK-216.
-const MISSING_CASES_RE = /is not exhaustive: missing (.+)$/m;
-
 connection.onCodeAction(async (params): Promise<CodeAction[]> => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
   const actions: CodeAction[] = [];
-
   for (const diag of params.context.diagnostics) {
     if (diag.source !== "ttc") continue;
     actions.push(...suggestedFixes(doc, diag));
-    if (diag.code !== "match-not-exhaustive") continue;
-    const m = MISSING_CASES_RE.exec(diag.message);
-    if (!m) continue;
-    const missing = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
-    if (missing.length === 0) continue;
-
-    const decls = await declarationsOf(doc);
-    const offset = doc.offsetAt(diag.range.start);
-    const match = decls.matches.find(
-      (site) => offset >= site.keyword && offset <= site.keyword + 5,
-    );
-    if (!match) continue;
-    // Which enum this match is over: the site's own answer, not a name
-    // scraped out of the sentence.
-    const e = decls.enums.find((x) =>
-      x.cases.some((c) => missing.includes(c.tag)),
-    );
-
-    const armFor = (tag: string): string => {
-      const c = e?.cases.find((x) => x.tag === tag);
-      const bindings =
-        c && c.fields.length > 0
-          ? `(${c.fields.map((f) => f.name).join(", ")})`
-          : "";
-      return `${tag}${bindings} => undefined,`;
-    };
-
-    actions.push({
-      title: `빠진 암 추가: ${missing.join(", ")}`,
-      kind: CodeActionKind.QuickFix,
-      diagnostics: [diag],
-      edit: {
-        changes: {
-          [doc.uri]: [insertArms(doc, match, missing.map(armFor))],
-        },
-      },
-    });
-    actions.push({
-      title: "와일드카드 `_` 암 추가",
-      kind: CodeActionKind.QuickFix,
-      diagnostics: [diag],
-      edit: {
-        changes: {
-          [doc.uri]: [insertArms(doc, match, ["_ => undefined,"])],
-        },
-      },
-    });
   }
   return actions;
 });
-
-/** Insert arm lines just before the match body's closing brace. */
-function insertArms(
-  doc: TextDocument,
-  match: engine.EngineMatchSite,
-  arms: string[],
-): TextEdit {
-  const text = doc.getText();
-  const closePos = doc.positionAt(match.bodyClose);
-  const matchPos = doc.positionAt(match.keyword);
-  const matchLineStart = doc.offsetAt({ line: matchPos.line, character: 0 });
-  const baseIndent = /^[ \t]*/.exec(
-    text.slice(matchLineStart, match.keyword),
-  )![0];
-  const armIndent = `${baseIndent}  `;
-
-  const closeLineStart = doc.offsetAt({ line: closePos.line, character: 0 });
-  const beforeClose = text.slice(closeLineStart, match.bodyClose);
-  if (beforeClose.trim() === "") {
-    // `}` alone on its line: insert full arm lines above it.
-    const newText = arms.map((a) => `${armIndent}${a}\n`).join("");
-    return TextEdit.insert({ line: closePos.line, character: 0 }, newText);
-  }
-  // Single-line match: splice arms in before `}`.
-  const needsComma = /[^,{\s]\s*$/.test(
-    text.slice(match.bodyOpen + 1, match.bodyClose),
-  );
-  const prefix = needsComma ? ", " : " ";
-  return TextEdit.insert(closePos, `${prefix}${arms.join(" ")} `);
-}
 
 // -------------------------------------------------------- semantic tokens
 

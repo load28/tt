@@ -129,7 +129,15 @@ const area = (shape: Shape): number =>
 ```
 
 ```text
-ttc: shape.tt:7:3: match on enum Shape is not exhaustive: missing "Rect" (add the missing arms or a final `_` arm)
+error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rect"
+ --> shape.tt:7:3
+  |
+7 |   match (shape) {
+  |   ^^^^^^^^^^^^^
+  |
+  = help: add the missing arms
+  |     Rect(width, height) => undefined,
+  = help: or add a final `_` arm: `_ => undefined,`
 ```
 
 Write `Circle` twice and you get `match: duplicate arm "Circle"`. Same

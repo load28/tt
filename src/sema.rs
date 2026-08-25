@@ -59,7 +59,9 @@
 
 use crate::analysis::{CoveredEnum, NameKind, Origin, has_nested};
 use crate::ast::*;
-use crate::diagnostics::{DiagnosticCode, NON_EXHAUSTIVE_HELP, non_exhaustive_message};
+use crate::diagnostics::{
+    DiagnosticCode, MatchSite, non_exhaustive_message, non_exhaustive_suggestions,
+};
 use crate::error::TtError;
 use crate::verify;
 
@@ -72,6 +74,7 @@ use crate::verify;
 /// ([`crate::Options::defer_to_checker`]); every other tt-level rule is
 /// checked either way.
 pub(crate) fn check_all(
+    source: &str,
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
@@ -91,7 +94,12 @@ pub(crate) fn check_all(
     // typo's business.
     report_resolution(analyses, &mut checker.errors);
     if !defer_to_checker {
-        report_coverage(analyses, &checker.coverage_suppressed, &mut checker.errors);
+        report_coverage(
+            source,
+            analyses,
+            &checker.coverage_suppressed,
+            &mut checker.errors,
+        );
     }
     // Source order, whatever order the categories ran in — the reader fixes
     // a file top to bottom. Stable, so equal positions keep report order.
@@ -917,6 +925,7 @@ impl Checker {
 /// cause and its coverage hole the effect, so only the cause is reported
 /// for that match — while every *other* match keeps its own answer.
 fn report_coverage(
+    source: &str,
     analyses: &crate::analysis::PatternAnalyses,
     suppressed: &[usize],
     errors: &mut Vec<TtError>,
@@ -925,14 +934,11 @@ fn report_coverage(
         .matches
         .iter()
         .filter(|m| !m.has_unresolved && !suppressed.contains(&m.keyword_off))
-        .filter_map(|m| {
-            m.coverage
-                .as_ref()
-                .map(|c| ((m.keyword_off, m.head_end), c))
-        })
+        .filter_map(|m| m.coverage.as_ref().map(|c| (m, c)))
         .filter(|(_, c)| !c.missing.is_empty());
 
-    for ((offset, head_end), coverage) in uncovered {
+    for (analysis, coverage) in uncovered {
+        let (offset, head_end) = (analysis.keyword_off, analysis.head_end);
         let message = if coverage.positions.len() == 1 {
             // A single match's one position always resolved — that is what
             // makes it a coverage answer at all.
@@ -959,11 +965,33 @@ fn report_coverage(
                 .collect();
             non_exhaustive_message(Some(&format!("({names})")), &combinations, true)
         };
-        errors.push(
-            TtError::span(offset, head_end, message)
-                .code(DiagnosticCode::MatchNotExhaustive)
-                .help(NON_EXHAUSTIVE_HELP),
+        // The arms that close the hole, written out: one per witness, each
+        // position's binding form joined the way a tuple pattern is
+        // written. Everything in the text comes from the analysis, so the
+        // edit and the message answer from one model.
+        let arms: Vec<String> = coverage
+            .missing
+            .iter()
+            .map(|row| {
+                if row.arm.len() > 1 {
+                    format!("({})", row.arm.join(", "))
+                } else {
+                    row.arm.first().cloned().unwrap_or_else(|| "_".to_string())
+                }
+            })
+            .collect();
+        let mut error =
+            TtError::span(offset, head_end, message).code(DiagnosticCode::MatchNotExhaustive);
+        error.suggestions = non_exhaustive_suggestions(
+            source,
+            MatchSite {
+                keyword_off: offset,
+                body_open: analysis.body_open,
+                body_close: analysis.body_close,
+            },
+            &arms,
         );
+        errors.push(error);
     }
 }
 

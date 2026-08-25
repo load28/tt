@@ -195,8 +195,10 @@ TS가 아니므로). 원소 수 불일치·`(_, _)`가 아닌 최상위 `_` 혼�
 or-패턴은 그 위치의 전 태그를 커버합니다. 빠진 조합은 그대로 보고합니다:
 
 ```
-ttc: nav.tt:4:14: match on (Dir, Speed) is not exhaustive: missing (South, Fast)
-     (add the missing arms or a final `(_, _)` arm)
+error[match-not-exhaustive]: match on (Dir, Speed) is not exhaustive: missing (South, Fast)
+ --> nav.tt:4:14
+  = help: add the missing arms: `(South, Fast) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
 ```
 
 곱집합 크기는 태그 수의 곱이라 폭발하지 않습니다(커버 집합 연산은 비트셋).

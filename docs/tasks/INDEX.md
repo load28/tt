@@ -223,7 +223,7 @@
 | TASK-213 | 진단 표현 계층 — 렌더러, 코드 노출, 구조화된 제안 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-213](./TASK-213-diagnostic-presentation.md) |
 | TASK-214 | 패닉 안전망 — 컴파일러 버그를 버그로 보고 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-214](./TASK-214-panic-safety-net.md) |
 | TASK-215 | 스냅샷 픽스처 — 방출과 진단 전체 고정 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-215](./TASK-215-snapshot-fixtures.md) |
-| TASK-216 | exhaustiveness 수정을 컴파일러 저작 편집으로 | 대기 | — | — | [TASK-216](./TASK-216-compiler-authored-arm-edits.md) |
+| TASK-216 | exhaustiveness 수정을 컴파일러 저작 편집으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-216](./TASK-216-compiler-authored-arm-edits.md) |
 | TASK-217 | VS Code 확장 completion 테스트 불안정성 조사 | 대기 | — | — | [TASK-217](./TASK-217-completion-test-instability.md) |
 | TASK-218 | 남은 규칙의 수정 조언을 Suggestion으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-218](./TASK-218-suggestions-for-remaining-rules.md) |
 | TASK-219 | 방출 코드 가독성 — 블록 암 들여쓰기와 런타임 import 위치 | 대기 | — | — | [TASK-219](./TASK-219-generated-code-readability.md) |

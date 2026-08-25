@@ -404,7 +404,24 @@ fn write_suggestions(out: &mut String, suggestions: &[Suggestion], width: usize,
             width = width
         );
         if let Some(edit) = &suggestion.edit {
-            let _ = write!(out, ": `{}`", edit.replacement);
+            // The edit's own bytes carry whatever spacing the insertion
+            // needs at its exact offset; on the page that padding is
+            // noise, so the *picture* of the fix is trimmed. The bytes a
+            // machine applies are unchanged — they travel in the wire
+            // form, not in this drawing.
+            let text = edit.replacement.trim_matches('\n');
+            if text.contains('\n') {
+                // A fix that spans lines is quoted the way the snippet
+                // above quotes source, so it reads as code rather than as
+                // a sentence with newlines in it. Each line keeps the
+                // indentation the edit writes, so what the reader sees is
+                // what the file would get.
+                for line in text.lines() {
+                    let _ = write!(out, "\n{:width$} | {line}", "", width = width);
+                }
+            } else {
+                let _ = write!(out, ": `{}`", text.trim_matches(' '));
+            }
         }
     }
 }

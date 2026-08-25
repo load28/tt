@@ -969,6 +969,7 @@ fn tt_errors(
     semantics: &analysis::SemanticFile,
 ) -> Vec<TtError> {
     let mut errors = sema::check_all(
+        source,
         program,
         options.verify,
         options.defer_to_checker,

@@ -313,7 +313,7 @@
       {
         "kind": "code",
         "label": "output",
-        "html": "<span>error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing \"Rect\"<br> --> shape.tt:7:3<br>  |<br>7 |   match (shape) {<br>  |   ^^^^^^^^^^^^^<br>  |<br>  = help: add the missing arms or a final `_` arm</span>"
+        "html": "<span>error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing \"Rect\"<br> --> shape.tt:7:3<br>  |<br>7 |   match (shape) {<br>  |   ^^^^^^^^^^^^^<br>  |<br>  = help: add the missing arms<br>  |     Rect(width, height) => undefined,<br>  = help: or add a final `_` arm: `_ => undefined,`</span>"
       },
       {
         "kind": "paragraph",
@@ -864,7 +864,7 @@
       {
         "kind": "code",
         "label": "output",
-        "html": "<span>error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing \"Rect\"<br> --> shape.tt:7:3<br>  |<br>7 |   match (shape) {<br>  |   ^^^^^^^^^^^^^<br>  |<br>  = help: add the missing arms or a final `_` arm</span>"
+        "html": "<span>error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing \"Rect\"<br> --> shape.tt:7:3<br>  |<br>7 |   match (shape) {<br>  |   ^^^^^^^^^^^^^<br>  |<br>  = help: add the missing arms<br>  |     Rect(width, height) => undefined,<br>  = help: or add a final `_` arm: `_ => undefined,`</span>"
       },
       {
         "kind": "paragraph",

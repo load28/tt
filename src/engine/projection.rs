@@ -261,10 +261,14 @@ pub(crate) fn assemble(
                 position,
                 covered: probe.covered.clone(),
             });
-            probes.literals.push(SourceAnchor {
-                source_path: file.source_path.clone(),
-                offset: probe.offset,
-                end: scrutinee_end(&file.source, probe.scrutinee_end),
+            probes.literals.push(MatchAnchor {
+                anchor: SourceAnchor {
+                    source_path: file.source_path.clone(),
+                    offset: probe.offset,
+                    end: scrutinee_end(&file.source, probe.scrutinee_end),
+                },
+                body_open: probe.body_open,
+                body_close: probe.body_close,
             });
         }
 
@@ -295,10 +299,14 @@ pub(crate) fn assemble(
                     position,
                     covered: probe.covered.clone(),
                 });
-                probes.tags.push(SourceAnchor {
-                    source_path: file.source_path.clone(),
-                    offset: probe.offset,
-                    end: scrutinee_end(&file.source, probe.scrutinee_end),
+                probes.tags.push(MatchAnchor {
+                    anchor: SourceAnchor {
+                        source_path: file.source_path.clone(),
+                        offset: probe.offset,
+                        end: scrutinee_end(&file.source, probe.scrutinee_end),
+                    },
+                    body_open: probe.body_open,
+                    body_close: probe.body_close,
                 });
             }
         }
@@ -472,6 +480,24 @@ pub(crate) struct SourceAnchor {
     pub end: usize,
 }
 
+/// A match the checker was asked about: where its diagnostic is drawn, and
+/// the braces of the body an arm-insertion edit writes between.
+///
+/// The typed pipeline reports a coverage hole from the checker's answer,
+/// not from a parse, so the syntax the fix needs has to travel with the
+/// question ([`crate::TagMatch`], [`crate::LiteralMatch`]) — which is what
+/// lets both pipelines author the same edit (TASK-216).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MatchAnchor {
+    /// Where the diagnostic is reported: the `match` keyword through the
+    /// end of its head.
+    pub anchor: SourceAnchor,
+    /// Byte offset of the body's opening `{`.
+    pub body_open: usize,
+    /// Byte offset of the body's closing `}`.
+    pub body_close: usize,
+}
+
 /// One mutation, with the symbol questions that decide whether it is one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MutationAnchor {
@@ -521,8 +547,8 @@ pub(crate) struct PassAnchor {
 /// The `.tt`-side halves of a [`Query`], parallel to its own vectors.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Probes {
-    pub literals: Vec<SourceAnchor>,
-    pub tags: Vec<SourceAnchor>,
+    pub literals: Vec<MatchAnchor>,
+    pub tags: Vec<MatchAnchor>,
     /// One per nested pattern asked about, in the order the query lists
     /// them after [`Probes::tags`]: which file, and which
     /// `(constructor, field)` column the answer names the alphabet of.

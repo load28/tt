@@ -32,6 +32,12 @@ pub struct LiteralMatch {
     /// fall through, so — exactly like a guarded tag arm — it covers
     /// nothing.
     pub covered: Vec<Literal>,
+    /// Byte offset of the body's opening `{`.
+    pub body_open: usize,
+    /// Byte offset of the body's closing `}`. With [`LiteralMatch::
+    /// body_open`], where the fix for a hole in this match is written —
+    /// the typed pipeline authors that edit too (TASK-216).
+    pub body_close: usize,
 }
 
 /// One literal a [`LiteralMatch`] covers, normalized to the value
@@ -73,6 +79,11 @@ pub struct TagMatch {
     /// The case tags the match's unguarded arms cover. A guarded arm may
     /// fall through, so it covers nothing.
     pub covered: Vec<String>,
+    /// Byte offset of the body's opening `{`.
+    pub body_open: usize,
+    /// Byte offset of the body's closing `}` — same role as
+    /// [`LiteralMatch::body_close`].
+    pub body_close: usize,
 }
 
 /// One nested pattern, as a question about the *payload* it tests.
@@ -419,6 +430,8 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
             scrutinee,
             scrutinee_end,
             covered: literals,
+            body_open: expr.body_open,
+            body_close: expr.body_close,
         }),
         Kind::Tag => out.tags.push(TagMatch {
             offset: expr.keyword_off,
@@ -426,6 +439,8 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
             scrutinee,
             scrutinee_end,
             covered: tags,
+            body_open: expr.body_open,
+            body_close: expr.body_close,
         }),
         Kind::None => {}
     }
@@ -467,6 +482,8 @@ fn collect_tuple(expr: &TupleMatchExpr, out: &mut Probes) {
         scrutinee,
         scrutinee_end,
         covered: Vec::new(),
+        body_open: expr.body_open,
+        body_close: expr.body_close,
     });
 }
 
