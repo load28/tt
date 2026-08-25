@@ -381,7 +381,7 @@ fn types_reports_a_missing_literal_of_a_finite_union() {
     );
     // reported at the `match` keyword of the .tt source, not in the
     // generated TypeScript
-    assert!(err.contains("src/main.tt:3:10:"), "{err}");
+    assert!(err.contains("--> src/main.tt:3:10"), "{err}");
 }
 
 #[test]
@@ -464,7 +464,7 @@ fn types_maps_a_bad_case_literal_back_to_the_tt_source() {
     let err = types_stderr(
         "export const pick = (x: \"a\" | \"b\") => match (x) { \"a\" => 1, \"c\" => 2, \"b\" => 3 };\n",
     );
-    assert!(err.contains("src/main.tt:1:61:"), "{err}");
+    assert!(err.contains("--> src/main.tt:1:61"), "{err}");
     assert!(err.contains("is not comparable to type"), "{err}");
 }
 
@@ -484,7 +484,7 @@ fn types_reports_a_mutating_method_of_a_built_in() {
         "{err}"
     );
     // reported at the path's root in the .tt source
-    assert!(err.contains("src/main.tt:2:1:"), "{err}");
+    assert!(err.contains("--> src/main.tt:2:1"), "{err}");
 }
 
 #[test]
@@ -573,7 +573,7 @@ fn types_keeps_reporting_syntactic_mutation_without_the_checker() {
         err.contains("cannot mutate through val binding `user`"),
         "{err}"
     );
-    assert!(err.contains("src/main.tt:6:1:"), "{err}");
+    assert!(err.contains("--> src/main.tt:6:1"), "{err}");
 }
 
 /* ------------------------------------------------------------------ */
@@ -698,7 +698,7 @@ fn overlay_checks_the_buffer_rather_than_the_saved_file() {
     );
     // The position is the buffer's, and the file is named as the user knows
     // it — not as a temporary.
-    assert!(err.contains("src/main.tt:2:1:"), "{err}");
+    assert!(err.contains("--> src/main.tt:2:1"), "{err}");
 }
 
 /// `--tt-only` drops TypeScript's layer and keeps tt's. The editor uses this
@@ -1022,4 +1022,120 @@ fn a_banner_shifts_the_map_so_positions_still_line_up() {
     assert!(mappings.starts_with(';'), "{mappings}");
     assert!(!mappings.starts_with(";;"), "{mappings}");
     fs::remove_dir_all(&dir).ok();
+}
+
+/* ------------------------------------------------------------------ */
+/* ttc explain                                                        */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn explain_prints_the_rule_behind_a_code() {
+    let out = ttc(&["explain", "match-not-exhaustive"]);
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.starts_with("error[match-not-exhaustive]"), "{text}");
+    assert!(text.contains("does not cover every case"), "{text}");
+    // Longer than the message it explains — that is the point of it.
+    assert!(text.lines().count() > 4, "{text}");
+}
+
+#[test]
+fn explain_accepts_a_code_pasted_from_a_build_log() {
+    // What a reader copies is `error[val-mutation]`, brackets and all.
+    let out = ttc(&["explain", "error[val-mutation]"]);
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.starts_with("error[val-mutation]"), "{text}");
+}
+
+#[test]
+fn explain_with_no_code_lists_every_rule() {
+    let out = ttc(&["explain"]);
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    for code in ttc::DiagnosticCode::ALL {
+        assert!(
+            text.contains(code.as_str()),
+            "{} missing:\n{text}",
+            code.as_str()
+        );
+    }
+}
+
+#[test]
+fn explain_names_the_list_when_the_code_is_unknown() {
+    let out = ttc(&["explain", "no-such-rule"]);
+    assert!(!out.status.success(), "{out:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("unknown diagnostic code"), "{err}");
+    assert!(err.contains("ttc explain"), "{err}");
+}
+
+/* ------------------------------------------------------------------ */
+/* rendered diagnostics                                               */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn a_diagnostic_is_rendered_with_its_rule_position_snippet_and_fix() {
+    // The whole user-visible contract of a tt error, in one place: the
+    // rule's code names it, `-->` places it, the snippet quotes the line
+    // the reader has to change, the carets cover the construct as written,
+    // and `= help:` says what to write instead.
+    let dir = tmpdir();
+    let source = dir.join("shapes.tt");
+    fs::write(
+        &source,
+        "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n",
+    )
+    .unwrap();
+    let out = ttc(&["--check", source.to_str().unwrap()]);
+    assert!(!out.status.success(), "expected a failing exit code");
+    let err = String::from_utf8(out.stderr).unwrap();
+    let rendered: Vec<&str> = err.lines().map(|line| line.trim_end()).collect();
+
+    assert_eq!(
+        rendered[0],
+        "error[unknown-case]: enum Shape has no case `Circel`",
+    );
+    assert!(rendered[1].ends_with("shapes.tt:2:23"), "{err}");
+    assert!(rendered[1].trim_start().starts_with("-->"), "{err}");
+    assert_eq!(rendered[2], "  |");
+    assert_eq!(
+        rendered[3],
+        "2 | const a = match (s) { Circel(radius) => radius, Empty => 0 };",
+    );
+    assert_eq!(
+        rendered[4], "  |                       ^^^^^^",
+        "the carets cover the tag as written\n{err}",
+    );
+    assert_eq!(rendered[5], "  |");
+    assert_eq!(
+        rendered[6],
+        "  = help: a case with a similar name exists: `Circle`",
+    );
+}
+
+#[test]
+fn the_rendered_code_is_the_one_explain_answers_to() {
+    // A reader's path out of a diagnostic: read the code off the header,
+    // paste it into `ttc explain`. That only works if they are the same
+    // string, so this pins the round trip rather than each half.
+    let dir = tmpdir();
+    let source = dir.join("holes.tt");
+    fs::write(
+        &source,
+        "enum Shape { Circle(r: number), Empty }\nconst a = match (s) { Circle(r) => r };\n",
+    )
+    .unwrap();
+    let out = ttc(&["--check", source.to_str().unwrap()]);
+    let err = String::from_utf8(out.stderr).unwrap();
+    let code = err
+        .split_once("error[")
+        .and_then(|(_, rest)| rest.split_once(']'))
+        .map(|(code, _)| code.to_string())
+        .unwrap_or_else(|| panic!("no rendered code:\n{err}"));
+    assert_eq!(code, "match-not-exhaustive");
+
+    let explained = ttc(&["explain", &code]);
+    assert!(explained.status.success(), "`ttc explain {code}` failed");
 }

@@ -14,14 +14,17 @@
 //! ```text
 //! → { "id": 1, "method": "check", "params": { "text", "filename"?, "verify"? } }
 //! ← { "id": 1, "result": { "diagnostics":
-//!        [{ "line", "col", "endLine", "endCol", "message", "code" }] } }
+//!        [{ "line", "col", "endLine", "endCol", "message", "code",
+//!           "suggestions": [{ "message", "edit": { "line", "col",
+//!             "endLine", "endCol", "replacement" } | null }] }] } }
 //!
 //! → { "id": 2, "method": "emitMap", "params": { "text" } }
 //! ← { "id": 2, "result": { "code", "mappings": [{ "src", "out", "len" }] } }
 //!
 //! → { "id": 3, "method": "typedCheck", "params": { "path", "text" } }
 //! ← { "id": 3, "result": { "blocked", "diagnostics":
-//!        [{ "path", "line", "col", "endLine", "endCol", "message", "code" }] } }
+//!        [{ "path", "line", "col", "endLine", "endCol", "message", "code",
+//!           "suggestions" }] } }
 //!
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
 //! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
@@ -322,6 +325,35 @@ fn close_document(
     Ok(serde_json::json!({}))
 }
 
+/// A diagnostic's suggestions as the JSON the protocol speaks.
+///
+/// The edit's byte offsets become the same 1-based line/column the
+/// diagnostic itself is reported in, so one response never mixes two
+/// coordinate spaces. `edit` is null for advice that names no replacement,
+/// and for an edit whose source the server cannot resolve — a consumer
+/// shows the message either way and only offers a fix when there is one.
+fn suggestions_json(suggestions: &[ttc::Suggestion], source: Option<&str>) -> serde_json::Value {
+    use serde_json::json;
+    suggestions
+        .iter()
+        .map(|suggestion| {
+            let edit = suggestion.edit.as_ref().zip(source).map(|(edit, source)| {
+                let (line, col) = ttc::line_col(source, edit.start);
+                let (end_line, end_col) = ttc::line_col(source, edit.end);
+                json!({
+                    "line": line,
+                    "col": col,
+                    "endLine": end_line,
+                    "endCol": end_col,
+                    "replacement": edit.replacement,
+                })
+            });
+            json!({ "message": suggestion.message, "edit": edit })
+        })
+        .collect::<Vec<_>>()
+        .into()
+}
+
 /// A [`Range`] as the JSON the protocol speaks.
 fn range_json(range: Range) -> serde_json::Value {
     serde_json::json!({
@@ -367,6 +399,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
                 "endCol": e.end_col,
                 "message": e.message,
                 "code": d.code.as_str(),
+                "suggestions": suggestions_json(&d.suggestions, Some(text)),
             })
         })
         .collect();
@@ -642,6 +675,10 @@ fn typed_check(
                                 "endCol": end_col,
                                 "message": d.message,
                                 "code": d.code,
+                                "suggestions": suggestions_json(
+                                    &d.suggestions,
+                                    snapshot.source_of(&d.path),
+                                ),
                             })
                         })
                         .collect();

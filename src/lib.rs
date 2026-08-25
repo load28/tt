@@ -67,6 +67,7 @@ mod lexer;
 mod parser;
 mod probe;
 mod program_syntax;
+pub mod render;
 pub mod resolve;
 mod scanner;
 mod sema;
@@ -82,7 +83,7 @@ pub use analysis::{
     NameKind, Origin, PatternAnalyses, PatternBinding, PatternSite, PayloadField, SiteKind,
     UnresolvedName, pattern_analyses,
 };
-pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Severity};
+pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Edit, Severity, Suggestion};
 pub use error::CompileError;
 pub use probe::{
     Literal, LiteralMatch, PayloadProbe, TagMatch, literal_matches, literal_matches_with_kind,

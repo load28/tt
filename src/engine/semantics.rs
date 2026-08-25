@@ -20,9 +20,11 @@ use crate::typescript::mapper::DiagnosticOrigin;
 
 /// One reported problem, at a position in a file the user can open.
 ///
-/// The message carries its full wording — including the `ts(CODE):` prefix
-/// of a type diagnostic — so a consumer prints or displays it verbatim and
-/// two consumers can never drift apart on phrasing.
+/// The message carries its full wording, so a consumer prints or displays
+/// it verbatim and two consumers can never drift apart on phrasing. It says
+/// what is wrong and nothing else: the rule's identity is `code` and the
+/// fix is `suggestions`, so neither has to be read back out of the
+/// sentence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Diagnostic {
     /// The file the problem is in — an `.tt` source, or a hand-written
@@ -48,6 +50,25 @@ pub struct Diagnostic {
     /// The same rule carries the same code on every path — CLI, server,
     /// editor, typed or untyped.
     pub code: Option<String>,
+    /// How to resolve the problem, in the same form the untyped pipeline
+    /// reports it ([`crate::Diagnostic::suggestions`]).
+    ///
+    /// An [`crate::Edit`]'s offsets are byte offsets into the source of the
+    /// file named by `path`, so a consumer holding that text can apply one
+    /// without asking the compiler again. Carrying the field here is what
+    /// keeps the typed path from silently dropping a fix the untyped pass
+    /// already computed.
+    pub suggestions: Vec<crate::Suggestion>,
+}
+
+/// The typed pass's copy of the advice that closes a match — the same
+/// constant the untyped pass attaches, so the two pipelines cannot drift
+/// apart on the fix any more than they can on the wording.
+fn non_exhaustive_help() -> crate::Suggestion {
+    crate::Suggestion {
+        message: crate::diagnostics::NON_EXHAUSTIVE_HELP.to_string(),
+        edit: None,
+    }
 }
 
 /// What one checked snapshot came back with.
@@ -202,10 +223,17 @@ pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static 
     }
 }
 
-fn ts_message(code: u32, message: &str, declarations: &[DeclaredEnum]) -> String {
+/// A checker message in tt's vocabulary.
+///
+/// The TypeScript code is *not* spelled into the sentence: it is already
+/// [`Diagnostic::code`], and a consumer that wants to show it reads it
+/// there. Repeating it here would make the rendered form say it twice
+/// (`error[ts2322]: ts(2322): …`), and the only way back out would be to
+/// recognise the prefix by its shape (TASK-213 decision 6).
+fn ts_message(message: &str, declarations: &[DeclaredEnum]) -> String {
     match name_types(message, declarations) {
-        Some(named) => format!("ts({code}): {message} (in tt's names: {named})"),
-        None => format!("ts({code}): {message}"),
+        Some(named) => format!("{message} (in tt's names: {named})"),
+        None => message.to_string(),
     }
 }
 
@@ -219,7 +247,7 @@ fn named_type(text: &str, declarations: &[DeclaredEnum]) -> String {
 /// backend could not prove an expected/found relation.
 fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredEnum]) -> String {
     let Some(mismatch) = &diagnostic.mismatch else {
-        return ts_message(diagnostic.code, &diagnostic.message, declarations);
+        return ts_message(&diagnostic.message, declarations);
     };
     let expected = named_type(&mismatch.expected, declarations);
     let found = named_type(&mismatch.found, declarations);
@@ -572,6 +600,7 @@ pub(crate) fn report(
                 end: diagnostic.end.map(|at| crate::line_col(&file.source, at)),
                 message: diagnostic.message.clone(),
                 code: Some(diagnostic.code.as_str().to_string()),
+                suggestions: diagnostic.suggestions.clone(),
             });
         }
     }
@@ -589,6 +618,7 @@ pub(crate) fn report(
                 end: d.end.map(|at| crate::line_col(&file.source, at)),
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
+                suggestions: d.suggestions.clone(),
             });
         }
     }
@@ -623,6 +653,7 @@ pub(crate) fn report(
                 end: None,
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
+                suggestions: Vec::new(),
             });
             continue;
         };
@@ -640,6 +671,7 @@ pub(crate) fn report(
                 end: None,
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
+                suggestions: Vec::new(),
             });
             continue;
         };
@@ -683,6 +715,7 @@ pub(crate) fn report(
                     end: Some(crate::line_col(&file.source, anchor.src_end)),
                     message: diagnostic_message(diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
+                    suggestions: Vec::new(),
                 });
                 continue;
             }
@@ -709,6 +742,7 @@ pub(crate) fn report(
                     end: Some(crate::line_col(&file.source, anchor.src_end)),
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
+                    suggestions: Vec::new(),
                 };
                 // One construct's glue can draw several TypeScript errors
                 // that all mean the same tt thing (`$tt_t.kind` and
@@ -731,6 +765,7 @@ pub(crate) fn report(
                     end: (end > start).then(|| crate::line_col(&file.source, end)),
                     message: diagnostic_message(diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
+                    suggestions: Vec::new(),
                 });
             }
             DiagnosticOrigin::Anchor(anchor) => out.push(Diagnostic {
@@ -742,6 +777,7 @@ pub(crate) fn report(
                     diagnostic_message(diagnostic, declared)
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
+                suggestions: Vec::new(),
             }),
             DiagnosticOrigin::Nearest { start } => out.push(Diagnostic {
                 path: file.source_path.clone(),
@@ -752,6 +788,7 @@ pub(crate) fn report(
                     diagnostic_message(diagnostic, declared)
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
+                suggestions: Vec::new(),
             }),
         }
     }
@@ -783,6 +820,7 @@ pub(crate) fn report(
                     .as_str()
                     .to_string(),
             ),
+            suggestions: vec![non_exhaustive_help()],
         });
     }
 
@@ -892,6 +930,7 @@ pub(crate) fn report(
                         .as_str()
                         .to_string(),
                 ),
+                suggestions: vec![non_exhaustive_help()],
             });
         }
     }
@@ -961,6 +1000,7 @@ pub(crate) fn report(
             end: Some(crate::line_col(&file.source, mutation.anchor.end)),
             message,
             code: Some(crate::DiagnosticCode::ValMutation.as_str().to_string()),
+            suggestions: Vec::new(),
         });
     }
 
@@ -1033,6 +1073,7 @@ pub(crate) fn report(
                 pass.name, described, pass.callee,
             ),
             code: Some(crate::DiagnosticCode::ValPass.as_str().to_string()),
+            suggestions: Vec::new(),
         });
     }
 
@@ -1269,13 +1310,12 @@ mod tests {
     fn an_ordinary_ts_message_also_uses_tt_names() {
         let declarations = table("enum E { A(x: number), B }\n");
         let said = ts_message(
-            2322,
             "Type '{ kind: \"A\"; x: number; }' is not assignable.",
             &declarations,
         );
         assert_eq!(
             said,
-            "ts(2322): Type '{ kind: \"A\"; x: number; }' is not assignable. \
+            "Type '{ kind: \"A\"; x: number; }' is not assignable. \
              (in tt's names: Type 'E.A' is not assignable.)"
         );
     }
@@ -1288,6 +1328,7 @@ mod tests {
             end: Some((line, 2)),
             message: "same".to_string(),
             code: Some(code.to_string()),
+            suggestions: Vec::new(),
         };
         let finished = finish_diagnostics(vec![at(2, "ts9999"), at(1, "ts1000"), at(2, "ts1001")]);
         assert_eq!(finished.len(), 2);

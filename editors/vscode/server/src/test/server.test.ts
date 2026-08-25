@@ -708,3 +708,92 @@ test(
     assert.equal(covered(source, failed.range), "try a()");
   },
 );
+
+test(
+  "a misspelled case offers the compiler's own replacement as a quick fix",
+  { skip, timeout },
+  async () => {
+    // The fix is the compiler's: the span and the text both arrive on the
+    // diagnostic, so the editor applies an answer rather than guessing one
+    // from the message (TASK-213).
+    const source = [
+      "enum Shape { Circle(radius: number), Empty }",
+      "declare const s: Shape;",
+      "const a = match (s) { Circel(radius) => radius, Empty => 0 };",
+      "",
+    ].join("\n");
+    const { client, uri, stop } = await open(source);
+    try {
+      const params = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (p: any) =>
+          p.uri === uri &&
+          p.diagnostics.some((d: any) => d.code === "unknown-case"),
+      );
+      const diagnostic = params.diagnostics.find(
+        (d: any) => d.code === "unknown-case",
+      );
+      // The message states the problem only — the fix travels beside it.
+      assert.equal(diagnostic.message, "enum Shape has no case `Circel`");
+      assert.equal(covered(source, diagnostic.range), "Circel");
+
+      const response = await client.request("textDocument/codeAction", {
+        textDocument: { uri },
+        range: diagnostic.range,
+        context: { diagnostics: [diagnostic] },
+      });
+      const actions = (response.result ?? []) as any[];
+      const fix = actions.find((a) => a.title.includes("Circle"));
+      assert.ok(fix, `no replacement quick fix in: ${JSON.stringify(actions)}`);
+      const edits = fix.edit.changes[uri];
+      assert.equal(edits.length, 1);
+      assert.equal(edits[0].newText, "Circle");
+      assert.equal(covered(source, edits[0].range), "Circel");
+    } finally {
+      stop();
+    }
+  },
+);
+
+test(
+  "a match with holes still offers arm insertion, keyed by the rule's code",
+  { skip, timeout },
+  async () => {
+    const source = [
+      "enum Shape { Circle(radius: number), Rect(w: number, h: number) }",
+      "declare const s: Shape;",
+      "const a = match (s) {",
+      "  Circle(radius) => radius,",
+      "};",
+      "",
+    ].join("\n");
+    const { client, uri, stop } = await open(source);
+    try {
+      const params = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (p: any) =>
+          p.uri === uri &&
+          p.diagnostics.some((d: any) => d.code === "match-not-exhaustive"),
+      );
+      const diagnostic = params.diagnostics.find(
+        (d: any) => d.code === "match-not-exhaustive",
+      );
+      const response = await client.request("textDocument/codeAction", {
+        textDocument: { uri },
+        range: diagnostic.range,
+        context: { diagnostics: [diagnostic] },
+      });
+      const actions = (response.result ?? []) as any[];
+      const armFix = actions.find((a) => a.title.includes("Rect"));
+      assert.ok(armFix, `no arm quick fix in: ${JSON.stringify(actions)}`);
+      const inserted = armFix.edit.changes[uri][0].newText;
+      assert.match(inserted, /Rect\(w, h\) => undefined,/);
+      assert.ok(
+        actions.some((a) => a.title.includes("_")),
+        "the wildcard fix is still offered",
+      );
+    } finally {
+      stop();
+    }
+  },
+);

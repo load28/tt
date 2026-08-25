@@ -148,6 +148,27 @@ fn run(dir: &Path, toolchain: &Toolchain, args: &[&str]) -> std::process::Output
 }
 
 /// Runs `ttc --check-types src` in `dir`, returning its diagnostics.
+/// The one rendered diagnostic containing `needle`.
+///
+/// A diagnostic is a block now, not a line: the rule and message open it,
+/// `-->` places it, and the snippet and `= help:` lines follow. Asserting a
+/// message and a location separately would let two different diagnostics
+/// satisfy one test, so the block keeps them paired.
+fn block<'a>(out: &'a str, needle: &str) -> &'a str {
+    let mut starts: Vec<usize> = out
+        .match_indices('\n')
+        .map(|(at, _)| at + 1)
+        .filter(|at| out[*at..].starts_with("error") || out[*at..].starts_with("warning"))
+        .collect();
+    starts.insert(0, 0);
+    starts
+        .iter()
+        .enumerate()
+        .map(|(index, start)| &out[*start..starts.get(index + 1).copied().unwrap_or(out.len())])
+        .find(|block| block.contains(needle))
+        .unwrap_or_else(|| panic!("no diagnostic mentioning {needle:?}:\n{out}"))
+}
+
 fn check(dir: &Path, toolchain: &Toolchain) -> String {
     let out = run(dir, toolchain, &["--check-types", "src"]);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -298,8 +319,10 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
     let out = check(&dir, &root);
     // The import resolved — the only error is the deliberate one, reported
     // in the hand-written file at TypeScript's own coordinates.
+    // Positionless: the checker's answer is about the hand-written file as
+    // a whole, so the block names the file and quotes nothing.
     assert!(
-        out.contains("src/use.ts: type mismatch: expected `number`"),
+        block(&out, "type mismatch: expected `number`").contains("--> src/use.ts"),
         "the .ts file's own error, in one project with the .tt: {out}"
     );
     assert!(
@@ -518,7 +541,7 @@ fn a_diagnostic_on_generated_code_is_restated_in_tts_words() {
     )]);
     let out = check(&dir, &root);
     assert!(
-        out.contains("src/ts_enum.tt:3:10:"),
+        out.contains("--> src/ts_enum.tt:3:10"),
         "reported at the `match` keyword in the .tt file: {out}"
     );
     assert!(
@@ -1131,14 +1154,18 @@ fn batched_answers_land_on_their_own_questions() {
         ),
     ]);
     let out = check(&dir, &root);
-    for (file, line) in [
-        ("src/a.tt:2:", "missing \"b\""),
-        ("src/b.tt:2:", "missing \"d\""),
-        ("src/a.tt:5:3", "cannot mutate through val binding `ua`"),
-        ("src/b.tt:5:3", "cannot mutate through val binding `ub`"),
+    for (at, said) in [
+        ("--> src/a.tt:2:", "missing \"b\""),
+        ("--> src/b.tt:2:", "missing \"d\""),
+        ("--> src/a.tt:5:3", "cannot mutate through val binding `ua`"),
+        ("--> src/b.tt:5:3", "cannot mutate through val binding `ub`"),
     ] {
-        let landed = out.lines().any(|l| l.contains(file) && l.contains(line));
-        assert!(landed, "expected {line} at {file}: {out}");
+        // The message and the position have to be one diagnostic, not two
+        // that happen to both be present.
+        assert!(
+            block(&out, said).contains(at),
+            "expected {said} at {at}: {out}"
+        );
     }
 }
 
@@ -1152,9 +1179,9 @@ fn a_type_error_is_reported_at_its_position_in_the_tt_source() {
         "export function go(): void {\n  const 한글: string = 1;\n}\n",
     )]);
     let out = check(&dir, &root);
+    let reported = block(&out, "type mismatch:");
     assert!(
-        out.starts_with("src/bad.tt:2:22: type mismatch:")
-            || out.contains("bad.tt:2:22: type mismatch:"),
+        reported.contains("--> src/bad.tt:2:22"),
         "the diagnostic belongs at the incompatible expression in the .tt file: {out}"
     );
 }

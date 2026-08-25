@@ -40,6 +40,7 @@ fn usage() {
 
 Usage: ttc [options] <file | dir> ...
        ttc help [topic]      language & workflow reference (topics: ttc help)
+       ttc explain [code]    what a diagnostic's rule is (codes: ttc explain)
 
 Builds a complete TypeScript tree: .tt/.ttx files are compiled, hand-written
 .ts/.tsx files pass through byte-for-byte (with relative .tt/.ttx specifiers
@@ -194,6 +195,44 @@ fn run_help(args: &[String]) -> ExitCode {
         }
         None => {
             eprintln!("ttc: unknown help topic \"{topic}\" (run `ttc help` for the list)");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `ttc explain [code]` — one rule at length, or the list of rules.
+fn run_explain(args: &[String]) -> ExitCode {
+    let code = match args {
+        [] => {
+            println!("ttc explain <code> — what a diagnostic's rule is and why\n");
+            println!("Codes:");
+            for code in ttc::DiagnosticCode::ALL {
+                println!("  {}", code.as_str());
+            }
+            return ExitCode::SUCCESS;
+        }
+        [code] => code.as_str(),
+        _ => {
+            eprintln!("ttc: explain takes one code (run `ttc explain` for the list)");
+            return ExitCode::FAILURE;
+        }
+    };
+    // A reader who copied `error[match-not-exhaustive]` out of a build log
+    // has the brackets too; they are not part of the code, so drop them
+    // rather than reject the paste.
+    let code = code
+        .trim()
+        .trim_start_matches("error[")
+        .trim_start_matches("warning[")
+        .trim_end_matches(']');
+    match ttc::DiagnosticCode::parse(code) {
+        Some(code) => {
+            println!("error[{}]\n", code.as_str());
+            println!("{}", code.explanation());
+            ExitCode::SUCCESS
+        }
+        None => {
+            eprintln!("ttc: unknown diagnostic code \"{code}\" (run `ttc explain` for the list)");
             ExitCode::FAILURE
         }
     }
@@ -751,12 +790,11 @@ fn typed_pass(
     let snapshot = match project.update(files) {
         Ok(snapshot) => snapshot,
         Err(blocked) => {
+            // No snapshot exists yet, so there is no text to quote: the
+            // header and the location are the whole report.
             eprintln!(
-                "ttc: {}:{}:{}: {}",
-                shown(&blocked.path),
-                blocked.error.line,
-                blocked.error.col,
-                blocked.error.message
+                "{}",
+                ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path))
             );
             return Ok(TypedReport {
                 reported: 1,
@@ -784,17 +822,18 @@ fn typed_pass(
         .map_err(|e| e.to_string())?;
     }
 
+    // The snapshot, not the file on disk: an `--overlay` was checked
+    // against text that was never saved, and quoting the disk would draw a
+    // caret under a line the compiler did not see.
     for diagnostic in &checked.diagnostics {
-        match diagnostic.position {
-            Some((line, col)) => eprintln!(
-                "ttc: {}:{}:{}: {}",
-                shown(&diagnostic.path),
-                line,
-                col,
-                diagnostic.message
-            ),
-            None => eprintln!("ttc: {}: {}", shown(&diagnostic.path), diagnostic.message),
-        }
+        eprintln!(
+            "{}",
+            ttc::render::engine_diagnostic(
+                diagnostic,
+                snapshot.source_of(&diagnostic.path),
+                &shown(&diagnostic.path),
+            )
+        );
     }
 
     // A backend that could not run is the pass failing to *run*, not the
@@ -947,6 +986,12 @@ fn main() -> ExitCode {
     // happens to be named "help" can still be passed as `./help`.
     if argv.first().is_some_and(|a| a == "help") {
         return run_help(&argv[1..]);
+    }
+
+    // `ttc explain [code]` — the long form of a diagnostic's rule, the way
+    // `error[match-not-exhaustive]` names it.
+    if argv.first().is_some_and(|a| a == "explain") {
+        return run_explain(&argv[1..]);
     }
 
     let mut inputs: Vec<String> = Vec::new();
@@ -1564,9 +1609,12 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 .collect();
             if !errors.is_empty() {
                 for diagnostic in errors {
+                    // Trailing newline: `eprintln!` then separates the
+                    // blocks with a blank line, so two diagnostics do not
+                    // read as one.
                     out.messages.push(format!(
-                        "ttc: {}",
-                        diagnostic.to_compile_error(&loaded.source, Some(&filename))
+                        "{}\n",
+                        ttc::render::diagnostic(diagnostic, &loaded.source, &filename)
                     ));
                 }
                 out.failed = true;
