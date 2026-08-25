@@ -35,6 +35,25 @@ export interface TtcDiagnostic {
   message: string;
   /** Stable tt rule identity; older/one-shot compilers may omit it. */
   code?: string;
+  /** How to fix it, as the compiler reports it. An entry with an `edit` is
+   * a fix the editor can apply; one without names advice only. Older
+   * compilers omit the field. */
+  suggestions?: TtcSuggestion[];
+}
+
+/** One way to resolve a diagnostic (`ttc`'s `Suggestion`). */
+export interface TtcSuggestion {
+  message: string;
+  /** The replacement, when the compiler can name one. 1-based line/column,
+   * `endLine`/`endCol` past the last replaced character — the same
+   * coordinates the diagnostic itself is reported in. */
+  edit?: {
+    line: number;
+    col: number;
+    endLine: number;
+    endCol: number;
+    replacement: string;
+  } | null;
 }
 
 export type TtcResult =
@@ -149,6 +168,7 @@ export async function runCheck(
         endCol: d.endCol,
         message: d.message,
         code: d.code,
+        suggestions: d.suggestions,
       })),
     };
   }
@@ -340,6 +360,7 @@ export async function runTypedCheck(
         endCol?: number;
         message: string;
         code?: string;
+        suggestions?: TtcSuggestion[];
       }[];
     };
     const all = result.diagnostics ?? [];
@@ -368,6 +389,7 @@ export async function runTypedCheck(
         endCol: d.endCol,
         message: d.message,
         code: d.code,
+        suggestions: d.suggestions,
       })),
     };
   }

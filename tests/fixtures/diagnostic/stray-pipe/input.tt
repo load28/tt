@@ -1,0 +1,4 @@
+declare function f(n: number): number;
+declare const ready: boolean;
+
+export const bad = ready ? 1 : 2 |> f;

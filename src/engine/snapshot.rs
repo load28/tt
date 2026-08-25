@@ -70,4 +70,28 @@ impl Snapshot {
     pub(crate) fn blocked(&self) -> &[Arc<BlockedFile>] {
         &self.blocked
     }
+
+    /// The text a diagnostic in `path` was reported against.
+    ///
+    /// This is the buffer the check actually ran on — an `--overlay`'s
+    /// unsaved text included — not whatever is on disk now, so a consumer
+    /// that quotes the source cannot draw a caret against a line the
+    /// compiler never saw. Covers files that could not be lowered as well
+    /// as projected ones: a file is at its most worth quoting exactly when
+    /// it is too broken to project.
+    ///
+    /// `None` when this snapshot does not hold the file — a diagnostic
+    /// TypeScript reported in a hand-written `.ts` outside the tt sources.
+    pub fn source_of(&self, path: &std::path::Path) -> Option<&str> {
+        self.files
+            .iter()
+            .find(|file| file.source_path == path)
+            .map(|file| file.source.as_str())
+            .or_else(|| {
+                self.blocked
+                    .iter()
+                    .find(|file| file.source_path == path)
+                    .map(|file| file.source.as_str())
+            })
+    }
 }

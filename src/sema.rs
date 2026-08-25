@@ -59,7 +59,7 @@
 
 use crate::analysis::{CoveredEnum, NameKind, Origin, has_nested};
 use crate::ast::*;
-use crate::diagnostics::{DiagnosticCode, non_exhaustive_message};
+use crate::diagnostics::{DiagnosticCode, NON_EXHAUSTIVE_HELP, non_exhaustive_message};
 use crate::error::TtError;
 use crate::verify;
 
@@ -114,23 +114,37 @@ fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut V
             name: unresolved.enum_name.clone(),
             origin: unresolved.origin.clone(),
         });
-        let (message, code) = match (&unresolved.kind, &unresolved.tag) {
+        // The message states the problem; the replacement is carried as a
+        // suggestion rather than spelled into the sentence. The analysis
+        // only produces an entry when it can name a replacement, so every
+        // one of these has exactly one — and it is the same datum the CLI
+        // renders as `help:` and an editor offers as a code action
+        // (TASK-213 decision 2).
+        let (message, hint, code) = match (&unresolved.kind, &unresolved.tag) {
             (NameKind::Field, Some(tag)) => (
                 format!(
-                    "{described}: case `{tag}` has no field `{}` — did you mean `{}`?",
-                    unresolved.name, unresolved.suggestion
+                    "{described}: case `{tag}` has no field `{}`",
+                    unresolved.name
                 ),
+                "a field with a similar name exists",
                 DiagnosticCode::UnknownField,
             ),
             _ => (
-                format!(
-                    "{described} has no case `{}` — did you mean `{}`?",
-                    unresolved.name, unresolved.suggestion
-                ),
+                format!("{described} has no case `{}`", unresolved.name),
+                "a case with a similar name exists",
                 DiagnosticCode::UnknownCase,
             ),
         };
-        errors.push(TtError::span(unresolved.start, unresolved.end, message).code(code));
+        errors.push(
+            TtError::span(unresolved.start, unresolved.end, message)
+                .code(code)
+                .suggest(
+                    hint,
+                    unresolved.start,
+                    unresolved.end,
+                    unresolved.suggestion.clone(),
+                ),
+        );
     }
 }
 
@@ -918,7 +932,9 @@ fn report_coverage(
             non_exhaustive_message(Some(&format!("({names})")), &combinations, true)
         };
         errors.push(
-            TtError::span(offset, head_end, message).code(DiagnosticCode::MatchNotExhaustive),
+            TtError::span(offset, head_end, message)
+                .code(DiagnosticCode::MatchNotExhaustive)
+                .help(NON_EXHAUSTIVE_HELP),
         );
     }
 }

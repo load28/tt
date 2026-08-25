@@ -1,0 +1,20 @@
+[
+  {
+    "code": "match-duplicate-arm",
+    "col": 45,
+    "endCol": 49,
+    "endLine": 3,
+    "line": 3,
+    "message": "match: duplicate arm 200",
+    "suggestions": []
+  },
+  {
+    "code": "match-wildcard-not-last",
+    "col": 33,
+    "endCol": 34,
+    "endLine": 4,
+    "line": 4,
+    "message": "match: the wildcard arm `_` must be the last arm",
+    "suggestions": []
+  }
+]

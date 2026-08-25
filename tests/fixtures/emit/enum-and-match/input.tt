@@ -1,0 +1,13 @@
+export enum Shape {
+  Circle(radius: number),
+  Rect(width: number, height: number),
+  Point,
+}
+
+declare const shape: Shape;
+
+export const area = match (shape) {
+  Circle(radius) => Math.PI * radius ** 2,
+  Rect(width: w, height) => w * height,
+  Point => 0,
+};

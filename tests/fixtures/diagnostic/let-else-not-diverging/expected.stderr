@@ -1,0 +1,5 @@
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge — end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+ --> input.tt:5:38
+  |
+5 |   const Some(value: name) = find(id) else {
+  |                                      ^^^^

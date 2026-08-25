@@ -1,0 +1,11 @@
+error[match-duplicate-arm]: match: duplicate arm 200
+ --> input.tt:3:45
+  |
+3 | export const a = match (code) { 200 => "a", 0xc8 => "b", _ => "c" };
+  |                                             ^^^^
+
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> input.tt:4:33
+  |
+4 | export const b = match (code) { _ => "a", 404 => "b" };
+  |                                 ^

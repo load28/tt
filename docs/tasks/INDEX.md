@@ -220,7 +220,21 @@
 | TASK-210 | 잔여 아키텍처·codegen 개선 묶음 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-210](./TASK-210-deferred-architecture-and-codegen-cleanup.md) |
 | TASK-211 | AI 에이전트의 로컬 개발 환경 탐색 표준화 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-211](./TASK-211-agent-local-setup-discovery.md) |
 | TASK-212 | 파이프 헬퍼의 전역 스크립트 충돌 제거 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-212](./TASK-212-pipeline-helper-global-collision.md) |
+| TASK-213 | 진단 표현 계층 — 렌더러, 코드 노출, 구조화된 제안 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-213](./TASK-213-diagnostic-presentation.md) |
+| TASK-214 | 패닉 안전망 — 컴파일러 버그를 버그로 보고 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-214](./TASK-214-panic-safety-net.md) |
+| TASK-215 | 스냅샷 픽스처 — 방출과 진단 전체 고정 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-215](./TASK-215-snapshot-fixtures.md) |
+| TASK-216 | exhaustiveness 수정을 컴파일러 저작 편집으로 | 대기 | — | — | [TASK-216](./TASK-216-compiler-authored-arm-edits.md) |
+| TASK-217 | VS Code 확장 completion 테스트 불안정성 조사 | 대기 | — | — | [TASK-217](./TASK-217-completion-test-instability.md) |
+| TASK-218 | 남은 규칙의 수정 조언을 Suggestion으로 | 대기 | — | — | [TASK-218](./TASK-218-suggestions-for-remaining-rules.md) |
+| TASK-219 | 방출 코드 가독성 — 블록 암 들여쓰기와 런타임 import 위치 | 대기 | — | — | [TASK-219](./TASK-219-generated-code-readability.md) |
+| TASK-220 | 진단 렌더러의 ANSI 색상 | 대기 | — | — | [TASK-220](./TASK-220-diagnostic-colour.md) |
+| TASK-221 | unwrap/expect 감사 | 대기 | — | — | [TASK-221](./TASK-221-panic-surface-audit.md) |
+| TASK-222 | 부하 시 integration 스위트의 간헐적 실패 | 대기 | — | — | [TASK-222](./TASK-222-integration-suite-flakiness.md) |
+| TASK-223 | 실세계 코퍼스 차등 테스트와 퍼징 | 대기 | — | — | [TASK-223](./TASK-223-corpus-and-fuzzing.md) |
+| TASK-224 | 커버리지 측정과 게이트 | 대기 | — | — | [TASK-224](./TASK-224-coverage-gate.md) |
+| TASK-225 | 성능 벤치마크와 회귀 게이트 | 대기 | — | — | [TASK-225](./TASK-225-performance-benchmarks.md) |
+| TASK-226 | 로컬과 CI의 Rust 툴체인 격차 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-226](./TASK-226-local-ci-toolchain-parity.md) |
 
 ## 다음 태스크 번호
 
-**TASK-213**
+**TASK-227**

@@ -1,0 +1,15 @@
+enum State { Ready(value: string), Empty }
+declare const state: State;
+declare const Panel: (props: { value: string }) => unknown;
+
+export const view = <main>
+  {match (state) {
+    Ready(value) => <strong>{value}</strong>,
+    Empty => <span>empty</span>,
+  }}
+</main>;
+
+export const panel = <Panel value={match (state) {
+  Ready(value) => value,
+  Empty => "",
+}} />;

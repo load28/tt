@@ -1,0 +1,13 @@
+enum Shape { Circle(radius: number), Rect(w: number, h: number) }
+declare const s: Shape;
+
+export const a = match (s) {
+  Circle(radius) => radius,
+};
+
+export function go(): void {
+  val const state = { count: 0 };
+  state.count = 1;
+}
+
+export const b = match (s) { Circel(radius) => radius, Rect(w, h) => w * h };

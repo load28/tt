@@ -1,0 +1,7 @@
+error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rect", "Point"
+ --> input.tt:8:21
+  |
+8 | export const area = match (s) {
+  |                     ^^^^^^^^^
+  |
+  = help: add the missing arms or a final `_` arm

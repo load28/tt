@@ -99,8 +99,9 @@ For the reasoning behind the language, read [Why I built tt](./docs/why-tt.md).
 ## Develop tt
 
 The compiler is a Rust crate with a small public API and an `ttc` CLI. Rust
-1.88 or newer is required. The complete local environment also needs Bun,
-Node.js, Go, and a typescript-go checkout.
+1.98 or newer is required — the version `rust-toolchain.toml` pins, and the
+one every build here is checked with. The complete local environment also
+needs Bun, Node.js, Go, and a typescript-go checkout.
 
 ```sh
 git clone https://github.com/load28/tt.git

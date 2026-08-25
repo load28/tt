@@ -1,0 +1,7 @@
+declare const code: 200 | 201 | 404;
+
+export const status = match (code) {
+  200 | 201 => "success",
+  404 => "not found",
+  _ => "other",
+};

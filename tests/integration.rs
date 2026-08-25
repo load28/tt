@@ -1726,10 +1726,18 @@ fn cli_checks_exhaustiveness_across_tt_imports() {
     .unwrap();
     let (ok, err) = run_ttc(&dir, &["--check", "parser.tt"]);
     assert!(!ok, "expected failure:\n{err}");
+    // The rendered form: the rule and its message on the header line, the
+    // file and position on the location line, the construct underlined.
     assert!(
-        err.contains("parser.tt:3:3: match on enum Token (imported from \"./token.tt\") is not exhaustive: missing \"Eof\""),
+        err.contains(
+            "error[match-not-exhaustive]: match on enum Token (imported from \"./token.tt\") \
+             is not exhaustive: missing \"Eof\""
+        ),
         "{err}"
     );
+    assert!(err.contains("--> parser.tt:3:3"), "{err}");
+    assert!(err.contains("3 |   match (t) {"), "{err}");
+    assert!(err.contains("  |   ^^^^^^^^^"), "{err}");
 
     fs::write(
         dir.join("parser.tt"),
@@ -2048,15 +2056,17 @@ fn cli_types_reports_tt_type_errors_at_the_source_position() {
     let (ok, err) = run_ttc(&dir, &["--types", "src"]);
     assert!(!ok, "expected a failing exit code:\n{err}");
 
-    let line = err
-        .lines()
-        .find(|line| line.contains("does not exist on type"))
-        .unwrap_or_else(|| panic!("no type error reported:\n{err}"));
     // `length` sits at column 55 of line 5 of the source. The emitted code
-    // puts it elsewhere entirely, and there is no `bad.ts` to open.
+    // puts it elsewhere entirely, and there is no `bad.ts` to open. The
+    // message and the position have to belong to the *same* diagnostic, so
+    // this reads the rendered block rather than two independent lines.
+    let reported = err
+        .split("error[")
+        .find(|block| block.contains("does not exist on type"))
+        .unwrap_or_else(|| panic!("no type error reported:\n{err}"));
     assert!(
-        line.starts_with("ttc: src/bad.tt:6:55: "),
-        "diagnostic should point into the .tt source: {line}"
+        reported.contains("--> src/bad.tt:6:55"),
+        "diagnostic should point into the .tt source: {reported}"
     );
     assert!(
         !err.contains("bad.ts"),

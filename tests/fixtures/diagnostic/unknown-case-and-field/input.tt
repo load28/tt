@@ -1,0 +1,5 @@
+enum Shape { Circle(radius: number), Empty }
+declare const s: Shape;
+
+export const a = match (s) { Circel(radius) => radius, Empty => 0 };
+export const b = match (s) { Circle(radiuz) => radiuz, Empty => 0 };

@@ -159,13 +159,7 @@ pub(crate) fn at_source(
             crate::error::TtError::span(start, end, message).code(code)
         }
         Some((start, _)) => crate::error::TtError::at(start, message).code(code),
-        None => crate::error::TtError {
-            message,
-            offset: None,
-            end: None,
-            code,
-            owner: None,
-        },
+        None => crate::error::TtError::positionless(message).code(code),
     }
 }
 

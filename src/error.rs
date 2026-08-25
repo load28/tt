@@ -68,9 +68,12 @@ pub(crate) struct TtError {
     pub code: DiagnosticCode,
     /// Complete syntax node that owns consequences of this cause.
     pub owner: Option<DiagnosticOwner>,
+    /// How to resolve the cause ([`crate::Diagnostic::suggestions`]).
+    /// Added with [`TtError::help`] or [`TtError::suggest`].
+    pub suggestions: Vec<Suggestion>,
 }
 
-use crate::diagnostics::{DiagnosticCode, DiagnosticOwner};
+use crate::diagnostics::{DiagnosticCode, DiagnosticOwner, Edit, Suggestion};
 
 impl TtError {
     /// An error at one byte, its width left to the consumer.
@@ -81,6 +84,20 @@ impl TtError {
             end: None,
             code: DiagnosticCode::Other,
             owner: None,
+            suggestions: Vec::new(),
+        }
+    }
+
+    /// An error with no position in the source — the output self-check
+    /// failing on text that maps back to nothing the user wrote.
+    pub fn positionless(message: impl Into<String>) -> Self {
+        TtError {
+            message: message.into(),
+            offset: None,
+            end: None,
+            code: DiagnosticCode::Other,
+            owner: None,
+            suggestions: Vec::new(),
         }
     }
 
@@ -93,6 +110,7 @@ impl TtError {
             end: Some(end.max(start)),
             code: DiagnosticCode::Other,
             owner: None,
+            suggestions: Vec::new(),
         }
     }
 
@@ -107,6 +125,38 @@ impl TtError {
     #[must_use]
     pub fn owner(mut self, start: usize, end: usize) -> Self {
         self.owner = Some(DiagnosticOwner { start, end });
+        self
+    }
+
+    /// The same error, carrying advice with no edit behind it — a fix the
+    /// reporter can describe but not write ("add the missing arms").
+    #[must_use]
+    pub fn help(mut self, message: impl Into<String>) -> Self {
+        self.suggestions.push(Suggestion {
+            message: message.into(),
+            edit: None,
+        });
+        self
+    }
+
+    /// The same error, carrying a fix a machine can apply: `[start, end)`
+    /// becomes `replacement`.
+    #[must_use]
+    pub fn suggest(
+        mut self,
+        message: impl Into<String>,
+        start: usize,
+        end: usize,
+        replacement: impl Into<String>,
+    ) -> Self {
+        self.suggestions.push(Suggestion {
+            message: message.into(),
+            edit: Some(Edit {
+                start,
+                end: end.max(start),
+                replacement: replacement.into(),
+            }),
+        });
         self
     }
 }

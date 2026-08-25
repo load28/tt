@@ -3975,8 +3975,7 @@ const a = match (s) {
 };
 "#);
     assert!(
-        e.message
-            .contains("enum Shape has no case `Circel` — did you mean `Circle`?"),
+        e.message.contains("enum Shape has no case `Circel`"),
         "{}",
         e.message
     );
@@ -4012,6 +4011,83 @@ if let Circel(radius) = s { log(radius); }
     assert_eq!((e.line, e.col), (2, 8));
 }
 
+/// Applies a diagnostic's edits to `source`, back to front so earlier
+/// offsets stay valid — what an editor's quick fix does.
+fn with_suggestions_applied(source: &str, diagnostic: &ttc::Diagnostic) -> String {
+    let mut edits: Vec<&ttc::Edit> = diagnostic
+        .suggestions
+        .iter()
+        .filter_map(|s| s.edit.as_ref())
+        .collect();
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start));
+    let mut out = source.to_string();
+    for edit in edits {
+        out.replace_range(edit.start..edit.end, &edit.replacement);
+    }
+    out
+}
+
+#[test]
+fn a_misspelled_case_carries_its_replacement_as_an_edit() {
+    let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let d = &diagnostics[0];
+    assert_eq!(d.code, ttc::DiagnosticCode::UnknownCase);
+    // The fix is data, not a sentence: the message must not spell it.
+    assert!(!d.message.contains("Circle`?"), "{}", d.message);
+    let edit = d.suggestions[0]
+        .edit
+        .as_ref()
+        .expect("a named replacement is an applicable edit");
+    assert_eq!(&src[edit.start..edit.end], "Circel");
+    assert_eq!(edit.replacement, "Circle");
+}
+
+#[test]
+fn a_misspelled_field_carries_its_replacement_as_an_edit() {
+    let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let d = &diagnostics[0];
+    assert_eq!(d.code, ttc::DiagnosticCode::UnknownField);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(&src[edit.start..edit.end], "radiuz");
+    assert_eq!(edit.replacement, "radius");
+}
+
+#[test]
+fn applying_a_suggested_edit_resolves_the_diagnostic_it_came_from() {
+    // The contract that makes a suggestion worth carrying: what it says to
+    // write is what makes the error go away.
+    let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let fixed = with_suggestions_applied(src, &diagnostics[0]);
+    assert!(
+        ttc::analyze(&fixed, &Options::default()).is_empty(),
+        "{fixed}\n{:#?}",
+        ttc::analyze(&fixed, &Options::default()),
+    );
+}
+
+#[test]
+fn a_match_with_holes_carries_advice_that_names_no_edit() {
+    // Not every fix is a replacement. "Add the missing arms" is real
+    // advice with no text the compiler can write, and it travels in the
+    // same channel so a consumer has one place to look.
+    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (s) { Circle(r) => r };\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let d = diagnostics
+        .iter()
+        .find(|d| d.code == ttc::DiagnosticCode::MatchNotExhaustive)
+        .expect("the hole is reported");
+    assert!(!d.message.contains("add the missing arms"), "{}", d.message);
+    assert_eq!(d.suggestions.len(), 1);
+    assert_eq!(
+        d.suggestions[0].message,
+        "add the missing arms or a final `_` arm"
+    );
+    assert!(d.suggestions[0].edit.is_none());
+}
+
 #[test]
 fn misspelled_field_names_the_field_meant() {
     let e = err(r#"enum Shape { Circle(radius: number), Empty }
@@ -4019,7 +4095,7 @@ const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
 "#);
     assert!(
         e.message
-            .contains("enum Shape: case `Circle` has no field `radiuz` — did you mean `radius`?"),
+            .contains("enum Shape: case `Circle` has no field `radiuz`"),
         "{}",
         e.message
     );
@@ -4043,8 +4119,7 @@ enum Outer { Wrap(inner: Inner), Bare }
 const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
 "#);
     assert!(
-        e.message
-            .contains("enum Inner has no case `Yess` — did you mean `Yes`?"),
+        e.message.contains("enum Inner has no case `Yess`"),
         "{}",
         e.message
     );
@@ -4054,8 +4129,7 @@ const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
 fn a_misspelled_builtin_case_is_reported() {
     let e = err("const n = match (o) { Some(value) => value, Non => 0 };\n");
     assert!(
-        e.message
-            .contains("built-in enum Option has no case `Non` — did you mean `None`?"),
+        e.message.contains("built-in enum Option has no case `Non`"),
         "{}",
         e.message
     );
@@ -4074,9 +4148,8 @@ fn a_misspelled_case_of_an_imported_enum_names_its_origin() {
     )
     .expect_err("expected a resolution error");
     assert!(
-        e.message.contains(
-            "enum Token (imported from \"./token.tt\") has no case `Idnet` — did you mean `Ident`?"
-        ),
+        e.message
+            .contains("enum Token (imported from \"./token.tt\") has no case `Idnet`"),
         "{}",
         e.message
     );
@@ -4145,8 +4218,7 @@ const n = match (d, s) {
 };
 "#);
     assert!(
-        e.message
-            .contains("enum Dir has no case `Nrth` — did you mean `North`?"),
+        e.message.contains("enum Dir has no case `Nrth`"),
         "{}",
         e.message
     );
@@ -4303,7 +4375,7 @@ fn a_duplicate_arm_covers_the_tag_it_repeats() {
 fn a_misspelled_case_covers_the_name_as_written() {
     let src = "enum Shape { Circle(r: number), Square(s: number) }\nconst v = match (s) { Circel(r) => r, Square(s) => s };\n";
     let e = err(src);
-    assert!(e.message.contains("did you mean"), "{}", e.message);
+    assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
     assert_eq!(covered(src, &e), "Circel");
 }
 
@@ -4416,7 +4488,7 @@ fn a_typo_suppresses_coverage_for_its_own_match_only() {
         ],
         "{diagnostics:#?}"
     );
-    assert!(diagnostics[0].message.contains("did you mean `Circle`"));
+    assert!(diagnostics[0].message.contains("has no case `Circel`"));
     assert!(diagnostics[1].message.contains("missing \"Circle\""));
 }
 

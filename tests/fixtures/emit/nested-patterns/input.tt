@@ -1,0 +1,9 @@
+enum Inner { Yes(n: number), No }
+enum Outer { Wrap(inner: Inner), Bare }
+declare const o: Outer;
+
+export const value = match (o) {
+  Wrap(inner: Yes(n)) => n,
+  Wrap(inner: No()) => 0,
+  Bare => -1,
+};

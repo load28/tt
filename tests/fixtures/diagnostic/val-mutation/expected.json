@@ -1,0 +1,20 @@
+[
+  {
+    "code": "val-mutation",
+    "col": 3,
+    "endCol": 8,
+    "endLine": 3,
+    "line": 3,
+    "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
+    "suggestions": []
+  },
+  {
+    "code": "val-mutation",
+    "col": 3,
+    "endCol": 8,
+    "endLine": 4,
+    "line": 4,
+    "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
+    "suggestions": []
+  }
+]

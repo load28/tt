@@ -1,0 +1,10 @@
+enum Shape {
+  Circle(radius: number),
+  Rect(w: number, h: number),
+  Point,
+}
+declare const s: Shape;
+
+export const area = match (s) {
+  Circle(radius) => radius,
+};

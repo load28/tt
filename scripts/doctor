@@ -7,8 +7,6 @@ TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 CONFIG="$TT_ROOT/.tt-dev/toolchain.json"
 PKG_MARKER="$TT_ROOT/npm/tt-lang/tt-dev.local.json"
 VSIX="$TT_ROOT/.tt-dev/tt-language.vsix"
-MIN_RUST_MAJOR=1
-MIN_RUST_MINOR=88
 FAILURES=0
 WARNINGS=0
 
@@ -38,14 +36,11 @@ check_command() {
   fi
 }
 
-rust_is_supported() {
-  local version major minor
-  version="$1"
-  IFS=. read -r major minor _rest <<EOF
-$version
-EOF
-  [ "${major:-0}" -gt "$MIN_RUST_MAJOR" ] \
-    || { [ "${major:-0}" -eq "$MIN_RUST_MAJOR" ] && [ "${minor:-0}" -ge "$MIN_RUST_MINOR" ]; }
+# The version rust-toolchain.toml pins, so the report can say whether this
+# checkout is actually building with it.
+pinned_rust() {
+  sed -n 's/^channel[[:space:]]*=[[:space:]]*"\(.*\)"/\1/p' \
+    "$TT_ROOT/rust-toolchain.toml" 2> /dev/null | head -n 1
 }
 
 printf 'TT development environment\n'
@@ -59,10 +54,16 @@ check_command npm
 
 if have rustc; then
   RUST_VERSION="$(rustc --version 2> /dev/null | awk '{print $2}')"
-  if rust_is_supported "$RUST_VERSION"; then
-    pass "Rust $RUST_VERSION satisfies MSRV 1.88"
+  PINNED_RUST="$(pinned_rust)"
+  # Every gate — fmt, clippy, test — answers differently on a different
+  # toolchain, so "it passed locally" only means something when this
+  # checkout builds with the version CI builds with (TASK-226).
+  if [ -z "$PINNED_RUST" ]; then
+    fail "rust-toolchain.toml does not name a channel"
+  elif [ "$RUST_VERSION" = "$PINNED_RUST" ]; then
+    pass "Rust $RUST_VERSION matches rust-toolchain.toml"
   else
-    fail "Rust $RUST_VERSION is older than the required MSRV 1.88"
+    fail "Rust $RUST_VERSION is active but rust-toolchain.toml pins $PINNED_RUST (rustup should select it; is rustc from rustup?)"
   fi
 fi
 

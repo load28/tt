@@ -40,6 +40,7 @@ fn usage() {
 
 Usage: ttc [options] <file | dir> ...
        ttc help [topic]      language & workflow reference (topics: ttc help)
+       ttc explain [code]    what a diagnostic's rule is (codes: ttc explain)
 
 Builds a complete TypeScript tree: .tt/.ttx files are compiled, hand-written
 .ts/.tsx files pass through byte-for-byte (with relative .tt/.ttx specifiers
@@ -194,6 +195,44 @@ fn run_help(args: &[String]) -> ExitCode {
         }
         None => {
             eprintln!("ttc: unknown help topic \"{topic}\" (run `ttc help` for the list)");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `ttc explain [code]` — one rule at length, or the list of rules.
+fn run_explain(args: &[String]) -> ExitCode {
+    let code = match args {
+        [] => {
+            println!("ttc explain <code> — what a diagnostic's rule is and why\n");
+            println!("Codes:");
+            for code in ttc::DiagnosticCode::ALL {
+                println!("  {}", code.as_str());
+            }
+            return ExitCode::SUCCESS;
+        }
+        [code] => code.as_str(),
+        _ => {
+            eprintln!("ttc: explain takes one code (run `ttc explain` for the list)");
+            return ExitCode::FAILURE;
+        }
+    };
+    // A reader who copied `error[match-not-exhaustive]` out of a build log
+    // has the brackets too; they are not part of the code, so drop them
+    // rather than reject the paste.
+    let code = code
+        .trim()
+        .trim_start_matches("error[")
+        .trim_start_matches("warning[")
+        .trim_end_matches(']');
+    match ttc::DiagnosticCode::parse(code) {
+        Some(code) => {
+            println!("error[{}]\n", code.as_str());
+            println!("{}", code.explanation());
+            ExitCode::SUCCESS
+        }
+        None => {
+            eprintln!("ttc: unknown diagnostic code \"{code}\" (run `ttc explain` for the list)");
             ExitCode::FAILURE
         }
     }
@@ -751,12 +790,11 @@ fn typed_pass(
     let snapshot = match project.update(files) {
         Ok(snapshot) => snapshot,
         Err(blocked) => {
+            // No snapshot exists yet, so there is no text to quote: the
+            // header and the location are the whole report.
             eprintln!(
-                "ttc: {}:{}:{}: {}",
-                shown(&blocked.path),
-                blocked.error.line,
-                blocked.error.col,
-                blocked.error.message
+                "{}",
+                ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path))
             );
             return Ok(TypedReport {
                 reported: 1,
@@ -784,17 +822,18 @@ fn typed_pass(
         .map_err(|e| e.to_string())?;
     }
 
+    // The snapshot, not the file on disk: an `--overlay` was checked
+    // against text that was never saved, and quoting the disk would draw a
+    // caret under a line the compiler did not see.
     for diagnostic in &checked.diagnostics {
-        match diagnostic.position {
-            Some((line, col)) => eprintln!(
-                "ttc: {}:{}:{}: {}",
-                shown(&diagnostic.path),
-                line,
-                col,
-                diagnostic.message
-            ),
-            None => eprintln!("ttc: {}: {}", shown(&diagnostic.path), diagnostic.message),
-        }
+        eprintln!(
+            "{}",
+            ttc::render::engine_diagnostic(
+                diagnostic,
+                snapshot.source_of(&diagnostic.path),
+                &shown(&diagnostic.path),
+            )
+        );
     }
 
     // A backend that could not run is the pass failing to *run*, not the
@@ -941,12 +980,39 @@ fn shown(path: &Path) -> String {
 }
 
 fn main() -> ExitCode {
+    // Every panic from here on is reported as what it is — a bug in this
+    // compiler — rather than as a Rust backtrace the reader has to
+    // interpret (TASK-214).
+    ttc::ice::install_reporter();
+    match ttc::ice::catching(run) {
+        Ok(code) => code,
+        // The report is already on stderr, printed where the panic
+        // happened. All that is left is to fail deliberately: 101 is the
+        // code a Rust panic exits with, kept so a caller that already
+        // knows it keeps working.
+        //
+        // Unwind safety: nothing outlives this call. The process is ending,
+        // and every file this run wrote was written whole before it.
+        Err(_) => ExitCode::from(101),
+    }
+}
+
+/// Everything `main` does, so that a panic anywhere in it is caught rather
+/// than aborting the process with a backtrace.
+fn run() -> ExitCode {
+    ttc::ice::panic_for_test("cli");
     let argv: Vec<String> = std::env::args().skip(1).collect();
 
     // `ttc help [topic]` — only as the first argument, so a file that
     // happens to be named "help" can still be passed as `./help`.
     if argv.first().is_some_and(|a| a == "help") {
         return run_help(&argv[1..]);
+    }
+
+    // `ttc explain [code]` — the long form of a diagnostic's rule, the way
+    // `error[match-not-exhaustive]` names it.
+    if argv.first().is_some_and(|a| a == "explain") {
+        return run_explain(&argv[1..]);
     }
 
     let mut inputs: Vec<String> = Vec::new();
@@ -1511,123 +1577,131 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
         &jobs.iter().zip(&loaded).collect::<Vec<_>>(),
         opts.jobs,
         |(job, loaded)| {
-            let mut out = Outcome::default();
-            let filename = job.file.display().to_string();
-            // A pass-through `.ts` compiled in place would land on top of
-            // its own source (with specifiers rewritten) — refuse rather
-            // than destroy hand-written code.
-            if !opts.print && !opts.check && same_file(&job.file, &job.out_path) {
-                out.messages.push(format!(
-                    "ttc: {filename}: output would overwrite the input — pass -o <dir>"
-                ));
-                out.failed = true;
-                return out;
-            }
-            let loaded = match loaded {
-                Ok(loaded) => loaded,
-                Err(e) => {
-                    out.messages.push(format!("ttc: {e}"));
+            ttc::ice::working_on(&job.file, || {
+                ttc::ice::panic_for_test("compile");
+                let mut out = Outcome::default();
+                let filename = job.file.display().to_string();
+                // A pass-through `.ts` compiled in place would land on top of
+                // its own source (with specifiers rewritten) — refuse rather
+                // than destroy hand-written code.
+                if !opts.print && !opts.check && same_file(&job.file, &job.out_path) {
+                    out.messages.push(format!(
+                        "ttc: {filename}: output would overwrite the input — pass -o <dir>"
+                    ));
                     out.failed = true;
                     return out;
                 }
-            };
-            let extern_enums = collect_extern_enums(&job.file, &loaded.scan.imports, &cache);
-            let std_imports_owned = std_dir.as_ref().map(|dir| {
-                StdModule::ALL.map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
-            });
-            let std_imports = match &std_imports_owned {
-                Some([types, option, result, runtime]) => StdImports {
-                    types: types.as_deref(),
-                    option: option.as_deref(),
-                    result: result.as_deref(),
-                    runtime: runtime.as_deref(),
-                },
-                None => StdImports::default(),
-            };
-            let options = Options {
-                filename: Some(&filename),
-                source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
-                verify: opts.verify,
-                rewrite_imports: opts.rewrite_imports,
-                extern_enums: &extern_enums,
-                defer_to_checker: false,
-                std_imports,
-            };
-            // Every tt-level diagnostic of the file, not the first one —
-            // the reader fixes a file in one pass (TASK-120). Output is
-            // only produced (and only written) when the file is clean.
-            let report = compile_report(&loaded.source, &options);
-            let errors: Vec<_> = report
-                .diagnostics
-                .iter()
-                .filter(|d| d.severity == ttc::Severity::Error)
-                .collect();
-            if !errors.is_empty() {
-                for diagnostic in errors {
+                let loaded = match loaded {
+                    Ok(loaded) => loaded,
+                    Err(e) => {
+                        out.messages.push(format!("ttc: {e}"));
+                        out.failed = true;
+                        return out;
+                    }
+                };
+                let extern_enums = collect_extern_enums(&job.file, &loaded.scan.imports, &cache);
+                let std_imports_owned = std_dir.as_ref().map(|dir| {
+                    StdModule::ALL
+                        .map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
+                });
+                let std_imports = match &std_imports_owned {
+                    Some([types, option, result, runtime]) => StdImports {
+                        types: types.as_deref(),
+                        option: option.as_deref(),
+                        result: result.as_deref(),
+                        runtime: runtime.as_deref(),
+                    },
+                    None => StdImports::default(),
+                };
+                let options = Options {
+                    filename: Some(&filename),
+                    source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
+                    verify: opts.verify,
+                    rewrite_imports: opts.rewrite_imports,
+                    extern_enums: &extern_enums,
+                    defer_to_checker: false,
+                    std_imports,
+                };
+                // Every tt-level diagnostic of the file, not the first one —
+                // the reader fixes a file in one pass (TASK-120). Output is
+                // only produced (and only written) when the file is clean.
+                let report = compile_report(&loaded.source, &options);
+                let errors: Vec<_> = report
+                    .diagnostics
+                    .iter()
+                    .filter(|d| d.severity == ttc::Severity::Error)
+                    .collect();
+                if !errors.is_empty() {
+                    for diagnostic in errors {
+                        // Trailing newline: `eprintln!` then separates the
+                        // blocks with a blank line, so two diagnostics do not
+                        // read as one.
+                        out.messages.push(format!(
+                            "{}\n",
+                            ttc::render::diagnostic(diagnostic, &loaded.source, &filename)
+                        ));
+                    }
+                    out.failed = true;
+                    return out;
+                }
+                let Some(emit) = report.emit else {
+                    // Unreachable in practice: emission is only withheld for
+                    // an error-severity diagnostic. Stay total.
+                    out.failed = true;
+                    return out;
+                };
+                let mut code = emit.code.clone();
+                if opts.banner {
+                    let base = job.file.file_name().unwrap().to_string_lossy();
+                    code =
+                        format!("// @generated from {base} by ttc — do not edit directly.\n{code}");
+                }
+                // A map describes a translation. A hand-written `.ts` is not
+                // translated — it passes through byte for byte by contract — so
+                // there is nothing for a map to say about it, and appending a
+                // `sourceMappingURL` line would be the one thing that contract
+                // forbids. Only the surfaces ttc compiles get one.
+                //
+                // The map is built against the emission's own offsets, so the
+                // banner is declared as the lines it prepends rather than
+                // measured back out of the text.
+                let map = match opts.source_map {
+                    SourceMapMode::Off => None,
+                    _ if ttc::SourceKind::from_tt_path(&job.file).is_none() => None,
+                    mode => Some(source_map_for(job, &emit, &loaded.source, opts, mode)),
+                };
+                if let Some(rendered) = &map {
+                    if !code.ends_with('\n') {
+                        code.push('\n');
+                    }
+                    code.push_str(&rendered.comment);
+                }
+                if opts.print || (!opts.check && contested(job)) {
+                    out.pending = Some(code);
+                    return out;
+                }
+                if !opts.check {
+                    if let Err(e) = write_output(&job.out_path, &code) {
+                        out.messages.push(e);
+                        out.failed = true;
+                        return out;
+                    }
+                    if let Some(rendered) = &map
+                        && let Some(document) = &rendered.document
+                        && let Err(e) = write_output(&map_path(&job.out_path), document)
+                    {
+                        out.messages.push(e);
+                        out.failed = true;
+                        return out;
+                    }
                     out.messages.push(format!(
-                        "ttc: {}",
-                        diagnostic.to_compile_error(&loaded.source, Some(&filename))
+                        "ttc: {} → {}",
+                        job.file.display(),
+                        job.out_path.display()
                     ));
                 }
-                out.failed = true;
-                return out;
-            }
-            let Some(emit) = report.emit else {
-                // Unreachable in practice: emission is only withheld for
-                // an error-severity diagnostic. Stay total.
-                out.failed = true;
-                return out;
-            };
-            let mut code = emit.code.clone();
-            if opts.banner {
-                let base = job.file.file_name().unwrap().to_string_lossy();
-                code = format!("// @generated from {base} by ttc — do not edit directly.\n{code}");
-            }
-            // A map describes a translation. A hand-written `.ts` is not
-            // translated — it passes through byte for byte by contract — so
-            // there is nothing for a map to say about it, and appending a
-            // `sourceMappingURL` line would be the one thing that contract
-            // forbids. Only the surfaces ttc compiles get one.
-            //
-            // The map is built against the emission's own offsets, so the
-            // banner is declared as the lines it prepends rather than
-            // measured back out of the text.
-            let map = match opts.source_map {
-                SourceMapMode::Off => None,
-                _ if ttc::SourceKind::from_tt_path(&job.file).is_none() => None,
-                mode => Some(source_map_for(job, &emit, &loaded.source, opts, mode)),
-            };
-            if let Some(rendered) = &map {
-                if !code.ends_with('\n') {
-                    code.push('\n');
-                }
-                code.push_str(&rendered.comment);
-            }
-            if opts.print || (!opts.check && contested(job)) {
-                out.pending = Some(code);
-                return out;
-            }
-            if !opts.check {
-                if let Err(e) = write_output(&job.out_path, &code) {
-                    out.messages.push(e);
-                    out.failed = true;
-                    return out;
-                }
-                if let Some(rendered) = &map
-                    && let Some(document) = &rendered.document
-                    && let Err(e) = write_output(&map_path(&job.out_path), document)
-                {
-                    out.messages.push(e);
-                    out.failed = true;
-                    return out;
-                }
-                out.messages.push(format!(
-                    "ttc: {} → {}",
-                    job.file.display(),
-                    job.out_path.display()
-                ));
-            }
-            out
+                out
+            })
         },
     );
 

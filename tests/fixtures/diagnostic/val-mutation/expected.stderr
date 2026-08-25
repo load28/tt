@@ -1,0 +1,11 @@
+error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
+ --> input.tt:3:3
+  |
+3 |   state.count = 1;
+  |   ^^^^^
+
+error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
+ --> input.tt:4:3
+  |
+4 |   state.inner.n += 1;
+  |   ^^^^^

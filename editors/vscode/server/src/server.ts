@@ -573,6 +573,10 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     message: d.message,
     code: d.code,
     source: "ttc",
+    // The compiler's own fixes, carried through to `onCodeAction`. LSP
+    // round-trips `data` untouched, so the quick fix is the compiler's
+    // answer rather than this server's reading of the message.
+    data: d.suggestions?.length ? { suggestions: d.suggestions } : undefined,
   };
 }
 
@@ -1231,8 +1235,46 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
 
 // ------------------------------------------------------------ code actions
 
-const NON_EXHAUSTIVE_RE =
-  /match on (?:built-in |imported )?enum ([\w.]+)(?: \(imported from "[^"]+"\))? is not exhaustive: missing (.+?) \(add/;
+/**
+ * The compiler's own fixes, off the diagnostic's `data`.
+ *
+ * A suggestion that names a replacement is a quick fix outright — the span
+ * and the text both come from the compiler, so nothing here has to
+ * recognise a message by its shape.
+ */
+function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
+  const data = diag.data as { suggestions?: ttc.TtcSuggestion[] } | undefined;
+  const actions: CodeAction[] = [];
+  for (const suggestion of data?.suggestions ?? []) {
+    const edit = suggestion.edit;
+    if (!edit) continue;
+    const range: Range = {
+      start: { line: edit.line - 1, character: Math.max(0, edit.col - 1) },
+      end: {
+        line: edit.endLine - 1,
+        character: Math.max(0, edit.endCol - 1),
+      },
+    };
+    actions.push({
+      title: `\`${edit.replacement}\`(으)로 바꾸기`,
+      kind: CodeActionKind.QuickFix,
+      diagnostics: [diag],
+      isPreferred: true,
+      edit: {
+        changes: {
+          [doc.uri]: [{ range, newText: edit.replacement }],
+        },
+      },
+    });
+  }
+  return actions;
+}
+
+// Which cases a match is still missing. The rule is identified by its
+// code, never by the message's shape; the tags are read off the list the
+// message renders. Replacing that last step with edits the compiler
+// authors is TASK-216.
+const MISSING_CASES_RE = /is not exhaustive: missing (.+)$/m;
 
 connection.onCodeAction(async (params): Promise<CodeAction[]> => {
   const doc = documents.get(params.textDocument.uri);
@@ -1241,9 +1283,11 @@ connection.onCodeAction(async (params): Promise<CodeAction[]> => {
 
   for (const diag of params.context.diagnostics) {
     if (diag.source !== "ttc") continue;
-    const m = NON_EXHAUSTIVE_RE.exec(diag.message);
+    actions.push(...suggestedFixes(doc, diag));
+    if (diag.code !== "match-not-exhaustive") continue;
+    const m = MISSING_CASES_RE.exec(diag.message);
     if (!m) continue;
-    const missing = [...m[2].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
+    const missing = [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]);
     if (missing.length === 0) continue;
 
     const decls = await declarationsOf(doc);
@@ -1252,7 +1296,11 @@ connection.onCodeAction(async (params): Promise<CodeAction[]> => {
       (site) => offset >= site.keyword && offset <= site.keyword + 5,
     );
     if (!match) continue;
-    const e = decls.enums.find((x) => x.name === m[1]);
+    // Which enum this match is over: the site's own answer, not a name
+    // scraped out of the sentence.
+    const e = decls.enums.find((x) =>
+      x.cases.some((c) => missing.includes(c.tag)),
+    );
 
     const armFor = (tag: string): string => {
       const c = e?.cases.find((x) => x.tag === tag);
