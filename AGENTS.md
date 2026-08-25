@@ -99,7 +99,17 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
   snapshot`), 갱신된 diff를 읽고 검토합니다.
 - 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
-변경 완료 전 다음 게이트를 모두 실행합니다.
+변경 완료 전 게이트를 실행합니다. GitHub Actions의 `CI`는 `workflow_dispatch`
+전용이라 push나 PR로 돌지 않습니다 — 검증은 로컬에서 끝나야 하고, `scripts/ci`가
+CI 잡을 그대로 재현합니다.
+
+```sh
+./scripts/ci
+```
+
+Rust만 건드린 변경이라면 해당 단계만 돌려도 됩니다(`./scripts/ci rust`). 단계
+목록과 도구가 없을 때 무엇이 스킵되는지는 `CONTRIBUTING.md`의 "머지 전 검증
+게이트"에 있습니다. 어느 경로로 돌리든 최소한 다음 셋은 통과해야 합니다.
 
 ```sh
 cargo fmt --check
