@@ -129,10 +129,8 @@ pub fn render(report: &Report<'_>, source: Option<&str>) -> String {
         }
     }
 
-    let snippet = report
-        .span
-        .and_then(|span| source.map(|source| (span, source)));
-    let Some((span, source)) = snippet else {
+    // A snippet needs both a place to point at and the text to quote.
+    let Some((span, source)) = report.span.zip(source) else {
         // No span, or no text to quote it from: name the file (and the
         // position, when there is one) and stop.
         match report.span {

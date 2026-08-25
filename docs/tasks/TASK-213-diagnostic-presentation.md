@@ -218,6 +218,19 @@ tt의 진단은 `Diagnostic`에 코드·바이트 span·owner까지 이미 갖�
 - **해결**: typescript-go를 빌드해 `./scripts/setup --tsgo-root`로 toolchain을
   구성하자 통과한다. 컴파일러 변경이 아니라 환경 구성 문제였다.
 
+### 이슈 5: CI에서만 보이는 clippy 린트 (PR #53)
+
+- **증상**: PR #53의 `fmt / clippy / test` 잡이 실패했다.
+  `src/render.rs`의 `report.span.and_then(|span| source.map(...))`가
+  `manual_option_zip`으로 걸렸다. 로컬 `cargo clippy --all-targets -- -D warnings`는
+  통과한 코드다.
+- **원인**: 툴체인 버전 차이. 로컬 clippy 1.94.1, CI(`dtolnay/rust-toolchain@stable`)
+  1.98.0. `scripts/doctor`는 MSRV 하한만 확인하므로 이 격차를 알려주지 않는다.
+- **해결**: `rustup update stable`로 로컬을 1.98.0에 맞춘 뒤 재현하고,
+  `report.span.zip(source)`로 고쳤다 — 린트 제안이 원래 의도한 표현이기도 하다.
+  같은 툴체인에서 fmt·clippy·전 스위트를 다시 통과시켰다. 격차 자체는
+  [TASK-226](./TASK-226-local-ci-toolchain-parity.md)으로 등록했다.
+
 ### 이슈 4: 확장 completion 테스트의 불안정성 (미해결, 범위 밖)
 
 - **증상**: `completion.test.js`의 probe/멤버 완성 케이스 일부가 이 컨테이너에서
