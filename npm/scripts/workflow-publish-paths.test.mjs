@@ -38,6 +38,14 @@ test("Dev approval requires the prepared SHA and reuses its artifacts", () => {
   assert.match(publish[0], /gh run download/);
 });
 
+test("Dev preparation starts from an explicit work ref and folds retry fixes into the pending branch", () => {
+  assert.match(prepare[0], /source_ref:/);
+  assert.match(prepare[0], /required: true/);
+  assert.match(prepare[0], /git fetch origin "\$SOURCE_REF"/);
+  assert.match(prepare[0], /release-plan\.mjs dev "\$REQUESTED_VERSION" "\$REQUESTED_SOURCE_SHA"/);
+  assert.match(prepare[0], /git merge --no-edit "\$REQUESTED_SOURCE_SHA"/);
+});
+
 test("publishing is idempotent and deletes only a completed release branch", () => {
   for (const source of publish) {
     assert.match(source, /npm view "\$name@\$version" version/);

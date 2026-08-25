@@ -240,7 +240,8 @@
 | TASK-230 | release 0.3.0-dev.7 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-230](./TASK-230-release-0.3.0-dev.7.md) |
 | TASK-231 | 수동 릴리스 브랜치 기반 Dev·Production 배포 | 완료 | 2026-08-25 | — | [TASK-231](./TASK-231-manual-release-branches.md) |
 | TASK-232 | Dev 스탬프 이후 create-tt 채널 테스트 정합성 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-232](./TASK-232-create-tt-release-channel-test.md) |
+| TASK-233 | 작업 브랜치 기반 릴리스 계약 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-233](./TASK-233-work-branch-release-contract.md) |
 
 ## 다음 태스크 번호
 
-**TASK-233**
+**TASK-234**

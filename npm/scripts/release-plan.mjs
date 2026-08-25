@@ -5,7 +5,7 @@ const CORE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const DEV = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-dev\.([1-9]\d*)$/;
 const DEV_TAG = /^dev-v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)-dev\.([1-9]\d*))(?:\..+)?$/;
 
-export function planRelease({ channel, requested = "", mainSha, tags = [], branches = [] }) {
+export function planRelease({ channel, requested = "", sourceSha, tags = [], branches = [] }) {
   if (!["development", "production"].includes(channel)) throw new Error(`unknown channel: ${channel}`);
   if (requested && !CORE.test(requested)) throw new Error(`version must be X.Y.Z: ${requested}`);
 
@@ -16,8 +16,8 @@ export function planRelease({ channel, requested = "", mainSha, tags = [], branc
   }
 
   const releases = parseReleaseTags(tags);
-  if (channel === "development") return planDevelopment(requested, mainSha, releases);
-  return planProduction(requested, mainSha, releases);
+  if (channel === "development") return planDevelopment(requested, sourceSha, releases);
+  return planProduction(requested, releases);
 }
 
 export function planPendingRelease({ channel, requested = "", branches = [] }) {
@@ -46,7 +46,7 @@ function pendingPlan(channel, branch) {
   return { version, branch: branch.name, sourceSha: branch.sha, resume: true };
 }
 
-function planDevelopment(requested, mainSha, releases) {
+function planDevelopment(requested, sourceSha, releases) {
   const stableCores = new Set(releases.filter((item) => item.channel === "production").map((item) => item.core));
   let core;
   let number;
@@ -67,10 +67,10 @@ function planDevelopment(requested, mainSha, releases) {
     }
   }
   const version = `${core}-dev.${number}`;
-  return { version, branch: `release/dev-${version}`, sourceSha: mainSha, resume: false };
+  return { version, branch: `release/dev-${version}`, sourceSha, resume: false };
 }
 
-function planProduction(requested, _mainSha, releases) {
+function planProduction(requested, releases) {
   const stableCores = new Set(releases.filter((item) => item.channel === "production").map((item) => item.core));
   const candidates = releases.filter((item) =>
     item.channel === "development" && !stableCores.has(item.core) && (!requested || item.core === requested),
@@ -154,6 +154,7 @@ function main(args) {
       ? "production"
       : args[0];
   const requested = args[1] ?? "";
+  const sourceSha = args[2] ?? git("rev-parse", "origin/main^{commit}");
   const tags = refs("refs/tags").map(({ ref, sha }) => ({ name: ref, sha }));
   const branches = refs("refs/remotes/origin/release").map(({ ref, sha }) => ({
     name: ref.replace(/^origin\//, ""),
@@ -164,7 +165,7 @@ function main(args) {
     : planRelease({
         channel,
         requested,
-        mainSha: git("rev-parse", "origin/main^{commit}"),
+        sourceSha,
         tags,
         branches,
       });

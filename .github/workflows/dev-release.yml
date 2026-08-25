@@ -8,6 +8,10 @@ on:
         description: Optional X.Y.Z core (empty continues latest SemVer)
         required: false
         type: string
+      source_ref:
+        description: Work branch, tag, or commit SHA to prepare
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -40,8 +44,11 @@ jobs:
         id: release
         env:
           REQUESTED_VERSION: ${{ inputs.version }}
+          SOURCE_REF: ${{ inputs.source_ref }}
         run: |
-          node npm/scripts/release-plan.mjs dev "$REQUESTED_VERSION" > /tmp/release-plan.json
+          git fetch origin "$SOURCE_REF"
+          REQUESTED_SOURCE_SHA="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          node npm/scripts/release-plan.mjs dev "$REQUESTED_VERSION" "$REQUESTED_SOURCE_SHA" > /tmp/release-plan.json
           VERSION="$(jq -r .version /tmp/release-plan.json)"
           BRANCH="$(jq -r .branch /tmp/release-plan.json)"
           SOURCE_SHA="$(jq -r .sourceSha /tmp/release-plan.json)"
@@ -51,6 +58,11 @@ jobs:
           if [ "$RESUME" = true ]; then
             git checkout -B "$BRANCH" "$SOURCE_SHA"
             test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$VERSION"
+            if ! git merge-base --is-ancestor "$REQUESTED_SOURCE_SHA" HEAD; then
+              git merge --no-edit "$REQUESTED_SOURCE_SHA"
+              test "$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)" = "$VERSION"
+              git push origin "HEAD:refs/heads/$BRANCH"
+            fi
           else
             git checkout -b "$BRANCH" "$SOURCE_SHA"
             node npm/scripts/release-version.mjs "$VERSION"
