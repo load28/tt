@@ -12,12 +12,12 @@ export function setReleaseVersion(version, repositoryRoot = process.cwd()) {
   }
   replaceOnce(
     path.join(repositoryRoot, "Cargo.toml"),
-    /(^\[package\]\nname = "ttc"\nversion = ")[^"]+("$)/m,
+    /(^\[package\]\r?\nname = "ttc"\r?\nversion = ")[^"]+("$)/m,
     `$1${version}$2`,
   );
   replaceOnce(
     path.join(repositoryRoot, "Cargo.lock"),
-    /(\[\[package\]\]\nname = "ttc"\nversion = ")[^"]+("\n)/,
+    /(\[\[package\]\]\r?\nname = "ttc"\r?\nversion = ")[^"]+("\r?\n)/,
     `$1${version}$2`,
   );
   stampVersion(version, [], repositoryRoot);

@@ -38,3 +38,18 @@ test("accepts RC versions", () => {
   setReleaseVersion("0.3.0-rc", root);
   assert.match(fs.readFileSync(path.join(root, "Cargo.toml"), "utf8"), /version = "0\.3\.0-rc"/);
 });
+
+test("stamps Cargo manifests with Windows line endings", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-version-crlf-"));
+  fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
+  fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
+  fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\r\nname = "ttc"\r\nversion = "0.3.0-dev.7"\r\n');
+  fs.writeFileSync(path.join(root, "Cargo.lock"), '[[package]]\r\nname = "ttc"\r\nversion = "0.3.0-dev.7"\r\n');
+  fs.writeFileSync(path.join(root, "npm", "tt-lang", "package.json"), JSON.stringify({ version: "old", optionalDependencies: {} }));
+  fs.writeFileSync(path.join(root, "packages", "create-tt", "package.json"), JSON.stringify({ version: "old" }));
+
+  setReleaseVersion("0.3.0-dev.8", root);
+
+  assert.match(fs.readFileSync(path.join(root, "Cargo.toml"), "utf8"), /version = "0\.3\.0-dev\.8"\r\n/);
+  assert.match(fs.readFileSync(path.join(root, "Cargo.lock"), "utf8"), /version = "0\.3\.0-dev\.8"\r\n/);
+});

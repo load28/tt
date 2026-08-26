@@ -28,7 +28,7 @@ export function releaseArtifacts({ compilerVersion, extensionBase, unpluginBase,
     npmTag,
     unpluginVersion: prerelease ? `${unplugin[1]}.${unplugin[2]}.${unplugin[3]}-${suffix}` : unpluginBase,
     vscodeVersion: prerelease
-      ? `${extension[1]}.${stamp[1].slice(2)}${stamp[2]}${stamp[3]}.${stamp[4]}${stamp[5]}${stamp[6]}`
+      ? `${extension[1]}.${stamp[1].slice(2)}${stamp[2]}${stamp[3]}.${Number(`${stamp[4]}${stamp[5]}${stamp[6]}`)}`
       : extensionBase,
   };
 }

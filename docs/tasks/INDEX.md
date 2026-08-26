@@ -244,7 +244,8 @@
 | TASK-234 | TypeScript 방식의 개발·릴리스 모델 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-234](./TASK-234-typescript-release-model.md) |
 | TASK-235 | Beta 없는 RC 중심 릴리스 흐름 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-235](./TASK-235-rc-first-release-model.md) |
 | TASK-236 | VS Code와 tsgo CI 통합 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-236](./TASK-236-unify-vscode-tsgo-ci.md) |
+| TASK-237 | 릴리스 산출물 버전 핫픽스 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-237](./TASK-237-release-artifact-version-hotfix.md) |
 
 ## 다음 태스크 번호
 
-**TASK-237**
+**TASK-238**
