@@ -13,53 +13,85 @@ export class EventProcessor {
   }
 
   accept(eventName, payload) {
-    if (payload.action !== 'created') return null
-    if (eventName !== 'discussion' && eventName !== 'discussion_comment') return null
-    const discussion = payload.discussion
-    if (!discussion?.node_id) return null
     const repository = payload.repository
     if (
       repository?.owner?.login !== this.config.repository.owner
       || repository?.name !== this.config.repository.name
     ) return null
 
-    const actor = payload.comment?.user ?? discussion.user
-    if (actor?.type === 'Bot') return null
-    const body = payload.comment?.body ?? discussion.body ?? ''
+    if (eventName === 'discussion' || eventName === 'discussion_comment') {
+      if (payload.action !== 'created') return null
+      const discussion = payload.discussion
+      if (!discussion?.node_id) return null
+      const actor = payload.comment?.user ?? discussion.user
+      if (actor?.type === 'Bot') return null
+      const body = payload.comment?.body ?? discussion.body ?? ''
+      return {
+        kind: 'discussion',
+        subjectId: discussion.node_id,
+        discussionId: discussion.node_id,
+        source: eventName,
+        actor: actor?.login ?? 'unknown',
+        body,
+        url: payload.comment?.html_url ?? discussion.html_url,
+        mentions: mentionedAgents(body, this.config.agents),
+      }
+    }
+
+    if (eventName !== 'pull_request') return null
+    if (!['opened', 'reopened', 'synchronize'].includes(payload.action)) return null
+    const pullRequest = payload.pull_request
+    if (!pullRequest?.node_id || !pullRequest?.head?.sha || !pullRequest?.number) return null
     return {
-      discussionId: discussion.node_id,
-      source: eventName,
-      actor: actor?.login ?? 'unknown',
-      body,
-      url: payload.comment?.html_url ?? discussion.html_url,
-      mentions: mentionedAgents(body, this.config.agents),
+      kind: 'pull_request',
+      subjectId: pullRequest.node_id,
+      pullRequestId: pullRequest.node_id,
+      pullRequestNumber: pullRequest.number,
+      headSha: pullRequest.head.sha,
+      action: payload.action,
+      actor: payload.sender?.login ?? 'unknown',
+      url: pullRequest.html_url,
     }
   }
 
   enqueue(trigger) {
-    const previous = this.queues.get(trigger.discussionId) ?? Promise.resolve()
+    const previous = this.queues.get(trigger.subjectId) ?? Promise.resolve()
     const current = previous
       .catch(() => {})
       .then(() => this.process(trigger))
       .finally(() => {
-        if (this.queues.get(trigger.discussionId) === current) {
-          this.queues.delete(trigger.discussionId)
+        if (this.queues.get(trigger.subjectId) === current) {
+          this.queues.delete(trigger.subjectId)
         }
       })
-    this.queues.set(trigger.discussionId, current)
+    this.queues.set(trigger.subjectId, current)
     return current
   }
 
   async process(trigger) {
-    const discussion = await this.github.fetchDiscussion(
-      this.config.controller,
-      trigger.discussionId,
-    )
-    if (trigger.mentions.length > 0) {
-      const agents = this.config.agents.filter((agent) => trigger.mentions.includes(agent.id))
-      return this.engine.answerMention(discussion, trigger, agents)
+    if (trigger.kind === 'discussion') {
+      const discussion = await this.github.fetchDiscussion(
+        this.config.controller,
+        trigger.discussionId,
+      )
+      if (trigger.mentions.length > 0) {
+        const agents = this.config.agents.filter((agent) => trigger.mentions.includes(agent.id))
+        return this.engine.answerMention(discussion, trigger, agents)
+      }
+      return this.engine.deliberate(discussion, trigger)
     }
-    return this.engine.deliberate(discussion, trigger)
+
+    const pullRequest = await this.github.fetchPullRequest(
+      this.config.controller,
+      trigger.pullRequestNumber,
+    )
+    if (pullRequest.headSha !== trigger.headSha) {
+      this.logger.log(
+        `Skipping stale review event for #${trigger.pullRequestNumber} at ${trigger.headSha}`,
+      )
+      return null
+    }
+    return this.engine.review(pullRequest, trigger)
   }
 }
 
