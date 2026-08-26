@@ -90,7 +90,9 @@ PR을 `main`에 squash merge합니다. `main`과 `release-X.Y`는 항상 빌드 
 CI는 `main`·`release-X.Y` push와 이들을 대상으로 하는 PR에서 자동 실행합니다.
 push CI는 정확한 커밋의 5개 플랫폼 바이너리, VSIX, 버전·SHA 메타데이터를 30일간
 보관합니다. 게시 액션은 다시 빌드하지 않고 성공한 CI run ID의 산출물만 사용합니다.
-Nightly만 예약 CI 성공 후 자동 게시하며 정식 릴리스는 수동으로 승격합니다.
+Nightly는 예약 CI 성공 후 자동 게시합니다. 정식 릴리스는 성공한 `release-X.Y` CI가
+`production` Environment 승인을 만들며, 승인자가 `Approve and deploy`한 뒤 게시합니다.
+run ID와 npm tag는 CI 메타데이터에서 자동으로 선택하므로 직접 입력하지 않습니다.
 릴리스 액션은 TypeScript와 같이 전용 `tt-release-automation` GitHub App 신원으로
 버전 커밋을 push합니다. 이 push가 후속 CI를 자동으로 시작하므로 CI를 별도로 dispatch하지
 않습니다. App private key는 Azure Key Vault 대신 `RELEASE_APP_PRIVATE_KEY` Actions
@@ -114,14 +116,16 @@ gh workflow run release.yml --ref main -f line=X.Y -f stage=stable
 gh workflow run release.yml --ref main -f line=X.Y -f stage=patch
 ```
 
-각 push CI가 성공하면 그 run ID를 `release-publish.yml`에 전달하고 단계에 맞춰
-`rc`, `latest` 중 하나로 수동 게시합니다. RC 뒤의 `main`은 다음 minor 개발을
-계속하며, 현재 릴리스에 꼭 필요한 수정만 작업 PR을 `main`에 squash merge한 뒤
-`release-X.Y`에 cherry-pick합니다. `release-X.Y`는 Stable 뒤에도 Patch용으로
-삭제하지 않습니다.
+각 push CI가 성공하면 게시 워크플로가 해당 run ID와 `rc`, `latest` 중 맞는 tag를
+자동으로 선택하고 `production` Environment에서 대기합니다. 승인자는 최신 후보의
+`Approve and deploy`만 누릅니다. RC 뒤의 `main`은 다음 minor 개발을 계속하며, 현재
+릴리스에 꼭 필요한 수정만 작업 PR을 `main`에 squash merge한 뒤 `release-X.Y`에
+cherry-pick합니다. `release-X.Y`는 Stable 뒤에도 Patch용으로 삭제하지 않습니다.
 
-빌드 실패는 해당 브랜치에 새 수정 커밋을 넣어 CI를 다시 실행합니다. 게시 실패는 같은
-run ID로 재시도합니다. npm의 동일 버전이 다른 SHA에서 이미 게시됐으면 중단합니다.
+빌드 실패는 해당 브랜치에 새 수정 커밋을 넣어 CI를 다시 실행합니다. 승인 뒤 게시
+직전에 해당 브랜치의 최신 CI인지 다시 확인하므로 오래된 후보는 게시되지 않습니다.
+게시 실패는 해당 게시 job을 재실행합니다. npm의 동일 버전이 다른 SHA에서 이미
+게시됐으면 중단합니다.
 
 ## 구현과 검증 규칙
 

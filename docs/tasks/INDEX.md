@@ -246,7 +246,8 @@
 | TASK-236 | VS Code와 tsgo CI 통합 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-236](./TASK-236-unify-vscode-tsgo-ci.md) |
 | TASK-237 | 릴리스 산출물 버전 핫픽스 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-237](./TASK-237-release-artifact-version-hotfix.md) |
 | TASK-238 | 전용 GitHub App 기반 릴리스 push | 완료 | 2026-08-26 | 2026-08-26 | [TASK-238](./TASK-238-release-github-app-identity.md) |
+| TASK-239 | 릴리스 게시 Environment 승인 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-239](./TASK-239-release-environment-approval.md) |
 
 ## 다음 태스크 번호
 
-**TASK-239**
+**TASK-240**

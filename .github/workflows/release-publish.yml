@@ -1,41 +1,28 @@
 # Promotion of one successful CI artifact set. Scheduled main CI runs promote
-# Nightlies automatically; formal releases are dispatched manually. Neither
-# path compiles source again.
+# Nightlies automatically; successful release branch CI runs wait for the
+# production environment approval. Neither path compiles source again.
 name: Publish Release
+run-name: Publish ${{ github.event.workflow_run.head_branch }} from CI ${{ github.event.workflow_run.id }}
 
 on:
   workflow_run:
     workflows: [CI]
     types: [completed]
-  workflow_dispatch:
-    inputs:
-      run_id:
-        description: Successful CI run ID containing release-metadata
-        required: true
-        type: string
-      npm_tag:
-        description: npm dist-tag to publish
-        required: true
-        type: choice
-        options: [next, rc, latest]
 
 permissions:
   actions: read
   contents: write
   id-token: write
 
-concurrency:
-  group: release-publish
-  cancel-in-progress: false
-
 jobs:
   verify:
     name: verify promoted CI build
     if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'schedule' &&
-       github.event.workflow_run.head_branch == 'main')
+      github.event.workflow_run.conclusion == 'success' &&
+      ((github.event.workflow_run.event == 'schedule' &&
+        github.event.workflow_run.head_branch == 'main') ||
+       (github.event.workflow_run.event == 'push' &&
+        startsWith(github.event.workflow_run.head_branch, 'release-')))
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ steps.release.outputs.run_id }}
@@ -45,14 +32,16 @@ jobs:
       npm_tag: ${{ steps.release.outputs.npm_tag }}
       unplugin_version: ${{ steps.release.outputs.unplugin_version }}
       vscode_version: ${{ steps.release.outputs.vscode_version }}
+      environment_name: ${{ steps.release.outputs.environment_name }}
+      run_event: ${{ steps.release.outputs.run_event }}
     steps:
       - name: Download and verify metadata
         id: release
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.run_id }}
-          REQUESTED_TAG: ${{ github.event_name == 'workflow_run' && 'next' || inputs.npm_tag }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
+          set -euo pipefail
           gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json name,status,conclusion,event,headSha,headBranch > /tmp/run.json
           test "$(jq -r .name /tmp/run.json)" = CI
           test "$(jq -r .status /tmp/run.json)" = completed
@@ -62,11 +51,23 @@ jobs:
           SOURCE_BRANCH="$(jq -r .sourceBranch metadata/release-metadata.json)"
           VERSION="$(jq -r .version metadata/release-metadata.json)"
           NPM_TAG="$(jq -r .npmTag metadata/release-metadata.json)"
+          RUN_EVENT="$(jq -r .event /tmp/run.json)"
           test "$SOURCE_SHA" = "$(jq -r .headSha /tmp/run.json)"
           test "$SOURCE_BRANCH" = "$(jq -r .headBranch /tmp/run.json)"
-          test "$NPM_TAG" = "$REQUESTED_TAG"
-          if [ "$GITHUB_EVENT_NAME" = workflow_run ]; then
-            test "$(jq -r .event /tmp/run.json)" = schedule
+          if [ "$SOURCE_BRANCH" = main ]; then
+            test "$RUN_EVENT" = schedule
+            test "$NPM_TAG" = next
+            ENVIRONMENT_NAME=nightly
+          else
+            test "$RUN_EVENT" = push
+            case "$SOURCE_BRANCH" in release-*) ;; *) exit 1 ;; esac
+            case "$VERSION" in
+              *-rc) EXPECTED_TAG=rc ;;
+              *-dev.*) exit 1 ;;
+              *) EXPECTED_TAG=latest ;;
+            esac
+            test "$NPM_TAG" = "$EXPECTED_TAG"
+            ENVIRONMENT_NAME=production
           fi
           if [ "$NPM_TAG" = next ]; then
             test "$SOURCE_BRANCH" = main
@@ -80,15 +81,21 @@ jobs:
           echo "npm_tag=$NPM_TAG" >> "$GITHUB_OUTPUT"
           echo "unplugin_version=$(jq -r .unpluginVersion metadata/release-metadata.json)" >> "$GITHUB_OUTPUT"
           echo "vscode_version=$(jq -r .vscodeVersion metadata/release-metadata.json)" >> "$GITHUB_OUTPUT"
+          echo "environment_name=$ENVIRONMENT_NAME" >> "$GITHUB_OUTPUT"
+          echo "run_event=$RUN_EVENT" >> "$GITHUB_OUTPUT"
 
   publish:
     name: publish verified artifacts
     needs: verify
     runs-on: ubuntu-latest
+    environment:
+      name: ${{ needs.verify.outputs.environment_name }}
     env:
       GH_TOKEN: ${{ github.token }}
       RUN_ID: ${{ needs.verify.outputs.run_id }}
       SOURCE_SHA: ${{ needs.verify.outputs.source_sha }}
+      SOURCE_BRANCH: ${{ needs.verify.outputs.source_branch }}
+      RUN_EVENT: ${{ needs.verify.outputs.run_event }}
       VERSION: ${{ needs.verify.outputs.version }}
       NPM_TAG: ${{ needs.verify.outputs.npm_tag }}
       UNPLUGIN_VERSION: ${{ needs.verify.outputs.unplugin_version }}
@@ -100,6 +107,11 @@ jobs:
         with:
           node-version: "22"
           registry-url: https://registry.npmjs.org
+      - name: Reject a superseded build
+        run: |
+          set -euo pipefail
+          latest_run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --branch "$SOURCE_BRANCH" --event "$RUN_EVENT" --limit 1 --json databaseId --jq '.[0].databaseId')"
+          test "$RUN_ID" = "$latest_run_id"
       - name: Download the promoted build
         run: |
           gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'release-ttc-*' --dir binaries
