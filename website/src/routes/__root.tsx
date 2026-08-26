@@ -24,7 +24,16 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   return (
     <html lang={pathname === '/ko' || pathname.startsWith('/ko/') ? 'ko' : 'en'}>
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-NKKYKXGD3W" />
+        <script dangerouslySetInnerHTML={{ __html: `
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-NKKYKXGD3W');
+        ` }} />
+      </head>
       <body>
         {children}
         <Scripts />
