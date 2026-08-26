@@ -252,7 +252,8 @@
 | TASK-242 | 홈페이지 릴리스 가이드 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-242](./TASK-242-website-release-guide.md) |
 | TASK-243 | 홈페이지 릴리스 가이드 전용 화면 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-243](./TASK-243-website-release-page.md) |
 | TASK-244 | GitHub Discussion 숙의 봇 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-244](./TASK-244-github-deliberation-bots.md) |
+| TASK-245 | Discussion #64 파이프라인 optional 스텝 RFC 정리 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-245](./TASK-245-pipeline-optional-step-rfc.md) |
 
 ## 다음 태스크 번호
 
-**TASK-245**
+**TASK-246**

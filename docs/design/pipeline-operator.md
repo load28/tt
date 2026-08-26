@@ -83,7 +83,9 @@ const total = csv |> .trim() |> .split(",") |> .map(Number) |> sum;
 - `|>` 다음의 `.`은 유효 TS에 존재할 수 없는 위치이고, step의 첫 유의
   바이트만 보면 판별되므로 바이트 단위 구조 파싱과 완전히 호환된다.
   (Hack 스타일 topic처럼 step 내부를 식 문법으로 파싱할 필요가 없다.)
-- `?.` 시작은 1차 범위에서 제외한다 (향후 확장 여지).
+- `?.` 시작 스텝(`x |> ?.p`)은 1차 범위에서 제외했고, Discussion #64에서 0.4
+  대상으로 설계를 확정했다 —
+  [`pipeline-optional-steps.md`](./pipeline-optional-steps.md). 아직 미구현이다.
 
 파이프라인은 **표현식**이다. `match`처럼 인자 위치, 템플릿 보간, match 암
 본문 등 표현식이 오는 어디에나 쓸 수 있다.
