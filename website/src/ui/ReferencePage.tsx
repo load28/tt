@@ -41,6 +41,11 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
   const item = content.topics[topic]
   const group = content.groups.find(({ topics }) => topics.includes(topic))!
   const nextTopic = topicIds[topicIds.indexOf(topic) + 1]
+  const codeLabel = topic === 'cli' || topic === 'install' || topic === 'release'
+    ? 'shell'
+    : topic === 'ttx'
+      ? 'example.ttx'
+      : 'example.tt'
 
   return (
     <SiteShell language={language} page={{ kind: 'topic', topic }}>
@@ -51,7 +56,7 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
         {topic === 'overview' && <InstallCommand language={language} />}
 
         <div className="code-block">
-          <span className="code-block__label">{topic === 'cli' || topic === 'install' ? 'shell' : topic === 'ttx' ? 'example.ttx' : 'example.tt'}</span>
+          <span className="code-block__label">{codeLabel}</span>
           <pre tabIndex={0} role="region" aria-label={language === 'ko' ? '코드 예제' : 'Code example'}>
             <code dangerouslySetInnerHTML={{ __html: highlighted[topic] }} />
           </pre>
