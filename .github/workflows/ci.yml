@@ -230,68 +230,10 @@ jobs:
           path: lcov.info
           if-no-files-found: warn
 
-  extension:
-    name: vscode extension
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install the pinned Rust toolchain
-        # rust-toolchain.toml decides the version, so nothing here names
-        # one. `rustup show active-toolchain` installs it if the runner
-        # does not have it and prints which file it came from, so the log
-        # says what was used rather than leaving it inferred.
-        run: rustup show active-toolchain
-
-      - name: Cache cargo build
-        uses: Swatinem/rust-cache@v2
-
-      # The server tests drive the real compiler; without it on PATH they
-      # skip, and the guard below would pass on nothing.
-      - name: Build ttc
-        run: cargo build
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - name: Install extension dependencies
-        working-directory: editors/vscode
-        run: npm ci
-
-      # Every TypeScript answer the server gives comes from the compiler's
-      # own language server, so the tests that ask for one skip without a
-      # `tsgo` on hand. It goes in the repository root rather than beside
-      # the extension: the extension's resolution walks `node_modules` up
-      # from the workspace, and `editors/vscode/node_modules/typescript` is
-      # the TypeScript 5 that *builds* the extension.
-      - name: Install TypeScript 7 for the language server
-        run: npm install --no-save --no-package-lock typescript@7
-
-      - name: Build
-        working-directory: editors/vscode
-        run: npx tsc -b
-
-      - name: Test
-        working-directory: editors/vscode
-        run: |
-          export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
-          node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension.log
-
-      # A skip here is not a pass: these tests skip silently when a tool is
-      # missing, which is exactly what this job installs. The one skip a
-      # released TypeScript 7 cannot avoid is declaration emit, which the
-      # package does not expose — the `native` job builds a compiler that
-      # does and runs the whole suite with nothing skipped.
-      - name: Guard — nothing skipped for a tool this job installed
-        run: |
-          ! grep -q "SKIP ttc not on PATH" /tmp/extension.log
-          ! grep -q "SKIP no tsgo executable" /tmp/extension.log
-
   native:
-    name: type checking (typescript-go)
+    name: tsgo type checking + vscode extension
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -466,7 +408,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
-    needs: [check, bench, coverage, extension, native, release-build, release-vsix]
+    needs: [check, bench, coverage, native, release-build, release-vsix]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

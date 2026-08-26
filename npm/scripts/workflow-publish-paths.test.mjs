@@ -19,6 +19,11 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.match(ci, /name: release-metadata/);
   assert.match(ci, /repository: microsoft\/typescript-go/);
   assert.match(ci, /go build -o built\/local\/tsgo \.\/cmd\/tsgo/);
+  assert.match(ci, /name: tsgo type checking \+ vscode extension/);
+  assert.match(ci, /TTC_TSGO_ROOT: \$\{\{ github\.workspace \}\}\/typescript-go/);
+  assert.doesNotMatch(ci, /^  extension:/m);
+  assert.doesNotMatch(ci, /npm install .*typescript@7/);
+  assert.doesNotMatch(ci, /needs: \[[^\]]*extension/);
   assert.doesNotMatch(ci, /npm publish|action-gh-release/);
 });
 
