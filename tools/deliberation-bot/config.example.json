@@ -1,0 +1,56 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8787,
+    "webhookPath": "/github/webhook",
+    "webhookSecretEnv": "TT_DELIBERATION_WEBHOOK_SECRET",
+    "stateDirectory": "../../.deliberation-bot/state"
+  },
+  "repository": {
+    "owner": "load28",
+    "name": "tt"
+  },
+  "codex": {
+    "binary": "codex",
+    "model": "",
+    "profile": "",
+    "timeoutSeconds": 300
+  },
+  "deliberation": {
+    "language": "ko",
+    "minimumRounds": 2,
+    "maximumRounds": 5
+  },
+  "controller": {
+    "displayName": "TT Deliberation Moderator",
+    "githubLogin": "tt-deliberation-moderator[bot]",
+    "appIdEnv": "TT_MODERATOR_APP_ID",
+    "privateKeyEnv": "TT_MODERATOR_PRIVATE_KEY"
+  },
+  "agents": [
+    {
+      "id": "language-designer",
+      "displayName": "Language Designer",
+      "githubLogin": "tt-language-designer[bot]",
+      "appIdEnv": "TT_LANGUAGE_DESIGNER_APP_ID",
+      "privateKeyEnv": "TT_LANGUAGE_DESIGNER_PRIVATE_KEY",
+      "perspective": "언어의 일관성, 학습 비용, 장기 확장성을 우선해 검토한다."
+    },
+    {
+      "id": "implementation-skeptic",
+      "displayName": "Implementation Skeptic",
+      "githubLogin": "tt-implementation-skeptic[bot]",
+      "appIdEnv": "TT_IMPLEMENTATION_SKEPTIC_APP_ID",
+      "privateKeyEnv": "TT_IMPLEMENTATION_SKEPTIC_PRIVATE_KEY",
+      "perspective": "구현 복잡도, 정확성, 유지보수 위험을 엄격하게 검토한다."
+    },
+    {
+      "id": "user-advocate",
+      "displayName": "User Advocate",
+      "githubLogin": "tt-user-advocate[bot]",
+      "appIdEnv": "TT_USER_ADVOCATE_APP_ID",
+      "privateKeyEnv": "TT_USER_ADVOCATE_PRIVATE_KEY",
+      "perspective": "실제 사용자의 이해 가능성, 효용, 마이그레이션 비용을 우선해 검토한다."
+    }
+  ]
+}

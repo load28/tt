@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "message",
+    "understoodPositions",
+    "stanceChange",
+    "changeReason",
+    "currentProposal",
+    "agreements",
+    "criticalObjections",
+    "canAccept"
+  ],
+  "properties": {
+    "message": { "type": "string", "minLength": 1 },
+    "understoodPositions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["speaker", "summary", "validPoints"],
+        "properties": {
+          "speaker": { "type": "string" },
+          "summary": { "type": "string" },
+          "validPoints": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "stanceChange": {
+      "type": "string",
+      "enum": ["maintain", "refine", "change", "accept"]
+    },
+    "changeReason": { "type": "string" },
+    "currentProposal": { "type": "string" },
+    "agreements": { "type": "array", "items": { "type": "string" } },
+    "criticalObjections": { "type": "array", "items": { "type": "string" } },
+    "canAccept": { "type": "boolean" }
+  }
+}

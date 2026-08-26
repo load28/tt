@@ -1,0 +1,14 @@
+{
+  "name": "@load28/tt-deliberation-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "check": "node --check src/index.mjs && node --check src/server.mjs && node --check src/deliberation.mjs && node --check scripts/install-macos.mjs",
+    "install:macos": "node scripts/install-macos.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
