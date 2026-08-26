@@ -7,7 +7,9 @@ function workflow(name) {
 }
 
 const ci = workflow("ci.yml");
-const advance = workflow("release.yml");
+const create = workflow("new-release-branch.yml");
+const sync = workflow("sync-release-branch.yml");
+const bump = workflow("bump-release-version.yml");
 const publish = workflow("release-publish.yml");
 
 test("CI follows TypeScript's main and release-X.Y branch model", () => {
@@ -27,24 +29,36 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.doesNotMatch(ci, /npm publish|action-gh-release/);
 });
 
-test("one retained release branch advances through RC, stable, and patch", () => {
-  assert.match(advance, /workflow_dispatch:/);
-  assert.match(advance, /options: \[rc, stable, patch\]/);
-  assert.match(advance, /permissions:\n  contents: read/);
-  assert.match(advance, /persist-credentials: false/);
-  assert.match(advance, /BRANCH="release-\$LINE"/);
-  assert.match(advance, /git checkout -b "\$BRANCH" origin\/main/);
-  assert.doesNotMatch(advance, /git merge --no-edit origin\/main/);
-  assert.match(advance, /release-stage\.mjs/);
-  assert.match(advance, /actions\/create-github-app-token@v3/);
-  assert.match(advance, /app-id: \$\{\{ vars\.RELEASE_APP_ID \}\}/);
-  assert.match(advance, /private-key: \$\{\{ secrets\.RELEASE_APP_PRIVATE_KEY \}\}/);
-  assert.match(advance, /permission-contents: write/);
-  assert.match(advance, /GITHUB_APP_TOKEN: \$\{\{ steps\.app-token\.outputs\.token \}\}/);
-  assert.match(advance, /git config --local http\.https:\/\/github\.com\/\.extraheader/);
-  assert.match(advance, /git push origin "HEAD:refs\/heads\/\$BRANCH"/);
-  assert.doesNotMatch(advance, /gh workflow run|GITHUB_TOKEN/);
-  assert.doesNotMatch(advance, /npm publish|action-gh-release|git push origin --delete/);
+test("release commands mirror TypeScript's create, sync, and bump boundaries", () => {
+  for (const command of [create, sync, bump]) {
+    assert.match(command, /workflow_dispatch:/);
+    assert.match(command, /permissions:\n  contents: read/);
+    assert.match(command, /persist-credentials: false/);
+    assert.doesNotMatch(command, /npm publish|action-gh-release|git push origin --delete/);
+  }
+
+  assert.match(create, /BRANCH="release-\$LINE"/);
+  assert.match(create, /git checkout -b "\$BRANCH"/);
+  assert.match(create, /VERSION="\$LINE\.0-beta"/);
+  assert.match(create, /git push --set-upstream origin "\$BRANCH"/);
+
+  assert.match(sync, /ref: release-\$\{\{ inputs\.line \}\}/);
+  assert.match(sync, /git fetch origin main/);
+  assert.match(sync, /git merge origin\/main --no-ff/);
+  assert.doesNotMatch(sync, /release-version\.mjs|release-bump\.mjs/);
+
+  assert.match(bump, /release-bump\.mjs "\$LINE" "\$CURRENT"/);
+  assert.match(bump, /git push origin "HEAD:refs\/heads\/release-\$\{\{ inputs\.line \}\}"/);
+
+  for (const command of [create, sync, bump]) {
+    assert.match(command, /actions\/create-github-app-token@v3/);
+    assert.match(command, /app-id: \$\{\{ vars\.RELEASE_APP_ID \}\}/);
+    assert.match(command, /private-key: \$\{\{ secrets\.RELEASE_APP_PRIVATE_KEY \}\}/);
+    assert.match(command, /permission-contents: write/);
+    assert.match(command, /GITHUB_APP_TOKEN: \$\{\{/);
+    assert.match(command, /git config --local http\.https:\/\/github\.com\/\.extraheader/);
+    assert.doesNotMatch(command, /gh workflow run|GITHUB_TOKEN/);
+  }
 });
 
 test("publishing promotes scheduled Nightlies and approved formal releases without manual identifiers", () => {
@@ -73,6 +87,7 @@ test("publish validates the source branch and immutable npm versions", () => {
   assert.match(publish, /test "\$RUN_EVENT" = push/);
   assert.match(publish, /test "\$SOURCE_BRANCH" = main/);
   assert.match(publish, /case "\$SOURCE_BRANCH" in release-\*/);
+  assert.match(publish, /\*-beta\) EXPECTED_TAG=beta/);
   assert.match(publish, /\*-rc\) EXPECTED_TAG=rc/);
   assert.match(publish, /\*\) EXPECTED_TAG=latest/);
   assert.match(publish, /test "\$NPM_TAG" = "\$EXPECTED_TAG"/);

@@ -78,7 +78,7 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
 4. 커밋 제목은 `TASK-NNN: subject`로 시작합니다.
 
 버전은 작업 단위로 올리지 않습니다. `main`의 Nightly 버전은 예약 CI가 산출물에만
-날짜로 스탬프합니다. RC 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.
+날짜로 스탬프합니다. Beta 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.
 
 ## 작업 브랜치와 릴리스
 
@@ -104,21 +104,24 @@ Nightly는 릴리스 브랜치를 만들지 않습니다. 매일 예약된 `main
 바꾸지 않은 채 산출물에 `X.Y.Z-dev.YYYYMMDD`를 스탬프합니다. CI가 성공하면 게시
 워크플로가 그 run ID의 산출물을 npm `next`와 GitHub prerelease로 자동 승격합니다.
 
-### RC·Stable·Patch
+### Beta·RC·Stable·Patch
 
-TypeScript의 릴리스 브랜치 모델에서 Beta만 생략합니다. `X.Y` RC는 최신 `main`에서
-`release-X.Y`를 만들고 `X.Y.0-rc`로 시작합니다. Stable은 `X.Y.0`, 이후 Patch는
-`X.Y.1`부터 하나씩 올립니다.
+TypeScript와 같은 버전 순서를 사용합니다. 최신 `main`에서 `release-X.Y`를 만들 때
+Beta `X.Y.0-beta`로 시작합니다. 이후 RC는 `X.Y.1-rc`, Stable은 `X.Y.2`, Patch는
+`X.Y.3`부터 하나씩 올립니다. 이 모델 도입 전에 이미 게시된 `release-0.3`은 기존
+Stable `0.3.0` 다음인 `0.3.1`부터 Patch를 이어갑니다.
 
 ```sh
-gh workflow run release.yml --ref main -f line=X.Y -f stage=rc
-gh workflow run release.yml --ref main -f line=X.Y -f stage=stable
-gh workflow run release.yml --ref main -f line=X.Y -f stage=patch
+gh workflow run new-release-branch.yml --ref main -f line=X.Y
+gh workflow run sync-release-branch.yml --ref main -f line=X.Y
+gh workflow run bump-release-version.yml --ref main -f line=X.Y
 ```
 
-각 push CI가 성공하면 게시 워크플로가 해당 run ID와 `rc`, `latest` 중 맞는 tag를
+세 명령은 TypeScript처럼 각각 브랜치 생성, `main` 병합, 다음 버전 증가만 담당합니다.
+각 push CI가 성공하면 게시 워크플로가 해당 run ID와 `beta`, `rc`, `latest` 중 맞는 tag를
 자동으로 선택하고 `production` Environment에서 대기합니다. 승인자는 최신 후보의
-`Approve and deploy`만 누릅니다. RC 뒤의 `main`은 다음 minor 개발을 계속하며, 현재
+`Approve and deploy`만 누릅니다. Beta 동안 RC에 포함할 `main` 변경은 sync 명령으로
+병합합니다. RC 뒤의 `main`은 다음 minor 개발을 계속하며, 현재
 릴리스에 꼭 필요한 수정만 작업 PR을 `main`에 squash merge한 뒤 `release-X.Y`에
 cherry-pick합니다. `release-X.Y`는 Stable 뒤에도 Patch용으로 삭제하지 않습니다.
 

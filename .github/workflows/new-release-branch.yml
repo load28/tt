@@ -1,0 +1,76 @@
+# TypeScript's `create release-X.Y`: branch from main, set X.Y.0-beta, and push.
+name: New Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      line:
+        description: Release line in X.Y form
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release-${{ inputs.line }}
+  cancel-in-progress: false
+
+jobs:
+  create:
+    name: create release-${{ inputs.line }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Create the Beta release branch
+        env:
+          LINE: ${{ inputs.line }}
+        run: |
+          set -euo pipefail
+          [[ "$LINE" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          BRANCH="release-$LINE"
+          if git ls-remote --exit-code origin "refs/heads/$BRANCH"; then
+            echo "$BRANCH already exists" >&2
+            exit 1
+          fi
+          git checkout -b "$BRANCH"
+          VERSION="$LINE.0-beta"
+          node npm/scripts/release-version.mjs "$VERSION"
+          git add Cargo.toml Cargo.lock npm/tt-lang/package.json packages/create-tt/package.json
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Configure git for GitHub App token
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          basic_auth="$(node -e 'process.stdout.write(Buffer.from("x-access-token:" + process.env.GITHUB_APP_TOKEN).toString("base64"))')"
+          echo "::add-mask::$basic_auth"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basic_auth}"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+      - name: Commit and push the Beta version
+        run: |
+          set -euo pipefail
+          git commit -m "chore(release): bump version to $VERSION"
+          git push --set-upstream origin "$BRANCH"
+

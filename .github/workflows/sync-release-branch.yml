@@ -1,0 +1,63 @@
+# TypeScript's `sync release-X.Y`: merge main into the existing release branch.
+name: Sync Release Branch
+
+on:
+  workflow_dispatch:
+    inputs:
+      line:
+        description: Release line in X.Y form
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release-${{ inputs.line }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: sync release-${{ inputs.line }} with main
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release-${{ inputs.line }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Merge main into the release branch
+        env:
+          LINE: ${{ inputs.line }}
+        run: |
+          set -euo pipefail
+          [[ "$LINE" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          git config user.name "tt-release-automation[bot]"
+          git config user.email "tt-release-automation[bot]@users.noreply.github.com"
+          git fetch origin main
+          git merge origin/main --no-ff
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Configure git for GitHub App token
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          basic_auth="$(node -e 'process.stdout.write(Buffer.from("x-access-token:" + process.env.GITHUB_APP_TOKEN).toString("base64"))')"
+          echo "::add-mask::$basic_auth"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basic_auth}"
+      - name: Push the synchronized branch
+        run: git push origin "HEAD:refs/heads/release-${{ inputs.line }}"
+

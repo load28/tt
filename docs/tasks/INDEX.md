@@ -247,7 +247,8 @@
 | TASK-237 | 릴리스 산출물 버전 핫픽스 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-237](./TASK-237-release-artifact-version-hotfix.md) |
 | TASK-238 | 전용 GitHub App 기반 릴리스 push | 완료 | 2026-08-26 | 2026-08-26 | [TASK-238](./TASK-238-release-github-app-identity.md) |
 | TASK-239 | 릴리스 게시 Environment 승인 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-239](./TASK-239-release-environment-approval.md) |
+| TASK-240 | TypeScript 릴리스 명령과 Beta 단계 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-240](./TASK-240-typescript-release-commands.md) |
 
 ## 다음 태스크 번호
 
-**TASK-240**
+**TASK-241**

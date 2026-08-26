@@ -62,6 +62,7 @@ jobs:
             test "$RUN_EVENT" = push
             case "$SOURCE_BRANCH" in release-*) ;; *) exit 1 ;; esac
             case "$VERSION" in
+              *-beta) EXPECTED_TAG=beta ;;
               *-rc) EXPECTED_TAG=rc ;;
               *-dev.*) exit 1 ;;
               *) EXPECTED_TAG=latest ;;
