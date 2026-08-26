@@ -41,9 +41,9 @@ export class StateStore {
     await rename(temporary, join(this.directory, 'processed.json'))
   }
 
-  async recordSession(discussionId, session) {
+  async recordSession(subjectId, session) {
     this.assertReady()
-    const safeId = discussionId.replaceAll(/[^a-zA-Z0-9_-]/g, '_')
+    const safeId = subjectId.replaceAll(/[^a-zA-Z0-9_-]/g, '_')
     await writeFile(
       join(this.directory, `${safeId}-${Date.now()}.json`),
       `${JSON.stringify(session, null, 2)}\n`,
