@@ -20,7 +20,7 @@ import { Notice, render } from "./notice.tt";
 ```
 
 컴파일러는 [`@load28/tt-lang`](https://www.npmjs.com/package/@load28/tt-lang)을 함께
-설치하면 자동으로 찾습니다 (`npm install --save-dev @load28/tt-lang@dev @load28/unplugin-tt@dev`). @load28/tt-lang이
+설치하면 자동으로 찾습니다 (`npm install --save-dev @load28/tt-lang@next @load28/unplugin-tt@next`). @load28/tt-lang이
 없으면 PATH의 `ttc`(`cargo install --path .`)로 폴백합니다.
 
 ## 서브패스

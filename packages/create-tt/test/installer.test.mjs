@@ -10,7 +10,8 @@ const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.
 const expectedDependencyChannel = dependencyChannel(ownManifest.version)
 
 test('keeps dependencies on the installer release channel', () => {
-  assert.equal(dependencyChannel('0.3.0-dev.20260823.143015.42.1'), 'dev')
+  assert.equal(dependencyChannel('0.3.0-dev.20260826'), 'next')
+  assert.equal(dependencyChannel('0.3.0-rc'), 'rc')
   assert.equal(dependencyChannel('0.3.0'), 'latest')
   assert.equal(dependencyChannel('0.0.0-dev'), 'latest')
 })

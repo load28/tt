@@ -77,8 +77,47 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
 3. 완료 전에 검증 결과와 변경 파일을 기록하고 INDEX와 문서를 `완료`로 바꿉니다.
 4. 커밋 제목은 `TASK-NNN: subject`로 시작합니다.
 
-버전은 작업 단위로 올리지 않습니다. `Cargo.toml` 버전은 명시적인 릴리스 태스크에서만
-변경하며 npm 메인 패키지와 설치기 버전은 배포 스크립트가 스탬프합니다.
+버전은 작업 단위로 올리지 않습니다. `main`의 Nightly 버전은 예약 CI가 산출물에만
+날짜로 스탬프합니다. RC 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.
+
+## 작업 브랜치와 릴리스
+
+Microsoft TypeScript와 같이 `main`을 유일한 개발 기준으로 사용합니다. 저장소 추적
+파일을 바꾸는 작업은 최신 `main`에서 작업 브랜치를 만들고, 로컬 게이트와 리뷰를 거친
+PR을 `main`에 squash merge합니다. `main`과 `release-X.Y`는 항상 빌드 가능한 상태여야
+하며 직접 기능 작업을 넣지 않습니다.
+
+CI는 `main`·`release-X.Y` push와 이들을 대상으로 하는 PR에서 자동 실행합니다.
+push CI는 정확한 커밋의 5개 플랫폼 바이너리, VSIX, 버전·SHA 메타데이터를 30일간
+보관합니다. 게시 액션은 다시 빌드하지 않고 성공한 CI run ID의 산출물만 사용합니다.
+Nightly만 예약 CI 성공 후 자동 게시하며 정식 릴리스는 수동으로 승격합니다.
+
+### Nightly
+
+Nightly는 릴리스 브랜치를 만들지 않습니다. 매일 예약된 `main` CI가 소스 버전을
+바꾸지 않은 채 산출물에 `X.Y.Z-dev.YYYYMMDD`를 스탬프합니다. CI가 성공하면 게시
+워크플로가 그 run ID의 산출물을 npm `next`와 GitHub prerelease로 자동 승격합니다.
+
+### RC·Stable·Patch
+
+TypeScript의 릴리스 브랜치 모델에서 Beta만 생략합니다. `X.Y` RC는 최신 `main`에서
+`release-X.Y`를 만들고 `X.Y.0-rc`로 시작합니다. Stable은 `X.Y.0`, 이후 Patch는
+`X.Y.1`부터 하나씩 올립니다.
+
+```sh
+gh workflow run release.yml --ref main -f line=X.Y -f stage=rc
+gh workflow run release.yml --ref main -f line=X.Y -f stage=stable
+gh workflow run release.yml --ref main -f line=X.Y -f stage=patch
+```
+
+각 push CI가 성공하면 그 run ID를 `release-publish.yml`에 전달하고 단계에 맞춰
+`rc`, `latest` 중 하나로 수동 게시합니다. RC 뒤의 `main`은 다음 minor 개발을
+계속하며, 현재 릴리스에 꼭 필요한 수정만 작업 PR을 `main`에 squash merge한 뒤
+`release-X.Y`에 cherry-pick합니다. `release-X.Y`는 Stable 뒤에도 Patch용으로
+삭제하지 않습니다.
+
+빌드 실패는 해당 브랜치에 새 수정 커밋을 넣어 CI를 다시 실행합니다. 게시 실패는 같은
+run ID로 재시도합니다. npm의 동일 버전이 다른 SHA에서 이미 게시됐으면 중단합니다.
 
 ## 구현과 검증 규칙
 
@@ -99,9 +138,9 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
   snapshot`), 갱신된 diff를 읽고 검토합니다.
 - 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
-변경 완료 전 게이트를 실행합니다. GitHub Actions의 `CI`는 `workflow_dispatch`
-전용이라 push나 PR로 돌지 않습니다 — 검증은 로컬에서 끝나야 하고, `scripts/ci`가
-CI 잡을 그대로 재현합니다.
+변경 완료 전 로컬 게이트를 실행합니다. GitHub Actions의 `CI`도 `main`과
+`release-X.Y` 대상 PR·push에서 같은 계약을 자동 검증하지만, 원격 CI는 로컬 검증을
+대신하지 않습니다.
 
 ```sh
 ./scripts/ci
