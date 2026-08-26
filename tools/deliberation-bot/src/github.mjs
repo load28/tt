@@ -98,6 +98,72 @@ export class GitHubClient {
     return data.addDiscussionComment.comment
   }
 
+  async fetchPullRequest(identity, pullRequestNumber) {
+    const token = await this.installationToken(identity)
+    const prefix = `/repos/${this.repository.owner}/${this.repository.name}`
+    const pullRequest = await this.request(`${prefix}/pulls/${pullRequestNumber}`, { token })
+    const [files, reviews] = await Promise.all([
+      this.paginate(`${prefix}/pulls/${pullRequestNumber}/files`, token),
+      this.paginate(`${prefix}/pulls/${pullRequestNumber}/reviews`, token),
+    ])
+    return {
+      id: pullRequest.node_id,
+      number: pullRequest.number,
+      title: pullRequest.title,
+      body: pullRequest.body ?? '',
+      url: pullRequest.html_url,
+      author: pullRequest.user?.login ?? 'unknown',
+      state: pullRequest.state,
+      draft: pullRequest.draft,
+      baseRef: pullRequest.base?.ref,
+      baseSha: pullRequest.base?.sha,
+      headRef: pullRequest.head?.ref,
+      headSha: pullRequest.head?.sha,
+      additions: pullRequest.additions,
+      deletions: pullRequest.deletions,
+      changedFiles: pullRequest.changed_files,
+      files: files.map((file) => ({
+        path: file.filename,
+        status: file.status,
+        previousPath: file.previous_filename,
+        additions: file.additions,
+        deletions: file.deletions,
+        patch: file.patch ?? null,
+      })),
+      reviews: reviews.map((review) => ({
+        id: review.id,
+        author: review.user?.login ?? 'unknown',
+        state: review.state,
+        body: review.body ?? '',
+        commitSha: review.commit_id,
+        submittedAt: review.submitted_at,
+      })),
+    }
+  }
+
+  async addPullRequestReview(identity, pullRequestNumber, headSha, body) {
+    const token = await this.installationToken(identity)
+    return this.request(
+      `/repos/${this.repository.owner}/${this.repository.name}/pulls/${pullRequestNumber}/reviews`,
+      {
+        method: 'POST',
+        token,
+        body: { commit_id: headSha, body, event: 'COMMENT' },
+      },
+    )
+  }
+
+  async paginate(path, token) {
+    const values = []
+    for (let page = 1; ; page += 1) {
+      const separator = path.includes('?') ? '&' : '?'
+      const batch = await this.request(`${path}${separator}per_page=100&page=${page}`, { token })
+      if (!Array.isArray(batch)) throw new Error(`GitHub API pagination expected an array: ${path}`)
+      values.push(...batch)
+      if (batch.length < 100) return values
+    }
+  }
+
   async graphql(token, query, variables) {
     const response = await this.fetchImpl('https://api.github.com/graphql', {
       method: 'POST',
@@ -111,10 +177,11 @@ export class GitHubClient {
     return value.data
   }
 
-  async request(path, { method = 'GET', token } = {}) {
+  async request(path, { method = 'GET', token, body } = {}) {
     const response = await this.fetchImpl(`https://api.github.com${path}`, {
       method,
       headers: this.headers(token),
+      body: body === undefined ? undefined : JSON.stringify(body),
     })
     const value = await response.json()
     if (!response.ok) throw new Error(`GitHub API ${response.status}: ${JSON.stringify(value)}`)
@@ -125,6 +192,7 @@ export class GitHubClient {
     return {
       accept: 'application/vnd.github+json',
       authorization: `Bearer ${token}`,
+      'content-type': 'application/json',
       'x-github-api-version': githubApiVersion,
       'user-agent': 'tt-deliberation-bot',
     }

@@ -24,10 +24,21 @@ export async function loadConfig(path, environment = process.env) {
     throw new Error('agents must contain at least two entries')
   }
 
-  const minimumRounds = positiveInteger(raw.deliberation?.minimumRounds, 'minimumRounds')
-  const maximumRounds = positiveInteger(raw.deliberation?.maximumRounds, 'maximumRounds')
-  if (minimumRounds > maximumRounds) {
-    throw new Error('minimumRounds cannot exceed maximumRounds')
+  const deliberationMinimumRounds = positiveInteger(
+    raw.deliberation?.minimumRounds,
+    'deliberation.minimumRounds',
+  )
+  const deliberationMaximumRounds = positiveInteger(
+    raw.deliberation?.maximumRounds,
+    'deliberation.maximumRounds',
+  )
+  const reviewMinimumRounds = positiveInteger(raw.review?.minimumRounds, 'review.minimumRounds')
+  const reviewMaximumRounds = positiveInteger(raw.review?.maximumRounds, 'review.maximumRounds')
+  if (deliberationMinimumRounds > deliberationMaximumRounds) {
+    throw new Error('deliberation.minimumRounds cannot exceed deliberation.maximumRounds')
+  }
+  if (reviewMinimumRounds > reviewMaximumRounds) {
+    throw new Error('review.minimumRounds cannot exceed review.maximumRounds')
   }
 
   const identities = [raw.controller, ...agents]
@@ -74,8 +85,17 @@ export async function loadConfig(path, environment = process.env) {
     },
     deliberation: {
       language: raw.deliberation.language ?? 'ko',
-      minimumRounds,
-      maximumRounds,
+      minimumRounds: deliberationMinimumRounds,
+      maximumRounds: deliberationMaximumRounds,
+    },
+    review: {
+      language: raw.review.language ?? 'ko',
+      minimumRounds: reviewMinimumRounds,
+      maximumRounds: reviewMaximumRounds,
+      maximumPatchCharacters: positiveInteger(
+        raw.review.maximumPatchCharacters ?? 200_000,
+        'review.maximumPatchCharacters',
+      ),
     },
     controller: await materializeIdentity(raw.controller, environment, baseDirectory),
     agents: await Promise.all(agents.map(async (agent) => ({

@@ -21,6 +21,12 @@
     "minimumRounds": 2,
     "maximumRounds": 5
   },
+  "review": {
+    "language": "ko",
+    "minimumRounds": 2,
+    "maximumRounds": 5,
+    "maximumPatchCharacters": 200000
+  },
   "controller": {
     "displayName": "TT Deliberation Moderator",
     "githubLogin": "tt-deliberation-moderator[bot]",
