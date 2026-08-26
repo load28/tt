@@ -158,19 +158,25 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
 ## 릴리스 모델
 
 tt은 Microsoft TypeScript와 같이 `main`을 Nightly와 일반 개발의 기준으로 사용합니다.
-작업 브랜치의 PR은 `main`에 squash merge합니다. RC를 만들 때 장기 브랜치
-`release-X.Y`를 한 번 만들고, 같은 브랜치를 Stable·Patch까지 유지합니다.
+작업 브랜치의 PR은 `main`에 squash merge합니다. Beta를 만들 때 장기 브랜치
+`release-X.Y`를 한 번 만들고, 같은 브랜치를 RC·Stable·Patch까지 유지합니다.
 
 - Nightly: 예약된 `main` CI 산출물, `X.Y.Z-dev.YYYYMMDD`, npm `next` 자동 게시
-- RC: 최신 `main`에서 만든 `release-X.Y`의 `X.Y.0-rc`, npm `rc`
-- Stable/Patch: 같은 릴리스 브랜치의 `X.Y.0`, `X.Y.1`…, npm `latest`
+- Beta: 최신 `main`에서 만든 `release-X.Y`의 `X.Y.0-beta`, npm `beta`
+- RC: Beta 브랜치를 `main`과 동기화한 뒤 `X.Y.1-rc`, npm `rc`
+- Stable/Patch: 같은 릴리스 브랜치의 `X.Y.2`, `X.Y.3`…, npm `latest`
 
-[`Advance Release Branch`](./.github/workflows/release.yml)는 릴리스 브랜치 생성과
-버전 커밋만 합니다. TypeScript 자동화와 같이 전용 `tt-release-automation` GitHub
-App 설치 토큰으로 push하므로, 그 push가 CI를 자동으로 시작합니다. CI는 모든 플랫폼
-바이너리와 VSIX를 만듭니다.
+이 모델 도입 전에 `0.3.0`으로 Stable이 게시된 `release-0.3`은 기존 번호를 보존하고
+`0.3.1`부터 Patch를 이어갑니다. 새 릴리스 라인부터 위 TypeScript 순서를 사용합니다.
+
+TypeScript처럼 [`New Release Branch`](./.github/workflows/new-release-branch.yml),
+[`Sync Release Branch`](./.github/workflows/sync-release-branch.yml),
+[`Bump Release Version`](./.github/workflows/bump-release-version.yml)을 독립적으로
+실행합니다. 세 액션은 각각 Beta 브랜치 생성, `main` 병합, 다음 단계 버전 증가만
+담당합니다. 전용 `tt-release-automation` GitHub App 설치 토큰으로 push하므로 그
+push가 CI를 자동으로 시작합니다. CI는 모든 플랫폼 바이너리와 VSIX를 만듭니다.
 [`Publish Release`](./.github/workflows/release-publish.yml)는 성공한 CI 산출물만 게시하며
-다시 빌드하지 않습니다. Nightly는 예약 CI 뒤 자동 게시합니다. RC·Stable·Patch는
+다시 빌드하지 않습니다. Nightly는 예약 CI 뒤 자동 게시합니다. Beta·RC·Stable·Patch는
 성공한 릴리스 브랜치 CI가 `production` Environment에서 대기하며, 승인자가
 `Approve and deploy`하면 게시됩니다. run ID와 npm tag는 자동으로 선택됩니다.
 저장소의 `production` Environment는 `load28`을 필수 승인자로 지정합니다.

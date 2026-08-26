@@ -1,6 +1,5 @@
-# A simplified TypeScript-style release line without a Beta stage.
-# The release-X.Y branch is retained for RC, Stable, and later patches.
-name: Advance Release Branch
+# TypeScript's `bump release-X.Y`: beta -> rc -> stable -> subsequent patches.
+name: Bump Release Version
 
 on:
   workflow_dispatch:
@@ -9,11 +8,6 @@ on:
         description: Release line in X.Y form
         required: true
         type: string
-      stage:
-        description: Stage to prepare
-        required: true
-        type: choice
-        options: [rc, stable, patch]
 
 permissions:
   contents: read
@@ -27,42 +21,27 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  advance:
-    name: ${{ inputs.stage }} release-${{ inputs.line }}
+  bump:
+    name: bump release-${{ inputs.line }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
-          fetch-depth: 0
+          ref: release-${{ inputs.line }}
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Create or advance the release line
+      - name: Bump the release version
         env:
           LINE: ${{ inputs.line }}
-          STAGE: ${{ inputs.stage }}
         run: |
           set -euo pipefail
-          BRANCH="release-$LINE"
-          if [ "$STAGE" = rc ]; then
-            if git ls-remote --exit-code origin "refs/heads/$BRANCH"; then
-              echo "$BRANCH already exists" >&2
-              exit 1
-            fi
-            git checkout -b "$BRANCH" origin/main
-            CURRENT=""
-          else
-            git fetch origin "$BRANCH"
-            git checkout -B "$BRANCH" "origin/$BRANCH"
-            CURRENT="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          fi
-          VERSION="$(node npm/scripts/release-stage.mjs "$STAGE" "$LINE" "$CURRENT")"
+          CURRENT="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          VERSION="$(node npm/scripts/release-bump.mjs "$LINE" "$CURRENT")"
           node npm/scripts/release-version.mjs "$VERSION"
           git add Cargo.toml Cargo.lock npm/tt-lang/package.json packages/create-tt/package.json
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
       - name: Create GitHub App token
         id: app-token
         uses: actions/create-github-app-token@v3
@@ -81,9 +60,9 @@ jobs:
           git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basic_auth}"
           git config user.name "${APP_SLUG}[bot]"
           git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
-      - name: Commit and push the release version
+      - name: Commit and push the version
         run: |
           set -euo pipefail
-          git commit -m "chore(release): $VERSION"
-          git push origin "HEAD:refs/heads/$BRANCH"
-          echo "Prepared $VERSION on $BRANCH. Its GitHub App push starts CI automatically."
+          git commit -m "chore(release): bump version to $VERSION"
+          git push origin "HEAD:refs/heads/release-${{ inputs.line }}"
+

@@ -14,8 +14,9 @@ test("derives TypeScript-style dated nightlies from main", () => {
 
 test("maps release stages to npm tags", () => {
   const common = { extensionBase: "0.1.0", unpluginBase: "0.1.0", timestamp: "20260826123456" };
-  assert.equal(releaseArtifacts({ ...common, compilerVersion: "0.3.0-rc" }).npmTag, "rc");
-  assert.equal(releaseArtifacts({ ...common, compilerVersion: "0.3.0" }).npmTag, "latest");
+  assert.equal(releaseArtifacts({ ...common, compilerVersion: "0.3.0-beta" }).npmTag, "beta");
+  assert.equal(releaseArtifacts({ ...common, compilerVersion: "0.3.1-rc" }).npmTag, "rc");
+  assert.equal(releaseArtifacts({ ...common, compilerVersion: "0.3.2" }).npmTag, "latest");
 });
 
 test("removes leading zeroes from the VS Code numeric version component", () => {
