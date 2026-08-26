@@ -252,7 +252,7 @@
 | TASK-242 | 홈페이지 릴리스 가이드 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-242](./TASK-242-website-release-guide.md) |
 | TASK-243 | 홈페이지 릴리스 가이드 전용 화면 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-243](./TASK-243-website-release-page.md) |
 | TASK-244 | GitHub Discussion 숙의 봇 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-244](./TASK-244-github-deliberation-bots.md) |
-| TASK-245 | `variant` 기반 tt 태그드 유니언 선언 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-245](./TASK-245-variant-declarations.md) |
+| TASK-245 | `variant` 기반 tt 태그드 유니언 선언 | 완료 | 2026-08-26 | 2026-08-27 | [TASK-245](./TASK-245-variant-declarations.md) |
 | TASK-246 | GitHub Discussion·PR 숙의 봇 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-246](./TASK-246-pr-review-deliberation.md) |
 
 ## 다음 태스크 번호

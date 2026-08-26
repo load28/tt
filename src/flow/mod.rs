@@ -1097,7 +1097,7 @@ const NON_LABEL_WORDS: &[&str] = &[
     "delete",
     "do",
     "else",
-    "variant",
+    "enum",
     "export",
     "extends",
     "false",
@@ -1179,7 +1179,7 @@ const NON_TYPE_WORDS: &[&str] = &[
     "delete",
     "do",
     "else",
-    "variant",
+    "enum",
     "export",
     "extends",
     "finally",
@@ -1345,9 +1345,70 @@ const BLOCK_STMT_WORDS: &[&str] = &[
     "namespace",
     "module",
     "interface",
-    "variant",
+    "enum",
     "with",
 ];
+
+/// Whether `{` is the declaration body of a TypeScript `enum` or a fully
+/// shaped tt `variant`. `variant` remains a valid TypeScript identifier
+/// everywhere else; only `variant Name {` (including generics and `export`)
+/// claims this statement boundary.
+fn variant_or_enum_body(src: &str, tokens: &[Token], last: usize, k: usize) -> bool {
+    let word = |i: usize| match tokens.get(i) {
+        Some(token) if matches!(token.kind, TokenKind::Ident) => {
+            Some(&src[token.span.start..token.span.end])
+        }
+        _ => None,
+    };
+    let variant = match (word(last), word(last + 1)) {
+        (Some("variant"), _) => Some(last),
+        (Some("export"), Some("variant")) => Some(last + 1),
+        _ => None,
+    };
+    if let Some(mut i) = variant {
+        i += 1;
+        if word(i).is_none() {
+            return false;
+        }
+        i += 1;
+        if i == k {
+            return true;
+        }
+        return matches!(
+            tokens.get(i).map(|token| &token.kind),
+            Some(TokenKind::Punct(b'<'))
+        ) && matches!(
+            k.checked_sub(1)
+                .and_then(|index| tokens.get(index))
+                .map(|token| &token.kind),
+            Some(TokenKind::Punct(b'>'))
+        );
+    }
+
+    let mut i = last;
+    if word(i) == Some("export") {
+        i += 1;
+        if word(i) == Some("default") {
+            i += 1;
+        }
+    }
+    if word(i) == Some("declare") {
+        i += 1;
+    }
+    let constant = word(i) == Some("const");
+    if constant {
+        i += 1;
+    }
+    if word(i) != Some("enum") {
+        return false;
+    }
+    i += 1;
+    if word(i).is_none() {
+        return false;
+    }
+    i += 1;
+    i == k
+}
 
 /// Words a `{` may directly follow while still being an *expression*:
 /// `return { … }`, `case { … }`, `await { … }`. Without this,
@@ -1376,6 +1437,9 @@ const EXPR_BRACE_WORDS: &[&str] = &[
 pub(crate) fn brace_opens_statement(src: &str, tokens: &[Token], last: usize, k: usize) -> bool {
     if k == last {
         return true; // the statement *is* a block
+    }
+    if variant_or_enum_body(src, tokens, last, k) {
+        return true;
     }
     let word = |i: usize| &src[tokens[i].span.start..tokens[i].span.end];
     if !matches!(tokens[last].kind, TokenKind::Ident) || !BLOCK_STMT_WORDS.contains(&word(last)) {
@@ -1601,8 +1665,24 @@ mod tests {
     fn a_labeled_statement_carries_its_bodys_flow() {
         assert!(check("label: return 1;"));
         assert!(check("label: { return 1; }"));
+        assert!(check("variant: { return 1; }"));
         assert!(!check("label: { break label; }"));
+        assert!(!check("variant: { break variant; }"));
         assert!(!check("label: log(\"x\");"));
+    }
+
+    #[test]
+    fn typescript_enum_and_tt_variant_are_distinct_statement_heads() {
+        assert!(check("enum E { A } throw e;"));
+        assert!(check("const enum E { A } throw e;"));
+        assert!(check("declare enum E { A } throw e;"));
+        assert!(check("export enum E { A } throw e;"));
+        assert!(check("export const enum E { A } throw e;"));
+        assert!(check("export declare enum E { A } throw e;"));
+        assert!(check("export default enum E { A } throw e;"));
+        assert!(check("variant V { A } throw e;"));
+        assert!(check("variant V<T> { A(value: T) } throw e;"));
+        assert!(check("export variant V { A } throw e;"));
     }
 
     #[test]
@@ -1701,6 +1781,7 @@ mod tests {
         assert!(inside("function f(): Promise<void> { HERE; }", "HERE"));
         assert!(inside("function f(): { a: number } { HERE; }", "HERE"));
         assert!(inside("function f(): X[] | null { HERE; }", "HERE"));
+        assert!(inside("function f(): variant { HERE; }", "HERE"));
         assert!(inside("const o = { m(): number { HERE; } };", "HERE"));
         // Nested in control flow inside the function — the `return` still
         // exits the function.

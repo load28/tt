@@ -2,7 +2,7 @@
 
 - **상태**: 완료
 - **시작일**: 2026-08-26
-- **완료일**: 2026-08-26
+- **완료일**: 2026-08-27
 - **커밋**: —
 
 ## 목적
@@ -38,6 +38,15 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
 - **선택과 근거**: 기존 tt `enum` 인식을 즉시 제거한다. `variant`만 ttc가 소유하고
   `enum`은 TypeScript에 전부 넘기므로 선언 경계가 단일 규칙으로 정리된다.
 
+### 결정 3: flow의 TypeScript 키워드와 tt 문맥 키워드를 분리
+
+- **상황**: PR 코드 리뷰에서 flow 구조 분류표의 TypeScript `enum`이 `variant`로
+  교체되어 통과 계약을 깨뜨릴 수 있다는 major finding에 세 리뷰어가 합의했다.
+- **검토한 대안**: 현재 교체 유지 / 두 단어를 전역 키워드로 등록 / `enum`을 복원하고
+  완전히 인식된 tt `variant` 선언만 별도로 처리.
+- **선택과 근거**: `enum`은 TypeScript 구조 키워드로 복원한다. `variant`는 일반
+  TypeScript 식별자이므로 완전히 인식된 tt 선언 문맥에서만 flow 구조로 취급한다.
+
 ## 작업 내역
 
 - 2026-08-26: `./scripts/doctor`로 개발 환경을 확인했다.
@@ -56,6 +65,11 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
   전환하고 VS Code 소비 모델과 회귀 테스트를 함께 갱신했다.
 - 2026-08-26: AST·HIR·resolve 내부 모델과 parser·설계·fixture 경로의 tt 전용
   명칭도 `variant`로 통일하고 전체 로컬 게이트를 다시 통과했다.
+- 2026-08-27: PR #66을 세 관점과 진행자 App이 5라운드로 리뷰했으며, TypeScript
+  `enum` 구조 분류 회귀와 VS Code 문서 잔여 용어를 반영하기로 승인받았다.
+- 2026-08-27: flow의 TypeScript `enum` 분류를 복원하고 tt `variant` 선언은 완성된
+  문맥에서만 인식하도록 분리했다. VS Code 문서 용어와 회귀 테스트도 갱신했다.
+- 2026-08-27: `./scripts/ci` 전체 게이트를 다시 통과했다.
 
 ## 이슈 및 해결
 
@@ -65,6 +79,11 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
   기대값 때문에 실패했다. 선언명 시작 열을 12에서 15로 갱신했다.
 - 최초 완료 검토에서 공개 API와 도구 JSON에 `enum` 명칭이 남은 것을 확인했다.
   호환 별칭 없이 전체 소비자를 `variant` 계약으로 함께 바꿨다.
+- PR 리뷰에서 flow 키워드 표의 기계적 치환이 TypeScript `enum` 문장 경계를 잃게 한
+  문제를 확인했다. `enum`은 TypeScript 구조 키워드로 복원하고 `variant`는 선언
+  형태를 별도로 확인하게 했다.
+- PR 리뷰에서 VS Code README에 tt 선언을 `enum`으로 부르는 표현이 남은 것을
+  확인했다. TypeScript 표준 용어를 제외한 해당 표현을 `variant`로 통일했다.
 
 ## 검증
 
