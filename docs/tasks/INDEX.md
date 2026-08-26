@@ -250,6 +250,7 @@
 | TASK-240 | TypeScript 릴리스 명령과 Beta 단계 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-240](./TASK-240-typescript-release-commands.md) |
 | TASK-241 | TypeScript 수준 릴리스 운영 가이드 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-241](./TASK-241-typescript-release-guide.md) |
 | TASK-242 | 홈페이지 릴리스 가이드 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-242](./TASK-242-website-release-guide.md) |
+| TASK-243 | 홈페이지 릴리스 가이드 전용 화면 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-243](./TASK-243-website-release-page.md) |
 
 ## 다음 태스크 번호
 
