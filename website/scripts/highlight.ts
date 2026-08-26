@@ -13,7 +13,11 @@ const highlighter = await createHighlighter({
 })
 
 function topicLanguage(id: string) {
-  return id === 'cli' || id === 'install' ? 'shellscript' : id === 'ttx' ? 'ttx' : 'tt'
+  return id === 'cli' || id === 'install' || id === 'release'
+    ? 'shellscript'
+    : id === 'ttx'
+      ? 'ttx'
+      : 'tt'
 }
 
 const highlighted = Object.fromEntries(

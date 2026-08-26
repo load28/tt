@@ -41,7 +41,8 @@
       "ko": "도구",
       "topics": [
         "modules",
-        "cli"
+        "cli",
+        "release"
       ]
     }
   ],
@@ -714,6 +715,73 @@
           "컴파일러는 입력 트리를 제자리에서 덮어쓰지 않습니다."
         ]
       }
+    },
+    "release": {
+      "nav": {
+        "en": "Release process",
+        "ko": "릴리스 절차"
+      },
+      "title": {
+        "en": "Release process",
+        "ko": "릴리스 절차"
+      },
+      "summary": {
+        "en": "tt follows TypeScript's single-main development line: Nightlies come from main, while each release line is stabilized from Beta through patches.",
+        "ko": "tt은 TypeScript의 단일 main 개발선을 따릅니다. Nightly는 main에서 만들고, 각 릴리스 라인은 Beta부터 Patch까지 안정화합니다."
+      },
+      "code": "# release-0.4\n0.4.0-beta  →  0.4.1-rc  →  0.4.2  →  0.4.3\n    Beta            RC       Stable     Patch",
+      "works": {
+        "en": [
+          "Nightly publishes the scheduled main CI automatically to npm next.",
+          "Beta, RC, Stable, and Patch use one long-lived release-X.Y branch.",
+          "Release preparation pushes a version commit; that push starts CI automatically.",
+          "A production approval publishes only the successful CI artifacts."
+        ],
+        "ko": [
+          "Nightly는 예약된 main CI를 npm next로 자동 게시합니다.",
+          "Beta, RC, Stable, Patch는 하나의 장기 release-X.Y 브랜치를 사용합니다.",
+          "릴리스 준비 액션이 버전 커밋을 push하고, 그 push가 CI를 자동 시작합니다.",
+          "production 승인은 성공한 CI 산출물만 게시합니다."
+        ]
+      },
+      "limits": {
+        "en": [],
+        "ko": []
+      },
+      "sections": [
+        {
+          "title": { "en": "What work belongs in each stage?", "ko": "각 단계에는 어떤 변경을 넣습니까?" },
+          "body": {
+            "en": "Put features, breaking changes, and ordinary fixes into main early in Beta. RC is for fixes and remaining editor work. After RC, restrict the release line to high-priority fixes; patches are for safe regressions and performance or editor fixes that should not wait for the next minor.",
+            "ko": "새 기능·큰 변경·일반 수정은 Beta 초기에 main에 넣습니다. RC에는 버그 수정과 남은 에디터 연동을 넣습니다. RC 뒤 릴리스 라인은 높은 우선순위 수정으로 제한하고, Patch에는 다음 minor까지 기다리기 어려운 안전한 회귀·성능·에디터 수정을 넣습니다."
+          },
+          "code": "# Beta: main accepts feature work\n# RC: fixes and remaining editor work\n# Stable / Patch: prioritized safe fixes only"
+        },
+        {
+          "title": { "en": "How does branching work?", "ko": "브랜치는 어떻게 사용합니까?" },
+          "body": {
+            "en": "Development normally lands in main through a squash-merged PR. Create release-X.Y from main for Beta. Sync main into that release branch during Beta and before RC. After RC, do not merge main wholesale: cherry-pick only the required main PR commit into release-X.Y.",
+            "ko": "일반 개발은 PR을 squash merge해 main에 넣습니다. Beta에서 main을 기준으로 release-X.Y를 만듭니다. Beta와 RC 직전에는 main을 해당 브랜치에 sync합니다. RC 뒤에는 main 전체를 병합하지 않고, 필요한 PR의 squash merge 커밋만 release-X.Y에 cherry-pick합니다."
+          },
+          "code": "git switch release-0.4\ngit cherry-pick <main-squash-merge-commit>\ngit push origin HEAD:release-0.4"
+        },
+        {
+          "title": { "en": "What is the release command sequence?", "ko": "릴리스 액션 순서는 무엇입니까?" },
+          "body": {
+            "en": "The three commands have separate boundaries, matching TypeScript's create, sync, and bump commands. They create the release branch, merge main, and advance the version respectively. The App identity pushes the resulting commit; do not create a version commit or dispatch CI yourself.",
+            "ko": "세 액션은 TypeScript의 create·sync·bump 경계를 그대로 나눕니다. 각각 릴리스 브랜치 생성, main 병합, 버전 증가를 담당합니다. App 신원이 결과 커밋을 push하므로 사람이 버전 커밋이나 CI dispatch를 만들지 않습니다."
+          },
+          "code": "gh workflow run new-release-branch.yml --ref main -f line=0.4\ngh workflow run sync-release-branch.yml --ref main -f line=0.4\ngh workflow run bump-release-version.yml --ref main -f line=0.4"
+        },
+        {
+          "title": { "en": "When is a release actually published?", "ko": "실제 게시는 언제 일어납니까?" },
+          "body": {
+            "en": "A release-branch push starts CI. On success, Publish Release takes that CI's immutable artifacts and waits at the production environment. A reviewer publishes by selecting Approve and deploy. Do not approve an intermediate sync CI that still has an already-published version; bump first to create the next publishable version.",
+            "ko": "릴리스 브랜치 push가 CI를 시작합니다. 성공하면 Publish Release가 그 CI의 불변 산출물을 가져와 production Environment에서 대기합니다. 승인자는 Approve and deploy를 눌러 게시합니다. 이미 게시한 버전과 같은 sync CI는 중간 검증이므로 승인하지 말고, 먼저 bump하여 다음 게시 버전을 만듭니다."
+          },
+          "code": "# CI succeeds → Publish Release waits in production\n# Approve and deploy → npm beta / rc / latest + GitHub Release"
+        }
+      ]
     }
   }
 }
