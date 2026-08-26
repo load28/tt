@@ -17,6 +17,9 @@ npm/*
 npm/tt-lang/tt-dev.local.json
 .rl-dev/
 
+# GitHub Discussion 숙의 봇의 로컬 자격 증명과 실행 상태
+.deliberation-bot/
+
 # Added by cargo
 
 /target

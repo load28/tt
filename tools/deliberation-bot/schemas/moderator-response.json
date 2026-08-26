@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "decision",
+    "summary",
+    "proposedResolution",
+    "agreements",
+    "unresolved",
+    "nextQuestion"
+  ],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["continue", "consensus", "human_required"]
+    },
+    "summary": { "type": "string" },
+    "proposedResolution": { "type": "string" },
+    "agreements": { "type": "array", "items": { "type": "string" } },
+    "unresolved": { "type": "array", "items": { "type": "string" } },
+    "nextQuestion": { "type": "string" }
+  }
+}

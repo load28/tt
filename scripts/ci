@@ -243,6 +243,8 @@ stage_rust() {
 stage_npm() {
   # Unquoted on purpose: the shell expands the globs, as it does in CI.
   run node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs || return 1
+  run npm --prefix tools/deliberation-bot test || return 1
+  run npm --prefix tools/deliberation-bot run check || return 1
 }
 
 # The reason this stage exists is to actually drive TypeScript 7, so a
