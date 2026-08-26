@@ -91,6 +91,10 @@ CI는 `main`·`release-X.Y` push와 이들을 대상으로 하는 PR에서 자�
 push CI는 정확한 커밋의 5개 플랫폼 바이너리, VSIX, 버전·SHA 메타데이터를 30일간
 보관합니다. 게시 액션은 다시 빌드하지 않고 성공한 CI run ID의 산출물만 사용합니다.
 Nightly만 예약 CI 성공 후 자동 게시하며 정식 릴리스는 수동으로 승격합니다.
+릴리스 액션은 TypeScript와 같이 전용 `tt-release-automation` GitHub App 신원으로
+버전 커밋을 push합니다. 이 push가 후속 CI를 자동으로 시작하므로 CI를 별도로 dispatch하지
+않습니다. App private key는 Azure Key Vault 대신 `RELEASE_APP_PRIVATE_KEY` Actions
+Secret에 보관하고 App ID는 `RELEASE_APP_ID` Actions Variable에 둡니다.
 
 ### Nightly
 
