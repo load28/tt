@@ -11,8 +11,7 @@ const expectedDependencyChannel = dependencyChannel(ownManifest.version)
 
 test('keeps dependencies on the installer release channel', () => {
   assert.equal(dependencyChannel('0.3.0-dev.20260826'), 'next')
-  assert.equal(dependencyChannel('0.3.0-beta'), 'beta')
-  assert.equal(dependencyChannel('0.3.1-rc'), 'rc')
+  assert.equal(dependencyChannel('0.3.0-rc'), 'rc')
   assert.equal(dependencyChannel('0.3.0'), 'latest')
   assert.equal(dependencyChannel('0.0.0-dev'), 'latest')
 })

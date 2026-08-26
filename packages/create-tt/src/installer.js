@@ -13,7 +13,6 @@ const versions = {
 
 export function dependencyChannel(packageVersion) {
   if (/-dev\./.test(packageVersion)) return 'next'
-  if (/-beta(?:\.|$)/.test(packageVersion)) return 'beta'
   if (/-rc(?:\.|$)/.test(packageVersion)) return 'rc'
   return 'latest'
 }

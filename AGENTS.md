@@ -77,8 +77,8 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
 3. 완료 전에 검증 결과와 변경 파일을 기록하고 INDEX와 문서를 `완료`로 바꿉니다.
 4. 커밋 제목은 `TASK-NNN: subject`로 시작합니다.
 
-버전은 작업 단위로 올리지 않습니다. `main`의 Nightly 버전은 CI가 빌드에만 날짜로
-스탬프합니다. Beta 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.
+버전은 작업 단위로 올리지 않습니다. `main`의 Nightly 버전은 예약 CI가 산출물에만
+날짜로 스탬프합니다. RC 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.
 
 ## 작업 브랜치와 릴리스
 
@@ -90,36 +90,28 @@ PR을 `main`에 squash merge합니다. `main`과 `release-X.Y`는 항상 빌드 
 CI는 `main`·`release-X.Y` push와 이들을 대상으로 하는 PR에서 자동 실행합니다.
 push CI는 정확한 커밋의 5개 플랫폼 바이너리, VSIX, 버전·SHA 메타데이터를 30일간
 보관합니다. 게시 액션은 다시 빌드하지 않고 성공한 CI run ID의 산출물만 사용합니다.
-어떤 채널도 자동 게시하지 않습니다.
+Nightly만 예약 CI 성공 후 자동 게시하며 정식 릴리스는 수동으로 승격합니다.
 
 ### Nightly
 
-Nightly는 릴리스 브랜치를 만들지 않고 `main`의 성공한 push CI를 승격합니다. CI는
-소스 버전을 바꾸지 않은 채 산출물에 `X.Y.Z-dev.YYYYMMDD`를 스탬프합니다. 사용자가
-Nightly 배포를 요청하면 대상 CI run ID를 확인한 뒤 다음을 실행하고 완료까지 봅니다.
+Nightly는 릴리스 브랜치를 만들지 않습니다. 매일 예약된 `main` CI가 소스 버전을
+바꾸지 않은 채 산출물에 `X.Y.Z-dev.YYYYMMDD`를 스탬프합니다. CI가 성공하면 게시
+워크플로가 그 run ID의 산출물을 npm `next`와 GitHub prerelease로 자동 승격합니다.
+
+### RC·Stable·Patch
+
+TypeScript의 릴리스 브랜치 모델에서 Beta만 생략합니다. `X.Y` RC는 최신 `main`에서
+`release-X.Y`를 만들고 `X.Y.0-rc`로 시작합니다. Stable은 `X.Y.0`, 이후 Patch는
+`X.Y.1`부터 하나씩 올립니다.
 
 ```sh
-gh workflow run release-publish.yml --ref main -f run_id=<CI-run-id> -f npm_tag=next
-```
-
-npm은 `next`, GitHub는 prerelease로 게시합니다. 같은 날짜의 Nightly가 이미 게시됐다면
-새 버전을 만들지 않으므로 다음 UTC 날짜의 빌드를 사용합니다.
-
-### Beta·RC·Stable·Patch
-
-TypeScript와 같은 한 릴리스 라인을 유지합니다. `X.Y` Beta는 최신 `main`에서
-`release-X.Y`를 만들고 `X.Y.0-beta`로 시작합니다. RC는 `main`을 그 브랜치에 병합한 뒤
-`X.Y.1-rc`, Stable은 `X.Y.2`, 이후 Patch는 `X.Y.3`부터 하나씩 올립니다.
-
-```sh
-gh workflow run release.yml --ref main -f line=X.Y -f stage=beta
 gh workflow run release.yml --ref main -f line=X.Y -f stage=rc
 gh workflow run release.yml --ref main -f line=X.Y -f stage=stable
 gh workflow run release.yml --ref main -f line=X.Y -f stage=patch
 ```
 
 각 push CI가 성공하면 그 run ID를 `release-publish.yml`에 전달하고 단계에 맞춰
-`beta`, `rc`, `latest` 중 하나로 수동 게시합니다. RC 뒤의 `main`은 다음 minor 개발을
+`rc`, `latest` 중 하나로 수동 게시합니다. RC 뒤의 `main`은 다음 minor 개발을
 계속하며, 현재 릴리스에 꼭 필요한 수정만 작업 PR을 `main`에 squash merge한 뒤
 `release-X.Y`에 cherry-pick합니다. `release-X.Y`는 Stable 뒤에도 Patch용으로
 삭제하지 않습니다.

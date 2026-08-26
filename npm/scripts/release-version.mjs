@@ -4,11 +4,11 @@ import { pathToFileURL } from "node:url";
 
 import { stampVersion } from "./stamp-version.mjs";
 
-const VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev\.[1-9]\d*|beta|rc))?$/;
+const VERSION = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev\.[1-9]\d*|rc))?$/;
 
 export function setReleaseVersion(version, repositoryRoot = process.cwd()) {
   if (!VERSION.test(version)) {
-    throw new Error(`release version must be X.Y.Z, X.Y.Z-dev.N, X.Y.0-beta, or X.Y.1-rc: ${version}`);
+    throw new Error(`release version must be X.Y.Z, X.Y.Z-dev.N, or X.Y.Z-rc: ${version}`);
   }
   replaceOnce(
     path.join(repositoryRoot, "Cargo.toml"),

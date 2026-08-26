@@ -158,18 +158,18 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
 ## 릴리스 모델
 
 tt은 Microsoft TypeScript와 같이 `main`을 Nightly와 일반 개발의 기준으로 사용합니다.
-작업 브랜치의 PR은 `main`에 squash merge합니다. Beta를 만들 때 장기 브랜치
-`release-X.Y`를 한 번 만들고, 같은 브랜치를 RC·Stable·Patch까지 유지합니다.
+작업 브랜치의 PR은 `main`에 squash merge합니다. RC를 만들 때 장기 브랜치
+`release-X.Y`를 한 번 만들고, 같은 브랜치를 Stable·Patch까지 유지합니다.
 
-- Nightly: `main`의 성공한 push CI 산출물, `X.Y.Z-dev.YYYYMMDD`, npm `next`
-- Beta: `release-X.Y`의 `X.Y.0-beta`, npm `beta`
-- RC: `main`을 릴리스 브랜치에 동기화한 `X.Y.1-rc`, npm `rc`
-- Stable/Patch: 같은 릴리스 브랜치의 `X.Y.2`, `X.Y.3`…, npm `latest`
+- Nightly: 예약된 `main` CI 산출물, `X.Y.Z-dev.YYYYMMDD`, npm `next` 자동 게시
+- RC: 최신 `main`에서 만든 `release-X.Y`의 `X.Y.0-rc`, npm `rc`
+- Stable/Patch: 같은 릴리스 브랜치의 `X.Y.0`, `X.Y.1`…, npm `latest`
 
-[`Advance Release Branch`](./.github/workflows/release.yml)는 릴리스 브랜치 생성·동기화와
+[`Advance Release Branch`](./.github/workflows/release.yml)는 릴리스 브랜치 생성과
 버전 커밋만 합니다. 그 push로 실행된 CI가 모든 플랫폼 바이너리와 VSIX를 만듭니다.
-[`Publish Release`](./.github/workflows/release-publish.yml)는 성공한 CI run ID를 입력받아
-그 산출물만 수동 게시하며 다시 빌드하지 않습니다. 자동 배포는 없습니다.
+[`Publish Release`](./.github/workflows/release-publish.yml)는 성공한 CI 산출물만 게시하며
+다시 빌드하지 않습니다. Nightly는 예약 CI 뒤 자동 게시하고 RC·Stable·Patch는
+run ID를 입력해 수동 게시합니다.
 
 ```sh
 bun add -d @load28/tt-lang@next @load28/unplugin-tt@next

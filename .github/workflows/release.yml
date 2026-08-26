@@ -1,5 +1,5 @@
-# TypeScript's create/sync/bump bot sequence as one maintainer action.
-# The release-X.Y branch is retained for Beta, RC, Stable, and later patches.
+# A simplified TypeScript-style release line without a Beta stage.
+# The release-X.Y branch is retained for RC, Stable, and later patches.
 name: Advance Release Branch
 
 on:
@@ -13,7 +13,7 @@ on:
         description: Stage to prepare
         required: true
         type: choice
-        options: [beta, rc, stable, patch]
+        options: [rc, stable, patch]
 
 permissions:
   contents: write
@@ -42,7 +42,7 @@ jobs:
           BRANCH="release-$LINE"
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          if [ "$STAGE" = beta ]; then
+          if [ "$STAGE" = rc ]; then
             if git ls-remote --exit-code origin "refs/heads/$BRANCH"; then
               echo "$BRANCH already exists" >&2
               exit 1
@@ -53,9 +53,6 @@ jobs:
             git fetch origin "$BRANCH"
             git checkout -B "$BRANCH" "origin/$BRANCH"
             CURRENT="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-            if [ "$STAGE" = rc ]; then
-              git merge --no-edit origin/main
-            fi
           fi
           VERSION="$(node npm/scripts/release-stage.mjs "$STAGE" "$LINE" "$CURRENT")"
           node npm/scripts/release-version.mjs "$VERSION"
