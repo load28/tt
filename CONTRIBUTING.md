@@ -170,8 +170,10 @@ tt은 Microsoft TypeScript와 같이 `main`을 Nightly와 일반 개발의 기�
 App 설치 토큰으로 push하므로, 그 push가 CI를 자동으로 시작합니다. CI는 모든 플랫폼
 바이너리와 VSIX를 만듭니다.
 [`Publish Release`](./.github/workflows/release-publish.yml)는 성공한 CI 산출물만 게시하며
-다시 빌드하지 않습니다. Nightly는 예약 CI 뒤 자동 게시하고 RC·Stable·Patch는
-run ID를 입력해 수동 게시합니다.
+다시 빌드하지 않습니다. Nightly는 예약 CI 뒤 자동 게시합니다. RC·Stable·Patch는
+성공한 릴리스 브랜치 CI가 `production` Environment에서 대기하며, 승인자가
+`Approve and deploy`하면 게시됩니다. run ID와 npm tag는 자동으로 선택됩니다.
+저장소의 `production` Environment는 `load28`을 필수 승인자로 지정합니다.
 
 이 동작에는 저장소에 설치한 `tt-release-automation` GitHub App이 필요합니다. App의
 저장소 `Contents` 권한은 `Read and write`로 제한합니다. Actions Variable
