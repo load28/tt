@@ -361,7 +361,7 @@ test(
 /** The legend the server declares — mirrored here to decode the response. */
 const TOKEN_TYPES = [
   "keyword",
-  "variant",
+  "enum",
   "enumMember",
   "variable",
   "property",
@@ -405,6 +405,7 @@ test(
       "    _ => 0,",
       "  };",
       "}",
+      "variant Shape { Circle(r: number), Point }",
       "",
     ].join("\n");
     const { client, uri, stop } = await open(source);
@@ -426,6 +427,8 @@ test(
       assert.equal(at(6, 9)?.type, "keyword");
       assert.equal(at(7, 4)?.type, "enumMember");
       assert.equal(at(7, 11)?.type, "variable");
+      // tt's Variant concept stays on the standard LSP `enum` wire token.
+      assert.equal(at(11, 8)?.type, "enum");
     } finally {
       stop();
     }

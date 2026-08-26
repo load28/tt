@@ -256,6 +256,13 @@ function passthrough(a: number, b: number) {
 }
 `;
 
+const VARIANT_ASI = `declare const variant: unknown;
+declare const Foo: unknown;
+variant
+Foo
+{ label: 1 }
+`;
+
 test("TypeScript look-alikes are not claimed by tt rules", async () => {
   const lines = await tokenize("source.tt", LOOKALIKES);
   // const enum은 TS enum 규칙의 것 — tt variant 스코프가 없어야 한다.
@@ -271,6 +278,19 @@ test("TypeScript look-alikes are not claimed by tt rules", async () => {
   // 객체 키 result는 키워드가 아니다.
   const key = tokenAt(lines, 4, "result");
   assert.ok(!key.scopes.includes("keyword.control.result.tt"));
+});
+
+test("line-separated TypeScript identifiers are not a variant declaration", async () => {
+  const tt = await tokenize("source.tt", VARIANT_ASI);
+  const ts = await tokenize("source.ts", VARIANT_ASI);
+  const strip = (lines: Token[][]) =>
+    lines.map((line) =>
+      line.map((token) => ({
+        text: token.text,
+        scopes: token.scopes.slice(1).join(" "),
+      })),
+    );
+  assert.deepEqual(strip(tt), strip(ts));
 });
 
 // 순수 TypeScript 픽스처 — tt 문법과 TS 문법의 스코프가 같아야 한다.

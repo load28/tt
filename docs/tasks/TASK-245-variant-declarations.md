@@ -47,6 +47,15 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
 - **선택과 근거**: `enum`은 TypeScript 구조 키워드로 복원한다. `variant`는 일반
   TypeScript 식별자이므로 완전히 인식된 tt 선언 문맥에서만 flow 구조로 취급한다.
 
+### 결정 4: 편집기 표시와 LSP wire 명칭을 분리
+
+- **상황**: 재리뷰에서 여러 줄 TypeScript 식별자를 variant 선언으로 강조하는 문법과
+  테스트의 LSP 토큰 범례를 `variant`로 바꾼 문제가 합의된 minor finding이 되었다.
+- **검토한 대안**: 문법의 넓은 공백 허용 유지 / variant 선언명을 같은 줄에서만
+  인식하고 선언 본문 또는 제네릭 시작을 확인 / LSP에 비표준 `variant` 토큰 추가.
+- **선택과 근거**: TextMate 문법은 같은 줄의 선언명과 뒤의 `<` 또는 `{`를 확인한다.
+  내부 개념은 variant로 유지하되 LSP wire token은 표준 `enum`을 유지한다.
+
 ## 작업 내역
 
 - 2026-08-26: `./scripts/doctor`로 개발 환경을 확인했다.
@@ -70,6 +79,12 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
 - 2026-08-27: flow의 TypeScript `enum` 분류를 복원하고 tt `variant` 선언은 완성된
   문맥에서만 인식하도록 분리했다. VS Code 문서 용어와 회귀 테스트도 갱신했다.
 - 2026-08-27: `./scripts/ci` 전체 게이트를 다시 통과했다.
+- 2026-08-27: 새 head 재리뷰의 합의된 편집기 minor 두 건을 반영했다. TextMate의
+  ASI 회귀 테스트와 LSP `enum` wire token 검증을 추가했다.
+- 2026-08-27: 원격 performance 체크가 벤치마크 입력의 폐기된 tt `enum` 때문에
+  실패한 원인을 확인하고 해당 선언을 `variant`로 바꿨다.
+- 2026-08-27: 편집기 minor와 벤치마크 수정 후 `./scripts/ci` 전체 게이트를 다시
+  통과했다.
 
 ## 이슈 및 해결
 
@@ -84,6 +99,12 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
   형태를 별도로 확인하게 했다.
 - PR 리뷰에서 VS Code README에 tt 선언을 `enum`으로 부르는 표현이 남은 것을
   확인했다. TypeScript 표준 용어를 제외한 해당 표현을 `variant`로 통일했다.
+- 재리뷰에서 TextMate의 `\\s+`가 줄바꿈 ASI 문장을 variant 선언으로 오인하는 문제를
+  확인했다. 선언명 앞 공백을 한 줄로 제한하고 뒤에 `<` 또는 `{`가 있는지 확인했다.
+- 재리뷰에서 시맨틱 토큰 테스트 범례가 실제 LSP `enum` wire token과 달라진 문제를
+  확인했다. 범례를 복원하고 variant 선언명의 실제 토큰 종류를 검증했다.
+- 원격 performance 체크에서 벤치마크가 폐기된 tt `enum` 문법을 사용해 컴파일되지
+  않았다. 벤치마크 선언을 `variant`로 바꾸고 직접 실행해 측정을 확인했다.
 
 ## 검증
 
@@ -91,6 +112,7 @@ GitHub Discussion #63의 선택지 B에 따라 TypeScript `enum`과 tt 태그드
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
 - [x] `./scripts/ci`
+- [x] `TT_BENCH_ITERS=1 cargo bench --bench compile -- --json`
 
 ## 결과
 

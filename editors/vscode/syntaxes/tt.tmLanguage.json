@@ -5848,7 +5848,7 @@
     },
     "tt-variant-declaration": {
       "name": "meta.variant.declaration.tt",
-      "begin": "(?<![_$[:alnum:]])(?:\\b(export)\\s+)?\\b(variant)\\s+([$_[:alpha:]][$_[:alnum:]]*)",
+      "begin": "(?<![_$[:alnum:]])(?:\\b(export)\\s+)?\\b(variant)[ \\t]+([$_[:alpha:]][$_[:alnum:]]*)(?=\\s*(?:<|\\{))",
       "beginCaptures": {
         "1": {
           "name": "keyword.control.export.ts"
