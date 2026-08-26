@@ -30,10 +30,20 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
 test("one retained release branch advances through RC, stable, and patch", () => {
   assert.match(advance, /workflow_dispatch:/);
   assert.match(advance, /options: \[rc, stable, patch\]/);
+  assert.match(advance, /permissions:\n  contents: read/);
+  assert.match(advance, /persist-credentials: false/);
   assert.match(advance, /BRANCH="release-\$LINE"/);
   assert.match(advance, /git checkout -b "\$BRANCH" origin\/main/);
   assert.doesNotMatch(advance, /git merge --no-edit origin\/main/);
   assert.match(advance, /release-stage\.mjs/);
+  assert.match(advance, /actions\/create-github-app-token@v3/);
+  assert.match(advance, /app-id: \$\{\{ vars\.RELEASE_APP_ID \}\}/);
+  assert.match(advance, /private-key: \$\{\{ secrets\.RELEASE_APP_PRIVATE_KEY \}\}/);
+  assert.match(advance, /permission-contents: write/);
+  assert.match(advance, /GITHUB_APP_TOKEN: \$\{\{ steps\.app-token\.outputs\.token \}\}/);
+  assert.match(advance, /git config --local http\.https:\/\/github\.com\/\.extraheader/);
+  assert.match(advance, /git push origin "HEAD:refs\/heads\/\$BRANCH"/);
+  assert.doesNotMatch(advance, /gh workflow run|GITHUB_TOKEN/);
   assert.doesNotMatch(advance, /npm publish|action-gh-release|git push origin --delete/);
 });
 

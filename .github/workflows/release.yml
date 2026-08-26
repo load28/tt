@@ -16,7 +16,11 @@ on:
         options: [rc, stable, patch]
 
 permissions:
-  contents: write
+  contents: read
+
+defaults:
+  run:
+    shell: bash
 
 concurrency:
   group: release-${{ inputs.line }}
@@ -31,6 +35,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -39,9 +44,8 @@ jobs:
           LINE: ${{ inputs.line }}
           STAGE: ${{ inputs.stage }}
         run: |
+          set -euo pipefail
           BRANCH="release-$LINE"
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           if [ "$STAGE" = rc ]; then
             if git ls-remote --exit-code origin "refs/heads/$BRANCH"; then
               echo "$BRANCH already exists" >&2
@@ -57,6 +61,29 @@ jobs:
           VERSION="$(node npm/scripts/release-stage.mjs "$STAGE" "$LINE" "$CURRENT")"
           node npm/scripts/release-version.mjs "$VERSION"
           git add Cargo.toml Cargo.lock npm/tt-lang/package.json packages/create-tt/package.json
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Configure git for GitHub App token
+        env:
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          GITHUB_APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          basic_auth="$(node -e 'process.stdout.write(Buffer.from("x-access-token:" + process.env.GITHUB_APP_TOKEN).toString("base64"))')"
+          echo "::add-mask::$basic_auth"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${basic_auth}"
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_SLUG}[bot]@users.noreply.github.com"
+      - name: Commit and push the release version
+        run: |
+          set -euo pipefail
           git commit -m "chore(release): $VERSION"
           git push origin "HEAD:refs/heads/$BRANCH"
-          echo "Prepared $VERSION on $BRANCH. CI will build the exact pushed commit."
+          echo "Prepared $VERSION on $BRANCH. Its GitHub App push starts CI automatically."
