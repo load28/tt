@@ -3,7 +3,7 @@
 - **상태**: 완료
 - **시작일**: 2026-08-26
 - **완료일**: 2026-08-27
-- **커밋**: —
+- **커밋**: `912c729`, `166c9d8`, `7200308`, `69b0408`
 
 ## 목적
 
@@ -120,3 +120,11 @@ tt 태그드 유니언은 문법, 컴파일러 모델, 공개 Rust API, ttc·eng
 VS Code와 문서에서 `variant`로만 표현한다. TypeScript와 LSP 표준이 소유하는
 `enum`·`enumMember`만 원래 의미로 유지한다. 괄호 없는 유닛 케이스와 기존
 페이로드·제네릭·match 의미는 동일하게 동작한다.
+
+변경 파일은 다음 책임 영역으로 나뉜다.
+
+- 컴파일러: `src/parser/variants.rs`, `src/ast.rs`, `src/hir/`, `src/resolve/`,
+  `src/analysis/`, `src/engine/`, `src/codegen/`, `src/flow/mod.rs`와 공개 API·CLI
+- 검증: `tests/`, `tests/fixtures/`, `benches/compile.rs`
+- 편집기: `editors/vscode/server/`, `editors/vscode/syntaxes/`, VS Code README
+- 문서: 영문·한글 README, `docs/ai/tt.md`, 관련 `docs/design/` 문서
