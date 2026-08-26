@@ -1,5 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
 import { isTopic } from '../content'
+import { ReleasePage } from '../ui/ReleasePage'
 import { ReferencePage, pageHead } from '../ui/ReferencePage'
 
 export const Route = createFileRoute('/ko/$topic')({
@@ -13,5 +14,6 @@ export const Route = createFileRoute('/ko/$topic')({
 function TopicPage() {
   const { topic } = Route.useParams()
   if (!isTopic(topic)) return null
+  if (topic === 'release') return <ReleasePage language="ko" />
   return <ReferencePage language="ko" topic={topic} />
 }
