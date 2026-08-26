@@ -57,22 +57,22 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
-    /// The file's enum declaration symbols, parsed once per content
+    /// The file's variant declaration symbols, parsed once per content
     /// version — what an importer's extern collection reads, so a file
     /// that did not change is never re-parsed for its exports
     /// (`docs/design/compiler-core.md` §11).
-    enum_symbols: std::sync::OnceLock<Vec<crate::EnumSymbol>>,
+    variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
     /// The file's relative `.tt` imports, parsed once per content version —
     /// the dependency edges the semantic cache keys off.
     imports: std::sync::OnceLock<Vec<crate::TtImport>>,
 }
 
 impl ProjectedDocument {
-    /// The file's enum declaration symbols (exported or not), computed on
+    /// The file's variant declaration symbols (exported or not), computed on
     /// first use and pinned to this projection's content version.
-    pub(crate) fn enum_symbols(&self) -> &[crate::EnumSymbol] {
-        self.enum_symbols.get_or_init(|| {
-            crate::enum_symbols_with_kind(
+    pub(crate) fn variant_symbols(&self) -> &[crate::VariantSymbol] {
+        self.variant_symbols.get_or_init(|| {
+            crate::variant_symbols_with_kind(
                 &self.source,
                 crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
             )
@@ -155,7 +155,7 @@ impl ProjectedDocument {
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
-            enum_symbols: std::sync::OnceLock::new(),
+            variant_symbols: std::sync::OnceLock::new(),
             imports: std::sync::OnceLock::new(),
         })
     }
@@ -609,7 +609,7 @@ fn scrutinee_position(emit: &MappedEmit, keyword_offset: usize) -> Option<usize>
 /// translated: their type error is TypeScript's to phrase.
 ///
 /// `declarations` is the file's declaration table — what lets the wording
-/// name the enum case a structural type in the message lowers from. It is
+/// name the variant case a structural type in the message lowers from. It is
 /// the caller's because the table costs a parse of the file (and of what it
 /// imports), which is worth doing once per file rather than once per
 /// diagnostic.
@@ -617,7 +617,7 @@ fn scrutinee_position(emit: &MappedEmit, keyword_offset: usize) -> Option<usize>
 fn translate_on_glue(
     file: &ProjectedDocument,
     diagnostic: &crate::typescript::backend::Diagnostic,
-    declarations: &[crate::analysis::DeclaredEnum],
+    declarations: &[crate::analysis::DeclaredVariant],
 ) -> Option<(crate::EmitAnchor, String)> {
     let anchor = glue_anchor(file, diagnostic.start)?;
     let said = super::semantics::translate(
@@ -740,7 +740,7 @@ mod tests {
     }
 
     /// The declaration table the report path hands the translation.
-    fn declarations(file: &ProjectedDocument) -> Vec<crate::analysis::DeclaredEnum> {
+    fn declarations(file: &ProjectedDocument) -> Vec<crate::analysis::DeclaredVariant> {
         crate::pattern_analyses(&file.source, &[]).declarations
     }
 
@@ -765,8 +765,8 @@ mod tests {
     }
 
     #[test]
-    fn a_malformed_match_beside_an_enum_recovers_before_codegen() {
-        let source = "enum Shape { Circle(r: number), Square(s: number) }\n\
+    fn a_malformed_match_beside_a_variant_recovers_before_codegen() {
+        let source = "variant Shape { Circle(r: number), Square(s: number) }\n\
             export function area(shape: Shape): number {\n\
               return match shape { Circle(r) => r, Square(s) => s };\n\
             }\n";
@@ -826,7 +826,7 @@ mod tests {
     #[test]
     fn the_innermost_construct_owns_its_glue() {
         let file = project(
-            "enum E { A(x: number), B }\nfunction f() {\n  const a = try wrap(match (e) { A(x) => x, B => 0 });\n}\n",
+            "variant E { A(x: number), B }\nfunction f() {\n  const a = try wrap(match (e) { A(x) => x, B => 0 });\n}\n",
         );
         let diagnostic = ts_at(
             &file,
@@ -846,7 +846,7 @@ mod tests {
         // (`Blocked`) and silence the file's typed diagnostics wholesale.
         // Now the file lowers, and the error rides along for the report.
         let file = project(
-            "enum E { A(x: number), B }\n\
+            "variant E { A(x: number), B }\n\
              const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n",
         );
         assert!(file.emit.code.contains("switch ($tt_m.kind)"));
@@ -860,7 +860,7 @@ mod tests {
     #[test]
     fn resolution_diagnostics_ride_along_on_the_typed_path_too() {
         let file = project(
-            "enum Shape { Circle(r: number), Empty }\n\
+            "variant Shape { Circle(r: number), Empty }\n\
              const v = match (s) { Circel(r) => r, Empty => 0 };\n",
         );
         assert_eq!(file.tt_diagnostics.len(), 1);

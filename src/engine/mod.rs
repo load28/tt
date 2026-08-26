@@ -52,7 +52,8 @@ mod tokens;
 
 pub use completions::{TtCompletion, TtCompletionKind, tt_completions_at};
 pub use declarations::{
-    TtCaseDecl, TtDeclarations, TtEnumDecl, TtEnumOrigin, TtFieldDecl, TtMatchSite, tt_declarations,
+    TtCaseDecl, TtDeclarations, TtFieldDecl, TtMatchSite, TtVariantDecl, TtVariantOrigin,
+    tt_declarations,
 };
 pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{

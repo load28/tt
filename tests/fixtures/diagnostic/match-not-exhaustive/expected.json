@@ -5,7 +5,7 @@
     "endCol": 30,
     "endLine": 8,
     "line": 8,
-    "message": "match on enum Shape is not exhaustive: missing \"Rect\", \"Point\"",
+    "message": "match on variant Shape is not exhaustive: missing \"Rect\", \"Point\"",
     "suggestions": [
       {
         "edit": {

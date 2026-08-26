@@ -32,10 +32,10 @@ use crate::typescript::mapper;
 pub enum SemanticTokenKind {
     /// A tt keyword the parser claimed: `match`, `result`, `flow`, `try`.
     Keyword,
-    /// A tt enum's name, at its declaration.
-    Enum,
-    /// A case tag — in an enum declaration or in a pattern.
-    EnumMember,
+    /// A tt variant's name, at its declaration.
+    Variant,
+    /// A case tag — in a variant declaration or in a pattern.
+    VariantCase,
     /// A binding a tt pattern introduces (alias included).
     Variable,
     /// A field name in a pattern's `field: alias` binding.
@@ -53,8 +53,8 @@ impl SemanticTokenKind {
     pub fn as_str(self) -> &'static str {
         match self {
             SemanticTokenKind::Keyword => "keyword",
-            SemanticTokenKind::Enum => "enum",
-            SemanticTokenKind::EnumMember => "enumMember",
+            SemanticTokenKind::Variant => "enum",
+            SemanticTokenKind::VariantCase => "enumMember",
             SemanticTokenKind::Variable => "variable",
             SemanticTokenKind::Property => "property",
             SemanticTokenKind::Function => "function",
@@ -116,10 +116,10 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(span) => deny_lookalikes(src, span.start, span.end, out),
-            Segment::Enum(decl) => {
-                out.push((decl.name_off, decl.name.len(), SemanticTokenKind::Enum));
+            Segment::Variant(decl) => {
+                out.push((decl.name_off, decl.name.len(), SemanticTokenKind::Variant));
                 for case in &decl.cases {
-                    out.push((case.tag_off, case.tag.len(), SemanticTokenKind::EnumMember));
+                    out.push((case.tag_off, case.tag.len(), SemanticTokenKind::VariantCase));
                 }
             }
             Segment::Match(m) => {
@@ -250,7 +250,7 @@ fn pattern(src: &str, p: &Pattern, out: &mut Vec<(usize, usize, SemanticTokenKin
 }
 
 fn tag_pattern(tag: &TagPattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
-    out.push((tag.tag_off, tag.tag.len(), SemanticTokenKind::EnumMember));
+    out.push((tag.tag_off, tag.tag.len(), SemanticTokenKind::VariantCase));
     if let Some(list) = &tag.bindings {
         bindings(list, out);
     }
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn claimed_constructs_report_their_tokens() {
         let src = r#"function demo(shape: Shape) {
-  enum Shape { Circle(r: number), Dot }
+  variant Shape { Circle(r: number), Dot }
   return match (shape) {
     Circle(r) => r,
     Some(value: user) => user,
@@ -421,9 +421,9 @@ mod tests {
 }
 "#;
         let tokens = kinds_at(src);
-        assert!(tokens.contains(&("Shape".into(), SemanticTokenKind::Enum)));
-        assert!(tokens.contains(&("Circle".into(), SemanticTokenKind::EnumMember)));
-        assert!(tokens.contains(&("Dot".into(), SemanticTokenKind::EnumMember)));
+        assert!(tokens.contains(&("Shape".into(), SemanticTokenKind::Variant)));
+        assert!(tokens.contains(&("Circle".into(), SemanticTokenKind::VariantCase)));
+        assert!(tokens.contains(&("Dot".into(), SemanticTokenKind::VariantCase)));
         assert!(tokens.contains(&("match".into(), SemanticTokenKind::Keyword)));
         assert!(tokens.contains(&("r".into(), SemanticTokenKind::Variable)));
         assert!(tokens.contains(&("value".into(), SemanticTokenKind::Property)));
@@ -473,8 +473,8 @@ mod tests {
     fn let_else_and_if_let_tags_are_enum_members() {
         let src = "function f(o: O) {\n  let Some(value: v) = o else { return 0; };\n  if let Ok(value) = ask() {\n    use(value);\n  }\n  return v;\n}\n";
         let tokens = kinds_at(src);
-        assert!(tokens.contains(&("Some".into(), SemanticTokenKind::EnumMember)));
-        assert!(tokens.contains(&("Ok".into(), SemanticTokenKind::EnumMember)));
+        assert!(tokens.contains(&("Some".into(), SemanticTokenKind::VariantCase)));
+        assert!(tokens.contains(&("Ok".into(), SemanticTokenKind::VariantCase)));
     }
 
     #[test]

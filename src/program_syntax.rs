@@ -2773,7 +2773,7 @@ mod tests {
         // copied dot. The owner projection records that fixed delimiter as
         // the boundary of the copied arm expression, so malformed user text
         // remains an input failure instead of becoming an ICE.
-        let source = "enum Shape { Circle(radius: number), Point }\n\
+        let source = "variant Shape { Circle(radius: number), Point }\n\
                       declare const shape: Shape;\n\
                       const label = match (shape) {\n\
                         Circle(radius) => radius.,\n\
@@ -2827,7 +2827,7 @@ mod tests {
     #[test]
     fn a_match_argument_keeps_its_call_parent_path() {
         let syntax = syntax(
-            "enum E { A, B(x: number) }\nconst out = render(1, match (e) { A => 0, B(x) => x });\n",
+            "variant E { A, B(x: number) }\nconst out = render(1, match (e) { A => 0, B(x) => x });\n",
         );
         let entry = syntax
             .overlay
@@ -2847,7 +2847,8 @@ mod tests {
 
     #[test]
     fn a_direct_return_is_a_function_statement_continuation() {
-        let source = "enum E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n";
+        let source =
+            "variant E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n";
         let syntax = syntax(source);
         let context = syntax
             .overlay
@@ -2871,7 +2872,8 @@ mod tests {
 
     #[test]
     fn an_expression_bodied_arrow_has_an_arrow_return_continuation() {
-        let syntax = syntax("enum E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
+        let syntax =
+            syntax("variant E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
         let entry = syntax
             .overlay
             .iter()
@@ -2891,7 +2893,7 @@ mod tests {
     #[test]
     fn a_nested_decision_keeps_the_outer_initializer_owner() {
         let syntax = syntax(
-            "enum E { A, B }\nconst value = match (outer) { A => match (inner) { A => 1, B => 2 }, B => 0 };\n",
+            "variant E { A, B }\nconst value = match (outer) { A => match (inner) { A => 1, B => 2 }, B => 0 };\n",
         );
         let entries = syntax
             .overlay
@@ -2909,7 +2911,7 @@ mod tests {
     #[test]
     fn a_conditional_branch_stays_conditional() {
         let syntax =
-            syntax("enum E { A, B }\nconst out = flag ? match (e) { A => 1, B => 2 } : 0;\n");
+            syntax("variant E { A, B }\nconst out = flag ? match (e) { A => 1, B => 2 } : 0;\n");
         let context = syntax
             .overlay
             .iter()
@@ -2922,7 +2924,8 @@ mod tests {
 
     #[test]
     fn an_eager_binary_rhs_has_an_explicit_evaluation_step() {
-        let syntax = syntax("enum E { A, B }\nconst out = left + match (e) { A => 1, B => 2 };\n");
+        let syntax =
+            syntax("variant E { A, B }\nconst out = left + match (e) { A => 1, B => 2 };\n");
         let entry = syntax
             .overlay
             .iter()
@@ -2937,7 +2940,7 @@ mod tests {
 
     #[test]
     fn a_whole_variable_initializer_has_an_initialize_continuation() {
-        let syntax = syntax("enum E { A, B }\nconst out = match (e) { A => 1, B => 2 };\n");
+        let syntax = syntax("variant E { A, B }\nconst out = match (e) { A => 1, B => 2 };\n");
         let entry = syntax
             .overlay
             .iter()
@@ -2950,7 +2953,7 @@ mod tests {
     #[test]
     fn a_short_circuit_rhs_is_a_conditional_protocol_branch() {
         let syntax =
-            syntax("enum E { A, B }\nconst out = ready && match (e) { A => 1, B => 2 };\n");
+            syntax("variant E { A, B }\nconst out = ready && match (e) { A => 1, B => 2 };\n");
         let entry = syntax
             .overlay
             .iter()
@@ -2964,8 +2967,9 @@ mod tests {
 
     #[test]
     fn a_member_call_preserves_the_reference_chain() {
-        let syntax =
-            syntax("enum E { A, B }\nconst out = (match (e) { A => left, B => right }).run();\n");
+        let syntax = syntax(
+            "variant E { A, B }\nconst out = (match (e) { A => left, B => right }).run();\n",
+        );
         let entry = syntax
             .overlay
             .iter()
@@ -2991,8 +2995,9 @@ mod tests {
 
     #[test]
     fn a_call_argument_keeps_left_to_right_argument_position() {
-        let syntax =
-            syntax("enum E { A, B }\nconst out = render(first(), match (e) { A => 1, B => 2 });\n");
+        let syntax = syntax(
+            "variant E { A, B }\nconst out = render(first(), match (e) { A => 1, B => 2 });\n",
+        );
         let entry = syntax
             .overlay
             .iter()
@@ -3006,7 +3011,7 @@ mod tests {
     #[test]
     fn an_await_operand_records_the_suspension_point() {
         let syntax = syntax(
-            "enum E { A, B }\nasync function f(e: E) { return await match (e) { A => 1, B => 2 }; }\n",
+            "variant E { A, B }\nasync function f(e: E) { return await match (e) { A => 1, B => 2 }; }\n",
         );
         let entry = syntax
             .overlay
@@ -3021,7 +3026,7 @@ mod tests {
     #[test]
     fn a_parameter_initializer_is_a_composed_owner_value() {
         let syntax = syntax(
-            "enum E { A, B }\nfunction f(e: E, x = match (e) { A => 1, B => 2 }) { return x; }\n",
+            "variant E { A, B }\nfunction f(e: E, x = match (e) { A => 1, B => 2 }) { return x; }\n",
         );
         let context = syntax
             .overlay
@@ -3035,8 +3040,9 @@ mod tests {
 
     #[test]
     fn an_expression_in_a_loop_keeps_repeated_frequency() {
-        let syntax =
-            syntax("enum E { A, B }\nwhile (ready()) { consume(match (e) { A => 1, B => 2 }); }\n");
+        let syntax = syntax(
+            "variant E { A, B }\nwhile (ready()) { consume(match (e) { A => 1, B => 2 }); }\n",
+        );
         let context = syntax
             .overlay
             .iter()
@@ -3049,7 +3055,7 @@ mod tests {
     #[test]
     fn every_core_surface_gets_a_typed_overlay() {
         let syntax = syntax(
-            "enum E { A(x: number), B }\n\
+            "variant E { A(x: number), B }\n\
              function f(e: E) {\n\
                if let A(x) = e { use(x); }\n\
                const A(y) = e else { return 0; };\n\

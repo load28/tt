@@ -103,8 +103,8 @@ pub(crate) enum RecoveryKind {
     Statement,
     /// Replace an invalid TypeScript type fragment with a literal type.
     Type,
-    /// Replace an invalid enum declaration with a value-and-type placeholder.
-    EnumDecl { name: String, exported: bool },
+    /// Replace an invalid variant declaration with a value-and-type placeholder.
+    VariantDecl { name: String, exported: bool },
 }
 
 /// One top-level piece of a [`Program`], in source order.
@@ -112,8 +112,8 @@ pub(crate) enum RecoveryKind {
 pub(crate) enum Segment {
     /// Bytes copied to the output unchanged.
     Verbatim(Span),
-    /// A tt `enum` declaration (plain TypeScript enums never get here).
-    Enum(EnumDecl),
+    /// A tt `variant` declaration (TypeScript enums never get here).
+    Variant(VariantDecl),
     /// A tt `match` expression.
     Match(MatchExpr),
     /// A tt tuple match expression (`match (a, b) { (P, Q) => ... }`).
@@ -272,7 +272,7 @@ pub(crate) enum TtImportNames {
     /// `import * as ns from ...` — every export, namespace-qualified.
     Namespace(String),
     /// `import { a, b as c, type d } from ...` — (exported name, alias).
-    /// A default binding is not recorded (tt enums are named exports).
+    /// A default binding is not recorded (tt variants are named exports).
     Named(Vec<(String, Option<String>)>),
     /// A side-effect import or a re-export — nothing enters local scope.
     None,
@@ -402,21 +402,21 @@ pub(crate) struct TryStmt {
     pub in_function: bool,
 }
 
-/// A structurally parsed tt `enum` declaration.
+/// A structurally parsed tt `variant` declaration.
 #[derive(Debug)]
-pub(crate) struct EnumDecl {
+pub(crate) struct VariantDecl {
     pub name: String,
     /// Byte offset of the name, for error reporting and the symbol API.
     pub name_off: usize,
     pub exported: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
-    pub cases: Vec<EnumCase>,
+    pub cases: Vec<VariantCase>,
 }
 
-/// One case of a tt enum.
+/// One case of a tt variant.
 #[derive(Debug)]
-pub(crate) struct EnumCase {
+pub(crate) struct VariantCase {
     pub tag: String,
     /// Byte offset of the tag, for error reporting.
     pub tag_off: usize,

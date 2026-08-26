@@ -79,8 +79,8 @@ impl Lower {
                     let node = self.node(Self::span(*span), AstOrigin::ValModifier);
                     stmts.push(Stmt::Opaque(node));
                 }
-                ast::Segment::Enum(decl) => {
-                    let owner = self.lower_enum(decl);
+                ast::Segment::Variant(decl) => {
+                    let owner = self.lower_variant(decl);
                     stmts.push(Stmt::Item(owner));
                 }
                 ast::Segment::TtImport(decl) => {
@@ -129,20 +129,20 @@ impl Lower {
         self.hir.exprs.alloc(Expr::Seq { node, body })
     }
 
-    fn lower_enum(&mut self, decl: &ast::EnumDecl) -> OwnerId {
+    fn lower_variant(&mut self, decl: &ast::VariantDecl) -> OwnerId {
         // One owner per item lowered from this file's syntax.
         let owner = OwnerId(
             u32::try_from(self.hir.items.len()).expect("a file has fewer than u32::MAX items"),
         );
         let node = self.node(
             Span::new(decl.name_off, decl.name_off + decl.name.len()),
-            AstOrigin::EnumDecl,
+            AstOrigin::VariantDecl,
         );
         let mut variants = Vec::with_capacity(decl.cases.len());
         for case in &decl.cases {
             let case_node = self.node(
                 Span::new(case.tag_off, case.tag_off + case.tag.len()),
-                AstOrigin::EnumCase,
+                AstOrigin::VariantCase,
             );
             // The variant is allocated before its fields so the owner link
             // can be recorded on each field.
@@ -158,7 +158,7 @@ impl Lower {
                     .map(|field| {
                         let field_node = self.node(
                             Span::new(field.name_off, field.name_off + field.name.len()),
-                            AstOrigin::EnumField,
+                            AstOrigin::VariantField,
                         );
                         self.hir.fields.alloc(FieldData {
                             node: field_node,
@@ -173,7 +173,7 @@ impl Lower {
             self.hir.variants[variant].fields = fields;
             variants.push(variant);
         }
-        self.hir.items.push(Item::Enum(EnumItem {
+        self.hir.items.push(Item::Variant(VariantItem {
             node,
             name: decl.name.clone(),
             exported: decl.exported,
@@ -649,11 +649,11 @@ mod tests {
     }
 
     #[test]
-    fn an_enum_declaration_collects_variants_and_fields_with_identity() {
-        let src = "export enum Shape { Circle(radius: number), Point }\n";
+    fn a_variant_declaration_collects_variants_and_fields_with_identity() {
+        let src = "export variant Shape { Circle(radius: number), Point }\n";
         let hir = lower(src);
-        let [Item::Enum(decl)] = hir.items.as_slice() else {
-            panic!("expected one enum item, got {:?}", hir.items);
+        let [Item::Variant(decl)] = hir.items.as_slice() else {
+            panic!("expected one variant item, got {:?}", hir.items);
         };
         assert_eq!(decl.name, "Shape");
         assert!(decl.exported);
@@ -687,7 +687,7 @@ mod tests {
 
     #[test]
     fn every_pattern_syntax_lowers_to_the_same_site_shape() {
-        let src = "enum E { A(x: number), B }\n\
+        let src = "variant E { A(x: number), B }\n\
             const m = match (v) { A(x) => x, B => 0 };\n\
             if let A(x) = (v) {\n  use(x);\n}\n\
             const A(x2) = w else { return; };\n";
@@ -711,7 +711,7 @@ mod tests {
 
     #[test]
     fn an_or_pattern_is_one_node_with_alternatives() {
-        let src = "enum E { A(x: number), B(x: number), C }\n\
+        let src = "variant E { A(x: number), B(x: number), C }\n\
             const m = match (v) { A(x) | B(x) => x, C => 0 };\n";
         let hir = lower(src);
         let site = hir.sites.iter().next().unwrap().1;
@@ -758,7 +758,7 @@ mod tests {
 
     #[test]
     fn a_tuple_match_lowers_positions_and_tuple_patterns() {
-        let src = "enum A { X, Y }\nenum B { P, Q }\n\
+        let src = "variant A { X, Y }\nvariant B { P, Q }\n\
             const m = match (a, b) { (X, P) => 0, (Y, Q(v)) => v, _ => 1 };\n";
         let hir = lower(src);
         let site = hir
@@ -831,7 +831,7 @@ mod tests {
         // Two matches with byte-identical text: same spelling, different
         // identity — the sites and their patterns are distinct IDs even
         // though every string in them compares equal.
-        let src = "enum E { A, B }\n\
+        let src = "variant E { A, B }\n\
             const m1 = match (v) { A => 0, B => 1 };\n\
             const m2 = match (v) { A => 0, B => 1 };\n";
         let hir = lower(src);

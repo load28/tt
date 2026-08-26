@@ -1,8 +1,8 @@
 //! tt's own names — the semantic surface the checker cannot be asked about.
 //!
-//! Three of tt's name spaces exist only in `.tt` source: an **enum name**,
+//! Three of tt's name spaces exist only in `.tt` source: a **variant name**,
 //! a **case tag**, and a **payload field name**. None survives lowering in
-//! a form TypeScript can be pointed at — an enum declaration is synthesized
+//! a form TypeScript can be pointed at — a variant declaration is synthesized
 //! text with no mapping back, a tag becomes a string literal, a field a
 //! destructuring key. So the answers TypeScript gives for every other
 //! identifier (hover, go-to-definition) are simply absent here, and tt has
@@ -20,25 +20,25 @@
 //!   this module says nothing about those positions and lets the service
 //!   answer. (The editor's previous implementation claimed them, which is
 //!   how a local variable that happened to share a case's name came to
-//!   hover as an enum case.)
+//!   hover as a variant case.)
 //!
 //! Where the declarations come from is the analysis' table, so an imported
-//! enum is found under the name the import gave it, and a local declaration
+//! variant is found under the name the import gave it, and a local declaration
 //! shadows it — one resolution rule, not a second one written here.
 
 use std::path::{Path, PathBuf};
 
-use crate::analysis::{DeclaredEnum, NameKind, Origin};
-use crate::{CaseSymbol, EnumSymbol, MatchConstructor, PayloadField};
+use crate::analysis::{DeclaredVariant, NameKind, Origin};
+use crate::{MatchConstructor, PayloadField, VariantCaseSymbol, VariantSymbol};
 
 use super::language::{Location, Position, Range};
 
 /// What a tt name names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TtSymbolKind {
-    /// An enum, at its declaration.
-    Enum,
-    /// One case of an enum.
+    /// A variant, at its declaration.
+    Variant,
+    /// One case of a variant.
     Case,
     /// One payload field of a case.
     Field,
@@ -54,8 +54,8 @@ pub struct TtSymbol {
     pub range: Range,
     /// The name as written.
     pub name: String,
-    /// The enum it belongs to (itself, for an enum).
-    pub enum_name: String,
+    /// The variant it belongs to (itself, for a variant).
+    pub variant_name: String,
     /// The declaration rendered in tt syntax — the hover's first line.
     pub signature: String,
     /// One sentence about what it is and where it came from.
@@ -71,13 +71,13 @@ pub struct TtSymbol {
 /// last saved) and to name the file a definition lives in.
 pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtSymbol> {
     let offset = super::language::source_byte(source, position);
-    let locals = crate::enum_symbols_with_kind(
+    let locals = crate::variant_symbols_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let analyses = super::language::analyses_for(path, source);
 
-    // 1. Inside an enum declaration: the name, a case tag, a field name.
+    // 1. Inside a variant declaration: the name, a case tag, a field name.
     //    These bytes have no counterpart in the output at all.
     if let Some(found) = declaration_at(path, source, &locals, offset) {
         return Some(found);
@@ -92,7 +92,7 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
     let declared = analyses
         .declarations
         .iter()
-        .find(|d| d.name == resolved.enum_name)?;
+        .find(|d| d.name == resolved.variant_name)?;
     let (kind, signature, detail, definition) = match resolved.kind {
         NameKind::Case => {
             let constructor = declared
@@ -130,20 +130,20 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
         kind,
         range: super::language::span_range(source, resolved.start, resolved.end),
         name: resolved.name.clone(),
-        enum_name: declared.name.clone(),
+        variant_name: declared.name.clone(),
         signature,
         detail,
         definition,
     })
 }
 
-/// The symbol at `offset` when it sits inside one of this file's own enum
+/// The symbol at `offset` when it sits inside one of this file's own variant
 /// declarations — the one region that lowers to text with no mapping at
 /// all, so nothing else can answer for it.
 fn declaration_at(
     path: &Path,
     source: &str,
-    locals: &[EnumSymbol],
+    locals: &[VariantSymbol],
     offset: usize,
 ) -> Option<TtSymbol> {
     for declaration in locals {
@@ -157,12 +157,12 @@ fn declaration_at(
                 ),
             };
             return Some(TtSymbol {
-                kind: TtSymbolKind::Enum,
+                kind: TtSymbolKind::Variant,
                 range: here.range,
                 name: declaration.name.clone(),
-                enum_name: declaration.name.clone(),
-                signature: enum_signature(declaration),
-                detail: "tt enum — compiles to a `kind`-tagged union type and a constructor \
+                variant_name: declaration.name.clone(),
+                signature: variant_signature(declaration),
+                detail: "tt variant — compiles to a `kind`-tagged union type and a constructor \
                          object of the same name"
                     .to_string(),
                 definition: Some(here),
@@ -183,7 +183,7 @@ fn declaration_at(
                         kind: TtSymbolKind::Field,
                         range,
                         name: field.name.clone(),
-                        enum_name: declaration.name.clone(),
+                        variant_name: declaration.name.clone(),
                         signature: format!(
                             "{}{}: {}",
                             field.name,
@@ -209,8 +209,8 @@ fn declaration_at(
 fn symbol_of_local_case(
     path: &Path,
     source: &str,
-    declaration: &EnumSymbol,
-    case: &CaseSymbol,
+    declaration: &VariantSymbol,
+    case: &VariantCaseSymbol,
 ) -> TtSymbol {
     let range = super::language::span_range(source, case.offset, case.offset + case.tag.len());
     let constructor = MatchConstructor {
@@ -230,7 +230,7 @@ fn symbol_of_local_case(
         kind: TtSymbolKind::Case,
         range,
         name: case.tag.clone(),
-        enum_name: declaration.name.clone(),
+        variant_name: declaration.name.clone(),
         signature: case_signature(&declaration.name, &constructor),
         detail: unit_or_payload(&constructor),
         definition: Some(Location {
@@ -240,14 +240,14 @@ fn symbol_of_local_case(
     }
 }
 
-/// Where a case is declared: this file when the enum is local, the imported
+/// Where a case is declared: this file when the variant is local, the imported
 /// file when the analysis found it there, and nowhere for a built-in (whose
 /// declaration is the compiler's own).
 fn case_definition(
     path: &Path,
     source: &str,
-    locals: &[EnumSymbol],
-    declared: &DeclaredEnum,
+    locals: &[VariantSymbol],
+    declared: &DeclaredVariant,
     tag: &str,
 ) -> Option<Location> {
     if let Some(local) = locals.iter().find(|d| d.name == declared.name) {
@@ -268,12 +268,12 @@ fn case_definition(
 fn field_definition(
     path: &Path,
     source: &str,
-    locals: &[EnumSymbol],
-    declared: &DeclaredEnum,
+    locals: &[VariantSymbol],
+    declared: &DeclaredVariant,
     tag: &str,
     name: &str,
 ) -> Option<Location> {
-    let find = |declaration: &EnumSymbol| -> Option<(usize, usize)> {
+    let find = |declaration: &VariantSymbol| -> Option<(usize, usize)> {
         let case = declaration.cases.iter().find(|c| c.tag == tag)?;
         let field = case.fields.as_deref()?.iter().find(|f| f.name == name)?;
         Some((field.offset, field.offset + field.name.len()))
@@ -293,17 +293,17 @@ fn field_definition(
     })
 }
 
-/// The file an imported enum was declared in, its text, and the declaration
+/// The file an imported variant was declared in, its text, and the declaration
 /// — found the way the analysis found it, by walking this file's relative
 /// `.tt` imports.
 fn imported_declaration(
     path: &Path,
-    declared: &DeclaredEnum,
-) -> Option<(PathBuf, String, EnumSymbol)> {
+    declared: &DeclaredVariant,
+) -> Option<(PathBuf, String, VariantSymbol)> {
     let Origin::Imported { .. } = declared.origin else {
         return None;
     };
-    // A namespace import renames the enum to `ns.Name`; the declaration in
+    // A namespace import renames the variant to `ns.Name`; the declaration in
     // the other file still carries its own name.
     let own = declared
         .name
@@ -321,7 +321,7 @@ fn imported_declaration(
         let Ok(text) = std::fs::read_to_string(&target) else {
             continue;
         };
-        if let Some(found) = crate::enum_symbols_with_kind(
+        if let Some(found) = crate::variant_symbols_with_kind(
             &text,
             crate::SourceKind::from_path(&target).unwrap_or_default(),
         )
@@ -334,9 +334,9 @@ fn imported_declaration(
     None
 }
 
-/// `enum Shape { Circle(radius: number), Point }` — the declaration as the
+/// `variant Shape { Circle(radius: number), Point }` — the declaration as the
 /// user would write it, on one line.
-fn enum_signature(declaration: &EnumSymbol) -> String {
+fn variant_signature(declaration: &VariantSymbol) -> String {
     let cases: Vec<String> = declaration
         .cases
         .iter()
@@ -354,18 +354,18 @@ fn enum_signature(declaration: &EnumSymbol) -> String {
         })
         .collect();
     format!(
-        "enum {}{} {{ {} }}",
+        "variant {}{} {{ {} }}",
         declaration.name,
         declaration.generics,
         cases.join(", ")
     )
 }
 
-pub(super) fn case_signature(enum_name: &str, constructor: &MatchConstructor) -> String {
+pub(super) fn case_signature(variant_name: &str, constructor: &MatchConstructor) -> String {
     match &constructor.fields {
-        None => format!("{enum_name}.{}", constructor.tag),
+        None => format!("{variant_name}.{}", constructor.tag),
         Some(fields) => format!(
-            "{enum_name}.{}({})",
+            "{variant_name}.{}({})",
             constructor.tag,
             fields
                 .iter()
@@ -385,14 +385,14 @@ pub(super) fn field_signature(field: &PayloadField) -> String {
     )
 }
 
-fn case_detail(declared: &DeclaredEnum, constructor: &MatchConstructor) -> String {
+fn case_detail(declared: &DeclaredVariant, constructor: &MatchConstructor) -> String {
     let origin = match &declared.origin {
-        Origin::Local => format!("`enum {}`", declared.name),
-        Origin::Builtin => format!("built-in `enum {}`", declared.name),
+        Origin::Local => format!("`variant {}`", declared.name),
+        Origin::Builtin => format!("built-in `variant {}`", declared.name),
         Origin::Imported { from: Some(from) } => {
-            format!("`enum {}` (imported from \"{from}\")", declared.name)
+            format!("`variant {}` (imported from \"{from}\")", declared.name)
         }
-        Origin::Imported { from: None } => format!("imported `enum {}`", declared.name),
+        Origin::Imported { from: None } => format!("imported `variant {}`", declared.name),
     };
     format!("{} of {origin}", unit_or_payload(constructor))
 }
@@ -422,15 +422,18 @@ mod tests {
             .unwrap_or_else(|| panic!("no tt symbol at {needle:?}+{delta}"))
     }
 
-    const SRC: &str = "enum Shape { Circle(radius: number), Point }\n\
+    const SRC: &str = "variant Shape { Circle(radius: number), Point }\n\
                        const a = match (s) { Circle(radius) => radius, Point => 0 };\n\
                        if let Circle(radius: r) = s { use(r); }\n";
 
     #[test]
-    fn an_enum_declaration_answers_for_its_own_names() {
-        let e = symbol(SRC, "enum Shape", 5);
-        assert_eq!(e.kind, TtSymbolKind::Enum);
-        assert_eq!(e.signature, "enum Shape { Circle(radius: number), Point }");
+    fn a_variant_declaration_answers_for_its_own_names() {
+        let e = symbol(SRC, "variant Shape", 8);
+        assert_eq!(e.kind, TtSymbolKind::Variant);
+        assert_eq!(
+            e.signature,
+            "variant Shape { Circle(radius: number), Point }"
+        );
 
         let case = symbol(SRC, "Circle(radius: number)", 0);
         assert_eq!(case.kind, TtSymbolKind::Case);
@@ -466,7 +469,7 @@ mod tests {
     fn a_builtin_case_is_named_as_one() {
         let src = "const n = match (o) { Some(value) => value, None => 0 };\n";
         let case = symbol(src, "Some(value)", 0);
-        assert_eq!(case.enum_name, "Option");
+        assert_eq!(case.variant_name, "Option");
         assert!(case.detail.contains("built-in"), "{}", case.detail);
         // The built-ins have no declaration to open.
         assert_eq!(case.definition, None);
@@ -476,7 +479,7 @@ mod tests {
     fn ordinary_identifiers_are_left_to_the_checker() {
         // A binding, a value use of the constructor, a type annotation: all
         // of them lower to TypeScript the service knows better.
-        let src = "enum Shape { Circle(radius: number), Point }\n\
+        let src = "variant Shape { Circle(radius: number), Point }\n\
                    const s: Shape = Shape.Circle(1);\n\
                    const Point = 2;\n";
         assert!(tt_symbol_at(Path::new("/p/a.tt"), src, at(src, "s: Shape", 0)).is_none());

@@ -1,4 +1,4 @@
-export enum Shape {
+export variant Shape {
   Circle(radius: number),
   Rect(width: number, height: number),
   Point,

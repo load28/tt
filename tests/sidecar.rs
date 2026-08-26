@@ -9,7 +9,7 @@ use ttc::build_sidecar;
 const SOURCE: &str = r#"import { pad } from "./format.ts";
 
 /** 알림 한 건. */
-export enum Notice {
+export variant Notice {
   Info(text: string),
   Warn(text: string),
 }
@@ -191,16 +191,16 @@ fn every_declaration_maps_to_its_position_in_the_tt_source() {
     let sidecar = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
     let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
 
-    // `export enum Notice` is on source line 4 (zero-based 3), name at
-    // column 12. Both the type alias and the constructor const map there.
+    // `export variant Notice` is on source line 4 (zero-based 3), name at
+    // column 15. Both the type alias and the constructor const map there.
     let notice: Vec<&Segment> = segments.iter().filter(|s| s.source_line == 3).collect();
     assert!(!notice.is_empty(), "{segments:?}");
-    assert!(notice.iter().all(|s| s.source_column == 12), "{notice:?}");
+    assert!(notice.iter().all(|s| s.source_column == 15), "{notice:?}");
     // Generated lines are shifted by one: line 0 is the @generated banner.
     assert_eq!(
         notice.iter().map(|s| s.generated_line).collect::<Vec<_>>(),
         vec![2, 2, 9, 9],
-        "type alias and constructor const both point at the enum"
+        "type alias and constructor const both point at the variant"
     );
 
     // `export function render` is on source line 9 (zero-based 8), name at

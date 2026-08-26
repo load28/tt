@@ -162,7 +162,7 @@ fn module(index: usize) -> String {
     out.push_str("import { helper } from \"./helper.js\";\n\n");
     for n in 0..8 {
         out.push_str(&format!(
-            "export enum Shape{index}_{n} {{\n\
+            "export variant Shape{index}_{n} {{\n\
              \x20 Circle(radius: number),\n\
              \x20 Rect(width: number, height: number),\n\
              \x20 Empty,\n\

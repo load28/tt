@@ -1,4 +1,4 @@
-error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rect", "Point"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect", "Point"
  --> input.tt:8:21
   |
 8 | export const area = match (s) {

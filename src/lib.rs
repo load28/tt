@@ -3,7 +3,7 @@
 //! Every valid TypeScript file is a valid `.tt` file, and every valid TSX file
 //! is a valid `.ttx` file. Both compile to themselves byte for byte; the
 //! compiler only rewrites the constructs tt adds —
-//! Rust-style `enum` declarations (plain TypeScript enums pass through
+//! Rust-style `variant` declarations (TypeScript enums pass through
 //! untouched), `match` expressions (literal, tuple and nested patterns
 //! included), `try` statements (Rust-`?`-style error propagation over
 //! `Result`), let-else and `if let` statements, and the pipeline operator
@@ -28,7 +28,7 @@
 //! use ttc::{compile, Options};
 //!
 //! let source = r#"
-//! export enum Shape {
+//! export variant Shape {
 //!   Circle(radius: number),
 //!   Point,
 //! }
@@ -79,9 +79,9 @@ mod val;
 mod verify;
 
 pub use analysis::{
-    AnalyzedArm, BodyBinding, Coverage, CoveredEnum, MatchAnalysis, MatchConstructor, MatchSubject,
-    NameKind, Origin, PatternAnalyses, PatternBinding, PatternSite, PayloadField, SiteKind,
-    UnresolvedName, pattern_analyses,
+    AnalyzedArm, BodyBinding, Coverage, CoveredVariant, MatchAnalysis, MatchConstructor,
+    MatchSubject, NameKind, Origin, PatternAnalyses, PatternBinding, PatternSite, PayloadField,
+    SiteKind, UnresolvedName, pattern_analyses,
 };
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Edit, Severity, Suggestion};
 pub use error::CompileError;
@@ -166,23 +166,23 @@ impl SourceKind {
     }
 }
 
-/// An enum declaration from another module, made available to [`compile`]'s
-/// exhaustiveness checking via [`Options::extern_enums`].
+/// A variant declaration from another module, made available to [`compile`]'s
+/// exhaustiveness checking via [`Options::extern_variants`].
 ///
 /// Collected by build tools (the `ttc` CLI does this for direct relative
-/// `.tt`/`.ttx` imports) with [`exported_enums`] over the imported file's source,
+/// `.tt`/`.ttx` imports) with [`exported_variants`] over the imported file's source,
 /// filtered through the importing file's clause ([`tt_imports`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExternEnum {
-    /// The enum's name in the *importing* file's scope (import aliases
+pub struct ExternVariant {
+    /// The variant's name in the *importing* file's scope (import aliases
     /// applied; `ns.Name` for a namespace import). A local declaration of
     /// the same name shadows it; it shadows a built-in of the same name.
     pub name: String,
-    /// The enum's case tags.
+    /// The variant's case tags.
     pub tags: Vec<String>,
     /// Where the declaration came from, quoted in error messages —
     /// typically the import specifier as written (e.g. `./token.tt`).
-    /// [`exported_enums`] leaves it `None`; the collector fills it in.
+    /// [`exported_variants`] leaves it `None`; the collector fills it in.
     pub from: Option<String>,
 }
 
@@ -207,32 +207,32 @@ pub enum TtImportNames {
     None,
 }
 
-/// Extracts the exported tt enum declarations (name + case tags) of a
+/// Extracts the exported tt variant declarations (name + case tags) of a
 /// source file, without compiling it — the declaration-table half of
-/// project-wide exhaustiveness checking. Non-exported enums and plain
+/// project-wide exhaustiveness checking. Non-exported variants and
 /// TypeScript enums are not included. The returned entries have
-/// [`ExternEnum::from`] set to `None`.
+/// [`ExternVariant::from`] set to `None`.
 ///
 /// ```
-/// let decls = ttc::exported_enums(
-///     "export enum Token { Num(value: number), Eof }\nenum Private { A() }\n",
+/// let decls = ttc::exported_variants(
+///     "export variant Token { Num(value: number), Eof }\nvariant Private { A() }\n",
 /// );
 /// assert_eq!(decls.len(), 1);
 /// assert_eq!(decls[0].name, "Token");
 /// assert_eq!(decls[0].tags, ["Num", "Eof"]);
 /// ```
-pub fn exported_enums(source: &str) -> Vec<ExternEnum> {
-    exported_enums_with_kind(source, SourceKind::TypeScript)
+pub fn exported_variants(source: &str) -> Vec<ExternVariant> {
+    exported_variants_with_kind(source, SourceKind::TypeScript)
 }
 
-/// [`exported_enums`] under an explicit TypeScript surface kind.
-pub fn exported_enums_with_kind(source: &str, source_kind: SourceKind) -> Vec<ExternEnum> {
+/// [`exported_variants`] under an explicit TypeScript surface kind.
+pub fn exported_variants_with_kind(source: &str, source_kind: SourceKind) -> Vec<ExternVariant> {
     let program = parser::parse_with_kind(source, source_kind);
     program
         .segments
         .iter()
         .filter_map(|segment| match segment {
-            ast::Segment::Enum(decl) if decl.exported => Some(ExternEnum {
+            ast::Segment::Variant(decl) if decl.exported => Some(ExternVariant {
                 name: decl.name.clone(),
                 tags: decl.cases.iter().map(|c| c.tag.clone()).collect(),
                 from: None,
@@ -244,7 +244,7 @@ pub fn exported_enums_with_kind(source: &str, source_kind: SourceKind) -> Vec<Ex
 
 /// Lists a source file's static relative `.tt`/`.ttx` imports and re-exports, in
 /// source order — the edges a build tool follows to collect declarations
-/// with [`exported_enums`].
+/// with [`exported_variants`].
 ///
 /// ```
 /// let imports = ttc::tt_imports("import { Token as T } from \"./token.tt\";\n");
@@ -377,7 +377,7 @@ fn program_uses_pipeline(program: &ast::Program) -> bool {
             }) || program_uses_pipeline(&block.value)
         }
         ast::Segment::Verbatim(_)
-        | ast::Segment::Enum(_)
+        | ast::Segment::Variant(_)
         | ast::Segment::TtImport(_)
         | ast::Segment::ValModifier(_) => false,
     })
@@ -392,13 +392,13 @@ fn if_let_uses_pipeline(stmt: &ast::IfLetStmt) -> bool {
         })
 }
 
-/// A tt enum declaration with source positions — the symbol-interface
-/// counterpart of [`ExternEnum`], produced by [`enum_symbols`] and emitted
+/// A tt variant declaration with source positions — the symbol-interface
+/// counterpart of [`ExternVariant`], produced by [`variant_symbols`] and emitted
 /// as JSON by `ttc --symbols` for language tooling (go-to-definition,
 /// completion, hover).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnumSymbol {
-    /// The enum's declared name.
+pub struct VariantSymbol {
+    /// The variant's declared name.
     pub name: String,
     /// Byte offset of the name in the source (see [`line_col`]).
     pub offset: usize,
@@ -406,25 +406,25 @@ pub struct EnumSymbol {
     pub exported: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
-    /// The enum's cases, in declaration order.
-    pub cases: Vec<CaseSymbol>,
+    /// The variant's cases, in declaration order.
+    pub cases: Vec<VariantCaseSymbol>,
 }
 
-/// One case of an [`EnumSymbol`].
+/// One case of an [`VariantSymbol`].
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CaseSymbol {
+pub struct VariantCaseSymbol {
     /// The case tag.
     pub tag: String,
     /// Byte offset of the tag in the source.
     pub offset: usize,
     /// `None` for a unit case without parens; `Some` (possibly empty) for
     /// a case with a field list.
-    pub fields: Option<Vec<FieldSymbol>>,
+    pub fields: Option<Vec<VariantFieldSymbol>>,
 }
 
 /// One field of a payload-carrying case.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FieldSymbol {
+pub struct VariantFieldSymbol {
     /// The field name.
     pub name: String,
     /// Byte offset of the name in the source (see [`line_col`]).
@@ -435,30 +435,30 @@ pub struct FieldSymbol {
     pub ty: String,
 }
 
-/// Extracts every tt enum declaration of a source file with positions —
-/// exported or not, flagged by [`EnumSymbol::exported`]. Plain TypeScript
-/// enums are not tt enums and are not included.
+/// Extracts every tt variant declaration of a source file with positions —
+/// exported or not, flagged by [`VariantSymbol::exported`]. Plain TypeScript
+/// enums are not tt variants and are not included.
 ///
 /// ```
-/// let syms = ttc::enum_symbols("export enum Token { Num(value: number), Eof }\n");
+/// let syms = ttc::variant_symbols("export variant Token { Num(value: number), Eof }\n");
 /// assert_eq!(syms[0].name, "Token");
 /// assert_eq!(ttc::line_col(
-///     "export enum Token { Num(value: number), Eof }\n", syms[0].offset), (1, 13));
+///     "export variant Token { Num(value: number), Eof }\n", syms[0].offset), (1, 16));
 /// assert_eq!(syms[0].cases[1].tag, "Eof");
 /// assert_eq!(syms[0].cases[1].fields, None);
 /// ```
-pub fn enum_symbols(source: &str) -> Vec<EnumSymbol> {
-    enum_symbols_with_kind(source, SourceKind::TypeScript)
+pub fn variant_symbols(source: &str) -> Vec<VariantSymbol> {
+    variant_symbols_with_kind(source, SourceKind::TypeScript)
 }
 
-/// [`enum_symbols`] under an explicit TypeScript surface kind.
-pub fn enum_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<EnumSymbol> {
+/// [`variant_symbols`] under an explicit TypeScript surface kind.
+pub fn variant_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<VariantSymbol> {
     let program = parser::parse_with_kind(source, source_kind);
     program
         .segments
         .iter()
         .filter_map(|segment| match segment {
-            ast::Segment::Enum(decl) => Some(EnumSymbol {
+            ast::Segment::Variant(decl) => Some(VariantSymbol {
                 name: decl.name.clone(),
                 offset: decl.name_off,
                 exported: decl.exported,
@@ -466,13 +466,13 @@ pub fn enum_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<Enum
                 cases: decl
                     .cases
                     .iter()
-                    .map(|c| CaseSymbol {
+                    .map(|c| VariantCaseSymbol {
                         tag: c.tag.clone(),
                         offset: c.tag_off,
                         fields: c.fields.as_ref().map(|fields| {
                             fields
                                 .iter()
-                                .map(|f| FieldSymbol {
+                                .map(|f| VariantFieldSymbol {
                                     name: f.name.clone(),
                                     offset: f.name_off,
                                     optional: f.optional,
@@ -550,8 +550,8 @@ pub enum AnchorKind {
     /// A pipeline's apply helper (`$tt_ap`) or composition helper
     /// (`$tt_fl`).
     Pipe,
-    /// A tt `enum`'s union type and constructor object.
-    Enum,
+    /// A tt `variant`'s union type and constructor object.
+    Variant,
 }
 
 /// A stretch of emitted output that ttc wrote itself, and the construct it
@@ -771,7 +771,7 @@ pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
 /// assert_eq!(opts.filename, None);
 /// assert!(opts.verify);
 /// assert_eq!(opts.rewrite_imports, ttc::ImportRewrite::Js);
-/// assert!(opts.extern_enums.is_empty());
+/// assert!(opts.extern_variants.is_empty());
 /// ```
 #[derive(Debug, Clone)]
 pub struct Options<'a> {
@@ -780,28 +780,28 @@ pub struct Options<'a> {
     pub filename: Option<&'a str>,
     /// Whether the source surface is TypeScript or TSX.
     pub source_kind: SourceKind,
-    /// Validate enum field types and the generated output with swc.
+    /// Validate variant field types and the generated output with swc.
     /// Corresponds to the CLI's `--no-verify` escape hatch when `false`;
     /// disabling it lets syntactically bad field types flow into the output
     /// (where tsc will report them) and skips the emitted-code self-check.
     pub verify: bool,
     /// How relative `.tt`/`.ttx` import specifiers are rewritten in the output.
     pub rewrite_imports: ImportRewrite,
-    /// Enum declarations imported from other modules, included in
+    /// Variant declarations imported from other modules, included in
     /// exhaustiveness checking (shadowed by local declarations; shadowing
     /// built-ins of the same name). The `ttc` CLI fills this from the
     /// file's direct relative `.tt`/`.ttx` imports.
-    pub extern_enums: &'a [ExternEnum],
+    pub extern_variants: &'a [ExternVariant],
     /// Leave the two judgments a TypeScript checker makes better to a
     /// TypeScript checker: match exhaustiveness, and which binding a
     /// mutation path is rooted at (`val`).
     ///
-    /// ttc answers both on its own, from its enum declarations and a lexical
+    /// ttc answers both on its own, from its variant declarations and a lexical
     /// scope model of its own, and those answers are what [`compile`]
     /// reports by default. Both are approximations of TypeScript's:
     /// exhaustiveness is the *declared* type's answer, so a case an earlier
-    /// guard already removed is still demanded and an enum from another
-    /// module has to be collected ([`Options::extern_enums`]); `val`'s
+    /// guard already removed is still demanded and a variant from another
+    /// module has to be collected ([`Options::extern_variants`]); `val`'s
     /// pairing is a scope model, so shadowing and redeclaration are ttc's
     /// reading rather than TypeScript's. A caller with a checker asks it
     /// instead — the narrowed type at each `match`, and symbol identity for
@@ -824,7 +824,7 @@ impl Default for Options<'_> {
             source_kind: SourceKind::TypeScript,
             verify: true,
             rewrite_imports: ImportRewrite::default(),
-            extern_enums: &[],
+            extern_variants: &[],
             defer_to_checker: false,
             std_imports: StdImports::default(),
         }
@@ -833,7 +833,7 @@ impl Default for Options<'_> {
 
 /// Compile tt source text to TypeScript or TSX source text.
 ///
-/// Only tt constructs (`enum` declarations, `match` expressions, `try` and
+/// Only tt constructs (`variant` declarations, `match` expressions, `try` and
 /// let-else statements) and relative `.tt`/`.ttx` import specifiers (per
 /// [`Options::rewrite_imports`]) are rewritten; everything else — including
 /// all plain TypeScript `enum` forms — passes through byte for byte. A
@@ -847,8 +847,8 @@ impl Default for Options<'_> {
 /// # Errors
 ///
 /// Returns a [`CompileError`] with a 1-based position in `source` for every
-/// tt-level rule violation: duplicate enum cases, invalid field types,
-/// duplicate or misplaced `match` arms, and non-exhaustive matches over enums
+/// tt-level rule violation: duplicate variant cases, invalid field types,
+/// duplicate or misplaced `match` arms, and non-exhaustive matches over variants
 /// declared in this source. With [`Options::verify`] enabled, a final
 /// self-check that the generated output parses as TypeScript can also fail
 /// (reported without a position). Run `ttc help errors` for guidance.
@@ -856,7 +856,7 @@ impl Default for Options<'_> {
 /// ```
 /// use ttc::{compile, Options};
 ///
-/// let source = "enum E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x };";
+/// let source = "variant E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x };";
 /// let options = Options { filename: Some("demo.tt"), ..Options::default() };
 /// let err = compile(source, &options).unwrap_err();
 /// assert_eq!((err.line, err.col), (2, 11));
@@ -898,7 +898,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     // the first error in source order — and skips emission when the checks
     // already failed.
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(&program, options.extern_enums);
+    let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     if let Some(first) = tt_errors(source, &program, &tokens, options, &semantics)
         .into_iter()
@@ -995,7 +995,7 @@ fn tt_errors(
 /// is [`compile_report`]'s half.
 ///
 /// ```
-/// let source = "enum E { A(x: number), B }\n\
+/// let source = "variant E { A(x: number), B }\n\
 ///     const a = match (E.A(1)) { A(x) => x };\n\
 ///     const b = match (E.B) { B => 0 };\n";
 /// let diagnostics = ttc::analyze(source, &ttc::Options::default());
@@ -1004,7 +1004,7 @@ fn tt_errors(
 /// ```
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(&program, options.extern_enums);
+    let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     tt_errors(source, &program, &tokens, options, &semantics)
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)
@@ -1074,7 +1074,7 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
                 span: ast::Span { start, end },
                 kind: ast::RecoveryKind::Expression,
             }),
-            DiagnosticCode::EnumInvalidFieldType => nodes.push(ast::RecoveryNode {
+            DiagnosticCode::VariantInvalidFieldType => nodes.push(ast::RecoveryNode {
                 span: ast::Span { start, end },
                 kind: ast::RecoveryKind::Type,
             }),
@@ -1119,7 +1119,7 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
             }
             ast::RecoveryKind::Statement => ";",
             ast::RecoveryKind::Type => "any",
-            ast::RecoveryKind::EnumDecl { name, exported } => {
+            ast::RecoveryKind::VariantDecl { name, exported } => {
                 let declaration = if *exported {
                     format!("export class {name} {{}}")
                 } else {
@@ -1157,7 +1157,7 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
 /// still-emitting form of [`compile_mapped`]. See [`CompileReport`].
 pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(&program, options.extern_enums);
+    let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if errors.iter().any(|e| e.code.blocks_projection()) {

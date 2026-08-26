@@ -21,7 +21,7 @@
 
 use std::path::Path;
 
-use crate::analysis::DeclaredEnum;
+use crate::analysis::DeclaredVariant;
 use crate::lexer::{Token, TokenKind, lex};
 
 use super::language::Position;
@@ -100,7 +100,7 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
                 .find(|c| c.tag == tag)
                 .and_then(|c| c.fields.as_deref())
                 .and_then(|fields| fields.iter().find(|f| f.name == field))
-                .and_then(|f| type_enum(&declarations, &f.ty))
+                .and_then(|f| type_variant(&declarations, &f.ty))
             else {
                 return Vec::new();
             };
@@ -332,7 +332,10 @@ fn arm_tags(
 /// The enum the table resolves a tag set to: the first declaration holding
 /// every one of them — the shadowing order the table is already in, and the
 /// same rule pattern resolution uses.
-fn resolve<'a>(declarations: &'a [DeclaredEnum], tags: &[String]) -> Option<&'a DeclaredEnum> {
+fn resolve<'a>(
+    declarations: &'a [DeclaredVariant],
+    tags: &[String],
+) -> Option<&'a DeclaredVariant> {
     declarations.iter().find(|declared| {
         tags.iter()
             .all(|tag| declared.constructors.iter().any(|c| c.tag == *tag))
@@ -340,7 +343,7 @@ fn resolve<'a>(declarations: &'a [DeclaredEnum], tags: &[String]) -> Option<&'a 
 }
 
 /// The enum a declared field type names, when it names one plainly.
-fn type_enum<'a>(declarations: &'a [DeclaredEnum], ty: &str) -> Option<&'a DeclaredEnum> {
+fn type_variant<'a>(declarations: &'a [DeclaredVariant], ty: &str) -> Option<&'a DeclaredVariant> {
     let trimmed = ty.trim();
     let base: String = trimmed
         .chars()
@@ -349,7 +352,7 @@ fn type_enum<'a>(declarations: &'a [DeclaredEnum], ty: &str) -> Option<&'a Decla
     declarations.iter().find(|d| d.name == base)
 }
 
-fn cases(declared: &DeclaredEnum, covered: &[String]) -> Vec<TtCompletion> {
+fn cases(declared: &DeclaredVariant, covered: &[String]) -> Vec<TtCompletion> {
     declared
         .constructors
         .iter()
@@ -362,7 +365,7 @@ fn cases(declared: &DeclaredEnum, covered: &[String]) -> Vec<TtCompletion> {
         .collect()
 }
 
-fn fields(declared: &DeclaredEnum, tag: &str) -> Vec<TtCompletion> {
+fn fields(declared: &DeclaredVariant, tag: &str) -> Vec<TtCompletion> {
     declared
         .constructors
         .iter()
@@ -403,7 +406,8 @@ mod tests {
             .collect()
     }
 
-    const DECL: &str = "enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }\n";
+    const DECL: &str =
+        "variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }\n";
 
     #[test]
     fn an_arm_position_offers_the_subjects_cases() {
@@ -445,9 +449,9 @@ mod tests {
     }
 
     #[test]
-    fn a_nested_position_offers_the_fields_enum() {
-        let src = "enum Inner { Yes(n: number), No }\n\
-                   enum Outer { Wrap(inner: Inner), Bare }\n\
+    fn a_nested_position_offers_the_fields_variant() {
+        let src = "variant Inner { Yes(n: number), No }\n\
+                   variant Outer { Wrap(inner: Inner), Bare }\n\
                    const a = match (o) { Wrap(inner: ) => 0 };\n";
         assert_eq!(labels(src, "Wrap(inner: "), ["Yes", "No"]);
     }
@@ -462,8 +466,8 @@ mod tests {
         let src = format!("{DECL}const Rect() = s else {{ return; }};\n");
         assert_eq!(labels(&src, "const Rect("), ["w", "h"]);
 
-        let src = "enum Inner { Yes(n: number), No }\n\
-                   enum Outer { Wrap(inner: Inner), Bare }\n\
+        let src = "variant Inner { Yes(n: number), No }\n\
+                   variant Outer { Wrap(inner: Inner), Bare }\n\
                    if let Wrap(inner: ) = o { }\n";
         assert_eq!(labels(src, "Wrap(inner: "), ["Yes", "No"]);
     }

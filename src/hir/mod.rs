@@ -58,7 +58,7 @@ impl Span {
 pub struct HirFile {
     /// Which file this HIR was lowered from.
     pub file: FileId,
-    /// The file's items (enum declarations, lifted imports), in source
+    /// The file's items (variant declarations, lifted imports), in source
     /// order. An item's position in this list is its [`OwnerId`].
     pub items: Vec<Item>,
     /// Every variant of every enum of the file, in declaration order.
@@ -137,12 +137,12 @@ pub enum AstOrigin {
     Verbatim,
     /// A lifted `val` modifier (erased on emission).
     ValModifier,
-    /// An enum declaration (the node's span is the declared name).
-    EnumDecl,
-    /// An enum case tag.
-    EnumCase,
-    /// An enum payload field name.
-    EnumField,
+    /// A variant declaration (the node's span is the declared name).
+    VariantDecl,
+    /// A variant case tag.
+    VariantCase,
+    /// A variant payload field name.
+    VariantField,
     /// A lifted import's specifier.
     Import,
     /// A `match` (the node's span is `match (scrutinee)`, arms excluded).
@@ -188,16 +188,16 @@ pub enum AstOrigin {
 /// One item of the file.
 #[derive(Debug)]
 pub enum Item {
-    /// A tt enum declaration.
-    Enum(EnumItem),
+    /// A tt variant declaration.
+    Variant(VariantItem),
     /// A lifted `.tt`/`@tt/std` package import.
     Import(ImportItem),
 }
 
-/// A tt enum declaration: one type definition and one constructor-value
+/// A tt variant declaration: one type definition and one constructor-value
 /// definition in the making (the resolver mints the [`DefId`]s — Phase 2).
 #[derive(Debug)]
-pub struct EnumItem {
+pub struct VariantItem {
     /// The declared name's node (span = the name).
     pub node: NodeId,
     /// The declared name.

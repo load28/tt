@@ -1,39 +1,32 @@
-# 설계: `enum` 키워드 통합과 에러 계층 분리
+# 설계: `variant` 선언과 에러 계층 분리
 
-2026-08-16 · v0.3. 사용자 결정 두 가지를 반영한 설계 문서.
+2026-08-26 · v0.4. Discussion #63과 TASK-245 결정을 반영한 설계 문서.
 
-## 결정 1: `variant` 키워드 폐기, `enum`으로 통합
+## 결정 1: tt 태그드 유니언은 `variant`로 선언
 
-tt의 태그드 유니언 선언은 `variant`가 아니라 **`enum`** 키워드를 쓴다.
-TypeScript 자체의 enum은 그대로 쓸 수 있어야 하고, 그 위에 Rust식 enum이
-얹히는 형태다.
+tt의 태그드 유니언 선언은 **`variant`** 키워드를 쓴다. TypeScript의 `enum`은
+모든 형태에서 그대로 통과한다. 두 데이터 모델의 소유권은 선언 첫 토큰에서
+확정된다.
 
 ### 구분 규칙
 
-`enum Name { ... }` 선언은 다음 중 하나일 때만 tt enum으로 변환된다:
+`variant Name { ... }`은 케이스의 페이로드나 제네릭 유무와 관계없이 tt 선언이다.
+따라서 `variant Status { Active, Inactive }`처럼 유닛 케이스만 있는 선언도 값
+생성자와 소진적 `match`를 제공한다. `enum`, `const enum`, `declare enum`은
+TypeScript 소유이며 ttc가 해석하지 않는다.
 
-1. 케이스에 페이로드 `(...)`가 하나라도 있다 — `Circle(r: number)` 또는 `Active()`
-2. 선언에 제네릭이 있다 — `enum Option<T> { ... }`
+**이 규칙이 안전한 근거**: `variant`는 TypeScript 선언 키워드가 아니므로 완전히
+인식된 선언만 ttc가 소유할 수 있다. `enum`을 전혀 들어 올리지 않으므로 모든
+유효한 TypeScript의 통과 계약도 직접 유지된다.
 
-둘 다 아니면 순수 TS enum으로 바이트 그대로 통과한다. 추가로 `const enum` /
-`declare enum` 앞 키워드가 있으면 무조건 TS의 것으로 취급한다 (tt enum은 이
-형태를 갖지 않는다).
-
-**이 규칙이 안전한 근거**: TS enum 멤버는 `Ident(...)` 형태가 될 수 없고
-(멤버는 `Ident` 또는 `Ident = 초기화식`), TS enum은 제네릭을 가질 수 없다.
-따라서 유효한 TypeScript가 tt enum으로 오인되는 경우는 존재하지 않는다 —
-"모든 유효한 TS는 유효한 tt" 원칙이 유지된다.
-
-**트레이드오프**: 유닛 케이스만 있는 tt enum은 문법상 TS enum과 구별 불가능하다.
-이 경우 TS enum으로 통과되며, tt 의미론(태그드 유니언 + match)이 필요하면 한
-케이스에 빈 괄호를 붙여 표시한다: `enum Status { Active(), Inactive }`.
-문서화된 규칙이며, 애매한 추론보다 명시적 표시를 택했다.
+**호환성**: 프로젝트가 1.0 이전이므로 기존 tt `enum` 인식, deprecation 기간과
+자동 마이그레이션은 제공하지 않는다.
 
 ## 결정 2: 에러 계층 분리 — 소진성 검사는 ttc의 것
 
 이전 구현은 `_` 없는 match에 `const $tt_never: never = $tt_m;`을 삽입해 빠진
 케이스를 **tsc 에러**로 만들었다. 이는 계층 위반이다: tt 수준의 에러(match가
-enum을 소진하지 못함)를 TS 타입 시스템에 위임했고, 생성물에 타입 트릭이 남았다.
+variant를 소진하지 못함)를 TS 타입 시스템에 위임했고, 생성물에 타입 트릭이 남았다.
 
 새 구조:
 
@@ -45,20 +38,20 @@ enum을 소진하지 못함)를 TS 타입 시스템에 위임했고, 생성물�
 
 ### 소진성 검사 알고리즘
 
-1. 변환 패스 중 tt enum 선언을 만나면 심볼 테이블(이름 → 케이스 태그 목록,
+1. 변환 패스 중 tt variant 선언을 만나면 심볼 테이블(이름 → 케이스 태그 목록,
    `BTreeMap`으로 결정적 순서)에 등록한다.
 2. `_` 없는 match를 만나면 암 태그 목록과 `match` 키워드 위치를 지연 검사
    목록에 넣는다 (즉시 검사하지 않으므로 **선언 순서 무관**).
 3. 파일 전체 변환이 끝난 뒤 각 지연 검사에 대해:
-   - 후보 enum = 암 태그 전부를 케이스로 포함하는 enum들
+   - 후보 variant = 암 태그 전부를 케이스로 포함하는 variant들
    - 후보 중 하나라도 완전히 커버되면 통과
    - 후보가 있는데 전부 미달이면 **에러** — 빠진 케이스가 가장 적은 후보를 골라
-     `match on enum E is not exhaustive: missing "X", "Y"` 형식으로 보고
+     `match on variant E is not exhaustive: missing "X", "Y"` 형식으로 보고
    - 후보가 없으면(태그가 이 파일의 어떤 enum에도 속하지 않음) 검사하지 않음
 
 ### 검사하지 않는 경우와 런타임 가드
 
-import한 enum이나 손으로 쓴 태그드 유니언에 대한 match는 ttc가 타입 정보를
+import한 variant나 손으로 쓴 태그드 유니언에 대한 match는 ttc가 타입 정보를
 갖지 못하므로 검사 없이 컴파일된다. 모든 `_` 없는 match의 `default` 분기에는
 순수 런타임 가드가 남는다:
 

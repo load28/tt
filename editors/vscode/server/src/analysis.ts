@@ -12,13 +12,13 @@
  * (server.ts `declarationsOf`).
  * ----------------------------------------------------------------------- */
 
-/** Reserved words — language.md §7. Not usable as enum names, tags, fields. */
+/** Reserved words — language.md §7. Not usable as variant names, tags, fields. */
 export const RESERVED = new Set(
   (
     "async await break case catch class const continue debugger default " +
     "delete do else enum export extends false finally for function if " +
     "import in instanceof let new null of return static super switch this " +
-    "throw true try typeof var void while with yield"
+    "throw true try typeof var variant void while with yield"
   ).split(" "),
 );
 

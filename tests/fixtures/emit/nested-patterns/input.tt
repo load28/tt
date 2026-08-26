@@ -1,5 +1,5 @@
-enum Inner { Yes(n: number), No }
-enum Outer { Wrap(inner: Inner), Bare }
+variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
 declare const o: Outer;
 
 export const value = match (o) {

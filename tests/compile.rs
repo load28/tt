@@ -33,7 +33,7 @@ fn ok_tsx(src: &str) -> String {
 
 #[test]
 fn ttx_lowers_constructs_in_jsx_children_and_attributes() {
-    let source = r#"enum State { Ready(value: string), Empty }
+    let source = r#"variant State { Ready(value: string), Empty }
 declare const state: State;
 const child = <section>{match (state) {
   Ready(value) => <strong>{value}</strong>,
@@ -93,7 +93,7 @@ fn ttx_rewrites_ttx_imports_for_each_target_surface() {
 #[test]
 fn ttx_expression_boundaries_ignore_delimiters_inside_regex_literals() {
     let output = ok_tsx(
-        r#"enum State { Ready(value: string), Empty }
+        r#"variant State { Ready(value: string), Empty }
 declare const state: State;
 const view = <Panel visible={/}/.test("}")} value={match (state) {
   Ready(value) => value,
@@ -106,13 +106,13 @@ const view = <Panel visible={/}/.test("}")} value={match (state) {
 }
 
 /* ------------------------------------------------------------------ */
-/* enum                                                                */
+/* variant                                                                */
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn enum_with_payload_emits_union_type_and_constructors() {
+fn variant_with_payload_emits_union_type_and_constructors() {
     let out = ok(r#"
-enum Shape {
+variant Shape {
   Circle(radius: number),
   Rect(width: number, height: number),
   Point,
@@ -128,8 +128,8 @@ enum Shape {
 }
 
 #[test]
-fn unit_only_enum_is_a_plain_typescript_enum() {
-    // No payload case and no generics → this is TypeScript's own enum and
+fn typescript_enum_is_passthrough() {
+    // Every `enum` declaration belongs to TypeScript and
     // must pass through byte for byte.
     let src = "enum Color { Red, Green, Blue }\n";
     assert_eq!(ok(src), src);
@@ -138,45 +138,59 @@ fn unit_only_enum_is_a_plain_typescript_enum() {
 }
 
 #[test]
-fn empty_parens_case_forces_tt_enum() {
-    // A unit-only enum can opt into tt semantics by giving one case parens.
-    let out = ok("enum Status { Active(), Inactive }\n");
+fn unit_only_variant_has_tt_semantics_without_parentheses() {
+    let out = ok("variant Status { Active, Inactive }\n");
     assert!(out.contains("type Status ="));
-    assert!(out.contains("Active: (): Status => ({ kind: \"Active\" })"));
+    assert!(out.contains("Active: { kind: \"Active\" } as const"));
     assert!(out.contains("Inactive: { kind: \"Inactive\" } as const"));
 }
 
 #[test]
-fn generics_force_tt_enum() {
-    let out = ok("enum Pair<T> { First, Second }\n");
+fn variant_supports_generics() {
+    let out = ok("variant Pair<T> { First, Second }\n");
     assert!(out.contains("type Pair<T> ="));
 }
 
 #[test]
-fn enum_export_prefix_on_both_declarations() {
-    let out = ok("export enum Shape { Circle(radius: number), Point }");
+fn malformed_unit_variant_is_a_variant_diagnostic() {
+    let src = "variant Status { Active = 1 }\n";
+    let e = err(src);
+    assert_eq!(
+        ttc::analyze(src, &Options::default())[0].code,
+        ttc::DiagnosticCode::MalformedVariant
+    );
+    assert!(
+        e.message.contains("tt `variant` could not be parsed"),
+        "{e}"
+    );
+    assert_eq!((e.line, e.col), (1, 1));
+}
+
+#[test]
+fn variant_export_prefix_on_both_declarations() {
+    let out = ok("export variant Shape { Circle(radius: number), Point }");
     assert!(out.contains("export type Shape ="));
     assert!(out.contains("export const Shape = {"));
 }
 
 #[test]
-fn enum_generics_flow_into_constructors() {
-    let out = ok("enum Option<T> {\n  Some(value: T),\n  None,\n}\n");
+fn variant_generics_flow_into_constructors() {
+    let out = ok("variant Option<T> {\n  Some(value: T),\n  None,\n}\n");
     assert!(out.contains("type Option<T> ="));
     assert!(out.contains("Some: <T>(value: T): Option<T> => ({ kind: \"Some\", value })"));
 }
 
 #[test]
-fn enum_duplicate_case_is_error_with_position() {
-    let e = err("const a = 1;\nenum X { A(v: number), A }\n");
+fn variant_duplicate_case_is_error_with_position() {
+    let e = err("const a = 1;\nvariant X { A(v: number), A }\n");
     assert!(e.message.contains("duplicate case \"A\""), "{}", e.message);
-    assert_eq!((e.line, e.col), (2, 24));
+    assert_eq!((e.line, e.col), (2, 27));
 }
 
 #[test]
-fn enum_complex_field_types() {
+fn variant_complex_field_types() {
     let out = ok(r#"
-enum Node {
+variant Node {
   Leaf(entries: Map<string, number[]>),
   Branch(children: Array<string>, meta: { tag: string, depth: number }),
 }
@@ -186,8 +200,8 @@ enum Node {
 }
 
 #[test]
-fn enum_invalid_field_type_is_rejected_by_swc_with_position() {
-    let e = err("enum X {\n  A(f: number number),\n}\n");
+fn variant_invalid_field_type_is_rejected_by_swc_with_position() {
+    let e = err("variant X {\n  A(f: number number),\n}\n");
     assert!(
         e.message.contains("invalid type for field `f`"),
         "{}",
@@ -198,21 +212,21 @@ fn enum_invalid_field_type_is_rejected_by_swc_with_position() {
 }
 
 #[test]
-fn enum_with_unbalanced_field_type_is_a_field_type_error() {
-    let e = err("enum E { A(value: number]) }\n");
+fn variant_with_unbalanced_field_type_is_a_field_type_error() {
+    let e = err("variant E { A(value: number]) }\n");
     assert!(e.message.contains("invalid type for field `value`"), "{e}");
-    assert_eq!((e.line, e.col), (1, 19));
+    assert_eq!((e.line, e.col), (1, 22));
 }
 
 #[test]
-fn enum_invalid_field_type_passes_without_verify() {
+fn variant_invalid_field_type_passes_without_verify() {
     // Without swc validation the construct still parses; the broken type is
     // carried into the output (where tsc would catch it).
     let opts = Options {
         verify: false,
         ..Options::default()
     };
-    let out = compile("enum X {\n  A(f: number number),\n}\n", &opts).unwrap();
+    let out = compile("variant X {\n  A(f: number number),\n}\n", &opts).unwrap();
     assert!(out.contains("f: number number"));
 }
 
@@ -223,7 +237,7 @@ fn enum_invalid_field_type_passes_without_verify() {
 #[test]
 fn match_compiles_to_switch_with_runtime_guard_only() {
     let out = ok(r#"
-enum Shape { Circle(radius: number), Point }
+variant Shape { Circle(radius: number), Point }
 const area = match (shape) {
   Circle(radius) => 3.14 * radius * radius,
   Point => 0,
@@ -259,7 +273,7 @@ fn whole_initializer_match_uses_a_statement_slot_without_an_iife() {
 
 #[test]
 fn expression_bodied_arrow_match_becomes_a_block_without_an_iife() {
-    let out = ok("enum E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
+    let out = ok("variant E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
         out.contains("const f = (e: E) => {\n  let $tt_v0;"),
@@ -271,7 +285,7 @@ fn expression_bodied_arrow_match_becomes_a_block_without_an_iife() {
 #[test]
 fn nested_initializer_match_inherits_the_parent_assignment_continuation() {
     let out = ok(
-        "enum Outer { A, B }\nenum Inner { X, Y }\nconst value = match (outer) { A => match (inner) { X => 1, Y => 2 }, B => 0 };\n",
+        "variant Outer { A, B }\nenum Inner { X, Y }\nconst value = match (outer) { A => match (inner) { X => 1, Y => 2 }, B => 0 };\n",
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.matches("switch (").count() >= 2, "{out}");
@@ -279,7 +293,7 @@ fn nested_initializer_match_inherits_the_parent_assignment_continuation() {
 
 #[test]
 fn expression_only_owners_use_one_named_boundary_without_an_iife() {
-    let out = ok("enum E { A(value: number), B }\n\
+    let out = ok("variant E { A(value: number), B }\n\
          function f(seed: number, value = match (E.A(seed)) { A(value) => value, B => 0 }) { return value; }\n\
          class C { value = match (E.A(2)) { A(value) => value, B => 0 }; }\n");
     assert!(!out.contains("((() =>"), "{out}");
@@ -291,7 +305,7 @@ fn expression_only_owners_use_one_named_boundary_without_an_iife() {
 #[test]
 fn expression_boundary_names_share_the_generated_name_namespace() {
     let out = ok(
-        "enum E { A, B }\nconst $tt_expr = 1;\nfunction f(value = match (E.A) { A => 1, B => 0 }) { return value; }\n",
+        "variant E { A, B }\nconst $tt_expr = 1;\nfunction f(value = match (E.A) { A => 1, B => 0 }) { return value; }\n",
     );
     assert!(out.contains("$tt_expr_1(() => {"), "{out}");
     assert!(out.contains("function $tt_expr_1<T>"), "{out}");
@@ -300,7 +314,7 @@ fn expression_boundary_names_share_the_generated_name_namespace() {
 #[test]
 fn one_owner_schedules_multiple_tt_values_without_expression_boundaries() {
     let out = ok(
-        "enum E { A(value: number), B }\nconst value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });\n",
+        "variant E { A(value: number), B }\nconst value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });\n",
     );
     assert!(!out.contains("$tt_expr(() =>"), "{out}");
     assert_eq!(out.matches("switch (").count(), 2, "{out}");
@@ -312,7 +326,7 @@ fn reference_protocol_preserves_optional_calls_and_structures_tagged_templates()
     // TASK-160 결정 17: a member optional call is one whole operation — the
     // receiver and callee evaluate once, the argument only past the nullish
     // check, and the call goes through the receiver.
-    let optional = ok("enum E { A(value: number), B }\n\
+    let optional = ok("variant E { A(value: number), B }\n\
          const value = receiver.method?.(match (input) { A(value) => value, B => 0 });\n");
     assert!(!optional.contains("$tt_expr"), "{optional}");
     assert!(optional.contains("!= null) {"), "{optional}");
@@ -321,7 +335,7 @@ fn reference_protocol_preserves_optional_calls_and_structures_tagged_templates()
     let lowering = optional.find("switch (").expect("value region");
     assert!(check < lowering, "{optional}");
 
-    let tagged = ok("enum E { A(value: number), B }\n\
+    let tagged = ok("variant E { A(value: number), B }\n\
          const value = receiver.tag`value:${match (input) { A(value) => value, B => 0 }}`;\n");
     assert!(!tagged.contains("$tt_expr(() =>"), "{tagged}");
     assert!(tagged.contains(".bind("), "{tagged}");
@@ -405,7 +419,7 @@ fn error_position_reported_inside_template_interpolation() {
 #[test]
 fn or_pattern_emits_fallthrough_cases() {
     let out = ok(r#"
-enum Key { Enter(), Escape, Tab, Char(ch: string) }
+variant Key { Enter(), Escape, Tab, Char(ch: string) }
 const action = match (key) {
   Enter => "submit",
   Escape | Tab => "cancel",
@@ -439,14 +453,14 @@ fn or_pattern_binding_order_is_insensitive() {
 #[test]
 fn or_pattern_counts_for_exhaustiveness() {
     ok(r#"
-enum Dir { North(), South, East, West }
+variant Dir { North(), South, East, West }
 const f = (d: Dir) => match (d) {
   North | South => 1,
   East | West => 2,
 };
 "#);
     let e = err(r#"
-enum Dir { North(), South, East, West }
+variant Dir { North(), South, East, West }
 const f = (d: Dir) => match (d) {
   North | South => 1,
   East => 2,
@@ -552,7 +566,7 @@ fn or_pattern_double_pipe_is_not_tt_syntax() {
 #[test]
 fn guarded_match_compiles_to_if_chain() {
     let out = ok(r#"
-enum Score { Graded(points: number), Pending }
+variant Score { Graded(points: number), Pending }
 const grade = match (s) {
   Graded(points) if points >= 90 => "A",
   Graded(points) => "F",
@@ -607,7 +621,7 @@ fn guarded_arms_do_not_satisfy_exhaustiveness() {
     );
     assert!(
         e.message
-            .contains("match on built-in enum Option is not exhaustive: missing \"Some\""),
+            .contains("match on built-in variant Option is not exhaustive: missing \"Some\""),
         "{}",
         e.message
     );
@@ -615,7 +629,7 @@ fn guarded_arms_do_not_satisfy_exhaustiveness() {
 
 #[test]
 fn fully_guarded_match_is_not_exhaustive() {
-    // guarded tags still identify the enum — they just cover nothing
+    // guarded tags still identify the variant — they just cover nothing
     let e =
         err("const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value };");
     assert!(e.message.contains("\"None\""), "{}", e.message);
@@ -696,7 +710,7 @@ fn try_inside_a_function_inside_a_guard_is_allowed() {
 #[test]
 fn non_exhaustive_match_is_an_ttc_error_with_position() {
     let e = err(
-        r#"enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+        r#"variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 const f = (s: Shape) => match (s) {
   Circle(radius) => radius,
   Point => 0,
@@ -705,7 +719,7 @@ const f = (s: Shape) => match (s) {
     );
     assert!(
         e.message
-            .contains("match on enum Shape is not exhaustive: missing \"Rect\""),
+            .contains("match on variant Shape is not exhaustive: missing \"Rect\""),
         "{}",
         e.message
     );
@@ -715,7 +729,7 @@ const f = (s: Shape) => match (s) {
 #[test]
 fn exhaustive_match_compiles() {
     let out = ok(r#"
-enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 const f = (s: Shape) => match (s) {
   Circle(radius) => radius,
   Rect(w, h) => w * h,
@@ -728,7 +742,7 @@ const f = (s: Shape) => match (s) {
 #[test]
 fn wildcard_satisfies_exhaustiveness() {
     ok(r#"
-enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 const f = (s: Shape) => match (s) {
   Circle(radius) => radius,
   _ => 0,
@@ -738,11 +752,11 @@ const f = (s: Shape) => match (s) {
 
 #[test]
 fn exhaustiveness_is_declaration_order_independent() {
-    // match appears before the enum declaration — still checked.
+    // match appears before the variant declaration — still checked.
     let e = err(r#"const f = (s: Shape) => match (s) {
   Circle(radius) => radius,
 };
-enum Shape { Circle(radius: number), Point }
+variant Shape { Circle(radius: number), Point }
 "#);
     assert!(e.message.contains("missing \"Point\""), "{}", e.message);
 }
@@ -766,7 +780,7 @@ fn match_on_builtin_option_is_exhaustiveness_checked() {
     let e = err("const f = (o: Option<number>) => match (o) { Some(value) => value };\n");
     assert!(
         e.message
-            .contains("match on built-in enum Option is not exhaustive: missing \"None\""),
+            .contains("match on built-in variant Option is not exhaustive: missing \"None\""),
         "{}",
         e.message
     );
@@ -777,14 +791,14 @@ fn match_on_builtin_result_is_exhaustiveness_checked() {
     let e = err("const f = (r: Result<number, string>) => match (r) { Err(error) => error };\n");
     assert!(
         e.message
-            .contains("match on built-in enum Result is not exhaustive: missing \"Ok\""),
+            .contains("match on built-in variant Result is not exhaustive: missing \"Ok\""),
         "{}",
         e.message
     );
 }
 
 #[test]
-fn full_match_on_builtin_enums_compiles() {
+fn full_match_on_builtin_variants_compiles() {
     let out = ok(r#"
 const f = (o: Option<number>) => match (o) { Some(value) => value, None => 0 };
 const g = (r: Result<number, string>) => match (r) { Ok(value) => value, Err(error) => error.length };
@@ -800,12 +814,13 @@ fn wildcard_exempts_builtin_exhaustiveness() {
 
 #[test]
 fn local_enum_shadows_builtin() {
-    // A file-local tt enum named Option replaces the built-in for this file.
-    let e =
-        err("enum Option { Some(), Stale }\nconst f = (o: Option) => match (o) { Some => 1 };\n");
+    // A file-local tt variant named Option replaces the built-in for this file.
+    let e = err(
+        "variant Option { Some(), Stale }\nconst f = (o: Option) => match (o) { Some => 1 };\n",
+    );
     assert!(
         e.message
-            .contains("match on enum Option is not exhaustive: missing \"Stale\""),
+            .contains("match on variant Option is not exhaustive: missing \"Stale\""),
         "{}",
         e.message
     );
@@ -815,18 +830,18 @@ fn local_enum_shadows_builtin() {
 #[test]
 fn a_candidate_the_arms_satisfy_makes_the_match_exhaustive() {
     // Two enums contain every arm tag. The arms cover `Small` completely,
-    // so nothing is missing — the check names an enum only when *no*
+    // so nothing is missing — the check names an variant only when *no*
     // candidate is satisfied, and then the one left fewest cases.
     ok(
-        "enum Big { A(s: string), B, C }\nenum Small { A(s: string), B }\nconst f = (v: Small) => match (v) { A(s) => s, B => \"b\" };\n",
+        "variant Big { A(s: string), B, C }\nvariant Small { A(s: string), B }\nconst f = (v: Small) => match (v) { A(s) => s, B => \"b\" };\n",
     );
 
     let e = err(
-        "enum Big { A(s: string), B, C, D }\nenum Small { A(s: string), B, C }\nconst f = (v: Small) => match (v) { A(s) => s, B => \"b\" };\n",
+        "variant Big { A(s: string), B, C, D }\nvariant Small { A(s: string), B, C }\nconst f = (v: Small) => match (v) { A(s) => s, B => \"b\" };\n",
     );
     assert!(
         e.message
-            .contains("match on enum Small is not exhaustive: missing \"C\""),
+            .contains("match on variant Small is not exhaustive: missing \"C\""),
         "{}",
         e.message
     );
@@ -834,7 +849,7 @@ fn a_candidate_the_arms_satisfy_makes_the_match_exhaustive() {
 
 #[test]
 fn missing_cases_are_all_listed() {
-    let e = err(r#"enum Dir { North, South, East, West(deg: number) }
+    let e = err(r#"variant Dir { North, South, East, West(deg: number) }
 const f = (d: Dir) => match (d) { North => 1 };
 "#);
     assert!(e.message.contains("\"East\""), "{}", e.message);
@@ -1051,7 +1066,7 @@ fn let_else_or_pattern_shares_one_destructuring() {
     // because it stands for every alternative at once, as in a match
     // or-arm.
     let out = ok(
-        "enum E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A(x) | B(x) = e else { return 0; };\n  return x;\n}\n",
+        "variant E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A(x) | B(x) = e else { return 0; };\n  return x;\n}\n",
     );
     assert!(
         out.contains(
@@ -1066,7 +1081,7 @@ fn let_else_or_pattern_with_a_bare_alternative_checks_only() {
     // A bare later alternative binds nothing, so the whole pattern must —
     // first alternative with empty parens, membership test only.
     let out = ok(
-        "enum E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A() | C = e else { return 0; };\n  return 1;\n}\n",
+        "variant E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A() | C = e else { return 0; };\n  return 1;\n}\n",
     );
     assert!(
         out.contains("if ($tt_t0.kind !== \"A\" && $tt_t0.kind !== \"C\") { return 0; }"),
@@ -1078,7 +1093,7 @@ fn let_else_or_pattern_with_a_bare_alternative_checks_only() {
 #[test]
 fn let_else_or_alternatives_must_bind_the_same_names() {
     let e = err(
-        "enum E { A(x: number), B(y: number), C }\nfunction f(e: E): number {\n  const A(x) | B(y) = e else { return 0; };\n  return x;\n}\n",
+        "variant E { A(x: number), B(y: number), C }\nfunction f(e: E): number {\n  const A(x) | B(y) = e else { return 0; };\n  return x;\n}\n",
     );
     assert!(
         e.message
@@ -1093,7 +1108,7 @@ fn let_else_or_alternatives_must_bind_the_same_names() {
 #[test]
 fn if_let_or_pattern_condition_is_a_disjunction() {
     let out = ok(
-        "enum E { A(x: number), B(x: number), C }\nfunction g(e: E): number {\n  if let A(x) | B(x) = e {\n    return x;\n  }\n  return -1;\n}\n",
+        "variant E { A(x: number), B(x: number), C }\nfunction g(e: E): number {\n  if let A(x) | B(x) = e {\n    return x;\n  }\n  return -1;\n}\n",
     );
     assert!(
         out.contains("if ($tt_t0.kind === \"A\" || $tt_t0.kind === \"B\") { const { x } = $tt_t0;"),
@@ -1121,7 +1136,7 @@ fn inline_bodies_inherit_the_enclosing_functions_place() {
     // let-else) inside them exits the function the chain bottoms out in,
     // exactly as it would outside the construct.
     let out = ok(
-        "enum E { A(x: number), B }\nfunction f(e: E): Result<number, string> {\n  if let A(x) = e {\n    const n = try g(x);\n    return Result.Ok(n);\n  }\n  return Result.Ok(0);\n}\n",
+        "variant E { A(x: number), B }\nfunction f(e: E): Result<number, string> {\n  if let A(x) = e {\n    const n = try g(x);\n    return Result.Ok(n);\n  }\n  return Result.Ok(0);\n}\n",
     );
     assert!(
         out.contains("if ($tt_t1.kind !== \"Ok\") return $tt_t1;"),
@@ -1129,7 +1144,7 @@ fn inline_bodies_inherit_the_enclosing_functions_place() {
     );
 
     let out = ok(
-        "enum E { A(x: number), B }\nfunction f(e: E): number {\n  const Some(v) = find(e) else {\n    const B() = e else { throw new Error(\"a\"); };\n    return 0;\n  };\n  return v;\n}\n",
+        "variant E { A(x: number), B }\nfunction f(e: E): number {\n  const Some(v) = find(e) else {\n    const B() = e else { throw new Error(\"a\"); };\n    return 0;\n  };\n  return v;\n}\n",
     );
     assert!(out.contains("if ($tt_t1.kind !== \"B\")"), "{out}");
 }
@@ -1139,7 +1154,7 @@ fn an_inline_chain_bottoming_out_in_an_iife_still_rejects_try() {
     // The same body inside a match arm: the chain bottoms out in the
     // arm's IIFE, so the emitted `return` would corrupt the match value.
     let e = err(
-        "enum E { A(x: number), B }\nconst r = match (e) {\n  A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },\n  B => 0,\n};\n",
+        "variant E { A(x: number), B }\nconst r = match (e) {\n  A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },\n  B => 0,\n};\n",
     );
     assert!(
         e.message.contains("`try` cannot be used here"),
@@ -1153,7 +1168,7 @@ fn a_module_level_inline_try_reports_the_cause_not_the_backstop() {
     // At the module's top level the chain bottoms out in the module: the
     // tt diagnostic is the cause, and the output self-check's failure on
     // the emitted `return` is its effect — reported once, not twice.
-    let src = "enum E { A(x: number), B }\nif let A(x) = e {\n  try g(x);\n}\n";
+    let src = "variant E { A(x: number), B }\nif let A(x) = e {\n  try g(x);\n}\n";
     let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
     assert_eq!(
@@ -1363,7 +1378,7 @@ fn let_else_divergence_sees_an_inline_if_let() {
         "if let Ok(value) = r { while (true) { return value; } } else { return 1; }",
     ] {
         ok(&format!(
-            "enum Res {{ Ok(value: number), Err(error: string) }}\n\
+            "variant Res {{ Ok(value: number), Err(error: string) }}\n\
              function f(r: Res): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
         ));
     }
@@ -1386,7 +1401,7 @@ fn let_else_divergence_stops_at_an_isolated_value_region() {
         "const Ok(value) = r else { return 1; }; log(value);",
     ] {
         let e = err(&format!(
-            "enum Res {{ Ok(value: number), Err(error: string) }}\n\
+            "variant Res {{ Ok(value: number), Err(error: string) }}\n\
              function f(r: Res): number {{\n  const Some(v) = find() else {{ {body} }};\n  return v;\n}}\n"
         ));
         assert!(e.message.contains("must diverge"), "{body}: {}", e.message);
@@ -1510,11 +1525,11 @@ fn invalid_typescript_in_a_match_arm_body_reports_the_byte_not_the_construct() {
 fn every_other_diagnostic_is_still_reported_with_it() {
     // The precondition failing does not swallow what the semantic passes
     // already found: one run reports everything.
-    let src = "enum E { A(x: number), A(y: number) }\nconst v = match (E.A(1)) { A(x) => { const q = ; return q; }, _ => 0 };\n";
+    let src = "variant E { A(x: number), A(y: number) }\nconst v = match (E.A(1)) { A(x) => { const q = ; return q; }, _ => 0 };\n";
     let report = ttc::compile_report(src, &Options::default());
     let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
     assert!(
-        codes.contains(&ttc::DiagnosticCode::EnumDuplicateCase)
+        codes.contains(&ttc::DiagnosticCode::VariantDuplicateCase)
             && codes.contains(&ttc::DiagnosticCode::SourceNotTypeScript),
         "{codes:?}"
     );
@@ -1755,7 +1770,7 @@ fn import_assignment_is_untouched() {
 fn rewrite_composes_with_tt_constructs_in_the_same_file() {
     let out = ok(r#"
 import { CalcError } from "./error.tt";
-enum Shape { Circle(radius: number), Point }
+variant Shape { Circle(radius: number), Point }
 const area = match (Shape.Point) {
   Circle(radius) => radius,
   Point => 0,
@@ -1769,8 +1784,8 @@ const area = match (Shape.Point) {
 /* project-wide exhaustiveness (extern enums)                          */
 /* ------------------------------------------------------------------ */
 
-fn token_extern() -> ttc::ExternEnum {
-    ttc::ExternEnum {
+fn token_extern() -> ttc::ExternVariant {
+    ttc::ExternVariant {
         name: "Token".to_string(),
         tags: vec!["Num".to_string(), "Ident".to_string(), "Eof".to_string()],
         from: Some("./token.tt".to_string()),
@@ -1781,7 +1796,7 @@ fn token_extern() -> ttc::ExternEnum {
 fn extern_enum_makes_match_checked() {
     let externs = [token_extern()];
     let opts = Options {
-        extern_enums: &externs,
+        extern_variants: &externs,
         ..Options::default()
     };
     let e = compile(
@@ -1791,7 +1806,7 @@ fn extern_enum_makes_match_checked() {
     .expect_err("expected non-exhaustive error");
     assert!(
         e.message
-            .contains("match on enum Token (imported from \"./token.tt\") is not exhaustive"),
+            .contains("match on variant Token (imported from \"./token.tt\") is not exhaustive"),
         "{}",
         e.message
     );
@@ -1803,7 +1818,7 @@ fn extern_enum_makes_match_checked() {
 fn extern_enum_full_coverage_compiles() {
     let externs = [token_extern()];
     let opts = Options {
-        extern_enums: &externs,
+        extern_variants: &externs,
         ..Options::default()
     };
     let out = compile(
@@ -1820,11 +1835,11 @@ fn local_enum_shadows_extern_of_same_name() {
     // a third. Full local coverage compiles.
     let externs = [token_extern()];
     let opts = Options {
-        extern_enums: &externs,
+        extern_variants: &externs,
         ..Options::default()
     };
     let out = compile(
-        "enum Token { Num(value: number), Ident(name: string) }\nconst s = match (t) { Num(value) => value, Ident(name) => 0 };\n",
+        "variant Token { Num(value: number), Ident(name: string) }\nconst s = match (t) { Num(value) => value, Ident(name) => 0 };\n",
         &opts,
     )
     .unwrap();
@@ -1835,13 +1850,13 @@ fn local_enum_shadows_extern_of_same_name() {
 fn extern_enum_shadows_builtin_of_same_name() {
     // An imported `Option` with an extra case replaces the built-in: the
     // two-case match that satisfies the built-in must now be an error.
-    let externs = [ttc::ExternEnum {
+    let externs = [ttc::ExternVariant {
         name: "Option".to_string(),
         tags: vec!["Some".to_string(), "None".to_string(), "Maybe".to_string()],
         from: Some("./opt.tt".to_string()),
     }];
     let opts = Options {
-        extern_enums: &externs,
+        extern_variants: &externs,
         ..Options::default()
     };
     let e = compile(
@@ -1853,11 +1868,11 @@ fn extern_enum_shadows_builtin_of_same_name() {
 }
 
 #[test]
-fn extern_enums_do_not_affect_unrelated_matches() {
-    // Tags that belong to no known enum stay unchecked (runtime guard only).
+fn extern_variants_do_not_affect_unrelated_matches() {
+    // Tags that belong to no known variant stay unchecked (runtime guard only).
     let externs = [token_extern()];
     let opts = Options {
-        extern_enums: &externs,
+        extern_variants: &externs,
         ..Options::default()
     };
     let out = compile("const s = match (x) { Foo(a) => a, Bar => 0 };\n", &opts).unwrap();
@@ -1869,15 +1884,15 @@ fn extern_enums_do_not_affect_unrelated_matches() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn exported_enums_returns_exported_tt_enums_only() {
-    let decls = ttc::exported_enums(
-        "export enum Token { Num(value: number), Eof }\nenum Private { A(), B }\nexport enum Color { Red, Green }\n",
+fn exported_variants_returns_exported_tt_enums_only() {
+    let decls = ttc::exported_variants(
+        "export variant Token { Num(value: number), Eof }\nenum Private { A, B }\nexport variant Color { Red, Green }\n",
     );
-    // Color is a plain TS enum (no payload, no generics) — not a tt enum.
-    assert_eq!(decls.len(), 1);
+    assert_eq!(decls.len(), 2);
     assert_eq!(decls[0].name, "Token");
     assert_eq!(decls[0].tags, vec!["Num".to_string(), "Eof".to_string()]);
     assert_eq!(decls[0].from, None);
+    assert_eq!(decls[1].name, "Color");
 }
 
 #[test]
@@ -1943,16 +1958,15 @@ fn scan_module_answers_both_questions_in_one_pass() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn enum_symbols_carries_positions_and_field_shapes() {
-    let src =
-        "export enum Token {\n  Num(value: number),\n  Empty(),\n  Eof,\n}\nenum Local { A() }\n";
-    let syms = ttc::enum_symbols(src);
+fn variant_symbols_carries_positions_and_field_shapes() {
+    let src = "export variant Token {\n  Num(value: number),\n  Empty(),\n  Eof,\n}\nvariant Local { A }\n";
+    let syms = ttc::variant_symbols(src);
     assert_eq!(syms.len(), 2);
 
     let token = &syms[0];
     assert_eq!(token.name, "Token");
     assert!(token.exported);
-    assert_eq!(ttc::line_col(src, token.offset), (1, 13));
+    assert_eq!(ttc::line_col(src, token.offset), (1, 16));
     assert_eq!(token.cases.len(), 3);
     assert_eq!(ttc::line_col(src, token.cases[0].offset), (2, 3));
     let fields = token.cases[0].fields.as_ref().unwrap();
@@ -1996,7 +2010,7 @@ fn a_lowering_is_laid_out_from_the_line_it_replaces() {
     // sits on, at every nesting depth, so the output reads as TypeScript
     // written where the tt source was.
     let out = ok(
-        "enum E { A(v: number), B }\ndeclare const e: E;\nfunction f(): number {\n  if (true) {\n    const r = match (e) { A(v) => v, B => 0 };\n    return r;\n  }\n  return 0;\n}\n",
+        "variant E { A(v: number), B }\ndeclare const e: E;\nfunction f(): number {\n  if (true) {\n    const r = match (e) { A(v) => v, B => 0 };\n    return r;\n  }\n  return 0;\n}\n",
     );
     assert!(out.contains("\n    let $tt_v0;\n    {\n"), "{out}");
     assert!(out.contains("\n      const $tt_m = e;"), "{out}");
@@ -2067,9 +2081,9 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
         // which here means staying inline at every indentation.
         "if let A(v) = e { use(v); }",
         "const A(v) = e else { throw new Error(\"no\"); };",
-        "enum Inner { X(a: number), Y }",
+        "variant Inner { X(a: number), Y }",
     ];
-    let prelude = "enum E { A(v: number), B }\ndeclare const e: E;\ndeclare const n: number;\n\
+    let prelude = "variant E { A(v: number), B }\ndeclare const e: E;\ndeclare const n: number;\n\
                    declare function use(v: unknown): void;\ndeclare function pick(v: E): string;\n\
                    declare function ask(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n";
     let mut with_block_structure = 0;
@@ -2119,7 +2133,7 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
 
 #[test]
 fn a_nested_enum_declaration_is_laid_out_from_its_own_line() {
-    let out = ok("function make() {\n  enum Inner { A(x: number), B }\n  return Inner.B;\n}\n");
+    let out = ok("function make() {\n  variant Inner { A(x: number), B }\n  return Inner.B;\n}\n");
     assert!(
         out.contains("\n  type Inner =\n    | { kind: \"A\"; x: number }"),
         "{out}"
@@ -2137,7 +2151,7 @@ fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
     // lowered value lands in, so the parentheses go where they mean
     // something and nowhere else.
     let out = ok(
-        "enum E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
+        "variant E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
     );
     assert!(out.contains("$tt_v0 = v + 1; break;"), "{out}");
     assert!(out.contains("$tt_v0 = 0; break;"), "{out}");
@@ -2172,7 +2186,7 @@ fn an_inert_pipeline_input_uses_a_direct_call() {
 
 #[test]
 fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
-    let out = ok("enum E { A(value: number), B }\n\
+    let out = ok("variant E { A(value: number), B }\n\
          const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
     assert!(out.contains("$tt_v0 = String($tt_v0);"), "{out}");
     assert!(!out.contains("$tt_ap"), "{out}");
@@ -2194,7 +2208,7 @@ fn pipeline_head_reclaims_a_lifted_template() {
 
 #[test]
 fn an_inert_member_receiver_needs_no_receiver_slot() {
-    let out = ok("enum E { A(value: string), B }\n\
+    let out = ok("variant E { A(value: string), B }\n\
          const value = \"abc\".replace(\
            match (E.A(\"a\")) { A(value) => value, B => \"b\" },\
            \"x\",\
@@ -2205,8 +2219,9 @@ fn an_inert_member_receiver_needs_no_receiver_slot() {
 
 #[test]
 fn pipeline_head_reclaims_a_lifted_match() {
-    let out =
-        ok("enum E { A(v: number), B }\nconst a = match (e) { A(v) => v, B => 0, } |> double;\n");
+    let out = ok(
+        "variant E { A(v: number), B }\nconst a = match (e) { A(v) => v, B => 0, } |> double;\n",
+    );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
     assert!(out.contains("$tt_v0 = double($tt_v0);"), "{out}");
@@ -2224,7 +2239,7 @@ fn pipeline_head_is_the_whole_call_not_the_inner_argument() {
 #[test]
 fn pipeline_inside_match_scrutinee_arm_and_template() {
     let out = ok(
-        "enum E { A(v: number), B }\nconst r = match (x |> norm) {\n  A(v) => v |> double,\n  B => 0,\n};\nconst t = `n=${x |> f}`;\n",
+        "variant E { A(v: number), B }\nconst r = match (x |> norm) {\n  A(v) => v |> double,\n  B => 0,\n};\nconst t = `n=${x |> f}`;\n",
     );
     assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
     assert!(out.contains("$tt_v0 = $tt_ap(v, double); break;"), "{out}");
@@ -2295,7 +2310,7 @@ fn a_block_arm_keeps_the_layout_its_author_wrote() {
     // rest of their block lines up against — dropping it put the first
     // statement in one column and the rest in another (TASK-219).
     let out = ok(
-        "enum E { A(n: number), B }\ndeclare const e: E;\nconst v = match (e) {\n  A(n) => {\n    const m = n + 1;\n    return m;\n  },\n  B => 0,\n};\n",
+        "variant E { A(n: number), B }\ndeclare const e: E;\nconst v = match (e) {\n  A(n) => {\n    const m = n + 1;\n    return m;\n  },\n  B => 0,\n};\n",
     );
     let block: Vec<&str> = out
         .lines()
@@ -2462,8 +2477,8 @@ fn flow_without_a_step_is_an_error() {
 #[test]
 fn tuple_match_emits_joint_if_chain() {
     let out = ok(r#"
-enum Dir { North(), South }
-enum Speed { Fast(), Slow }
+variant Dir { North(), South }
+variant Speed { Fast(), Slow }
 const step = match (dir, speed) {
   (North, Fast) => 2,
   (North, Slow) => 1,
@@ -2517,8 +2532,8 @@ fn comma_expression_scrutinee_is_still_a_single_match() {
 #[test]
 fn tuple_match_product_exhaustiveness_reports_missing_combination() {
     let e = err(r#"
-enum Dir { North(), South }
-enum Speed { Fast(), Slow }
+variant Dir { North(), South }
+variant Speed { Fast(), Slow }
 const step = match (d, s) {
   (North, Fast) => 2,
   (North, Slow) => 1,
@@ -2537,8 +2552,8 @@ const step = match (d, s) {
 #[test]
 fn tuple_match_wildcard_element_and_or_pattern_cover_the_product() {
     let out = ok(r#"
-enum Dir { North(), South, East, West }
-enum Speed { Fast(), Slow }
+variant Dir { North(), South, East, West }
+variant Speed { Fast(), Slow }
 const step = match (d, s) {
   (North | South, _) => 1,
   (East, Fast | Slow) => 2,
@@ -2557,7 +2572,7 @@ const step = match (d, s) {
 #[test]
 fn tuple_match_guarded_arm_covers_nothing() {
     let e = err(r#"
-enum Coin { Heads(), Tails }
+variant Coin { Heads(), Tails }
 const r = match (a, b) {
   (Heads, Heads) if lucky() => 1,
   (Heads, Heads) => 2,
@@ -2575,7 +2590,7 @@ const r = match (a, b) {
 #[test]
 fn tuple_match_bare_wildcard_arm_skips_the_check_and_must_be_last() {
     let out = ok(r#"
-enum Coin { Heads(), Tails }
+variant Coin { Heads(), Tails }
 const r = match (a, b) {
   (Heads, Heads) => 1,
   _ => 0,
@@ -2674,7 +2689,7 @@ fn tuple_match_or_alternatives_must_bind_the_same_fields_per_element() {
 }
 
 #[test]
-fn tuple_match_over_builtin_enums() {
+fn tuple_match_over_builtin_variants() {
     let e = err(
         "const r = match (o, r2) {\n  (Some(value), Ok(value: v)) => value + v,\n  (None, _) => 0,\n};\n",
     );
@@ -2689,7 +2704,7 @@ fn tuple_match_over_builtin_enums() {
 #[test]
 fn tuple_match_block_bodies_and_guards_leave_through_the_region() {
     let out = ok(r#"
-enum Coin { Heads(), Tails }
+variant Coin { Heads(), Tails }
 const r = match (a, b) {
   (Heads, Tails) if go() => { log(); return 1; },
   _ => 0,
@@ -2716,7 +2731,7 @@ fn tuple_match_await_in_scrutinee_makes_it_async() {
 #[test]
 fn tuple_match_three_positions() {
     let e = err(r#"
-enum B { T(), F }
+variant B { T(), F }
 const r = match (x, y, z) {
   (T, _, _) => 1,
   (F, T, _) => 2,
@@ -2805,7 +2820,7 @@ const n = match (r) {
 "#);
     assert!(
         e.message.contains(
-            "match on built-in enum Result is not exhaustive: missing \"Ok(value: None())\""
+            "match on built-in variant Result is not exhaustive: missing \"Ok(value: None())\""
         ),
         "{}",
         e.message
@@ -3175,7 +3190,7 @@ fn direct_return_result_region_uses_the_host_function_without_an_iife() {
 #[test]
 fn result_region_in_a_match_arm_inherits_the_parent_slot() {
     let out = ok(
-        "enum E { A, B }\nconst value = match (e) {\n  A => result { const x <- f(); x },\n  B => Result.Ok(0),\n};\n",
+        "variant E { A, B }\nconst value = match (e) {\n  A => result { const x <- f(); x },\n  B => Result.Ok(0),\n};\n",
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
@@ -3594,7 +3609,7 @@ fn literal_match_wildcard_must_be_last() {
 }
 
 #[test]
-fn literal_match_is_not_checked_against_enums() {
+fn literal_match_is_not_checked_against_variants() {
     // A literal match carries no tags, so the tag exhaustiveness pass must
     // not adopt it — `Option`/`Result` are always in the candidate table.
     let out = ok(r#"const v = match (x) { "Some" => 1, "None" => 2 };"#);
@@ -3981,7 +3996,7 @@ fn val_is_checked_inside_nested_tt_constructs() {
         err("val const cfg = { a: 1 };\nconst msg = `${(() => { cfg.a = 2; return 1; })()}`;\n");
     assert!(e.message.contains("val binding `cfg`"));
     let e = err("\
-enum Shape { Circle(r: number), Point }
+variant Shape { Circle(r: number), Point }
 val const s = Shape.Circle(1);
 const v = match (s) {
   Circle(r) => { s.kind = \"Point\"; return r; },
@@ -3994,7 +4009,7 @@ const v = match (s) {
 #[test]
 fn val_on_a_let_else_pattern_covers_the_names_it_binds() {
     let e = err("\
-enum Opt { Some(value: Box), None }
+variant Opt { Some(value: Box), None }
 function f(o: Opt) {
   val const Some(value) = o else { return; };
   value.n = 1;
@@ -4006,7 +4021,7 @@ function f(o: Opt) {
 #[test]
 fn val_covers_every_or_pattern_alternatives_bindings() {
     let e = err("\
-enum E { A(x: Box), B(x: Box) }
+variant E { A(x: Box), B(x: Box) }
 function f(e: E) {
   val const A(x) | B(x) = e else { return; };
   x.n = 1;
@@ -4064,14 +4079,14 @@ function f(val b: Box) {
 
 #[test]
 fn misspelled_case_in_a_match_arm_names_the_case_meant() {
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) {
   Circel(radius) => radius,
   Empty => 0,
 };
 "#);
     assert!(
-        e.message.contains("enum Shape has no case `Circel`"),
+        e.message.contains("variant Shape has no case `Circel`"),
         "{}",
         e.message
     );
@@ -4083,7 +4098,7 @@ const a = match (s) {
 fn a_misspelled_case_is_reported_instead_of_the_exhaustiveness_it_breaks() {
     // The typo removes Shape from the candidate table, which used to turn
     // the exhaustiveness check off *silently* — the bug this pass fixes.
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) { Circel(radius) => radius, Empty => 0 };
 "#);
     assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
@@ -4092,7 +4107,7 @@ const a = match (s) { Circel(radius) => radius, Empty => 0 };
 
 #[test]
 fn misspelled_case_in_let_else_and_if_let_is_reported() {
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 function f(): number {
   const Circel(radius) = s else { return 0; };
   return radius;
@@ -4100,7 +4115,7 @@ function f(): number {
 "#);
     assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
 
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 if let Circel(radius) = s { log(radius); }
 "#);
     assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
@@ -4126,7 +4141,7 @@ fn with_suggestion_applied(source: &str, diagnostic: &ttc::Diagnostic, which: us
 
 #[test]
 fn a_misspelled_case_carries_its_replacement_as_an_edit() {
-    let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
+    let src = "variant Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
     let diagnostics = ttc::analyze(src, &Options::default());
     let d = &diagnostics[0];
     assert_eq!(d.code, ttc::DiagnosticCode::UnknownCase);
@@ -4142,7 +4157,7 @@ fn a_misspelled_case_carries_its_replacement_as_an_edit() {
 
 #[test]
 fn a_misspelled_field_carries_its_replacement_as_an_edit() {
-    let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };\n";
+    let src = "variant Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };\n";
     let diagnostics = ttc::analyze(src, &Options::default());
     let d = &diagnostics[0];
     assert_eq!(d.code, ttc::DiagnosticCode::UnknownField);
@@ -4155,7 +4170,7 @@ fn a_misspelled_field_carries_its_replacement_as_an_edit() {
 fn applying_a_suggested_edit_resolves_the_diagnostic_it_came_from() {
     // The contract that makes a suggestion worth carrying: what it says to
     // write is what makes the error go away.
-    let src = "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
+    let src = "variant Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n";
     let diagnostics = ttc::analyze(src, &Options::default());
     let fixed = with_suggestion_applied(src, &diagnostics[0], 0);
     assert!(
@@ -4178,8 +4193,7 @@ fn a_match_with_holes_carries_the_arms_that_close_them() {
     // The compiler writes the arms: it is the only party that knows what
     // is missing, what each case's payload is called, and where the body's
     // braces are (TASK-216).
-    let src =
-        "enum Shape { Circle(r: number), Empty }\nconst a = match (s) {\n  Circle(r) => r,\n};\n";
+    let src = "variant Shape { Circle(r: number), Empty }\nconst a = match (s) {\n  Circle(r) => r,\n};\n";
     let d = hole(src);
     assert!(!d.message.contains("add the missing arms"), "{}", d.message);
     assert_eq!(d.suggestions.len(), 2);
@@ -4196,7 +4210,8 @@ fn an_authored_arm_binds_the_payload_the_body_will_need() {
     // The message names the value (`Circle`); the arm has to bind what the
     // body will use, and the field name comes from the declaration the
     // analysis already read.
-    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (s) {\n  Empty => 0,\n};\n";
+    let src =
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (s) {\n  Empty => 0,\n};\n";
     let d = hole(src);
     assert!(d.message.contains("missing \"Circle\""), "{}", d.message);
     let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
@@ -4208,12 +4223,12 @@ fn applying_the_authored_arms_makes_the_match_exhaustive() {
     // The contract that makes the edit worth carrying, for a rule whose
     // fix is an insertion rather than a replacement.
     for src in [
-        "enum Shape { Circle(r: number), Square(s: number), Empty }\nconst a = match (v) {\n  Empty => 0,\n};\n",
-        "enum Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0 };\n",
+        "variant Shape { Circle(r: number), Square(s: number), Empty }\nconst a = match (v) {\n  Empty => 0,\n};\n",
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0 };\n",
         // A tuple match: the fix is a combination per position.
-        "enum Dir { North(), South }\nenum Speed { Fast(), Slow }\nconst step = match (d, s) {\n  (North, Fast) => 2,\n  (North, Slow) => 1,\n  (South, Fast) => -1,\n};\n",
+        "variant Dir { North(), South }\nvariant Speed { Fast(), Slow }\nconst step = match (d, s) {\n  (North, Fast) => 2,\n  (North, Slow) => 1,\n  (South, Fast) => -1,\n};\n",
         // A payload hole: the witness constrains one field and binds the rest.
-        "enum Inner { Yes, No }\nenum Outer { Wrap(inner: Inner, tag: number), Empty }\nconst a = match (v) {\n  Wrap(inner: Yes()) => 1,\n  Empty => 0,\n};\n",
+        "variant Inner { Yes, No }\nvariant Outer { Wrap(inner: Inner, tag: number), Empty }\nconst a = match (v) {\n  Wrap(inner: Yes()) => 1,\n  Empty => 0,\n};\n",
     ] {
         let d = hole(src);
         let fixed = with_suggestion_applied(src, &d, 0);
@@ -4228,7 +4243,8 @@ fn applying_the_authored_arms_makes_the_match_exhaustive() {
 
 #[test]
 fn the_wildcard_arm_closes_the_hole_too() {
-    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (v) {\n  Empty => 0,\n};\n";
+    let src =
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (v) {\n  Empty => 0,\n};\n";
     let d = hole(src);
     let fixed = with_suggestion_applied(src, &d, 1);
     assert!(fixed.contains("  _ => undefined,"), "{fixed}");
@@ -4242,24 +4258,24 @@ fn the_wildcard_arm_closes_the_hole_too() {
 
 #[test]
 fn an_authored_arm_keeps_a_one_line_match_on_one_line() {
-    let src = "enum Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0 };\n";
+    let src = "variant Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0 };\n";
     let d = hole(src);
     let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
     assert_eq!(edit.replacement, ", Circle(r) => undefined, ");
     assert_eq!(
         with_suggestion_applied(src, &d, 0),
-        "enum Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0, Circle(r) => undefined, };\n"
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0, Circle(r) => undefined, };\n"
     );
 }
 
 #[test]
 fn misspelled_field_names_the_field_meant() {
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
 "#);
     assert!(
         e.message
-            .contains("enum Shape: case `Circle` has no field `radiuz`"),
+            .contains("variant Shape: case `Circle` has no field `radiuz`"),
         "{}",
         e.message
     );
@@ -4267,7 +4283,7 @@ const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
 
 #[test]
 fn misspelled_field_is_reported_in_let_else_too() {
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 function f(): number {
   const Circle(radiuz) = s else { return 0; };
   return radiuz;
@@ -4278,12 +4294,12 @@ function f(): number {
 
 #[test]
 fn misspelled_case_of_a_nested_pattern_is_resolved_through_the_field_type() {
-    let e = err(r#"enum Inner { Yes(n: number), No }
-enum Outer { Wrap(inner: Inner), Bare }
+    let e = err(r#"variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
 const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
 "#);
     assert!(
-        e.message.contains("enum Inner has no case `Yess`"),
+        e.message.contains("variant Inner has no case `Yess`"),
         "{}",
         e.message
     );
@@ -4293,17 +4309,18 @@ const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
 fn a_misspelled_builtin_case_is_reported() {
     let e = err("const n = match (o) { Some(value) => value, Non => 0 };\n");
     assert!(
-        e.message.contains("built-in enum Option has no case `Non`"),
+        e.message
+            .contains("built-in variant Option has no case `Non`"),
         "{}",
         e.message
     );
 }
 
 #[test]
-fn a_misspelled_case_of_an_imported_enum_names_its_origin() {
+fn a_misspelled_case_of_an_imported_variant_names_its_origin() {
     let externs = [token_extern()];
     let opts = Options {
-        extern_enums: &externs,
+        extern_variants: &externs,
         ..Options::default()
     };
     let e = compile(
@@ -4313,7 +4330,7 @@ fn a_misspelled_case_of_an_imported_enum_names_its_origin() {
     .expect_err("expected a resolution error");
     assert!(
         e.message
-            .contains("enum Token (imported from \"./token.tt\") has no case `Idnet`"),
+            .contains("variant Token (imported from \"./token.tt\") has no case `Idnet`"),
         "{}",
         e.message
     );
@@ -4332,10 +4349,10 @@ const a = match (m) { Ping => 0, Pong(n) => n, _ => -1 };
 }
 
 #[test]
-fn a_shared_tag_name_does_not_drag_an_unrelated_union_into_an_enum() {
+fn a_shared_tag_name_does_not_drag_an_unrelated_union_into_a_variant() {
     // `Empty` is also a Shape case, so the analysis identifies Shape — but
     // `Full` is nobody's misspelling, so nothing is reported.
-    let out = ok(r#"enum Shape { Circle(radius: number), Empty }
+    let out = ok(r#"variant Shape { Circle(radius: number), Empty }
 type Msg = { kind: "Empty" } | { kind: "Full"; n: number };
 const a = match (m) { Empty => 0, Full(n) => n };
 "#);
@@ -4351,17 +4368,17 @@ fn a_hand_written_payload_field_is_not_a_misspelling() {
 }
 
 #[test]
-fn a_two_edit_case_typo_needs_a_match_to_corroborate_the_enum() {
+fn a_two_edit_case_typo_needs_a_match_to_corroborate_the_variant() {
     // `Cyrcla` is two edits from `Circle`. In a match another arm names
-    // the enum, so the typo is reported...
-    let e = err(r#"enum Shape { Circle(radius: number), Empty }
+    // the variant, so the typo is reported...
+    let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) { Cyrcla(radius) => radius, Empty => 0 };
 "#);
     assert!(e.message.contains("has no case `Cyrcla`"), "{}", e.message);
 
     // ...but a let-else has only its own tag, so two edits are not enough
     // evidence that this is Shape at all. One edit is (`Circel` above).
-    let out = ok(r#"enum Shape { Circle(radius: number), Empty }
+    let out = ok(r#"variant Shape { Circle(radius: number), Empty }
 function f(): number {
   const Cyrcla(radius) = s else { return 0; };
   return radius;
@@ -4373,8 +4390,8 @@ function f(): number {
 #[test]
 fn a_misspelled_case_in_a_tuple_match_position_is_reported() {
     // Payload cases make these tt enums rather than TypeScript ones.
-    let e = err(r#"enum Dir { North(dx: number), South }
-enum Speed { Fast(v: number), Slow }
+    let e = err(r#"variant Dir { North(dx: number), South }
+variant Speed { Fast(v: number), Slow }
 const n = match (d, s) {
   (North(dx), Fast(v)) => dx + v,
   (Nrth(dx), Slow) => dx,
@@ -4382,7 +4399,7 @@ const n = match (d, s) {
 };
 "#);
     assert!(
-        e.message.contains("enum Dir has no case `Nrth`"),
+        e.message.contains("variant Dir has no case `Nrth`"),
         "{}",
         e.message
     );
@@ -4396,8 +4413,8 @@ const n = match (d, s) {
 fn nested_patterns_that_cover_the_payload_are_exhaustive() {
     // The old rule counted tags, so an arm with a nested pattern covered
     // nothing and this exhaustive match was rejected.
-    let out = ok(r#"enum Inner { Yes(n: number), No }
-enum Outer { Wrap(inner: Inner), Bare }
+    let out = ok(r#"variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
 const a = match (o) {
   Wrap(inner: Yes(n)) => n,
   Wrap(inner: No()) => 0,
@@ -4409,7 +4426,7 @@ const a = match (o) {
 
 #[test]
 fn a_generic_payload_is_typed_by_the_patterns_written_in_it() {
-    // `Ok`'s payload is declared `T`, which names no enum — but `Some`
+    // `Ok`'s payload is declared `T`, which names no variant — but `Some`
     // and `None` written there name Option, exactly as arm tags name a
     // match's subject.
     let out = ok(r#"const n = match (r) {
@@ -4423,8 +4440,8 @@ fn a_generic_payload_is_typed_by_the_patterns_written_in_it() {
 
 #[test]
 fn a_witness_names_the_value_that_is_missing() {
-    let e = err(r#"enum Inner { Yes(n: number), No }
-enum Outer { Wrap(inner: Inner), Bare }
+    let e = err(r#"variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
 const a = match (o) { Wrap(inner: Yes(n)) => n, Bare => -1 };
 "#);
     assert!(
@@ -4450,9 +4467,9 @@ fn a_fully_guarded_match_still_names_every_case() {
 #[test]
 fn deeply_nested_exhaustiveness_terminates_and_answers() {
     // Three levels of payload, one hole at the bottom.
-    let e = err(r#"enum A { A1(b: B), A2 }
-enum B { B1(c: C), B2 }
-enum C { C1(n: number), C2 }
+    let e = err(r#"variant A { A1(b: B), A2 }
+variant B { B1(c: C), B2 }
+variant C { C1(n: number), C2 }
 const v = match (a) {
   A1(b: B1(c: C1(n))) => n,
   A1(b: B2()) => 2,
@@ -4472,8 +4489,8 @@ fn a_witness_can_be_pasted_back_as_an_arm() {
     // must compile as the arm that covers it. A nested unit case is where
     // that promise used to break — `inner: No` *binds* the field to a name
     // called `No`, so the arm compiled and covered every `Wrap`.
-    let base = r#"enum Inner { Yes(n: number), No }
-enum Outer { Wrap(inner: Inner), Bare }
+    let base = r#"variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
 declare const o: Outer;
 const a = match (o) {
   Wrap(inner: Yes(n)) => n,
@@ -4512,7 +4529,7 @@ fn covered(src: &str, e: &ttc::CompileError) -> String {
 fn a_non_exhaustive_match_covers_its_head() {
     // The head — not the word the position lands on, and not the arms
     // below it, which are the user's own code.
-    let src = "enum S { A(x: number), B }\nconst v = match (s) { A(x) => x };\n";
+    let src = "variant S { A(x: number), B }\nconst v = match (s) { A(x) => x };\n";
     let e = err(src);
     assert!(e.message.contains("is not exhaustive"), "{}", e.message);
     assert_eq!((e.line, e.col), (2, 11));
@@ -4521,7 +4538,7 @@ fn a_non_exhaustive_match_covers_its_head() {
 
 #[test]
 fn a_tuple_match_covers_every_scrutinee() {
-    let src = "enum S { A(x: number), B }\nenum T { C(), D }\nconst v = match (s, t) { (A(x), C) => x };\n";
+    let src = "variant S { A(x: number), B }\nvariant T { C(), D }\nconst v = match (s, t) { (A(x), C) => x };\n";
     let e = err(src);
     assert!(e.message.contains("is not exhaustive"), "{}", e.message);
     assert_eq!(covered(src, &e), "match (s, t)");
@@ -4529,7 +4546,8 @@ fn a_tuple_match_covers_every_scrutinee() {
 
 #[test]
 fn a_duplicate_arm_covers_the_tag_it_repeats() {
-    let src = "enum S { A(x: number), B }\nconst v = match (s) { A(x) => x, A(x) => 0, B => 1 };\n";
+    let src =
+        "variant S { A(x: number), B }\nconst v = match (s) { A(x) => x, A(x) => 0, B => 1 };\n";
     let e = err(src);
     assert!(e.message.contains("duplicate arm"), "{}", e.message);
     assert_eq!(covered(src, &e), "A");
@@ -4537,7 +4555,7 @@ fn a_duplicate_arm_covers_the_tag_it_repeats() {
 
 #[test]
 fn a_misspelled_case_covers_the_name_as_written() {
-    let src = "enum Shape { Circle(r: number), Square(s: number) }\nconst v = match (s) { Circel(r) => r, Square(s) => s };\n";
+    let src = "variant Shape { Circle(r: number), Square(s: number) }\nconst v = match (s) { Circel(r) => r, Square(s) => s };\n";
     let e = err(src);
     assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
     assert_eq!(covered(src, &e), "Circel");
@@ -4563,7 +4581,7 @@ fn a_val_mutation_covers_the_binding() {
 fn an_error_without_a_known_extent_reports_a_position_only() {
     // No end means "the consumer decides the width" — the editor then
     // underlines the word at the position, as it always has.
-    let src = "enum S { A(x: number), B }\nconst v = match (s) { A(x) => x, _ => 0, B => 1 };\n";
+    let src = "variant S { A(x: number), B }\nconst v = match (s) { A(x) => x, _ => 0, B => 1 };\n";
     let e = err(src);
     assert!(e.message.contains("must be the last arm"), "{}", e.message);
     assert_eq!(covered(src, &e), "_");
@@ -4577,7 +4595,7 @@ fn an_error_without_a_known_extent_reports_a_position_only() {
 fn analyze_reports_every_uncovered_match_in_source_order() {
     // TASK-117 symptom 1: the default path used to report one error per
     // run; tsc and rustc report them all.
-    let src = "enum Shape { Circle(r: number), Square(s: number), Tri(a: number) }\n\
+    let src = "variant Shape { Circle(r: number), Square(s: number), Tri(a: number) }\n\
         export function f(x: Shape): number {\n  return match (x) { Circle(r) => r };\n}\n\
         export function g(x: Shape): number {\n  return match (x) { Square(s) => s };\n}\n\
         export function h(x: Shape): number {\n  return match (x) { Tri(a) => a };\n}\n";
@@ -4613,7 +4631,7 @@ fn analyze_reports_every_uncovered_match_in_source_order() {
 fn a_duplicate_arm_does_not_hide_the_files_other_diagnostics() {
     // TASK-117 symptom 3, the tt half: one recoverable error used to stop
     // the whole check.
-    let src = "enum Shape { Circle(r: number), Square(s: number), Tri(a: number) }\n\
+    let src = "variant Shape { Circle(r: number), Square(s: number), Tri(a: number) }\n\
         export function f(x: Shape): number {\n\
           return match (x) { Circle(r) => r, Circle(r) => 0, Square(s) => s, Tri(a) => a };\n\
         }\n\
@@ -4637,7 +4655,7 @@ fn a_typo_suppresses_coverage_for_its_own_match_only() {
     // The recovery boundary is the match, not the file: `Circel` silences
     // f's exhaustiveness question (the typo is the cause), while g's hole
     // is still reported.
-    let src = "enum Shape { Circle(r: number), Empty }\n\
+    let src = "variant Shape { Circle(r: number), Empty }\n\
         export function f(x: Shape): number {\n\
           return match (x) { Circel(r) => r, Empty => 0 };\n\
         }\n\
@@ -4658,7 +4676,7 @@ fn a_typo_suppresses_coverage_for_its_own_match_only() {
 
 #[test]
 fn sema_and_val_diagnostics_merge_in_source_order() {
-    let src = "enum E { A(x: number), B }\n\
+    let src = "variant E { A(x: number), B }\n\
         val const cfg = { a: 1 };\n\
         cfg.a = 2;\n\
         const v = match (E.B) { B => 0 };\n";
@@ -4676,7 +4694,7 @@ fn sema_and_val_diagnostics_merge_in_source_order() {
 
 #[test]
 fn compile_still_returns_the_first_error_in_source_order() {
-    let src = "enum Shape { Circle(r: number), Square(s: number) }\n\
+    let src = "variant Shape { Circle(r: number), Square(s: number) }\n\
         export function f(x: Shape): number {\n  return match (x) { Circle(r) => r };\n}\n\
         export function g(x: Shape): number {\n  return match (x) { Square(s) => s };\n}\n";
     let e = err(src);
@@ -4692,7 +4710,7 @@ fn compile_report_still_emits_under_recoverable_errors() {
     // Codegen is infallible, so a duplicate arm does not withhold the
     // lowered TypeScript — that is what lets the typed pass run and report
     // alongside the tt errors (TASK-117 symptom 3).
-    let src = "enum E { A(x: number), B }\n\
+    let src = "variant E { A(x: number), B }\n\
         const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n";
     let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1);
@@ -4706,12 +4724,12 @@ fn compile_report_still_emits_under_recoverable_errors() {
 
 #[test]
 fn duplicate_enum_case_emits_only_one_constructor_property() {
-    let src = "enum E { A(x: number), B, A(y: number) }\n";
+    let src = "variant E { A(x: number), B, A(y: number) }\n";
     let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
     assert_eq!(
         report.diagnostics[0].code,
-        ttc::DiagnosticCode::EnumDuplicateCase
+        ttc::DiagnosticCode::VariantDuplicateCase
     );
     let code = report.emit.expect("duplicate cases are recoverable").code;
     assert_eq!(code.matches("  A:").count(), 1, "{code}");
@@ -4720,7 +4738,7 @@ fn duplicate_enum_case_emits_only_one_constructor_property() {
 
 #[test]
 fn duplicate_pattern_binding_is_renamed_in_recovery_output() {
-    let src = "enum E { A(left: number, right: number), B }\n\
+    let src = "variant E { A(left: number, right: number), B }\n\
         const value = match (E.A(1, 2)) { A(left: x, right: x) => x, B => 0 };\n";
     let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);
@@ -4740,8 +4758,8 @@ fn duplicate_pattern_binding_is_renamed_in_recovery_output() {
 
 #[test]
 fn duplicate_nested_binding_is_renamed_across_destructuring_statements() {
-    let src = "enum Inner { Some(value: number), None }\n\
-        enum Outer { Ok(value: Inner, error: number), Err }\n\
+    let src = "variant Inner { Some(value: number), None }\n\
+        variant Outer { Ok(value: Inner, error: number), Err }\n\
         const value = match (Outer.Err) {\n\
           Ok(value: Some(value), error: value) => value,\n\
           Err => 0,\n\
@@ -4769,7 +4787,7 @@ fn duplicate_nested_binding_is_renamed_across_destructuring_statements() {
 
 #[test]
 fn duplicate_tuple_binding_is_renamed_across_tuple_elements() {
-    let src = "enum E { A(value: number), B }\n\
+    let src = "variant E { A(value: number), B }\n\
         const value = match (E.A(1), E.A(2)) { (A(value: x), A(value: x)) => x, _ => 0 };\n";
     let report = ttc::compile_report(src, &Options::default());
     assert!(
@@ -4849,8 +4867,8 @@ fn diagnostic_codes_are_stable_strings() {
 }
 
 #[test]
-fn malformed_match_blocks_codegen_even_beside_a_lowered_enum() {
-    let src = "enum Shape { Circle(r: number), Square(s: number) }\n\
+fn malformed_match_blocks_codegen_even_beside_a_lowered_variant() {
+    let src = "variant Shape { Circle(r: number), Square(s: number) }\n\
         export function area(shape: Shape): number {\n\
           return match shape { Circle(r) => r, Square(s) => s };\n\
         }\n";

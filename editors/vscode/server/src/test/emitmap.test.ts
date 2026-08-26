@@ -29,7 +29,7 @@ after(() => engine.shutdownEngineServer());
 const SOURCE = [
   'import { disc } from "./helpers";',
   "",
-  "enum Shape {",
+  "variant Shape {",
   "  Circle(radius: number),",
   "  Rect(w: number, h: number),",
   "  Point,",
@@ -166,7 +166,7 @@ test(
 );
 
 const IMPORTED_SHAPES = [
-  "export enum Shape {",
+  "export variant Shape {",
   "  Circle(radius: number),",
   "  Rect(w: number, h: number),",
   "}",
@@ -191,7 +191,7 @@ test(
   async () => {
     // The importer is the open buffer; `shapes.tt` is only on disk. The
     // engine projects and serves it on its own — served raw, TypeScript
-    // would read `enum Shape` as a TS enum and the arm bindings would lose
+    // would read `variant Shape` as a TS variant and the arm bindings would lose
     // their types.
     const dir = fixture("tt-import-test-", {
       "shapes.tt": IMPORTED_SHAPES,
@@ -241,7 +241,7 @@ test("a type error inside a pipeline is reported", { skip }, async () => {
 });
 
 const BAD_ARM = [
-  "enum Shape {",
+  "variant Shape {",
   "  Circle(radius: number),",
   "  Point,",
   "}",
@@ -397,8 +397,8 @@ const NAMED_SOURCE = [
   'import type { TResult } from "@tt/std";',
   'import * as Result from "@tt/std/result";',
   "",
-  "enum Wire { OutOfRange(value: number), Missing }",
-  "enum ParseError { NotANumber(text: string) }",
+  "variant Wire { OutOfRange(value: number), Missing }",
+  "variant ParseError { NotANumber(text: string) }",
   "",
   "function inner(w: Wire) {",
   '  if (w.kind === "OutOfRange") { return Result.Err(w); }',
@@ -424,7 +424,7 @@ test("a restated diagnostic names the case it is about", { skip }, async () => {
   assert.equal(sliceOf(NAMED_SOURCE, error!.range), "try inner(w)");
   assert.match(error!.message, /the `Err` this `try` propagates/);
   // The narrowed case prints structurally; tt says whose case it is, and
-  // a union covering a whole enum is that enum.
+  // a union covering a whole variant is that variant.
   assert.match(
     error!.message,
     /in tt's names: Type 'TErr<Wire\.OutOfRange>' is not assignable to type 'TResult<number, ParseError>'/,
@@ -441,7 +441,7 @@ test(
   { skip },
   async () => {
     const source = [
-      "enum Conn { Up(value: number), Down }",
+      "variant Conn { Up(value: number), Down }",
       "export const mixed = (c: Conn): string =>",
       '  match (c) { Up(value) => "up", 404 => "gone", Down => "down" };',
       "",

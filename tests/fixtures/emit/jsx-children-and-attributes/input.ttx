@@ -1,4 +1,4 @@
-enum State { Ready(value: string), Empty }
+variant State { Ready(value: string), Empty }
 declare const state: State;
 declare const Panel: (props: { value: string }) => unknown;
 

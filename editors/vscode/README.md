@@ -16,17 +16,17 @@ tt(`.tt`)과 ttx(`.ttx`) 파일을 위한 VSCode 언어 서비스입니다. VSCo
 | 진단 (tt) | 편집할 때마다 **실제 컴파일러**(`ttc --check`)를 실행해 에러를 표시 — 에디터의 에러는 항상 컴파일러와 일치 |
 | 진단 (타입) | 버퍼가 컴파일된 TypeScript를 타입 검사해 `match` 암·`\|>` 파이프라인 **안의 타입 에러까지** 원본 위치에 표시 (`source: ts`). `tt.typeDiagnostics`로 끌 수 있음 |
 | 진단 (타입 기반 tt) | 타입이 있어야 판정되는 **tt 에러** — `val` 바인딩을 통한 변경, 스크루티니의 실제 타입 기준 소진성 — 을 편집 중에 표시. 서버가 버퍼를 자기 프로젝트의 일부로 두고 `ttc --check-types`를 돌리므로 문안은 컴파일러의 것 그대로. `tt.typedChecks`로 끌 수 있음 |
-| 자동완성 | match 암 위치의 케이스 태그(이미 덮은 태그 제외 — 대상 enum은 구조적 추론, 실패 시 보이는 enum 전체), `Enum.` 뒤 생성자(필드 탭스톱 스니펫)**와 그 객체의 TS 멤버**(`Result.map`·`Option.unwrapOrElse` 등 표준 라이브러리 콤비네이터), `Tag(` 안의 필드 바인딩, `enum`/`match`/`try`/`flow`/`result`/`let-else` 스니펫. 그 외 위치·`obj.` 멤버 접근은 TypeScript 언어 서비스의 완성 목록(tt 항목이 위). 항목을 고르면 그 항목의 **타입 시그니처와 JSDoc**을 채워서 보여줌 |
+| 자동완성 | match 암 위치의 케이스 태그(이미 덮은 태그 제외 — 대상 variant는 구조적 추론, 실패 시 보이는 variant 전체), `Variant.` 뒤 생성자(필드 탭스톱 스니펫)**와 그 객체의 TS 멤버**(`Result.map`·`Option.unwrapOrElse` 등 표준 라이브러리 콤비네이터), `Tag(` 안의 필드 바인딩, `variant`/`match`/`try`/`flow`/`result`/`let-else` 스니펫. 그 외 위치·`obj.` 멤버 접근은 TypeScript 언어 서비스의 완성 목록(tt 항목이 위). 항목을 고르면 그 항목의 **타입 시그니처와 JSDoc**을 채워서 보여줌 |
 | 시그니처 헬프 | 호출을 쓰는 동안 파라미터 힌트 — TypeScript 언어 서비스 위임이라 match 암·`\|>` 파이프라인 안에서도 동작 |
 | 참조 찾기 | TypeScript 언어 서비스 위임 — `.tt`·`.ttx` import 너머 선언·사용처 포함 |
-| 이름 변경 | 일반 TS 심볼은 TypeScript 언어 서비스 위임. tt 심볼(enum·케이스 태그)은 방출물의 `kind` 문자열과 연동되므로 거부(안전) |
-| 호버 | enum·케이스 선언 시그니처와 컴파일 형태 설명 (내장 `Option`/`Result`·import한 enum 포함). 그 외 심볼은 TypeScript 언어 서비스의 quick info |
-| 정의로 이동 | tt 심볼(케이스 태그·enum 이름)은 선언 위치로 — **`.tt`·`.ttx` import 너머까지**. **그 외 모든 심볼(변수·함수·타입·import된 값)은 TypeScript 언어 서비스에 위임** — `.ts`·`.tsx` 파일에서처럼 동작하고 source-extension import도 따라간다 |
-| 문서 심볼 | Outline에 enum과 케이스 트리 표시 |
-| 빠른 수정 | 소진되지 않은 match에 "빠진 암 추가" / "와일드카드 `_` 암 추가" (import한 enum 포함) |
+| 이름 변경 | 일반 TS 심볼은 TypeScript 언어 서비스 위임. tt 심볼(variant·케이스 태그)은 방출물의 `kind` 문자열과 연동되므로 거부(안전) |
+| 호버 | variant·케이스 선언 시그니처와 컴파일 형태 설명 (내장 `Option`/`Result`·import한 variant 포함). 그 외 심볼은 TypeScript 언어 서비스의 quick info |
+| 정의로 이동 | tt 심볼(케이스 태그·variant 이름)은 선언 위치로 — **`.tt`·`.ttx` import 너머까지**. **그 외 모든 심볼(변수·함수·타입·import된 값)은 TypeScript 언어 서비스에 위임** — `.ts`·`.tsx` 파일에서처럼 동작하고 source-extension import도 따라간다 |
+| 문서 심볼 | Outline에 variant와 케이스 트리 표시 |
+| 빠른 수정 | 소진되지 않은 match에 "빠진 암 추가" / "와일드카드 `_` 암 추가" (import한 variant 포함) |
 
 심볼 해석은 컴파일러와 동일한 규칙을 따릅니다: 직접 `.tt` import의
-exported enum이 자동완성·호버·정의 이동에 포함되고(별칭 반영, named import
+exported variant가 자동완성·호버·정의 이동에 포함되고(별칭 반영, named import
 한정 — `* as ns`는 아직), 섀도잉은 **로컬 > 임포트 > 내장** 순입니다.
 크로스 파일 정보는 서버가 tt 문법을 다시 구현하지 않고 컴파일러의 심볼
 인터페이스(`ttc --symbols`)를 소비해 얻습니다 — 저장된 파일 기준이므로
@@ -50,7 +50,7 @@ tt 해석이 답하지 못하는 나머지 심볼은 **tt 엔진**(`ttc --server
   않습니다.
 - **import한 `.tt`·`.ttx` 모듈도 방출물로 서빙됩니다.** 디스크의 소스는 열려
   있지 않아도 엔진이 projection해서 넘깁니다(재-export 포함, 내용 기준
-  캐시) — 원문을 넘기면 tt `enum`이 TS `enum`으로 잘못 파싱되어 그
+  캐시) — 원문을 넘기면 tt `variant`를 TS가 파싱하지 못해 그
   import를 건너온 값의 타입이 전부 무너집니다.
 
 **입력 중인 `.` — 프로브.** 완성은 `.`를 친 그 순간에 요청되는데, 그때
@@ -127,7 +127,7 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
    (TT 저장소에서 `scripts/setup`을 돌린 경우 — `server/src/dev.ts`)
 4. PATH의 `ttc`
 
-`ttc`가 없으면 진단과 엔진 위임 기능이 꺼지고, tt 구문 계층(enum·케이스
+`ttc`가 없으면 진단과 엔진 위임 기능이 꺼지고, tt 구문 계층(variant·케이스
 태그·문서 심볼·빠른 수정)은 그대로 동작합니다.
 
 ### TypeScript (`tsgo`)
@@ -151,7 +151,7 @@ npm 모드(`--tsgo-npm`)면 아무것도 주입하지 않고 위 순서 그대�
 프로젝트의 TypeScript를 씁니다.
 
 즉 **프로젝트가 `typescript@7`을 설치해 두면 그대로 동작합니다.** 찾지
-못하면 위 위임 기능들이 답하지 않고, tt 자신이 아는 것(enum·케이스 태그·
+못하면 위 위임 기능들이 답하지 않고, tt 자신이 아는 것(variant·케이스 태그·
 소진성)만 동작합니다. TypeScript 세션이 죽으면 다음 질문이 새로
 시작합니다 — 기능이 영구히 침묵하는 일은 없습니다.
 

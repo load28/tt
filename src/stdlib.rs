@@ -5,7 +5,7 @@
 //! modules a project needs and bundler adapters expose them virtually;
 //! user-written imports otherwise pass through the compiler untouched,
 //! so the passthrough contract is unaffected. The values inside are
-//! byte-identical to what the corresponding tt `enum`s would compile to
+//! byte-identical to what the corresponding tt `variant`s would compile to
 //! (guarded by `tests/stdlib.rs`), which is what makes `match` — and the
 //! built-in exhaustiveness check below — work on them. `Result`'s two
 //! constructors are the one deliberate deviation: they are typed by the
@@ -120,7 +120,7 @@ impl<'a> StdImports<'a> {
     }
 }
 
-// The built-in enums a file gets without declaring them (`Option`,
+// The built-in variants a file gets without declaring them (`Option`,
 // `Result`) live in [`crate::analysis`], with their payload fields: one
 // declaration table serves both exhaustiveness and the editor's types, so
 // there is no tag-only copy of them here.

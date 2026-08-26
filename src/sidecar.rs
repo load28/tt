@@ -11,7 +11,7 @@
 //! that as a declaration map whose `sources` points at the `.tt` file, which
 //! is what sends "go to definition" to the original instead of the `.d.ts`.
 
-use crate::enum_symbols;
+use crate::variant_symbols;
 
 /// The two files that make up a module's editor sidecar.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,7 +46,7 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
         .filter(|name| !name.is_empty())
         .unwrap_or(tt_path);
     let source_lines: Vec<&str> = source.lines().collect();
-    let enums = enum_symbols(source);
+    let variants = variant_symbols(source);
 
     let decl_lines: Vec<&str> = declarations
         .lines()
@@ -57,7 +57,7 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
         .iter()
         .map(|line| {
             let name = declared_name(line)?;
-            let position = locate(source, &source_lines, &enums, name)?;
+            let position = locate(source, &source_lines, &variants, name)?;
             Some(Hit {
                 generated_column: utf16_column(line, line.find(name)?),
                 line: position.0,
@@ -126,16 +126,16 @@ fn identifier_prefix(text: &str) -> &str {
 
 /// Where `name` is declared in the source, as a zero-based (line, column).
 ///
-/// tt enums come from the parsed declarations, so their positions are exact.
+/// tt variants come from the parsed declarations, so their positions are exact.
 /// Everything else lives in a passthrough region and is found by scanning
 /// for its declaration keyword; the first match wins.
 fn locate(
     source: &str,
     source_lines: &[&str],
-    enums: &[crate::EnumSymbol],
+    variants: &[crate::VariantSymbol],
     name: &str,
 ) -> Option<(usize, usize)> {
-    if let Some(symbol) = enums.iter().find(|e| e.name == name) {
+    if let Some(symbol) = variants.iter().find(|e| e.name == name) {
         let (line, column) = crate::line_col(source, symbol.offset);
         let index = line.checked_sub(1)?;
         // `offset` points at the declaration keyword; move to the name.

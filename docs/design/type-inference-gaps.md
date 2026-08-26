@@ -145,7 +145,7 @@ run(cfg.mode);                  // error TS2345
 ```
 
 Rust에는 대응 문제가 없습니다(리터럴이 아니라 enum을 쓰므로). tt의 답도
-같습니다 — stringly-typed 유니언 대신 tt `enum`을 쓰면 확장 문제가 생기지
+같습니다 — stringly-typed 유니언 대신 tt `variant`를 쓰면 확장 문제가 생기지
 않습니다. 별도 기능은 제안하지 않습니다.
 
 ---

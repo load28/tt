@@ -8,7 +8,7 @@ tt is a small language that adds expressive data and control-flow features to Ty
 > **Early development:** tt is not yet recommended for production use. APIs and language behavior may change between releases.
 
 ```tt
-export enum Shape {
+export variant Shape {
   Circle(radius: number),
   Rectangle(width: number, height: number),
   Point,
@@ -87,7 +87,7 @@ Run `ttc --help` for compiler options or `ttc help <topic>` for the built-in lan
 
 ## The language at a glance
 
-- Model data with Rust-style `enum` declarations and unpack it with exhaustive `match` expressions, including guards, tuples, literals, or-patterns, and nested patterns.
+- Model data with Rust-style `variant` declarations and unpack it with exhaustive `match` expressions, including guards, tuples, literals, or-patterns, and nested patterns. TypeScript `enum` declarations remain ordinary TypeScript.
 - Work with `TOption` and `TResult` through `try`, `let-else`, `if let`, and `result` blocks. Types come from `@tt/std`; tree-shakeable operations use `@tt/std/option` and `@tt/std/result`.
 - Build value and function pipelines with `|>` and `flow`.
 - Mark bindings and parameters with `val` when mutation through them must be rejected.

@@ -13,7 +13,7 @@ TASK-119의 설계 기록이다. **제안이 아니라 채택된 전환 계획**
 > 명확한 컴파일러 중심부를 세운다. 새 컴파일러를 옆에 만들지 않는다.
 
 "rustc 수준"의 뜻: LLVM·borrow checker·trait solver의 복제가 아니라, tt이
-추가하는 구문(`enum`·pattern·`match`·`try`·let-else·`if let`·`result`·
+추가하는 구문(`variant`·pattern·`match`·`try`·let-else·`if let`·`result`·
 `val`·`|>`/`flow`)에 대해 rustc가 자기 구문에 제공하는 것과 같은 **일관된
 컴파일러 모델**을 제공하는 것이다: lossless parsing, 안정된 node/symbol
 identity, 선언 수집과 이름 해석, TypeScript 타입 정보를 쓰는 typed semantic
@@ -68,12 +68,12 @@ TypeScript 타입 체커를 재구현하지 않는다.
   에러(중복 arm)에도 projection을 포기한다(`Blocked`).
 - **D3. typed/untyped 경로의 소진성 문안이 다르다** (TASK-117 증상 2).
   같은 규칙의 렌더러가 두 벌이다.
-- **D4. symbol identity가 없다.** 태그·필드·enum 이름이 전부 **문자열 비교**로
-  이어진다. `usefulness`의 constructor도 문자열 tag다. 다른 enum의 동명
+- **D4. symbol identity가 없다.** 태그·필드·variant 이름이 전부 **문자열 비교**로
+  이어진다. `usefulness`의 constructor도 문자열 tag다. 다른 variant의 동명
   variant를 구분할 방법이 정의 동일성이 아니라 이름뿐이라, rename/references
   합성(GAP-2)이 원리상 성립하지 않는다.
 - **D5. 이름 해석이 단계가 아니라 휴리스틱이다.** `analysis::Table`은 arm
-  태그 집합으로 enum을 "추측"한다(`identify`). 선언 수집(모듈 스코프,
+  태그 집합으로 variant를 "추측"한다(`identify`). 선언 수집(모듈 스코프,
   import alias, shadowing)이 명시적 declaration table + scope graph로
   존재하지 않고, `Option`/`Result`도 builtin identity가 아니라 문자열
   특례다.
@@ -139,18 +139,18 @@ TypeScript passthrough expression은 다시 파싱하지 않는다 — tt 분석
 ## 5. 선언 수집과 이름 해석 (Phase 2)
 
 `src/resolve/`에 declaration collection과 reference resolution을 분리해
-둔다. namespace는 최소: type / value / enum variant / payload field /
+둔다. namespace는 최소: type / value / variant case / payload field /
 local pattern binding / module·import.
 
-tt enum 하나는 type definition과 constructor value definition을 함께 만든다.
-variant·field는 소유 enum에 연결된다(`DefKind::Variant { enum_def, variant }`).
+tt variant 하나는 type definition과 constructor value definition을 함께 만든다.
+case·field는 소유 variant에 연결된다(`DefKind::Variant`).
 `Res`는 `Def/Variant/Field/Local/Builtin/Unresolved/Ambiguous`를 구분한다.
-local 선언이 imported enum을 shadow하고, import alias·namespace import가
+local 선언이 imported variant를 shadow하고, import alias·namespace import가
 정확히 반영된다. std의 `Option`/`Result`는 문자열 특례가 아니라 **builtin
 declaration identity**로 등록한다.
 
-unknown tag 진단의 suggestion 후보는 같은 enum domain의 variant로 한정한다.
-다른 enum의 동명 variant를 자동 연결하지 않는다. 해석할 subject 후보가
+unknown tag 진단의 suggestion 후보는 같은 variant domain의 case로 한정한다.
+다른 variant의 동명 case를 자동 연결하지 않는다. 해석할 subject 후보가
 하나도 없으면(외부 TS 유니언) 지금처럼 침묵한다 — 오탐은 통과 계약보다
 비싸다.
 
@@ -324,7 +324,7 @@ INDEX 상태에 따라 조정될 수 있다 — 확정 번호는 INDEX가 진실
 ### 남은 후속 (등록 대기)
 
 - usefulness 내부의 태그 문자열 비교를 `VariantRef` 비교로 — 열의
-  alphabet이 한 enum으로 고정된 뒤의 비교라 의미론적 결함은 아니고
+  alphabet이 한 variant로 고정된 뒤의 비교라 의미론적 결함은 아니고
   (TASK-123 정산), Table 구축이 resolver 위로 이동한 지금(TASK-129)은
   identity 표현만 남은 정리다.
 - **Phase 5 잔여** — flow의 HIR body 연동(`Branch { condition: ExprId }`).

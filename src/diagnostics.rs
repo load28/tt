@@ -43,8 +43,8 @@ pub enum DiagnosticCode {
     StrayIfLet,
     /// A `result` block the parser could not claim.
     StrayResult,
-    /// An `enum` committed to tt syntax but not fully parsed.
-    MalformedEnum,
+    /// A `variant` committed to tt syntax but not fully parsed.
+    MalformedVariant,
     /// A `match` committed to tt syntax but not fully parsed.
     MalformedMatch,
     /// A `result` binding missing its declaration keyword.
@@ -62,10 +62,10 @@ pub enum DiagnosticCode {
     LetElseNotDiverging,
     /// An `if let` in expression position.
     IfLetPlacement,
-    /// An enum declaring the same case tag twice.
-    EnumDuplicateCase,
-    /// An enum field whose type annotation does not parse as TypeScript.
-    EnumInvalidFieldType,
+    /// A variant declaring the same case tag twice.
+    VariantDuplicateCase,
+    /// A variant field whose type annotation does not parse as TypeScript.
+    VariantInvalidFieldType,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
     /// A match mixing tag patterns and literal patterns.
@@ -109,7 +109,7 @@ impl DiagnosticCode {
             DiagnosticCode::StrayPipe => "stray-pipe",
             DiagnosticCode::StrayIfLet => "stray-if-let",
             DiagnosticCode::StrayResult => "stray-result",
-            DiagnosticCode::MalformedEnum => "malformed-enum",
+            DiagnosticCode::MalformedVariant => "malformed-variant",
             DiagnosticCode::MalformedMatch => "malformed-match",
             DiagnosticCode::ResultMissingKeyword => "result-missing-keyword",
             DiagnosticCode::ResultNestedBinding => "result-nested-binding",
@@ -118,8 +118,8 @@ impl DiagnosticCode {
             DiagnosticCode::LetElsePlacement => "let-else-placement",
             DiagnosticCode::LetElseNotDiverging => "let-else-not-diverging",
             DiagnosticCode::IfLetPlacement => "if-let-placement",
-            DiagnosticCode::EnumDuplicateCase => "enum-duplicate-case",
-            DiagnosticCode::EnumInvalidFieldType => "enum-invalid-field-type",
+            DiagnosticCode::VariantDuplicateCase => "variant-duplicate-case",
+            DiagnosticCode::VariantInvalidFieldType => "variant-invalid-field-type",
             DiagnosticCode::PatternDuplicateBinding => "pattern-duplicate-binding",
             DiagnosticCode::MatchMixedPatterns => "match-mixed-patterns",
             DiagnosticCode::MatchWildcardNotLast => "match-wildcard-not-last",
@@ -148,7 +148,7 @@ impl DiagnosticCode {
         DiagnosticCode::StrayPipe,
         DiagnosticCode::StrayIfLet,
         DiagnosticCode::StrayResult,
-        DiagnosticCode::MalformedEnum,
+        DiagnosticCode::MalformedVariant,
         DiagnosticCode::MalformedMatch,
         DiagnosticCode::ResultMissingKeyword,
         DiagnosticCode::ResultNestedBinding,
@@ -157,8 +157,8 @@ impl DiagnosticCode {
         DiagnosticCode::LetElsePlacement,
         DiagnosticCode::LetElseNotDiverging,
         DiagnosticCode::IfLetPlacement,
-        DiagnosticCode::EnumDuplicateCase,
-        DiagnosticCode::EnumInvalidFieldType,
+        DiagnosticCode::VariantDuplicateCase,
+        DiagnosticCode::VariantInvalidFieldType,
         DiagnosticCode::PatternDuplicateBinding,
         DiagnosticCode::MatchMixedPatterns,
         DiagnosticCode::MatchWildcardNotLast,
@@ -232,14 +232,12 @@ have no `;`. Text that is meant to be an ordinary identifier followed by a
 block passes through untouched; text with a `<-` in it does not."
             }
 
-            DiagnosticCode::MalformedEnum => {
+            DiagnosticCode::MalformedVariant => {
                 "\
-The text committed to tt's `enum` syntax — a case with payload
-parentheses, or a generic parameter list — but did not parse as one.
+The text committed to tt's `variant` syntax but did not parse as one.
 
-A TypeScript `enum` (`enum Color { Red }`, `const enum`, `declare enum`)
-has no payload parentheses and passes through untouched. Once a payload
-appears, the declaration is tt's and has to parse as tt: each case is
+Every `enum` declaration belongs to TypeScript and passes through untouched.
+A `variant` belongs to tt and each case must be
 `Tag`, `Tag()`, or `Tag(field: Type, ...)`, separated by commas."
             }
 
@@ -338,18 +336,18 @@ Inside an expression region it is allowed only within a function you write
 there, which is the same control-flow rule `try` and let-else follow."
             }
 
-            DiagnosticCode::EnumDuplicateCase => {
+            DiagnosticCode::VariantDuplicateCase => {
                 "\
-An enum declares the same case tag twice.
+A variant declares the same case tag twice.
 
 The tag is the emitted union's `kind` discriminant, so two cases with one
 tag would be indistinguishable at runtime and unmatchable in a pattern.
 Rename one of them."
             }
 
-            DiagnosticCode::EnumInvalidFieldType => {
+            DiagnosticCode::VariantInvalidFieldType => {
                 "\
-An enum field's type annotation does not parse as TypeScript.
+A variant field's type annotation does not parse as TypeScript.
 
 Field types are emitted into the generated union verbatim, so they are
 checked as TypeScript type syntax where they are written — that way the
@@ -436,7 +434,7 @@ mismatch rather than a guess."
 
             DiagnosticCode::UnknownCase => {
                 "\
-A pattern names a case the enum does not declare.
+A pattern names a case the variant does not declare.
 
 tt only reports this when it can name what you meant — a near-miss or a
 case difference — because tag patterns also match hand-written `kind`
@@ -460,7 +458,7 @@ declaration table can name the field you meant."
                 "\
 A `match` without a `_` arm does not cover every case of its subject.
 
-Exhaustiveness is what makes adding a case to an enum a compile error at
+Exhaustiveness is what makes adding a case to a variant a compile error at
 every place that handles it, rather than a runtime surprise. Add the
 missing arms, or a final `_` arm to opt out.
 
@@ -555,11 +553,11 @@ look up."
             DiagnosticCode::StrayPipe
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::StrayResult
-                | DiagnosticCode::MalformedEnum
+                | DiagnosticCode::MalformedVariant
                 | DiagnosticCode::MalformedMatch
                 | DiagnosticCode::ResultMissingKeyword
                 | DiagnosticCode::ResultNestedBinding
-                | DiagnosticCode::EnumInvalidFieldType
+                | DiagnosticCode::VariantInvalidFieldType
                 | DiagnosticCode::VerifyFailed
                 | DiagnosticCode::SourceNotTypeScript
         )
@@ -850,8 +848,8 @@ mod tests {
     fn the_typed_and_untyped_wordings_are_one_renderer() {
         let missing = vec!["\"Square\"".to_string(), "\"Tri\"".to_string()];
         assert_eq!(
-            non_exhaustive_message(Some("enum Shape"), &missing, false),
-            "match on enum Shape is not exhaustive: missing \"Square\", \"Tri\"",
+            non_exhaustive_message(Some("variant Shape"), &missing, false),
+            "match on variant Shape is not exhaustive: missing \"Square\", \"Tri\"",
         );
         assert_eq!(
             non_exhaustive_message(None, &missing, false),

@@ -56,7 +56,7 @@ import 문의 지정자 구간(바이트 범위)만 추가로 기록하면 된�
 ### 2단계 — 선언 수집과 프로젝트 단위 소진성 (구현됨 — TASK-022)
 
 재작성 대상이 된 지정자를 실제로 따라가 참조된 `.tt`을 파싱하고, 그 파일의
-`enum` 선언(태그 목록)만 뽑아 현재 파일의 sema에 넘긴다.
+`variant` 선언(태그 목록)만 뽑아 현재 파일의 sema에 넘긴다.
 
 ```
 parse(a.tt) ──┐
@@ -135,7 +135,7 @@ TS 파일이 `"./x.tt"`을 import하고 있으면 결과가 원문과 달라진�
 (`... declared at token.tt:7:1`) 정해야 한다.
 
 **결정(TASK-022)**: 위치는 컴파일 중인 파일의 `match` 키워드 그대로 두고,
-메시지에 출처를 넣는다: `match on enum Token (imported from "./token.tt")
+메시지에 출처를 넣는다: `match on variant Token (imported from "./token.tt")
 is not exhaustive: ...`. 선언 파일의 행:열까지 담으려면 수집 API가 위치를
 운반해야 해서 (지금은 이름+태그뿐) 비용 대비 이득이 작다.
 
@@ -147,9 +147,9 @@ is not exhaustive: ...`. 선언 파일의 행:열까지 담으려면 수집 API�
 
 **결정(TASK-022)**: `compile`은 그대로, IO도 여전히 라이브러리 밖이다.
 수집 재료를 주는 두 함수(`tt_imports` — import 목록,
-`exported_enums` — exported enum 선언 추출)와 주입구
-(`Options::extern_enums: &[ExternEnum]`)만 추가했고, 파일을 읽는 그래프
-순회는 CLI(`collect_extern_enums`)가 한다.
+`exported_variants` — exported variant 선언 추출)와 주입구
+(`Options::extern_variants: &[ExternVariant]`)만 추가했고, 파일을 읽는 그래프
+순회는 CLI(`collect_extern_variants`)가 한다.
 
 ## 범위 밖
 

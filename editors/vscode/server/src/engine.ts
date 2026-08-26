@@ -92,10 +92,10 @@ export interface EngineDiagnostic {
 }
 
 export interface EngineTtSymbol {
-  kind: "enum" | "case" | "field";
+  kind: "variant" | "case" | "field";
   range: EngineRange;
   name: string;
-  enumName: string;
+  variantName: string;
   /** The declaration in tt syntax — the hover's code block. */
   signature: string;
   /** One sentence about what it is and where it came from. */
@@ -432,9 +432,9 @@ export async function semanticTokens(
   return result?.tokens ?? null;
 }
 
-/** A tt name — an enum, a case tag, a payload field — at a position.
+/** A tt name — a variant, a case tag, a payload field — at a position.
  *
- * These three name spaces exist only in `.tt` source (an enum declaration
+ * These three name spaces exist only in `.tt` source (a variant declaration
  * lowers to synthesized text, a tag to a string literal, a field to a
  * destructuring key), so the TypeScript service cannot be asked about them
  * and the engine answers from the compiler's own declaration table. Like
@@ -494,10 +494,10 @@ export interface EngineSpan {
   end: number;
 }
 
-/** One enum visible in a buffer, from the compiler's own declaration
+/** One variant visible in a buffer, from the compiler's own declaration
  * table (`declarations`, cli.md) — local, imported (aliases applied) and
  * built-in, under exactly the compiler's shadowing. */
-export interface EngineEnumDecl {
+export interface EngineVariantDecl {
   name: string;
   generics: string;
   origin: "local" | "imported" | "builtin";
@@ -507,7 +507,7 @@ export interface EngineEnumDecl {
   cases: EngineCaseDecl[];
 }
 
-/** One case of an [EngineEnumDecl]. */
+/** One case of an [EngineVariantDecl]. */
 export interface EngineCaseDecl {
   tag: string;
   span: EngineSpan | null;
@@ -525,7 +525,7 @@ export interface EngineMatchSite {
 
 /** The compiler's declaration surface for one buffer. */
 export interface EngineDeclarations {
-  enums: EngineEnumDecl[];
+  variants: EngineVariantDecl[];
   matches: EngineMatchSite[];
 }
 
@@ -546,7 +546,7 @@ export async function declarations(
     { path, text },
     onError,
   );
-  return result ?? { enums: [], matches: [] };
+  return result ?? { variants: [], matches: [] };
 }
 
 export async function tsDiagnostics(

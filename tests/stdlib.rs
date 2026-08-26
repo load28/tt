@@ -51,7 +51,7 @@ fn std_runtime_members_are_independent_esm_exports() {
 }
 
 #[test]
-fn std_value_shapes_match_builtin_enums() {
+fn std_value_shapes_match_builtin_variants() {
     for shape in [
         r#"{ kind: "Some"; value: T }"#,
         r#"{ kind: "None" }"#,

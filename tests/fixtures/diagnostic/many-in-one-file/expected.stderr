@@ -1,4 +1,4 @@
-error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rect"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
  --> input.tt:4:18
   |
 4 | export const a = match (s) {
@@ -13,7 +13,7 @@ error[val-mutation]: cannot mutate through val binding `state` (the binding is d
 10 |   state.count = 1;
    |   ^^^^^
 
-error[unknown-case]: enum Shape has no case `Circel`
+error[unknown-case]: variant Shape has no case `Circel`
   --> input.tt:13:30
    |
 13 | export const b = match (s) { Circel(radius) => radius, Rect(w, h) => w * h };

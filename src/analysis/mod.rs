@@ -9,7 +9,7 @@
 //! This module is that description, in the mold of rustc's typed pattern
 //! representation (surface pattern → analysis with types attached), sized
 //! to tt's contract: ttc does not grow a TypeScript type system, so the
-//! types here are the *declared* field types from enum declarations.
+//! types here are the *declared* field types from variant declarations.
 //!
 //! Layering follows the compiler's existing seams exactly:
 //!
@@ -43,7 +43,7 @@
 mod usefulness;
 
 use crate::ast::*;
-use crate::{EnumSymbol, ExternEnum};
+use crate::{ExternVariant, VariantSymbol};
 use usefulness::{Alphabets, Cell, ColTy};
 
 /// The typed analysis of every pattern in one source file, nested ones
@@ -70,13 +70,13 @@ pub struct PatternAnalyses {
     /// literal, a field a destructuring key), so the checker cannot be
     /// asked about them and tt has to answer. Sorted by position.
     pub resolved: Vec<ResolvedName>,
-    /// The declaration table the analysis resolved against — local enums
+    /// The declaration table the analysis resolved against — local variants
     /// first, then imported ones, then the built-ins, each name once.
     ///
     /// Exposed because the same table answers questions no single pattern
     /// does: what a case's payload looks like (hover), which cases exist
     /// (completion).
-    pub declarations: Vec<DeclaredEnum>,
+    pub declarations: Vec<DeclaredVariant>,
 }
 
 /// The complete semantic answer for one parsed file.
@@ -101,7 +101,7 @@ pub(crate) type PayloadAlphabet = ((String, String), Vec<String>);
 
 /// One enum of the analysis' declaration table.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DeclaredEnum {
+pub struct DeclaredVariant {
     /// The enum's name in the analyzed file's scope (an import alias, or
     /// `ns.Name` for a namespace import).
     pub name: String,
@@ -123,7 +123,7 @@ pub struct ResolvedName {
     /// End of the name's span.
     pub end: usize,
     /// The enum it resolved in.
-    pub enum_name: String,
+    pub variant_name: String,
     /// Where that enum was declared.
     pub origin: Origin,
     /// For a field, the case whose payload it belongs to.
@@ -180,7 +180,7 @@ pub struct UnresolvedName {
     /// End of the name's span.
     pub end: usize,
     /// The enum the name was resolved against.
-    pub enum_name: String,
+    pub variant_name: String,
     /// Where that enum was declared — an error names the origin.
     pub origin: Origin,
     /// For a field, the case whose payload it was looked up in.
@@ -245,7 +245,7 @@ pub struct MatchAnalysis {
 pub struct MatchSubject {
     /// The enum's name in this file's scope (alias or `ns.Name` for an
     /// imported one).
-    pub enum_name: String,
+    pub variant_name: String,
     /// The enum's constructors, in declaration order.
     pub constructors: Vec<MatchConstructor>,
 }
@@ -312,7 +312,7 @@ pub struct PatternBinding {
     /// field.
     pub ty: Option<String>,
     /// The enum [`PatternBinding::ty`] was read from, when it is known.
-    pub enum_name: Option<String>,
+    pub variant_name: Option<String>,
     /// Byte span of the whole alternative list this occurrence belongs to
     /// (`A(x) | B(x)` for either `x`) — what a consumer replaces when it
     /// isolates one alternative.
@@ -354,7 +354,7 @@ pub struct Coverage {
     /// One entry per scrutinee position: the enum whose cases that position
     /// enumerates. `None` for a *universal* position of a tuple match —
     /// every arm writes `_` there, so it constrains nothing.
-    pub positions: Vec<Option<CoveredEnum>>,
+    pub positions: Vec<Option<CoveredVariant>>,
     /// Tags an arm covers outright — unguarded and nested-free, since a
     /// guard may be false and a nested pattern reaches further in. Single
     /// matches only. This is not what exhaustiveness is computed from (the
@@ -417,11 +417,11 @@ impl Coverage {
     }
 }
 
-/// An enum a [`Coverage`] position enumerates, with where it was declared —
-/// the origin an error message names ("enum E", "built-in enum Option",
-/// "enum T (imported from \"./token.tt\")").
+/// A variant a [`Coverage`] position enumerates, with where it was declared —
+/// the origin an error message names ("variant E", "built-in variant Option",
+/// "variant T (imported from \"./token.tt\")").
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CoveredEnum {
+pub struct CoveredVariant {
     /// The enum's name in this file's scope.
     pub name: String,
     /// Where the declaration came from.
@@ -441,7 +441,7 @@ pub enum Origin {
         /// recorded it — an error message quotes it to say *which* enum.
         from: Option<String>,
     },
-    /// A built-in enum (`Option`, `Result`).
+    /// A built-in variant (`Option`, `Result`).
     Builtin,
 }
 
@@ -450,7 +450,7 @@ impl PatternAnalyses {
     /// inclusive, matching how the language surface treats a chunk's end).
     ///
     /// ```
-    /// let src = "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+    /// let src = "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
     /// let analyses = ttc::pattern_analyses(src, &[]);
     /// let a_x = analyses.binding_at(src.find("A(x)").unwrap() + 2).unwrap();
     /// assert_eq!(a_x.ty.as_deref(), Some("string"));
@@ -527,28 +527,28 @@ impl PatternAnalyses {
 }
 
 /// Analyzes every `match` of a source file, nested ones included, in
-/// source order. `externs` are imported enum declarations under their
-/// in-scope names — the same input [`crate::Options::extern_enums`] gives
-/// sema, carried as [`EnumSymbol`]s because the analysis needs field
+/// source order. `externs` are imported variant declarations under their
+/// in-scope names — the same input [`crate::Options::extern_variants`] gives
+/// sema, carried as [`VariantSymbol`]s because the analysis needs field
 /// types, not just tags. Subjects resolve local > imported > built-in
 /// (`Option`, `Result`), exactly as exhaustiveness does.
 ///
 /// ```
-/// let src = "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) => x, B(x) => x };\n";
+/// let src = "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) => x, B(x) => x };\n";
 /// let analyses = ttc::pattern_analyses(src, &[]);
 /// let subject = analyses.matches[0].subjects[0].as_ref().unwrap();
-/// assert_eq!(subject.enum_name, "E");
+/// assert_eq!(subject.variant_name, "E");
 /// assert_eq!(analyses.matches[0].arms[0].body_bindings[0].ty.as_deref(), Some("string"));
 /// ```
 ///
 /// let-else and `if let` are analyzed the same way, as [`PatternSite`]s:
 ///
 /// ```
-/// let src = "enum E { A(x: string) }\nif let A(x) = e { use(x); }\n";
+/// let src = "variant E { A(x: string) }\nif let A(x) = e { use(x); }\n";
 /// let analyses = ttc::pattern_analyses(src, &[]);
 /// assert_eq!(analyses.sites[0].pattern_bindings[0].ty.as_deref(), Some("string"));
 /// ```
-pub fn pattern_analyses(source: &str, externs: &[EnumSymbol]) -> PatternAnalyses {
+pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnalyses {
     let program = crate::parser::parse(source);
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
     semantics_over(&program, &decls, Depth::Full).patterns
@@ -559,18 +559,18 @@ pub fn pattern_analyses(source: &str, externs: &[EnumSymbol]) -> PatternAnalyses
 /// of the rule.
 ///
 /// `externs` are the imported declarations the CLI collects for sema
-/// ([`crate::Options::extern_enums`]); they carry tags without field types,
+/// ([`crate::Options::extern_variants`]); they carry tags without field types,
 /// which is all coverage needs. Pattern bindings are therefore not analyzed
 /// and every arm comes back empty — [`pattern_analyses`] is the entry point
 /// for those.
 #[cfg(test)]
-pub(crate) fn coverage_analyses(program: &Program, externs: &[ExternEnum]) -> PatternAnalyses {
+pub(crate) fn coverage_analyses(program: &Program, externs: &[ExternVariant]) -> PatternAnalyses {
     coverage_semantics(program, externs).patterns
 }
 
 /// Builds the semantic file used by sema and lowering in the ordinary
 /// compiler pipeline.
-pub(crate) fn coverage_semantics(program: &Program, externs: &[ExternEnum]) -> SemanticFile {
+pub(crate) fn coverage_semantics(program: &Program, externs: &[ExternVariant]) -> SemanticFile {
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
     semantics_over(program, &decls, Depth::CoverageOnly)
 }
@@ -643,13 +643,13 @@ fn attach_resolution(
             .node_span(node)
             .map_or((0, 0), |s| (s.start, s.end))
     };
-    let enum_origin = |def: crate::hir::DefId| match &resolution.defs[def].kind {
-        res::DefKind::Enum(data) => match &data.origin {
+    let variant_origin = |def: crate::hir::DefId| match &resolution.defs[def].kind {
+        res::DefKind::Variant(data) => match &data.origin {
             res::DeclOrigin::Local(_) => Origin::Local,
             res::DeclOrigin::Imported { from } => Origin::Imported { from: from.clone() },
             res::DeclOrigin::Builtin => Origin::Builtin,
         },
-        res::DefKind::EnumValue { .. } => Origin::Local,
+        res::DefKind::VariantValue { .. } => Origin::Local,
     };
 
     for miss in &resolution.unresolved {
@@ -662,8 +662,8 @@ fn attach_resolution(
             name: miss.name.clone(),
             start,
             end,
-            enum_name: resolution.defs[miss.against].name.clone(),
-            origin: enum_origin(miss.against),
+            variant_name: resolution.defs[miss.against].name.clone(),
+            origin: variant_origin(miss.against),
             tag: miss.tag.clone(),
             suggestion: miss.suggestion.clone(),
         });
@@ -679,8 +679,8 @@ fn attach_resolution(
                     .unwrap_or_default(),
                 start,
                 end,
-                enum_name: resolution.defs[v.enum_def].name.clone(),
-                origin: enum_origin(v.enum_def),
+                variant_name: resolution.defs[v.variant_def].name.clone(),
+                origin: variant_origin(v.variant_def),
                 tag: None,
             }),
             res::Res::Field(f) => analyses.resolved.push(ResolvedName {
@@ -691,8 +691,8 @@ fn attach_resolution(
                     .unwrap_or_default(),
                 start,
                 end,
-                enum_name: resolution.defs[f.variant.enum_def].name.clone(),
-                origin: enum_origin(f.variant.enum_def),
+                variant_name: resolution.defs[f.variant.variant_def].name.clone(),
+                origin: variant_origin(f.variant.variant_def),
                 tag: resolution.variant(f.variant).map(|d| d.name.clone()),
             }),
             _ => {}
@@ -734,7 +734,7 @@ fn analyze(program: &Program, table: &Table, depth: Depth) -> PatternAnalyses {
     analyses.declarations = table
         .entries
         .iter()
-        .map(|e| DeclaredEnum {
+        .map(|e| DeclaredVariant {
             name: e.name.clone(),
             origin: e.origin.clone(),
             constructors: e.constructors.clone(),
@@ -743,20 +743,20 @@ fn analyze(program: &Program, table: &Table, depth: Depth) -> PatternAnalyses {
     analyses
 }
 
-/// One candidate enum of the analysis' declaration table.
+/// One candidate variant of the analysis' declaration table.
 struct Entry {
-    /// The enum's name in the analyzed file's scope.
+    /// The variant's name in the analyzed file's scope.
     name: String,
     /// Where it was declared — carried into [`Coverage`] so a consumer can
     /// name the origin without a table of its own.
     origin: Origin,
     /// The constructors, in declaration order. An imported declaration that
-    /// only carried tags ([`ExternEnum`], sema's input) has `fields: None`
+    /// only carried tags ([`ExternVariant`], sema's input) has `fields: None`
     /// throughout — enough for coverage, which is all that path asks.
     constructors: Vec<MatchConstructor>,
 }
 
-/// The candidate enums a match's subject can resolve to, in shadowing
+/// The candidate variants a match's subject can resolve to, in shadowing
 /// order — the analysis' declaration table.
 struct Table {
     /// Local declarations first (in source order), then imported ones, then
@@ -776,7 +776,7 @@ impl Table {
             .defs
             .iter()
             .filter_map(|(id, def)| {
-                let DefKind::Enum(data) = &def.kind else {
+                let DefKind::Variant(data) = &def.kind else {
                     return None;
                 };
                 // Only the winner of each name is a candidate.
@@ -813,8 +813,8 @@ impl Table {
         Table { entries }
     }
 
-    /// The first enum whose cases contain every tag — `None` for an empty
-    /// tag set (nothing identifies an enum) or when no candidate fits.
+    /// The first variant whose cases contain every tag — `None` for an empty
+    /// tag set (nothing identifies an variant) or when no candidate fits.
     fn resolve(&self, tags: &[&str]) -> Option<(&str, &[MatchConstructor])> {
         if tags.is_empty() {
             return None;
@@ -843,7 +843,7 @@ impl Table {
     /// analyzes; a tag no declaration knows becomes a constructor with no
     /// field list, which specializes to nothing and so covers only itself.
     /// The entry has no name — the checker answers with a *type*, not a
-    /// declaration, which is why the typed path's message names no enum.
+    /// declaration, which is why the typed path's message names no variant.
     fn entry_of_members(&self, tags: &[String]) -> Entry {
         Entry {
             name: String::new(),
@@ -862,7 +862,7 @@ impl Table {
         }
     }
 
-    /// The enum a declared type text names: a bare (possibly dotted)
+    /// The variant a declared type text names: a bare (possibly dotted)
     /// identifier, optionally with type arguments — `Shape`,
     /// `Option<number>`, `ns.Token` — and nothing else. Type arguments are
     /// not substituted (ttc has no type system); the constructor's declared
@@ -873,7 +873,7 @@ impl Table {
     }
 
     /// [`Table::resolve_type`]'s answer as the table entry itself — what
-    /// resolution needs, since it reports the enum's origin too.
+    /// resolution needs, since it reports the variant's origin too.
     fn entry_of_type(&self, ty: &str) -> Option<&Entry> {
         let trimmed = ty.trim();
         let base_len = trimmed
@@ -886,7 +886,7 @@ impl Table {
         let rest = trimmed[base_len..].trim_start();
         let type_args = rest.starts_with('<') && rest.ends_with('>');
         if !rest.is_empty() && !type_args {
-            return None; // a union, intersection, array, ... — not one enum
+            return None; // a union, intersection, array, ... — not one variant
         }
         let base = &trimmed[..base_len];
         self.entries.iter().find(|e| e.name == base)
@@ -894,8 +894,8 @@ impl Table {
 }
 
 impl Entry {
-    fn covered_enum(&self) -> CoveredEnum {
-        CoveredEnum {
+    fn covered_variant(&self) -> CoveredVariant {
+        CoveredVariant {
             name: self.name.clone(),
             origin: self.origin.clone(),
         }
@@ -907,7 +907,7 @@ fn walk(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyse
         match segment {
             Segment::Verbatim(_)
             | Segment::TtImport(_)
-            | Segment::Enum(_)
+            | Segment::Variant(_)
             | Segment::ValModifier(_) => {}
             Segment::Match(expr) => {
                 let analysis = analyze_match(expr, table, depth);
@@ -1095,7 +1095,7 @@ fn analyze_tuple_match(expr: &TupleMatchExpr, table: &Table, depth: Depth) -> Ma
 
 fn to_subject((name, constructors): (&str, &[MatchConstructor])) -> MatchSubject {
     MatchSubject {
-        enum_name: name.to_string(),
+        variant_name: name.to_string(),
         constructors: constructors.to_vec(),
     }
 }
@@ -1225,7 +1225,7 @@ fn analyze_group(
 }
 
 /// Walks one alternative's bindings, nested patterns included, recording a
-/// [`PatternBinding`] per leaf. `constructor` is `(enum name, constructor)`
+/// [`PatternBinding`] per leaf. `constructor` is `(variant name, constructor)`
 /// when the expected type is known; group fields are filled by the caller.
 fn collect_bindings(
     bindings: &[Binding],
@@ -1245,7 +1245,7 @@ fn collect_bindings(
         match &b.nested {
             Some(inner) => {
                 // The field's declared type is the nested pattern's
-                // expected type; resolve it to an enum and recurse.
+                // expected type; resolve it to an variant and recurse.
                 let nested_constructor =
                     field
                         .and_then(|f| table.resolve_type(&f.ty))
@@ -1271,9 +1271,9 @@ fn collect_bindings(
                     end: span.end,
                     tag: tag.to_string(),
                     ty: field.map(field_type),
-                    enum_name: field
+                    variant_name: field
                         .and(constructor)
-                        .map(|(enum_name, _)| enum_name.to_string()),
+                        .map(|(variant_name, _)| variant_name.to_string()),
                     // Filled by the caller with the top-level group.
                     group_start: 0,
                     group_end: 0,
@@ -1316,7 +1316,7 @@ fn merge_types(types: &[Option<String>]) -> Option<String> {
 }
 
 /// True when the alternative carries a nested pattern — like a guard, such
-/// an arm may mismatch at runtime, so it identifies the enum but covers
+/// an arm may mismatch at runtime, so it identifies the variant but covers
 /// nothing (sema's rule, and now the only copy of it).
 pub(crate) fn has_nested(alt: &TagPattern) -> bool {
     alt.bindings
@@ -1333,7 +1333,7 @@ fn covers(guard: &Option<GuardExpr>, alts: &[TagPattern]) -> bool {
 }
 
 /// [`Coverage`] of a single match, when the question means something: a tag
-/// match with no wildcard arm whose tags identify a known enum.
+/// match with no wildcard arm whose tags identify a known variant.
 ///
 /// The arms become a one-column matrix and the algorithm answers
 /// ([`usefulness`]). Guarded arms stay out of it — a guard may be false —
@@ -1342,7 +1342,7 @@ fn covers(guard: &Option<GuardExpr>, alts: &[TagPattern]) -> bool {
 /// of being written off.
 fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
     let rows = match_rows(expr)?;
-    // Several enums can hold every tag. The one the arms *satisfy* is the
+    // Several variants can hold every tag. The one the arms *satisfy* is the
     // subject if there is one; otherwise the one they leave least of —
     // the rule sema has always reported, now measured in witnesses.
     let cx = Alphabets::of(table);
@@ -1360,7 +1360,7 @@ fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
     }
     let (entry, missing) = best?;
     Some(Coverage {
-        positions: vec![Some(entry.covered_enum())],
+        positions: vec![Some(entry.covered_variant())],
         covered: rows.covered,
         missing,
         unreachable: unreachable_arms(&rows.arm_rows, &[ColTy::Enum(entry)], &cx),
@@ -1373,7 +1373,7 @@ fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
 /// oracle for the one column the checker can speak about.
 pub(crate) fn checked_coverage(
     source: &str,
-    externs: &[EnumSymbol],
+    externs: &[VariantSymbol],
     members: &[(usize, Vec<Vec<String>>)],
     payloads: &[PayloadAlphabet],
 ) -> Vec<(usize, Coverage)> {
@@ -1578,7 +1578,7 @@ fn collect_matches<'a>(
             }
             Segment::Verbatim(_)
             | Segment::TtImport(_)
-            | Segment::Enum(_)
+            | Segment::Variant(_)
             | Segment::ValModifier(_) => {}
         }
     }
@@ -1659,7 +1659,7 @@ fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
 
 /// [`Coverage`] of a tuple match: the same algorithm over as many columns
 /// as there are scrutinees. `None` when a bare `_` arm covers everything,
-/// when a tagged position resolves to no known enum, or when no position
+/// when a tagged position resolves to no known variant, or when no position
 /// is tagged at all (nothing to enumerate).
 fn tuple_coverage_of(expr: &TupleMatchExpr, table: &Table) -> Option<Coverage> {
     let arity = expr.scrutinees.len();
@@ -1692,7 +1692,7 @@ fn tuple_coverage_of(expr: &TupleMatchExpr, table: &Table) -> Option<Coverage> {
         }
     }
 
-    let mut positions: Vec<Option<CoveredEnum>> = Vec::with_capacity(arity);
+    let mut positions: Vec<Option<CoveredVariant>> = Vec::with_capacity(arity);
     let mut types: Vec<ColTy> = Vec::with_capacity(arity);
     for tags in &position_tags {
         if tags.is_empty() {
@@ -1701,10 +1701,10 @@ fn tuple_coverage_of(expr: &TupleMatchExpr, table: &Table) -> Option<Coverage> {
             types.push(ColTy::Unconstrained);
             continue;
         }
-        // A position whose tags name no enum makes the whole question
+        // A position whose tags name no variant makes the whole question
         // unanswerable — the same conservatism as before.
         let entry = *table.candidates(tags).first()?;
-        positions.push(Some(entry.covered_enum()));
+        positions.push(Some(entry.covered_variant()));
         types.push(ColTy::Enum(entry));
     }
     if positions.iter().all(Option::is_none) {
@@ -1850,12 +1850,12 @@ mod tests {
 
     #[test]
     fn single_constructor_binding_and_body_share_the_payload_type() {
-        let src = "enum E { A(x: string), B }\nconst v = match (e) { A(x) => x, B => 0 };\n";
+        let src = "variant E { A(x: string), B }\nconst v = match (e) { A(x) => x, B => 0 };\n";
         let analyses = pattern_analyses(src, &[]);
         let b = binding(&analyses, src, "A(x)", 2);
         assert_eq!(b.ty.as_deref(), Some("string"));
         assert_eq!(b.tag, "A");
-        assert_eq!(b.enum_name.as_deref(), Some("E"));
+        assert_eq!(b.variant_name.as_deref(), Some("E"));
         assert_eq!(b.alternatives, 1);
         let arm = &analyses.matches[0].arms[0];
         assert_eq!(arm.body_bindings.len(), 1);
@@ -1866,7 +1866,7 @@ mod tests {
     #[test]
     fn or_pattern_occurrences_keep_their_own_types_and_the_body_merges_them() {
         let src =
-            "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+            "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
         let analyses = pattern_analyses(src, &[]);
         let a = binding(&analyses, src, "A(x)", 2);
         let b = binding(&analyses, src, "B(x)", 2);
@@ -1885,7 +1885,7 @@ mod tests {
     #[test]
     fn agreeing_alternatives_merge_to_a_single_type() {
         let src =
-            "enum E { A(x: string), B(x: string) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+            "variant E { A(x: string), B(x: string) }\nconst v = match (e) { A(x) | B(x) => x };\n";
         let analyses = pattern_analyses(src, &[]);
         assert_eq!(
             analyses.matches[0].arms[0].body_bindings[0].ty.as_deref(),
@@ -1895,7 +1895,7 @@ mod tests {
 
     #[test]
     fn aliases_bind_the_alias_span_and_optional_fields_widen() {
-        let src = "enum E { A(v?: string), B(v: number) }\nconst r = match (e) { A(v: x) | B(v: x) => x };\n";
+        let src = "variant E { A(v?: string), B(v: number) }\nconst r = match (e) { A(v: x) | B(v: x) => x };\n";
         let analyses = pattern_analyses(src, &[]);
         let a = binding(&analyses, src, "A(v: x)", 5);
         assert_eq!(a.name, "x");
@@ -1908,12 +1908,12 @@ mod tests {
 
     #[test]
     fn nested_patterns_resolve_through_the_field_type() {
-        let src = "enum Inner { Some(value: number), None }\nenum E { A(o: Inner), B(o: Inner) }\nconst v = match (e) { A(o: Some(value)) => value, B(o: None()) => 0 };\n";
+        let src = "variant Inner { Some(value: number), None }\nvariant E { A(o: Inner), B(o: Inner) }\nconst v = match (e) { A(o: Some(value)) => value, B(o: None()) => 0 };\n";
         let analyses = pattern_analyses(src, &[]);
         let x = binding(&analyses, src, "Some(value)", 5);
         assert_eq!(x.ty.as_deref(), Some("number"));
         assert_eq!(x.tag, "Some");
-        assert_eq!(x.enum_name.as_deref(), Some("Inner"));
+        assert_eq!(x.variant_name.as_deref(), Some("Inner"));
         assert_eq!(
             analyses.matches[0].arms[0].body_bindings[0].ty.as_deref(),
             Some("number")
@@ -1921,18 +1921,18 @@ mod tests {
     }
 
     #[test]
-    fn generic_field_types_resolve_their_base_enum() {
-        let src = "enum E { A(o: Option<number>) }\nconst v = match (e) { A(o: Some(value)) => value, _ => 0 };\n";
+    fn generic_field_types_resolve_their_base_variant() {
+        let src = "variant E { A(o: Option<number>) }\nconst v = match (e) { A(o: Some(value)) => value, _ => 0 };\n";
         let analyses = pattern_analyses(src, &[]);
         let x = binding(&analyses, src, "Some(value)", 5);
         // Declared, not instantiated: the checker's answer supersedes this.
         assert_eq!(x.ty.as_deref(), Some("T"));
-        assert_eq!(x.enum_name.as_deref(), Some("Option"));
+        assert_eq!(x.variant_name.as_deref(), Some("Option"));
     }
 
     #[test]
     fn tuple_elements_resolve_per_position() {
-        let src = "enum L { A(x: string), B }\nenum R { C(y: number), D }\nconst v = match (l, r) { (A(x) | B, C(y) | D) => 0, _ => 1 };\n";
+        let src = "variant L { A(x: string), B }\nvariant R { C(y: number), D }\nconst v = match (l, r) { (A(x) | B, C(y) | D) => 0, _ => 1 };\n";
         let analyses = pattern_analyses(src, &[]);
         let x = binding(&analyses, src, "A(x)", 2);
         let y = binding(&analyses, src, "C(y)", 2);
@@ -1941,8 +1941,8 @@ mod tests {
         assert_eq!(&src[x.group_start..x.group_end], "A(x) | B");
         let m = &analyses.matches[0];
         assert_eq!(m.subjects.len(), 2);
-        assert_eq!(m.subjects[0].as_ref().unwrap().enum_name, "L");
-        assert_eq!(m.subjects[1].as_ref().unwrap().enum_name, "R");
+        assert_eq!(m.subjects[0].as_ref().unwrap().variant_name, "L");
+        assert_eq!(m.subjects[1].as_ref().unwrap().variant_name, "R");
     }
 
     #[test]
@@ -1951,9 +1951,9 @@ mod tests {
         let analyses = pattern_analyses(src, &[]);
         let value = binding(&analyses, src, "Some(value)", 5);
         assert_eq!(value.ty.as_deref(), Some("T"));
-        assert_eq!(value.enum_name.as_deref(), Some("Option"));
+        assert_eq!(value.variant_name.as_deref(), Some("Option"));
 
-        let shadowed = "enum Option { Some(value: string), None }\nconst v = match (o) { Some(value) => value, None => 0 };\n";
+        let shadowed = "variant Option { Some(value: string), None }\nconst v = match (o) { Some(value) => value, None => 0 };\n";
         let analyses = pattern_analyses(shadowed, &[]);
         let value = binding(&analyses, shadowed, "Some(value)", 5);
         assert_eq!(value.ty.as_deref(), Some("string"));
@@ -1961,23 +1961,23 @@ mod tests {
 
     #[test]
     fn extern_declarations_answer_under_their_in_scope_names() {
-        let externs = vec![EnumSymbol {
+        let externs = vec![VariantSymbol {
             name: "T".to_string(),
             offset: 0,
             exported: true,
             generics: String::new(),
             cases: vec![
-                crate::CaseSymbol {
+                crate::VariantCaseSymbol {
                     tag: "Num".to_string(),
                     offset: 0,
-                    fields: Some(vec![crate::FieldSymbol {
+                    fields: Some(vec![crate::VariantFieldSymbol {
                         name: "value".to_string(),
                         offset: 0,
                         optional: false,
                         ty: "number".to_string(),
                     }]),
                 },
-                crate::CaseSymbol {
+                crate::VariantCaseSymbol {
                     tag: "Eof".to_string(),
                     offset: 0,
                     fields: None,
@@ -1988,7 +1988,7 @@ mod tests {
         let analyses = pattern_analyses(src, &externs);
         let value = binding(&analyses, src, "Num(value)", 4);
         assert_eq!(value.ty.as_deref(), Some("number"));
-        assert_eq!(value.enum_name.as_deref(), Some("T"));
+        assert_eq!(value.variant_name.as_deref(), Some("T"));
     }
 
     #[test]
@@ -2005,18 +2005,18 @@ mod tests {
     #[test]
     fn coverage_mirrors_the_exhaustiveness_rule() {
         let src =
-            "enum E { A(s: string), B, C }\nconst v = match (e) { A(x) => x, B if f() => 1 };\n";
+            "variant E { A(s: string), B, C }\nconst v = match (e) { A(x) => x, B if f() => 1 };\n";
         let analyses = pattern_analyses(src, &[]);
         let coverage = analyses.matches[0].coverage.as_ref().unwrap();
         assert_eq!(coverage.covered, ["A"]);
-        // The guarded `B` arm identifies the enum but covers nothing.
+        // The guarded `B` arm identifies the variant but covers nothing.
         assert_eq!(coverage.missing_tags(), ["B", "C"]);
         assert_eq!(
             coverage.positions[0].as_ref().map(|e| (&e.name, &e.origin)),
             Some((&"E".to_string(), &Origin::Local))
         );
 
-        let with_wildcard = "enum E { A, B }\nconst v = match (e) { A => 0, _ => 1 };\n";
+        let with_wildcard = "variant E { A, B }\nconst v = match (e) { A => 0, _ => 1 };\n";
         assert_eq!(
             pattern_analyses(with_wildcard, &[]).matches[0].coverage,
             None
@@ -2025,11 +2025,11 @@ mod tests {
 
     #[test]
     fn coverage_prefers_the_candidate_the_arms_satisfy() {
-        // Both enums contain every arm tag; `Small` is fully covered, so the
+        // Both variants contain every arm tag; `Small` is fully covered, so the
         // match is exhaustive even though `Big` is missing a case. This is
         // the rule sema has always reported — an arm set that satisfies
         // *some* candidate is not a missing-case error.
-        let src = "enum Big { A(s: string), B, C }\nenum Small { A(s: string), B }\nconst v = match (e) { A(x) => x, B => 1 };\n";
+        let src = "variant Big { A(s: string), B, C }\nvariant Small { A(s: string), B }\nconst v = match (e) { A(x) => x, B => 1 };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
             .clone()
@@ -2038,7 +2038,7 @@ mod tests {
         assert_eq!(coverage.positions[0].as_ref().unwrap().name, "Small");
 
         // With no satisfied candidate, the one left fewest cases is named.
-        let unsatisfied = "enum Big { A(s: string), B, C, D }\nenum Small { A(s: string), B, C }\nconst v = match (e) { A(x) => x, B => 1 };\n";
+        let unsatisfied = "variant Big { A(s: string), B, C, D }\nvariant Small { A(s: string), B, C }\nconst v = match (e) { A(x) => x, B => 1 };\n";
         let coverage = pattern_analyses(unsatisfied, &[]).matches[0]
             .coverage
             .clone()
@@ -2048,9 +2048,9 @@ mod tests {
     }
 
     #[test]
-    fn coverage_of_an_imported_enum_carries_its_specifier() {
+    fn coverage_of_an_imported_variant_carries_its_specifier() {
         let src = "import { Token } from \"./token.tt\";\nconst v = match (t) { Word => 0 };\n";
-        let externs = [ExternEnum {
+        let externs = [ExternVariant {
             name: "Token".to_string(),
             tags: vec!["Word".to_string(), "Punct".to_string()],
             from: Some("./token.tt".to_string()),
@@ -2071,7 +2071,7 @@ mod tests {
 
     #[test]
     fn tuple_coverage_is_the_product_of_its_positions() {
-        let src = "enum A { X(v: number), Y }\nenum B { P(v: number), Q }\nconst v = match (a, b) { (X, P) => 0, (Y, _) => 1 };\n";
+        let src = "variant A { X(v: number), Y }\nvariant B { P(v: number), Q }\nconst v = match (a, b) { (X, P) => 0, (Y, _) => 1 };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
             .clone()
@@ -2092,7 +2092,7 @@ mod tests {
     #[test]
     fn a_universal_tuple_position_shows_as_a_hole() {
         // Nothing is ever written at position 1, so it constrains nothing.
-        let src = "enum A { X(v: number), Y }\nconst v = match (a, b) { (X, _) => 0 };\n";
+        let src = "variant A { X(v: number), Y }\nconst v = match (a, b) { (X, _) => 0 };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
             .clone()
@@ -2101,14 +2101,15 @@ mod tests {
         assert_eq!(patterns(&coverage), [["Y", "_"]]);
 
         // A bare `_` arm covers everything; there is nothing to enumerate.
-        let bare = "enum A { X(v: number), Y }\nconst v = match (a, b) { (X, _) => 0, _ => 1 };\n";
+        let bare =
+            "variant A { X(v: number), Y }\nconst v = match (a, b) { (X, _) => 0, _ => 1 };\n";
         assert_eq!(pattern_analyses(bare, &[]).matches[0].coverage, None);
     }
 
     #[test]
     fn body_definitions_answer_the_innermost_arm() {
         let src =
-            "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+            "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
         let analyses = pattern_analyses(src, &[]);
         let body_x = src.rfind("=> x").unwrap() + 3;
         let spans = analyses.body_definitions(src, body_x);
@@ -2127,7 +2128,7 @@ mod tests {
     #[test]
     fn body_binding_lookup_merges_like_the_body_map() {
         let src =
-            "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+            "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
         let analyses = pattern_analyses(src, &[]);
         let body_x = src.rfind("=> x").unwrap() + 3;
         let (b, span) = analyses.body_binding_at(src, body_x).unwrap();
@@ -2138,7 +2139,7 @@ mod tests {
 
     #[test]
     fn let_else_and_if_let_are_pattern_sites_with_typed_bindings() {
-        let src = "enum E { A(x: string), B }\n\
+        let src = "variant E { A(x: string), B }\n\
                    const A(x) = e else { throw 0; };\n\
                    if let A(x: y) = e { use(y); }\n";
         let analyses = pattern_analyses(src, &[]);
@@ -2150,7 +2151,7 @@ mod tests {
             analyses.sites[0]
                 .subject
                 .as_ref()
-                .map(|s| s.enum_name.as_str()),
+                .map(|s| s.variant_name.as_str()),
             Some("E")
         );
         assert_eq!(
@@ -2165,7 +2166,7 @@ mod tests {
 
     #[test]
     fn each_link_of_an_if_let_chain_is_its_own_site() {
-        let src = "enum E { A(x: string), B(y: number) }\n\
+        let src = "variant E { A(x: string), B(y: number) }\n\
                    if let A(x) = e { use(x); } else if let B(y) = e { use(y); }\n";
         let analyses = pattern_analyses(src, &[]);
         assert_eq!(analyses.sites.len(), 2);
@@ -2178,7 +2179,7 @@ mod tests {
     #[test]
     fn resolution_reports_a_misspelling_and_stays_quiet_otherwise() {
         let typo = pattern_analyses(
-            "enum E { Alpha(x: string), Beta }\nconst v = match (e) { Alhpa(x) => x, Beta => 0 };\n",
+            "variant E { Alpha(x: string), Beta }\nconst v = match (e) { Alhpa(x) => x, Beta => 0 };\n",
             &[],
         );
         assert_eq!(typo.unresolved.len(), 1);
@@ -2188,19 +2189,19 @@ mod tests {
         // A name that is nobody's misspelling is not an error: the pattern
         // may be over a hand-written tagged union.
         let union = pattern_analyses(
-            "enum E { Alpha(x: string), Beta }\nconst v = match (m) { Beta => 0, Gamma(q) => q };\n",
+            "variant E { Alpha(x: string), Beta }\nconst v = match (m) { Beta => 0, Gamma(q) => q };\n",
             &[],
         );
         assert!(union.unresolved.is_empty());
     }
 
     #[test]
-    fn an_ambiguous_tag_identifies_no_enum() {
-        // Both enums contain `A`, so neither is *the* subject — and a
+    fn an_ambiguous_tag_identifies_no_variant() {
+        // Both variants contain `A`, so neither is *the* subject — and a
         // suggestion ttc cannot choose is no suggestion.
         let analyses = pattern_analyses(
-            "enum L { A(x: string), Left(n: number) }\n\
-             enum R { A(x: string), Righ(n: number) }\n\
+            "variant L { A(x: string), Left(n: number) }\n\
+             variant R { A(x: string), Righ(n: number) }\n\
              const v = match (e) { A(x) => x, Right(n) => n };\n",
             &[],
         );
@@ -2210,7 +2211,7 @@ mod tests {
     #[test]
     fn unreachable_arms_are_computed_but_not_an_error() {
         // `A` is already covered, so the third arm matches nothing new.
-        let src = "enum E { A(x: string), B(y: number) }\n\
+        let src = "variant E { A(x: string), B(y: number) }\n\
                    const v = match (e) { A(x) => x, B(y) => y, A(x: z) => z };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
@@ -2222,7 +2223,7 @@ mod tests {
 
     #[test]
     fn a_guarded_arm_leaves_its_case_uncovered() {
-        let src = "enum E { A(x: string), B(y: number) }\n\
+        let src = "variant E { A(x: string), B(y: number) }\n\
                    const v = match (e) { A(x) if ok => x, B(y) => y };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
@@ -2233,8 +2234,8 @@ mod tests {
 
     #[test]
     fn a_nested_pattern_is_a_column_of_its_own() {
-        let src = "enum I { Y(n: number), N }\n\
-                   enum O { W(i: I), B }\n\
+        let src = "variant I { Y(n: number), N }\n\
+                   variant O { W(i: I), B }\n\
                    const v = match (o) { W(i: Y(n)) => n, B => 0 };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
@@ -2245,11 +2246,11 @@ mod tests {
 
     #[test]
     fn a_witness_from_an_unidentifiable_column_is_not_certain() {
-        // `Inner` names no tt enum, so the payload column's alphabet is
+        // `Inner` names no tt variant, so the payload column's alphabet is
         // unknown and the witness is a guess. The default path reports it
         // anyway (nothing better is available without types); a consumer
         // with a checker filters on this flag and asks instead.
-        let src = "enum O { W(i: Inner), B }\n\
+        let src = "variant O { W(i: Inner), B }\n\
                    const v = match (o) { W(i: Yes(n)) => n, B => 0 };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
@@ -2259,8 +2260,8 @@ mod tests {
         assert!(!coverage.missing[0].certain);
 
         // A column the table *can* name is certain.
-        let src = "enum I { Y(n: number), N }\n\
-                   enum O { W(i: I), B }\n\
+        let src = "variant I { Y(n: number), N }\n\
+                   variant O { W(i: I), B }\n\
                    const v = match (o) { W(i: Y(n)) => n, B => 0 };\n";
         let coverage = pattern_analyses(src, &[]).matches[0]
             .coverage
@@ -2271,7 +2272,7 @@ mod tests {
 
     #[test]
     fn nested_matches_are_all_collected() {
-        let src = "enum E { A(x: string), B }\nconst v = match (e) { A(x) => match (e) { A(x: y) | B => 0 }, B => 1 };\n";
+        let src = "variant E { A(x: string), B }\nconst v = match (e) { A(x) => match (e) { A(x: y) | B => 0 }, B => 1 };\n";
         let analyses = pattern_analyses(src, &[]);
         assert_eq!(analyses.matches.len(), 2);
         let y = binding(&analyses, src, "A(x: y)", 5);

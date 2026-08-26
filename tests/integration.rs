@@ -115,7 +115,7 @@ fn ttx_output_typechecks_as_tsx() {
     let source = r#"declare global {
   namespace JSX { interface IntrinsicElements { main: {}; b: {}; } }
 }
-enum State { Ready(value: string), Empty }
+variant State { Ready(value: string), Empty }
 export const render = (state: State) => <main>{match (state) {
   Ready(value) => <b>{value}</b>,
   Empty => null,
@@ -211,11 +211,11 @@ fn recoverable_codegen_errors_do_not_create_tsc_errors() {
         return;
     }
 
-    let duplicate_case = "enum E { A(x: number), B, A(y: number) }\n";
+    let duplicate_case = "variant E { A(x: number), B, A(y: number) }\n";
     let (ok, out) = typecheck_recovery(duplicate_case);
     assert!(ok, "tsc rejected duplicate-case recovery:\n{out}");
 
-    let duplicate_binding = "enum E { A(left: number, right: number), B }\n\
+    let duplicate_binding = "variant E { A(left: number, right: number), B }\n\
         const value = match (E.A(1, 2)) { A(left: x, right: x) => x, B => 0 };\n";
     let (ok, out) = typecheck_recovery(duplicate_binding);
     assert!(ok, "tsc rejected duplicate-binding recovery:\n{out}");
@@ -267,7 +267,7 @@ fn a_grouped_value_still_evaluates_to_what_the_arm_wrote() {
     if !have("tsc") || !have("node") {
         return;
     }
-    let out = run("enum E { A(v: number), B }\n\
+    let out = run("variant E { A(v: number), B }\n\
          const e: E = E.A(1);\n\
          const seen: number[] = [];\n\
          const note = (n: number): number => { seen.push(n); return n; };\n\
@@ -300,7 +300,7 @@ fn a_block_arm_yields_the_same_value_whether_or_not_it_can_fall_out() {
     if !have("tsc") || !have("node") {
         return;
     }
-    let out = run("enum E { A(v: number), B }\n\
+    let out = run("variant E { A(v: number), B }\n\
          const run = (e: E): unknown => match (e) {\n\
            A(v) => {\n\
              if (v > 0) { return \"positive\"; }\n\
@@ -401,10 +401,10 @@ macro_rules! require_toolchain {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn runtime_enum_construction_and_match() {
+fn runtime_variant_construction_and_match() {
     require_toolchain!();
     let lines = run(r#"
-enum Shape {
+variant Shape {
   Circle(radius: number),
   Rect(width: number, height: number),
   Point,
@@ -436,7 +436,7 @@ console.log(JSON.stringify(Shape.Point));
 fn runtime_binding_aliases_and_block_bodies() {
     require_toolchain!();
     let lines = run(r#"
-enum Msg {
+variant Msg {
   Quit,
   Move(x: number, y: number),
   Write(text: string),
@@ -464,7 +464,7 @@ console.log(describe(Msg.Quit));
 fn runtime_owner_lowering_preserves_reference_order_and_block_exits() {
     require_toolchain!();
     let lines = run(r#"
-enum E { A(value: number), B }
+variant E { A(value: number), B }
 const events: string[] = [];
 const receiver = {
   get method() {
@@ -511,7 +511,7 @@ console.log(value, block, nested);
 fn runtime_expression_boundaries_preserve_parameter_and_field_context() {
     require_toolchain!();
     let lines = run(r#"
-enum E { A(value: number), B }
+variant E { A(value: number), B }
 function parameter(
   seed: number,
   value = match (E.A(seed + arguments.length)) {
@@ -538,7 +538,7 @@ console.log(new Counter().value);
 fn runtime_reference_protocol_preserves_optional_and_tagged_calls() {
     require_toolchain!();
     let lines = run(r#"
-enum E { A(value: number), B }
+variant E { A(value: number), B }
 const events: string[] = [];
 const receiver = {
   get method() {
@@ -589,7 +589,7 @@ console.log(present, missing, tagged);
 fn runtime_or_patterns_share_one_body() {
     require_toolchain!();
     let lines = run(r#"
-enum Key {
+variant Key {
   Enter(),
   Escape,
   Tab,
@@ -616,7 +616,7 @@ console.log(action(Key.Char("z")));
 fn runtime_match_guards_fall_through_top_to_bottom() {
     require_toolchain!();
     let lines = run(r#"
-enum Score {
+variant Score {
   Graded(points: number),
   Pending,
 }
@@ -651,10 +651,10 @@ console.log(tally(Score.Graded(-1)));
 }
 
 #[test]
-fn runtime_generic_enum() {
+fn runtime_generic_variant() {
     require_toolchain!();
     let lines = run(r#"
-enum TOption<T> {
+variant TOption<T> {
   Some(value: T),
   None,
 }
@@ -676,7 +676,7 @@ console.log(unwrapOr<number>(TOption.None, 42));
 fn runtime_async_match_with_await() {
     require_toolchain!();
     let lines = run(r#"
-enum Job {
+variant Job {
   Fetch(n: number),
   Idle,
 }
@@ -708,7 +708,7 @@ fn runtime_unexpected_case_throws() {
     // The emitted default branch is a plain runtime guard — it protects when
     // the type system was bypassed (e.g. data from the outside world).
     let lines = run(r#"
-enum AB { A(n: number), B }
+variant AB { A(n: number), B }
 function f(x: AB): number {
   return match (x) {
     A(n) => n,
@@ -731,10 +731,10 @@ try {
 #[test]
 fn runtime_plain_typescript_enum_coexists() {
     require_toolchain!();
-    // A unit-only enum is TypeScript's own enum, untouched by ttc.
+    // TypeScript enum stays untouched while a unit-only tt variant lowers.
     let lines = run(r#"
 enum Color { Red, Green, Blue }
-enum Shape { Circle(radius: number), Point }
+variant Shape { Circle(radius: number), Point }
 
 console.log(Color.Green);
 console.log(Color[Color.Blue]);
@@ -885,7 +885,7 @@ fn runtime_or_patterns_in_let_else_and_if_let() {
     // temporary to the alternatives' union for the shared destructuring,
     // and the if-let disjunction narrows inside the then-block.
     let lines = run(r#"
-enum Shape { Circle(r: number), Square(r: number), Dot }
+variant Shape { Circle(r: number), Square(r: number), Dot }
 
 function side(s: Shape): number {
   const Circle(r) | Square(r) = s else { return 0; };
@@ -1240,7 +1240,7 @@ fn typecheck_exhaustive_match_passes() {
     require_toolchain!();
     let (ok, out) = typecheck(
         r#"
-enum Shape { Circle(radius: number), Point }
+variant Shape { Circle(radius: number), Point }
 const f = (s: Shape) => match (s) {
   Circle(radius) => radius,
   Point => 0,
@@ -1255,7 +1255,7 @@ fn typecheck_wildcard_makes_partial_match_exhaustive() {
     require_toolchain!();
     let (ok, out) = typecheck(
         r#"
-enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 const f = (s: Shape) => match (s) {
   Circle(radius) => radius,
   _ => 0,
@@ -1631,7 +1631,7 @@ const f = (e: AppEvent) => match (e) {
 /* import specifier rewriting                                          */
 /* ------------------------------------------------------------------ */
 
-const ERROR_TT: &str = "export enum CalcError { DivByZero, Overflow(limit: number) }\n";
+const ERROR_TT: &str = "export variant CalcError { DivByZero, Overflow(limit: number) }\n";
 const MAIN_TT: &str = r#"import { CalcError } from "./error.tt";
 const e = CalcError.Overflow(9);
 const msg = match (e) {
@@ -1681,7 +1681,7 @@ fn cross_file_tt_import_typechecks_and_runs() {
 /* ------------------------------------------------------------------ */
 
 const TOKEN_TT: &str =
-    "export enum Token {\n  Num(value: number),\n  Ident(name: string),\n  Eof,\n}\n";
+    "export variant Token {\n  Num(value: number),\n  Ident(name: string),\n  Eof,\n}\n";
 
 /// Runs the ttc binary itself — declaration collection across files lives
 /// in the CLI, not in `compile`. No tsc/node needed.
@@ -1746,7 +1746,7 @@ fn cli_checks_exhaustiveness_across_tt_imports() {
     // file and position on the location line, the construct underlined.
     assert!(
         err.contains(
-            "error[match-not-exhaustive]: match on enum Token (imported from \"./token.tt\") \
+            "error[match-not-exhaustive]: match on variant Token (imported from \"./token.tt\") \
              is not exhaustive: missing \"Eof\""
         ),
         "{err}"
@@ -1821,7 +1821,7 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
     fs::write(dir.join("token.tt"), TOKEN_TT).unwrap();
     fs::write(
         dir.join("parser.tt"),
-        "import { Token as Tok } from \"./token.tt\";\nimport { Gone } from \"./missing.tt\";\nenum Local { A(x: number) }\n",
+        "import { Token as Tok } from \"./token.tt\";\nimport { Gone } from \"./missing.tt\";\nvariant Local { A(x: number) }\n",
     )
     .unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
@@ -1832,10 +1832,12 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
     assert!(out.status.success());
     let json = String::from_utf8_lossy(&out.stdout).into_owned();
 
-    // Shape: the local enum with its position, the resolved import with the
+    // Shape: the local variant with its position, the resolved import with the
     // referenced file's exported declarations, and the unresolvable import
     // marked null.
     assert!(json.contains("\"file\":\"parser.tt\""), "{json}");
+    assert!(json.contains("\"variants\":["), "{json}");
+    assert!(!json.contains("\"enums\""), "{json}");
     assert!(json.contains("\"name\":\"Local\""), "{json}");
     assert!(
         json.contains("\"entries\":[{\"name\":\"Token\",\"alias\":\"Tok\"}]"),
@@ -1843,7 +1845,7 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
     );
     assert!(
         json.contains(
-            "\"name\":\"Token\",\"exported\":true,\"generics\":\"\",\"line\":1,\"col\":13"
+            "\"name\":\"Token\",\"exported\":true,\"generics\":\"\",\"line\":1,\"col\":16"
         ),
         "{json}"
     );
@@ -1852,7 +1854,7 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
         "{json}"
     );
     assert!(json.contains("\"specifier\":\"./missing.tt\""), "{json}");
-    assert!(json.contains("\"resolved\":null,\"enums\":[]"), "{json}");
+    assert!(json.contains("\"resolved\":null,\"variants\":[]"), "{json}");
 
     // And it must be JSON a real parser accepts.
     if have("node") {
@@ -1880,9 +1882,9 @@ fn symbols_reports_imports_and_positions_as_valid_json() {
 /* the unified pipeline through the CLI: build and --types             */
 /* ------------------------------------------------------------------ */
 
-const LEVEL_TT: &str = "export enum Level {\n  Low,\n  High(threshold: number),\n}\n";
+const LEVEL_TT: &str = "export variant Level {\n  Low,\n  High(threshold: number),\n}\n";
 
-const NOTICE_TT: &str = "import type { TOption } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport { Level } from \"./level.tt\";\n\nexport enum Notice {\n  Info(text: string),\n  Warn(text: string, code: number),\n}\n\nexport function render(n: Notice): string {\n  return match (n) {\n    Info(text) => `info: ${text}`,\n    Warn(text, code) => `warn[${code}]: ${text}`,\n  };\n}\n\nexport function gate(l: Level): number {\n  return match (l) {\n    Low => 0,\n    High(threshold) => threshold,\n  };\n}\n\nexport function first(list: Notice[]): TOption<Notice> {\n  return list.length > 0 ? Option.Some(list[0]) : Option.None;\n}\n";
+const NOTICE_TT: &str = "import type { TOption } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport { Level } from \"./level.tt\";\n\nexport variant Notice {\n  Info(text: string),\n  Warn(text: string, code: number),\n}\n\nexport function render(n: Notice): string {\n  return match (n) {\n    Info(text) => `info: ${text}`,\n    Warn(text, code) => `warn[${code}]: ${text}`,\n  };\n}\n\nexport function gate(l: Level): number {\n  return match (l) {\n    Low => 0,\n    High(threshold) => threshold,\n  };\n}\n\nexport function first(list: Notice[]): TOption<Notice> {\n  return list.length > 0 ? Option.Some(list[0]) : Option.None;\n}\n";
 
 const CONSUMER_MAIN_TS: &str = "import * as Option from \"@tt/std/option\";\nimport { Notice, render, first } from \"./notice.tt\";\n\nconst items = [Notice.Info(\"hello\"), Notice.Warn(\"careful\", 7)];\nfor (const n of items) console.log(render(n));\nconsole.log(Option.isSome(first(items)));\n";
 
@@ -2288,7 +2290,7 @@ console.log(order.join(","), out);
 fn a_materialized_pipeline_keeps_head_before_callee() {
     require_toolchain!();
     let lines = run(r#"
-enum E { A(value: number), B }
+variant E { A(value: number), B }
 const order: string[] = [];
 const head = (): E => { order.push("head"); return E.A(2); };
 const step = () => { order.push("step"); return (value: number) => {
@@ -2370,8 +2372,8 @@ await main();
 fn runtime_tuple_match_dispatches_on_the_combination() {
     require_toolchain!();
     let lines = run(r#"
-enum Conn { Online(latency: number), Offline }
-enum Mode { Auto(), Manual(level: number) }
+variant Conn { Online(latency: number), Offline }
+variant Mode { Auto(), Manual(level: number) }
 
 function decide(c: Conn, m: Mode): number {
   return match (c, m) {
@@ -2395,8 +2397,8 @@ fn tuple_match_bindings_typecheck_per_position() {
     require_toolchain!();
     let (ok, out) = typecheck(
         r#"
-enum Left { A(n: number), B }
-enum Right { C(s: string), D }
+variant Left { A(n: number), B }
+variant Right { C(s: string), D }
 function f(l: Left, r: Right): string {
   return match (l, r) {
     (A(n), C(s)) => s.repeat(n),
@@ -2414,7 +2416,7 @@ function f(l: Left, r: Right): string {
 fn tuple_match_scrutinees_evaluate_once_each_left_to_right() {
     require_toolchain!();
     let lines = run(r#"
-enum Coin { Heads(), Tails }
+variant Coin { Heads(), Tails }
 const order: string[] = [];
 function heads(name: string): Coin { order.push(name); return Coin.Heads(); }
 const r = match (heads("a"), heads("b")) {
@@ -2434,8 +2436,8 @@ console.log(order.join(","), r);
 fn runtime_nested_pattern_falls_through_on_inner_mismatch() {
     require_toolchain!();
     let lines = run(r#"
-enum Opt { Some(value: number), None }
-enum Res { Ok(value: Opt), Err(error: string) }
+variant Opt { Some(value: number), None }
+variant Res { Ok(value: Opt), Err(error: string) }
 
 function grade(r: Res): string {
   return match (r) {
@@ -2464,8 +2466,8 @@ fn nested_pattern_bindings_typecheck_through_the_paths() {
     // destructuring — no type tricks, plain control-flow analysis.
     let (ok, out) = typecheck(
         r#"
-enum Opt { Some(value: number), None }
-enum Res { Ok(value: Opt), Err(error: string) }
+variant Opt { Some(value: number), None }
+variant Res { Ok(value: Opt), Err(error: string) }
 function f(r: Res): number {
   return match (r) {
     Ok(value: Some(value: v)) => v + 1,
@@ -2485,7 +2487,7 @@ function f(r: Res): number {
 fn runtime_if_let_chains_and_falls_back() {
     require_toolchain!();
     let lines = run(r#"
-enum Opt { Some(value: number), None }
+variant Opt { Some(value: number), None }
 
 function pick(a: Opt, b: Opt): number {
   let out = -1;
@@ -2513,7 +2515,7 @@ fn if_let_bindings_stay_narrowed_inside_closures() {
     // closure boundaries — the gap that motivated the feature (TASK-042 G5).
     let (ok, out) = typecheck(
         r#"
-enum Opt { Some(value: string), None }
+variant Opt { Some(value: string), None }
 function f(o: Opt, xs: number[]): string[] {
   const collected: string[] = [];
   if let Some(value) = o {
@@ -2530,12 +2532,12 @@ function f(o: Opt, xs: number[]): string[] {
 /* result computation block                                            */
 /* ------------------------------------------------------------------ */
 
-/// tt enums in exactly the shape `@tt/std`'s `Result` has, so the block
+/// tt variants in exactly the shape `@tt/std`'s `Result` has, so the block
 /// tests need no module setup.
 const RESULT_PRELUDE: &str = r#"
-enum Res<T, E> { Ok(value: T), Err(error: E) }
-enum UserError { NoUser() }
-enum CompanyError { NoCompany(id: number) }
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+variant UserError { NoUser() }
+variant CompanyError { NoCompany(id: number) }
 type User = { id: number; name: string; companyId: number };
 type Company = { id: number; name: string };
 declare function getUser(id: number): Res<User, UserError>;
@@ -2606,7 +2608,7 @@ const check = (id: number): string => match (view(id)) {{
 fn runtime_result_block_short_circuits_on_the_first_err() {
     require_toolchain!();
     let lines = run(r#"
-enum Res<T, E> { Ok(value: T), Err(error: E) }
+variant Res<T, E> { Ok(value: T), Err(error: E) }
 
 const steps: string[] = [];
 const step = (name: string, ok: boolean): Res<string, string> => {
@@ -2638,7 +2640,7 @@ console.log(JSON.stringify(chain(false)), steps.join(","));
 fn runtime_result_block_with_await_resolves_to_a_result() {
     require_toolchain!();
     let lines = run(r#"
-enum Res<T, E> { Ok(value: T), Err(error: E) }
+variant Res<T, E> { Ok(value: T), Err(error: E) }
 
 const fetchNum = async (n: number): Promise<Res<number, string>> =>
   n > 0 ? Res.Ok(n) : Res.Err("not positive");
@@ -3077,7 +3079,7 @@ fn a_block_arm_exit_leaves_the_region_from_inside_a_loop() {
     // `break`. If the label were dropped here the `break` would leave the
     // loop and fall through to the next statement instead.
     let lines = run(r#"
-enum Pick { Scan(from: number), Zero }
+variant Pick { Scan(from: number), Zero }
 declare const nothing: number;
 function choose(p: Pick): number {
   return match (p) {
@@ -3101,7 +3103,7 @@ fn a_block_arm_exit_without_a_loop_still_yields_its_value() {
         return;
     }
     let lines = run(r#"
-enum Pick { Some(v: number), None }
+variant Pick { Some(v: number), None }
 function choose(p: Pick): number {
   return match (p) {
     Some(v) => { const doubled = v * 2; return doubled; },
@@ -3131,7 +3133,7 @@ fn a_node_stack_trace_points_at_the_tt_source() {
     let source = src_dir.join("app.tt");
     fs::write(
         &source,
-        "enum Shape { Circle(r: number), Rect(w: number, h: number) }\n\
+        "variant Shape { Circle(r: number), Rect(w: number, h: number) }\n\
          \n\
          function area(s: Shape): number {\n\
          \x20 return match (s) {\n\
@@ -3185,7 +3187,7 @@ fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
     let source = dir.join("app.tt");
     fs::write(
         &source,
-        "enum E { A(v: number), B }\n\
+        "variant E { A(v: number), B }\n\
          function pick(e: E): number {\n\
          \x20 return match (e) {\n\
          \x20   A(v) => v,\n\
