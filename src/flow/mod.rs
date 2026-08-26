@@ -1097,7 +1097,7 @@ const NON_LABEL_WORDS: &[&str] = &[
     "delete",
     "do",
     "else",
-    "enum",
+    "variant",
     "export",
     "extends",
     "false",
@@ -1179,7 +1179,7 @@ const NON_TYPE_WORDS: &[&str] = &[
     "delete",
     "do",
     "else",
-    "enum",
+    "variant",
     "export",
     "extends",
     "finally",
@@ -1345,7 +1345,7 @@ const BLOCK_STMT_WORDS: &[&str] = &[
     "namespace",
     "module",
     "interface",
-    "enum",
+    "variant",
     "with",
 ];
 

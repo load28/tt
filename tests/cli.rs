@@ -29,7 +29,7 @@ fn ttx_builds_to_tsx_and_keeps_jsx() {
     let out_dir = dir.join("out");
     fs::write(
         &source,
-        "enum State { Ready(value: string), Empty }\n\
+        "variant State { Ready(value: string), Empty }\n\
          declare const state: State;\n\
          export const view = <main>{match (state) { Ready(value) => <b>{value}</b>, Empty => null }}</main>;\n",
     )
@@ -109,7 +109,7 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
 fn write_project(dir: &Path, files: usize) {
     fs::write(
         dir.join("shared.tt"),
-        "export enum Token { Num(value: number), Word(text: string), Eof }\n",
+        "export variant Token { Num(value: number), Word(text: string), Eof }\n",
     )
     .unwrap();
     for n in 0..files {
@@ -208,7 +208,7 @@ fn help_lists_every_topic() {
     let stdout = String::from_utf8(out.stdout).unwrap();
     for topic in [
         "overview",
-        "enum",
+        "variant",
         "match",
         "try",
         "let-else",
@@ -790,7 +790,7 @@ fn the_server_resolves_tt_names_without_a_toolchain() {
     use std::io::Write;
     let dir = tmpdir();
     let file = dir.join("shape.tt");
-    let source = "enum Shape { Circle(radius: number), Point }\n\
+    let source = "variant Shape { Circle(radius: number), Point }\n\
                   const a = match (s) { Circle(radius) => radius, Point => 0 };\n";
     fs::write(&file, source).unwrap();
 
@@ -817,6 +817,8 @@ fn the_server_resolves_tt_names_without_a_toolchain() {
         serde_json::from_slice(String::from_utf8_lossy(&out.stdout).trim().as_bytes())
             .expect("one JSON line");
     assert_eq!(answer["result"]["kind"], "case");
+    assert_eq!(answer["result"]["variantName"], "Shape");
+    assert!(answer["result"].get("enumName").is_none());
     assert_eq!(
         answer["result"]["signature"],
         "Shape.Circle(radius: number)"
@@ -837,7 +839,7 @@ fn a_missing_backend_still_reports_tt_diagnostics() {
     let dir = tmpdir();
     fs::write(
         dir.join("a.tt"),
-        "enum E { A(x: number), B }\n\
+        "variant E { A(x: number), B }\n\
          const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n",
     )
     .unwrap();
@@ -867,7 +869,7 @@ fn a_build_writes_no_source_map_unless_it_is_asked_for() {
     let out_dir = dir.join("out");
     fs::write(
         &source,
-        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
     let out = ttc(&[
@@ -891,7 +893,7 @@ fn a_source_map_file_lands_beside_its_output_and_names_the_tt_source() {
     let out_dir = dir.join("out");
     fs::write(
         &source,
-        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
     let out = ttc(&[
@@ -921,7 +923,7 @@ fn an_inline_source_map_travels_with_printed_output() {
     let source = dir.join("a.tt");
     fs::write(
         &source,
-        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
     let out = ttc(&[
@@ -992,7 +994,7 @@ fn a_banner_shifts_the_map_so_positions_still_line_up() {
     let out_dir = dir.join("out");
     fs::write(
         &source,
-        "enum E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
     let with_banner = ttc(&[
@@ -1075,7 +1077,7 @@ fn a_diagnostic_is_rendered_with_its_rule_position_snippet_and_fix() {
     let source = dir.join("shapes.tt");
     fs::write(
         &source,
-        "enum Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n",
+        "variant Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n",
     )
     .unwrap();
     let out = ttc(&["--check", source.to_str().unwrap()]);
@@ -1085,7 +1087,7 @@ fn a_diagnostic_is_rendered_with_its_rule_position_snippet_and_fix() {
 
     assert_eq!(
         rendered[0],
-        "error[unknown-case]: enum Shape has no case `Circel`",
+        "error[unknown-case]: variant Shape has no case `Circel`",
     );
     assert!(rendered[1].ends_with("shapes.tt:2:23"), "{err}");
     assert!(rendered[1].trim_start().starts_with("-->"), "{err}");
@@ -1114,7 +1116,7 @@ fn the_rendered_code_is_the_one_explain_answers_to() {
     let source = dir.join("holes.tt");
     fs::write(
         &source,
-        "enum Shape { Circle(r: number), Empty }\nconst a = match (s) { Circle(r) => r };\n",
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (s) { Circle(r) => r };\n",
     )
     .unwrap();
     let out = ttc(&["--check", source.to_str().unwrap()]);

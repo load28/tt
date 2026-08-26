@@ -1,4 +1,4 @@
-enum Reading { Value(n: number), Missing }
+variant Reading { Value(n: number), Missing }
 declare const reading: Reading;
 
 export function describe(r: Reading): string {

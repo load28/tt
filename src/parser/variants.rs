@@ -1,27 +1,26 @@
-//! Structural parsing of tt `enum` declarations.
+//! Structural parsing of tt `variant` declarations.
 //!
-//! Purely structural: returns `None` for anything that is not a tt enum
-//! (including every valid plain TypeScript enum), so it passes through
-//! verbatim. tt-level errors — duplicate cases, bad field types — are the
-//! semantic phase's job.
+//! `variant` is a tt-owned contextual keyword. Every fully parsed declaration
+//! is lifted, including unit-only declarations; TypeScript `enum` declarations
+//! never enter this parser and pass through verbatim.
 
 use super::Claim;
 use super::cursor::Cursor;
 use super::is_reserved;
-use crate::ast::{EnumCase, EnumDecl, Field, RecoveryKind, RecoveryNode, Span};
+use crate::ast::{Field, RecoveryKind, RecoveryNode, Span, VariantCase, VariantDecl};
 use crate::lexer::TokenKind;
 
-/// `cur` is positioned just past the `enum` keyword. On success returns
+/// `cur` is positioned just past the `variant` keyword. On success returns
 /// the advanced cursor, the byte just past the closing brace, and the
 /// parsed declaration.
-pub(super) fn parse_enum<'t>(
+pub(super) fn parse_variant<'t>(
     cur: Cursor<'t>,
     exported: bool,
-) -> Claim<(Cursor<'t>, usize, EnumDecl)> {
-    if let Some(parsed) = parse_enum_complete(cur, exported) {
+) -> Claim<(Cursor<'t>, usize, VariantDecl)> {
+    if let Some(parsed) = parse_variant_complete(cur, exported) {
         return Claim::Parsed(parsed);
     }
-    if enum_committed(cur) {
+    if variant_committed(cur) {
         let keyword = cur
             .idx
             .checked_sub(1)
@@ -39,7 +38,7 @@ pub(super) fn parse_enum<'t>(
             .tokens
             .get(cur.idx)
             .map(|token| cur.text(token).to_string())
-            .unwrap_or_else(|| "$tt_invalid_enum".to_string());
+            .unwrap_or_else(|| "$tt_invalid_variant".to_string());
         let end = (cur.idx + 1..cur.tokens.len())
             .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
@@ -48,73 +47,37 @@ pub(super) fn parse_enum<'t>(
         return Claim::Malformed {
             error: crate::error::TtError::span(
                 keyword,
-                keyword + "enum".len(),
-                "tt `enum` could not be parsed".to_string(),
+                keyword + "variant".len(),
+                "tt `variant` could not be parsed".to_string(),
             )
-            .code(crate::DiagnosticCode::MalformedEnum)
+            .code(crate::DiagnosticCode::MalformedVariant)
             .help("a case is `Case` or `Case(field: Type)`"),
             recovery: RecoveryNode {
                 span: Span { start, end },
-                kind: RecoveryKind::EnumDecl { name, exported },
+                kind: RecoveryKind::VariantDecl { name, exported },
             },
         };
     }
     Claim::NotTt
 }
 
-fn enum_committed(cur: Cursor<'_>) -> bool {
+fn variant_committed(cur: Cursor<'_>) -> bool {
     let Some(name) = cur.tokens.get(cur.idx) else {
         return false;
     };
     if !matches!(name.kind, TokenKind::Ident) {
         return false;
     }
-    if matches!(
+    matches!(
         cur.tokens.get(cur.idx + 1).map(|t| &t.kind),
-        Some(TokenKind::Punct(b'<'))
-    ) {
-        return true;
-    }
-    let Some(open) = (cur.idx + 1..cur.tokens.len())
-        .find(|index| matches!(cur.tokens[*index].kind, TokenKind::Punct(b'{')))
-    else {
-        return false;
-    };
-    let mut depth = 0usize;
-    for index in open..cur.tokens.len().saturating_sub(1) {
-        match cur.tokens[index].kind {
-            TokenKind::Punct(b'{') => depth += 1,
-            TokenKind::Punct(b'}') => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    break;
-                }
-            }
-            TokenKind::Ident if depth == 1 => {
-                let at_case_start = index == open + 1
-                    || matches!(
-                        cur.tokens.get(index.wrapping_sub(1)).map(|t| &t.kind),
-                        Some(TokenKind::Punct(b',' | b'{'))
-                    );
-                if at_case_start
-                    && matches!(
-                        cur.tokens.get(index + 1).map(|t| &t.kind),
-                        Some(TokenKind::Punct(b'('))
-                    )
-                {
-                    return true;
-                }
-            }
-            _ => {}
-        }
-    }
-    false
+        Some(TokenKind::Punct(b'<' | b'{'))
+    )
 }
 
-fn parse_enum_complete<'t>(
+fn parse_variant_complete<'t>(
     mut cur: Cursor<'t>,
     exported: bool,
-) -> Option<(Cursor<'t>, usize, EnumDecl)> {
+) -> Option<(Cursor<'t>, usize, VariantDecl)> {
     let (name, name_span) = cur.eat_ident()?;
     if is_reserved(name) {
         return None;
@@ -134,26 +97,17 @@ fn parse_enum_complete<'t>(
     let close = cur.find_close()?;
     let inner = cur.sub(open + 1, close, cur.tokens[close].span.start);
 
-    let cases = match parse_enum_cases(inner) {
+    let cases = match parse_variant_cases(inner) {
         Some(cases) if !cases.is_empty() => cases,
         _ => return None,
     };
-
-    // A declaration with no payload case and no generics is a plain
-    // TypeScript enum — pass it through untouched. (TS enum members can
-    // never look like `Tag(...)`, and TS enums can never have generics, so
-    // this rule never captures valid TypeScript.)
-    let is_tt_enum = !generics.is_empty() || cases.iter().any(|c| c.fields.is_some());
-    if !is_tt_enum {
-        return None;
-    }
 
     let byte_end = cur.tokens[close].span.end;
     cur.idx = close + 1;
     Some((
         cur,
         byte_end,
-        EnumDecl {
+        VariantDecl {
             name: name.to_string(),
             name_off: name_span.start,
             exported,
@@ -163,7 +117,7 @@ fn parse_enum_complete<'t>(
     ))
 }
 
-fn parse_enum_cases(mut cur: Cursor) -> Option<Vec<EnumCase>> {
+fn parse_variant_cases(mut cur: Cursor) -> Option<Vec<VariantCase>> {
     let mut cases = Vec::new();
     loop {
         if cur.peek().is_none() {
@@ -185,7 +139,7 @@ fn parse_enum_cases(mut cur: Cursor) -> Option<Vec<EnumCase>> {
             ))?);
             cur.idx = close + 1;
         }
-        cases.push(EnumCase {
+        cases.push(VariantCase {
             tag: tag.to_string(),
             tag_off: tag_span.start,
             fields,

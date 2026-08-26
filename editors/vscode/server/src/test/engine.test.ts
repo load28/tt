@@ -72,7 +72,7 @@ const TTX_SOURCE = [
   "declare global {",
   "  namespace JSX { interface IntrinsicElements { main: { children?: unknown } } }",
   "}",
-  "export enum State { Ready(value: number), Empty }",
+  "export variant State { Ready(value: number), Empty }",
   "declare const state: State;",
   "export const View = () => {",
   "  const label = match (state) {",
@@ -186,6 +186,7 @@ test("ttx receives the complete TypeScript and tt semantic surface", { skip }, a
     positionAt(TTX_SOURCE, TTX_SOURCE.indexOf("Ready(value) =>")),
   );
   assert.equal(symbol?.name, "Ready");
+  assert.equal(symbol?.variantName, "State");
   const ttCompletions = await engine.ttCompletions(
     COMPILER,
     ttx,
@@ -420,7 +421,7 @@ test("a closed document is the disk's again", { skip }, async () => {
 const skipTtOnly = compilerAvailable() ? false : "ttc not on PATH";
 
 const DEAD_ARM = [
-  "enum Shape {",
+  "variant Shape {",
   "  Circle(radius: number),",
   "  Rect(width: number, height: number),",
   "}",

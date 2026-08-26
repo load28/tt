@@ -34,10 +34,10 @@ tsserver는 `.tt` 확장자를 모르고, tt 언어 서버는 `documentSelector`
 ```
 진단: 없음
 main.ts:23  render  → src/notice.tt:21:17     ← export function render
-main.ts:10  Notice  → src/notice.tt:9:13      ← export enum Notice
+main.ts:10  Notice  → src/notice.tt:9:16      ← export variant Notice
 ```
 
-`Notice`에서 정의가 둘 나오는 것은 tt enum 하나가 타입과 값 두 선언으로
+`Notice`에서 정의가 둘 나오는 것은 tt variant 하나가 타입과 값 두 선언으로
 컴파일되기 때문이며, 둘 다 원본의 같은 위치를 가리킨다.
 
 세 번째 조각도 필요하다: **`src/`를 담당하는 `tsconfig.json`**. 프로젝트
@@ -72,7 +72,7 @@ ttc     x.d.ts + 구간 대응 → x.tt.d.ts + x.tt.d.ts.map
 
 ## 결정해야 하는 것
 
-1. **본문 생성 주체** — 위 배치대로 tsc에 맡길지, tt enum만이라도 ttc가
+1. **본문 생성 주체** — 위 배치대로 tsc에 맡길지, tt variant만이라도 ttc가
    직접 낼지. 후자는 통과 영역 선언을 다루지 못해 반쪽이 된다.
 2. **사이드카 배치** — `.tt` 옆에 둘지, 별도 디렉터리에 두고 tsconfig
    `paths`로 연결할지. 상대 경로 지정자는 `paths`를 타지 않으므로 후자는

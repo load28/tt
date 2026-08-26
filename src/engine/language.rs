@@ -803,7 +803,7 @@ impl Project {
         // built on the first translation of this pass: most passes
         // translate nothing, and building it parses the file and its
         // imports.
-        let mut declarations: Option<Vec<crate::analysis::DeclaredEnum>> = None;
+        let mut declarations: Option<Vec<crate::analysis::DeclaredVariant>> = None;
         let mut translated_seen: HashSet<(usize, crate::AnchorKind, &'static str)> = HashSet::new();
         for item in items {
             let severity = item["severity"].as_u64().unwrap_or(1);
@@ -1101,7 +1101,7 @@ pub(super) fn span_range(text: &str, start: usize, end: usize) -> Range {
     )
 }
 
-/// The enum declarations a file's direct relative `.tt` imports bring into
+/// The variant declarations a file's direct relative `.tt` imports bring into
 /// scope, under the names the imports give them — the same 1-hop
 /// collection the CLI does for sema.
 ///
@@ -1112,7 +1112,7 @@ pub(super) fn externs_of(
     path: &Path,
     source: &str,
     read: &dyn Fn(&Path) -> Option<String>,
-) -> Vec<crate::EnumSymbol> {
+) -> Vec<crate::VariantSymbol> {
     externs_from(
         path,
         &crate::tt_imports_with_kind(
@@ -1122,7 +1122,7 @@ pub(super) fn externs_of(
         &|target| {
             let text = read(target)?;
             Some(
-                crate::enum_symbols_with_kind(
+                crate::variant_symbols_with_kind(
                     &text,
                     crate::SourceKind::from_path(target).unwrap_or_default(),
                 )
@@ -1141,10 +1141,10 @@ pub(super) fn externs_of(
 pub(super) fn externs_from(
     path: &Path,
     imports: &[crate::TtImport],
-    exports_of: &dyn Fn(&Path) -> Option<Vec<crate::EnumSymbol>>,
-) -> Vec<crate::EnumSymbol> {
+    exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
+) -> Vec<crate::VariantSymbol> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    let mut externs: Vec<crate::EnumSymbol> = Vec::new();
+    let mut externs: Vec<crate::VariantSymbol> = Vec::new();
     for import in imports {
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
@@ -1216,8 +1216,8 @@ fn isolate_alternative(
 /// is unknown (an unknown type would be a claim, not an answer).
 fn declared_binding_hover(binding: &crate::PatternBinding, range: Range) -> Option<HoverInfo> {
     let ty = binding.ty.as_deref()?;
-    let case = match &binding.enum_name {
-        Some(enum_name) => format!("{enum_name}.{}", binding.tag),
+    let case = match &binding.variant_name {
+        Some(variant_name) => format!("{variant_name}.{}", binding.tag),
         None => binding.tag.clone(),
     };
     Some(HoverInfo {
@@ -1696,7 +1696,7 @@ mod tests {
     #[test]
     fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
         let src =
-            "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+            "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
         let analyses = crate::pattern_analyses(src, &[]);
         let b_x = src.find("B(x)").unwrap() + 2;
         let binding = analyses.binding_at(b_x).unwrap().clone();
@@ -1721,7 +1721,7 @@ mod tests {
     #[test]
     fn declared_hover_names_the_constructor_and_its_type() {
         let src =
-            "enum E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
+            "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
         let analyses = crate::pattern_analyses(src, &[]);
         let binding = analyses.binding_at(src.find("B(x)").unwrap() + 2).unwrap();
         let range = source_range(src, 0, 1);
@@ -1748,7 +1748,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("token.tt"),
-            "export enum Token { Num(value: number), Eof }\n",
+            "export variant Token { Num(value: number), Eof }\n",
         )
         .unwrap();
         let source = "import { Token as T } from \"./token.tt\";\nconst v = match (t) { Num(value) | Eof => 0 };\n";
@@ -1771,7 +1771,7 @@ mod tests {
             .binding_at(source.find("Num(value)").unwrap() + 4)
             .unwrap();
         assert_eq!(binding.ty.as_deref(), Some("number"));
-        assert_eq!(binding.enum_name.as_deref(), Some("T"));
+        assert_eq!(binding.variant_name.as_deref(), Some("T"));
 
         // ...the same question again is answered by the cache...
         assert_eq!(project.semantic_cache_hits(), 0);
@@ -1783,7 +1783,7 @@ mod tests {
         // recompute, not a stale hit.
         project.open_document(
             dir.join("token.tt").canonicalize().unwrap(),
-            "export enum Token { Num(value: string), Eof }\n".to_string(),
+            "export variant Token { Num(value: string), Eof }\n".to_string(),
         );
         let semantics = project.semantic_analyses(&main, source);
         let binding = semantics
@@ -1800,7 +1800,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("tt-shared-cache-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("a.tt");
-        let source = "enum E { A(x: number), B }\nconst v = match (e) { A(x) | B => 0 };\n";
+        let source = "variant E { A(x: number), B }\nconst v = match (e) { A(x) | B => 0 };\n";
         std::fs::write(&file, source).unwrap();
 
         let engine = crate::engine::Engine::new(None);

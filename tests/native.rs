@@ -248,7 +248,7 @@ fn watching_re_checks_against_the_compiler_it_already_started() {
     let root = require_tsgo!();
     let dir = project(&[(
         "src/color.tt",
-        "export enum Color { Red(), Green() }\n\
+        "export variant Color { Red(), Green() }\n\
          export function name(c: Color): string {\n\
          \x20 return match (c) { Red => \"red\", Green => \"green\" };\n\
          }\n",
@@ -271,7 +271,7 @@ fn watching_re_checks_against_the_compiler_it_already_started() {
     write(
         &dir,
         "src/color.tt",
-        "export enum Color { Red(), Green(), Blue() }\n\
+        "export variant Color { Red(), Green(), Blue() }\n\
          export function name(c: Color): string {\n\
          \x20 return match (c) { Red => \"red\", Green => \"green\" };\n\
          }\n",
@@ -303,7 +303,7 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
     let dir = project(&[
         (
             "src/shape.tt",
-            "export enum Shape { Circle(radius: number), Point }\n",
+            "export variant Shape { Circle(radius: number), Point }\n",
         ),
         (
             "src/use.ts",
@@ -333,7 +333,7 @@ fn a_hand_written_tsx_file_imports_an_ttx_file_by_its_specifier() {
     let dir = project(&[
         (
             "src/view.ttx",
-            "export enum State { Ready(value: string), Empty }\n\
+            "export variant State { Ready(value: string), Empty }\n\
              export const render = (state: State) => <main>{match (state) {\n\
              Ready(value) => <b>{value}</b>, Empty => null\n\
              }}</main>;\n",
@@ -359,7 +359,7 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
     let dir = project(&[
         (
             "src/token.tt",
-            "export enum Token { Num(value: number), Eof }\n",
+            "export variant Token { Num(value: number), Eof }\n",
         ),
         (
             "src/parse.tt",
@@ -398,7 +398,7 @@ fn a_declaration_carries_a_map_back_to_the_tt_source() {
     let root = require_emit!();
     let dir = project(&[(
         "src/token.tt",
-        "export enum Token { Num(value: number), Eof }\n\
+        "export variant Token { Num(value: number), Eof }\n\
          export function width(t: Token): number {\n\
          \x20 return match (t) { Num(value) => value, Eof => 0 };\n\
          }\n",
@@ -434,7 +434,7 @@ fn declarations_are_emitted_by_the_compiler_itself() {
     let root = require_emit!();
     let dir = project(&[(
         "src/shape.tt",
-        "export enum Shape { Circle(radius: number), Point }\n\
+        "export variant Shape { Circle(radius: number), Point }\n\
          export function area(s: Shape): number {\n\
          \x20 return match (s) { Circle(radius) => radius, Point => 0 };\n\
          }\n",
@@ -456,7 +456,7 @@ fn declarations_are_emitted_by_the_compiler_itself() {
     // emits for the module ttc lowered, exactly as for a hand-written one.
     assert!(
         declaration.contains("kind: \"Circle\"") && declaration.contains("radius: number"),
-        "the enum's union type: {declaration}"
+        "the variant's union type: {declaration}"
     );
     assert!(
         declaration.contains("export declare function area(s: Shape): number;"),
@@ -523,7 +523,7 @@ fn the_pipeline_runtime_enters_the_typed_project_once() {
 #[test]
 fn a_diagnostic_on_generated_code_is_restated_in_tts_words() {
     let root = require_tsgo!();
-    // A plain TypeScript enum is not a tt enum, so matching on one lowers
+    // A plain TypeScript enum is not a tt variant, so matching on one lowers
     // to a `.kind` switch over a value that has no `kind`. The error is
     // real and it is the user's, but the text TypeScript points at is code
     // ttc wrote — so ttc says what the construct meant, at the construct
@@ -559,8 +559,8 @@ fn a_restated_diagnostic_calls_a_case_by_its_declared_name() {
         "src/named.tt",
         "import type { TResult } from \"@tt/std\";\n\
          import * as Result from \"@tt/std/result\";\n\
-         enum Wire { OutOfRange(value: number), Missing }\n\
-         enum ParseError { NotANumber(text: string) }\n\
+         variant Wire { OutOfRange(value: number), Missing }\n\
+         variant ParseError { NotANumber(text: string) }\n\
          function inner(w: Wire) {\n\
          \x20 if (w.kind === \"OutOfRange\") { return Result.Err(w); }\n\
          \x20 return Result.Ok(1);\n\
@@ -589,8 +589,8 @@ fn assignability_diagnostics_report_the_minimal_type_difference() {
         "src/mismatch.tt",
         "import type { TResult } from \"@tt/std\";\n\
          import * as Result from \"@tt/std/result\";\n\
-         enum InputError { Empty, NotANumber(raw: string) }\n\
-         enum RangeError { TooLarge(value: number, max: number) }\n\
+         variant InputError { Empty, NotANumber(raw: string) }\n\
+         variant RangeError { TooLarge(value: number, max: number) }\n\
          export function port(value: number): TResult<number, InputError> {\n\
          \x20 return value > 65535\n\
          \x20   ? Result.Err(RangeError.TooLarge(value, 65535))\n\
@@ -664,7 +664,7 @@ fn a_precise_tt_error_owns_an_overlapping_type_consequence() {
     let root = require_tsgo!();
     let dir = project(&[(
         "src/field.tt",
-        "enum Shape { Circle(radius: number), Point }\n\
+        "variant Shape { Circle(radius: number), Point }\n\
          export const radiusOf = (shape: Shape): number =>\n\
          \x20 match (shape) { Circle(radiuz) => radiuz, Point => 0 };\n",
     )]);
@@ -680,10 +680,10 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
     let root = require_tsgo!();
     let source = "import type { TResult } from \"@tt/std\";\n\
         import * as Result from \"@tt/std/result\";\n\
-        enum Input { Blank, Num(value: number) }\n\
-        enum InputError { Empty }\n\
-        enum RangeError { TooLarge(value: number) }\n\
-        enum Conn { Up(value: number), Down }\n\
+        variant Input { Blank, Num(value: number) }\n\
+        variant InputError { Empty }\n\
+        variant RangeError { TooLarge(value: number) }\n\
+        variant Conn { Up(value: number), Down }\n\
         export function toPort(input: Input): TResult<number, InputError> {\n\
         \x20 return match (input) {\n\
         \x20   Blank => Result.Err(InputError.Empty),\n\
@@ -741,7 +741,7 @@ fn a_pattern_typo_suppresses_typed_exhaustiveness_for_that_match() {
     let root = require_tsgo!();
     let dir = project(&[(
         "src/typo.tt",
-        "enum Shape { Circle(radius: number), Square(size: number) }\n\
+        "variant Shape { Circle(radius: number), Square(size: number) }\n\
          export function area(shape: Shape): number {\n\
          \x20 return match (shape) { Circel(radius) => radius, Square(size) => size * size };\n\
          }\n",
@@ -849,11 +849,11 @@ fn literal_exhaustiveness_uses_the_narrowed_type_at_the_match() {
 }
 
 #[test]
-fn enum_exhaustiveness_uses_the_narrowed_type_at_the_match() {
+fn variant_exhaustiveness_uses_the_narrowed_type_at_the_match() {
     let root = require_tsgo!();
     let dir = project(&[(
         "src/shape.tt",
-        "export enum Shape { Circle(radius: number), Square(side: number), Point }\n\
+        "export variant Shape { Circle(radius: number), Square(side: number), Point }\n\
          export function area(s: Shape): number {\n\
          \x20 if (s.kind !== \"Point\") {\n\
          \x20   return match (s) { Circle(radius) => radius };\n\
@@ -902,7 +902,7 @@ fn exhaustiveness_holds_when_the_scrutinee_is_not_a_name() {
     let root = require_tsgo!();
     let dir = project(&[(
         "src/shape.tt",
-        "export enum Shape { Circle(radius: number), Rect(w: number, h: number) }\n         declare function getShape(): Shape;\n         type State = \"idle\" | \"loading\" | \"done\";\n         declare function getState(): State;\n         export const area = match (getShape()) { Circle(radius) => radius };\n         export const label = match (getState()) { \"idle\" => 0, \"loading\" => 1 };\n",
+        "export variant Shape { Circle(radius: number), Rect(w: number, h: number) }\n         declare function getShape(): Shape;\n         type State = \"idle\" | \"loading\" | \"done\";\n         declare function getState(): State;\n         export const area = match (getShape()) { Circle(radius) => radius };\n         export const label = match (getState()) { \"idle\" => 0, \"loading\" => 1 };\n",
     )]);
     // The question is asked about the temporary the match binds, not about
     // the scrutinee's text: at `getShape` the checker answers "a function",
@@ -911,7 +911,7 @@ fn exhaustiveness_holds_when_the_scrutinee_is_not_a_name() {
     let out = check(&dir, &root);
     assert!(
         out.contains("missing \"Rect\""),
-        "a call scrutinee still has an enum type: {out}"
+        "a call scrutinee still has an variant type: {out}"
     );
     assert!(
         out.contains("missing \"done\""),
@@ -920,12 +920,12 @@ fn exhaustiveness_holds_when_the_scrutinee_is_not_a_name() {
 }
 
 #[test]
-fn an_enum_from_another_module_needs_no_declaration_collecting() {
+fn a_variant_from_another_module_needs_no_declaration_collecting() {
     let root = require_tsgo!();
     let dir = project(&[
         (
             "src/token.tt",
-            "export enum Token { Num(value: number), Eof }\n",
+            "export variant Token { Num(value: number), Eof }\n",
         ),
         (
             "src/parse.tt",
@@ -938,7 +938,7 @@ fn an_enum_from_another_module_needs_no_declaration_collecting() {
     let out = check(&dir, &root);
     assert!(
         out.contains("missing \"Eof\""),
-        "the enum's cases come from the imported module's own type: {out}"
+        "the variant's cases come from the imported module's own type: {out}"
     );
 }
 
@@ -1192,8 +1192,8 @@ fn typed_exhaustiveness_sees_a_hole_inside_a_payload() {
     // here, while `--check` reported the hole.
     let dir = project(&[(
         "src/nest.tt",
-        "enum Inner { Yes(n: number), No }\n\
-         enum Outer { Wrap(inner: Inner), Bare }\n\
+        "variant Inner { Yes(n: number), No }\n\
+         variant Outer { Wrap(inner: Inner), Bare }\n\
          declare const o: Outer;\n\
          export const a = match (o) { Wrap(inner: Yes(n)) => n, Bare => -1 };\n",
     )]);
@@ -1212,7 +1212,7 @@ fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
     // declaration, does report it.
     let dir = project(&[(
         "src/narrow.tt",
-        "enum Shape { Circle(radius: number), Point }\n\
+        "variant Shape { Circle(radius: number), Point }\n\
          export function f(x: Shape): number {\n\
          \x20 if (x.kind === \"Point\") return 0;\n\
          \x20 return match (x) { Circle(radius) => radius };\n\
@@ -1235,7 +1235,7 @@ fn a_hand_written_payload_union_is_named_by_the_checker() {
     let dir = project(&[(
         "src/opaque.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
-         enum Outer { Wrap(inner: Inner), Bare }\n\
+         variant Outer { Wrap(inner: Inner), Bare }\n\
          declare const o: Outer;\n\
          export const a = match (o) { Wrap(inner: Yes(n)) => n, Bare => -1 };\n",
     )]);
@@ -1256,7 +1256,7 @@ fn a_hand_written_payload_union_fully_covered_is_exhaustive() {
     let dir = project(&[(
         "src/opaque_full.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
-         enum Outer { Wrap(inner: Inner), Bare }\n\
+         variant Outer { Wrap(inner: Inner), Bare }\n\
          declare const o: Outer;\n\
          export const a = match (o) {\n\
          \x20 Wrap(inner: Yes(n)) => n,\n\
@@ -1275,11 +1275,14 @@ fn typed_exhaustiveness_resolves_a_payload_declared_in_another_module() {
     // ones have to be collected on this path too — the same 1-hop
     // collection the default path does.
     let dir = project(&[
-        ("src/token.tt", "export enum Tok { Num(n: number), Eof }\n"),
+        (
+            "src/token.tt",
+            "export variant Tok { Num(n: number), Eof }\n",
+        ),
         (
             "src/line.tt",
             "import { Tok } from \"./token.tt\";\n\
-             enum Line { Head(t: Tok), Blank }\n\
+             variant Line { Head(t: Tok), Blank }\n\
              declare const l: Line;\n\
              export const a = match (l) { Head(t: Num(n)) => n, Blank => 0 };\n",
         ),
@@ -1287,7 +1290,7 @@ fn typed_exhaustiveness_resolves_a_payload_declared_in_another_module() {
     let out = check(&dir, &root);
     assert!(
         out.contains("match is not exhaustive: missing \"Head(t: Eof())\""),
-        "the imported payload enum is resolved: {out}"
+        "the imported payload variant is resolved: {out}"
     );
 }
 
@@ -1299,8 +1302,8 @@ fn typed_exhaustiveness_covers_tuple_matches_too() {
     // checked only by the default path's declaration table (TASK-111).
     let dir = project(&[(
         "src/tuple.tt",
-        "enum Dir { North(dx: number), South }\n\
-         enum Speed { Fast(v: number), Slow }\n\
+        "variant Dir { North(dx: number), South }\n\
+         variant Speed { Fast(v: number), Slow }\n\
          declare const d: Dir;\n\
          declare const s: Speed;\n\
          export const n = match (d, s) { (North(dx), Fast(v)) => dx + v, (South, _) => 0 };\n",
@@ -1320,8 +1323,8 @@ fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
     // knows only the declaration, does report them.
     let dir = project(&[(
         "src/narrowed_tuple.tt",
-        "enum Dir { North(dx: number), South }\n\
-         enum Speed { Fast(v: number), Slow }\n\
+        "variant Dir { North(dx: number), South }\n\
+         variant Speed { Fast(v: number), Slow }\n\
          export function f(d: Dir, s: Speed): number {\n\
          \x20 if (d.kind === \"South\") return 0;\n\
          \x20 return match (d, s) { (North(dx), Fast(v)) => dx + v, (North(dx), Slow) => dx };\n\

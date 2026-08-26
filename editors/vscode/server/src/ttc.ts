@@ -235,7 +235,7 @@ function runCheckOnce(
 
 /* ----------------------------------------------------------------------
  * Symbol interface (`ttc --symbols`): the compiler
- * reports a file's tt enum declarations (with 1-based positions) and its
+ * reports a file's tt variant declarations (with 1-based positions) and its
  * direct relative `.tt` imports, including each referenced file's exported
  * declarations — the server consumes this for cross-file features instead
  * of re-implementing import resolution.
@@ -255,7 +255,7 @@ export interface SymbolsCase {
   fields: SymbolsField[] | null;
 }
 
-export interface SymbolsEnum {
+export interface SymbolsVariant {
   name: string;
   exported: boolean;
   generics: string;
@@ -274,12 +274,12 @@ export interface SymbolsImport {
   names: SymbolsNames;
   /** Path the specifier resolved to, or null if unreadable. */
   resolved: string | null;
-  enums: SymbolsEnum[];
+  variants: SymbolsVariant[];
 }
 
 export interface SymbolsFile {
   file: string;
-  enums: SymbolsEnum[];
+  variants: SymbolsVariant[];
   imports: SymbolsImport[];
 }
 

@@ -14,7 +14,7 @@ use std::sync::Arc;
 use super::projection::{self, Probes, ProjectedDocument};
 use super::snapshot::Snapshot;
 use crate::AnchorKind;
-use crate::analysis::{DeclaredEnum, PayloadAlphabet};
+use crate::analysis::{DeclaredVariant, PayloadAlphabet};
 use crate::typescript::backend::{Answers, Diagnostic as TsDiagnostic, Resolution};
 use crate::typescript::mapper::DiagnosticOrigin;
 
@@ -150,7 +150,7 @@ type MatchAlphabets = (usize, Vec<Vec<String>>);
 pub(crate) struct FileSemantics {
     /// The imported declarations in this file's scope (aliases applied) —
     /// half of the cache key, and `checked_coverage`'s input.
-    pub externs: Vec<crate::EnumSymbol>,
+    pub externs: Vec<crate::VariantSymbol>,
     /// The file's pattern analyses over those externs.
     pub analyses: crate::PatternAnalyses,
 }
@@ -177,7 +177,7 @@ pub(crate) fn translate(
     kind: AnchorKind,
     code: u32,
     message: &str,
-    declarations: &[DeclaredEnum],
+    declarations: &[DeclaredVariant],
 ) -> Option<String> {
     translation_class(kind, code)?;
     let said = match (kind, code) {
@@ -246,14 +246,14 @@ pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static 
 /// there. Repeating it here would make the rendered form say it twice
 /// (`error[ts2322]: ts(2322): …`), and the only way back out would be to
 /// recognise the prefix by its shape (TASK-213 decision 6).
-fn ts_message(message: &str, declarations: &[DeclaredEnum]) -> String {
+fn ts_message(message: &str, declarations: &[DeclaredVariant]) -> String {
     match name_types(message, declarations) {
         Some(named) => format!("{message} (in tt's names: {named})"),
         None => message.to_string(),
     }
 }
 
-fn named_type(text: &str, declarations: &[DeclaredEnum]) -> String {
+fn named_type(text: &str, declarations: &[DeclaredVariant]) -> String {
     name_types(text, declarations).unwrap_or_else(|| text.to_string())
 }
 
@@ -261,7 +261,7 @@ fn named_type(text: &str, declarations: &[DeclaredEnum]) -> String {
 /// or nesting of a TypeScript diagnostic message. This is the common CLI and
 /// editor wording; the raw checker message is only the fallback when the
 /// backend could not prove an expected/found relation.
-fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredEnum]) -> String {
+fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredVariant]) -> String {
     let Some(mismatch) = &diagnostic.mismatch else {
         return ts_message(&diagnostic.message, declarations);
     };
@@ -357,7 +357,7 @@ fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
 /// The restatement is a reading aid and never replaces the original — the
 /// caller carries TypeScript's own text along with it, because a name tt
 /// got wrong has to be checkable against what the checker actually said.
-pub(crate) fn name_types(message: &str, declarations: &[DeclaredEnum]) -> Option<String> {
+pub(crate) fn name_types(message: &str, declarations: &[DeclaredVariant]) -> Option<String> {
     let members = case_members(message, declarations);
     if members.is_empty() {
         return None;
@@ -372,7 +372,7 @@ pub(crate) fn name_types(message: &str, declarations: &[DeclaredEnum]) -> Option
             None => {
                 let named: Vec<String> = members[run.start..run.end]
                     .iter()
-                    .map(|m| format!("{}.{}", m.enum_name, m.tag))
+                    .map(|m| format!("{}.{}", m.variant_name, m.tag))
                     .collect();
                 out.push_str(&named.join(" | "));
             }
@@ -391,7 +391,7 @@ struct CaseMember {
     end: usize,
     /// The enum that declares the case, under the name the analyzed file
     /// calls it by.
-    enum_name: String,
+    variant_name: String,
     /// The case's tag.
     tag: String,
 }
@@ -407,7 +407,7 @@ struct Run {
 /// The scan is quote-aware — a `{` inside a string literal opens nothing —
 /// and it descends into an object type it does not recognize, so a case
 /// nested in some other type is still found.
-fn case_members(message: &str, declarations: &[DeclaredEnum]) -> Vec<CaseMember> {
+fn case_members(message: &str, declarations: &[DeclaredVariant]) -> Vec<CaseMember> {
     let bytes = message.as_bytes();
     let mut out = Vec::new();
     let mut at = 0;
@@ -416,11 +416,11 @@ fn case_members(message: &str, declarations: &[DeclaredEnum]) -> Vec<CaseMember>
             b'"' => at = string_end(bytes, at),
             b'{' => match object_end(bytes, at) {
                 Some(end) => match recognize(&message[at..end], declarations) {
-                    Some((enum_name, tag)) => {
+                    Some((variant_name, tag)) => {
                         out.push(CaseMember {
                             start: at,
                             end,
-                            enum_name,
+                            variant_name,
                             tag,
                         });
                         at = end;
@@ -455,12 +455,12 @@ fn union_runs(message: &str, members: &[CaseMember]) -> Vec<Run> {
 
 /// The enum name a whole union collapses to — `Some` only when its members
 /// are the cases of one enum, each once, all of them.
-fn collapsed(run: &[CaseMember], declarations: &[DeclaredEnum]) -> Option<String> {
+fn collapsed(run: &[CaseMember], declarations: &[DeclaredVariant]) -> Option<String> {
     let first = run.first()?;
-    if run.iter().any(|m| m.enum_name != first.enum_name) {
+    if run.iter().any(|m| m.variant_name != first.variant_name) {
         return None;
     }
-    let declared = declarations.iter().find(|d| d.name == first.enum_name)?;
+    let declared = declarations.iter().find(|d| d.name == first.variant_name)?;
     if declared.constructors.len() != run.len() {
         return None;
     }
@@ -468,13 +468,13 @@ fn collapsed(run: &[CaseMember], declarations: &[DeclaredEnum]) -> Option<String
         .constructors
         .iter()
         .all(|c| run.iter().any(|m| m.tag == c.tag))
-        .then(|| first.enum_name.clone())
+        .then(|| first.variant_name.clone())
 }
 
 /// The case an object type names — `Some((enum, tag))` when exactly one
 /// declaration in scope declares the tag *and* its payload is exactly the
 /// fields written here.
-fn recognize(text: &str, declarations: &[DeclaredEnum]) -> Option<(String, String)> {
+fn recognize(text: &str, declarations: &[DeclaredVariant]) -> Option<(String, String)> {
     let (tag, mut fields) = object_fields(text)?;
     fields.sort_unstable();
     let mut candidates = declarations
@@ -722,7 +722,7 @@ pub(crate) fn report(
                 {
                     continue;
                 }
-                let declared: &[DeclaredEnum] = semantics
+                let declared: &[DeclaredVariant] = semantics
                     .get(&file.source_path)
                     .map(|s| s.analyses.declarations.as_slice())
                     .unwrap_or_default();
@@ -746,7 +746,7 @@ pub(crate) fn report(
             {
                 continue;
             }
-            let declared: &[DeclaredEnum] = semantics
+            let declared: &[DeclaredVariant] = semantics
                 .get(&file.source_path)
                 .map(|s| s.analyses.declarations.as_slice())
                 .unwrap_or_default();
@@ -770,7 +770,7 @@ pub(crate) fn report(
                 continue;
             }
         }
-        let declared: &[DeclaredEnum] = semantics
+        let declared: &[DeclaredVariant] = semantics
             .get(&file.source_path)
             .map(|s| s.analyses.declarations.as_slice())
             .unwrap_or_default();
@@ -916,7 +916,7 @@ pub(crate) fn report(
         // imported ones have to be collected — otherwise a payload whose
         // type is an imported enum reads as an unknown alphabet and its
         // holes go unreported. The cached semantics carry them.
-        let externs: &[crate::EnumSymbol] = semantics
+        let externs: &[crate::VariantSymbol] = semantics
             .get(&file.source_path)
             .map(|s| s.externs.as_slice())
             .unwrap_or_default();
@@ -1181,7 +1181,7 @@ pub(crate) fn match_declarations(
     out
 }
 
-/// The enum declarations one file's direct `.tt` imports bring into scope,
+/// The variant declarations one file's direct `.tt` imports bring into scope,
 /// preferring the snapshot's own text for a file it holds — the same
 /// 1-hop collection every other surface does, so an imported enum is known
 /// under the name the import gave it.
@@ -1189,14 +1189,17 @@ pub(crate) fn match_declarations(
 /// cached per-file symbols where the import target is in the snapshot —
 /// a target that did not change is never re-parsed — and from disk
 /// otherwise.
-pub(crate) fn externs_of(snapshot: &Snapshot, file: &ProjectedDocument) -> Vec<crate::EnumSymbol> {
+pub(crate) fn externs_of(
+    snapshot: &Snapshot,
+    file: &ProjectedDocument,
+) -> Vec<crate::VariantSymbol> {
     super::language::externs_from(&file.source_path, file.tt_imports(), &|target| {
         snapshot
             .files()
             .iter()
             .find(|f| f.source_path == target)
             .map(|f| {
-                f.enum_symbols()
+                f.variant_symbols()
                     .iter()
                     .filter(|d| d.exported)
                     .cloned()
@@ -1208,7 +1211,7 @@ pub(crate) fn externs_of(snapshot: &Snapshot, file: &ProjectedDocument) -> Vec<c
                     .iter()
                     .find(|f| f.source_path == target)
                     .map(|f| {
-                        f.enum_symbols()
+                        f.variant_symbols()
                             .iter()
                             .filter(|d| d.exported)
                             .cloned()
@@ -1218,7 +1221,7 @@ pub(crate) fn externs_of(snapshot: &Snapshot, file: &ProjectedDocument) -> Vec<c
             .or_else(|| {
                 let text = std::fs::read_to_string(target).ok()?;
                 Some(
-                    crate::enum_symbols_with_kind(
+                    crate::variant_symbols_with_kind(
                         &text,
                         crate::SourceKind::from_path(target).unwrap_or_default(),
                     )
@@ -1245,17 +1248,17 @@ mod tests {
     use super::*;
 
     /// The declaration table of a source, as a translation sees it.
-    fn table(source: &str) -> Vec<DeclaredEnum> {
+    fn table(source: &str) -> Vec<DeclaredVariant> {
         crate::pattern_analyses(source, &[]).declarations
     }
 
     /// The motivating example of TASK-118: the propagated `Err` and the
     /// return type it does not fit, both said as the user declared them.
     #[test]
-    fn a_case_is_named_and_a_full_union_is_its_enum() {
+    fn a_case_is_named_and_a_full_union_is_its_variant() {
         let declarations = table(
-            "enum Test { OutOfRange(value: number), Empty }\n\
-             enum ParseError { NotANumber(text: string) }\n",
+            "variant Test { OutOfRange(value: number), Empty }\n\
+             variant ParseError { NotANumber(text: string) }\n",
         );
         let said = translate(
             AnchorKind::Try,
@@ -1281,7 +1284,7 @@ mod tests {
 
     #[test]
     fn a_partial_union_stays_a_union_of_named_cases() {
-        let declarations = table("enum E { A(x: number), B, C }\n");
+        let declarations = table("variant E { A(x: number), B, C }\n");
         let named = name_types(
             "Type '{ kind: \"A\"; x: number; } | { kind: \"B\"; }' is not assignable to type 'E'.",
             &declarations,
@@ -1295,7 +1298,7 @@ mod tests {
 
     #[test]
     fn a_tag_two_declarations_answer_to_is_not_named() {
-        let declarations = table("enum A { Empty }\nenum B { Empty }\n");
+        let declarations = table("variant A { Empty }\nvariant B { Empty }\n");
         assert_eq!(
             name_types("Type '{ kind: \"Empty\"; }'.", &declarations),
             None
@@ -1305,7 +1308,7 @@ mod tests {
     #[test]
     fn a_type_that_only_shares_a_tag_is_not_named() {
         // Same tag, different payload — some other type, not this case.
-        let declarations = table("enum E { A(x: number) }\n");
+        let declarations = table("variant E { A(x: number) }\n");
         assert_eq!(
             name_types("Type '{ kind: \"A\"; y: string; }'.", &declarations),
             None
@@ -1314,7 +1317,7 @@ mod tests {
 
     #[test]
     fn a_message_with_no_structural_case_is_left_alone() {
-        let declarations = table("enum E { A(x: number), B }\n");
+        let declarations = table("variant E { A(x: number), B }\n");
         assert_eq!(
             name_types(
                 "Property 'kind' does not exist on type 'number'.",
@@ -1335,7 +1338,7 @@ mod tests {
 
     #[test]
     fn a_case_nested_in_another_type_is_named_where_it_stands() {
-        let declarations = table("enum E { A(x: number), B }\n");
+        let declarations = table("variant E { A(x: number), B }\n");
         let named = name_types(
             "Type 'Array<{ kind: \"A\"; x: number; }>' is not assignable.",
             &declarations,
@@ -1347,7 +1350,7 @@ mod tests {
     #[test]
     fn a_tag_union_names_nothing() {
         // `{ kind: "A" | "B" }` is not one case, so it is not one name.
-        let declarations = table("enum E { A(x: number), B }\n");
+        let declarations = table("variant E { A(x: number), B }\n");
         assert_eq!(
             name_types("Type '{ kind: \"A\" | \"B\"; }'.", &declarations),
             None
@@ -1367,7 +1370,7 @@ mod tests {
 
     #[test]
     fn an_ordinary_ts_message_also_uses_tt_names() {
-        let declarations = table("enum E { A(x: number), B }\n");
+        let declarations = table("variant E { A(x: number), B }\n");
         let said = ts_message(
             "Type '{ kind: \"A\"; x: number; }' is not assignable.",
             &declarations,

@@ -5,7 +5,7 @@
     "endCol": 27,
     "endLine": 4,
     "line": 4,
-    "message": "match on enum Shape is not exhaustive: missing \"Rect\"",
+    "message": "match on variant Shape is not exhaustive: missing \"Rect\"",
     "suggestions": [
       {
         "edit": {
@@ -44,7 +44,7 @@
     "endCol": 36,
     "endLine": 13,
     "line": 13,
-    "message": "enum Shape has no case `Circel`",
+    "message": "variant Shape has no case `Circel`",
     "suggestions": [
       {
         "edit": {

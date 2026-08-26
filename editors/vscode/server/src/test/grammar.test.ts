@@ -158,7 +158,7 @@ test("tt constructs inside a function body get tt scopes (reported regression)",
 
 // 나머지 구문 전부를 함수 본문(중첩 컨텍스트)에 몰아넣은 픽스처.
 const NESTED = `function demo(items: Item[]) {
-  enum Shape<T> { Circle(r: number, meta?: T), Dot }
+  variant Shape<T> { Circle(r: number, meta?: T), Dot }
   const area = match (shape) {
     Circle(r) => r * r,
     Rect(w: width, h) if width > 0 => width * h,
@@ -192,9 +192,9 @@ const NESTED = `function demo(items: Item[]) {
 test("every tt construct works in nested contexts", async () => {
   const lines = await tokenize("source.tt", NESTED);
 
-  // enum — 함수 안 선언, 페이로드 필드와 타입.
-  assertScope(lines, 2, "enum", "storage.type.enum.ts");
-  assertScope(lines, 2, "Shape", "entity.name.type.enum.ts");
+  // variant — 함수 안 선언, 페이로드 필드와 타입.
+  assertScope(lines, 2, "variant", "storage.type.variant.tt");
+  assertScope(lines, 2, "Shape", "entity.name.type.variant.tt");
   assertScope(lines, 2, "Circle", "variable.other.enummember.ts");
   assertScope(lines, 2, "r", "variable.other.property.tt");
   assertScope(lines, 2, "number", "support.type.primitive.ts");
@@ -258,7 +258,7 @@ function passthrough(a: number, b: number) {
 
 test("TypeScript look-alikes are not claimed by tt rules", async () => {
   const lines = await tokenize("source.tt", LOOKALIKES);
-  // const enum은 TS enum 규칙의 것 — tt enum 스코프가 없어야 한다.
+  // const enum은 TS enum 규칙의 것 — tt variant 스코프가 없어야 한다.
   // (루트 스코프 source.tt은 모든 토큰이 가지므로 제외.)
   for (const token of lines[0]) {
     assert.ok(
@@ -333,7 +333,7 @@ test("pure TSX tokenizes identically to the TypeScript React grammar", async () 
 test("tt constructs inside JSX expression containers keep tt scopes", async () => {
   const lines = await tokenize(
     "source.ttx",
-    `enum State { Ready(value: string), Empty }
+    `variant State { Ready(value: string), Empty }
 export const View = ({ state }: { state: State }) => (
   <main>{match (state) { Ready(value) => <b>{value}</b>, Empty => null }}</main>
 );`,
@@ -375,7 +375,7 @@ test("the extension registers ttx and shares each file icon across themes", () =
 // 직접 토크나이즈한다 — 펜스 인식·source.tt 임베드·펜스 종료·타 언어 펜스
 // 불간섭이 이 문법의 계약 전부다 (TASK-094 결정 3).
 const MARKDOWN_FENCES = `\`\`\`tt
-enum Shape { Circle(r: number), Dot }
+variant Shape { Circle(r: number), Dot }
 const area = match (s) { Circle(r) => r * r, _ => 0 };
 \`\`\`
 after the fence
@@ -397,7 +397,7 @@ test("markdown ```tt fences embed the tt grammar", async () => {
   assertScope(lines, 1, "tt", "fenced_code.block.language.markdown");
 
   // 펜스 안: 내용이 meta.embedded.block.tt로 감싸이고 tt/TS 스코프가 붙는다.
-  assertScope(lines, 2, "enum", "storage.type.enum.ts");
+  assertScope(lines, 2, "variant", "storage.type.variant.tt");
   assertScope(lines, 2, "Circle", "variable.other.enummember.ts");
   assertScope(lines, 3, "match", "keyword.control.match.tt");
   assertScope(lines, 3, "_", "keyword.control.wildcard.tt");

@@ -1,6 +1,6 @@
 //! Typed exhaustiveness probes for literal matches.
 //!
-//! ttc resolves tag exhaustiveness itself, from the enum declarations it can
+//! ttc resolves tag exhaustiveness itself, from the variant declarations it can
 //! see. A literal match has no such registry: whether `"north" | "south"`
 //! covers the scrutinee is a fact about a *TypeScript type*, and the design
 //! contract (`docs/design/match-literal-patterns.md`) is that ttc must not
@@ -201,7 +201,7 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
             }
             Segment::Verbatim(_)
             | Segment::TtImport(_)
-            | Segment::Enum(_)
+            | Segment::Variant(_)
             | Segment::ValModifier(_) => {}
         }
     }
@@ -314,7 +314,7 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
         match segment {
             Segment::Verbatim(_)
             | Segment::TtImport(_)
-            | Segment::Enum(_)
+            | Segment::Variant(_)
             | Segment::ValModifier(_) => {}
             Segment::Match(expr) => {
                 collect(expr, src, out);

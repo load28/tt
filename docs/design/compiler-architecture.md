@@ -85,7 +85,7 @@ expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍�
 tt 수준 *에러*(중복 케이스 등)는 전부 sema의 몫이다. 중첩 코드(스크루티니,
 arm body, 보간)는 같은 토큰 스트림의 부분 슬라이스로 재귀 파싱된다.
 
-TS enum 구분 규칙(payload 케이스 또는 제네릭이 있어야 tt enum)과
+TypeScript `enum` 통과와 tt `variant` 소유권 규칙을
 `const enum`/`declare enum` 제외, 예약어 규칙도 파서 소관이다.
 
 ### 4. `sema` — 의미 검사

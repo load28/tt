@@ -25,7 +25,7 @@
     "tt-statement": {
       "patterns": [
         { "include": "#tt-val-declaration-modifier" },
-        { "include": "#tt-enum-declaration" },
+        { "include": "#tt-variant-declaration" },
         { "include": "#tt-if-let" },
         { "include": "#tt-let-else" },
         { "include": "#tt-catch-val-parameters" }
@@ -63,23 +63,23 @@
       "match": "(?<![_$[:alnum:]])(?:(?<=\\.\\.\\.)|(?<!\\.))(val)(?=\\s+(?!as(?![_$[:alnum:]])|satisfies(?![_$[:alnum:]])|is(?![_$[:alnum:]])|in(?![_$[:alnum:]])|of(?![_$[:alnum:]])|instanceof(?![_$[:alnum:]])|keyof(?![_$[:alnum:]]))[$_[:alpha:]{\\[])",
       "captures": { "1": { "name": "storage.modifier.val.tt" } }
     },
-    "tt-enum-declaration": {
-      "name": "meta.enum.declaration.tt",
-      "begin": "(?<![_$[:alnum:]])(?<!const )(?<!declare )(?:\\b(export)\\s+)?\\b(enum)\\s+([$_[:alpha:]][$_[:alnum:]]*)",
+    "tt-variant-declaration": {
+      "name": "meta.variant.declaration.tt",
+      "begin": "(?<![_$[:alnum:]])(?:\\b(export)\\s+)?\\b(variant)\\s+([$_[:alpha:]][$_[:alnum:]]*)",
       "beginCaptures": {
         "1": { "name": "keyword.control.export.ts" },
-        "2": { "name": "storage.type.enum.ts" },
-        "3": { "name": "entity.name.type.enum.ts" }
+        "2": { "name": "storage.type.variant.tt" },
+        "3": { "name": "entity.name.type.variant.tt" }
       },
       "end": "(?<=\\})|(?=[^\\s<{])",
       "patterns": [
         { "include": "#comment" },
         { "include": "#type-parameters" },
-        { "include": "#tt-enum-body" }
+        { "include": "#tt-variant-body" }
       ]
     },
-    "tt-enum-body": {
-      "name": "meta.enum.body.tt",
+    "tt-variant-body": {
+      "name": "meta.variant.body.tt",
       "begin": "\\{",
       "end": "\\}",
       "beginCaptures": { "0": { "name": "punctuation.definition.block.ts" } },

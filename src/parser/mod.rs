@@ -3,7 +3,7 @@
 //! The parser is **infallible**: it never reports an error. The source is
 //! first lexed into a significant-token stream ([`crate::lexer`]); the
 //! parser walks that stream and lifts every construct that *fully* parses
-//! as tt syntax — an `enum` declaration, a `match` expression, a `try` or
+//! as tt syntax — a `variant` declaration, a `match` expression, a `try` or
 //! let-else statement, a `val` binding modifier, a relative `.tt` import
 //! specifier — into a typed AST node; everything else, including any candidate that deviates even
 //! slightly from tt syntax, is left as a verbatim byte range. This is how
@@ -13,18 +13,17 @@
 //! non-exhaustive match, bad field types) are the semantic phase's job
 //! ([`crate::sema`]).
 //!
-//! Plain TypeScript enums keep working: an `enum` declaration is treated as
-//! a tt enum only when at least one case carries a payload `(...)` or the
-//! declaration has generics — neither is valid TypeScript enum syntax, so no
-//! valid TS enum is ever lifted.
+//! Plain TypeScript enums keep working: only a declaration beginning with the
+//! contextual `variant` keyword is treated as a tt variant. TypeScript `enum`
+//! declarations are never lifted and pass through byte-for-byte.
 //!
 //! Nested code (match scrutinees, arm bodies, template interpolations) is
 //! parsed recursively from sub-slices of the same token stream, with
 //! absolute byte spans, so every later phase can report exact positions.
 //!
 //! Module layout: this file owns the main token loop and shared token
-//! rules; [`cursor`] is the token cursor sub-parsers consume; [`enums`]
-//! parses tt `enum` declarations; [`matches`] parses `match` expressions;
+//! rules; [`cursor`] is the token cursor sub-parsers consume; [`variants`]
+//! parses tt `variant` declarations; [`matches`] parses `match` expressions;
 //! [`tries`] parses `try` statements; [`lets`] parses let-else statements;
 //! [`results`] parses `result { ... }` computation blocks;
 //! [`imports`] lifts relative `.tt` module specifiers out of static
@@ -32,7 +31,6 @@
 //! here too, through the shared structural rule in [`crate::val`].
 
 mod cursor;
-mod enums;
 mod iflets;
 mod imports;
 mod lets;
@@ -41,6 +39,7 @@ mod matches;
 mod pipes;
 mod results;
 mod tries;
+mod variants;
 
 use crate::ast::*;
 use crate::lexer::{self, Token, TokenKind, TplPart};
@@ -90,6 +89,7 @@ pub(crate) fn is_reserved(word: &str) -> bool {
             | "enum"
             | "export"
             | "extends"
+            | "variant"
             | "false"
             | "finally"
             | "for"
@@ -195,7 +195,7 @@ fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
-            | Segment::Enum(_)
+            | Segment::Variant(_)
             | Segment::TtImport(_)
             | Segment::ValModifier(_) => {}
             Segment::Match(expr) => {
@@ -313,13 +313,13 @@ fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
     }
 }
 
-/// The byte where a segment starts in the source (approximate for enums —
+/// The byte where a segment starts in the source (approximate for variants —
 /// the name offset — which is fine: rewinding only compares against a
-/// pipeline head start, and an enum declaration cannot sit inside one).
+/// pipeline head start, and a variant declaration cannot sit inside one).
 fn segment_start(seg: &Segment) -> usize {
     match seg {
         Segment::Verbatim(span) => span.start,
-        Segment::Enum(d) => d.name_off,
+        Segment::Variant(d) => d.name_off,
         Segment::Match(m) => m.keyword_off,
         Segment::TupleMatch(m) => m.keyword_off,
         Segment::Try(t) => t.keyword_off,
@@ -526,23 +526,15 @@ impl Parser<'_> {
 
             // property access like `str.match(...)` never starts a construct
             let dotted = cursor::dotted_at(tokens, 0, i);
-            let prev_word = match i.checked_sub(1).map(|p| &tokens[p]) {
-                Some(t) if matches!(t.kind, TokenKind::Ident) => {
-                    &self.src[t.span.start..t.span.end]
-                }
-                _ => "",
-            };
 
-            // `const enum` / `declare enum` are TypeScript-only forms — never tt.
-            let ts_enum_prefix = prev_word == "const" || prev_word == "declare";
-            if !dotted && !ts_enum_prefix && (word == "enum" || word == "export") {
-                let (kw_idx, exported) = if word == "enum" {
+            if !dotted && (word == "variant" || word == "export") {
+                let (kw_idx, exported) = if word == "variant" {
                     (Some(i), false)
                 } else {
                     match tokens.get(i + 1) {
                         Some(t)
                             if matches!(t.kind, TokenKind::Ident)
-                                && &self.src[t.span.start..t.span.end] == "enum" =>
+                                && &self.src[t.span.start..t.span.end] == "variant" =>
                         {
                             (Some(i + 1), true)
                         }
@@ -550,10 +542,13 @@ impl Parser<'_> {
                     }
                 };
                 if let Some(kw_idx) = kw_idx {
-                    match enums::parse_enum(Cursor::new(self, tokens, kw_idx + 1, end), exported) {
+                    match variants::parse_variant(
+                        Cursor::new(self, tokens, kw_idx + 1, end),
+                        exported,
+                    ) {
                         Claim::Parsed((cur, byte_end, decl)) => {
                             flush_verbatim(&mut segments, seg_start, tok.span.start);
-                            segments.push(Segment::Enum(decl));
+                            segments.push(Segment::Variant(decl));
                             seg_start = byte_end;
                             i = cur.idx;
                             expr = (i, false);

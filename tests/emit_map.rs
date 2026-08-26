@@ -67,7 +67,7 @@ fn passthrough_maps_identity() {
 
 #[test]
 fn match_scrutinee_and_arm_bodies_are_mapped() {
-    let src = r#"enum Shape { Circle(radius: number), Point }
+    let src = r#"variant Shape { Circle(radius: number), Point }
 const shape = Shape.Point;
 const r = match (shape) {
   Circle(radius) => radius * 2,
@@ -90,12 +90,12 @@ const r = match (shape) {
 
 #[test]
 fn construct_corpus_upholds_mapping_invariants() {
-    // One of everything the emitter rewrites: enum, guarded match with
+    // One of everything the emitter rewrites: variant, guarded match with
     // or-patterns and nested patterns, tuple match, try, let-else, if let,
     // pipeline, template interpolation, .tt import.
     let src = r#"import { Token } from "./token.tt";
 import type { TOption, TResult } from "@tt/std";
-enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 
 const area = (s: Shape): number =>
   match (s) {
@@ -147,7 +147,7 @@ declare function getShape(): Shape;
 fn emit_is_infallible_on_tt_level_errors() {
     // A non-exhaustive match is a compile() error but must still emit for
     // the editor: diagnostics stay `--check`'s job.
-    let src = "enum E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x };\n";
+    let src = "variant E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x };\n";
     assert!(compile(src, &Options::default()).is_err());
     let m = emit_mapped(src);
     assert!(m.code.contains("switch ($tt_m.kind)"));
@@ -158,7 +158,7 @@ fn emit_is_infallible_on_tt_level_errors() {
 fn emitted_code_matches_compile_with_imports_off() {
     // For a semantically valid file, the tooling emission is byte-identical
     // to the real compile with the same import mode (no verification drift).
-    let src = r#"enum Shape { Circle(radius: number), Point }
+    let src = r#"variant Shape { Circle(radius: number), Point }
 const r = match (Shape.Circle(2)) {
   Circle(radius) => radius,
   Point => 0,
@@ -270,7 +270,7 @@ fn pattern_bindings_are_mapped_to_their_destructurings() {
     // nested — is copied from the source into the emitted destructuring,
     // so the editor can hover it and jump to it.
     let src = r#"import type { TOption } from "@tt/std";
-enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
 declare function getShape(): Shape;
 declare function boxed(): TOption<Shape>;
 
@@ -313,8 +313,8 @@ fn tuple_element_bindings_follow_the_same_rule() {
     // A tuple match destructures each scrutinee separately, so the rule is
     // per element: a single-alternative element maps its bindings, an
     // or-pattern element does not (one destructuring, several patterns).
-    let src = r#"enum Dir { North(deg: number), South }
-enum Speed { Fast(kmh: number), Slow(kmh: number) }
+    let src = r#"variant Dir { North(deg: number), South }
+variant Speed { Fast(kmh: number), Slow(kmh: number) }
 declare function dir(): Dir;
 declare function speed(): Speed;
 const v = match (dir(), speed()) {
@@ -338,7 +338,7 @@ fn or_pattern_bindings_are_left_unmapped() {
     // One destructuring stands for every alternative, so it belongs to no
     // single one: claiming a source position would point the editor at an
     // arbitrary alternative (and let a rename rewrite that one alone).
-    let src = r#"enum E { A(x: number), B(x: number), C }
+    let src = r#"variant E { A(x: number), B(x: number), C }
 declare function get(): E;
 const v = match (get()) {
   A(x) | B(x) => x,
@@ -400,7 +400,7 @@ fn anchors_nest_innermost_first() {
 #[test]
 fn anchors_do_not_change_the_emitted_bytes() {
     // Anchors are zero-length notes; the output must be what it always was.
-    let src = r#"enum E { A(x: number), B }
+    let src = r#"variant E { A(x: number), B }
 function f() {
   const a = try readNum();
   const A(x) = e else { return; };

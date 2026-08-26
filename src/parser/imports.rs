@@ -122,7 +122,7 @@ fn clause_then_spec(mut cur: Cursor<'_>, local: bool) -> Option<(Cursor<'_>, TtI
                         _ if !local => TtImportNames::None,
                         (Some(ns), _) => TtImportNames::Namespace(ns),
                         (None, Some(entries)) => TtImportNames::Named(entries),
-                        // only a default binding (tt enums are named exports)
+                        // only a default binding (tt variants are named exports)
                         (None, None) => TtImportNames::None,
                     };
                     return Some((cur, TtImportDecl { spec, kind, names }));

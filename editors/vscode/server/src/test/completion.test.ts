@@ -195,7 +195,7 @@ test(
 );
 
 const MATCH_SOURCE = [
-  "enum Shape {",
+  "variant Shape {",
   "  Circle(radius: number),",
   "  Point,",
   "}",

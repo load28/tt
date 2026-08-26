@@ -2,11 +2,11 @@
 //! the fidelity of the conversion into the analysis surface (the analysis
 //! consumes this resolver — Phase 3, TASK-123·129).
 
-use ttc::ExternEnum;
+use ttc::ExternVariant;
 use ttc::hir::{self, FileId};
 use ttc::resolve::{self, DefKind, Namespace, Res, Resolution, UseKind};
 
-fn resolved(source: &str, externs: &[ExternEnum]) -> (hir::HirFile, Resolution) {
+fn resolved(source: &str, externs: &[ExternVariant]) -> (hir::HirFile, Resolution) {
     let mut hir = hir::lower_source(FileId(0), source);
     let decls: Vec<resolve::ExternDecl> = externs.iter().map(Into::into).collect();
     let resolution = resolve::resolve_file(&mut hir, &decls);
@@ -19,8 +19,8 @@ fn span_text<'s>(source: &'s str, hir: &hir::HirFile, node: hir::NodeId) -> &'s 
 }
 
 #[test]
-fn an_enum_defines_a_type_and_a_constructor_value() {
-    let src = "export enum Shape { Circle(radius: number), Point }\n";
+fn a_variant_defines_a_type_and_a_constructor_value() {
+    let src = "export variant Shape { Circle(radius: number), Point }\n";
     let (hir, resolution) = resolved(src, &[]);
     let type_def = resolution
         .lookup(Namespace::Type, "Shape")
@@ -29,10 +29,10 @@ fn an_enum_defines_a_type_and_a_constructor_value() {
         .lookup(Namespace::Value, "Shape")
         .expect("value def");
     assert_ne!(type_def, value_def, "two definitions, one per namespace");
-    let DefKind::EnumValue { enum_def } = resolution.defs[value_def].kind else {
+    let DefKind::VariantValue { variant_def } = resolution.defs[value_def].kind else {
         panic!("the value-namespace def is the constructor object");
     };
-    assert_eq!(enum_def, type_def);
+    assert_eq!(variant_def, type_def);
     // The definition's span is the declared name.
     let span = hir
         .source_map
@@ -44,9 +44,9 @@ fn an_enum_defines_a_type_and_a_constructor_value() {
 #[test]
 fn same_spelling_is_not_same_identity() {
     // Two enums both declare `Empty`. The two uses resolve to *different*
-    // variants — identity is the (enum, index) pair, not the string.
-    let src = "enum A { Empty, Ok(x: number) }\n\
-        enum B { Empty, Fail(code: number) }\n\
+    // variants — identity is the (variant, index) pair, not the string.
+    let src = "variant A { Empty, Ok(x: number) }\n\
+        variant B { Empty, Fail(code: number) }\n\
         const a = match (v) { Ok(x) => x, Empty => 0 };\n\
         const b = match (w) { Fail(code) => code, Empty => 0 };\n";
     let (hir, resolution) = resolved(src, &[]);
@@ -65,25 +65,25 @@ fn same_spelling_is_not_same_identity() {
         })
         .collect();
     assert_eq!(empties.len(), 2);
-    assert_ne!(empties[0].enum_def, empties[1].enum_def);
-    assert_eq!(resolution.defs[empties[0].enum_def].name, "A");
-    assert_eq!(resolution.defs[empties[1].enum_def].name, "B");
+    assert_ne!(empties[0].variant_def, empties[1].variant_def);
+    assert_eq!(resolution.defs[empties[0].variant_def].name, "A");
+    assert_eq!(resolution.defs[empties[1].variant_def].name, "B");
 }
 
 #[test]
 fn locals_shadow_imports_shadow_builtins() {
     // A local `Option` replaces the built-in; an imported `Token` exists;
     // an imported `Result` would shadow the built-in the same way.
-    let src = "enum Option { Nothing, Just(v: number) }\n\
+    let src = "variant Option { Nothing, Just(v: number) }\n\
         const a = match (o) { Just(v) => v, Nothing => 0 };\n";
-    let externs = [ExternEnum {
+    let externs = [ExternVariant {
         name: "Token".to_string(),
         tags: vec!["Num".to_string(), "Eof".to_string()],
         from: Some("./token.tt".to_string()),
     }];
     let (hir, resolution) = resolved(src, &externs);
     let option = resolution.lookup(Namespace::Type, "Option").unwrap();
-    let DefKind::Enum(data) = &resolution.defs[option].kind else {
+    let DefKind::Variant(data) = &resolution.defs[option].kind else {
         panic!()
     };
     assert!(matches!(data.origin, resolve::DeclOrigin::Local(_)));
@@ -94,13 +94,13 @@ fn locals_shadow_imports_shadow_builtins() {
     );
     // Result is still the built-in.
     let result = resolution.lookup(Namespace::Type, "Result").unwrap();
-    let DefKind::Enum(data) = &resolution.defs[result].kind else {
+    let DefKind::Variant(data) = &resolution.defs[result].kind else {
         panic!()
     };
     assert!(matches!(data.origin, resolve::DeclOrigin::Builtin));
     // Token came in from the import, tags only.
     let token = resolution.lookup(Namespace::Type, "Token").unwrap();
-    let DefKind::Enum(data) = &resolution.defs[token].kind else {
+    let DefKind::Variant(data) = &resolution.defs[token].kind else {
         panic!()
     };
     assert_eq!(
@@ -120,7 +120,7 @@ fn locals_shadow_imports_shadow_builtins() {
 fn an_import_alias_is_the_name_in_scope() {
     // The CLI hands the resolver the alias-applied name (`T` for
     // `import { Token as T }`) — resolution happens under it.
-    let externs = [ExternEnum {
+    let externs = [ExternVariant {
         name: "T".to_string(),
         tags: vec!["Num".to_string(), "Eof".to_string()],
         from: Some("./token.tt".to_string()),
@@ -133,12 +133,12 @@ fn an_import_alias_is_the_name_in_scope() {
 }
 
 #[test]
-fn unknown_case_suggestions_stay_in_the_identified_enums_domain() {
+fn unknown_case_suggestions_stay_in_the_identified_variants_domain() {
     // `Circel` misses in Shape; Other also has a `Circle`. The suggestion
     // must come from Shape (the identified subject), and resolution must
     // not silently wire the pattern to Other's homonym.
-    let src = "enum Shape { Circle(r: number), Empty }\n\
-        enum Other { Circle(r: number), Rest }\n\
+    let src = "variant Shape { Circle(r: number), Empty }\n\
+        variant Other { Circle(r: number), Rest }\n\
         const v = match (s) { Circel(r) => r, Empty => 0 };\n";
     let (hir, resolution) = resolved(src, &[]);
     assert_eq!(resolution.unresolved.len(), 1);
@@ -162,8 +162,8 @@ fn a_hand_written_union_resolves_to_silence() {
 
 #[test]
 fn nested_patterns_resolve_against_the_fields_declared_type() {
-    let src = "enum Inner { Leaf(v: number), Nil }\n\
-        enum Outer { Wrap(inner: Inner), Bare }\n\
+    let src = "variant Inner { Leaf(v: number), Nil }\n\
+        variant Outer { Wrap(inner: Inner), Bare }\n\
         const v = match (o) { Wrap(inner: Leaf(n)) => n, Wrap(inner: Nil) => 0, Bare => 1 };\n";
     let (hir, resolution) = resolved(src, &[]);
     let inner_def = resolution.lookup(Namespace::Type, "Inner").unwrap();
@@ -176,7 +176,7 @@ fn nested_patterns_resolve_against_the_fields_declared_type() {
             let Some(Res::Variant(v)) = resolution.uses.get(&path.node) else {
                 panic!("Leaf did not resolve");
             };
-            assert_eq!(v.enum_def, inner_def);
+            assert_eq!(v.variant_def, inner_def);
             found = true;
         }
     }
@@ -187,7 +187,7 @@ fn nested_patterns_resolve_against_the_fields_declared_type() {
 fn a_single_pattern_site_reports_only_a_unique_one_edit_miss() {
     // `Circel` is one transposition from Shape's `Circle` and nothing
     // else is that close → reported. `Cxxcle` is not → silence.
-    let src = "enum Shape { Circle(radius: number), Empty }\n\
+    let src = "variant Shape { Circle(radius: number), Empty }\n\
         if let Circel(radius) = s {\n  use(radius);\n}\n\
         if let Cxxcle(radius) = s {\n  use(radius);\n}\n";
     let (_, resolution) = resolved(src, &[]);
@@ -204,23 +204,23 @@ fn resolution_matches_the_analysis_answer() {
     // analysis surface hands on, span for span, word for word.
     let cases = [
         // a match typo
-        "enum Shape { Circle(r: number), Empty }\n\
+        "variant Shape { Circle(r: number), Empty }\n\
          const v = match (s) { Circel(r) => r, Empty => 0 };\n",
         // a field typo
-        "enum Shape { Circle(radius: number), Empty }\n\
+        "variant Shape { Circle(radius: number), Empty }\n\
          const v = match (s) { Circle(radiuz) => radiuz, Empty => 0 };\n",
         // a nested typo
-        "enum Inner { Leaf(v: number), Nil }\n\
-         enum Outer { Wrap(inner: Inner), Bare }\n\
+        "variant Inner { Leaf(v: number), Nil }\n\
+         variant Outer { Wrap(inner: Inner), Bare }\n\
          const v = match (o) { Wrap(inner: Laef(n)) => n, Bare => 1, _ => 2 };\n",
         // an if-let typo, and one too far to report
-        "enum Shape { Circle(radius: number), Empty }\n\
+        "variant Shape { Circle(radius: number), Empty }\n\
          if let Circel(radius) = s {\n  use(radius);\n}\n\
          if let Zzz(radius) = s {\n  use(radius);\n}\n",
         // a hand-written union: silence
         "const v = match (u) { Loading => 0, Ready => 1, _ => 2 };\n",
         // clean code: silence
-        "enum Shape { Circle(r: number), Empty }\n\
+        "variant Shape { Circle(r: number), Empty }\n\
          const v = match (s) { Circle(r) => r, Empty => 0 };\n",
     ];
     for src in cases {
@@ -245,9 +245,8 @@ fn resolution_matches_the_analysis_answer() {
 
 #[test]
 fn tuple_positions_identify_independently() {
-    // Empty parens force the tt-enum reading (a unit-only `enum` is
-    // TypeScript's own and passes through).
-    let src = "enum A { X(), Y }\nenum B { P(), Q }\n\
+    // Unit-only declarations are tt variants without a disambiguating payload.
+    let src = "variant A { X(), Y }\nvariant B { P(), Q }\n\
         const v = match (a, b) { (X, P) => 0, (Y, Q) => 1 };\n";
     let (hir, resolution) = resolved(src, &[]);
     let site_id = hir
@@ -265,10 +264,10 @@ fn tuple_positions_identify_independently() {
 #[test]
 fn an_or_pattern_site_gets_match_grade_identification() {
     // Two tags are match-grade evidence: the unique best-overlap holder
-    // identifies the enum, so a typo two edits away is reported — the
+    // identifies the variant, so a typo two edits away is reported — the
     // strict one-edit licence only governs a site whose evidence is a
     // single tag.
-    let src = "enum Shape { Circle(radius: number), Empty }\n\
+    let src = "variant Shape { Circle(radius: number), Empty }\n\
         function f(s: Shape): number {\n\
         \x20 const Cyrcla(radius) | Empty() = s else { return 0; };\n\
         \x20 return radius;\n\
@@ -280,7 +279,7 @@ fn an_or_pattern_site_gets_match_grade_identification() {
 
     // The same typo as the only alternative stays unreported: one tag is
     // thin evidence and `Cyrcla` is two edits from `Circle`.
-    let alone = "enum Shape { Circle(radius: number), Empty }\n\
+    let alone = "variant Shape { Circle(radius: number), Empty }\n\
         function f(s: Shape): number {\n\
         \x20 const Cyrcla(radius) = s else { return 0; };\n\
         \x20 return radius;\n\

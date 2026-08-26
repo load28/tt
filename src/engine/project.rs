@@ -255,7 +255,7 @@ impl Project {
         &self,
         path: &Path,
         source: &str,
-        externs: Vec<crate::EnumSymbol>,
+        externs: Vec<crate::VariantSymbol>,
     ) -> Arc<FileSemantics> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         source.hash(&mut hasher);
@@ -302,7 +302,7 @@ impl Project {
                     && doc.source == text
                 {
                     return Some(
-                        doc.enum_symbols()
+                        doc.variant_symbols()
                             .iter()
                             .filter(|d| d.exported)
                             .cloned()
@@ -310,7 +310,7 @@ impl Project {
                     );
                 }
                 Some(
-                    crate::enum_symbols_with_kind(
+                    crate::variant_symbols_with_kind(
                         &text,
                         crate::SourceKind::from_path(target).unwrap_or_default(),
                     )

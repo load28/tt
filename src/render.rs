@@ -20,7 +20,7 @@
 //!     &Report {
 //!         severity: ttc::Severity::Error,
 //!         code: Some("match-not-exhaustive"),
-//!         message: "match on enum Shape is not exhaustive: missing \"Rect\"",
+//!         message: "match on variant Shape is not exhaustive: missing \"Rect\"",
 //!         path: "shapes.tt",
 //!         span: Some(Span {
 //!             start: Position { line: 1, col: 1 },
@@ -31,7 +31,7 @@
 //!     Some("match (shape) {\n}\n"),
 //!     Styles::PLAIN,
 //! );
-//! assert!(out.starts_with("error[match-not-exhaustive]: match on enum Shape"));
+//! assert!(out.starts_with("error[match-not-exhaustive]: match on variant Shape"));
 //! assert!(out.contains("1 | match (shape) {"));
 //! assert!(out.contains("  | ^^^^^^^^^^^^^"));
 //! ```
@@ -585,7 +585,7 @@ mod tests {
     use super::*;
     use crate::diagnostics::Edit;
 
-    const SOURCE: &str = "enum Shape { Circle(radius: number), Rect }\ndeclare const s: Shape;\nconst a = match (s) {\n  Circel(r) => r,\n};\n";
+    const SOURCE: &str = "variant Shape { Circle(radius: number), Rect }\ndeclare const s: Shape;\nconst a = match (s) {\n  Circel(r) => r,\n};\n";
 
     fn at(line: usize, col: usize) -> Position {
         Position { line, col }
@@ -595,7 +595,7 @@ mod tests {
         Report {
             severity: Severity::Error,
             code: Some("unknown-case"),
-            message: "enum Shape has no case `Circel`",
+            message: "variant Shape has no case `Circel`",
             path: "shapes.tt",
             span,
             suggestions,
@@ -698,7 +698,7 @@ mod tests {
         let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
         assert_eq!(
             out,
-            "error[unknown-case]: enum Shape has no case `Circel`\n \
+            "error[unknown-case]: variant Shape has no case `Circel`\n \
              --> shapes.tt:4:3\n  \
              |\n\
              4 |   Circel(r) => r,\n  \
@@ -762,7 +762,7 @@ mod tests {
         let out = render(&report(Some(span), &[]), None, Styles::PLAIN);
         assert_eq!(
             out,
-            "error[unknown-case]: enum Shape has no case `Circel`\n --> shapes.tt:4:3",
+            "error[unknown-case]: variant Shape has no case `Circel`\n --> shapes.tt:4:3",
         );
     }
 

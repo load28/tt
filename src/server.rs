@@ -30,7 +30,7 @@
 //! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
 //!
 //! → { "id": 5, "method": "ttSymbol", "params": { "path", "text", "position" } }
-//! ← { "id": 5, "result": { "kind", "range", "name", "enumName",
+//! ← { "id": 5, "result": { "kind", "range", "name", "variantName",
 //!                          "signature", "detail", "definition" } | null }
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
@@ -40,7 +40,7 @@
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
 //!
 //! → { "id": 8, "method": "declarations", "params": { "path", "text" } }
-//! ← { "id": 8, "result": { "enums": [{ "name", "generics", "origin",
+//! ← { "id": 8, "result": { "variants": [{ "name", "generics", "origin",
 //!        "specifier", "nameSpan", "span", "cases" }],
 //!        "matches": [{ "keyword", "bodyOpen", "bodyClose" }] } }
 //!
@@ -443,7 +443,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 /// ambiguous surface, in the buffer's coordinates. Like `check`, this is
 /// stateless and parse-only — it needs no project and no TypeScript
 /// toolchain, so the editor's colors stay exact in every environment.
-/// The declarations visible in a buffer — the compiler's own enum table
+/// The declarations visible in a buffer — the compiler's own variant table
 /// (local, imported, built-in, under the compiler's shadowing) plus the
 /// buffer's `match` sites. This is the surface that replaces the editor's
 /// regex re-implementation of tt semantics (`engine::tt_declarations`).
@@ -454,18 +454,18 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
     let decls = ttc::engine::tt_declarations(Path::new(path), text_param(params)?);
-    let enums: Vec<_> = decls
-        .enums
+    let variants: Vec<_> = decls
+        .variants
         .iter()
         .map(|e| {
             let (origin, specifier, name_span, span) = match &e.origin {
-                ttc::engine::TtEnumOrigin::Local { name_span, span } => (
+                ttc::engine::TtVariantOrigin::Local { name_span, span } => (
                     "local",
                     serde_json::Value::Null,
                     Some(*name_span),
                     Some(*span),
                 ),
-                ttc::engine::TtEnumOrigin::Imported { specifier } => (
+                ttc::engine::TtVariantOrigin::Imported { specifier } => (
                     "imported",
                     specifier
                         .clone()
@@ -474,7 +474,7 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
                     None,
                     None,
                 ),
-                ttc::engine::TtEnumOrigin::Builtin => {
+                ttc::engine::TtVariantOrigin::Builtin => {
                     ("builtin", serde_json::Value::Null, None, None)
                 }
             };
@@ -509,10 +509,10 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
             })
         })
         .collect();
-    Ok(json!({ "enums": enums, "matches": matches }))
+    Ok(json!({ "variants": variants, "matches": matches }))
 }
 
-/// The tt name at a position — an enum, a case tag, a payload field.
+/// The tt name at a position — a variant, a case tag, a payload field.
 ///
 /// Text-only like `semanticTokens`: the answer needs no project and no
 /// toolchain, because these names exist nowhere in the emitted TypeScript
@@ -533,13 +533,13 @@ fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     };
     Ok(json!({
         "kind": match symbol.kind {
-            ttc::engine::TtSymbolKind::Enum => "enum",
+            ttc::engine::TtSymbolKind::Variant => "variant",
             ttc::engine::TtSymbolKind::Case => "case",
             ttc::engine::TtSymbolKind::Field => "field",
         },
         "range": range_json(symbol.range),
         "name": symbol.name,
-        "enumName": symbol.enum_name,
+        "variantName": symbol.variant_name,
         "signature": symbol.signature,
         "detail": symbol.detail,
         "definition": symbol.definition.map(|location| json!({

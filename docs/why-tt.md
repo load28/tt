@@ -117,7 +117,7 @@ have.
 Here's the `switch` from earlier:
 
 ```tt
-enum Shape {
+variant Shape {
   Circle(radius: number),
   Rect(width: number, height: number),
 }
@@ -129,7 +129,7 @@ const area = (shape: Shape): number =>
 ```
 
 ```text
-error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rect"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
  --> shape.tt:7:3
   |
 7 |   match (shape) {
@@ -183,7 +183,7 @@ lines of tt can tell you what those forty lines do, and so can a reviewer at
 ## Where this is
 
 tt is early. The compiler is written in Rust, the language is seven constructs
-and one binding modifier — `enum`, `match`, `try`, `let-else`, `if let`, `|>`
+and one binding modifier — `variant`, `match`, `try`, `let-else`, `if let`, `|>`
 (with `flow`), `result` blocks, and `val` — and I wouldn't put it in production
 yet.
 

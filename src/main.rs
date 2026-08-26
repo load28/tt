@@ -28,8 +28,8 @@ mod server;
 use ttc::engine::collect_sources;
 use ttc::source_map::SourceMapRequest;
 use ttc::{
-    EnumSymbol, ExternEnum, ImportRewrite, ModuleScan, Options, StdImports, StdModule, TtImport,
-    TtImportNames, compile_report,
+    ExternVariant, ImportRewrite, ModuleScan, Options, StdImports, StdModule, TtImport,
+    TtImportNames, VariantSymbol, compile_report,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -86,7 +86,7 @@ Tooling options (bundler plugins, editors):
   --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
                         <dir>/<name>.d.ts (tsc --emitDeclarationOnly output);
                         compiles nothing (--types runs this step for you)
-  --symbols             print tt enum declarations (with positions) and the
+  --symbols             print tt variant declarations (with positions) and the
                         direct .tt imports of each input as JSON; compiles
                         nothing (for language tooling)
   --emit-map            print each input's emitted TypeScript plus source<->
@@ -109,7 +109,7 @@ const GUIDE: &str = include_str!("../docs/ai/tt.md");
 /// prefix selects the preamble (everything before the first `## `).
 const HELP_TOPICS: &[(&str, &[&str], &str)] = &[
     ("overview", &["contracts", "intro"], ""),
-    ("enum", &["enums"], "## enum"),
+    ("variant", &["variants"], "## variant"),
     ("match", &["tuple", "patterns"], "## match"),
     ("try", &[], "## try"),
     ("let-else", &["letelse"], "## let-else"),
@@ -245,7 +245,7 @@ struct Job {
 }
 
 /// `--symbols`: prints, as a JSON array on stdout, each input file's tt
-/// enum declarations (positions included) and its direct relative `.tt`
+/// variant declarations (positions included) and its direct relative `.tt`
 /// imports with the referenced files' exported declarations — the symbol
 /// interface language tooling consumes (module graph phase 3). Compiles
 /// nothing; unreadable *imported* files yield `"resolved": null` while
@@ -264,8 +264,8 @@ fn symbols_mode(jobs: &[Job]) -> ExitCode {
             }
         };
         let mut entry = format!("{{\"file\":{}", json_str(&filename));
-        entry.push_str(",\"enums\":");
-        entry.push_str(&enums_json(&source, &ttc::enum_symbols(&source)));
+        entry.push_str(",\"variants\":");
+        entry.push_str(&variants_json(&source, &ttc::variant_symbols(&source)));
         entry.push_str(",\"imports\":[");
         let dir = job.file.parent().unwrap_or(Path::new("."));
         let imports = ttc::tt_imports(&source)
@@ -281,14 +281,14 @@ fn symbols_mode(jobs: &[Job]) -> ExitCode {
                             ",\"resolved\":{}",
                             json_str(&target.display().to_string())
                         ));
-                        let exported: Vec<EnumSymbol> = ttc::enum_symbols(&imported_src)
+                        let exported: Vec<VariantSymbol> = ttc::variant_symbols(&imported_src)
                             .into_iter()
                             .filter(|e| e.exported)
                             .collect();
-                        o.push_str(",\"enums\":");
-                        o.push_str(&enums_json(&imported_src, &exported));
+                        o.push_str(",\"variants\":");
+                        o.push_str(&variants_json(&imported_src, &exported));
                     }
-                    Err(_) => o.push_str(",\"resolved\":null,\"enums\":[]"),
+                    Err(_) => o.push_str(",\"resolved\":null,\"variants\":[]"),
                 }
                 o.push('}');
                 o
@@ -452,7 +452,7 @@ fn relative_path(from_dir: &Path, to_file: &Path) -> String {
     parts.join("/")
 }
 
-fn enums_json(source: &str, symbols: &[EnumSymbol]) -> String {
+fn variants_json(source: &str, symbols: &[VariantSymbol]) -> String {
     let objects = symbols
         .iter()
         .map(|e| {
@@ -549,8 +549,8 @@ struct ExternCache<'a> {
     inputs: HashMap<&'a Path, &'a str>,
     /// Exported declarations per imported path, filled on first use. An
     /// unreadable module caches as an empty table: module resolution is
-    /// tsc's domain (`TS2307`), so its enums simply stay unknown.
-    decls: Mutex<HashMap<PathBuf, Arc<Vec<ExternEnum>>>>,
+    /// tsc's domain (`TS2307`), so its variants simply stay unknown.
+    decls: Mutex<HashMap<PathBuf, Arc<Vec<ExternVariant>>>>,
 }
 
 impl<'a> ExternCache<'a> {
@@ -561,7 +561,7 @@ impl<'a> ExternCache<'a> {
         }
     }
 
-    fn exported_enums(&self, path: &Path) -> Arc<Vec<ExternEnum>> {
+    fn exported_variants(&self, path: &Path) -> Arc<Vec<ExternVariant>> {
         // A poisoned lock means another job already panicked, and that
         // panic is the failure being reported — a second one here would
         // bury it. The map's contents are sound either way: it is only
@@ -579,9 +579,9 @@ impl<'a> ExternCache<'a> {
         // insertion wins and both see the same table.
         let source_kind = ttc::SourceKind::from_path(path).unwrap_or_default();
         let decls = Arc::new(match self.inputs.get(path) {
-            Some(source) => ttc::exported_enums_with_kind(source, source_kind),
+            Some(source) => ttc::exported_variants_with_kind(source, source_kind),
             None => match fs::read_to_string(path) {
-                Ok(source) => ttc::exported_enums_with_kind(&source, source_kind),
+                Ok(source) => ttc::exported_variants_with_kind(&source, source_kind),
                 Err(_) => Vec::new(),
             },
         });
@@ -595,24 +595,28 @@ impl<'a> ExternCache<'a> {
     }
 }
 
-/// Collects enum declarations from the file's direct relative `.tt`
-/// imports, so matches over imported enums get exhaustiveness-checked
+/// Collects variant declarations from the file's direct relative `.tt`
+/// imports, so matches over imported variants get exhaustiveness-checked
 /// (module graph phase 2). One hop, import declarations only — re-exports
 /// bring nothing into scope. A specifier that cannot be read is skipped
 /// silently: module resolution is tsc's domain (`TS2307`), and an unknown
-/// enum simply stays unchecked, exactly as before.
-fn collect_extern_enums(file: &Path, imports: &[TtImport], cache: &ExternCache) -> Vec<ExternEnum> {
+/// variant simply stays unchecked, exactly as before.
+fn collect_extern_variants(
+    file: &Path,
+    imports: &[TtImport],
+    cache: &ExternCache,
+) -> Vec<ExternVariant> {
     let dir = file.parent().unwrap_or(Path::new("."));
-    let mut externs: Vec<ExternEnum> = Vec::new();
+    let mut externs: Vec<ExternVariant> = Vec::new();
     for import in imports {
         if matches!(import.names, TtImportNames::None) {
             continue;
         }
-        let decls = cache.exported_enums(&dir.join(&import.specifier));
+        let decls = cache.exported_variants(&dir.join(&import.specifier));
         let from = Some(import.specifier.clone());
         match &import.names {
             TtImportNames::Namespace(ns) => {
-                externs.extend(decls.iter().map(|d| ExternEnum {
+                externs.extend(decls.iter().map(|d| ExternVariant {
                     name: format!("{ns}.{}", d.name),
                     tags: d.tags.clone(),
                     from: from.clone(),
@@ -621,7 +625,7 @@ fn collect_extern_enums(file: &Path, imports: &[TtImport], cache: &ExternCache) 
             TtImportNames::Named(entries) => {
                 for (name, alias) in entries {
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
-                        externs.push(ExternEnum {
+                        externs.push(ExternVariant {
                             name: alias.clone().unwrap_or_else(|| name.clone()),
                             tags: d.tags.clone(),
                             from: from.clone(),
@@ -1632,7 +1636,8 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                         return out;
                     }
                 };
-                let extern_enums = collect_extern_enums(&job.file, &loaded.scan.imports, &cache);
+                let extern_variants =
+                    collect_extern_variants(&job.file, &loaded.scan.imports, &cache);
                 let std_imports_owned = std_dir.as_ref().map(|dir| {
                     StdModule::ALL
                         .map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
@@ -1651,7 +1656,7 @@ fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                     source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
                     verify: opts.verify,
                     rewrite_imports: opts.rewrite_imports,
-                    extern_enums: &extern_enums,
+                    extern_variants: &extern_variants,
                     defer_to_checker: false,
                     std_imports,
                 };

@@ -1,5 +1,5 @@
-enum Dir { North(dx: number), South }
-enum Speed { Fast(v: number), Slow }
+variant Dir { North(dx: number), South }
+variant Speed { Fast(v: number), Slow }
 declare const d: Dir;
 declare const s: Speed;
 

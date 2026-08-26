@@ -19,7 +19,7 @@ pub(crate) struct BlockedFile {
     pub(crate) source_path: std::path::PathBuf,
     pub(crate) source: String,
     pub(crate) diagnostics: Vec<crate::Diagnostic>,
-    enum_symbols: std::sync::OnceLock<Vec<crate::EnumSymbol>>,
+    variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
 }
 
 impl BlockedFile {
@@ -32,13 +32,13 @@ impl BlockedFile {
             source_path,
             source,
             diagnostics,
-            enum_symbols: std::sync::OnceLock::new(),
+            variant_symbols: std::sync::OnceLock::new(),
         }
     }
 
-    pub(crate) fn enum_symbols(&self) -> &[crate::EnumSymbol] {
-        self.enum_symbols.get_or_init(|| {
-            crate::enum_symbols_with_kind(
+    pub(crate) fn variant_symbols(&self) -> &[crate::VariantSymbol] {
+        self.variant_symbols.get_or_init(|| {
+            crate::variant_symbols_with_kind(
                 &self.source,
                 crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
             )

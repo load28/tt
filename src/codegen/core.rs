@@ -1055,7 +1055,7 @@ impl<'a> Emitter<'a> {
                     // constructor belongs to the `enum` that wrote it.
                     let span = self.span(adt.node);
                     out.anchored(
-                        AnchorKind::Enum,
+                        AnchorKind::Variant,
                         span.start,
                         span.end,
                         span.end,
@@ -3089,7 +3089,7 @@ fn unexpected_switch(literal: bool) -> &'static str {
     }
 }
 
-/// The union type and constructor object one tt `enum` becomes, laid out
+/// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
 fn emit_adt<'a>(adt: &Adt) -> Rope<'a> {
     let export = if adt.exported { "export " } else { "" };

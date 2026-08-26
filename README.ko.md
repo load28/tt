@@ -8,7 +8,7 @@ tt은 TypeScript에 표현력 높은 데이터·제어 흐름 기능을 더하�
 > **개발 중:** tt은 아직 프로덕션 사용을 권장하지 않습니다. 릴리스 사이에 API와 언어 동작이 바뀔 수 있습니다.
 
 ```tt
-export enum Shape {
+export variant Shape {
   Circle(radius: number),
   Rectangle(width: number, height: number),
   Point,
@@ -86,7 +86,7 @@ cargo install --git https://github.com/load28/tt
 
 ## 언어 한눈에 보기
 
-- Rust 스타일 `enum`으로 데이터를 모델링하고, 가드·튜플·리터럴·or-패턴·중첩 패턴을 지원하는 소진적 `match`로 값을 추출합니다.
+- Rust 스타일 `variant`로 데이터를 모델링하고, 가드·튜플·리터럴·or-패턴·중첩 패턴을 지원하는 소진적 `match`로 값을 추출합니다. TypeScript `enum`은 평범한 TypeScript로 그대로 둡니다.
 - `@tt/std`의 `TOption`과 `TResult`를 `try`, `let-else`, `if let`, `result` 블록으로 다룹니다. 트리셰이킹 가능한 연산은 `@tt/std/option`과 `@tt/std/result`에서 가져옵니다.
 - `|>`와 `flow`로 값 파이프라인과 함수 파이프라인을 만듭니다.
 - 변경을 허용하지 않을 바인딩과 매개변수에는 `val`을 붙입니다.

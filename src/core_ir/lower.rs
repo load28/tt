@@ -78,7 +78,7 @@ impl Lowering<'_> {
                 }
             }
             hir::Stmt::Item(owner) => match &self.semantic.hir.items[owner.0 as usize] {
-                hir::Item::Enum(item) => {
+                hir::Item::Variant(item) => {
                     let mut emitted = HashSet::new();
                     Some(Statement::Adt(Adt {
                         node: item.node,

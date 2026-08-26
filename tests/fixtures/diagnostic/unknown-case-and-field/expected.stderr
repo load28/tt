@@ -1,4 +1,4 @@
-error[unknown-case]: enum Shape has no case `Circel`
+error[unknown-case]: variant Shape has no case `Circel`
  --> input.tt:4:30
   |
 4 | export const a = match (s) { Circel(radius) => radius, Empty => 0 };
@@ -6,7 +6,7 @@ error[unknown-case]: enum Shape has no case `Circel`
   |
   = help: a case with a similar name exists: `Circle`
 
-error[unknown-field]: enum Shape: case `Circle` has no field `radiuz`
+error[unknown-field]: variant Shape: case `Circle` has no field `radiuz`
  --> input.tt:5:37
   |
 5 | export const b = match (s) { Circle(radiuz) => radiuz, Empty => 0 };

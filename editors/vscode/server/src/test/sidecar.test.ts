@@ -54,7 +54,7 @@ const skip = !compilerAvailable()
 
 const SOURCE = [
   "/** 알림 한 건. */",
-  "export enum Notice {",
+  "export variant Notice {",
   "  Info(text: string),",
   "  Warn(text: string),",
   "}",
@@ -117,7 +117,7 @@ test("ttx saves refresh TSX declarations and map back to the ttx source", { skip
     ttx,
     [
       "declare namespace JSX { interface IntrinsicElements { main: {} } }",
-      "export enum State { Ready(label: string), Empty }",
+      "export variant State { Ready(label: string), Empty }",
       "export const View = ({ state }: { state: State }) => (",
       "  <main>{match (state) { Ready(label) => label, Empty => null }}</main>",
       ");",

@@ -2,7 +2,7 @@
 //!
 //! This is what retires the editor's second, regex-based implementation of
 //! tt semantics (`docs/design/rust-parity-analysis.md` GAP-3): the list of
-//! enums visible in a file — local, imported (aliases applied), built-in —
+//! variants visible in a file — local, imported (aliases applied), built-in —
 //! comes from [`crate::resolve`], under exactly the shadowing the compiler
 //! resolves with, together with everything a completion or an outline
 //! needs (case signatures, payload fields, spans for local declarations).
@@ -17,30 +17,30 @@ use crate::resolve::{self, DeclOrigin, DefKind};
 /// Everything the declaration surface answers for one file.
 #[derive(Debug)]
 pub struct TtDeclarations {
-    /// The enums visible in the file, in resolution order (local
+    /// The variants visible in the file, in resolution order (local
     /// declarations in source order, then imports, then built-ins) —
     /// shadowed names appear once, as the declaration that wins.
-    pub enums: Vec<TtEnumDecl>,
+    pub variants: Vec<TtVariantDecl>,
     /// The file's `match` sites (nested ones included), in source order.
     pub matches: Vec<TtMatchSite>,
 }
 
-/// One visible enum.
+/// One visible variant.
 #[derive(Debug)]
-pub struct TtEnumDecl {
-    /// The name this enum is known by in the file's scope.
+pub struct TtVariantDecl {
+    /// The name this variant is known by in the file's scope.
     pub name: String,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
     /// Where it comes from.
-    pub origin: TtEnumOrigin,
+    pub origin: TtVariantOrigin,
     /// The cases, in declaration order.
     pub cases: Vec<TtCaseDecl>,
 }
 
-/// Where a visible enum is declared.
+/// Where a visible variant is declared.
 #[derive(Debug, PartialEq, Eq)]
-pub enum TtEnumOrigin {
+pub enum TtVariantOrigin {
     /// Declared in this file. `name_span` is the declared name;
     /// `span` runs from the name to the last declared piece — the outline
     /// range.
@@ -59,7 +59,7 @@ pub enum TtEnumOrigin {
     Builtin,
 }
 
-/// One case of a visible enum.
+/// One case of a visible variant.
 #[derive(Debug)]
 pub struct TtCaseDecl {
     /// The tag.
@@ -112,9 +112,9 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
     let mut hir = hir::lower_program(hir::FileId(0), &program);
     let resolution = resolve::resolve_file(&mut hir, &externs);
 
-    let mut enums = Vec::new();
+    let mut variants = Vec::new();
     for (id, def) in resolution.defs.iter() {
-        let DefKind::Enum(data) = &def.kind else {
+        let DefKind::Variant(data) = &def.kind else {
             continue;
         };
         // Only the winner of each name: a shadowed declaration is not
@@ -170,17 +170,17 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
                     .map(|s| s.end)
                     .max()
                     .unwrap_or(name_span.1);
-                TtEnumOrigin::Local {
+                TtVariantOrigin::Local {
                     name_span,
                     span: (name_span.0, end.max(name_span.1)),
                 }
             }
-            DeclOrigin::Imported { from } => TtEnumOrigin::Imported {
+            DeclOrigin::Imported { from } => TtVariantOrigin::Imported {
                 specifier: from.clone(),
             },
-            DeclOrigin::Builtin => TtEnumOrigin::Builtin,
+            DeclOrigin::Builtin => TtVariantOrigin::Builtin,
         };
-        enums.push(TtEnumDecl {
+        variants.push(TtVariantDecl {
             name: def.name.clone(),
             generics: data.generics.clone(),
             origin,
@@ -192,7 +192,7 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
     collect_matches(&program, &mut matches);
     matches.sort_by_key(|m| m.keyword);
 
-    TtDeclarations { enums, matches }
+    TtDeclarations { variants, matches }
 }
 
 /// Every `match` of a program, nested positions included.
@@ -201,7 +201,7 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
-            Segment::Enum(_) => {}
+            Segment::Variant(_) => {}
             Segment::Match(expr) => {
                 out.push(TtMatchSite {
                     keyword: expr.keyword_off,
@@ -290,12 +290,12 @@ mod tests {
 
     #[test]
     fn locals_come_with_spans_imports_and_builtins_without() {
-        let src = "export enum Shape { Circle(radius: number), Point }\n";
+        let src = "export variant Shape { Circle(radius: number), Point }\n";
         let decls = declarations(src);
-        let names: Vec<&str> = decls.enums.iter().map(|e| e.name.as_str()).collect();
+        let names: Vec<&str> = decls.variants.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, ["Shape", "Option", "Result"]);
-        let shape = &decls.enums[0];
-        let TtEnumOrigin::Local { name_span, span } = &shape.origin else {
+        let shape = &decls.variants[0];
+        let TtVariantOrigin::Local { name_span, span } = &shape.origin else {
             panic!("Shape is local");
         };
         assert_eq!(&src[name_span.0..name_span.1], "Shape");
@@ -304,24 +304,28 @@ mod tests {
         assert_eq!(shape.cases[0].fields[0].ty, "number");
         assert!(shape.cases[1].unit);
         // The built-ins carry their declared type parameters.
-        let option = decls.enums.iter().find(|e| e.name == "Option").unwrap();
+        let option = decls.variants.iter().find(|e| e.name == "Option").unwrap();
         assert_eq!(option.generics, "<T>");
-        assert_eq!(option.origin, TtEnumOrigin::Builtin);
+        assert_eq!(option.origin, TtVariantOrigin::Builtin);
     }
 
     #[test]
     fn a_local_declaration_shadows_the_builtin_once() {
-        let src = "enum Option { Nothing, Just(v: number) }\n";
+        let src = "variant Option { Nothing, Just(v: number) }\n";
         let decls = declarations(src);
-        let options: Vec<&TtEnumDecl> = decls.enums.iter().filter(|e| e.name == "Option").collect();
+        let options: Vec<&TtVariantDecl> = decls
+            .variants
+            .iter()
+            .filter(|e| e.name == "Option")
+            .collect();
         assert_eq!(options.len(), 1, "the shadowed built-in is not listed");
-        assert!(matches!(options[0].origin, TtEnumOrigin::Local { .. }));
+        assert!(matches!(options[0].origin, TtVariantOrigin::Local { .. }));
         assert_eq!(options[0].cases[0].tag, "Nothing");
     }
 
     #[test]
     fn matches_carry_their_arm_insertion_point() {
-        let src = "enum E { A(x: number), B }\n\
+        let src = "variant E { A(x: number), B }\n\
             const v = match (e) { A(x) => match (inner) { B => 0, _ => 1 }, B => 2 };\n";
         let decls = declarations(src);
         assert_eq!(decls.matches.len(), 2);

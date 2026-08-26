@@ -1,4 +1,4 @@
-enum Shape { Circle(radius: number), Rect(w: number, h: number) }
+variant Shape { Circle(radius: number), Rect(w: number, h: number) }
 declare const s: Shape;
 
 export const a = match (s) {

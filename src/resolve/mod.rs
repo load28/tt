@@ -2,10 +2,10 @@
 //!
 //! This is the resolve phase of the compiler core
 //! (`docs/design/compiler-core.md` §5): declaration collection builds the
-//! world one file sees — its own enums, its imported ones, the built-ins —
+//! world one file sees — its own variants, its imported ones, the built-ins —
 //! as definitions with stable IDs, and reference resolution binds every
 //! name a pattern writes to one of them. After this phase, "is this tag
-//! that case?" is an ID comparison, never a string comparison: two enums
+//! that case?" is an ID comparison, never a string comparison: two variants
 //! may both declare a `Circle`, and the two `Circle`s are different
 //! definitions.
 //!
@@ -32,7 +32,7 @@ use crate::hir::{
 /// An imported declaration as the resolver receives it: the name it is
 /// known by in the importing file's scope (aliases applied), where it came
 /// from, and its variants — with payload fields when the collector had
-/// them ([`crate::EnumSymbol`]), tags only otherwise ([`crate::ExternEnum`]).
+/// them ([`crate::VariantSymbol`]), tags only otherwise ([`crate::ExternVariant`]).
 #[derive(Debug, Clone)]
 pub struct ExternDecl {
     /// The name in the importing file's scope.
@@ -52,8 +52,8 @@ pub type ExternVariant = (String, Option<Vec<ExternField>>);
 /// One payload field of an [`ExternVariant`]: `(name, optional, type text)`.
 pub type ExternField = (String, bool, String);
 
-impl From<&crate::ExternEnum> for ExternDecl {
-    fn from(e: &crate::ExternEnum) -> ExternDecl {
+impl From<&crate::ExternVariant> for ExternDecl {
+    fn from(e: &crate::ExternVariant) -> ExternDecl {
         ExternDecl {
             name: e.name.clone(),
             from: e.from.clone(),
@@ -63,8 +63,8 @@ impl From<&crate::ExternEnum> for ExternDecl {
     }
 }
 
-impl From<&crate::EnumSymbol> for ExternDecl {
-    fn from(e: &crate::EnumSymbol) -> ExternDecl {
+impl From<&crate::VariantSymbol> for ExternDecl {
+    fn from(e: &crate::VariantSymbol) -> ExternDecl {
         ExternDecl {
             name: e.name.clone(),
             from: None,
@@ -107,7 +107,7 @@ pub struct Resolution {
     pub defs: Arena<DefId, Definition>,
     /// The type namespace after shadowing: name → definition.
     pub type_ns: HashMap<String, DefId>,
-    /// The value namespace after shadowing: name → definition (a tt enum
+    /// The value namespace after shadowing: name → definition (a tt variant
     /// contributes its constructor object here).
     pub value_ns: HashMap<String, DefId>,
     /// Each pattern site's identified subject, one per scrutinee position
@@ -133,11 +133,11 @@ impl Resolution {
 
     /// The enum definition behind `def` — itself for a type-namespace
     /// enum, the owner for a constructor-object value.
-    pub fn enum_of(&self, def: DefId) -> Option<(DefId, &EnumDef)> {
+    pub fn variant_of(&self, def: DefId) -> Option<(DefId, &VariantDef)> {
         match &self.defs[def].kind {
-            DefKind::Enum(data) => Some((def, data)),
-            DefKind::EnumValue { enum_def } => match &self.defs[*enum_def].kind {
-                DefKind::Enum(data) => Some((*enum_def, data)),
+            DefKind::Variant(data) => Some((def, data)),
+            DefKind::VariantValue { variant_def } => match &self.defs[*variant_def].kind {
+                DefKind::Variant(data) => Some((*variant_def, data)),
                 _ => None,
             },
         }
@@ -145,7 +145,7 @@ impl Resolution {
 
     /// A variant by reference.
     pub fn variant(&self, at: VariantRef) -> Option<&VariantDecl> {
-        let (_, data) = self.enum_of(at.enum_def)?;
+        let (_, data) = self.variant_of(at.variant_def)?;
         data.variants.get(at.index as usize)
     }
 
@@ -180,25 +180,25 @@ pub struct Definition {
     pub kind: DefKind,
 }
 
-/// What a definition is. A tt enum mints two: the type ([`DefKind::Enum`])
-/// and the constructor object ([`DefKind::EnumValue`]), one per namespace —
-/// variants and fields hang off the enum and are addressed by
+/// What a definition is. A tt variant mints two: the type ([`DefKind::Variant`])
+/// and the constructor object ([`DefKind::VariantValue`]), one per namespace —
+/// cases and fields hang off the variant and are addressed by
 /// [`VariantRef`]/[`FieldRef`], which keeps their identity tied to their
 /// owner.
 #[derive(Debug)]
 pub enum DefKind {
-    /// An enum type, with its variants.
-    Enum(EnumDef),
-    /// An enum's constructor object in the value namespace.
-    EnumValue {
+    /// A variant type, with its cases.
+    Variant(VariantDef),
+    /// A variant's constructor object in the value namespace.
+    VariantValue {
         /// The type-namespace definition this constructor object belongs to.
-        enum_def: DefId,
+        variant_def: DefId,
     },
 }
 
-/// An enum definition's data.
+/// A variant definition's data.
 #[derive(Debug)]
-pub struct EnumDef {
+pub struct VariantDef {
     /// Where the declaration lives.
     pub origin: DeclOrigin,
     /// The verbatim `<...>` generic parameter list, or `""` (built-ins
@@ -224,7 +224,7 @@ pub enum DeclOrigin {
     Builtin,
 }
 
-/// One variant of an [`EnumDef`].
+/// One variant of an [`VariantDef`].
 #[derive(Debug)]
 pub struct VariantDecl {
     /// The tag.
@@ -259,7 +259,7 @@ pub struct FieldDecl {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VariantRef {
     /// The owning enum's definition.
-    pub enum_def: DefId,
+    pub variant_def: DefId,
     /// Index into the owner's variant list.
     pub index: u32,
 }
@@ -278,7 +278,7 @@ pub struct FieldRef {
 pub enum Res {
     /// A top-level definition.
     Def(DefId),
-    /// An enum variant.
+    /// A variant case.
     Variant(VariantRef),
     /// A payload field.
     Field(FieldRef),
@@ -337,17 +337,17 @@ struct Resolver {
 }
 
 impl Resolver {
-    /// Declaration collection: local enums (a later declaration of the
+    /// Declaration collection: local variants (a later declaration of the
     /// same name replaces an earlier one, as in the analysis' registry),
     /// then imported ones (shadowed by locals), then the built-ins
     /// (shadowed by both) — `Option` and `Result` enter as definitions
     /// like any other, not as string special cases.
     fn collect(&mut self, hir: &mut HirFile, externs: &[ExternDecl]) {
-        let locals: Vec<(String, EnumDef, Option<Span>)> = hir
+        let locals: Vec<(String, VariantDef, Option<Span>)> = hir
             .items
             .iter()
             .filter_map(|item| {
-                let hir::Item::Enum(decl) = item else {
+                let hir::Item::Variant(decl) = item else {
                     return None;
                 };
                 let variants = decl
@@ -379,7 +379,7 @@ impl Resolver {
                     .collect();
                 Some((
                     decl.name.clone(),
-                    EnumDef {
+                    VariantDef {
                         origin: DeclOrigin::Local(decl.node),
                         generics: decl.generics.clone(),
                         variants,
@@ -389,15 +389,15 @@ impl Resolver {
             })
             .collect();
         for (name, data, span) in locals {
-            self.declare_enum(name, data, span, hir);
+            self.declare_variant(name, data, span, hir);
         }
         for extern_decl in externs {
             if self.resolution.type_ns.contains_key(&extern_decl.name) {
                 continue; // shadowed by a local declaration
             }
-            self.declare_enum(
+            self.declare_variant(
                 extern_decl.name.clone(),
-                EnumDef {
+                VariantDef {
                     origin: DeclOrigin::Imported {
                         from: extern_decl.from.clone(),
                     },
@@ -428,13 +428,13 @@ impl Resolver {
                 hir,
             );
         }
-        for (name, generics, variants) in builtin_enums() {
+        for (name, generics, variants) in builtin_variants() {
             if self.resolution.type_ns.contains_key(&name) {
                 continue; // shadowed by a local or imported declaration
             }
-            self.declare_enum(
+            self.declare_variant(
                 name,
-                EnumDef {
+                VariantDef {
                     origin: DeclOrigin::Builtin,
                     generics: generics.to_string(),
                     variants,
@@ -445,27 +445,33 @@ impl Resolver {
         }
     }
 
-    fn declare_enum(&mut self, name: String, data: EnumDef, span: Option<Span>, hir: &mut HirFile) {
+    fn declare_variant(
+        &mut self,
+        name: String,
+        data: VariantDef,
+        span: Option<Span>,
+        hir: &mut HirFile,
+    ) {
         // A later local declaration of the same name replaces the earlier
         // one in both namespaces (last one wins, as in the analysis).
-        let enum_def = if let Some(&existing) = self.resolution.type_ns.get(&name) {
-            self.resolution.defs[existing].kind = DefKind::Enum(data);
+        let variant_def = if let Some(&existing) = self.resolution.type_ns.get(&name) {
+            self.resolution.defs[existing].kind = DefKind::Variant(data);
             existing
         } else {
-            let enum_def = self.resolution.defs.alloc(Definition {
+            let variant_def = self.resolution.defs.alloc(Definition {
                 name: name.clone(),
-                kind: DefKind::Enum(data),
+                kind: DefKind::Variant(data),
             });
             let value_def = self.resolution.defs.alloc(Definition {
                 name: name.clone(),
-                kind: DefKind::EnumValue { enum_def },
+                kind: DefKind::VariantValue { variant_def },
             });
-            self.resolution.type_ns.insert(name.clone(), enum_def);
+            self.resolution.type_ns.insert(name.clone(), variant_def);
             self.resolution.value_ns.insert(name, value_def);
-            enum_def
+            variant_def
         };
         if let Some(span) = span {
-            hir.source_map.record_def(enum_def, span);
+            hir.source_map.record_def(variant_def, span);
         }
     }
 
@@ -501,7 +507,7 @@ impl Resolver {
             // or-pattern's several tags are match-grade evidence, so they
             // go through `identify` like an arm list and get no licence).
             match subject {
-                Some(enum_def) => {
+                Some(variant_def) => {
                     for arm in &site.arms {
                         self.resolve_position(
                             hir,
@@ -509,7 +515,7 @@ impl Resolver {
                             arm.pattern,
                             position,
                             positions,
-                            enum_def,
+                            variant_def,
                         );
                     }
                 }
@@ -535,13 +541,13 @@ impl Resolver {
         if tags.is_empty() {
             return None;
         }
-        let enums: Vec<(DefId, &EnumDef)> = self
+        let variants: Vec<(DefId, &VariantDef)> = self
             .resolution
             .defs
             .iter()
             .filter_map(|(id, def)| match &def.kind {
-                DefKind::Enum(data) => Some((id, data)),
-                DefKind::EnumValue { .. } => None,
+                DefKind::Variant(data) => Some((id, data)),
+                DefKind::VariantValue { .. } => None,
             })
             .filter(|(id, _)| {
                 // Only names visible after shadowing count: a replaced
@@ -549,8 +555,8 @@ impl Resolver {
                 self.resolution.type_ns.get(&self.resolution.defs[*id].name) == Some(id)
             })
             .collect();
-        let has = |data: &EnumDef, tag: &str| data.variants.iter().any(|v| v.name == tag);
-        if let Some((id, _)) = enums
+        let has = |data: &VariantDef, tag: &str| data.variants.iter().any(|v| v.name == tag);
+        if let Some((id, _)) = variants
             .iter()
             .find(|(_, data)| tags.iter().all(|t| has(data, t)))
         {
@@ -558,7 +564,7 @@ impl Resolver {
         }
         let mut best: Option<(DefId, usize)> = None;
         let mut tied = false;
-        for (id, data) in &enums {
+        for (id, data) in &variants {
             let hits = tags.iter().filter(|t| has(data, t)).count();
             if hits == 0 {
                 continue;
@@ -576,7 +582,7 @@ impl Resolver {
     }
 
     /// Resolves the constructor uses of `pattern` at `position` (of
-    /// `positions`) against `enum_def`, recording a [`Res`] per name node
+    /// `positions`) against `variant_def`, recording a [`Res`] per name node
     /// and an [`UnresolvedUse`] where a near-miss licenses one.
     fn resolve_position(
         &mut self,
@@ -585,28 +591,28 @@ impl Resolver {
         pattern: PatternId,
         position: usize,
         positions: usize,
-        enum_def: DefId,
+        variant_def: DefId,
     ) {
         match &hir.patterns[pattern] {
             Pat::Wildcard | Pat::Literal(_) => {}
             Pat::Or(alts) => {
                 for &alt in alts {
-                    self.resolve_position(hir, site, alt, position, positions, enum_def);
+                    self.resolve_position(hir, site, alt, position, positions, variant_def);
                 }
             }
             Pat::Tuple(elems) => {
                 if positions > 1 {
                     if let Some(&elem) = elems.get(position) {
-                        self.resolve_position(hir, site, elem, 0, 1, enum_def);
+                        self.resolve_position(hir, site, elem, 0, 1, variant_def);
                     }
                 } else {
                     for &elem in elems {
-                        self.resolve_position(hir, site, elem, 0, 1, enum_def);
+                        self.resolve_position(hir, site, elem, 0, 1, variant_def);
                     }
                 }
             }
             Pat::Constructor { path, fields } => {
-                self.resolve_constructor(hir, site, path, fields.as_deref(), enum_def);
+                self.resolve_constructor(hir, site, path, fields.as_deref(), variant_def);
             }
         }
     }
@@ -617,9 +623,9 @@ impl Resolver {
         site: PatternSiteId,
         path: &hir::UnresolvedPath,
         fields: Option<&[hir::FieldPat]>,
-        enum_def: DefId,
+        variant_def: DefId,
     ) {
-        let Some((_, data)) = self.resolution.enum_of(enum_def) else {
+        let Some((_, data)) = self.resolution.variant_of(variant_def) else {
             return;
         };
         let found = data
@@ -627,7 +633,7 @@ impl Resolver {
             .iter()
             .position(|v| v.name == path.name)
             .map(|index| VariantRef {
-                enum_def,
+                variant_def,
                 // One variant per `Case` the parser produced, so this
                 // counts syntax in a file — 4 billion of them would need a
                 // source larger than any file system offers.
@@ -646,11 +652,11 @@ impl Resolver {
                 // Same-domain suggestions only: the candidates are this
                 // enum's variants, never another enum's homonyms.
                 let suggestion = {
-                    // `enum_def` was just read out of the resolution's
+                    // `variant_def` was just read out of the resolution's
                     // own enum table, and nothing removes from it.
                     let (_, data) = self
                         .resolution
-                        .enum_of(enum_def)
+                        .variant_of(variant_def)
                         .expect("the id came from the enum table");
                     nearest(&path.name, data.variants.iter().map(|v| v.name.as_str()))
                 };
@@ -661,7 +667,7 @@ impl Resolver {
                         node: path.node,
                         name: path.name.clone(),
                         kind: UseKind::Case,
-                        against: enum_def,
+                        against: variant_def,
                         tag: None,
                         suggestion,
                     });
@@ -711,10 +717,16 @@ impl Resolver {
                     // declared type, when that type names an enum this
                     // file can see.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
-                        && let Some(nested_enum) = self.enum_of_type(&declared[index].1)
+                        && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                         && let Pat::Constructor { path, fields } = &hir.patterns[*inner]
                     {
-                        self.resolve_constructor(hir, site, path, fields.as_deref(), nested_enum);
+                        self.resolve_constructor(
+                            hir,
+                            site,
+                            path,
+                            fields.as_deref(),
+                            nested_variant,
+                        );
                     }
                 }
                 None => {
@@ -729,7 +741,7 @@ impl Resolver {
                             node: field_pat.node,
                             name: field_pat.name.clone(),
                             kind: UseKind::Field,
-                            against: variant.enum_def,
+                            against: variant.variant_def,
                             tag: Some(variant_name.clone()),
                             suggestion,
                         });
@@ -748,7 +760,7 @@ impl Resolver {
         };
         let mut found: Option<(DefId, String)> = None;
         for (id, def) in self.resolution.defs.iter() {
-            let DefKind::Enum(data) = &def.kind else {
+            let DefKind::Variant(data) = &def.kind else {
                 continue;
             };
             if self.resolution.type_ns.get(&def.name) != Some(&id) {
@@ -764,14 +776,14 @@ impl Resolver {
             }
             found = Some((id, suggestion));
         }
-        if let Some((enum_def, suggestion)) = found {
+        if let Some((variant_def, suggestion)) = found {
             self.resolution.uses.insert(path.node, Res::Unresolved);
             self.resolution.unresolved.push(UnresolvedUse {
                 site,
                 node: path.node,
                 name: path.name.clone(),
                 kind: UseKind::Case,
-                against: enum_def,
+                against: variant_def,
                 tag: None,
                 suggestion,
             });
@@ -781,7 +793,7 @@ impl Resolver {
     /// The enum a declared type text names — a bare (possibly dotted)
     /// identifier, optionally with type arguments; anything else (a union,
     /// an array…) names no single enum. Same rule as the analysis'.
-    fn enum_of_type(&self, ty: &str) -> Option<DefId> {
+    fn variant_of_type(&self, ty: &str) -> Option<DefId> {
         let trimmed = ty.trim();
         let base_len = trimmed
             .bytes()
@@ -837,7 +849,7 @@ fn collect_position_tags<'h>(
 
 /// `Option`/`Result` as declaration identities — the same shapes as the
 /// standard library module and [`crate::analysis`]'s table.
-fn builtin_enums() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
+fn builtin_variants() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
     let field = |name: &str, ty: &str| FieldDecl {
         name: name.to_string(),
         node: None,
@@ -885,7 +897,7 @@ fn builtin_enums() -> Vec<(String, &'static str, Vec<VariantDecl>)> {
 ///
 /// ```
 /// // a real typo resolves; an unrelated name does not
-/// let src = "enum Shape { Circle(radius: number), Empty }\n\
+/// let src = "variant Shape { Circle(radius: number), Empty }\n\
 ///            const v = match (s) { Circel(radius) => radius, Empty => 0 };\n";
 /// let found = ttc::pattern_analyses(src, &[]);
 /// assert_eq!(found.unresolved[0].name, "Circel");

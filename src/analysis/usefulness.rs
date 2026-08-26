@@ -305,7 +305,7 @@ fn usefulness<'a>(
 /// The witness heads for a column no row completes: each missing
 /// constructor by name, or a bare wildcard when there is nothing to name
 /// (an opaque column — its alphabet is unknown, so `_` is the honest
-/// answer). An enum column no arm mentioned at all is missing *every*
+/// answer). A variant column no arm mentioned at all is missing *every*
 /// constructor, and naming them beats printing `_` at the one place the
 /// user can act on.
 fn missing_heads(column: &ColTy<'_>, used: &[String]) -> Vec<Witness> {

@@ -2,7 +2,7 @@
  *
  * The modules below it are unit-tested elsewhere; what only shows up here is
  * how the server *composes* them — which is where the reported bug lived:
- * `Result.` answered with the enum's two constructors instead of, rather
+ * `Result.` answered with the variant's two constructors instead of, rather
  * than alongside, everything the TypeScript language service knows about
  * the standard library namespace.
  *
@@ -178,7 +178,7 @@ const TTX_EDITOR_SOURCE = [
   "declare global {",
   "  namespace JSX { interface IntrinsicElements { main: { children?: unknown } } }",
   "}",
-  "enum State { Ready(value: string), Empty }",
+  "variant State { Ready(value: string), Empty }",
   "declare const state: State;",
   "export const View = () => {",
   "  const label = match (state) {",
@@ -285,8 +285,8 @@ test(
       for (const member of ["toFixed", "toString", "toPrecision"]) {
         assert.ok(labels.includes(member), `missing ${member} in: ${labels}`);
       }
-      // A member access is members only — no enum names, no tt snippets.
-      for (const noise of ["Option", "Result", "match", "enum"]) {
+      // A member access is members only — no variant names, no tt snippets.
+      for (const noise of ["Option", "Result", "match", "variant"]) {
         assert.ok(!labels.includes(noise), `unexpected ${noise} in: ${labels}`);
       }
       const resolved = await resolve("toFixed");
@@ -361,7 +361,7 @@ test(
 /** The legend the server declares — mirrored here to decode the response. */
 const TOKEN_TYPES = [
   "keyword",
-  "enum",
+  "variant",
   "enumMember",
   "variable",
   "property",
@@ -440,7 +440,7 @@ test(
  * ---------------------------------------------------------------------- */
 
 const SHAPE_SOURCE = [
-  "enum Shape { Circle(radius: number), Rect(w: number, h: number), Point }",
+  "variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }",
   "declare const s: Shape;",
   "const area = match (s) {",
   "  Circle(radius) => radius,",
@@ -622,7 +622,7 @@ test(
   { skip, timeout },
   async () => {
     const source = [
-      "enum Shape { Circle(r: number), Square(s: number), Tri(a: number) }",
+      "variant Shape { Circle(r: number), Square(s: number), Tri(a: number) }",
       "export function area(shape: Shape): number {",
       "  return match (shape) {",
       "    Circle(r) => r * r,",
@@ -646,8 +646,8 @@ test(
   { skip, timeout },
   async () => {
     const source = [
-      "enum Conn { Up(value: number), Down }",
-      "enum Mode { Auto(), Manual }",
+      "variant Conn { Up(value: number), Down }",
+      "variant Mode { Auto(), Manual }",
       "const mixed = match (c) { Up(value) => 1, 222 => 2, Down => 3 };",
       "const arity = match (c, m) { (Up(value)) => value, _ => 0 };",
       "",
@@ -671,7 +671,7 @@ test(
     // Parser recovery owns this unambiguous tt near miss and keeps its
     // stable rule identity through the compiler protocol and LSP adapter.
     const source = [
-      "enum Shape { Circle(r: number), Square(s: number) }",
+      "variant Shape { Circle(r: number), Square(s: number) }",
       "export function area(shape: Shape): number {",
       "  return match shape {",
       "    Circle(r) => r,",
@@ -720,7 +720,7 @@ test(
     // diagnostic, so the editor applies an answer rather than guessing one
     // from the message (TASK-213).
     const source = [
-      "enum Shape { Circle(radius: number), Empty }",
+      "variant Shape { Circle(radius: number), Empty }",
       "declare const s: Shape;",
       "const a = match (s) { Circel(radius) => radius, Empty => 0 };",
       "",
@@ -737,7 +737,7 @@ test(
         (d: any) => d.code === "unknown-case",
       );
       // The message states the problem only — the fix travels beside it.
-      assert.equal(diagnostic.message, "enum Shape has no case `Circel`");
+      assert.equal(diagnostic.message, "variant Shape has no case `Circel`");
       assert.equal(covered(source, diagnostic.range), "Circel");
 
       const response = await client.request("textDocument/codeAction", {
@@ -767,7 +767,7 @@ test(
   { skip, timeout },
   async () => {
     const source = [
-      "enum Shape { Circle(radius: number), Rect(w: number, h: number) }",
+      "variant Shape { Circle(radius: number), Rect(w: number, h: number) }",
       "declare const s: Shape;",
       "const a = match (s) {",
       "  Circle(radius) => radius,",

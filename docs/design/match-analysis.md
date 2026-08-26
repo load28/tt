@@ -12,7 +12,7 @@ hover/definition이 소비하는 경로를 규범으로 남긴다.
 ## 1. 문제 — or-pattern binding 위치의 침묵
 
 ```tt
-enum E { A(x: string), B(x: number) }
+variant E { A(x: string), B(x: number) }
 const v = match (e) {
   A(x) | B(x) => x
 };
@@ -49,7 +49,7 @@ seam(`typescript/backend.rs`·`service.rs`) 뒤에 격리. MatchAnalysis도 그
 
 ```
 src/analysis.rs            ← 순수 단계 (probe.rs·sema.rs와 같은 층위)
-   pattern_analyses(source, externs: &[EnumSymbol]) -> PatternAnalyses
+   pattern_analyses(source, externs: &[VariantSymbol]) -> PatternAnalyses
    · 선언 테이블: 로컬 enum > import된 enum > 내장 Option/Result
      (sema의 소진성 해석과 같은 섀도잉·후보 규칙)
    · match마다: subjects(위치별) / arms / coverage
@@ -63,11 +63,11 @@ sema.rs                    ← 소비자 (컴파일 에러): unresolved → TtEr
 engine/language.rs         ← 소비자 (에디터 semantic 표면)
    hover:      TS 서비스 → (없으면) 대안 격리 프로브 → 선언 타입 폴백
    definition: TS 서비스 → (비면) body 참조 → 패턴 binding span들
-   externs 수집: tt_imports + overlay/디스크 + enum_symbols
-                 (CLI가 sema에 extern_enums를 모아 주는 방식의 엔진판)
+   externs 수집: tt_imports + overlay/디스크 + variant_symbols
+                 (CLI가 sema에 extern_variants를 모아 주는 방식의 엔진판)
 ```
 
-- **core에 두는 이유**: sema가 `extern_enums`를 입력으로 받듯 분석기도
+- **core에 두는 이유**: sema가 `extern_variants`를 입력으로 받듯 분석기도
   소스 + 외부 선언만 받는 순수 함수다. 파일 시스템도 TypeScript도
   모른다. 그래서 ttc(sema·CLI)와 엔진(LSP)이 **같은 모델**을 소비할 수
   있고, 툴체인이 없는 환경에서도 항상 계산된다(semantic tokens와 같은
@@ -162,11 +162,11 @@ sema.rs       Coverage → 위치 있는 TtError (문안·오프셋·보고 순�
 
 ```
 Coverage
-  positions:   Vec<Option<CoveredEnum>>  // 위치별 subject, None = 보편 위치(`_`만 쓰인 자리)
+  positions:   Vec<Option<CoveredVariant>>  // 위치별 subject, None = 보편 위치(`_`만 쓰인 자리)
   covered:     Vec<String>               // 단일 match에서 arm이 통째로 덮은 태그 (요약)
   missing:     Vec<Vec<String>>          // witness: 빠진 값을 tt 패턴으로 렌더 (행 = 값, 칸 = 위치)
   unreachable: Vec<usize>                // 죽은 arm의 인덱스 (계산만 — 아래)
-CoveredEnum { name, origin: Local | Imported { from } | Builtin }
+CoveredVariant { name, origin: Local | Imported { from } | Builtin }
 ```
 
 **TASK-103 갱신**: 계산은 이제 `analysis/usefulness.rs`의 Maranget usefulness다.
@@ -177,7 +177,7 @@ arm은 같은 재귀가 답하지만 **보고하지 않는다**: tt에는 경고
 lint를 하드 에러로 바꾸면 지금 컴파일되는 프로그램이 깨진다.
 
 `origin`이 모델에 있는 이유는 에러 문안이 그것을 부르기 때문이다 —
-"enum E" / "built-in enum Option" / "enum T (imported from \"./token.tt\")".
+"variant E" / "built-in variant Option" / "variant T (imported from \"./token.tt\")".
 sema는 이제 자기 후보 표를 갖지 않는다.
 
 규칙 두 가지가 여기서 규범이 된다:
@@ -193,8 +193,8 @@ sema는 이제 자기 후보 표를 갖지 않는다.
 내장 enum(`Option`/`Result`)의 선언도 이 표 하나뿐이다. sema가 태그만 담긴
 사본(`stdlib::BUILTIN_ENUMS`)을 따로 보던 것은 함께 없앴다.
 
-extern 입력의 모양이 둘인 것(컴파일러의 `ExternEnum` — 태그와 지정자,
-에디터의 `EnumSymbol` — 필드 타입까지)은 표 빌더가 흡수한다. 컴파일러
+extern 입력의 모양이 둘인 것(컴파일러의 `ExternVariant` — 태그와 지정자,
+에디터의 `VariantSymbol` — 필드 타입까지)은 표 빌더가 흡수한다. 컴파일러
 경로는 필드 타입이 필요 없으므로 binding 분석을 아예 건너뛴다
 (`Depth::CoverageOnly`) — 소진성 답은 그대로 완전하다.
 

@@ -82,7 +82,7 @@ mod tests {
 
     #[test]
     fn an_arm_an_earlier_one_already_covers_is_hinted() {
-        let src = "enum E { A(x: string), B(y: number) }\n\
+        let src = "variant E { A(x: string), B(y: number) }\n\
                    const v = match (e) { A(x) => x, B(y) => y, A(x: z) => z };\n";
         let found = hints(src);
         assert_eq!(found.len(), 1, "{found:?}");
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn a_live_match_has_nothing_to_say() {
-        let src = "enum E { A(x: string), B(y: number) }\n\
+        let src = "variant E { A(x: string), B(y: number) }\n\
                    const v = match (e) { A(x) => x, B(y) => y };\n";
         assert!(hints(src).is_empty());
     }
@@ -109,15 +109,15 @@ mod tests {
     fn a_guarded_arm_is_never_dead() {
         // The guard may be false, so a later arm for the same case still
         // matches values the guarded one does not.
-        let src = "enum E { A(x: string), B(y: number) }\n\
+        let src = "variant E { A(x: string), B(y: number) }\n\
                    const v = match (e) { A(x) if ok => x, A(x: z) => z, B(y) => y };\n";
         assert!(hints(src).is_empty());
     }
 
     #[test]
     fn a_tuple_combination_an_earlier_arm_covers_is_hinted() {
-        let src = "enum D { N(a: number), S(b: number) }\n\
-                   enum P { F(c: number), G(d: number) }\n\
+        let src = "variant D { N(a: number), S(b: number) }\n\
+                   variant P { F(c: number), G(d: number) }\n\
                    const v = match (x, y) { (N, _) => 1, (S, F) => 2, (S, G) => 3, (N, F) => 4 };\n";
         let found = hints(src);
         assert_eq!(found.len(), 1, "{found:?}");

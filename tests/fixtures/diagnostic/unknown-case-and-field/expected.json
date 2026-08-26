@@ -5,7 +5,7 @@
     "endCol": 36,
     "endLine": 4,
     "line": 4,
-    "message": "enum Shape has no case `Circel`",
+    "message": "variant Shape has no case `Circel`",
     "suggestions": [
       {
         "edit": {
@@ -25,7 +25,7 @@
     "endCol": 43,
     "endLine": 5,
     "line": 5,
-    "message": "enum Shape: case `Circle` has no field `radiuz`",
+    "message": "variant Shape: case `Circle` has no field `radiuz`",
     "suggestions": [
       {
         "edit": {

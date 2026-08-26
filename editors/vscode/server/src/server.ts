@@ -19,7 +19,7 @@
  *   second opinion here would answer differently from the compiler
  *   (TASK-107). Those requests are text-based, so they work on a buffer
  *   mid-keystroke and with no TypeScript toolchain installed.
- * - The **declaration surface** — which enums are visible (local,
+ * - The **declaration surface** — which variants are visible (local,
  *   imported, built-in), their cases and fields, and where the `match`
  *   sites are — is the compiler's answer too (`declarations`,
  *   `declarationsOf`): completion lists, document symbols and the
@@ -185,7 +185,7 @@ interface Analyzed {
 const analysisCache = new Map<string, Analyzed>();
 
 /** The text-shape half: the masked buffer for cursor-context questions
- * (member access, word boundaries). tt *semantics* — which enums are
+ * (member access, word boundaries). tt *semantics* — which variants are
  * visible, where the match sites are — are the compiler's answer
  * ([declarationsOf]), not this file's. */
 function analyze(doc: TextDocument): Analyzed {
@@ -203,7 +203,7 @@ const declCache = new Map<
   { version: number; decls: engine.EngineDeclarations }
 >();
 
-/** The compiler's declaration surface for the buffer: visible enums
+/** The compiler's declaration surface for the buffer: visible variants
  * (local, imported, built-in — the compiler's shadowing) and match sites.
  * One implementation of the rules, the compiler's; empty when the engine
  * cannot answer, and every consumer degrades quietly. */
@@ -220,14 +220,14 @@ async function declarationsOf(
         doc.getText(),
         logEngine,
       )
-    : { enums: [], matches: [] };
+    : { variants: [], matches: [] };
   declCache.set(doc.uri, { version: doc.version, decls });
   return decls;
 }
 
-/** Render a case the way completion shows it: `Enum.Tag(field: ty, ...)`. */
+/** Render a case the way completion shows it: `Variant.Tag(field: ty, ...)`. */
 function caseSignature(
-  e: engine.EngineEnumDecl,
+  e: engine.EngineVariantDecl,
   c: engine.EngineCaseDecl,
 ): string {
   if (c.unit && c.fields.length === 0) return `${e.name}.${c.tag}`;
@@ -299,7 +299,7 @@ let warnedTypedCheckUnavailable = false;
 /**
  * Adds the typed diagnostics that say something new.
  *
- * The two passes overlap: enum exhaustiveness is decided from the text by
+ * The two passes overlap: variant exhaustiveness is decided from the text by
  * `--check` and from the type by the typed pass, and both report it at the
  * same place. One squiggle per position: the authoritative compiler result
  * replaces the matching provisional checker result before the generation is
@@ -667,16 +667,16 @@ documents.onDidClose((e) => {
 
 const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
-    label: "enum",
+    label: "variant",
     kind: CompletionItemKind.Snippet,
-    detail: "tt enum declaration",
+    detail: "tt variant declaration",
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "tt 태그드 유니언 선언. 케이스에 페이로드 괄호가 있거나 제네릭이 있어야 tt enum입니다.",
+        "tt 태그드 유니언 선언. 유닛 케이스는 괄호 없이 값으로 선언할 수 있습니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
-    insertText: "enum ${1:Name} {\n\t${2:Case}(${3:field}: ${4:number}),\n\t${5:Unit},\n}",
+    insertText: "variant ${1:Name} {\n\t${2:Case}(${3:field}: ${4:number}),\n\t${5:Unit},\n}",
   },
   {
     label: "match",
@@ -685,7 +685,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`kind` 태그로 분기하는 match 표현식. `_` 없는 match는 같은 파일·import한 tt enum에 대해 소진성이 검사됩니다.",
+        "`kind` 태그로 분기하는 match 표현식. `_` 없는 match는 같은 파일·import한 tt variant에 대해 소진성이 검사됩니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "match (${1:value}) {\n\t$0\n}",
@@ -826,7 +826,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   if (!doc) return [];
   const { masked } = analyze(doc);
   const offset = doc.offsetAt(params.position);
-  const visible = (await declarationsOf(doc)).enums;
+  const visible = (await declarationsOf(doc)).variants;
 
   // `Enum.` member access → the enum's case constructors, then everything
   // else TypeScript offers on that same object. Both halves are needed:
@@ -893,10 +893,10 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     kind: CompletionItemKind.Enum,
     detail:
       e.origin === "builtin"
-        ? `내장 enum ${e.name}${e.generics}`
+        ? `내장 variant ${e.name}${e.generics}`
         : e.origin === "imported"
-          ? `enum ${e.name}${e.generics}${e.specifier ? ` — ${e.specifier}` : ""}`
-          : `enum ${e.name}${e.generics}`,
+          ? `variant ${e.name}${e.generics}${e.specifier ? ` — ${e.specifier}` : ""}`
+          : `variant ${e.name}${e.generics}`,
     sortText: `0${e.name}`,
   }));
   const ttItems = items.concat(KEYWORD_SNIPPETS);
@@ -985,7 +985,7 @@ connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
 });
 
 function constructorItem(
-  e: engine.EngineEnumDecl,
+  e: engine.EngineVariantDecl,
   c: engine.EngineCaseDecl,
 ): CompletionItem {
   const unit = c.unit && c.fields.length === 0;
@@ -1025,7 +1025,7 @@ connection.onHover(async (params) => {
           value:
             "```tt\nmatch (값) { 패턴 => 본문, ... }\n```\n" +
             "tt match 표현식 — 값의 `kind` 필드로 분기합니다. " +
-            "`_` 없는 match는 같은 파일·import한 tt enum(내장 `Option`/`Result` 포함)에 대해 소진성이 검사됩니다.",
+            "`_` 없는 match는 같은 파일·import한 tt variant(내장 `Option`/`Result` 포함)에 대해 소진성이 검사됩니다.",
         },
         range: { start: doc.positionAt(w.start), end: doc.positionAt(w.end) },
       };
@@ -1106,7 +1106,7 @@ connection.onDefinition(async (params) => {
     if (sym) return null;
   }
 
-  // Everything else — ordinary TypeScript symbols, and built-in enum
+  // Everything else — ordinary TypeScript symbols, and built-in variant
   // names the user may have imported from the std module — is the
   // engine's answer, already in `.tt` coordinates.
   const fsPath = enginePath(doc);
@@ -1147,7 +1147,7 @@ connection.onRenameRequest(async (params) => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
 
-  // tt names (enums, case tags, payload fields) are compiled into emitted
+  // tt names (variants, case tags, payload fields) are compiled into emitted
   // `kind` strings and destructuring keys — renaming one needs tt-aware
   // rewriting across both worlds, so refuse rather than let TypeScript do
   // half the job. The engine decides what is a tt name; this server does
@@ -1194,7 +1194,7 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
   if (!doc) return [];
   const decls = await declarationsOf(doc);
   const out: DocumentSymbol[] = [];
-  for (const e of decls.enums) {
+  for (const e of decls.variants) {
     // Only this file's declarations belong in its outline.
     if (e.origin !== "local" || !e.span || !e.nameSpan) continue;
     const range = {

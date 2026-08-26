@@ -6,7 +6,7 @@ TASK-101의 검토 기록이다. **제안이며 규범이 아니다** — 채택
 TASK-096(typed match analysis)·TASK-097(coverage 단일 원천)은 `match`를
 "필요할 때마다 부분 추론"에서 **타입이 붙은 공통 분석 결과**로 끌어올렸다.
 이 문서는 같은 질문을 나머지 구문 전체에 던진다: tt이 러스트에서 가져온
-구문들(`enum`·`match`·`try`·let-else·`if let`·`|>`/`flow`·`result`·`val`)이
+구문들(`variant`·`match`·`try`·let-else·`if let`·`|>`/`flow`·`result`·`val`)이
 **rustc가 자기 구문에 대해 아는 만큼**을 ttc도 아는가, 그리고 그 앎이
 컴파일 정확도와 LSP(타입 추론·자동완성·이동·이름 바꾸기)로 이어지는가.
 
@@ -46,7 +46,7 @@ TASK-096(typed match analysis)·TASK-097(coverage 단일 원천)은 `match`를
 
 | 구문 | 바인딩 타입(hover/추론) | tt 이름 hover | definition | rename | 자동완성 | tt 진단 |
 |---|---|---|---|---|---|---|
-| `enum` 선언 | — | `~` 에디터 shadow | `~` shadow | `✗` 거부 | `Enum.` 멤버는 `✓`(TS) | 중복 케이스·필드 타입 `✓` |
+| `variant` 선언 | — | `~` 에디터 shadow | `~` shadow | `✗` 거부 | 생성자 객체 멤버는 `✓`(TS) | 중복 케이스·필드 타입 `✓` |
 | `match` | `✓` 체커→프로브→폴백 | `~` shadow(오탐 있음) | `~` shadow | `✗` 태그·필드 | `~` 암 태그(shadow) | 소진성·중복·or-집합 `✓` / 미지의 태그 `✗` |
 | let-else | `✓` (체커, 매핑됨) | `✗` | `✗` | `✗` | `✗` | 발산·사용 위치만 |
 | `if let` | `✓` (체커, 매핑됨) | `✗` | `✗` | `✗` | `✗` | 사용 위치만 |
@@ -84,7 +84,7 @@ tt에는 TypeScript가 모르는 이름 공간이 셋 있다: **enum 이름**, *
 않는다.** rustc는 그 반대다 — 패턴 경로와 필드를 먼저 해석하고(E0599·E0026·
 E0023), 해석에 실패하면 거기서 멈춘다.
 
-실측(`enum Shape { Circle(radius: number), Empty }`):
+실측(`variant Shape { Circle(radius: number), Empty }`):
 
 | 쓴 것 | ttc | 실제로 나오는 것 |
 |---|---|---|
@@ -93,7 +93,7 @@ E0023), 해석에 실패하면 거기서 멈춘다.
 | `match (s) { Circel(r) => r, Empty => 0 }` | 에러 **없음** | `TS2678` — 글루(`case "Circel":`) 위 |
 
 세 번째 줄이 가장 나쁘다. 태그 오타 하나로 후보 표에서 **모든 태그를 포함하는
-enum이 사라지고**, 그 결과 `coverage`가 `None`이 되어 — 빠진 `Circle` 케이스를
+variant가 사라지고**, 그 결과 `coverage`가 `None`이 되어 — 빠진 `Circle` 케이스를
 포함해 — **소진성 검사가 통째로 조용히 꺼진다.** tt의 간판 검사가 오타 하나에
 무력화되고, 사용자는 그 사실을 통보받지 못한다. (typed 경로에서는 `TagQuery`가
 좁혀진 타입으로 답하므로 "missing Circle"은 잡힌다. 오타 자체는 여전히 `TS2678`이다.)
@@ -101,7 +101,7 @@ enum이 사라지고**, 그 결과 `coverage`가 `None`이 되어 — 빠진 `Ci
 필요한 것은 타입이 아니라 **구조**다 — 후보 표는 이미 `analysis.rs`에 있다.
 계약 위반 없이 ttc가 직접 보고할 수 있는 에러인데 보고하지 않고 있는 것이다.
 
-### GAP-2 — enum 선언은 매핑 없는 글루다 (LSP 사각지대)
+### GAP-2 — variant 선언은 매핑 없는 글루다 (LSP 사각지대)
 
 `codegen/enums.rs::emit_enum`은 선언 전체를 `format!`으로 **합성해**
 `push_lit`으로 넣는다. `ttc --emit-map`으로 확인하면 위 파일의 첫 매핑은
@@ -133,13 +133,13 @@ enum이 사라지고**, 그 결과 `coverage`가 `None`이 되어 — 빠진 `Ci
 문제는 셋이다.
 
 1. **규칙이 다르다.** `inferEnum`은 "태그를 하나라도 가진 소유자가 유일하면
-   그 enum"이다. `analysis.rs`의 규범 규칙("모든 arm 태그를 포함하는 후보 중
+   그 variant"이다. `analysis.rs`의 규범 규칙("모든 arm 태그를 포함하는 후보 중
    커버 arm을 만족시키는 것, 없으면 결손 최소")과 다르므로, **hover가 컴파일러의
    판단과 다른 답을 할 수 있다.**
-2. **오탐이 구조적이다.** `symbolAt`은 match 본문 안에서 "추론된 enum, 없으면
-   **아무 enum이나**"의 태그와 이름이 같은 식별자를 케이스로 단정한다. 케이스
-   이름과 같은 지역 변수(`Empty`)를 hover하면 enum 케이스 설명이 뜬다. 파일
-   어디서든 enum 이름과 같은 식별자도 마찬가지로 가로챈다.
+2. **오탐이 구조적이다.** `symbolAt`은 match 본문 안에서 "추론된 variant, 없으면
+   **아무 variant나**"의 태그와 이름이 같은 식별자를 케이스로 단정한다. 케이스
+   이름과 같은 지역 변수(`Empty`)를 hover하면 variant 케이스 설명이 뜬다. 파일
+   어디서든 variant 이름과 같은 식별자도 마찬가지로 가로챈다.
 3. **덮는 범위가 match뿐이다.** let-else·`if let`의 패턴 태그는 Rust 쪽
    semantic tokens가 `enumMember`로 **색칠은 하면서**(`engine/tokens.rs`) hover는
    빈손이다. 패턴 필드명(`Some(value: user)`의 `value`)은 어느 구문에서도
@@ -274,7 +274,7 @@ ttc: shape.tt:14:16: case Shape.Circle has no field `radiuz` — did you mean `r
 - 답의 우선순위 표를 규범으로 못박는다(match-analysis.md §3의 확장):
   **tt 이름 = tt 소유, 그 밖 = 체커 소유.** shadow 층의 "아무 enum이나" 폴백은
   없앤다(모르면 답하지 않는다).
-- 대안으로 검토했으나 기각: *enum 선언에 emit-map을 붙여 tsc가 답하게 하기* —
+- 대안으로 검토했으나 기각: *variant 선언에 emit-map을 붙여 tsc가 답하게 하기* —
   패턴 자리에는 TS 대응물이 없어 rename이 원리상 완전해질 수 없고(§GAP-2),
   한 소스 span이 `type`/`const` 두 곳에 대응해 편집 중복 제거 규칙이 새로
   필요하다. 매핑은 이 문제를 풀지 못한다.
@@ -410,7 +410,7 @@ ttc는 타입을 모른다.** 이것이 유일하고 근본적인 차이이고, 
 1. **배치(untyped) 빌드에서는 절반만 답한다.** 이름 해석·필드·소진성은 답하고,
    "이 스크루티니가 정말 그 enum인가"는 답하지 않는다. rustc는 이 구분이 없다.
 2. **세계가 닫혀 있지 않다.** rustc의 enum은 변형 목록이 닫혀 있지만, tt의
-   스크루티니는 손으로 쓴 TS 유니언이거나 여러 tt enum의 합일 수 있다. 그래서
+   스크루티니는 손으로 쓴 TS 유니언이거나 여러 tt variant의 합일 수 있다. 그래서
    resolve는 **후보를 하나도 못 찾으면 침묵**해야 한다 — 오탐은 통과 계약보다
    비싸다. rustc에는 이 규칙이 필요 없다.
 3. **witness의 타입 표현은 선언 텍스트다.** `Circle(_)`까지는 tt이 만들 수

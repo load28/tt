@@ -56,7 +56,7 @@ pub(crate) struct LiteralQuery {
 }
 
 /// "Which case tags does the scrutinee's type still allow?" — the same
-/// question as [`LiteralQuery`], for a tt enum. The enum lowers to a
+/// question as [`LiteralQuery`], for a tt variant. The variant lowers to a
 /// discriminated union, so the answer is the `kind` literals of the type's
 /// constituents at that point.
 #[derive(Debug, Clone, PartialEq, Eq)]

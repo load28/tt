@@ -1812,7 +1812,7 @@ mod tests {
     #[test]
     fn every_core_primitive_gets_one_region() {
         let (file, _core) = evaluation(
-            "enum E { A(value: number), B }\n\
+            "variant E { A(value: number), B }\n\
              import { load } from \"./load.tt\";\n\
              function f(e: E) {\n\
                try load();\n\
@@ -1861,7 +1861,7 @@ mod tests {
     #[test]
     fn a_decision_region_has_switch_arms_and_a_join() {
         let (file, core) = evaluation(
-            "enum E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n",
+            "variant E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n",
         );
         let region = file
             .regions
@@ -1882,7 +1882,7 @@ mod tests {
     #[test]
     fn nested_decisions_share_the_outer_host_plan() {
         let (file, core) = evaluation(
-            "enum E { A, B }\nconst value = match (outer) { A => match (inner) { A => 1, B => 2 }, B => 0 };\n",
+            "variant E { A, B }\nconst value = match (outer) { A => match (inner) { A => 1, B => 2 }, B => 0 };\n",
         );
         let plan = plan(&file, &core);
         let values = plan
@@ -1902,7 +1902,7 @@ mod tests {
     #[test]
     fn a_call_argument_is_composed_by_its_host_owner() {
         let (file, core) =
-            evaluation("enum E { A, B }\nconst out = render(match (e) { A => 1, B => 2 });\n");
+            evaluation("variant E { A, B }\nconst out = render(match (e) { A => 1, B => 2 });\n");
         let placement = &file
             .regions
             .iter()
@@ -1995,7 +1995,7 @@ mod tests {
     #[test]
     fn validation_rejects_a_normal_path_without_its_result() {
         let (mut file, _core) = evaluation(
-            "enum E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n",
+            "variant E { A, B }\nfunction f(e: E) { return match (e) { A => 1, B => 2 }; }\n",
         );
         let region = file
             .regions
@@ -2011,7 +2011,7 @@ mod tests {
 
     #[test]
     fn validation_rejects_an_out_of_region_target() {
-        let (mut file, _core) = evaluation("enum E { A(value: number), B }\n");
+        let (mut file, _core) = evaluation("variant E { A(value: number), B }\n");
         file.regions[0].blocks[0].terminator = EvalTerminator::Goto(EvalBlockId(u32::MAX));
         assert!(matches!(
             file.validate(),

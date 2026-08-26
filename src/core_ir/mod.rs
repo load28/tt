@@ -374,7 +374,7 @@ mod tests {
 
     #[test]
     fn every_pattern_surface_is_one_decision_ir() {
-        let source = "enum E { A(value: number), B }\n\
+        let source = "variant E { A(value: number), B }\n\
             function f(e: E) {\n\
               if let A(value) = e { use(value); }\n\
               const A(value) = e else { return 0; };\n\
@@ -426,7 +426,7 @@ mod tests {
 
     #[test]
     fn resolved_patterns_carry_definition_identity() {
-        let source = "enum E { A(value: number), B }\n\
+        let source = "variant E { A(value: number), B }\n\
             const n = match (e) { A(value) => value, B => 0 };\n";
         let core = lower(source);
         let decision = core
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn match_dispatch_is_fixed_before_target_lowering() {
-        let source = "enum E { A, B }\n\
+        let source = "variant E { A, B }\n\
             const tagged = match (e) { A => 1, B => 2 };\n\
             const literal = match (n) { 0 => 1, _ => 2 };\n\
             const nested = match (e) { A => 1, B if ready => 2, _ => 3 };\n";
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn statement_decision_kind_is_fixed_before_target_lowering() {
-        let source = "enum E { A(value: number), B }\n\
+        let source = "variant E { A(value: number), B }\n\
             if let A(value) = e { use(value); }\n\
             const A(value) | B = e else { return; };\n";
         let core = lower(source);

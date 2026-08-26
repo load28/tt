@@ -6018,7 +6018,7 @@
           "include": "#tt-val-declaration-modifier"
         },
         {
-          "include": "#tt-enum-declaration"
+          "include": "#tt-variant-declaration"
         },
         {
           "include": "#tt-if-let"
@@ -6095,18 +6095,18 @@
         }
       }
     },
-    "tt-enum-declaration": {
-      "name": "meta.enum.declaration.tt",
-      "begin": "(?<![_$[:alnum:]])(?<!const )(?<!declare )(?:\\b(export)\\s+)?\\b(enum)\\s+([$_[:alpha:]][$_[:alnum:]]*)",
+    "tt-variant-declaration": {
+      "name": "meta.variant.declaration.tt",
+      "begin": "(?<![_$[:alnum:]])(?:\\b(export)\\s+)?\\b(variant)\\s+([$_[:alpha:]][$_[:alnum:]]*)",
       "beginCaptures": {
         "1": {
           "name": "keyword.control.export.ts"
         },
         "2": {
-          "name": "storage.type.enum.ts"
+          "name": "storage.type.variant.tt"
         },
         "3": {
-          "name": "entity.name.type.enum.ts"
+          "name": "entity.name.type.variant.tt"
         }
       },
       "end": "(?<=\\})|(?=[^\\s<{])",
@@ -6118,12 +6118,12 @@
           "include": "#type-parameters"
         },
         {
-          "include": "#tt-enum-body"
+          "include": "#tt-variant-body"
         }
       ]
     },
-    "tt-enum-body": {
-      "name": "meta.enum.body.tt",
+    "tt-variant-body": {
+      "name": "meta.variant.body.tt",
       "begin": "\\{",
       "end": "\\}",
       "beginCaptures": {

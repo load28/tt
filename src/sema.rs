@@ -14,11 +14,11 @@
 //! delegated to tsc — in particular exhaustiveness, which this module
 //! *reports* but no longer computes: [`crate::analysis`] owns the subject
 //! table and the coverage rule, and sema turns its answer into positioned
-//! errors after the walk (so a match may precede the enum it matches on).
+//! errors after the walk (so a match may precede the variant it matches on).
 //! One rule, one implementation — see `docs/design/match-analysis.md` §5.
 //!
 //! Checks performed:
-//! - `enum`: no duplicate case tags; with verification enabled, every field
+//! - `variant`: no duplicate case tags; with verification enabled, every field
 //!   type parses as a TypeScript type fragment (via [`crate::verify`]).
 //! - `match`: the wildcard `_` arm is last; no arm repeats a tag already
 //!   covered by an unguarded arm (guarded arms may share tags with each
@@ -45,19 +45,19 @@
 //!   `continue`; a CFG answer) — otherwise the destructuring after the
 //!   block would run with the case unproven.
 //! - exhaustiveness: a wildcard-free match whose arm tags all belong to an
-//!   enum declared in this file, an imported declaration
-//!   ([`crate::Options::extern_enums`], collected by the CLI from direct
-//!   relative `.tt` imports), or a built-in enum (`Option`, `Result`; the
+//!   variant declared in this file, an imported declaration
+//!   ([`crate::Options::extern_variants`], collected by the CLI from direct
+//!   relative `.tt` imports), or a built-in variant (`Option`, `Result`; the
 //!   analysis' declaration table) — must cover every case of that
-//!   enum with unguarded arms (a guard may be false, so guarded arms
-//!   identify the enum but cover nothing). A tuple match must cover the
+//!   variant with unguarded arms (a guard may be false, so guarded arms
+//!   identify the variant but cover nothing). A tuple match must cover the
 //!   cartesian product of its positions. Same-name shadowing runs
 //!   local > imported > built-in. Matches whose tags belong to no known
-//!   enum (hand-written unions, unresolved imports) are not checked — ttc
+//!   variant (hand-written unions, unresolved imports) are not checked — ttc
 //!   has no type information for them. The whole computation lives in
 //!   [`crate::analysis`]; what is here is the reporting.
 
-use crate::analysis::{CoveredEnum, NameKind, Origin, has_nested};
+use crate::analysis::{CoveredVariant, NameKind, Origin, has_nested};
 use crate::ast::*;
 use crate::diagnostics::{
     DiagnosticCode, MatchSite, non_exhaustive_message, non_exhaustive_suggestions,
@@ -67,8 +67,8 @@ use crate::verify;
 
 /// Checks a whole program and returns **every** tt-level violation, in
 /// source order. `verify` enables swc validation of field types; `externs`
-/// are enum declarations collected from imported modules
-/// ([`crate::Options::extern_enums`]). With `defer_to_checker` the two
+/// are variant declarations collected from imported modules
+/// ([`crate::Options::extern_variants`]). With `defer_to_checker` the two
 /// exhaustiveness passes are skipped, because a TypeScript backend answers
 /// the question better than this file's declaration table can
 /// ([`crate::Options::defer_to_checker`]); every other tt-level rule is
@@ -118,8 +118,8 @@ pub(crate) fn check_all(
 /// a replacement for. This function is the wording.
 fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut Vec<TtError>) {
     for unresolved in &analyses.unresolved {
-        let described = describe(&CoveredEnum {
-            name: unresolved.enum_name.clone(),
+        let described = describe(&CoveredVariant {
+            name: unresolved.variant_name.clone(),
             origin: unresolved.origin.clone(),
         });
         // The message states the problem; the replacement is carried as a
@@ -358,7 +358,7 @@ impl Checker {
         for segment in &program.segments {
             match segment {
                 Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
-                Segment::Enum(decl) => self.check_enum(decl),
+                Segment::Variant(decl) => self.check_variant(decl),
                 Segment::Match(expr) => self.check_match(expr),
                 Segment::TupleMatch(expr) => self.check_tuple_match(expr),
                 Segment::Try(stmt) => self.check_try(stmt, place),
@@ -582,7 +582,7 @@ impl Checker {
         self.visit_program(&block.value, Ctx::Expr, Place::ValueRegion);
     }
 
-    fn check_enum(&mut self, decl: &EnumDecl) {
+    fn check_variant(&mut self, decl: &VariantDecl) {
         let mut seen: Vec<&str> = Vec::new();
         for case in &decl.cases {
             if seen.contains(&case.tag.as_str()) {
@@ -590,9 +590,9 @@ impl Checker {
                     TtError::span(
                         case.tag_off,
                         case.tag_off + case.tag.len(),
-                        format!("enum {}: duplicate case \"{}\"", decl.name, case.tag),
+                        format!("variant {}: duplicate case \"{}\"", decl.name, case.tag),
                     )
-                    .code(DiagnosticCode::EnumDuplicateCase),
+                    .code(DiagnosticCode::VariantDuplicateCase),
                 );
                 continue;
             }
@@ -609,11 +609,11 @@ impl Checker {
                                     field.ty_off,
                                     field.ty_off + field.ty.len(),
                                     format!(
-                                        "enum {}: invalid type for field `{}`: {}",
+                                        "variant {}: invalid type for field `{}`: {}",
                                         decl.name, field.name, msg
                                     ),
                                 )
-                                .code(DiagnosticCode::EnumInvalidFieldType),
+                                .code(DiagnosticCode::VariantInvalidFieldType),
                             );
                         }
                     }
@@ -998,13 +998,13 @@ fn report_coverage(
 
 /// How an error names the enum a match is over — the declaration's origin,
 /// so "which `Token`?" is answerable from the message alone.
-fn describe(subject: &CoveredEnum) -> String {
+fn describe(subject: &CoveredVariant) -> String {
     match &subject.origin {
-        Origin::Local => format!("enum {}", subject.name),
-        Origin::Builtin => format!("built-in enum {}", subject.name),
+        Origin::Local => format!("variant {}", subject.name),
+        Origin::Builtin => format!("built-in variant {}", subject.name),
         Origin::Imported { from: Some(from) } => {
-            format!("enum {} (imported from \"{from}\")", subject.name)
+            format!("variant {} (imported from \"{from}\")", subject.name)
         }
-        Origin::Imported { from: None } => format!("imported enum {}", subject.name),
+        Origin::Imported { from: None } => format!("imported variant {}", subject.name),
     }
 }

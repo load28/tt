@@ -116,7 +116,7 @@ TypeScript 코드에서 사용하면 됩니다.
 앞서 본 `switch` 문을 tt로 작성하면 다음과 같습니다.
 
 ```tt
-enum Shape {
+variant Shape {
   Circle(radius: number),
   Rect(width: number, height: number),
 }
@@ -128,7 +128,7 @@ const area = (shape: Shape): number =>
 ```
 
 ```text
-error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing "Rect"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
  --> shape.tt:7:3
   |
 7 |   match (shape) {
@@ -182,7 +182,7 @@ tt가 예외 던지기를 금지하는 것은 아닙니다. 여전히 TypeScript
 ## 지금 tt는 어디까지 왔나
 
 tt는 아직 초기 단계입니다. 컴파일러는 Rust로 작성되어 있습니다. 언어가 추가하는
-것은 일곱 가지 구문과 하나의 바인딩 수식자뿐입니다. `enum`, `match`, `try`,
+것은 일곱 가지 구문과 하나의 바인딩 수식자뿐입니다. `variant`, `match`, `try`,
 `let-else`, `if let`, `|>`와 `flow`, `result` 블록, 그리고 `val`입니다. 아직
 프로덕션 사용을 권할 단계는 아닙니다.
 
