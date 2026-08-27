@@ -63,7 +63,12 @@ export function ReferencePage({ language, topic }: { language: Language; topic: 
         </div>
 
         <div className="detail-grid">
-          <DetailList title={language === 'ko' ? '기능' : 'Features'} items={item.works[language]} />
+          <DetailList
+            title={topic === 'install'
+              ? (language === 'ko' ? '지원 범위' : 'Supported setup')
+              : (language === 'ko' ? '기능' : 'Features')}
+            items={item.works[language]}
+          />
         </div>
 
         {'sections' in item && (

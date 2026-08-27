@@ -1,20 +1,6 @@
 # tt 설치
 
-권장 설치 명령에는 [Bun](https://bun.sh/)이 필요합니다. TT 패키지와 프리빌트
-`ttc` 컴파일러는 npm 공식 배포본을 설치합니다.
-
-`ttc`는 TypeScript 7을 구동하며, 그것을 **프로젝트 자신의 `node_modules`**
-에서만 찾습니다 — 빌드가 쓰는 바로 그 패키지입니다. TT와 함께 설치합니다.
-
-```sh
-bun add -d typescript@7.1.0-dev.20260826.1
-```
-
-내보낼 환경 변수도, 에디터 전용 설정도 없습니다. 확장은 프로젝트의 `ttc`를
-띄우고, 그 `ttc`가 프로젝트의 TypeScript를 찾습니다. 선언 방출
-(`ttc --types`와 에디터의 `.tt.d.ts` 사이드카)과 content mapper(`.ts`가
-`.tt`을 디스크 생성물 없이 import하는 경로)는 TypeScript 7.1에서 들어온
-API를 사용하며, 나머지 기능은 7.0에서 모두 동작합니다.
+권장 설치 명령에는 [Bun](https://bun.sh/)이 필요합니다.
 
 ## 자동 설치
 
@@ -34,15 +20,12 @@ bunx @load28/create-tt@0.3.0 init
 bun run tt:check
 ```
 
-`init`은 `package.json`에서 Vite, Rollup, Rolldown, webpack, Rspack,
-esbuild, Farm을 감지합니다. `0.3.0` 설치기는 `@load28/tt-lang`과
-`@load28/unplugin-tt`의 Stable 채널과 TT용 스크립트를 추가합니다. npm TypeScript
-패키지는 추가하지 않으므로 위와 같이 `typescript@7.1.0-dev.20260826.1`을 직접 설치합니다.
-선언형 설정을 쓰는 번들러에는 기존 설정을 합성하는
-`tt.*.config.mjs` 래퍼를 생성하며 사용자 설정 소스는 고치지 않습니다. 생성된
-래퍼는 `bun run tt:dev` 또는 `bun run tt:build`로 사용합니다. esbuild 빌드
-스크립트는 임의의 JavaScript이므로 자동 수정하지 않고 추가할 플러그인 한 줄을
-출력합니다.
+`init`이 수행하는 작업:
+
+- Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm 감지
+- `@load28/tt-lang`, `@load28/unplugin-tt`, TypeScript, TT 스크립트 추가
+- 선언형 번들러용 `tt.*.config.mjs` 생성
+- esbuild에 추가할 플러그인 코드 출력
 
 비대화형 실행 옵션은 다음과 같습니다.
 
@@ -53,35 +36,8 @@ bunx @load28/create-tt@0.3.0 init --no-install
 bunx @load28/create-tt@0.3.0 init --package-manager bun
 ```
 
-새 프로젝트는 항상 Bun을 사용합니다. 기존 프로젝트는 `--package-manager`를
-지정하지 않으면 `packageManager` 필드나 lockfile의 패키지 매니저를 유지합니다.
-
-## 저장소 개발: 로컬 빌드 패키지를 레지스트리로 설치
-
-컴파일러를 개발할 때는 의존성을 `file:` 경로로 바꾸지 않고 실제 npm 호환
-레지스트리를 사용합니다. 첫 번째 터미널에서 Verdaccio를 실행합니다.
-
-```sh
-bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
-```
-
-현재 OS와 CPU용 `ttc`를 빌드하고 `@load28/tt-lang`, 플랫폼 바이너리, `@load28/unplugin-tt`,
-`@load28/create-tt`을 로컬 레지스트리에 게시합니다.
-
-```sh
-bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
-```
-
-게시 스크립트가 다음 형태의 정확한 생성 명령을 출력합니다.
-
-```sh
-BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
-  bunx @load28/create-tt@latest my-app --registry http://127.0.0.1:4873
-```
-
-`--registry`는 같은 레지스트리를 `bun install`에 넘기고 새 프로젝트의
-`bunfig.toml`에도 기록합니다. Verdaccio는 로컬에서 빌드한 TT 패키지를 제공하고
-Vite 같은 외부 패키지는 프록시합니다.
+새 프로젝트는 Bun을 사용합니다. 기존 프로젝트는 `packageManager` 필드나
+lockfile의 패키지 매니저를 유지합니다.
 
 ## 컴파일러 수동 설치
 
@@ -175,12 +131,7 @@ code --install-extension ./tt-language-<버전>.vsix
 code --install-extension ./tt-typescript-preview-<버전>-<플랫폼>.vsix
 ```
 
-두 번째 VSIX가 에디터용 TypeScript 자체입니다. tt은 성능을 위해
-TypeScript 7(네이티브 컴파일러)을 구동하고, 그중 7.1 라인의 API —
-`.ts`가 `.tt`을 디스크 생성물 없이 import하게 하는 content mapper — 를
-사용합니다. Marketplace의 TypeScript 확장은 아직 이 API를 싣지 않았으므로,
-같은 나이틀리 릴리스의 빌드로 TypeScript 확장을 직접 설치하고 `useTsgo`
-설정을 켜서 TypeScript 확장이 최신 API로 `.ts`/`.tsx`를 서빙하게 합니다.
+두 VSIX를 설치한 뒤 에디터에서 TypeScript 7을 사용하도록 설정합니다.
 
 ```jsonc
 // .vscode/settings.json (또는 사용자 설정)
@@ -188,9 +139,4 @@ TypeScript 7(네이티브 컴파일러)을 구동하고, 그중 7.1 라인의 AP
 "typescript.experimental.useTsgo": true
 ```
 
-TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
-`useTsgo` 설정도 필요 없어집니다.
-
-프로젝트 루트를 엽니다. 확장은 프로젝트가 설치한 `ttc`를 띄우고 그 `ttc`는
-프로젝트가 설치한 TypeScript를 쓰므로, 에디터와 빌드가 다른 TypeScript를 쓰는
-상황이 성립하지 않습니다.
+VS Code에서 프로젝트 루트를 엽니다.
