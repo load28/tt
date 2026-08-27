@@ -28,9 +28,20 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 
 Install TT's official development packages from npm. Rust is not required on
 supported platforms, and neither is a source build of anything: `ttc` uses
-the TypeScript your project installed, so `typescript@7` is the only other
+the TypeScript your project installed, so TypeScript is the only other
 dependency. There is nothing to export and nothing to configure — the
 compiler, the editor extension and your build all read the same package.
+
+Pin it to the exact version TT is tested against:
+
+```sh
+bun add -d typescript@7.1.0-dev.20260826.1
+```
+
+That is a 7.1 prerelease on purpose. Declaration output — `ttc --types` and
+the editor's `.tt.d.ts` sidecars — needs the emit API that arrived in 7.1,
+and a plain `typescript@7` resolves to the 7.0 line because npm ranges do
+not match prereleases. Move to `typescript@7` once 7.1 is released.
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
@@ -52,11 +63,8 @@ code --install-extension ./tt-language-<version>.vsix
 For a manual compiler-only install:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
-
-Declaration output (`ttc --types` and the editor's `.tt.d.ts` sidecars) uses
-an API that arrived in TypeScript 7.1; everything else works on 7.0.
 
 Compile a file or source tree, or check it without writing output:
 

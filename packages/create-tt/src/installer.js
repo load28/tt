@@ -9,6 +9,15 @@ const versions = {
   '@load28/tt-lang': ttChannel,
   '@load28/unplugin-tt': ttChannel,
   vite: '^8.0.0',
+  // ttc drives the TypeScript the project installs and looks nowhere else,
+  // so a scaffolded project has to install one. Pinned to an exact
+  // prerelease rather than `7`: declaration output (`ttc --types`, the
+  // editor's `.tt.d.ts` sidecars) needs the emit API that arrived in 7.1,
+  // and `7` resolves to the 7.0 line because ranges do not match
+  // prereleases. It is the version this repository itself pins, which a
+  // test holds the two to (TASK-256); move both together when 7.1 is
+  // released.
+  typescript: '7.1.0-dev.20260826.1',
 }
 
 export function dependencyChannel(packageVersion) {
@@ -102,6 +111,7 @@ export async function createProject(options) {
     devDependencies: {
       '@load28/tt-lang': versions['@load28/tt-lang'],
       '@load28/unplugin-tt': versions['@load28/unplugin-tt'],
+      typescript: versions.typescript,
       vite: versions.vite,
     },
   }
@@ -129,6 +139,7 @@ export async function initializeExisting(options) {
   const bundler = options.bundler === 'auto' ? detectBundler(manifest) : options.bundler
   const devDependencies = manifest.devDependencies ?? {}
   devDependencies['@load28/tt-lang'] ??= versions['@load28/tt-lang']
+  devDependencies.typescript ??= versions.typescript
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
   manifest.scripts['tt:check'] ??= 'ttc --check-types src'

@@ -27,7 +27,9 @@ const API_IN_PACKAGE: &str = "dist/api/sync/api.js";
 
 /// How to install what is missing — the one sentence every error here ends
 /// with, so the fix never depends on which half reported it.
-const INSTALL: &str = "install it in this project (`npm i -D typescript@7`)";
+const INSTALL: &str = "install TypeScript in this project (`npm i -D typescript@7.1` — the 7.1 \
+     line, whose declaration-emit API `ttc --types` needs; a plain `7` \
+     resolves to 7.0)";
 
 /// One npm distribution of TypeScript 7.
 struct Distribution {

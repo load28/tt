@@ -7,7 +7,7 @@
 에서만 찾습니다 — 빌드가 쓰는 바로 그 패키지입니다. TT와 함께 설치합니다.
 
 ```sh
-bun add -d typescript@7
+bun add -d typescript@7.1.0-dev.20260826.1
 ```
 
 내보낼 환경 변수도, 에디터 전용 설정도 없습니다. 확장은 프로젝트의 `ttc`를
@@ -36,7 +36,7 @@ bun run tt:check
 `init`은 `package.json`에서 Vite, Rollup, Rolldown, webpack, Rspack,
 esbuild, Farm을 감지합니다. `0.3.0` 설치기는 `@load28/tt-lang`과
 `@load28/unplugin-tt`의 Stable 채널과 TT용 스크립트를 추가합니다. npm TypeScript
-패키지는 추가하지 않으므로 위와 같이 `typescript@7`을 직접 설치합니다.
+패키지는 추가하지 않으므로 위와 같이 `typescript@7.1.0-dev.20260826.1`을 직접 설치합니다.
 선언형 설정을 쓰는 번들러에는 기존 설정을 합성하는
 `tt.*.config.mjs` 래퍼를 생성하며 사용자 설정 소스는 고치지 않습니다. 생성된
 래퍼는 `bun run tt:dev` 또는 `bun run tt:build`로 사용합니다. esbuild 빌드
@@ -87,7 +87,7 @@ Vite 같은 외부 패키지는 프록시합니다.
 컴파일러와 그것이 구동할 TypeScript를 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.

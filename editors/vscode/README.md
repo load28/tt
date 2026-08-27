@@ -121,7 +121,7 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
 씁니다. 그래서 TT 저장소를 직접 빌드하지 않는 개발자의 절차는 이렇습니다.
 
 ```sh
-npm i -D @load28/tt-lang typescript@7                 # ttc + TypeScript 7
+npm i -D @load28/tt-lang typescript@7.1.0-dev.20260826.1                 # ttc + TypeScript 7
 code --install-extension tt-language-<version>.vsix   # 릴리스의 VSIX
 ```
 
@@ -173,7 +173,7 @@ TypeScript 7에는 인프로세스 JS 언어 서비스 API가 없기 때문이�
 기술하고 두 소비자가 그것을 읽습니다 (실행 파일 이름 규칙은 업스트림
 `getExePath.js`와 같습니다 — `typescript`는 `tsc`, 미리보기 채널은 `tsgo`).
 
-즉 **프로젝트가 `typescript@7`을 설치해 두면 그대로 동작합니다.** 찾지
+즉 **프로젝트가 `typescript@7.1.0-dev.20260826.1`을 설치해 두면 그대로 동작합니다.** 찾지
 못하면 위 위임 기능들이 답하지 않고, tt 자신이 아는 것(variant·케이스 태그·
 소진성)만 동작합니다. TypeScript 세션이 죽으면 다음 질문이 새로
 시작합니다 — 기능이 영구히 침묵하는 일은 없습니다.

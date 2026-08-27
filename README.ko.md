@@ -28,9 +28,20 @@ export const area = (shape: Shape): number =>
 
 npm에서 TT의 공식 개발 패키지를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지
 않고, 무언가를 소스에서 빌드할 일도 없습니다. `ttc`는 **프로젝트가 설치한**
-TypeScript를 쓰므로 다른 의존성은 `typescript@7` 하나뿐입니다. 내보낼 환경
+TypeScript를 쓰므로 다른 의존성은 TypeScript 하나뿐입니다. 내보낼 환경
 변수도, 설정할 것도 없습니다 — 컴파일러·에디터 확장·빌드가 모두 같은 패키지를
 읽습니다.
+
+TT가 검증한 정확한 버전으로 고정합니다.
+
+```sh
+bun add -d typescript@7.1.0-dev.20260826.1
+```
+
+7.1 프리릴리스인 것은 의도입니다. 선언 방출 — `ttc --types`와 에디터의
+`.tt.d.ts` 사이드카 — 은 7.1에서 들어온 emit API를 쓰는데, npm 범위는
+프리릴리스를 매칭하지 않으므로 `typescript@7`은 7.0 라인으로 해석됩니다.
+7.1이 정식 릴리스되면 `typescript@7`로 옮깁니다.
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
@@ -52,11 +63,8 @@ code --install-extension ./tt-language-<버전>.vsix
 컴파일러만 수동으로 설치할 때:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
-
-선언 방출(`ttc --types`와 에디터의 `.tt.d.ts` 사이드카)은 TypeScript 7.1에서
-들어온 API를 사용합니다. 나머지 기능은 7.0에서 모두 동작합니다.
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
 
