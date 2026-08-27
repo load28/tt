@@ -109,8 +109,14 @@ gh workflow run bump-release-version.yml --ref main -f line=0.4
 30일 동안 보관합니다. `Publish Release`는 성공한 그 CI run의 산출물만 가져오며 다시
 빌드하지 않습니다.
 
-Nightly는 예약된 `main` CI 성공 뒤 `X.Y.Z-dev.YYYYMMDD` 산출물을 npm `next`와 GitHub
-prerelease로 자동 게시합니다. 소스 버전과 릴리스 브랜치는 바꾸지 않습니다.
+Nightly는 예약된 `main` CI 성공 뒤 `X.Y.Z-dev.YYYYMMDD.N` 산출물을 npm `next`와
+GitHub prerelease로 자동 게시합니다. `N`은 GitHub Actions 실행 번호이므로 같은 날짜의
+여러 빌드도 서로 다른 불변 버전을 가집니다. 동일 실행의 재시도는 같은 버전을
+재사용합니다. 소스 버전과 릴리스 브랜치는 바꾸지 않습니다.
+
+`next`는 버전이 아니라 최신 Nightly를 가리키는 npm dist-tag입니다. 새 불변 버전을
+`--tag next`로 게시할 때 포인터가 새 버전으로 이동하므로 사용자는
+`@load28/tt-lang@next`로 항상 현재 Nightly를 설치할 수 있습니다.
 
 Beta·RC·Stable·Patch는 성공한 `release-X.Y` CI 뒤 `production` Environment에서
 대기합니다. 승인자는 **Approve and deploy**를 눌러야 게시됩니다. npm 태그와 CI run ID는

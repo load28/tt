@@ -43,8 +43,8 @@ export TTC_TSGO_ROOT="$PWD"
 실행합니다. 실행 파일과 API 클라이언트는 같은 체크아웃에서 빌드해야 합니다.
 
 ```sh
-bunx @load28/create-tt@next my-app
-bunx @load28/create-tt@next init       # 기존 TypeScript 프로젝트에서 실행
+bunx @load28/create-tt@0.3.0 my-app
+bunx @load28/create-tt@0.3.0 init       # 기존 TypeScript 프로젝트에서 실행
 ```
 
 새 프로젝트의 자동 설치에는 Bun을 사용합니다. 자동 설치와 번들러별 수동 절차는
@@ -63,7 +63,7 @@ code --install-extension ./tt-language-<버전>.vsix
 `TTC_TSGO_ROOT`를 설정한 상태로 유지해야 합니다.
 
 ```sh
-bun add -d @load28/tt-lang@next
+bun add -d @load28/tt-lang@0.3.0
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.

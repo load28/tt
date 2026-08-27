@@ -16,6 +16,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: read
 
 env:
@@ -314,11 +315,43 @@ jobs:
           # declarations — so a skip means the wiring broke.
           grep -q "^# skipped 0$" /tmp/extension-native.log
 
+  release-version:
+    name: release artifact version
+    if: >-
+      github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.versions.outputs.version }}
+      npm_tag: ${{ steps.versions.outputs.npm_tag }}
+      unplugin_version: ${{ steps.versions.outputs.unplugin_version }}
+      vscode_version: ${{ steps.versions.outputs.vscode_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Derive one version for every release artifact
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
+          RUN_CREATED_AT="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)"
+          TIMESTAMP="$(date -u -d "$RUN_CREATED_AT" +%Y%m%d%H%M%S)"
+          if [ "$GITHUB_REF_NAME" = main ]; then
+            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP" "$GITHUB_RUN_NUMBER")"
+          fi
+          EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"
+          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version.split('-')[0]")"
+          node npm/scripts/release-artifacts.mjs describe "$VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" "$TIMESTAMP" >> "$GITHUB_OUTPUT"
+
   release-build:
     name: release build (${{ matrix.key }})
     if: >-
       github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    needs: release-version
     strategy:
       fail-fast: false
       matrix:
@@ -340,12 +373,9 @@ jobs:
           node-version: "22"
       - name: Stamp the artifact version
         shell: bash
+        env:
+          VERSION: ${{ needs.release-version.outputs.version }}
         run: |
-          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
-          if [ "$GITHUB_REF_NAME" = main ]; then
-            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP")"
-          fi
           node npm/scripts/release-version.mjs "$VERSION"
       - name: Install musl toolchain
         if: contains(matrix.target, 'musl')
@@ -371,6 +401,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    needs: release-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -380,14 +411,8 @@ jobs:
       - name: Derive artifact versions
         id: versions
         run: |
-          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
-          if [ "$GITHUB_REF_NAME" = main ]; then
-            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP")"
-          fi
-          EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"
-          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version.split('-')[0]")"
-          node npm/scripts/release-artifacts.mjs describe "$VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" "$TIMESTAMP" >> "$GITHUB_OUTPUT"
+          echo "version=${{ needs.release-version.outputs.version }}" >> "$GITHUB_OUTPUT"
+          echo "vscode_version=${{ needs.release-version.outputs.vscode_version }}" >> "$GITHUB_OUTPUT"
       - name: Package extension
         working-directory: editors/vscode
         run: |
@@ -408,7 +433,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
-    needs: [check, bench, coverage, native, release-build, release-vsix]
+    needs: [check, bench, coverage, native, release-version, release-build, release-vsix]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -416,23 +441,19 @@ jobs:
         with:
           node-version: "22"
       - name: Write immutable release metadata
+        env:
+          VERSION: ${{ needs.release-version.outputs.version }}
+          NPM_TAG: ${{ needs.release-version.outputs.npm_tag }}
+          UNPLUGIN_VERSION: ${{ needs.release-version.outputs.unplugin_version }}
+          VSCODE_VERSION: ${{ needs.release-version.outputs.vscode_version }}
         run: |
-          VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -1)"
-          TIMESTAMP="$(TZ=UTC git show -s --format=%cd --date=format-local:%Y%m%d%H%M%S HEAD)"
-          if [ "$GITHUB_REF_NAME" = main ]; then
-            VERSION="$(node npm/scripts/release-artifacts.mjs nightly "$VERSION" "$TIMESTAMP")"
-          fi
-          EXTENSION_BASE="$(node -p "require('./editors/vscode/package.json').version")"
-          UNPLUGIN_BASE="$(node -p "require('./integrations/unplugin/package.json').version.split('-')[0]")"
-          node npm/scripts/release-artifacts.mjs describe "$VERSION" "$EXTENSION_BASE" "$UNPLUGIN_BASE" "$TIMESTAMP" > /tmp/versions.env
-          . /tmp/versions.env
           jq -n \
             --arg sourceSha "$GITHUB_SHA" \
             --arg sourceBranch "$GITHUB_REF_NAME" \
-            --arg version "$version" \
-            --arg npmTag "$npm_tag" \
-            --arg unpluginVersion "$unplugin_version" \
-            --arg vscodeVersion "$vscode_version" \
+            --arg version "$VERSION" \
+            --arg npmTag "$NPM_TAG" \
+            --arg unpluginVersion "$UNPLUGIN_VERSION" \
+            --arg vscodeVersion "$VSCODE_VERSION" \
             '{sourceSha:$sourceSha,sourceBranch:$sourceBranch,version:$version,npmTag:$npmTag,unpluginVersion:$unpluginVersion,vscodeVersion:$vscodeVersion}' \
             > release-metadata.json
       - uses: actions/upload-artifact@v4

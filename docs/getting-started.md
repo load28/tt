@@ -26,7 +26,7 @@ come from the same checkout because their protocol is not version-negotiated.
 Create a Vite + TypeScript project with a starter `.tt` module:
 
 ```sh
-bunx @load28/create-tt@next my-app
+bunx @load28/create-tt@0.3.0 my-app
 cd my-app
 bun run dev
 ```
@@ -35,12 +35,12 @@ Add tt to an existing TypeScript project:
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@next init
+bunx @load28/create-tt@0.3.0 init
 bun run tt:check
 ```
 
 `init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
-`package.json`. The `@next` initializer adds the `dev` channel of
+`package.json`. The `0.3.0` initializer adds the stable channels of
 `@load28/tt-lang` and `@load28/unplugin-tt`, plus TT scripts. It does not add
 an npm TypeScript package; `ttc` uses the built typescript-go checkout above.
 For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
@@ -52,10 +52,10 @@ line that must be added instead.
 Useful non-interactive options:
 
 ```sh
-bunx @load28/create-tt@next init --bundler vite
-bunx @load28/create-tt@next init --bundler none
-bunx @load28/create-tt@next init --no-install
-bunx @load28/create-tt@next init --package-manager bun
+bunx @load28/create-tt@0.3.0 init --bundler vite
+bunx @load28/create-tt@0.3.0 init --bundler none
+bunx @load28/create-tt@0.3.0 init --no-install
+bunx @load28/create-tt@0.3.0 init --package-manager bun
 ```
 
 New projects always use Bun. An existing project keeps the package manager in
@@ -94,7 +94,7 @@ Before using this path, complete the typescript-go source build at the top of
 this guide and keep `TTC_TSGO_ROOT` exported. Then install the compiler:
 
 ```sh
-bun add -d @load28/tt-lang@next
+bun add -d @load28/tt-lang@0.3.0
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
@@ -118,7 +118,7 @@ The same built typescript-go checkout and `TTC_TSGO_ROOT` are required for this
 path. Install the direct-source plugin in addition to the compiler:
 
 ```sh
-bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
+bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0
 ```
 
 Put `tt()` first in the bundler's plugins array:

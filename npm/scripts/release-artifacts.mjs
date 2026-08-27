@@ -1,14 +1,16 @@
 import { pathToFileURL } from "node:url";
 
-const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(dev\.([1-9]\d*)|beta|rc))?$/;
+const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-(dev\.([1-9]\d*(?:\.[1-9]\d*)*)|beta|rc))?$/;
 const STABLE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const STAMP = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})$/;
+const BUILD_NUMBER = /^[1-9]\d*$/;
 
-export function nightlyVersion(sourceVersion, timestamp) {
+export function nightlyVersion(sourceVersion, timestamp, buildNumber) {
   const source = VERSION.exec(sourceVersion);
   const stamp = requireTimestamp(timestamp);
   if (!source) throw new Error(`source version must be SemVer: ${sourceVersion}`);
-  return `${source[1]}.${source[2]}.${source[3]}-dev.${stamp[1]}${stamp[2]}${stamp[3]}`;
+  if (!BUILD_NUMBER.test(buildNumber)) throw new Error(`invalid CI build number: ${buildNumber}`);
+  return `${source[1]}.${source[2]}.${source[3]}-dev.${stamp[1]}${stamp[2]}${stamp[3]}.${buildNumber}`;
 }
 
 export function releaseArtifacts({ compilerVersion, extensionBase, unpluginBase, timestamp }) {
@@ -53,15 +55,15 @@ function requireTimestamp(timestamp) {
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const [command, ...args] = process.argv.slice(2);
-    if (command === "nightly" && args.length === 2) {
-      console.log(nightlyVersion(args[0], args[1]));
+    if (command === "nightly" && args.length === 3) {
+      console.log(nightlyVersion(args[0], args[1], args[2]));
     } else if (command === "describe" && args.length === 4) {
       const result = releaseArtifacts({
         compilerVersion: args[0], extensionBase: args[1], unpluginBase: args[2], timestamp: args[3],
       });
       for (const [key, value] of Object.entries(result)) console.log(`${key.replace(/[A-Z]/g, c => `_${c.toLowerCase()}`)}=${value}`);
     } else {
-      throw new Error("usage: release-artifacts.mjs nightly <source-version> <timestamp> | describe <version> <extension-base> <unplugin-base> <timestamp>");
+      throw new Error("usage: release-artifacts.mjs nightly <source-version> <timestamp> <build-number> | describe <version> <extension-base> <unplugin-base> <timestamp>");
     }
   } catch (error) {
     console.error(`release-artifacts: ${error.message}`);
