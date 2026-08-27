@@ -222,8 +222,16 @@ code --install-extension tt-typescript-preview-<버전>-<플랫폼>.vsix
 mapper를 실은 정식 프리뷰가 마켓플레이스에 올라오면 같은 ID의 더 높은
 버전이므로 자동 업데이트가 이 빌드를 자연스럽게 교체합니다.
 
-`.ts`·`.tsx`를 그 서버가 서빙하게 하려면 워크스페이스 설정에
-`"js/ts.experimental.useTsgo": true`를 둡니다.
+`.ts`·`.tsx`를 그 서버가 서빙하게 하려면 `useTsgo`를 켭니다:
+
+```jsonc
+// .vscode/settings.json (또는 사용자 설정)
+"js/ts.experimental.useTsgo": true,
+"typescript.experimental.useTsgo": true
+```
+
+TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
+`useTsgo` 설정도 필요 없어집니다.
 
 CLI(`tsc`)와 tsconfig 기반 프로젝트에서는 `contentMappers` 한 줄이면 됩니다:
 

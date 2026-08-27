@@ -88,7 +88,7 @@ Vite 같은 외부 패키지는 프록시합니다.
 컴파일러와 그것이 구동할 TypeScript를 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
+bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.
@@ -111,7 +111,7 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0
+bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
 ```
 
 각 번들러의 plugins 배열 맨 앞에 `tt()`을 넣습니다.
@@ -172,7 +172,24 @@ import { render } from "./notice.tt";
 
 ```sh
 code --install-extension ./tt-language-<버전>.vsix
+code --install-extension ./tt-typescript-preview-<버전>-<플랫폼>.vsix
 ```
+
+두 번째 VSIX가 에디터용 TypeScript 자체입니다. tt은 성능을 위해
+TypeScript 7(네이티브 컴파일러)을 구동하고, 그중 7.1 라인의 API —
+`.ts`가 `.tt`을 디스크 생성물 없이 import하게 하는 content mapper — 를
+사용합니다. Marketplace의 TypeScript 확장은 아직 이 API를 싣지 않았으므로,
+같은 나이틀리 릴리스의 빌드로 TypeScript 확장을 직접 설치하고 `useTsgo`
+설정을 켜서 TypeScript 확장이 최신 API로 `.ts`/`.tsx`를 서빙하게 합니다.
+
+```jsonc
+// .vscode/settings.json (또는 사용자 설정)
+"js/ts.experimental.useTsgo": true,
+"typescript.experimental.useTsgo": true
+```
+
+TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
+`useTsgo` 설정도 필요 없어집니다.
 
 프로젝트 루트를 엽니다. 확장은 프로젝트가 설치한 `ttc`를 띄우고 그 `ttc`는
 프로젝트가 설치한 TypeScript를 쓰므로, 에디터와 빌드가 다른 TypeScript를 쓰는

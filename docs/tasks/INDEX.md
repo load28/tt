@@ -269,6 +269,8 @@
 
 | TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 진행 중 | 2026-08-27 | — | [TASK-259](./TASK-259-upstream-extension-id.md) |
 
+| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 진행 중 | 2026-08-28 | — | [TASK-260](./TASK-260-nightly-install-docs.md) |
+
 ## 다음 태스크 번호
 
-**TASK-260**
+**TASK-261**

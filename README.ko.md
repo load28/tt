@@ -59,12 +59,29 @@ bunx @load28/create-tt@0.3.0 init       # 기존 TypeScript 프로젝트에서 �
 
 ```sh
 code --install-extension ./tt-language-<버전>.vsix
+code --install-extension ./tt-typescript-preview-<버전>-<플랫폼>.vsix
 ```
+
+두 번째 VSIX가 에디터용 TypeScript 자체입니다. tt은 성능을 위해
+TypeScript 7(네이티브 컴파일러)을 구동하고, 그중 7.1 라인의 API —
+`.ts`가 `.tt`을 디스크 생성물 없이 import하게 하는 content mapper — 를
+사용합니다. Marketplace의 TypeScript 확장은 아직 이 API를 싣지 않았으므로,
+같은 나이틀리 릴리스의 빌드로 TypeScript 확장을 직접 설치하고 `useTsgo`
+설정을 켜서 TypeScript 확장이 최신 API로 `.ts`/`.tsx`를 서빙하게 합니다.
+
+```jsonc
+// .vscode/settings.json (또는 사용자 설정)
+"js/ts.experimental.useTsgo": true,
+"typescript.experimental.useTsgo": true
+```
+
+TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
+`useTsgo` 설정도 필요 없어집니다.
 
 컴파일러만 수동으로 설치할 때:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
+bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
