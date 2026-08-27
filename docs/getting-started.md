@@ -14,7 +14,8 @@ bun add -d typescript@7.1.0-dev.20260826.1
 There is nothing to export and no editor-specific configuration: the
 extension runs your project's `ttc`, which resolves your project's
 TypeScript. Declaration output (`ttc --types` and the editor's `.tt.d.ts`
-sidecars) uses an API that arrived in TypeScript 7.1; everything else works
+sidecars) and content mappers (`.ts` importing `.tt` with nothing on disk)
+use APIs that arrived in TypeScript 7.1; everything else works
 on 7.0.
 
 ## Automatic setup

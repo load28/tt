@@ -24,14 +24,26 @@ looks. The TT installer does not add it for you:
 bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
 
-Declaration output (`ttc --types`, editor `.tt.d.ts` sidecars) uses an API
-that arrived in TypeScript 7.1; everything else works on 7.0. See the
+Declaration output (`ttc --types`, editor `.tt.d.ts` sidecars) and content
+mappers (below) use APIs that arrived in TypeScript 7.1; everything else
+works on 7.0. See the
 [installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md).
 
 ```sh
 bunx ttc -o build src/     # compile a source tree to TypeScript
 bunx ttc --check src/      # check without writing anything
 bunx ttc --types src/      # editor/typecheck declarations
+```
+
+On TypeScript 7.1+, `.ts` files can import `.tt` directly — this package
+is a TypeScript **content mapper**, so the compiler holds the transform
+virtually (no sidecar files). Declare it once in `tsconfig.json` and run
+`tsc` with `--runExternalCode`:
+
+```jsonc
+"contentMappers": [
+  { "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] }
+]
 ```
 
 Using a bundler? [`@load28/unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)

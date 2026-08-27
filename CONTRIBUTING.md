@@ -38,8 +38,10 @@ npm ci             # TypeScript 7 포함 — package.json이 버전을 고정한
 `devDependencies.typescript`이고, typed 테스트와 에디터가 모두 그것을 읽습니다.
 
 TypeScript 7 배포판은 네이티브 실행 파일과 API 클라이언트를 함께 담습니다.
-선언 방출(`ttc --types`, 사이드카)은 7.1에서 들어온 API를 쓰므로 이 저장소는
-7.1 나이틀리를 정확한 버전으로 고정합니다.
+이 저장소가 7.1 나이틀리를 정확한 버전으로 고정하는 이유는 둘 다 7.1
+신규이기 때문입니다: 선언 방출 API(`ttc --types`, 사이드카)와 content
+mapper(`ttc --content-mapper`, `.ts`가 `.tt`을 사이드카 없이 import하는
+경로 — TASK-257). 7.1 정식이 나오면 핀을 그 버전으로 옮깁니다.
 
 setup은 현재 TT 체크아웃을 release 빌드하고 VSCode 확장을 빌드해
 재설치합니다(기존 설치는 삭제 후 설치). git 상태는 절대 건드리지 않습니다 —

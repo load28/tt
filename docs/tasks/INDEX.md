@@ -264,7 +264,8 @@
 | TASK-254 | 릴리스 smoke test의 variant 전환 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-254](./TASK-254-release-smoke-variant.md) |
 | TASK-255 | 설치된 패키지만으로 동작하는 에디터 툴체인 해석 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-255](./TASK-255-installed-toolchain-resolution.md) |
 | TASK-256 | TypeScript는 프로젝트가 설치한 npm 패키지 하나로 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-256](./TASK-256-typescript-from-npm-only.md) |
+| TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 진행 중 | 2026-08-27 | — | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 
 ## 다음 태스크 번호
 
-**TASK-257**
+**TASK-258**

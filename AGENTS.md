@@ -46,7 +46,8 @@ npm ci             # TypeScript를 포함한 의존성 설치
 
 ## 아키텍처 경계
 
-- `src/main.rs`, `src/server.rs`: CLI와 JSON-lines 서버 진입점
+- `src/main.rs`, `src/server.rs`, `src/content_mapper.rs`: CLI, JSON-lines
+  서버, TypeScript 7.1 content mapper 진입점
 - `src/lib.rs`, `src/engine/`: 공개 API와 Project/Snapshot 기반 typed engine
 - `src/lexer.rs`, `src/parser/`, `src/ast.rs`, `src/hir/`: 구문 인식과 단계 간 계약
 - `src/resolve/`, `src/analysis/`, `src/sema.rs`, `src/val.rs`: 이름·패턴·의미 분석

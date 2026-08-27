@@ -196,9 +196,35 @@ TypeScript 7에는 인프로세스 JS 언어 서비스 API가 없기 때문이�
 
 ## `.ts`·`.tsx`에서 `.tt`·`.ttx` 가져다 쓰기
 
-`.ts`·`.tsx` 파일은 tsserver가 담당하는데 tsserver는 `.tt`·`.ttx` 확장자를 모르므로,
-`import { Notice } from "./notice.tt"`은 그대로 두면 `TS2307`이 됩니다.
-소스 옆에 **사이드카**(`notice.tt.d.ts` 또는 `view.ttx.d.ts`와 map)를 두면
+`.ts`·`.tsx` 파일은 TypeScript의 언어 서버가 담당하는데 그 서버는 `.tt`·`.ttx`
+확장자를 모르므로, `import { Notice } from "./notice.tt"`은 그대로 두면
+`TS2307`이 됩니다. 해법은 TypeScript 세대에 따라 둘입니다.
+
+### TypeScript 7.1+ — content mapper (권장, 설정 0)
+
+TypeScript 7.1의 언어 서버는 **content mapper**를 통해 `.tt`·`.ttx`를
+가상으로 들고 검사합니다 — 디스크에 생성물이 없고, `rootDirs`/`paths`
+배선도 필요 없습니다. 이 확장이 활성화될 때 TypeScript 확장
+(네이티브 프리뷰)에 `.tt`·`.ttx`를 자동 등록하므로, 워크스페이스가
+`@load28/tt-lang`을 설치해 두었다면 에디터 쪽 설정은 없습니다.
+
+CLI(`tsc`)와 tsconfig 기반 프로젝트에서는 `contentMappers` 한 줄이면 됩니다:
+
+```jsonc
+// tsconfig.json
+"contentMappers": [
+  { "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] }
+]
+```
+
+`tsc`는 외부 프로세스 실행을 허용하는 `--runExternalCode`와 함께 실행합니다.
+진단은 원본 `.tt`·`.ttx` 위치로 보고되고, tt 수준 오류는 `tt` 소스로
+함께 나옵니다.
+
+### 클래식 tsserver — 사이드카 (레거시)
+
+content mapper가 없는 TypeScript에서는 소스 옆에
+**사이드카**(`notice.tt.d.ts` 또는 `view.ttx.d.ts`와 map)를 두면
 해결됩니다 — 에러가 사라지고, 정의 이동이 `.d.ts`가 아니라 **원본 `.tt`·`.ttx`의
 해당 줄**로 갑니다.
 

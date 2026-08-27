@@ -37,8 +37,9 @@ bun add -d typescript@7.1.0-dev.20260826.1
 ```
 
 An exact prerelease on purpose, and the same one this repository tests
-against. Declaration output — `ttc --types` and the editor's `.tt.d.ts`
-sidecars — needs the emit API that arrived in TypeScript 7.1, and a plain
+against. Two things tt uses arrived in the TypeScript 7.1 line — the
+declaration emit API (`ttc --types`, the editor's `.tt.d.ts` sidecars) and
+content mappers (`.ts` importing `.tt` with nothing on disk) — and a plain
 `typescript@7` resolves to the 7.0 line because npm ranges do not match
 prereleases. Naming the version rather than a tag means a nightly published
 tonight cannot change how your build behaves tomorrow. When 7.1 is
