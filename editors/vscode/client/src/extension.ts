@@ -11,9 +11,15 @@ import {
   TransportKind,
 } from "vscode-languageclient/node";
 
+import { registerContentMappers } from "./contentMapper";
+
 let client: LanguageClient | undefined;
 
 export function activate(context: ExtensionContext): void {
+  // TypeScript 7.1+ holds `.tt`/`.ttx` virtually through a content mapper;
+  // registering is fire-and-forget and never blocks the language client.
+  void registerContentMappers(context);
+
   const serverModule = context.asAbsolutePath(
     path.join("server", "out", "server.js"),
   );

@@ -1,0 +1,301 @@
+//! `ttc --content-mapper` against the real TypeScript (TASK-257).
+//!
+//! These cases spawn the repository's installed TypeScript (`npm ci`,
+//! TASK-256) with `--runExternalCode` on a project whose tsconfig names
+//! `@load28/tt-lang` as a content mapper, and the mapper it spawns is this
+//! build's `ttc`. That is the whole consumer contract in one process tree:
+//! TypeScript resolves the mapper package, speaks JSON-RPC to `ttc
+//! --content-mapper`, holds the transformed `.tt`/`.ttx` files virtually,
+//! and reports diagnostics through the span map.
+//!
+//! They skip silently when the install is not there or has no content
+//! mapper support (that arrived in the TypeScript 7.1 line). Where CI says
+//! a toolchain must be present, `TTC_REQUIRE_TSGO=1` turns either skip
+//! into a failure, exactly as `tests/native.rs` does.
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+mod common;
+use common::Workspace;
+
+/// The repository's installed `typescript/lib/tsc.js`, searched upwards
+/// the way `toolchain.rs` searches.
+fn tsc_entry() -> Option<PathBuf> {
+    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
+    while let Some(current) = dir {
+        let entry = current.join("node_modules/typescript/lib/tsc.js");
+        if entry.exists() {
+            return Some(entry);
+        }
+        dir = current.parent().map(Path::to_path_buf);
+    }
+    None
+}
+
+fn have_node() -> bool {
+    Command::new("node")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// True when the caller has declared that a toolchain must be present.
+fn required() -> bool {
+    std::env::var_os("TTC_REQUIRE_TSGO").is_some_and(|v| !v.is_empty() && v != "0")
+}
+
+/// Whether the installed TypeScript knows `--runExternalCode` — the gate
+/// content mappers sit behind. A 7.0 pin does not; the 7.1 line does.
+fn supports_content_mappers(tsc: &Path) -> bool {
+    Command::new("node")
+        .args([
+            tsc.as_os_str().to_str().unwrap(),
+            "--runExternalCode",
+            "--version",
+        ])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// The installed TypeScript with content mapper support, or the reason to
+/// skip. `TTC_REQUIRE_TSGO=1` turns both reasons into failures.
+fn toolchain() -> Option<PathBuf> {
+    if !have_node() {
+        assert!(
+            !required(),
+            "TTC_REQUIRE_TSGO is set but node is not installed"
+        );
+        return None;
+    }
+    let Some(tsc) = tsc_entry() else {
+        assert!(
+            !required(),
+            "TTC_REQUIRE_TSGO is set but this repository has no TypeScript \
+             installed — run `npm ci` at the repository root"
+        );
+        return None;
+    };
+    if !supports_content_mappers(&tsc) {
+        assert!(
+            !required(),
+            "TTC_REQUIRE_TSGO is set but the installed TypeScript has no \
+             content mapper support — pin a 7.1 in the root package.json"
+        );
+        return None;
+    }
+    Some(tsc)
+}
+
+macro_rules! require_mapper_toolchain {
+    () => {
+        match toolchain() {
+            Some(tsc) => tsc,
+            None => return,
+        }
+    };
+}
+
+/// A consumer project: a tsconfig naming `@load28/tt-lang` as the mapper
+/// for `.tt`/`.ttx`, and a stub install of that package whose mapper
+/// process is this build's `ttc`.
+fn mapper_project(jsx: bool) -> Workspace {
+    let workspace = Workspace::with_subdir("content-mapper", "src");
+    fs::write(
+        workspace.path().join("package.json"),
+        "{ \"private\": true }\n",
+    )
+    .unwrap();
+    let jsx_option = if jsx {
+        "\"jsx\": \"preserve\",\n    "
+    } else {
+        ""
+    };
+    fs::write(
+        workspace.path().join("tsconfig.json"),
+        format!(
+            "{{\n  \"compilerOptions\": {{\n    {jsx_option}\"strict\": true,\n    \"noEmit\": true,\n    \"target\": \"es2022\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"skipLibCheck\": true\n  }},\n  \"contentMappers\": [\n    {{ \"package\": \"@load28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }}\n  ],\n  \"include\": [\"src\"]\n}}\n"
+        ),
+    )
+    .unwrap();
+    let package = workspace.path().join("node_modules/@load28/tt-lang");
+    fs::create_dir_all(&package).unwrap();
+    fs::write(
+        package.join("package.json"),
+        format!(
+            "{{\n  \"name\": \"@load28/tt-lang\",\n  \"version\": \"0.0.0-test\",\n  \"typescript\": {{\n    \"contentMapper\": {{\n      \"exec\": [{:?}, \"--content-mapper\"]\n    }}\n  }}\n}}\n",
+            env!("CARGO_BIN_EXE_ttc")
+        ),
+    )
+    .unwrap();
+    workspace
+}
+
+/// One `tsc -p <project> --runExternalCode` run.
+fn check(tsc: &Path, project: &Path) -> (bool, String) {
+    let output = Command::new("node")
+        .args([
+            tsc.as_os_str().to_str().unwrap(),
+            "-p",
+            project.to_str().unwrap(),
+            "--runExternalCode",
+        ])
+        .output()
+        .expect("tsc runs");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (output.status.success(), text)
+}
+
+const SHAPE_TT: &str = "export variant Shape {\n  Circle(radius: number),\n  Rect(width: number, height: number),\n}\n\nexport function area(shape: Shape): number {\n  return match (shape) {\n    Circle(radius) => Math.PI * radius * radius,\n    Rect(width, height) => width * height,\n  };\n}\n";
+
+#[test]
+fn a_ts_file_imports_a_tt_file_with_no_sidecar_on_disk() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/shape.tt"), SHAPE_TT).unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { Shape, area } from \"./shape.tt\";\nconst ok: number = area(Shape.Circle(2));\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(ok, "expected a clean check, got:\n{text}");
+    // The check held the transform virtually: nothing was written next to
+    // the sources, which is the point of the mapper over the sidecar.
+    assert!(!project.path().join("src/shape.tt.d.ts").exists());
+    assert!(!project.path().join(".tt-types").exists());
+}
+
+#[test]
+fn a_consumer_type_error_reports_at_the_consumer() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/shape.tt"), SHAPE_TT).unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { Shape, area } from \"./shape.tt\";\nconst bad: string = area(Shape.Circle(2));\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("main.ts(2,7): error TS2322"),
+        "expected TS2322 at the consumer, got:\n{text}"
+    );
+}
+
+#[test]
+fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/shape.tt"), SHAPE_TT).unwrap();
+    // One-hop import: the missing `Rect` arm is knowable only by reading
+    // `./shape.tt`, which is the mapper's extern collection at work.
+    fs::write(
+        project.path().join("src/partial.tt"),
+        "import { Shape } from \"./shape.tt\";\n\nexport function tag(shape: Shape): string {\n  return match (shape) {\n    Circle(radius) => \"circle\",\n  };\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { tag } from \"./partial.tt\";\nconst t: string = tag({ kind: \"Circle\", radius: 1 });\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    // The diagnostic is the mapper's own: tt's source name, tt's stable
+    // code number, at the match's position in the original file.
+    assert!(
+        text.contains("partial.tt(4,10): error tt27"),
+        "expected the tt exhaustiveness diagnostic at its source, got:\n{text}"
+    );
+    assert!(
+        text.contains("not exhaustive"),
+        "expected the tt message, got:\n{text}"
+    );
+}
+
+#[test]
+fn a_type_error_inside_glue_reports_at_the_construct() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/shape.tt"), SHAPE_TT).unwrap();
+    // A match whose arms disagree with the declared return type: the
+    // checker sees the disagreement in compiler-written glue, and the
+    // anchor span carries it back to the construct.
+    fs::write(
+        project.path().join("src/wrong.tt"),
+        "import { Shape } from \"./shape.tt\";\n\nexport function wrong(shape: Shape): number {\n  return match (shape) {\n    Circle(radius) => radius,\n    Rect(width, height) => \"not a number\",\n  };\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { wrong } from \"./wrong.tt\";\nconst n: number = wrong({ kind: \"Circle\", radius: 1 });\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("wrong.tt(4,3): error TS2322"),
+        "expected the checker's error mapped to the match, got:\n{text}"
+    );
+}
+
+#[test]
+fn std_imports_resolve_through_materialization() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/opt.tt"),
+        "import type { TOption } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\n\nexport function first(values: readonly number[]): TOption<number> {\n  return values.length > 0 ? Option.Some(values[0]) : Option.None;\n}\n\nexport function describe(values: readonly number[]): string {\n  return match (first(values)) {\n    Some(value) => `first: ${value}`,\n    None => \"empty\",\n  };\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { describe } from \"./opt.tt\";\nconst text: string = describe([1, 2, 3]);\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(ok, "expected a clean check, got:\n{text}");
+    // The mapper put the standard library where module resolution looks.
+    assert!(
+        project
+            .path()
+            .join("node_modules/@tt/std/index.ts")
+            .exists()
+    );
+}
+
+#[test]
+fn a_ttx_file_serves_as_tsx() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(true);
+    fs::write(
+        project.path().join("src/badge.ttx"),
+        "export variant State {\n  On(label: string),\n  Off,\n}\n\ndeclare global {\n  namespace JSX {\n    interface IntrinsicElements {\n      span: { className?: string; children?: unknown };\n    }\n  }\n}\n\nexport function Badge(props: { state: State }) {\n  return match (props.state) {\n    On(label) => <span className=\"on\">{label}</span>,\n    Off => <span className=\"off\">off</span>,\n  };\n}\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { State } from \"./badge.ttx\";\nconst s: State = State.Off;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(
+        ok,
+        "expected a clean check of the .ttx project, got:\n{text}"
+    );
+}

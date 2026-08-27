@@ -7,6 +7,11 @@
     "ttc": "bin/ttc.js"
   },
   "main": "index.js",
+  "typescript": {
+    "contentMapper": {
+      "exec": ["node", "bin/ttc.js", "--content-mapper"]
+    }
+  },
   "files": [
     "bin/ttc.js",
     "index.js",

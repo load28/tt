@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
+mod content_mapper;
 mod server;
 
 use ttc::engine::collect_sources;
@@ -96,7 +97,11 @@ Tooling options (bundler plugins, editors):
   --server              keep the engine alive and answer check/emitMap/
                         typedCheck requests as JSON lines on stdin/stdout,
                         reusing one project session per project — the same
-                        answers as the one-shot modes, without the startup"
+                        answers as the one-shot modes, without the startup
+  --content-mapper      serve .tt/.ttx to TypeScript 7.1+ as a content
+                        mapper process (JSON-RPC on stdin/stdout) — the
+                        mode `contentMappers` entries in tsconfig.json and
+                        the editor integration spawn; not for direct use"
     );
 }
 
@@ -1063,6 +1068,7 @@ fn run() -> ExitCode {
     let mut emit_map = false;
     let mut sidecar_dir: Option<PathBuf> = None;
     let mut server = false;
+    let mut content_mapper = false;
     let mut node: Option<PathBuf> = None;
     let mut rewrite_imports = ImportRewrite::default();
     let mut source_map = SourceMapMode::default();
@@ -1089,6 +1095,7 @@ fn run() -> ExitCode {
             }
             "--tt-only" => tt_only = true,
             "--server" => server = true,
+            "--content-mapper" => content_mapper = true,
             "--overlay" => match it.next() {
                 Some(path) => overlay_path = Some(PathBuf::from(path)),
                 None => {
@@ -1189,6 +1196,27 @@ fn run() -> ExitCode {
             }
             other => inputs.push(other.to_string()),
         }
+    }
+
+    // A TypeScript content mapper process — spawned by TypeScript itself,
+    // never combined with anything: stdin and stdout are the protocol.
+    if content_mapper {
+        if server
+            || !inputs.is_empty()
+            || emit_std.is_some()
+            || print
+            || watch
+            || check
+            || check_types
+            || symbols
+            || emit_map
+            || sidecar_dir.is_some()
+            || overlay_path.is_some()
+        {
+            eprintln!("ttc: --content-mapper takes no inputs and combines with no other mode");
+            return ExitCode::FAILURE;
+        }
+        return content_mapper::run();
     }
 
     // The engine behind a pipe — a session for tools that ask often. It

@@ -4,6 +4,11 @@
 [`project-front-end.md`](./project-front-end.md)의 역할 변경과 짝을 이루는
 에디터 쪽 조각을 다룬다.
 
+> **대체 진행 중 (TASK-257)** — TypeScript 7.1의 content mapper가 같은
+> 문제를 디스크 파일 없이 푼다: [`content-mapper.md`](./content-mapper.md).
+> 사이드카는 content mapper가 없는 TypeScript를 위한 레거시 경로로
+> 유지된다.
+
 ## 문제
 
 `.ts` 파일이 `.tt`을 import하면 에디터가 에러를 낸다.

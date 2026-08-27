@@ -12,7 +12,8 @@ bun add -d typescript@7.1.0-dev.20260826.1
 
 내보낼 환경 변수도, 에디터 전용 설정도 없습니다. 확장은 프로젝트의 `ttc`를
 띄우고, 그 `ttc`가 프로젝트의 TypeScript를 찾습니다. 선언 방출
-(`ttc --types`와 에디터의 `.tt.d.ts` 사이드카)은 TypeScript 7.1에서 들어온
+(`ttc --types`와 에디터의 `.tt.d.ts` 사이드카)과 content mapper(`.ts`가
+`.tt`을 디스크 생성물 없이 import하는 경로)는 TypeScript 7.1에서 들어온
 API를 사용하며, 나머지 기능은 7.0에서 모두 동작합니다.
 
 ## 자동 설치

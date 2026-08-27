@@ -191,7 +191,9 @@ Bundler alternative: `@load28/unplugin-tt` (`import tt from "@load28/unplugin-tt
 
 ## Workflow
 
-- Edit loop: change `.tt` → `npx ttc --check src` (fast tt-level, no TypeScript) → `npx ttc --check-types src` (types, exhaustiveness by narrowed type, `val`). Keep `npx ttc --types -w src` running so editor/tsc resolve `./x.tt` + `@tt/std`; if not watching, re-run `--types` after variant changes.
+- Edit loop: change `.tt` → `npx ttc --check src` (fast tt-level, no TypeScript) → `npx ttc --check-types src` (types, exhaustiveness by narrowed type, `val`).
+- `.ts` importing `.tt` (TypeScript 7.1+): declare the content mapper once in tsconfig — `"contentMappers": [{ "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] }]` — and run `tsc` with `--runExternalCode`. TypeScript holds the transform virtually (no files on disk, no `rootDirs`/`paths`); diagnostics land at original `.tt` positions, tt-level rules under the `tt` source. The VS Code extension auto-registers the mapper with the TypeScript extension, so the editor needs no config at all.
+- `.ts` importing `.tt` (classic tsserver, LEGACY): keep `npx ttc --types -w src` running so editor/tsc resolve `./x.tt` + `@tt/std` via sidecars; if not watching, re-run `--types` after variant changes.
 - Build: `npm run build` (ttc emits TS tree then tsc) or bundler build. CI: `ttc --check src && tsc --noEmit` + tests.
 - `ttc <dir>`: `.tt`→`.ts`, `.ttx`→`.tsx`, hand-written `.ts`/`.tsx` passthrough; `-o <dir>` separate tree (in-place overwrite refused); `@tt/std` auto-materialized when imported. `ttc -w` watches and also recompiles importers of changed files (cross-file exhaustiveness). Files compile in parallel (one per core) with identical output/diagnostics either way; `-j <n>` sets the count, `-j 1` = sequential.
 - Emitted `.ts`/`.tsx` starts with `// @generated` — NEVER edit output or `.tt-types/`; edit the `.tt`/`.ttx` source.
