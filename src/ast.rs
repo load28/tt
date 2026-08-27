@@ -162,11 +162,24 @@ pub(crate) struct PipeExpr {
     /// Raw span of the head expression — the `flow` keyword for a
     /// composition — for error reporting.
     pub head_span: Span,
+    /// Structural class of the head needed by tt-level grammar checks.
+    pub head_kind: PipeHeadKind,
     /// The head expression, recursively parsed. `None` for a `flow`
     /// composition, which has no value head.
     pub head: Option<Program>,
     /// The pipeline's steps, in source order. Never empty.
     pub steps: Vec<PipeStep>,
+}
+
+/// The pipeline head forms whose tt meaning differs before HIR lowering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PipeHeadKind {
+    /// The contextual composition keyword `flow`.
+    Flow,
+    /// The JavaScript `super` keyword without a following member or call.
+    BareSuper,
+    /// Any ordinary value expression.
+    Expression,
 }
 
 /// One `|> step` of a [`PipeExpr`].
@@ -175,12 +188,21 @@ pub(crate) struct PipeStep {
     /// Raw span of the step text (for a method step, including the leading
     /// `.`).
     pub span: Span,
-    /// True for a method step (`|> .m(...)`) — the step text is appended
-    /// to the piped value as a postfix chain instead of applied via the
-    /// helper.
-    pub postfix: bool,
+    /// How the step consumes the accumulator.
+    pub kind: PipeStepKind,
     /// The step text, recursively parsed.
     pub body: Program,
+}
+
+/// The syntactic class of one pipeline step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PipeStepKind {
+    /// An ordinary unary function step (`|> f`).
+    Call,
+    /// A postfix tail appended to the accumulator. `optional` records
+    /// whether the tail begins with `?.` rather than `.`; the parser has
+    /// already validated the complete tail before constructing this node.
+    Postfix { optional: bool },
 }
 
 /// A structurally parsed tt `result { ... }` computation block: a chain of

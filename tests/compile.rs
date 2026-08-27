@@ -2364,9 +2364,64 @@ fn empty_or_dangling_step_is_an_error() {
 }
 
 #[test]
-fn optional_chain_step_is_an_error() {
-    let e = err("const a = x |> ?.trim();\n");
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
+fn optional_postfix_step_emits_the_complete_chain() {
+    let out = ok("const a = x |> ?.trim();\n\
+         const b = xs |> ?.[key]?.value;\n\
+         const c = fn |> ?.(arg).value?.();\n");
+    assert!(out.contains("const a = x?.trim();"), "{out}");
+    assert!(out.contains("const b = xs?.[key]?.value;"), "{out}");
+    assert!(out.contains("const c = fn?.(arg).value?.();"), "{out}");
+}
+
+#[test]
+fn optional_postfix_uses_the_common_receiver_grouping_rule() {
+    let out = ok("const a = value |> ?.member;\n\
+         const b = left + right |> ?.member;\n\
+         const c = make() |> ?.member;\n");
+    assert!(out.contains("const a = value?.member;"), "{out}");
+    assert!(out.contains("const b = (left + right)?.member;"), "{out}");
+    assert!(out.contains("const c = make()?.member;"), "{out}");
+}
+
+#[test]
+fn malformed_optional_postfix_is_one_owned_diagnostic() {
+    for src in [
+        "const a = x |> ?.;\n",
+        "const a = x |> ?.#private;\n",
+        "const a = x |> ?.tag`value`;\n",
+        "const a = x |> ?.member + other |> next;\n",
+    ] {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:?}");
+        assert_eq!(
+            diagnostics[0].code,
+            ttc::DiagnosticCode::MalformedPipelinePostfix,
+            "{src}"
+        );
+        assert_eq!(
+            diagnostics[0].owner.as_ref().map(|owner| owner.start),
+            Some(10)
+        );
+    }
+}
+
+#[test]
+fn bare_super_is_not_an_optional_receiver() {
+    for src in [
+        "class C extends B { m() { return super |> ?.value; } }\n",
+        "class C extends B { m() { return /* kept */ super |> ?.value; } }\n",
+    ] {
+        let report = ttc::compile_report(src, &Options::default());
+        assert!(report.emit.is_none(), "{src}\n{:?}", report.diagnostics);
+        assert_eq!(report.diagnostics.len(), 1, "{report:?}");
+        assert_eq!(
+            report.diagnostics[0].code,
+            ttc::DiagnosticCode::InvalidOptionalReceiver
+        );
+    }
+
+    let out = ok("class C extends B { m() { return super |> .value |> ?.name; } }\n");
+    assert!(out.contains("return super.value?.name;"), "{out}");
 }
 
 #[test]
@@ -2399,6 +2454,15 @@ fn flow_method_step_becomes_a_contextually_typed_arrow() {
     let out = ok("const f = flow |> parse |> .toFixed(1);\n");
     assert!(
         out.contains("const f = $tt_fl(parse, (($tt_v) => ($tt_v).toFixed(1)));"),
+        "{out}"
+    );
+}
+
+#[test]
+fn flow_optional_postfix_step_becomes_a_contextually_typed_arrow() {
+    let out = ok("const f = flow |> parse |> ?.value?.toFixed(1);\n");
+    assert!(
+        out.contains("const f = $tt_fl(parse, (($tt_v) => ($tt_v)?.value?.toFixed(1)));"),
         "{out}"
     );
 }

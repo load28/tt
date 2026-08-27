@@ -1,0 +1,7 @@
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+ --> input.tt:3:36
+  |
+3 | export const name = user |> ?.name + "!" |> String;
+  |                                    ^
+  |
+  = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations

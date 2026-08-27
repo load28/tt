@@ -1,0 +1,16 @@
+[
+  {
+    "code": "malformed-pipeline-postfix",
+    "col": 36,
+    "endCol": 37,
+    "endLine": 3,
+    "line": 3,
+    "message": "pipeline: invalid optional postfix tail",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations"
+      }
+    ]
+  }
+]

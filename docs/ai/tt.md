@@ -101,10 +101,10 @@ else { prompt(); }
 ```tt
 const label = half(4) |> Option.mapP(x => x + 1) |> Option.unwrapOrP(0) |> .toFixed(1);
 ```
-- `x |> f` = `f(x)`; step starting `.` = postfix chain on piped value (`x |> .trim().split(",")`).
+- `x |> f` = `f(x)`; step starting `.` = postfix chain on piped value (`x |> .trim().split(",")`). A step starting `?.` is one JavaScript optional postfix tail: `?.name`, `?.[key]`, or `?.(args)`, followed by ordinary/optional member, index, or call operations.
 - Multi-arg: std `*P` curried variants or parenthesized arrow `x |> (n => add(n, 2))`.
 - PARENTHESIZE ternaries & arrows at head/step top level: `(c ? a : b) |> f`, `x |> (n => n+1)` — else compile error.
-- No `?.`-starting step; no empty step; no try STATEMENT inside head/step (pipeline inside a try expr is fine: `const a = try readCfg() |> normalize;`).
+- An optional step short-circuits only its own tail; a following `|> f` still calls `f(undefined)`. Optional keys and arguments are evaluated only when JavaScript would reach them. No empty step or incomplete/unsupported optional tail; no try STATEMENT inside head/step (pipeline inside a try expr is fine: `const a = try readCfg() |> normalize;`).
 - Malformed `|>` = located compile error. Ambiguous head (no-semicolon style, `in`/`instanceof`) → parenthesize head.
 - `flow` head = compose FUNCTIONS instead of piping a value: `const label = flow |> half |> Option.mapP(x => x + 1) |> .toFixed(1);` then `label(4)`. Same step rules; nothing runs until the composed fn is called.
 - `flow` is contextual — only a head that is exactly `flow`; a `flow` VARIABLE pipes when parenthesized (`(flow) |> f`). `flow |> f` (one step) = `f`.

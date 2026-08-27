@@ -247,6 +247,12 @@ test("every tt construct works in nested contexts", async () => {
   assertScope(lines, 26, "<-", "keyword.operator.result-bind.tt");
 });
 
+test("an optional postfix pipeline keeps TypeScript optional-chain scopes", async () => {
+  const lines = await tokenize("source.tt", "const out = value |> ?.member;\n");
+  assertScope(lines, 1, "|>", "keyword.operator.pipeline.tt");
+  assertScope(lines, 1, "?.", "punctuation.accessor.optional.ts");
+});
+
 // tt 구문과 형태가 겹치는 순수 TypeScript — tt로 오인하면 안 된다.
 const LOOKALIKES = `const enum Flags { A = 1, B = 2 }
 function passthrough(a: number, b: number) {

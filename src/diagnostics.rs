@@ -39,6 +39,11 @@ pub enum DiagnosticCode {
     /// A `|>` the parser could not claim — the surrounding text is not
     /// emittable TypeScript.
     StrayPipe,
+    /// An optional postfix pipeline step committed at `?.` but its complete
+    /// tail is not in the supported grammar.
+    MalformedPipelinePostfix,
+    /// A pipeline head cannot be the base receiver of an optional chain.
+    InvalidOptionalReceiver,
     /// An `if let` the parser could not claim.
     StrayIfLet,
     /// A `result` block the parser could not claim.
@@ -107,6 +112,8 @@ impl DiagnosticCode {
     pub fn as_str(self) -> &'static str {
         match self {
             DiagnosticCode::StrayPipe => "stray-pipe",
+            DiagnosticCode::MalformedPipelinePostfix => "malformed-pipeline-postfix",
+            DiagnosticCode::InvalidOptionalReceiver => "invalid-optional-receiver",
             DiagnosticCode::StrayIfLet => "stray-if-let",
             DiagnosticCode::StrayResult => "stray-result",
             DiagnosticCode::MalformedVariant => "malformed-variant",
@@ -146,6 +153,8 @@ impl DiagnosticCode {
     /// a new variant that forgets either one fails the test that walks it.
     pub const ALL: &[DiagnosticCode] = &[
         DiagnosticCode::StrayPipe,
+        DiagnosticCode::MalformedPipelinePostfix,
+        DiagnosticCode::InvalidOptionalReceiver,
         DiagnosticCode::StrayIfLet,
         DiagnosticCode::StrayResult,
         DiagnosticCode::MalformedVariant,
@@ -205,9 +214,31 @@ an arrow function at the top level of either side has to be wrapped:
     (ready ? a : b) |> f
     x |> (n => n + 1)
 
-A step may not start with `?.`, and it may not be empty. An ambiguous
-head — no-semicolon style, or one containing `in` / `instanceof` — is
-resolved by parenthesizing the head."
+A step may not be empty. An ambiguous head — no-semicolon style, or one
+containing `in` / `instanceof` — is resolved by parenthesizing the head."
+            }
+
+            DiagnosticCode::MalformedPipelinePostfix => {
+                "\
+An optional postfix pipeline step started with `?.`, so tt owns the whole
+step, but its tail is incomplete or outside the supported postfix grammar.
+
+The first operation is `?.name`, `?.[key]`, or `?.(args)`. It may continue
+with ordinary or optional member, index, and call operations. Tagged
+templates, private fields, optional construction, and partial operations are
+not supported. The whole pipeline is rejected rather than partially emitted."
+            }
+
+            DiagnosticCode::InvalidOptionalReceiver => {
+                "\
+The value before an optional postfix pipeline step cannot be used as an
+optional-chain receiver. Parentheses only control precedence; they cannot make
+a syntactically forbidden receiver valid.
+
+For example, bare `super` may only appear in the member and call forms the
+JavaScript grammar permits, and cannot become the base of `?.`. Use an
+ordinary `super.member` expression before the pipeline or restructure the
+access."
             }
 
             DiagnosticCode::StrayIfLet => {
@@ -551,6 +582,7 @@ look up."
         matches!(
             self,
             DiagnosticCode::StrayPipe
+                | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::StrayResult
                 | DiagnosticCode::MalformedVariant
@@ -875,7 +907,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 30);
+        assert_eq!(DiagnosticCode::ALL.len(), 32);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();

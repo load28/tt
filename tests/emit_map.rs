@@ -180,6 +180,18 @@ fn tt_import_specifiers_stay_untouched() {
 }
 
 #[test]
+fn optional_postfix_tail_keeps_user_expressions_mapped() {
+    let src = "const out = source |> ?.[key()]?.method(argument);\n";
+    let m = emit_mapped(src);
+    assert_mapping_invariants(src, &m);
+    for needle in ["source", "key", "method", "argument"] {
+        let at = src.find(needle).unwrap();
+        let out = map_offset(&m, at).unwrap_or_else(|| panic!("missing mapping for {needle}"));
+        assert_eq!(&m.code[out..out + needle.len()], needle);
+    }
+}
+
+#[test]
 fn val_modifier_is_dropped_and_the_rest_keeps_mapping() {
     // The editor serves the emitted text as a virtual TypeScript document,
     // so the erased `val` must leave the surrounding bytes mapped exactly.

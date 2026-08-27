@@ -257,7 +257,8 @@
 | TASK-247 | 공식 홈페이지 Google Analytics | 완료 | 2026-08-27 | 2026-08-27 | [TASK-247](./TASK-247-google-analytics.md) |
 | TASK-248 | 공식 홈페이지 `variant` 전환 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-248](./TASK-248-website-variant-content.md) |
 | TASK-249 | 비태스크 파일 `variant` 계약 정합성 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-249](./TASK-249-variant-contract-cleanup.md) |
+| TASK-250 | 파이프라인 optional postfix step — 구조화 tail과 평가 계약 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-250](./TASK-250-optional-postfix-pipeline.md) |
 
 ## 다음 태스크 번호
 
-**TASK-250**
+**TASK-251**
