@@ -20,7 +20,6 @@
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
 
-import { ttcSpawnEnv } from "./dev";
 
 /** The name a rename asks the engine for, standing in for the new name in
  * every edit's `newText` (see `onRenameRequest`). */
@@ -176,10 +175,6 @@ function engineServerFor(compiler: string): EngineServer | null {
   try {
     child = spawn(compiler, ["--server"], {
       stdio: ["pipe", "pipe", "ignore"],
-      // The engine resolves its TypeScript toolchain from the environment;
-      // a local-development setup (scripts/setup) is handed over here so the
-      // editor drives the same toolchain as the CLI launcher (dev.ts).
-      env: ttcSpawnEnv(compiler),
     });
   } catch {
     engineServerStrikes += 1;

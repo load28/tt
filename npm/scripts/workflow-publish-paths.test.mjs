@@ -24,12 +24,14 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.match(ci, /actions\/runs\/\$GITHUB_RUN_ID.*--jq \.created_at/);
   assert.match(ci, /needs: release-version/);
   assert.doesNotMatch(ci, /git show -s --format=%cd/);
-  assert.match(ci, /repository: microsoft\/typescript-go/);
-  assert.match(ci, /go build -o built\/local\/tsgo \.\/cmd\/tsgo/);
+  // TypeScript is a dependency of this repository, not a checkout CI builds:
+  // `npm ci` installs the version package.json pins, and ttc resolves it
+  // from node_modules exactly as a consumer project does (TASK-256).
+  assert.doesNotMatch(ci, /typescript-go/);
+  assert.doesNotMatch(ci, /TTC_TSGO_/);
+  assert.match(ci, /name: Install TypeScript\n\s+run: npm ci/);
   assert.match(ci, /name: tsgo type checking \+ vscode extension/);
-  assert.match(ci, /TTC_TSGO_ROOT: \$\{\{ github\.workspace \}\}\/typescript-go/);
   assert.doesNotMatch(ci, /^  extension:/m);
-  assert.doesNotMatch(ci, /npm install .*typescript@7/);
   assert.doesNotMatch(ci, /needs: \[[^\]]*extension/);
   assert.doesNotMatch(ci, /npm publish|action-gh-release/);
 });

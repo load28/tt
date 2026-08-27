@@ -27,21 +27,10 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 ## Install and use
 
 Install TT's official development packages from npm. Rust is not required on
-supported platforms. `ttc` requires a current source build of typescript-go.
-
-```sh
-git clone https://github.com/microsoft/typescript-go.git
-cd typescript-go
-npm ci
-mkdir -p built/local
-go build -o built/local/tsgo ./cmd/tsgo
-npx tsc -b _packages/native-preview
-export TTC_TSGO_ROOT="$PWD"
-```
-
-Keep `TTC_TSGO_ROOT` in the environment that runs `ttc`, and launch VS Code
-from the same shell. The executable and API client must come from the same
-checkout.
+supported platforms, and neither is a source build of anything: `ttc` uses
+the TypeScript your project installed, so `typescript@7` is the only other
+dependency. There is nothing to export and nothing to configure — the
+compiler, the editor extension and your build all read the same package.
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
@@ -60,12 +49,14 @@ Download `tt-language-<version>.vsix` from the newest pre-release on
 code --install-extension ./tt-language-<version>.vsix
 ```
 
-For a manual compiler-only install, first complete the typescript-go build
-above and keep `TTC_TSGO_ROOT` exported:
+For a manual compiler-only install:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0
+bun add -d @load28/tt-lang@0.3.0 typescript@7
 ```
+
+Declaration output (`ttc --types` and the editor's `.tt.d.ts` sidecars) uses
+an API that arrived in TypeScript 7.1; everything else works on 7.0.
 
 Compile a file or source tree, or check it without writing output:
 
@@ -101,18 +92,19 @@ For the reasoning behind the language, read [Why I built tt](./docs/why-tt.md).
 The compiler is a Rust crate with a small public API and an `ttc` CLI. Rust
 1.98 or newer is required — the version `rust-toolchain.toml` pins, and the
 one every build here is checked with. The complete local environment also
-needs Bun, Node.js, Go, and a typescript-go checkout.
+needs Bun and Node.js.
 
 ```sh
 git clone https://github.com/load28/tt.git
-git clone https://github.com/microsoft/typescript-go.git
 cd tt
-./scripts/setup --tsgo-root ../typescript-go
+npm ci
+./scripts/setup
 ```
 
-`scripts/setup` builds the current typescript-go checkout, a release `ttc`,
-and the VS Code extension. Later runs reuse `.tt-dev/toolchain.json`; the
-script never updates either Git checkout.
+`npm ci` installs TypeScript at the version `package.json` pins; the typed
+test suites and the editor both read it, the same way a consumer project's
+would. `scripts/setup` then builds a release `ttc` and the VS Code
+extension; it never updates the Git checkout.
 
 To test exactly what package consumers receive, publish the local TT packages
 to an npm-compatible registry:

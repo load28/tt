@@ -1,43 +1,33 @@
-//! Where TypeScript 7 comes from — the one description both halves read.
+//! Where TypeScript 7 comes from: **the package the project installed**.
 //!
-//! ttc drives the same TypeScript twice: as an **API server** for the
-//! checker ([`super::native`]) and as a **language server** for the editor
-//! surface ([`super::service`]). They are two halves of one install — the
-//! protocols carry no version negotiation — so *which* install, and *where
-//! its files are*, is decided here rather than once per consumer. Two
-//! copies of these rules is how a project ends up type-checking on the
-//! command line while the editor answers nothing (TASK-255).
+//! ttc drives the same TypeScript twice — as an API server for the checker
+//! ([`super::native`]) and as a language server for the editor surface
+//! ([`super::service`]). They are two halves of one install, so both are
+//! resolved here, from one description, and there is exactly one place they
+//! can come from: `node_modules`, walked upwards from the project.
 //!
-//! **Order, first hit wins:**
+//! **There is deliberately no environment variable and no checkout path.**
+//! TypeScript 7 publishes the native executable *and* the API client in its
+//! npm packages, so a second way to name a toolchain would only be a second
+//! way for the editor and the command line to disagree about which
+//! TypeScript a project uses — which is what having one used to cause
+//! (TASK-255, TASK-256). A project pins its TypeScript the way it pins
+//! every other dependency, and everything that reads this module inherits
+//! that one answer.
 //!
-//! 1. **Named by the environment** — `TTC_TSGO_API` (with an optional
-//!    `TTC_TSGO_BIN`) for the API client, `TTC_TSGO_BIN` for the language
-//!    server.
-//! 2. **A built typescript-go checkout** — `TTC_TSGO_ROOT`, else a
-//!    `../typescript-go` sibling.
-//! 3. **A package installed in the project** — `node_modules` from the file
-//!    upwards, which is the TypeScript the project's code is written
-//!    against.
-//!
-//! 1 and 2 are instructions, not guesses: when `TTC_TSGO_*` names something
-//! that is not there, ttc says so and stops instead of quietly running some
-//! other TypeScript. The `../typescript-go` sibling is a convention rather
-//! than an instruction, so it is skipped when absent. No path is compiled
-//! in, and a tree that is not built yet is reported as such.
-//!
-//! The installed layout is upstream's, not ours: `getExePath.js` in the
-//! published package derives the executable's name from the package's own
-//! name (`typescript` ships `tsc`, every other distribution ships `tsgo`)
-//! and finds it in `@typescript/<base>-<platform>-<arch>/lib`.
+//! The layout is upstream's, not ours: `getExePath.js` in the published
+//! package derives the executable's name from the package's own name
+//! (`typescript` ships `tsc`, every other distribution ships `tsgo`) and
+//! finds it in `@typescript/<base>-<platform>-<arch>/lib`.
 
 use std::path::{Path, PathBuf};
 
-/// `tsgo`'s path inside a built typescript-go tree.
-pub(crate) const BIN_IN_TREE: &str = "built/local/tsgo";
-/// The JS API client's path inside a built typescript-go tree.
-const API_IN_TREE: &str = "_packages/native-preview/dist/api/sync/api.js";
-/// The API client's path inside an installed package.
+/// The API client's path inside its package.
 const API_IN_PACKAGE: &str = "dist/api/sync/api.js";
+
+/// How to install what is missing — the one sentence every error here ends
+/// with, so the fix never depends on which half reported it.
+const INSTALL: &str = "install it in this project (`npm i -D typescript@7`)";
 
 /// One npm distribution of TypeScript 7.
 struct Distribution {
@@ -50,9 +40,9 @@ struct Distribution {
     exe: &'static str,
 }
 
-/// The distributions ttc resolves, in order. `typescript` is the eventual
-/// released package; `@typescript/native-preview` is what the TypeScript
-/// team publishes today.
+/// The distributions ttc resolves, in order. `typescript` is the released
+/// package; `@typescript/native-preview` is the preview channel it grew out
+/// of, still resolved for a project that has not moved off it.
 const DISTRIBUTIONS: [Distribution; 2] = [
     Distribution {
         client: "typescript",
@@ -66,135 +56,49 @@ const DISTRIBUTIONS: [Distribution; 2] = [
     },
 ];
 
-/// A place a toolchain may come from, in the order ttc takes them. Both
-/// halves walk this one list, so their priority cannot drift apart.
-enum Source {
-    /// What the environment names outright.
-    Named,
-    /// A built typescript-go checkout. `named` marks the one the user
-    /// pointed at (`TTC_TSGO_ROOT`): its absence is an error, where the
-    /// sibling's is simply a miss.
-    Checkout { root: PathBuf, named: bool },
-    /// Whatever the project installed, from `from` upwards.
-    Installed { from: PathBuf },
-}
-
-/// The sources for a toolchain serving `from`, in priority order.
-fn sources(from: &Path) -> Vec<Source> {
-    let mut sources = vec![Source::Named];
-    if let Some(root) = env_path("TTC_TSGO_ROOT") {
-        sources.push(Source::Checkout { root, named: true });
-    }
-    sources.push(Source::Checkout {
-        root: PathBuf::from("../typescript-go"),
-        named: false,
-    });
-    sources.push(Source::Installed {
-        from: from.to_path_buf(),
-    });
-    sources
-}
-
-/// The API client half, and the executable to run it against.
-///
-/// An installed package ships both together and the client finds its own
-/// executable, so `bin` is `None` there; a checkout names both.
+/// The API client half — the JS module the host imports.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Client {
-    /// The `tsgo` executable to run as the API server, or `None` to let the
-    /// API client run the one shipped beside it.
-    pub bin: Option<PathBuf>,
-    /// The JS client module the host imports (`.../api/sync/api.js`).
+    /// The client module's path (`.../dist/api/sync/api.js`). Absolute: the
+    /// host imports it by path and runs in the project's directory, so a
+    /// relative path would resolve against neither. The client finds the
+    /// executable shipped beside it on its own.
     pub api: PathBuf,
 }
 
-/// Resolves the API client for a project at `from`. The error names what is
-/// missing and how to produce it.
+/// Resolves the API client for a project at `from`.
 pub(crate) fn client(from: &Path) -> Result<Client, String> {
-    for source in sources(from) {
-        match source {
-            Source::Named => {
-                if let Some(api) = env_path("TTC_TSGO_API") {
-                    return checked(Client {
-                        bin: env_path("TTC_TSGO_BIN"),
-                        api,
-                    });
-                }
-            }
-            Source::Checkout { root, named } => {
-                let candidate = Client {
-                    bin: Some(root.join(BIN_IN_TREE)),
-                    api: root.join(API_IN_TREE),
-                };
-                if named || candidate.api.exists() {
-                    return checked(candidate);
-                }
-            }
-            Source::Installed { from } => {
-                for node_modules in node_modules_from(&from) {
-                    for distribution in &DISTRIBUTIONS {
-                        let api = node_modules.join(distribution.client).join(API_IN_PACKAGE);
-                        if api.exists() {
-                            return checked(Client { bin: None, api });
-                        }
-                    }
-                }
+    for node_modules in node_modules_from(from) {
+        for distribution in &DISTRIBUTIONS {
+            let api = node_modules.join(distribution.client).join(API_IN_PACKAGE);
+            if api.exists() {
+                return Ok(Client { api: absolute(api) });
             }
         }
     }
-    Err(format!(
-        "no TypeScript compiler found — install one \
-         (`npm i -D typescript@7`), or build a typescript-go checkout \
-         (`go build -o {BIN_IN_TREE} ./cmd/tsgo` plus `npm ci && npx \
-         tsc -b _packages/native-preview`) and point ttc at it with \
-         TTC_TSGO_ROOT"
-    ))
+    Err(format!("no TypeScript compiler found — {INSTALL}"))
 }
 
-/// Resolves the `tsgo` executable that serves the language service for a
-/// project at `from`.
+/// Resolves the executable that serves the language service for a project
+/// at `from`.
 ///
 /// Always absolute. The server is spawned with its working directory in the
-/// *project*, so a relative answer — the sibling checkout's, or a relative
-/// `TTC_TSGO_ROOT` — would be resolved against a directory it was never
-/// measured from, and the session would fail to start for one project while
-/// working for another (TASK-217).
+/// *project*, so a relative answer would be resolved against a directory it
+/// was never measured from, and the session would fail to start for one
+/// project while working for another (TASK-217).
 pub(crate) fn service_binary(from: &Path) -> Result<PathBuf, String> {
-    for source in sources(from) {
-        match source {
-            Source::Named => {
-                if let Some(bin) = env_path("TTC_TSGO_BIN") {
-                    return checked_bin(bin).map(absolute);
-                }
-            }
-            Source::Checkout { root, named } => {
-                let bin = root.join(BIN_IN_TREE);
-                if named {
-                    return checked_bin(bin).map(absolute);
-                }
-                if bin.exists() {
-                    return Ok(absolute(bin));
-                }
-            }
-            Source::Installed { from } => {
-                for node_modules in node_modules_from(&from) {
-                    for distribution in &DISTRIBUTIONS {
-                        let exe = node_modules
-                            .join(distribution.platform_package())
-                            .join("lib")
-                            .join(exe_file_name(distribution.exe));
-                        if exe.exists() {
-                            return Ok(exe);
-                        }
-                    }
-                }
+    for node_modules in node_modules_from(from) {
+        for distribution in &DISTRIBUTIONS {
+            let exe = node_modules
+                .join(distribution.platform_package())
+                .join("lib")
+                .join(exe_file_name(distribution.exe));
+            if exe.exists() {
+                return Ok(absolute(exe));
             }
         }
     }
-    Err("no tsgo language server found — install TypeScript 7 \
-         (`npm i -D typescript@7`) or point TTC_TSGO_ROOT at a built \
-         typescript-go checkout"
-        .to_string())
+    Err(format!("no TypeScript language server found — {INSTALL}"))
 }
 
 impl Distribution {
@@ -203,41 +107,6 @@ impl Distribution {
     fn platform_package(&self) -> String {
         format!("@typescript/{}-{}-{}", self.base, os_name(), arch_name())
     }
-}
-
-/// Rejects a client whose halves are not both present, naming the step that
-/// produces the missing one, and makes what survives absolute — the host
-/// imports the client by path and runs in the project's directory, so a
-/// relative path would resolve against neither.
-fn checked(client: Client) -> Result<Client, String> {
-    if let Some(bin) = &client.bin {
-        checked_bin(bin.clone())?;
-    }
-    if !client.api.exists() {
-        return Err(format!(
-            "no TypeScript API client at {} — in a typescript-go checkout \
-             build it with `npm ci && npx tsc -b _packages/native-preview` \
-             (the client and the executable must come from one build)",
-            client.api.display(),
-        ));
-    }
-    Ok(Client {
-        bin: client.bin.map(absolute),
-        api: absolute(client.api),
-    })
-}
-
-/// The executable, or the error that names how to build it.
-fn checked_bin(bin: PathBuf) -> Result<PathBuf, String> {
-    if bin.exists() {
-        return Ok(bin);
-    }
-    Err(format!(
-        "no tsgo executable at {} — build one with `go build -o {} \
-         ./cmd/tsgo` in a typescript-go checkout",
-        bin.display(),
-        BIN_IN_TREE,
-    ))
 }
 
 /// The executable's file name on this platform.
@@ -265,12 +134,6 @@ fn node_modules_from(from: &Path) -> impl Iterator<Item = PathBuf> {
 /// The path as a process started elsewhere will see it.
 fn absolute(path: PathBuf) -> PathBuf {
     path.canonicalize().unwrap_or(path)
-}
-
-fn env_path(var: &str) -> Option<PathBuf> {
-    std::env::var_os(var)
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
 }
 
 fn os_name() -> &'static str {
@@ -324,18 +187,14 @@ mod tests {
     fn both_halves_of_every_published_distribution_resolve() {
         for distribution in &DISTRIBUTIONS {
             let dir = scratch(distribution.base);
-            let node_modules = install(&dir, distribution);
-            assert!(
-                node_modules
-                    .join(distribution.client)
-                    .join(API_IN_PACKAGE)
-                    .exists()
+            install(&dir, distribution);
+            assert!(client(&dir).is_ok(), "no client for {}", distribution.base);
+            let exe = service_binary(&dir)
+                .unwrap_or_else(|e| panic!("no executable for {}: {e}", distribution.base));
+            assert_eq!(
+                exe.file_name().unwrap(),
+                exe_file_name(distribution.exe).as_str()
             );
-            let exe = node_modules
-                .join(distribution.platform_package())
-                .join("lib")
-                .join(exe_file_name(distribution.exe));
-            assert!(exe.exists(), "no executable for {}", distribution.base);
             std::fs::remove_dir_all(&dir).ok();
         }
     }
@@ -356,41 +215,27 @@ mod tests {
     }
 
     /// A package installed at the workspace root serves a file nested
-    /// anywhere below it — Node's own rule.
+    /// anywhere below it — Node's own rule, and what makes one install at a
+    /// monorepo root enough.
     #[test]
     fn resolution_walks_up_to_the_installing_root() {
         let dir = scratch("walk");
-        let distribution = &DISTRIBUTIONS[1];
-        install(&dir, distribution);
+        install(&dir, &DISTRIBUTIONS[0]);
         let nested = dir.join("packages/app/src");
         std::fs::create_dir_all(&nested).unwrap();
-        let found = node_modules_from(&nested).find(|nm| {
-            nm.join(distribution.platform_package())
-                .join("lib")
-                .join(exe_file_name(distribution.exe))
-                .exists()
-        });
-        assert!(found.is_some(), "the root install must serve a nested file");
+        assert!(client(&nested).is_ok());
+        assert!(service_binary(&nested).is_ok());
         std::fs::remove_dir_all(&dir).ok();
     }
 
-    /// The order is one list, and both halves read it: an environment that
-    /// names a toolchain is taken before anything a project installed.
+    /// Both halves fail the same way, and the message names the one fix —
+    /// there is no second place a toolchain could have come from.
     #[test]
-    fn the_environment_outranks_an_installed_package() {
-        let ordered: Vec<&'static str> = sources(Path::new("/tmp"))
-            .iter()
-            .map(|source| match source {
-                Source::Named => "named",
-                Source::Checkout { named: true, .. } => "checkout",
-                Source::Checkout { named: false, .. } => "sibling",
-                Source::Installed { .. } => "installed",
-            })
-            .collect();
-        assert_eq!(ordered.first(), Some(&"named"));
-        assert_eq!(ordered.last(), Some(&"installed"));
-        let sibling = ordered.iter().position(|s| *s == "sibling").unwrap();
-        let installed = ordered.iter().position(|s| *s == "installed").unwrap();
-        assert!(sibling < installed);
+    fn a_project_without_typescript_is_told_how_to_install_it() {
+        let dir = scratch("empty");
+        for message in [client(&dir).unwrap_err(), service_binary(&dir).unwrap_err()] {
+            assert!(message.contains(INSTALL), "unhelpful message: {message}");
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

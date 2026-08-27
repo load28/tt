@@ -9,12 +9,12 @@
 //! tt, and it needs no oracle: a file with no tt syntax must come back
 //! **byte for byte**, so the input is the expected output.
 //!
-//! The corpus is the `typescript-go` checkout the typed suites already
-//! need — `testdata/tests/cases/` is TypeScript's own conformance corpus,
-//! and `internal/bundled/libs/` is the standard library's declarations.
-//! Pinning it costs nothing new: CI already fixes that revision, for the
-//! same reason (a floating `main` breaks this gate on someone else's
-//! commit).
+//! The corpus is what is already on the machine: this repository's own
+//! TypeScript, plus the standard library declarations that ship inside the
+//! installed TypeScript package — over a hundred files of the most
+//! scrutinised TypeScript there is. Pinning costs nothing new: the version
+//! is the one `package.json` fixes for the typed suites, for the same
+//! reason (a floating version breaks this gate on someone else's commit).
 //!
 //! ```sh
 //! cargo test --test corpus                  # sample, as a PR runs it
@@ -45,14 +45,13 @@ const OWN_DIRS: [&str; 3] = [
     "integrations",
 ];
 
-/// Where more TypeScript lives inside a typescript-go checkout: the
-/// compiler's own conformance corpus, its bundled library declarations,
-/// and the API client's sources. Pinned by the same revision the typed
-/// suites use.
-const TSGO_DIRS: [&str; 3] = [
-    "testdata/tests/cases",
-    "internal/bundled/libs",
-    "_packages/native-preview/src",
+/// Where more TypeScript lives once the repository has installed one: the
+/// TypeScript compiler's own library declarations, which ship in the
+/// package and are as real as hand-written TypeScript gets. Pinned by the
+/// same `package.json` the typed suites read (`src/typescript/toolchain.rs`).
+const INSTALLED_DIRS: [&str; 2] = [
+    "node_modules/@typescript/typescript-{platform}/lib",
+    "node_modules/@typescript/native-preview-{platform}/lib",
 ];
 
 /// Directories that hold something other than hand-written sources.
@@ -69,24 +68,41 @@ fn full() -> bool {
 }
 
 /// The corpus roots. A named tree replaces them all; otherwise this
-/// repository's own TypeScript, plus a typescript-go checkout's when one
-/// is resolvable (the same way ttc resolves its toolchain).
+/// repository's own TypeScript, plus the installed TypeScript's library
+/// declarations.
 fn roots() -> Vec<PathBuf> {
     if let Some(named) = std::env::var_os("TTC_CORPUS").filter(|v| !v.is_empty()) {
         let root = PathBuf::from(named);
         return root.is_dir().then_some(vec![root]).unwrap_or_default();
     }
     let here = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let tree = match std::env::var_os("TTC_TSGO_ROOT").filter(|v| !v.is_empty()) {
-        Some(root) => PathBuf::from(root),
-        None => PathBuf::from("../typescript-go"),
-    };
+    let platform = format!("{}-{}", os_name(), arch_name());
     OWN_DIRS
         .iter()
         .map(|dir| here.join(dir))
-        .chain(TSGO_DIRS.iter().map(|dir| tree.join(dir)))
+        .chain(
+            INSTALLED_DIRS
+                .iter()
+                .map(|dir| here.join(dir.replace("{platform}", &platform))),
+        )
         .filter(|dir| dir.is_dir())
         .collect()
+}
+
+fn os_name() -> &'static str {
+    match std::env::consts::OS {
+        "macos" => "darwin",
+        "windows" => "win32",
+        other => other,
+    }
+}
+
+fn arch_name() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        other => other,
+    }
 }
 
 /// Every `.ts`/`.tsx` file under `roots`, in path order — so a sample is
@@ -225,8 +241,7 @@ fn typescript_the_compiler_never_saw_comes_back_unchanged() {
         assert!(
             !required(),
             "TTC_REQUIRE_CORPUS is set but no corpus was found \
-             (TTC_CORPUS, {OWN_DIRS:?} here, or {TSGO_DIRS:?} under \
-             TTC_TSGO_ROOT / ../typescript-go)"
+             (TTC_CORPUS, {OWN_DIRS:?} here, or {INSTALLED_DIRS:?})"
         );
         return;
     }

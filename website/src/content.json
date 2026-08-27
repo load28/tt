@@ -89,24 +89,30 @@
       }
     },
     "install": {
-      "nav": { "en": "Install", "ko": "설치" },
-      "title": { "en": "Install published TT packages with the current tsgo source.", "ko": "공식 TT 패키지와 최신 tsgo 소스로 시작합니다." },
+      "nav": {
+        "en": "Install",
+        "ko": "설치"
+      },
+      "title": {
+        "en": "Install published TT packages with TypeScript 7 from npm.",
+        "ko": "공식 TT 패키지와 npm의 TypeScript 7으로 시작합니다."
+      },
       "summary": {
-        "en": "TT itself is installed from npm. Until tsgo is officially released with the sync API used by ttc, build typescript-go from its latest source. create-tt does not install an npm TypeScript package.",
-        "ko": "TT 자체는 npm 공식 배포본을 설치합니다. ttc가 사용하는 sync API를 포함한 tsgo가 정식 출시되기 전까지 typescript-go를 최신 소스에서 빌드합니다. create-tt은 npm TypeScript 패키지를 설치하지 않습니다."
+        "en": "TT itself is installed from npm, and so is the TypeScript it drives: ttc resolves TypeScript 7 from the project's own node_modules and nowhere else. create-tt does not add the TypeScript package for you.",
+        "ko": "TT 자체도, ttc가 구동하는 TypeScript도 npm에서 설치합니다 — ttc는 프로젝트 자신의 node_modules에서만 TypeScript 7을 찾습니다. create-tt은 TypeScript 패키지를 대신 추가하지 않습니다."
       },
       "code": "bunx @load28/create-tt@0.3.0 my-app\n\n# Or, inside an existing TypeScript project:\nbunx @load28/create-tt@0.3.0 init\nbun run tt:check",
       "works": {
         "en": [
           "TT packages and the prebuilt ttc binary come from the public npm registry.",
           "create-tt@0.3.0 installs the stable channels of tt-lang and unplugin-tt, without an npm TypeScript package.",
-          "The tsgo executable and sync API client come from one current typescript-go checkout.",
+          "The tsgo executable and sync API client both come from the installed TypeScript 7 package.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm are detected."
         ],
         "ko": [
           "TT 패키지와 프리빌트 ttc 바이너리는 공개 npm 레지스트리에서 설치합니다.",
           "create-tt@0.3.0은 npm TypeScript 패키지 없이 tt-lang과 unplugin-tt의 Stable 채널을 설치합니다.",
-          "tsgo 실행 파일과 sync API 클라이언트는 하나의 최신 typescript-go 체크아웃에서 빌드합니다.",
+          "tsgo 실행 파일과 sync API 클라이언트는 설치된 TypeScript 7 패키지 하나에서 함께 옵니다.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 감지합니다."
         ]
       },
@@ -114,46 +120,86 @@
         "en": [
           "The initializer does not rewrite arbitrary JavaScript config source.",
           "esbuild scripts need the printed plugin line because they have no standard config shape.",
-          "Keep TTC_TSGO_ROOT available to ttc and launch VS Code from that environment.",
+          "Add typescript@7 yourself; ttc --types sidecars additionally need the 7.1 declaration-emit API.",
           "A bundler transpiles sources; keep ttc --check-types as a separate type-check step."
         ],
         "ko": [
           "설치기는 임의 형태의 JavaScript 설정 소스를 재작성하지 않습니다.",
           "esbuild 스크립트에는 표준 설정 형태가 없어 출력된 플러그인 줄을 직접 추가합니다.",
-          "ttc가 실행되는 환경에 TTC_TSGO_ROOT를 유지하고 같은 환경에서 VS Code를 실행합니다.",
+          "typescript@7은 직접 추가합니다. ttc --types 사이드카는 7.1의 선언 방출 API가 추가로 필요합니다.",
           "번들러는 소스를 변환할 뿐이므로 ttc --check-types 검사를 별도로 유지합니다."
         ]
       },
       "sections": [
         {
-          "title": { "en": "Current tsgo prerequisite", "ko": "현재 tsgo 사전 준비" },
-          "body": { "en": "Clone the current typescript-go source and build its executable and sync API client together. Export the checkout root in every shell that runs ttc; launch VS Code from the same shell for editor services.", "ko": "최신 typescript-go 소스를 복제하고 실행 파일과 sync API 클라이언트를 같은 체크아웃에서 함께 빌드합니다. ttc를 실행하는 셸마다 체크아웃 루트를 지정하고, 에디터 서비스도 같은 도구 체인을 쓰도록 해당 셸에서 VS Code를 실행합니다." },
-          "code": "git clone https://github.com/microsoft/typescript-go.git\ncd typescript-go\nnpm ci\nmkdir -p built/local\ngo build -o built/local/tsgo ./cmd/tsgo\nnpx tsc -b _packages/native-preview\nexport TTC_TSGO_ROOT=\"$PWD\""
+          "title": {
+            "en": "TypeScript 7 prerequisite",
+            "ko": "TypeScript 7 사전 준비"
+          },
+          "body": {
+            "en": "Install TypeScript 7 in the project. It ships the native executable and the sync API client together, and ttc resolves both from node_modules — there is no environment variable, and no way for the editor and the build to use different TypeScripts.",
+            "ko": "프로젝트에 TypeScript 7을 설치합니다. 네이티브 실행 파일과 sync API 클라이언트가 한 패키지에 함께 들어 있고 ttc가 둘 다 node_modules에서 찾습니다 — 환경 변수도 없고, 에디터와 빌드가 다른 TypeScript를 쓸 방법도 없습니다."
+          },
+          "code": "bun add -d typescript@7"
         },
         {
-          "title": { "en": "New project", "ko": "새 프로젝트" },
-          "body": { "en": "The official npm installer creates src/main.ts with a starter src/app.tt module, installs with Bun, and adds dev, build, and check scripts.", "ko": "공식 npm 설치기가 src/main.ts와 첫 src/app.tt 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다." },
+          "title": {
+            "en": "New project",
+            "ko": "새 프로젝트"
+          },
+          "body": {
+            "en": "The official npm installer creates src/main.ts with a starter src/app.tt module, installs with Bun, and adds dev, build, and check scripts.",
+            "ko": "공식 npm 설치기가 src/main.ts와 첫 src/app.tt 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다."
+          },
           "code": "bunx @load28/create-tt@0.3.0 my-app\ncd my-app\nbun run dev"
         },
         {
-          "title": { "en": "Existing project", "ko": "기존 프로젝트" },
-          "body": { "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.", "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다." },
+          "title": {
+            "en": "Existing project",
+            "ko": "기존 프로젝트"
+          },
+          "body": {
+            "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.",
+            "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다."
+          },
           "code": "bunx @load28/create-tt@0.3.0 init\nbunx @load28/create-tt@0.3.0 init --bundler vite --no-install"
         },
         {
-          "title": { "en": "VS Code extension", "ko": "VS Code 확장" },
-          "body": { "en": "Development extensions are distributed as VSIX files on GitHub Releases, not through the Marketplace. Download tt-language-<version>.vsix from the newest pre-release, then use Extensions: Install from VSIX... in the Command Palette or the CLI below.", "ko": "개발 확장은 Marketplace가 아니라 GitHub Releases의 VSIX 파일로 배포합니다. 최신 pre-release에서 tt-language-<버전>.vsix를 내려받은 뒤 명령 팔레트의 Extensions: Install from VSIX... 또는 아래 CLI로 설치합니다." },
-          "link": { "href": "https://github.com/load28/tt/releases", "en": "Download from GitHub Releases ↗", "ko": "GitHub Releases에서 다운로드 ↗" },
+          "title": {
+            "en": "VS Code extension",
+            "ko": "VS Code 확장"
+          },
+          "body": {
+            "en": "Development extensions are distributed as VSIX files on GitHub Releases, not through the Marketplace. Download tt-language-<version>.vsix from the newest pre-release, then use Extensions: Install from VSIX... in the Command Palette or the CLI below.",
+            "ko": "개발 확장은 Marketplace가 아니라 GitHub Releases의 VSIX 파일로 배포합니다. 최신 pre-release에서 tt-language-<버전>.vsix를 내려받은 뒤 명령 팔레트의 Extensions: Install from VSIX... 또는 아래 CLI로 설치합니다."
+          },
+          "link": {
+            "href": "https://github.com/load28/tt/releases",
+            "en": "Download from GitHub Releases ↗",
+            "ko": "GitHub Releases에서 다운로드 ↗"
+          },
           "code": "code --install-extension ./tt-language-<version>.vsix"
         },
         {
-          "title": { "en": "Manual compiler", "ko": "컴파일러 수동 설치" },
-          "body": { "en": "Prerequisite: complete Current tsgo prerequisite above and keep TTC_TSGO_ROOT exported before using this path. Then install only the published TT compiler from npm.", "ko": "선행 조건: 먼저 위의 현재 tsgo 사전 준비를 완료하고 TTC_TSGO_ROOT를 설정한 상태여야 합니다. 그다음 npm에서는 공식 TT 컴파일러만 설치합니다." },
-          "code": "# Requires the typescript-go build and TTC_TSGO_ROOT from above.\nbun add -d @load28/tt-lang@0.3.0\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "title": {
+            "en": "Manual compiler",
+            "ko": "컴파일러 수동 설치"
+          },
+          "body": {
+            "en": "Prerequisite: install typescript@7 as shown above. Then install the published TT compiler from npm.",
+            "ko": "선행 조건: 위와 같이 typescript@7을 설치합니다. 그다음 npm에서 공식 TT 컴파일러를 설치합니다."
+          },
+          "code": "bun add -d @load28/tt-lang@0.3.0 typescript@7\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
-          "title": { "en": "Manual bundlers", "ko": "번들러 수동 설정" },
-          "body": { "en": "This path has the same source-built typescript-go prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript-go 소스 빌드 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
+          "title": {
+            "en": "Manual bundlers",
+            "ko": "번들러 수동 설정"
+          },
+          "body": {
+            "en": "This path has the same typescript@7 prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.",
+            "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript@7 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다."
+          },
           "code": "bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]
@@ -752,7 +798,10 @@
       },
       "sections": [
         {
-          "title": { "en": "What work belongs in each stage?", "ko": "각 단계에는 어떤 변경을 넣습니까?" },
+          "title": {
+            "en": "What work belongs in each stage?",
+            "ko": "각 단계에는 어떤 변경을 넣습니까?"
+          },
           "body": {
             "en": "Put features, breaking changes, and ordinary fixes into main early in Beta. RC is for fixes and remaining editor work. After RC, restrict the release line to high-priority fixes; patches are for safe regressions and performance or editor fixes that should not wait for the next minor.",
             "ko": "새 기능·큰 변경·일반 수정은 Beta 초기에 main에 넣습니다. RC에는 버그 수정과 남은 에디터 연동을 넣습니다. RC 뒤 릴리스 라인은 높은 우선순위 수정으로 제한하고, Patch에는 다음 minor까지 기다리기 어려운 안전한 회귀·성능·에디터 수정을 넣습니다."
@@ -760,7 +809,10 @@
           "code": "# Beta: main accepts feature work\n# RC: fixes and remaining editor work\n# Stable / Patch: prioritized safe fixes only"
         },
         {
-          "title": { "en": "How does branching work?", "ko": "브랜치는 어떻게 사용합니까?" },
+          "title": {
+            "en": "How does branching work?",
+            "ko": "브랜치는 어떻게 사용합니까?"
+          },
           "body": {
             "en": "Development normally lands in main through a squash-merged PR. Create release-X.Y from main for Beta. Sync main into that release branch during Beta and before RC. After RC, do not merge main wholesale: cherry-pick only the required main PR commit into release-X.Y.",
             "ko": "일반 개발은 PR을 squash merge해 main에 넣습니다. Beta에서 main을 기준으로 release-X.Y를 만듭니다. Beta와 RC 직전에는 main을 해당 브랜치에 sync합니다. RC 뒤에는 main 전체를 병합하지 않고, 필요한 PR의 squash merge 커밋만 release-X.Y에 cherry-pick합니다."
@@ -768,7 +820,10 @@
           "code": "git switch release-0.4\ngit cherry-pick <main-squash-merge-commit>\ngit push origin HEAD:release-0.4"
         },
         {
-          "title": { "en": "What is the release command sequence?", "ko": "릴리스 액션 순서는 무엇입니까?" },
+          "title": {
+            "en": "What is the release command sequence?",
+            "ko": "릴리스 액션 순서는 무엇입니까?"
+          },
           "body": {
             "en": "The three commands have separate boundaries, matching TypeScript's create, sync, and bump commands. They create the release branch, merge main, and advance the version respectively. The App identity pushes the resulting commit; do not create a version commit or dispatch CI yourself.",
             "ko": "세 액션은 TypeScript의 create·sync·bump 경계를 그대로 나눕니다. 각각 릴리스 브랜치 생성, main 병합, 버전 증가를 담당합니다. App 신원이 결과 커밋을 push하므로 사람이 버전 커밋이나 CI dispatch를 만들지 않습니다."
@@ -776,7 +831,10 @@
           "code": "gh workflow run new-release-branch.yml --ref main -f line=0.4\ngh workflow run sync-release-branch.yml --ref main -f line=0.4\ngh workflow run bump-release-version.yml --ref main -f line=0.4"
         },
         {
-          "title": { "en": "When is a release actually published?", "ko": "실제 게시는 언제 일어납니까?" },
+          "title": {
+            "en": "When is a release actually published?",
+            "ko": "실제 게시는 언제 일어납니까?"
+          },
           "body": {
             "en": "A release-branch push starts CI. On success, Publish Release takes that CI's immutable artifacts and waits at the production environment. A reviewer publishes by selecting Approve and deploy. Do not approve an intermediate sync CI that still has an already-published version; bump first to create the next publishable version.",
             "ko": "릴리스 브랜치 push가 CI를 시작합니다. 성공하면 Publish Release가 그 CI의 불변 산출물을 가져와 production Environment에서 대기합니다. 승인자는 Approve and deploy를 눌러 게시합니다. 이미 게시한 버전과 같은 sync CI는 중간 검증이므로 승인하지 말고, 먼저 bump하여 다음 게시 버전을 만듭니다."

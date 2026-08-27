@@ -17,6 +17,7 @@ import * as path from "node:path";
 import * as engine from "../engine";
 import { positionAt, sliceOf } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 const skip = !compilerAvailable()
   ? "no ttc — none built, installed, or on PATH"
@@ -51,7 +52,7 @@ const SOURCE = [
 const HELPERS = "export function disc(x: number): number {\n  return x * Math.PI;\n}\n";
 
 function fixture(name: string, files: Record<string, string>): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), name));
+  const dir = caseDir(name);
   for (const [file, text] of Object.entries(files)) {
     fs.writeFileSync(path.join(dir, file), text);
   }

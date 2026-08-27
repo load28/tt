@@ -16,6 +16,7 @@ import * as path from "node:path";
 import * as engine from "../engine";
 import { positionAt, sliceOf, spanOf } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 const skip = !compilerAvailable()
   ? "no ttc — none built, installed, or on PATH"
@@ -42,7 +43,7 @@ const RENDER = [
 ].join("\n");
 
 function workspace(): { dir: string; tt: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-engine-test-"));
+  const dir = caseDir("tt-engine-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),
@@ -86,7 +87,7 @@ const TTX_SOURCE = [
 ].join("\n");
 
 function ttxWorkspace(): { dir: string; ttx: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ttx-engine-test-"));
+  const dir = caseDir("ttx-engine-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),

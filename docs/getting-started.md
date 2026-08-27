@@ -3,23 +3,19 @@
 You need [Bun](https://bun.sh/) to run the recommended setup command. TT
 packages and the prebuilt `ttc` compiler are installed from npm.
 
-During early development, build the toolchain required by `ttc` from the
-current [typescript-go source](https://github.com/microsoft/typescript-go);
-TT itself still comes from npm:
+`ttc` drives TypeScript 7, which it takes from your project's own
+`node_modules` — the same package your build uses, and the only place it
+looks. Install it alongside TT:
 
 ```sh
-git clone https://github.com/microsoft/typescript-go.git
-cd typescript-go
-npm ci
-mkdir -p built/local
-go build -o built/local/tsgo ./cmd/tsgo
-npx tsc -b _packages/native-preview
-export TTC_TSGO_ROOT="$PWD"
+bun add -d typescript@7
 ```
 
-Keep `TTC_TSGO_ROOT` in every shell that runs `ttc`. Launch VS Code from the
-same shell when using TT editor services. The executable and API client must
-come from the same checkout because their protocol is not version-negotiated.
+There is nothing to export and no editor-specific configuration: the
+extension runs your project's `ttc`, which resolves your project's
+TypeScript. Declaration output (`ttc --types` and the editor's `.tt.d.ts`
+sidecars) uses an API that arrived in TypeScript 7.1; everything else works
+on 7.0.
 
 ## Automatic setup
 
@@ -42,7 +38,7 @@ bun run tt:check
 `init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
 `package.json`. The `0.3.0` initializer adds the stable channels of
 `@load28/tt-lang` and `@load28/unplugin-tt`, plus TT scripts. It does not add
-an npm TypeScript package; `ttc` uses the built typescript-go checkout above.
+an npm TypeScript package; add `typescript@7` yourself as shown above.
 For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
 that composes the existing config; it never rewrites the user's config source.
 Run `bun run tt:dev` or `bun run tt:build` to use that wrapper. esbuild build
@@ -90,11 +86,10 @@ proxies third-party packages such as Vite.
 
 ## Manual compiler setup
 
-Before using this path, complete the typescript-go source build at the top of
-this guide and keep `TTC_TSGO_ROOT` exported. Then install the compiler:
+Install the compiler and the TypeScript it drives:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0
+bun add -d @load28/tt-lang@0.3.0 typescript@7
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
@@ -114,8 +109,7 @@ to `.gitignore`. Do not edit generated files.
 
 ## Manual bundler setup
 
-The same built typescript-go checkout and `TTC_TSGO_ROOT` are required for this
-path. Install the direct-source plugin in addition to the compiler:
+Install the direct-source plugin in addition to the compiler:
 
 ```sh
 bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0
@@ -181,4 +175,6 @@ with **Extensions: Install from VSIX...** in the VS Code Command Palette, or:
 code --install-extension ./tt-language-<version>.vsix
 ```
 
-Open the project root from the shell that provides `TTC_TSGO_ROOT`.
+Open the project root. The extension runs the `ttc` your project installed,
+which uses the TypeScript your project installed — no environment variables,
+and no way for the editor and the build to disagree.

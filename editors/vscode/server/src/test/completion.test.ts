@@ -18,6 +18,7 @@ import * as path from "node:path";
 import * as engine from "../engine";
 import { positionAt } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 const skip = !compilerAvailable()
   ? "no ttc — none built, installed, or on PATH"
@@ -29,7 +30,7 @@ after(() => engine.shutdownEngineServer());
 
 /** A buffer in a workspace of its own, open in the engine. */
 function project(source: string): { file: string; done: () => void } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-completion-"));
+  const dir = caseDir("tt-completion-");
   const file = path.join(dir, "main.tt");
   fs.writeFileSync(file, source);
   engine.openDocument(COMPILER, file, source);

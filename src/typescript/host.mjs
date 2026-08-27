@@ -7,10 +7,10 @@
  * ordinary TypeScript it lowers to, and answers tt's semantic questions
  * against that project's checker.
  *
- * The API comes from the typescript-go tree ttc was pointed at
- * (`TTC_TSGO_ROOT`/`TTC_TSGO_BIN`, see `native.rs`): the JS client and the
- * `tsgo` binary speak an unversioned MessagePack protocol and must come from
- * the same build, so both are resolved from that one tree.
+ * The API comes from the TypeScript the project installed (see
+ * `toolchain.rs`): the JS client and the native executable speak an
+ * unversioned MessagePack protocol and must come from the same build, so
+ * the client is named and it runs the executable shipped beside it.
  *
  * The host is a **session**: one line of JSON in, one line of JSON out, for
  * as long as stdin stays open. The compiler is started once and the project
@@ -18,7 +18,7 @@
  * a watch or an editor viable — reopening a real project per keystroke is
  * not.
  *
- *   open   { tsgoBin (nullable), apiModule, cwd, tsconfig (nullable) }
+ *   open   { apiModule, cwd, tsconfig (nullable) }
  *       →  { ok: true }
  *
  *   ask    { modules: [{ path, text }],   // lowered .tt → virtual .ts
@@ -175,9 +175,8 @@ async function main() {
   const dirs = new Set();
   const api = new API({
     cwd: open.cwd,
-    // Omitted for an installed package: the client runs the executable
-    // shipped beside it, which is the one it was built against.
-    ...(open.tsgoBin ? { tsserverPath: open.tsgoBin } : {}),
+    // The client runs the executable shipped beside it — the one it was
+    // built against, and the same one ttc drives as a language server.
     fs: layeredFileSystem(files, dirs),
   });
   writeLine(JSON.stringify({ ok: true }));

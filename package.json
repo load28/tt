@@ -1,0 +1,9 @@
+{
+  "name": "tt-repository",
+  "private": true,
+  "description": "Development dependencies of the TT repository itself. ttc resolves TypeScript from node_modules walking upwards (src/typescript/toolchain.rs), so the compiler's own typed suites read the TypeScript pinned here — the same way a consumer project's does.",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "7.1.0-dev.20260826.1"
+  }
+}

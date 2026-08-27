@@ -69,28 +69,12 @@ jobs:
       - name: Install Rolldown for std tree-shaking regression
         run: npm install -g rolldown@1.2.5
 
-      # The native suite also exercises the language server and declaration
-      # emit, so the npm preview package is insufficient. Build one pinned
-      # typescript-go checkout and use its executable and API client together.
-      - name: Check out typescript-go
-        uses: actions/checkout@v4
-        with:
-          repository: microsoft/typescript-go
-          ref: c6b013f5706d58582f566df778cc0df2683b58f5
-          path: typescript-go
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: typescript-go/go.mod
-          cache-dependency-path: typescript-go/go.sum
-
-      - name: Build TypeScript 7 for the type checking modes
-        working-directory: typescript-go
-        run: |
-          go build -o built/local/tsgo ./cmd/tsgo
-          npm ci
-          npx tsc -b _packages/native-preview
+      # TypeScript 7 is a dependency of this repository, pinned in
+      # package.json: it ships the API client and the native executable
+      # together, and ttc resolves both from node_modules the way every
+      # consumer project does (src/typescript/toolchain.rs).
+      - name: Install TypeScript
+        run: npm ci
 
       - name: Check formatting
         run: cargo fmt --check
@@ -100,7 +84,6 @@ jobs:
 
       - name: Test
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           TTC_REQUIRE_TSGO: "1"
         run: cargo test
 
@@ -113,13 +96,12 @@ jobs:
       # which went stale every time a test was added.)
       - name: Guard — integration tests must not have been skipped
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           TTC_REQUIRE_TSGO: "1"
         run: |
           tsc --version
           node --version
-          test -x "$TTC_TSGO_ROOT/built/local/tsgo"
-          test -f "$TTC_TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js"
+          node -p "require('typescript/package.json').version"
+          test -f node_modules/typescript/dist/api/sync/api.js
           cargo test --test native
 
   bench:
@@ -190,25 +172,8 @@ jobs:
       # different program — the editor and backend layers simply do not run
       # — so the number would not be comparable between runs
       # (docs/tasks/TASK-224).
-      - name: Check out typescript-go
-        uses: actions/checkout@v4
-        with:
-          repository: microsoft/typescript-go
-          ref: c6b013f5706d58582f566df778cc0df2683b58f5
-          path: typescript-go
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: typescript-go/go.mod
-          cache-dependency-path: typescript-go/go.sum
-
-      - name: Build the compiler and its API client
-        working-directory: typescript-go
-        run: |
-          go build -o built/local/tsgo ./cmd/tsgo
-          npm ci
-          npx tsc -b _packages/native-preview
+      - name: Install TypeScript
+        run: npm ci
 
       # The floor is the measured baseline, not a target: "do not drop" is
       # a rule that can be followed, while an arbitrary goal invites tests
@@ -216,7 +181,6 @@ jobs:
       # earns the higher coverage.
       - name: Measure, and refuse to go below the baseline
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           # A missing toolchain would silently lower the number instead of
           # failing the job, which is the one way this gate could lie.
           TTC_REQUIRE_TSGO: "1"
@@ -257,32 +221,14 @@ jobs:
       # with no version negotiation, so both have to come from one build —
       # and a floating `main` would break this gate on someone else's
       # commit. Bumping it is a task, not a side effect.
-      - name: Check out typescript-go
-        uses: actions/checkout@v4
-        with:
-          repository: microsoft/typescript-go
-          ref: c6b013f5706d58582f566df778cc0df2683b58f5
-          path: typescript-go
-
-      - name: Install Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: typescript-go/go.mod
-          cache-dependency-path: typescript-go/go.sum
-
-      - name: Build the compiler and its API client
-        working-directory: typescript-go
-        run: |
-          go build -o built/local/tsgo ./cmd/tsgo
-          npm ci
-          npx tsc -b _packages/native-preview
+      - name: Install TypeScript
+        run: npm ci
 
       - name: Build ttc
         run: cargo build
 
       - name: Test — the type checking modes end to end
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           # Nothing here may skip: this job builds the compiler itself.
           TTC_REQUIRE_TSGO: "1"
         run: cargo test --test native
@@ -293,7 +239,6 @@ jobs:
       # A sample here, the whole thing on the soak schedule.
       - name: Test — real TypeScript comes back unchanged
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           TTC_REQUIRE_CORPUS: "1"
         run: cargo test --test corpus -- --nocapture
 
@@ -306,7 +251,6 @@ jobs:
       - name: Test — the extension against a compiler that can emit
         working-directory: editors/vscode
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
         run: |
           export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
           node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log

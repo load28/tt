@@ -4,7 +4,6 @@
 set -u
 
 TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-CONFIG="$TT_ROOT/.tt-dev/toolchain.json"
 PKG_MARKER="$TT_ROOT/npm/tt-lang/tt-dev.local.json"
 VSIX="$TT_ROOT/.tt-dev/tt-language.vsix"
 FAILURES=0
@@ -67,49 +66,32 @@ if have rustc; then
   fi
 fi
 
-printf '\nTypeScript toolchain\n'
-KIND=""
-TSGO_ROOT=""
-if [ ! -f "$CONFIG" ]; then
-  fail "toolchain is not configured: $CONFIG"
+printf '\nTypeScript\n'
+# A project's TypeScript is the one in its own node_modules and there is no
+# way to name another (src/typescript/toolchain.rs). For this repository
+# that is package.json's pinned version, installed by `npm ci` — the typed
+# suites and the editor both read it.
+TS_PKG="$TT_ROOT/node_modules/typescript/package.json"
+if [ ! -f "$TS_PKG" ]; then
+  fail "TypeScript is not installed: run npm ci (or ./scripts/setup)"
 elif ! have node; then
-  fail "cannot read toolchain config without Node.js"
+  fail "cannot read the installed TypeScript version without Node.js"
 else
-  KIND="$(node -e '
-    try {
-      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).kind;
-      if (typeof value === "string") process.stdout.write(value);
-    } catch {}
-  ' "$CONFIG")"
-  TSGO_ROOT="$(node -e '
-    try {
-      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).root;
-      if (typeof value === "string") process.stdout.write(value);
-    } catch {}
-  ' "$CONFIG")"
-
-  case "$KIND" in
-    checkout)
-      if [ -z "$TSGO_ROOT" ] || [ ! -d "$TSGO_ROOT" ]; then
-        fail "configured typescript-go checkout does not exist: ${TSGO_ROOT:-<empty>}"
-      else
-        pass "typescript-go checkout: $TSGO_ROOT"
-        check_command go
-        [ -f "$TSGO_ROOT/built/local/tsgo" ] \
-          && pass "tsgo executable is built" \
-          || fail "tsgo executable is missing: $TSGO_ROOT/built/local/tsgo"
-        [ -f "$TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js" ] \
-          && pass "TypeScript API client is built" \
-          || fail "TypeScript API client is missing under $TSGO_ROOT"
-      fi
-      ;;
-    npm)
-      pass "toolchain mode: npm (consuming projects provide typescript@7)"
-      ;;
-    *)
-      fail "toolchain config is unreadable or has an unknown kind: $CONFIG"
-      ;;
-  esac
+  TS_VERSION="$(node -p "require('$TS_PKG').version" 2> /dev/null || true)"
+  PINNED_TS="$(node -p "require('$TT_ROOT/package.json').devDependencies.typescript" 2> /dev/null || true)"
+  if [ -z "$TS_VERSION" ]; then
+    fail "the installed TypeScript is unreadable: $TS_PKG"
+  elif [ "$TS_VERSION" = "$PINNED_TS" ]; then
+    pass "TypeScript $TS_VERSION matches package.json"
+  else
+    fail "TypeScript $TS_VERSION is installed but package.json pins ${PINNED_TS:-<none>} (run npm ci)"
+  fi
+  # Declaration emit (`ttc --types`, editor sidecars) arrived in 7.1.
+  if grep -q "getDeclarationEmit" "$TT_ROOT/node_modules/typescript/dist/api/sync/api.js" 2> /dev/null; then
+    pass "declaration emit is available"
+  else
+    fail "the installed TypeScript cannot emit declarations — pin a 7.1 in package.json"
+  fi
 fi
 
 printf '\nTT artifacts\n'
@@ -156,12 +138,6 @@ fi
 
 printf 'not ready: %s error(s), %s warning(s)\n' "$FAILURES" "$WARNINGS" >&2
 printf '\nNext action\n' >&2
-if [ ! -f "$CONFIG" ]; then
-  printf '  Choose one setup mode; do not guess the toolchain:\n' >&2
-  printf '    ./scripts/setup --tsgo-root /path/to/typescript-go\n' >&2
-  printf '    ./scripts/setup --tsgo-npm\n' >&2
-else
-  printf '  After resolving prerequisite errors, rebuild the saved configuration with:\n' >&2
-  printf '    ./scripts/setup\n' >&2
-fi
+printf '  After resolving prerequisite errors, build this checkout with:\n' >&2
+printf '    ./scripts/setup\n' >&2
 exit 1

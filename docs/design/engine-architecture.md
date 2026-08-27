@@ -72,7 +72,7 @@ VSCode ── LSP ──> server.ts (1712줄 단일 모듈)
 | 중복 | 한쪽 | 다른쪽 |
 |---|---|---|
 | tsgo 클라이언트 | `native.rs`+`host.mjs` (API server, msgpack) | `lsp.ts` (`tsgo --lsp`, JSON-RPC) |
-| toolchain 해석 | `native.rs::Toolchain::resolve` | `ttc.ts::findTsgo` (규칙 불일치) |
+| toolchain 해석 | `native.rs::Toolchain::resolve` | `ttc.ts::findTsgo` (규칙 불일치) — 이 불일치가 실제로 에디터를 침묵시켰고, TASK-255에서 `typescript/toolchain.rs` 한 곳으로 합쳐진 뒤 TASK-256에서 출처 자체가 "프로젝트가 설치한 패키지" 하나로 줄었다 |
 | project graph | `project.rs::lower`(전체) + overlay | `virtualDocs`+`diskVirtuals`+regex import 추적(재-export 누락) |
 | 좌표 매핑 | `mapper.rs`(선형 탐색, glue 폴백 있음) | `virtual.ts::MappedDoc`(이진 탐색, 끝-포함, glue 폴백 없음) |
 | tt 구문 인식 | `parser/*`(진짜 파서) | `analysis.ts`(821줄 근사) |

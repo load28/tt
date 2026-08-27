@@ -13,6 +13,7 @@ import * as path from "node:path";
 
 import { runTypedCheck } from "../ttc";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** A case that needs a real typed answer, not just a compiler that runs.
@@ -23,13 +24,8 @@ const skipTyped = skip || (findTsgo() ? false : "no tsgo executable");
 /** A typed check opens a project and starts the TypeScript compiler. */
 const timeout = 60_000;
 
-let seq = 0;
 function tmpProject(): string {
-  const dir = path.join(
-    os.tmpdir(),
-    `tt-typedcheck-${process.pid}-${seq++}`,
-    "src",
-  );
+  const dir = path.join(caseDir("tt-typedcheck-"), "src");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

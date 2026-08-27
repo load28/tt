@@ -8,8 +8,10 @@
 
 1. 저장소 루트에서 `./scripts/doctor`를 실행해 로컬 환경을 읽기 전용으로 진단합니다.
 2. doctor가 성공하면 setup을 다시 실행하지 않습니다.
-3. doctor가 toolchain 미설정을 보고하면 `--tsgo-root <path>`와 `--tsgo-npm` 중
-   어느 방식을 쓸지 추측하지 말고 사용자에게 확인합니다.
+3. doctor가 TypeScript 미설치를 보고하면 `npm ci`로 충분합니다 — 고를 것이
+   없습니다. TypeScript는 `package.json`이 버전을 고정한 이 저장소의 의존성이고,
+   ttc는 프로젝트의 `node_modules`에서만 그것을 찾습니다
+   (`src/typescript/toolchain.rs`).
 4. doctor가 재구성을 요구하더라도 `./scripts/setup`은 Cargo 산출물을 정리하고
    release `ttc`와 VS Code 확장을 다시 설치하므로 사용자가 로컬 setup 또는
    재설치를 요청한 경우에만 실행합니다.
@@ -17,13 +19,9 @@
    doctor 실행, 기존 setup 실행, 설치 상태 확인만 하는 운영 작업은 태스크에서
    제외합니다.
 
-첫 setup은 다음 중 사용자가 선택한 하나만 실행합니다. 이후에는 인자 없는 명령이
-`.tt-dev/toolchain.json`을 재사용합니다.
-
 ```sh
-./scripts/setup --tsgo-root /path/to/typescript-go
-./scripts/setup --tsgo-npm
-./scripts/setup
+npm ci             # TypeScript를 포함한 의존성 설치
+./scripts/setup    # 그 위에 release ttc와 VS Code 확장까지
 ```
 
 ## 프로젝트와 설계 계약

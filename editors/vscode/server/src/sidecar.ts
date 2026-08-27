@@ -16,7 +16,6 @@ import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { ttcSpawnEnv } from "./dev";
 
 /** What to do when an `.tt` file is saved. */
 export type SidecarMode = "off" | "refresh" | "always";
@@ -89,7 +88,7 @@ function run(compiler: string, args: string[], files: string[]): Promise<Sidecar
     execFile(
       compiler,
       args,
-      { timeout: 30000, maxBuffer: 8 * 1024 * 1024, env: ttcSpawnEnv(compiler) },
+      { timeout: 30000, maxBuffer: 8 * 1024 * 1024 },
       (err, _stdout, stderr) => {
         const code = err === null ? 0 : ((err as { code?: number }).code ?? 1);
         if (code === 0 || code === 1) {

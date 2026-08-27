@@ -36,6 +36,14 @@ fn tmpdir() -> Workspace {
     Workspace::new("test")
 }
 
+/// A directory for a case whose project needs **dependencies**: TypeScript
+/// is resolved from `node_modules` walking upwards, so a project under the
+/// repository inherits the repository's install while one in the system
+/// temp directory has none (`tests/common/mod.rs`).
+fn project_dir() -> Workspace {
+    Workspace::in_repo("test")
+}
+
 /// Appended to every snippet so it is a module (like real tt files with
 /// exports) — otherwise script-scope names collide with DOM globals
 /// such as `Option`.
@@ -1686,22 +1694,15 @@ const TOKEN_TT: &str =
 /// Runs the ttc binary itself — declaration collection across files lives
 /// in the CLI, not in `compile`. No tsc/node needed.
 fn run_ttc(dir: &std::path::Path, args: &[&str]) -> (bool, String) {
-    run_ttc_env(dir, args, false)
+    run_ttc_env(dir, args)
 }
 
-/// [`run_ttc`], optionally with every TypeScript-toolchain variable cleared
-/// so ttc resolves nothing — the only way to test what it says when there
-/// is no compiler, on a machine that has one.
-fn run_ttc_env(dir: &std::path::Path, args: &[&str], no_typescript: bool) -> (bool, String) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
-    command.current_dir(dir).args(args);
-    if no_typescript {
-        command
-            .env_remove("TTC_TSGO_API")
-            .env_remove("TTC_TSGO_BIN")
-            .env_remove("TTC_TSGO_ROOT");
-    }
-    let out = command.output().expect("failed to run ttc");
+fn run_ttc_env(dir: &std::path::Path, args: &[&str]) -> (bool, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .expect("failed to run ttc");
     (
         out.status.success(),
         String::from_utf8_lossy(&out.stderr).into_owned(),
@@ -1714,7 +1715,7 @@ fn run_ttc_env(dir: &std::path::Path, args: &[&str], no_typescript: bool) -> (bo
 /// the machine. A released `typescript@7` can check but not emit, so it
 /// answers `false` here and the `--types` success tests skip.
 fn usable_typescript_for_types() -> bool {
-    let dir = tmpdir();
+    let dir = project_dir();
     fs::write(dir.join("probe.tt"), "export const n: number = 1;\n").unwrap();
     let (ok, _) = run_ttc(&dir, &["--types", "probe.tt", "-o", "."]);
     ok && dir.join("probe.tt.d.ts").exists()
@@ -1991,7 +1992,7 @@ fn cli_refuses_to_overwrite_a_pass_through_input() {
 fn cli_types_leaves_nothing_but_the_sidecars() {
     require_toolchain!();
     require_types_typescript!();
-    let dir = tmpdir();
+    let dir = project_dir();
     write_consumer_tree(&dir);
 
     let (ok, err) = run_ttc(&dir, &["--types", "src"]);
@@ -2031,7 +2032,7 @@ fn cli_types_leaves_nothing_but_the_sidecars() {
 fn cli_types_reports_type_errors_but_keeps_the_sidecars_fresh() {
     require_toolchain!();
     require_types_typescript!();
-    let dir = tmpdir();
+    let dir = project_dir();
     write_consumer_tree(&dir);
     // A type error in the consumer, not a tt-level one: declarations are
     // still emitted, so the sidecars must be written and the run must fail.
@@ -2057,7 +2058,7 @@ fn cli_types_reports_type_errors_but_keeps_the_sidecars_fresh() {
 fn cli_types_reports_tt_type_errors_at_the_source_position() {
     require_toolchain!();
     require_types_typescript!();
-    let dir = tmpdir();
+    let dir = project_dir();
     write_consumer_tree(&dir);
     // A type error *inside* tt syntax. The emitted TypeScript is a switch
     // IIFE that moves the offending expression far from where it was
@@ -2098,11 +2099,11 @@ fn cli_types_without_typescript_says_so() {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src")).unwrap();
     fs::write(dir.join("src/level.tt"), LEVEL_TT).unwrap();
-    // No TypeScript on purpose: the environment variables that would name
-    // one are cleared, and a temporary directory has no `node_modules` and
-    // no sibling typescript-go above it. So this runs everywhere, rather
-    // than skipping on any machine that happens to have a compiler.
-    let (ok, err) = run_ttc_env(&dir, &["--types", "src"], true);
+    // No TypeScript on purpose: a project's TypeScript comes from its own
+    // `node_modules` and nowhere else, and a temporary directory has none
+    // above it. So this runs everywhere, rather than skipping on any
+    // machine that happens to have a compiler installed somewhere.
+    let (ok, err) = run_ttc_env(&dir, &["--types", "src"]);
     assert!(!ok, "expected failure:\n{err}");
     assert!(err.contains("no TypeScript compiler found"), "{err}");
 }
@@ -2111,7 +2112,7 @@ fn cli_types_without_typescript_says_so() {
 fn cli_types_sidecars_typecheck_the_source_tree() {
     require_toolchain!();
     require_types_typescript!();
-    let dir = tmpdir();
+    let dir = project_dir();
     write_consumer_tree(&dir);
 
     let (ok, err) = run_ttc(&dir, &["--types", "src"]);

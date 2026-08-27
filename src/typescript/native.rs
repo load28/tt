@@ -84,7 +84,6 @@ impl NativeBackend {
         let mut stdout = BufReader::new(child.stdout.take().expect("stdout piped"));
 
         let open = serde_json::json!({
-            "tsgoBin": self.toolchain.bin,  // null: the client runs the one beside it
             "apiModule": self.toolchain.api,
             "cwd": root,
             "tsconfig": tsconfig,
@@ -116,10 +115,10 @@ fn host_died(child: &mut Child) -> String {
         let _ = pipe.read_to_string(&mut stderr);
     }
     if status.and_then(|s| s.code()) == Some(5) {
-        return "the resolved TypeScript can check but cannot emit declarations \
-                — that API is newer than the released package. Use --check-types \
-                (which writes nothing), or point ttc at a built typescript-go \
-                checkout with TTC_TSGO_ROOT"
+        return "the installed TypeScript can check but cannot emit \
+                declarations — that API arrived in TypeScript 7.1. Install a \
+                7.1 in this project (`npm i -D typescript@7.1`), or use \
+                --check-types, which writes nothing"
             .to_string();
     }
     let stderr = stderr.trim();

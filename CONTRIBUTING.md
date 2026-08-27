@@ -22,38 +22,42 @@ cargo test
 ## 로컬 개발 환경 (`scripts/setup`)
 
 typed 경로(`--check-types`/`--types`/`--server`)까지 포함해 전부 로컬에서
-돌려 보려면 setup 스크립트 하나면 됩니다. TypeScript 7 toolchain은 두 방식
-중 하나로 연결합니다:
+돌려 보려면 명령 두 개면 됩니다:
 
 ```sh
-# A. 로컬 typescript-go 체크아웃을 쓸 때 (루트 경로 하나만 전달)
-./scripts/setup --tsgo-root ~/dev/typescript-go
-
-# B. TypeScript 7을 npm으로 쓸 때 (소비 프로젝트가 typescript@7을 설치)
-./scripts/setup --tsgo-npm
-
-# 이후에는 저장된 설정을 그대로 재사용
-./scripts/setup
+npm ci             # TypeScript 7 포함 — package.json이 버전을 고정한다
+./scripts/setup    # release ttc + VSCode 확장
 ```
 
-setup은 선택을 `.tt-dev/toolchain.json`에 저장하고(머신 로컬, 커밋 금지),
-checkout 모드면 **현재 체크아웃된** typescript-go를 그 자리에서 빌드한 뒤
-(git pull/checkout 같은 저장소 상태 변경은 절대 하지 않습니다 — 두 저장소의
-갱신은 사용자가 직접), 현재 TT 체크아웃을 release 빌드하고, VSCode 확장을
-빌드해 재설치(기존 설치는 삭제 후 설치)합니다.
+**고를 toolchain이 없습니다.** ttc가 쓰는 TypeScript는 그 프로젝트의
+`node_modules`에 있는 것 하나뿐이고, 다른 것을 지목할 방법은 없습니다
+(`src/typescript/toolchain.rs`). 환경변수도, typescript-go 체크아웃도,
+`.tt-dev/toolchain.json`도 없습니다 — 그 두 번째 경로가 정확히 "CLI는
+되는데 에디터는 안 되는" 상태를 만들던 것이기 때문입니다
+(`docs/tasks/TASK-256`). 이 저장소가 쓰는 버전은 `package.json`의
+`devDependencies.typescript`이고, typed 테스트와 에디터가 모두 그것을 읽습니다.
+
+TypeScript 7 배포판은 네이티브 실행 파일과 API 클라이언트를 함께 담습니다.
+선언 방출(`ttc --types`, 사이드카)은 7.1에서 들어온 API를 쓰므로 이 저장소는
+7.1 나이틀리를 정확한 버전으로 고정합니다.
+
+setup은 현재 TT 체크아웃을 release 빌드하고 VSCode 확장을 빌드해
+재설치합니다(기존 설치는 삭제 후 설치). git 상태는 절대 건드리지 않습니다 —
+저장소 갱신은 사용자가 직접 합니다.
 
 테스트 프로젝트에서는 TT 전용 명령 없이 일반 패키지 매니저로 설치합니다:
 
 ```sh
 pnpm add -D file:/path/to/tt/npm/tt-lang   # 재빌드 후에는 --force로 재설치
+pnpm add -D typescript@7
 pnpm ttc --check-types src
 ```
 
-launcher(`npm/tt-lang/bin/ttc.js`)가 저장소의 `target/release/ttc`를 실행하며,
-checkout 모드의 `TTC_TSGO_*` 환경변수는 **그 child process에만** 주입됩니다 —
-셸 프로파일은 건드리지 않습니다. VSCode 확장도 같은 `toolchain.json`을 읽어
-CLI와 동일한 toolchain을 씁니다. 이 계층 전체는 임시 구조입니다: TT 패키지가
-검증된 TypeScript 7을 직접 포함하게 되면 `scripts/setup`·`.tt-dev/`·
+launcher(`npm/tt-lang/bin/ttc.js`)가 저장소의 `target/release/ttc`를 실행하고,
+TypeScript는 그 테스트 프로젝트가 설치한 것을 씁니다 — VSCode 확장도 같은
+ttc를 띄우므로 CLI와 에디터가 다른 TypeScript를 쓰는 상황이 성립하지
+않습니다. `file:` 설치 계층 자체는 임시 구조입니다: TT 패키지가 검증된
+TypeScript를 직접 포함하게 되면 `scripts/setup`·`.tt-dev/`·
 `npm/tt-lang/dev.js`를 함께 제거합니다 (`docs/tasks/TASK-090`).
 
 ## 절대 불변 원칙
