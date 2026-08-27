@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # scripts/ci — run the merge gates on this machine.
 #
-# GitHub Actions no longer runs CI per push or per pull request; the workflow
-# is manual (see .github/workflows/ci.yml). The gates did not shrink, they
-# moved here, which makes this script the gate rather than a convenience. It
-# mirrors ci.yml stage by stage and every deliberate difference is a comment
-# saying why.
+# GitHub Actions runs the same gates on pushes to main and release-X.Y and
+# on pull requests targeting them (.github/workflows/ci.yml). This script is
+# what you run before asking for that: it mirrors ci.yml stage by stage and
+# every deliberate difference is a comment saying why. Passing here is not a
+# substitute for the hosted run — the workflow files, the release builds and
+# the other platforms only exist there.
 #
 # The stages, in the order they run:
 #

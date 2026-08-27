@@ -266,6 +266,33 @@ TASK-255에서 "설치된 TypeScript 패키지"를 해석 경로에 넣고 나�
   그 테스트가 `soak.yml: job "corpus" runs npm without actions/setup-node`로
   실패하는 것을 확인했다.
 
+### 이슈 6: 워크플로가 깨져 CI가 잡 하나 없이 즉시 실패했다
+
+- **증상**: PR #74에서 CI 런 8개가 전부 실패. 잡 로그가 없고
+  `created_at`·`run_started_at`·`updated_at`이 모두 같다(실행 0초). 성공한 옛
+  런은 이름이 `CI`인데 이 런들은 `.github/workflows/ci.yml` — GitHub이
+  `name:`조차 읽지 못했다는 뜻이다.
+- **원인**: `TTC_TSGO_ROOT` env 줄을 정규식으로 지울 때 유일한 키였던 자리가
+  있어 `env:`만 남았다. 빈 매핑 키는 유효하지 않아 워크플로가 파싱되지 않는다.
+  로컬에서 "YAML 검증"이라고 한 것이 `readFileSync`로 읽히는지만 본
+  것이었다 — 읽는 것은 파싱하는 것이 아니다.
+- **해결**: 빈 `env:`를 제거하고, 이 부류를 회귀 테스트로 고정했다
+  (`workflow-publish-paths.test.mjs`). `env`·`with`·`outputs`·`defaults`가
+  값 없이 놓이면 실패한다 — 되돌리면
+  `ci.yml:253: \`env:\` has nothing under it`으로 잡히는 것을 확인했다.
+  YAML 검증기가 아니라, 이 파일들을 패턴으로 편집할 때 실제로 나오는 한 가지
+  형태를 겨냥한 것이다.
+
+### 이슈 7: `scripts/ci` 헤더가 CI가 꺼져 있다고 말하고 있었다
+
+- **증상**: "GitHub Actions no longer runs CI per push or per pull request;
+  the workflow is manual"이라고 적혀 있었다. 실제 `ci.yml`은
+  `push`·`pull_request`(main·release-*)에서 돈다. AGENTS.md와도 모순이었고,
+  이 문장 때문에 "예전에 CI를 껐던 것 같다"는 인식이 생겼다.
+- **원인**: CI를 수동으로 돌리던 시기의 문구가 트리거 복원 후에도 남았다.
+- **해결**: 실제 트리거를 기술하도록 고치고, 로컬 게이트가 호스티드 실행을
+  대신하지 못한다는 점(워크플로 파일·릴리스 빌드·다른 플랫폼)을 명시했다.
+
 ## 검증
 
 - [x] `cargo fmt --check`
@@ -273,8 +300,9 @@ TASK-255에서 "설치된 TypeScript 패키지"를 해석 경로에 넣고 나�
 - [x] `cargo test` — 환경 변수 0개로 전부 통과 (native 41/41, corpus 136파일)
 - [x] `npm test`(editors/vscode) — 환경 변수 0개, 스킵 0
 - [x] `./scripts/ci`
-- [x] 워크플로 계약: npm을 쓰는 모든 잡에 `actions/setup-node`가 있다
-      (회귀 테스트가 실제로 잡는 것까지 확인)
+- [x] 워크플로 계약: npm을 쓰는 모든 잡에 `actions/setup-node`가 있고, 빈
+      매핑 키가 없다 — 두 회귀 테스트 모두 되돌렸을 때 실제로 잡는 것까지 확인
+- [x] 모든 워크플로를 YAML 파서로 검증 (`name`·`on` 정상 파싱)
 - [x] 소비자 E2E: npm 설치만 한 프로젝트에서 실제 language server를 stdio로
       띄워 hover·definition·completion·signature help·diagnostics 확인.
       프로젝트의 `typescript`를 치우면 전부 침묵하고 되돌리면 살아난다 —

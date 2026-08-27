@@ -250,7 +250,6 @@ jobs:
 
       - name: Test — the extension against a compiler that can emit
         working-directory: editors/vscode
-        env:
         run: |
           export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
           node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log

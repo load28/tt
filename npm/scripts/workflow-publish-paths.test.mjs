@@ -134,3 +134,33 @@ test("every workflow job that runs npm sets Node up", () => {
     }
   }
 });
+
+/**
+ * A key that must hold a mapping — `env:`, `with:` — with nothing under it
+ * is invalid, and GitHub does not fail it the way a broken job fails: the
+ * run is created and dies before any step, in zero seconds, listed under
+ * the file path instead of the workflow's name. Nothing local sees it,
+ * because reading the file is not parsing it (TASK-256 shipped exactly this
+ * — a regex removed the last key from an `env:` and left the header).
+ *
+ * This is not a YAML validator; it is the one shape that editing these
+ * files by pattern actually produces.
+ */
+test("no workflow leaves a mapping key empty", () => {
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const BLOCK_KEYS = /^(\s*)(env|with|outputs|defaults):\s*$/;
+  for (const file of readdirSync(dir).filter((n) => n.endsWith(".yml"))) {
+    const lines = readFileSync(new URL(file, dir), "utf8").split("\n");
+    lines.forEach((line, i) => {
+      const match = BLOCK_KEYS.exec(line);
+      if (!match) return;
+      const indent = match[1].length;
+      const next = lines.slice(i + 1).find((l) => l.trim() !== "" && !/^\s*#/.test(l));
+      const nextIndent = next === undefined ? -1 : next.length - next.trimStart().length;
+      assert.ok(
+        next !== undefined && nextIndent > indent,
+        `${file}:${i + 1}: \`${match[2]}:\` has nothing under it`,
+      );
+    });
+  }
+});
