@@ -8,6 +8,12 @@
 
 ### Added
 
+- **파이프라인에 JavaScript 방식 optional postfix step을 추가한다** (TASK-250).
+  `value |> ?.name`, `?.[key]`, `?.(args)`와 이어지는 member·index·call tail을
+  지원한다. optional step은 해당 tail만 단락 평가하며 다음 `|>` step은
+  `undefined`도 평범하게 입력받는다. 미완성·미지원 tail은 하나의 tt 진단으로
+  보고하고, computed key·인자 안의 tt 제어 흐름도 평가 순서와 `this`를 보존한다.
+
 - **Bun 기반 프로젝트 설치기와 로컬 레지스트리 개발 흐름을 제공한다**
   (TASK-167). `bunx @load28/create-tt@latest`로 Vite 프로젝트를 만들고 `init`으로 기존
   TypeScript 프로젝트의 번들러를 감지해 TT 설정을 합성한다. 자동·수동 설치법은

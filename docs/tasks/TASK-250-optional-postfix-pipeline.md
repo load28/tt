@@ -177,6 +177,8 @@ postfix step이 같은 receiver 및 검증 규칙을 소비하게 해 특정 예
   유지해 computed key·인자 단락 평가와 method reference의 `this`를 보존했다.
 - 2026-08-27: 출력·진단 snapshot, 타입·런타임·source map, completion probe,
   TextMate grammar, 영·한 문서와 홈페이지 레퍼런스를 갱신했다.
+- 2026-08-27: PR 검토에서 확인한 릴리스 기록 누락을 보완해 Unreleased changelog에
+  optional postfix의 문법과 평가 계약을 등록했다.
 
 ## 이슈 및 해결
 
@@ -228,4 +230,4 @@ postfix step이 같은 receiver 및 검증 규칙을 소비하게 해 특정 예
 
 변경 파일: `src/{ast,parser,hir,core_ir,sema,diagnostics,codegen,engine}/`,
 `tests/{compile,integration,emit_map,native,fixtures}/`, `editors/vscode/`,
-`README.md`, `README.ko.md`, `docs/{ai,design,tasks}/`, `website/src/`.
+`CHANGELOG.md`, `README.md`, `README.ko.md`, `docs/{ai,design,tasks}/`, `website/src/`.
