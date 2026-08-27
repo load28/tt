@@ -97,6 +97,20 @@ test('every published install command names the pinned version', async () => {
   }
 })
 
+test('the scripts print the pinned version', async () => {
+  // `scripts/setup` ends by telling the reader what a consuming project
+  // installs; that is a command someone copies, so it is held like any
+  // other. `scripts/ci` names a *different* TypeScript on purpose — the
+  // stable major the integration tests compile ttc's output with — so only
+  // the 7.x line is checked here.
+  for (const script of ['scripts/setup', 'scripts/doctor', 'scripts/ci']) {
+    const text = await readFile(root(script), 'utf8')
+    for (const spec of [...text.matchAll(/typescript@(7[\w.\-^~]*)/g)].map((m) => m[1])) {
+      assert.equal(spec, PIN, `${script} prints typescript@${spec}`)
+    }
+  }
+})
+
 test('the generated website code blocks match their source', async () => {
   // `website/src/highlighted-sections.json` is generated from content.json;
   // a stale regeneration would show the old command on the site.
