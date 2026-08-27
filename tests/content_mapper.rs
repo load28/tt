@@ -299,3 +299,91 @@ fn a_ttx_file_serves_as_tsx() {
         "expected a clean check of the .ttx project, got:\n{text}"
     );
 }
+
+/// The protocol end to end without TypeScript: this test is the peer,
+/// speaking Content-Length-framed JSON-RPC to `ttc --content-mapper`
+/// directly. It needs no toolchain, so the wire contract stays covered
+/// even where the tsgo-driven cases above skip.
+#[test]
+fn the_mapper_process_answers_the_protocol_directly() {
+    use std::io::{Read, Write};
+
+    let workspace = Workspace::new("content-mapper-wire");
+    fs::write(
+        workspace.path().join("package.json"),
+        "{ \"private\": true }\n",
+    )
+    .unwrap();
+    let file = workspace.path().join("shape.tt");
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--content-mapper")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("the mapper process starts");
+
+    let mut stdin = child.stdin.take().unwrap();
+    let requests = [
+        serde_json::json!({ "jsonrpc": "2.0", "id": "api1", "method": "initialize",
+            "params": { "positionEncodings": ["utf-8", "utf-16"] } }),
+        serde_json::json!({ "jsonrpc": "2.0", "id": "api2", "method": "openProject",
+            "params": { "configFileName": workspace.path().join("tsconfig.json").to_str().unwrap(),
+                        "projectHandle": "p:0" } }),
+        serde_json::json!({ "jsonrpc": "2.0", "id": "api3", "method": "transform",
+            "params": { "fileName": file.to_str().unwrap(),
+                        "content": "export variant Shape { Circle(radius: number), Point }\n",
+                        "projectHandle": "p:0" } }),
+        serde_json::json!({ "jsonrpc": "2.0", "id": "api4", "method": "closeProject",
+            "params": { "projectHandle": "p:0" } }),
+    ];
+    for request in &requests {
+        let body = serde_json::to_string(request).unwrap();
+        write!(stdin, "Content-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+    }
+    drop(stdin); // end of input ends the session with exit 0
+
+    let mut wire = String::new();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut wire)
+        .unwrap();
+    let status = child.wait().unwrap();
+    assert!(status.success(), "clean exit at end of stdin");
+
+    // Parse every framed response in order.
+    let mut answers = Vec::new();
+    let mut rest = wire.as_str();
+    while let Some(start) = rest.find("\r\n\r\n") {
+        let length: usize = rest[..start]
+            .trim_start_matches("Content-Length:")
+            .trim()
+            .parse()
+            .unwrap();
+        let body = &rest[start + 4..start + 4 + length];
+        answers.push(serde_json::from_str::<serde_json::Value>(body).unwrap());
+        rest = &rest[start + 4 + length..];
+    }
+    assert_eq!(answers.len(), 4, "one answer per request:\n{wire}");
+    assert_eq!(answers[0]["id"], "api1");
+    assert_eq!(answers[0]["result"]["positionEncoding"], "utf-8");
+    assert_eq!(answers[0]["result"]["diagnosticSource"], "tt");
+    assert_eq!(answers[1]["result"], serde_json::json!({}));
+    assert_eq!(answers[2]["result"]["extension"], ".ts");
+    assert!(
+        answers[2]["result"]["text"]
+            .as_str()
+            .unwrap()
+            .contains("kind: \"Circle\"")
+    );
+    assert_eq!(answers[3]["result"], serde_json::json!({}));
+    // openProject materialized the standard library at the config root.
+    assert!(
+        workspace
+            .path()
+            .join("node_modules/@tt/std/index.ts")
+            .exists()
+    );
+}
