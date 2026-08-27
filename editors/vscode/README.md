@@ -216,9 +216,14 @@ TypeScript 7.1의 언어 서버는 **content mapper**를 통해 `.tt`·`.ttx`를
 code --install-extension tt-typescript-preview-<버전>-<플랫폼>.vsix
 ```
 
+이 VSIX는 업스트림과 같은 확장 ID(`TypeScriptTeam.native-preview`)를
+씁니다 — VS Code 내장 TypeScript 확장이 그 ID 목록에만 양보하기
+때문입니다(TASK-259). 마켓플레이스 판을 대체 설치하는 셈이고, content
+mapper를 실은 정식 프리뷰가 마켓플레이스에 올라오면 같은 ID의 더 높은
+버전이므로 자동 업데이트가 이 빌드를 자연스럽게 교체합니다.
+
 `.ts`·`.tsx`를 그 서버가 서빙하게 하려면 워크스페이스 설정에
-`"js/ts.experimental.useTsgo": true`를 둡니다. Microsoft의 Native
-Preview와 동시에 설치하면 명령 ID가 충돌하므로 한쪽만 설치합니다.
+`"js/ts.experimental.useTsgo": true`를 둡니다.
 
 CLI(`tsc`)와 tsconfig 기반 프로젝트에서는 `contentMappers` 한 줄이면 됩니다:
 

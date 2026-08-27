@@ -32,9 +32,12 @@ test("the packaged platforms mirror the ttc release matrix", () => {
   }
 });
 
-test("the identity is ours, never Microsoft's publisher", () => {
-  assert.equal(EXTENSION_IDENTITY.publisher, "load28");
-  assert.equal(EXTENSION_IDENTITY.name, "tt-typescript-preview");
+test("the identity is the upstream id the built-in extension yields to", () => {
+  // The built-in TypeScript extension's yield list is hardcoded to the
+  // typescriptteam ids (TASK-259); any other id leaves it running its own
+  // semantic server, which reports TS2307 on every .tt import.
+  assert.equal(EXTENSION_IDENTITY.publisher, "TypeScriptTeam");
+  assert.equal(EXTENSION_IDENTITY.name, "native-preview");
   assert.equal(
     vsixName("0.20260826.1", "darwin-arm64"),
     "tt-typescript-preview-0.20260826.1-darwin-arm64.vsix",
@@ -55,5 +58,5 @@ test("the tt extension's lookup knows the shipped identity", () => {
     new URL("../../editors/vscode/client/src/contentMapper.ts", import.meta.url),
     "utf8",
   );
-  assert.match(lookup, /load28\.tt-typescript-preview/);
+  assert.match(lookup, /TypeScriptTeam\.native-preview/);
 });
