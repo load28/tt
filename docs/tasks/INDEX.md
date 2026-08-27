@@ -258,7 +258,9 @@
 | TASK-248 | 공식 홈페이지 `variant` 전환 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-248](./TASK-248-website-variant-content.md) |
 | TASK-249 | 비태스크 파일 `variant` 계약 정합성 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-249](./TASK-249-variant-contract-cleanup.md) |
 | TASK-250 | 파이프라인 optional postfix step — 구조화 tail과 평가 계약 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-250](./TASK-250-optional-postfix-pipeline.md) |
+| TASK-251 | TypeScript 방식의 고유한 Nightly 버전 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-251](./TASK-251-unique-nightly-versions.md) |
+| TASK-252 | Stable 0.3 사용자 설치 가이드 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-252](./TASK-252-stable-0.3-user-guide.md) |
 
 ## 다음 태스크 번호
 
-**TASK-251**
+**TASK-253**

@@ -26,7 +26,7 @@ export TTC_TSGO_ROOT="$PWD"
 첫 `.tt` 모듈이 포함된 Vite + TypeScript 프로젝트를 만듭니다.
 
 ```sh
-bunx @load28/create-tt@next my-app
+bunx @load28/create-tt@0.3.0 my-app
 cd my-app
 bun run dev
 ```
@@ -35,13 +35,13 @@ bun run dev
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@next init
+bunx @load28/create-tt@0.3.0 init
 bun run tt:check
 ```
 
 `init`은 `package.json`에서 Vite, Rollup, Rolldown, webpack, Rspack,
-esbuild, Farm을 감지합니다. `@next` 설치기는 `@load28/tt-lang`과
-`@load28/unplugin-tt`의 `next` 채널과 TT용 스크립트를 추가합니다. npm TypeScript
+esbuild, Farm을 감지합니다. `0.3.0` 설치기는 `@load28/tt-lang`과
+`@load28/unplugin-tt`의 Stable 채널과 TT용 스크립트를 추가합니다. npm TypeScript
 패키지는 추가하지 않으며 `ttc`는 위에서 빌드한 typescript-go를 사용합니다.
 선언형 설정을 쓰는 번들러에는 기존 설정을 합성하는
 `tt.*.config.mjs` 래퍼를 생성하며 사용자 설정 소스는 고치지 않습니다. 생성된
@@ -52,10 +52,10 @@ esbuild, Farm을 감지합니다. `@next` 설치기는 `@load28/tt-lang`과
 비대화형 실행 옵션은 다음과 같습니다.
 
 ```sh
-bunx @load28/create-tt@next init --bundler vite
-bunx @load28/create-tt@next init --bundler none
-bunx @load28/create-tt@next init --no-install
-bunx @load28/create-tt@next init --package-manager bun
+bunx @load28/create-tt@0.3.0 init --bundler vite
+bunx @load28/create-tt@0.3.0 init --bundler none
+bunx @load28/create-tt@0.3.0 init --no-install
+bunx @load28/create-tt@0.3.0 init --package-manager bun
 ```
 
 새 프로젝트는 항상 Bun을 사용합니다. 기존 프로젝트는 `--package-manager`를
@@ -94,7 +94,7 @@ Vite 같은 외부 패키지는 프록시합니다.
 `TTC_TSGO_ROOT`가 설정된 상태를 유지해야 합니다. 그다음 컴파일러를 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@next
+bun add -d @load28/tt-lang@0.3.0
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.
@@ -118,7 +118,7 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
+bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0
 ```
 
 각 번들러의 plugins 배열 맨 앞에 `tt()`을 넣습니다.

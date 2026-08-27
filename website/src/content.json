@@ -95,17 +95,17 @@
         "en": "TT itself is installed from npm. Until tsgo is officially released with the sync API used by ttc, build typescript-go from its latest source. create-tt does not install an npm TypeScript package.",
         "ko": "TT 자체는 npm 공식 배포본을 설치합니다. ttc가 사용하는 sync API를 포함한 tsgo가 정식 출시되기 전까지 typescript-go를 최신 소스에서 빌드합니다. create-tt은 npm TypeScript 패키지를 설치하지 않습니다."
       },
-      "code": "bunx @load28/create-tt@next my-app\n\n# Or, inside an existing TypeScript project:\nbunx @load28/create-tt@next init\nbun run tt:check",
+      "code": "bunx @load28/create-tt@0.3.0 my-app\n\n# Or, inside an existing TypeScript project:\nbunx @load28/create-tt@0.3.0 init\nbun run tt:check",
       "works": {
         "en": [
           "TT packages and the prebuilt ttc binary come from the public npm registry.",
-          "create-tt@next installs the same dev channel of tt-lang and unplugin-tt, without an npm TypeScript package.",
+          "create-tt@0.3.0 installs the stable channels of tt-lang and unplugin-tt, without an npm TypeScript package.",
           "The tsgo executable and sync API client come from one current typescript-go checkout.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm are detected."
         ],
         "ko": [
           "TT 패키지와 프리빌트 ttc 바이너리는 공개 npm 레지스트리에서 설치합니다.",
-          "create-tt@next는 npm TypeScript 패키지 없이 tt-lang과 unplugin-tt을 같은 next 채널로 설치합니다.",
+          "create-tt@0.3.0은 npm TypeScript 패키지 없이 tt-lang과 unplugin-tt의 Stable 채널을 설치합니다.",
           "tsgo 실행 파일과 sync API 클라이언트는 하나의 최신 typescript-go 체크아웃에서 빌드합니다.",
           "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 감지합니다."
         ]
@@ -133,12 +133,12 @@
         {
           "title": { "en": "New project", "ko": "새 프로젝트" },
           "body": { "en": "The official npm installer creates src/main.ts with a starter src/app.tt module, installs with Bun, and adds dev, build, and check scripts.", "ko": "공식 npm 설치기가 src/main.ts와 첫 src/app.tt 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다." },
-          "code": "bunx @load28/create-tt@next my-app\ncd my-app\nbun run dev"
+          "code": "bunx @load28/create-tt@0.3.0 my-app\ncd my-app\nbun run dev"
         },
         {
           "title": { "en": "Existing project", "ko": "기존 프로젝트" },
           "body": { "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.", "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다." },
-          "code": "bunx @load28/create-tt@next init\nbunx @load28/create-tt@next init --bundler vite --no-install"
+          "code": "bunx @load28/create-tt@0.3.0 init\nbunx @load28/create-tt@0.3.0 init --bundler vite --no-install"
         },
         {
           "title": { "en": "VS Code extension", "ko": "VS Code 확장" },
@@ -149,12 +149,12 @@
         {
           "title": { "en": "Manual compiler", "ko": "컴파일러 수동 설치" },
           "body": { "en": "Prerequisite: complete Current tsgo prerequisite above and keep TTC_TSGO_ROOT exported before using this path. Then install only the published TT compiler from npm.", "ko": "선행 조건: 먼저 위의 현재 tsgo 사전 준비를 완료하고 TTC_TSGO_ROOT를 설정한 상태여야 합니다. 그다음 npm에서는 공식 TT 컴파일러만 설치합니다." },
-          "code": "# Requires the typescript-go build and TTC_TSGO_ROOT from above.\nbun add -d @load28/tt-lang@next\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "code": "# Requires the typescript-go build and TTC_TSGO_ROOT from above.\nbun add -d @load28/tt-lang@0.3.0\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
           "title": { "en": "Manual bundlers", "ko": "번들러 수동 설정" },
           "body": { "en": "This path has the same source-built typescript-go prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.", "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript-go 소스 빌드 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다." },
-          "code": "bun add -d @load28/tt-lang@next @load28/unplugin-tt@next\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
+          "code": "bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]
     },

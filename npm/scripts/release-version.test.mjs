@@ -39,6 +39,19 @@ test("accepts RC versions", () => {
   assert.match(fs.readFileSync(path.join(root, "Cargo.toml"), "utf8"), /version = "0\.3\.0-rc"/);
 });
 
+test("accepts a dated Nightly with a CI build number", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-nightly-"));
+  fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
+  fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
+  fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\nname = "ttc"\nversion = "0.4.0-dev.1"\n');
+  fs.writeFileSync(path.join(root, "Cargo.lock"), '[[package]]\nname = "ttc"\nversion = "0.4.0-dev.1"\n');
+  fs.writeFileSync(path.join(root, "npm", "tt-lang", "package.json"), JSON.stringify({ version: "old", optionalDependencies: {} }));
+  fs.writeFileSync(path.join(root, "packages", "create-tt", "package.json"), JSON.stringify({ version: "old" }));
+
+  setReleaseVersion("0.4.0-dev.20260827.42", root);
+  assert.match(fs.readFileSync(path.join(root, "Cargo.toml"), "utf8"), /version = "0\.4\.0-dev\.20260827\.42"/);
+});
+
 test("accepts Beta versions", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-beta-"));
   fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });

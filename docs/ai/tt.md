@@ -171,16 +171,16 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 
 ## Install
 
-- `bunx @load28/create-tt@next app` → new Bun + Vite project; `bunx @load28/create-tt@next init` → structurally adds tt to an existing TS project, detects Vite/Rollup/Rolldown/webpack/Rspack/esbuild/Farm, and preserves existing config through a generated wrapper where possible. The initializer does not install an npm TypeScript package. New projects use Bun; existing projects retain their declared/locked package manager unless overridden.
+- `bunx @load28/create-tt@0.3.0 app` → new Bun + Vite project; `bunx @load28/create-tt@0.3.0 init` → structurally adds tt to an existing TS project, detects Vite/Rollup/Rolldown/webpack/Rspack/esbuild/Farm, and preserves existing config through a generated wrapper where possible. The initializer does not install an npm TypeScript package. New projects use Bun; existing projects retain their declared/locked package manager unless overridden.
 - Local built packages through a real registry: run Verdaccio with `scripts/verdaccio.local.yaml`, then `bun scripts/publish-local-registry.mjs http://127.0.0.1:4873`; use the printed `BUN_CONFIG_REGISTRY=... bunx @load28/create-tt@latest ... --registry ...` command. This publishes the current platform binary and TT packages rather than substituting `file:` dependencies.
-- Current nightly channel: `bun add -d @load28/tt-lang@next` → officially published prebuilt `ttc` binary (linux-x64/arm64, darwin-x64/arm64, win32-x64), run via `bunx ttc`. Direct bundler imports additionally need `@load28/unplugin-tt@next`. Until tsgo is officially released with the sync API ttc uses, build the executable and `_packages/native-preview` API client from one current typescript-go checkout and set `TTC_TSGO_ROOT` to it.
+- Current stable release: `bun add -d @load28/tt-lang@0.3.0` → officially published prebuilt `ttc` binary (linux-x64/arm64, darwin-x64/arm64, win32-x64), run via `bunx ttc`. Direct bundler imports additionally need `@load28/unplugin-tt@0.1.0`. Until tsgo is officially released with the sync API ttc uses, build the executable and `_packages/native-preview` API client from one current typescript-go checkout and set `TTC_TSGO_ROOT` to it.
 - Other platforms / no npm: `cargo install --git https://github.com/load28/tt`; to keep using the npm launcher, set env `TTC_BINARY=/path/to/ttc`.
 - Update: `npm i -D @load28/tt-lang@latest` (binary follows package version); verify `npx ttc -v`; then re-run `npx ttc --types src` and rebuild.
 - Editor: download the VSIX from the newest GitHub Releases pre-release. Everything TypeScript answers comes from the compiler's own language server (`tsgo --lsp`); during development, point `TTC_TSGO_ROOT` at the same built typescript-go checkout or those features go quiet.
 
 ## Setup
 
-New project: `bunx @load28/create-tt@next app`; sources in `src/**/*.tt` or React/JSX sources in `src/**/*.ttx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.tt-types/` and the out dir. Full manual paths: `docs/getting-started.md` / `docs/getting-started.ko.md`.
+New project: `bunx @load28/create-tt@0.3.0 app`; sources in `src/**/*.tt` or React/JSX sources in `src/**/*.ttx` (hand-written `.ts`/`.tsx` alongside is fine); gitignore `.tt-types/` and the out dir. Full manual paths: `docs/getting-started.md` / `docs/getting-started.ko.md`.
 ```jsonc
 // package.json
 "scripts": { "build": "ttc -o build src && tsc", "types": "ttc --types src", "check": "ttc --check-types src" }

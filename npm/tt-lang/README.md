@@ -12,8 +12,8 @@ For a complete Bun + Vite project, or to add tt to an existing TypeScript
 project, use the initializer instead:
 
 ```sh
-bunx @load28/create-tt@next my-app
-bunx @load28/create-tt@next init
+bunx @load28/create-tt@0.3.0 my-app
+bunx @load28/create-tt@0.3.0 init
 ```
 
 During early development, `ttc` uses APIs that are not yet available from an
@@ -25,7 +25,7 @@ before running the compiler. The current TT installer does not add a
 TypeScript npm package.
 
 ```sh
-bun add -d @load28/tt-lang@next
+bun add -d @load28/tt-lang@0.3.0
 ```
 
 ```sh

@@ -18,7 +18,12 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.match(ci, /merge_group:\n    branches: \[main, "release-\*"\]/);
   assert.match(ci, /schedule:\n    - cron:/);
   assert.match(ci, /name: release build/);
+  assert.match(ci, /name: release artifact version/);
   assert.match(ci, /name: release-metadata/);
+  assert.match(ci, /release-artifacts\.mjs nightly "\$VERSION" "\$TIMESTAMP" "\$GITHUB_RUN_NUMBER"/);
+  assert.match(ci, /actions\/runs\/\$GITHUB_RUN_ID.*--jq \.created_at/);
+  assert.match(ci, /needs: release-version/);
+  assert.doesNotMatch(ci, /git show -s --format=%cd/);
   assert.match(ci, /repository: microsoft\/typescript-go/);
   assert.match(ci, /go build -o built\/local\/tsgo \.\/cmd\/tsgo/);
   assert.match(ci, /name: tsgo type checking \+ vscode extension/);
