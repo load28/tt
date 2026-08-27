@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 function workflow(name) {
@@ -104,4 +104,33 @@ test("publish validates the source branch and immutable npm versions", () => {
   assert.match(publish, /run_event=\$RUN_EVENT/);
   assert.match(publish, /npm view "\$name@\$version" version/);
   assert.match(publish, /test -z "\$git_head" \|\| test "\$git_head" = "\$SOURCE_SHA"/);
+});
+
+/**
+ * A job that runs npm without setting Node up works only by accident — the
+ * runner image happens to carry one, at whatever version it happens to
+ * carry. The local gate cannot see this class of mistake at all: it shows
+ * up only on the hosted runner, and only sometimes. TASK-256 introduced one
+ * (`npm ci` replaced a checkout in soak's corpus job, which had never
+ * needed Node), so the rule is checked rather than remembered.
+ */
+test("every workflow job that runs npm sets Node up", () => {
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  for (const file of readdirSync(dir).filter((n) => n.endsWith(".yml"))) {
+    const text = readFileSync(new URL(file, dir), "utf8");
+    const body = text.split(/^jobs:$/m)[1];
+    if (!body) continue;
+    // Job keys sit at exactly two spaces of indentation.
+    const jobs = body.split(/\n(?=  [A-Za-z0-9_-]+:\n)/);
+    for (const job of jobs) {
+      const name = job.trim().split(":")[0];
+      const runsNpm = /\b(npm|npx) /.test(job);
+      if (!runsNpm) continue;
+      assert.match(
+        job,
+        /actions\/setup-node/,
+        `${file}: job "${name}" runs npm without actions/setup-node`,
+      );
+    }
+  }
 });

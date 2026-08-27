@@ -252,6 +252,20 @@ TASK-255에서 "설치된 TypeScript 패키지"를 해석 경로에 넣고 나�
   의도적으로 다른 일(방출물을 안정 메이저로 컴파일해 보는 오라클)이므로
   7.x 라인만 본다.
 
+### 이슈 5: 워크플로 잡이 Node 없이 `npm ci`를 돌게 됐다
+
+- **증상**: `soak.yml`의 corpus 잡이 `npm ci`를 실행하는데 `actions/setup-node`가
+  없다. 러너 이미지에 Node가 들어 있어 "그냥 되긴" 하지만, 버전이 무엇이든
+  상관없이 도는 상태다.
+- **원인**: 그 잡의 typescript-go 체크아웃을 `npm ci`로 바꾸면서, 원래 Node가
+  필요 없던 잡이라 setup-node가 없었다는 것을 놓쳤다. 로컬 게이트는 이
+  부류를 **볼 수 없다** — 호스티드 러너에서만, 그것도 가끔만 드러난다.
+- **해결**: setup-node를 넣고, 규칙을 기억에 맡기지 않도록
+  `npm/scripts/workflow-publish-paths.test.mjs`가 **모든 워크플로의 모든 잡**에
+  대해 "npm을 쓰면 setup-node가 있어야 한다"를 검사한다. 고친 것을 되돌리면
+  그 테스트가 `soak.yml: job "corpus" runs npm without actions/setup-node`로
+  실패하는 것을 확인했다.
+
 ## 검증
 
 - [x] `cargo fmt --check`
@@ -259,6 +273,8 @@ TASK-255에서 "설치된 TypeScript 패키지"를 해석 경로에 넣고 나�
 - [x] `cargo test` — 환경 변수 0개로 전부 통과 (native 41/41, corpus 136파일)
 - [x] `npm test`(editors/vscode) — 환경 변수 0개, 스킵 0
 - [x] `./scripts/ci`
+- [x] 워크플로 계약: npm을 쓰는 모든 잡에 `actions/setup-node`가 있다
+      (회귀 테스트가 실제로 잡는 것까지 확인)
 - [x] 소비자 E2E: npm 설치만 한 프로젝트에서 실제 language server를 stdio로
       띄워 hover·definition·completion·signature help·diagnostics 확인.
       프로젝트의 `typescript`를 치우면 전부 침묵하고 되돌리면 살아난다 —
@@ -297,8 +313,8 @@ TASK-255에서 "설치된 TypeScript 패키지"를 해석 경로에 넣고 나�
 - **테스트**: `tests/native.rs`, `tests/corpus.rs`, `tests/cli.rs`,
   `tests/integration.rs`, `tests/common/mod.rs`
 - **스크립트·CI**: `scripts/setup`·`doctor`·`ci`,
-  `.github/workflows/ci.yml`·`soak.yml`,
-  `npm/scripts/workflow-publish-paths.test.mjs`
+  `.github/workflows/ci.yml`·`soak.yml`(+ corpus 잡 setup-node),
+  `npm/scripts/workflow-publish-paths.test.mjs`(+ Node 설정 가드)
 - **문서**: `AGENTS.md`, `CONTRIBUTING.md`, `README.md`·`README.ko.md`,
   `docs/getting-started.md`·`.ko.md`, `editors/vscode/README.md`,
   `npm/tt-lang/README.md`, `docs/ai/tt.md`,
