@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { runTypedCheck } from "../ttc";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 
-const skip = compilerAvailable() ? false : "ttc not on PATH";
+const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** A case that needs a real typed answer, not just a compiler that runs.
  * Without this the two cases below fail — rather than skip — on a machine
  * with no TypeScript 7, which is the difference between "the tool is

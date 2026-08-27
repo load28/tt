@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { devPackageCompiler, ttcSpawnEnv, toolchainEnv } from "../dev";
+import { ttcSpawnEnv, toolchainEnv } from "../dev";
 
 /** A fake TT repository whose setup chose the given toolchain config. */
 function ttRepo(toolchain: object | null): string {
@@ -85,27 +85,4 @@ test("ttcSpawnEnv layers the toolchain over the process environment", () => {
   const env = ttcSpawnEnv(path.join(tt, "target", "release", "ttc"));
   assert.equal(env?.TTC_TSGO_ROOT, tsgo);
   assert.equal(env?.PATH, process.env.PATH);
-});
-
-test("devPackageCompiler finds the ttc of a file:-installed dev package", () => {
-  const tt = ttRepo(null);
-  const exe = process.platform === "win32" ? "ttc.exe" : "ttc";
-  fs.writeFileSync(path.join(tt, "target", "release", exe), "");
-
-  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "tt-ws-test-"));
-  const pkg = path.join(workspace, "node_modules", "@load28", "tt-lang");
-  fs.mkdirSync(pkg, { recursive: true });
-  fs.writeFileSync(
-    path.join(pkg, "tt-dev.local.json"),
-    JSON.stringify({ root: tt }),
-  );
-
-  assert.equal(
-    devPackageCompiler([workspace]),
-    path.join(tt, "target", "release", exe),
-  );
-
-  // A stale stamp (binary gone) resolves to nothing, not to a dead path.
-  fs.rmSync(path.join(tt, "target", "release", exe));
-  assert.equal(devPackageCompiler([workspace]), "");
 });

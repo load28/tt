@@ -47,7 +47,7 @@ function toolchainAvailable(): boolean {
 }
 
 const skip = !compilerAvailable()
-  ? "ttc not on PATH"
+  ? "no ttc — none built, installed, or on PATH"
   : !toolchainAvailable()
     ? "no TypeScript compiler for ttc to drive"
     : false;

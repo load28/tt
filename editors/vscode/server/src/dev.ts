@@ -13,10 +13,9 @@
  *   computes the TTC_TSGO_* additions. A published ttc, an "npm" toolchain
  *   (TypeScript 7 from the project's node_modules) or an unbuilt checkout
  *   add nothing — ttc then resolves TypeScript by its own documented order.
- * - `devPackageCompiler(roots)` finds the ttc of a `file:`-installed local
- *   @load28/tt-lang package (its setup-written `tt-dev.local.json` names the TT
- *   repository), so the extension works in a test project that installed
- *   `file:.../npm/tt-lang` without any `tt.compilerPath` configuration.
+ * Which ttc a project provides is not this module's question — the installed
+ * package answers that for every install shape, development ones included
+ * (install.ts).
  *
  * The variables live only on the spawned processes — the user's shell and
  * VSCode's own environment are never modified. The whole layer is temporary
@@ -86,23 +85,4 @@ export function toolchainEnv(compiler: string): Record<string, string> | null {
 export function ttcSpawnEnv(compiler: string): NodeJS.ProcessEnv | undefined {
   const extra = toolchainEnv(compiler);
   return extra === null ? undefined : { ...process.env, ...extra };
-}
-
-/**
- * The release ttc of a local-development @load28/tt-lang package installed in one of
- * the workspace roots (`node_modules/@load28/tt-lang/tt-dev.local.json` names the TT
- * repository), or "" when there is none. Mirrors npm/tt-lang/dev.js.
- */
-export function devPackageCompiler(workspaceRoots: string[]): string {
-  const exe = process.platform === "win32" ? "ttc.exe" : "ttc";
-  for (const root of workspaceRoots) {
-    const config = readConfig(
-      path.join(root, "node_modules", "@load28", "tt-lang", "tt-dev.local.json"),
-    );
-    const ttRoot = config && typeof config.root === "string" ? config.root : null;
-    if (ttRoot === null) continue;
-    const binary = path.join(ttRoot, "target", "release", exe);
-    if (exists(binary)) return binary;
-  }
-  return "";
 }

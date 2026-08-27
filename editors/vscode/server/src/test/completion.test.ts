@@ -20,7 +20,7 @@ import { positionAt } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 
 const skip = !compilerAvailable()
-  ? "ttc not on PATH"
+  ? "no ttc — none built, installed, or on PATH"
   : findTsgo() === null
     ? "no tsgo executable"
     : false;

@@ -18,7 +18,7 @@ import { positionAt, sliceOf, spanOf } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 
 const skip = !compilerAvailable()
-  ? "ttc not on PATH"
+  ? "no ttc — none built, installed, or on PATH"
   : findTsgo() === null
     ? "no tsgo executable"
     : false;
@@ -418,7 +418,7 @@ test("a closed document is the disk's again", { skip }, async () => {
 
 /* Hints need no TypeScript at all — they are the parse-only surface, like
  * semantic tokens — so they answer wherever ttc itself is available. */
-const skipTtOnly = compilerAvailable() ? false : "ttc not on PATH";
+const skipTtOnly = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 
 const DEAD_ARM = [
   "variant Shape {",

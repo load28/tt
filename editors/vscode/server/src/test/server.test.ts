@@ -33,7 +33,7 @@ function compilerAvailable(): boolean {
   }
 }
 
-const skip = compilerAvailable() ? false : "ttc not on PATH";
+const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** Answers that need the TypeScript language service. A skip must mean a
  * tool is missing, never that a feature quietly answered nothing — so the
  * cases below that ask TypeScript guard on tsgo as well as on ttc. */

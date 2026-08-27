@@ -11,7 +11,8 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { devPackageCompiler, ttcSpawnEnv } from "./dev";
+import { ttcSpawnEnv } from "./dev";
+import { packageCompiler } from "./install";
 import { engineRequest } from "./engine";
 
 /** A typed check opens a project and starts a compiler; it is slower than
@@ -77,9 +78,20 @@ const CANDIDATE_PATHS = [
 ];
 
 /**
- * Resolve the compiler to run: explicit setting > locally built binary in a
- * workspace root > the ttc of a `file:`-installed local @load28/tt-lang package
- * (a test project set up via `scripts/setup`, see dev.ts) > `ttc` on PATH.
+ * Resolve the compiler to run:
+ *
+ * 1. the explicit `tt.compilerPath` setting;
+ * 2. a binary built in a workspace root — the TT repository itself, open in
+ *    the editor that is developing it;
+ * 3. the ttc of the `@load28/tt-lang` package the project installed, which the
+ *    package resolves itself (install.ts) — a published install, a `file:`
+ *    development install, or `TTC_BINARY`;
+ * 4. `ttc` on PATH.
+ *
+ * Step 3 is how a project that merely *consumes* tt gets a compiler: the one
+ * it installed, the same one `npx ttc` runs. Everything above it is for
+ * someone building the compiler; everything below it is a machine-wide
+ * install.
  */
 export function findCompiler(
   configuredPath: string,
@@ -96,8 +108,8 @@ export function findCompiler(
       }
     }
   }
-  const dev = devPackageCompiler(workspaceRoots);
-  if (dev !== "") return dev;
+  const installed = packageCompiler(workspaceRoots);
+  if (installed !== "") return installed;
   return "ttc";
 }
 
@@ -125,14 +137,18 @@ export function findTsgo(workspaceRoots: string[]): string {
   const sibling = path.join("..", "typescript-go", "built/local/tsgo");
   if (exists(sibling)) return sibling;
   const platform = `${process.platform}-${process.arch}`;
+  const suffix = process.platform === "win32" ? ".exe" : "";
   for (const start of [...workspaceRoots, process.cwd()]) {
     let dir = start;
     while (true) {
-      for (const pkg of [
-        `@typescript/typescript-${platform}`,
-        `@typescript/native-preview-${platform}`,
+      // The published layout (`src/typescript/installed.rs`): the executable
+      // sits in the platform package's `lib/`, named for its distribution —
+      // `typescript` ships `tsc`, the preview ships `tsgo`.
+      for (const [pkg, bin] of [
+        [`@typescript/typescript-${platform}`, "tsc"],
+        [`@typescript/native-preview-${platform}`, "tsgo"],
       ]) {
-        const exe = path.join(dir, "node_modules", pkg, "lib", "tsc");
+        const exe = path.join(dir, "node_modules", pkg, "lib", `${bin}${suffix}`);
         if (exists(exe)) return exe;
       }
       const parent = path.dirname(dir);

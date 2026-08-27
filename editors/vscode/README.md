@@ -115,6 +115,24 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
   "깨끗함"이 아니므로, 기존 진단을 그대로 둡니다. 이유는 출력 채널에 한 번만
   적습니다.
 
+## 설치 — TT 저장소 없이
+
+이 확장은 컴파일러도 TypeScript도 번들하지 않고, **프로젝트가 설치한 것**을
+씁니다. 그래서 TT 저장소를 직접 빌드하지 않는 개발자의 절차는 이렇습니다.
+
+```sh
+npm i -D @load28/tt-lang @typescript/native-preview   # ttc + TypeScript 7
+code --install-extension tt-language-<version>.vsix   # 릴리스의 VSIX
+```
+
+설정할 것도, 내보낼 환경 변수도 없습니다. 확장은 그 프로젝트의
+`@load28/tt-lang`이 가리키는 ttc를 띄우고, ttc는 같은 프로젝트의 TypeScript 7을
+찾아 언어 서비스를 몰아 줍니다 — `npx ttc`와 완전히 같은 툴체인입니다.
+
+typescript-go를 직접 빌드해 쓰는 경우에만 `TTC_TSGO_ROOT`(또는
+`TTC_TSGO_BIN`)를 에디터가 상속하는 환경에 둡니다 — 그쪽이 npm 패키지보다
+우선입니다. 아래 "요구사항"이 두 탐색 순서를 모두 적어 둡니다.
+
 ## 요구사항
 
 ### `ttc`
@@ -122,10 +140,17 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
 진단에는 `ttc` 바이너리가 필요합니다. 탐색 순서:
 
 1. `tt.compilerPath` 설정
-2. 워크스페이스의 `target/release/ttc` → `target/debug/ttc`
-3. 워크스페이스에 `file:`로 설치된 로컬 개발용 `@load28/tt-lang` 패키지의 ttc
-   (TT 저장소에서 `scripts/setup`을 돌린 경우 — `server/src/dev.ts`)
+2. 워크스페이스의 `target/release/ttc` → `target/debug/ttc` (TT 저장소 자체를
+   열어 컴파일러를 개발하는 경우)
+3. **프로젝트가 설치한 `@load28/tt-lang`의 ttc** — 어느 바이너리인지는 그
+   패키지 자신이 답하므로(`binaryPath()`), 게시본 설치·`file:` 개발 설치·
+   `TTC_BINARY` 지정이 모두 같은 경로로 해석됩니다 (`server/src/install.ts`)
 4. PATH의 `ttc`
+
+즉 **프로젝트에 `@load28/tt-lang`을 설치했다면 아무 설정 없이 동작합니다** —
+`npx ttc`가 실행하는 바로 그 컴파일러를 확장도 실행합니다. 3번은 워크스페이스
+루트에서 위로 올라가며 `node_modules`를 찾으므로, 모노레포 루트에 설치한
+패키지도 하위 폴더의 파일에 적용됩니다.
 
 `ttc`가 없으면 진단과 엔진 위임 기능이 꺼지고, tt 구문 계층(variant·케이스
 태그·문서 심볼·빠른 수정)은 그대로 동작합니다.
@@ -138,10 +163,26 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
 TypeScript 7에는 인프로세스 JS 언어 서비스 API가 없기 때문이며, 확장
 프로그램은 TypeScript를 번들하지 않습니다. 엔진의 탐색 순서:
 
-1. `TTC_TSGO_BIN` / `TTC_TSGO_ROOT` 환경 변수 — 직접 빌드한
-   typescript-go 체크아웃 (`built/local/tsgo`)
-2. 프로젝트에서 위로 올라가며 찾는 `node_modules/@typescript/
-   typescript-<platform>/lib/tsc` (또는 `native-preview-<platform>`)
+1. **환경 변수가 지목한 것** — `TTC_TSGO_BIN`(언어 서버), `TTC_TSGO_API`
+   (API 클라이언트)
+2. **직접 빌드한 typescript-go 체크아웃** — `TTC_TSGO_ROOT`, 없으면
+   `../typescript-go` 형제 디렉터리 (`built/local/tsgo`)
+3. **프로젝트가 설치한 TypeScript 7** — 위로 올라가며 찾는
+   `node_modules`의 `typescript` 또는 `@typescript/native-preview`
+
+즉 **직접 빌드한 tsgo(1·2)가 npm 패키지(3)보다 우선**입니다. 1·2는 사용자가
+지목한 것이므로, 가리킨 자리에 산출물이 없으면 조용히 3으로 넘어가지 않고
+무엇이 없는지 말하고 멈춥니다 — `../typescript-go`는 지목이 아니라 관례라서
+없으면 그냥 건너뜁니다.
+
+세 자리 모두에서 **두 반쪽이 함께** 해석됩니다: API 클라이언트
+(`dist/api/sync/api.js`)는 타입 검사·방출에, 플랫폼 패키지의 실행 파일
+(`@typescript/typescript-<platform>/lib/tsc` 또는
+`@typescript/native-preview-<platform>/lib/tsgo`)은 언어 서비스에 쓰이는데,
+한쪽만 찾아지면 "CLI는 타입 검사되는데 에디터는 아무것도 답하지 않는" 상태가
+됩니다. 그래서 순서와 레이아웃을 컴파일러의 `src/typescript/toolchain.rs`
+한 곳에서 기술하고 두 소비자가 그것을 읽습니다 (실행 파일 이름 규칙은 업스트림
+`getExePath.js`와 같습니다 — `typescript`는 `tsc`, 그 외 배포는 `tsgo`).
 
 TT 저장소에서 `scripts/setup`으로 toolchain을 연결해 뒀다면(체크아웃 모드,
 `.tt-dev/toolchain.json`) 이 서버가 ttc를 띄울 때 그 `TTC_TSGO_*` 변수를
@@ -150,7 +191,8 @@ TT 저장소에서 `scripts/setup`으로 toolchain을 연결해 뒀다면(체크
 npm 모드(`--tsgo-npm`)면 아무것도 주입하지 않고 위 순서 그대로 각
 프로젝트의 TypeScript를 씁니다.
 
-즉 **프로젝트가 `typescript@7`을 설치해 두면 그대로 동작합니다.** 찾지
+즉 **프로젝트가 `typescript@7`(또는 `@typescript/native-preview`)을 설치해
+두면 환경 변수 없이 그대로 동작합니다.** 찾지
 못하면 위 위임 기능들이 답하지 않고, tt 자신이 아는 것(variant·케이스 태그·
 소진성)만 동작합니다. TypeScript 세션이 죽으면 다음 질문이 새로
 시작합니다 — 기능이 영구히 침묵하는 일은 없습니다.
