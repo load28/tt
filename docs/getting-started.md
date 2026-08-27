@@ -8,7 +8,7 @@ packages and the prebuilt `ttc` compiler are installed from npm.
 looks. Install it alongside TT:
 
 ```sh
-bun add -d typescript@next
+bun add -d typescript@7.1.0-dev.20260826.1
 ```
 
 There is nothing to export and no editor-specific configuration: the
@@ -38,7 +38,7 @@ bun run tt:check
 `init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
 `package.json`. The `0.3.0` initializer adds the stable channels of
 `@load28/tt-lang` and `@load28/unplugin-tt`, plus TT scripts. It does not add
-an npm TypeScript package; add `typescript@next` yourself as shown above.
+an npm TypeScript package; add `typescript@7.1.0-dev.20260826.1` yourself as shown above.
 For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
 that composes the existing config; it never rewrites the user's config source.
 Run `bun run tt:dev` or `bun run tt:build` to use that wrapper. esbuild build
@@ -89,7 +89,7 @@ proxies third-party packages such as Vite.
 Install the compiler and the TypeScript it drives:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@next
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:

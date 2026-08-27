@@ -33,13 +33,15 @@ TypeScript를 쓰므로 다른 의존성은 TypeScript 하나뿐입니다. 내�
 읽습니다.
 
 ```sh
-bun add -d typescript@next
+bun add -d typescript@7.1.0-dev.20260826.1
 ```
 
-`7`이 아니라 `next`인 것은 의도입니다. 선언 방출 — `ttc --types`와 에디터의
-`.tt.d.ts` 사이드카 — 은 7.1에서 들어온 emit API를 쓰는데, npm 범위는
-프리릴리스를 매칭하지 않으므로 `typescript@7`은 7.0 라인으로 해석됩니다.
-7.1이 정식 릴리스되면 `typescript@7`로 옮깁니다.
+정확한 프리릴리스인 것은 의도이고, 이 저장소가 검증하는 바로 그 버전입니다.
+선언 방출 — `ttc --types`와 에디터의 `.tt.d.ts` 사이드카 — 은 7.1에서 들어온
+emit API를 쓰는데, npm 범위는 프리릴리스를 매칭하지 않으므로 `typescript@7`은
+7.0 라인으로 해석됩니다. 태그가 아니라 버전을 명시하므로 오늘 밤 올라온
+나이틀리가 내일 빌드 동작을 바꾸는 일이 없습니다. 7.1이 정식 릴리스되면
+`typescript@7`로 한 번에 모두 옮깁니다.
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
@@ -61,7 +63,7 @@ code --install-extension ./tt-language-<버전>.vsix
 컴파일러만 수동으로 설치할 때:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@next
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.

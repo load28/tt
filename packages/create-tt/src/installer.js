@@ -10,15 +10,16 @@ const versions = {
   '@load28/unplugin-tt': ttChannel,
   vite: '^8.0.0',
   // ttc drives the TypeScript the project installs and looks nowhere else,
-  // so a scaffolded project has to install one. `next`, not `7`:
-  // declaration output (`ttc --types`, the editor's `.tt.d.ts` sidecars)
-  // needs the emit API that arrived in 7.1, and `7` resolves to the 7.0
-  // line because ranges do not match prereleases. A tag rather than the
-  // exact version this repository pins, for the same reason the published
-  // documentation uses one — a scaffolded project should not carry a
-  // nightly that was current the day we wrote it (TASK-256). Move to `7`
-  // once 7.1 is released.
-  typescript: 'next',
+  // so a scaffolded project has to install one — the exact version this
+  // repository tests against, which is the whole point: a user runs the
+  // compiler against the TypeScript it was verified with, and an upstream
+  // nightly cannot change their build overnight. Not `7`: declaration
+  // output (`ttc --types`, the editor's `.tt.d.ts` sidecars) needs the emit
+  // API that arrived in 7.1, and `7` resolves to the 7.0 line because
+  // ranges do not match prereleases (TASK-256). When 7.1 is released this
+  // moves to `7` everywhere at once, held by
+  // npm/scripts/typescript-version.test.mjs.
+  typescript: "7.1.0-dev.20260826.1",
 }
 
 export function dependencyChannel(packageVersion) {

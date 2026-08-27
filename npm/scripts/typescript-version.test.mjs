@@ -1,22 +1,18 @@
-/* Which TypeScript, for whom.
+/* One TypeScript version, named in one place.
  *
  * ttc drives the TypeScript a project installed and looks nowhere else
  * (`src/typescript/toolchain.rs`), so a version is not a detail: what the
  * documentation tells a reader to install is what their editor and build
- * will run. Two audiences want different things from that, and this file is
- * where the difference is stated rather than left to whoever edits next
- * (TASK-256):
+ * will run. Everyone therefore gets the same exact prerelease this
+ * repository tests against — a user runs the compiler against the
+ * TypeScript it was verified with, and an upstream nightly published
+ * tonight cannot change their build tomorrow (TASK-256).
  *
- * - **This repository** pins an exact nightly. CI has to compare the same
- *   program from one week to the next, which a moving version cannot do.
- * - **Published instructions** say `typescript@next`. An exact nightly
- *   written into a README is correct on the day it is written and stale
- *   after it, and nobody is going to bump seven documents every night.
- *
- * What both must avoid is `typescript@7`: npm ranges do not match
+ * What nothing may say is `typescript@7`: npm ranges do not match
  * prereleases, so it resolves to the 7.0 line, whose API client cannot emit
  * declarations — `ttc --types` and the editor's sidecars go quiet with no
- * hint that a version chose that. */
+ * hint that a version chose that. When 7.1 is released, the pin below moves
+ * to `7` and these tests fail until every copy follows. */
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -27,10 +23,6 @@ const root = (path) => new URL(path, ROOT)
 
 const manifest = JSON.parse(await readFile(root('package.json'), 'utf8'))
 const PIN = manifest.devDependencies.typescript
-
-/** The spec published instructions must use — a tag, so it does not go
- * stale, and one that resolves to the 7.1 line. */
-const PUBLISHED = 'next'
 
 /** Files that tell a reader what to install. */
 const DOCUMENTS = [
@@ -81,25 +73,25 @@ test('the pinned TypeScript can emit declarations', async () => {
   )
 })
 
-test('the project initializer scaffolds the published spec', async () => {
-  // A scaffolded project is a user's project: it gets what the instructions
-  // say, not the nightly this repository happened to pin.
+test('the project initializer scaffolds the pinned version', async () => {
+  // A scaffolded project gets what the instructions say, which is what this
+  // repository tests against.
   const installer = await readFile(root('packages/create-tt/src/installer.js'), 'utf8')
   const literal = installer.match(/typescript:\s*['"]([^'"]+)['"]/)
   assert.ok(literal, 'the initializer names no TypeScript version')
-  assert.equal(literal[1], PUBLISHED)
+  assert.equal(literal[1], PIN)
 })
 
-test('every published install command uses the tag, never a range or a nightly', async () => {
+test('every published install command names the pinned version', async () => {
   for (const document of DOCUMENTS) {
     const text = await readFile(root(document), 'utf8')
     for (const spec of specs(text)) {
       assert.equal(
         spec,
-        PUBLISHED,
-        `${document} tells the reader to install typescript@${spec}; ` +
-          `published instructions use typescript@${PUBLISHED} ` +
-          `(a range resolves to 7.0, an exact nightly goes stale)`,
+        PIN,
+        `${document} tells the reader to install typescript@${spec}, ` +
+          `but this repository is tested against ${PIN} ` +
+          `(and a \`7\` range would resolve to 7.0, which cannot emit declarations)`,
       )
     }
   }
@@ -113,7 +105,7 @@ test('the generated website code blocks match their source', async () => {
   // stripping them to empty would fuse a version with the next command.
   const plain = highlighted.replace(/<[^>]*>/g, ' ')
   for (const spec of [...plain.matchAll(/typescript@([\w.\-^~]+)/g)].map((m) => m[1])) {
-    assert.equal(spec, PUBLISHED, 'run `bun run highlight` in website/')
+    assert.equal(spec, PIN, 'run `bun run highlight` in website/')
   }
 })
 

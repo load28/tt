@@ -120,13 +120,13 @@
         "en": [
           "The initializer does not rewrite arbitrary JavaScript config source.",
           "esbuild scripts need the printed plugin line because they have no standard config shape.",
-          "Add typescript@next yourself; ttc --types sidecars additionally need the 7.1 declaration-emit API.",
+          "Add typescript@7.1.0-dev.20260826.1 yourself; ttc --types sidecars additionally need the 7.1 declaration-emit API.",
           "A bundler transpiles sources; keep ttc --check-types as a separate type-check step."
         ],
         "ko": [
           "설치기는 임의 형태의 JavaScript 설정 소스를 재작성하지 않습니다.",
           "esbuild 스크립트에는 표준 설정 형태가 없어 출력된 플러그인 줄을 직접 추가합니다.",
-          "typescript@next은 직접 추가합니다. ttc --types 사이드카는 7.1의 선언 방출 API가 추가로 필요합니다.",
+          "typescript@7.1.0-dev.20260826.1은 직접 추가합니다. ttc --types 사이드카는 7.1의 선언 방출 API가 추가로 필요합니다.",
           "번들러는 소스를 변환할 뿐이므로 ttc --check-types 검사를 별도로 유지합니다."
         ]
       },
@@ -140,7 +140,7 @@
             "en": "Install TypeScript 7 in the project. It ships the native executable and the sync API client together, and ttc resolves both from node_modules — there is no environment variable, and no way for the editor and the build to use different TypeScripts.",
             "ko": "프로젝트에 TypeScript 7을 설치합니다. 네이티브 실행 파일과 sync API 클라이언트가 한 패키지에 함께 들어 있고 ttc가 둘 다 node_modules에서 찾습니다 — 환경 변수도 없고, 에디터와 빌드가 다른 TypeScript를 쓸 방법도 없습니다."
           },
-          "code": "bun add -d typescript@next"
+          "code": "bun add -d typescript@7.1.0-dev.20260826.1"
         },
         {
           "title": {
@@ -186,10 +186,10 @@
             "ko": "컴파일러 수동 설치"
           },
           "body": {
-            "en": "Prerequisite: install typescript@next as shown above. Then install the published TT compiler from npm.",
-            "ko": "선행 조건: 위와 같이 typescript@next을 설치합니다. 그다음 npm에서 공식 TT 컴파일러를 설치합니다."
+            "en": "Prerequisite: install typescript@7.1.0-dev.20260826.1 as shown above. Then install the published TT compiler from npm.",
+            "ko": "선행 조건: 위와 같이 typescript@7.1.0-dev.20260826.1을 설치합니다. 그다음 npm에서 공식 TT 컴파일러를 설치합니다."
           },
-          "code": "bun add -d @load28/tt-lang@0.3.0 typescript@next\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "code": "bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
           "title": {
@@ -197,8 +197,8 @@
             "ko": "번들러 수동 설정"
           },
           "body": {
-            "en": "This path has the same typescript@next prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.",
-            "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript@next 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다."
+            "en": "This path has the same typescript@7.1.0-dev.20260826.1 prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.",
+            "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript@7.1.0-dev.20260826.1 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다."
           },
           "code": "bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }

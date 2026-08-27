@@ -9,12 +9,15 @@ import { createProject, dependencyChannel, detectBundler, initializeExisting, ru
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const expectedDependencyChannel = dependencyChannel(ownManifest.version)
 
-/** What a scaffolded project installs. `next` rather than the exact nightly
- * this repository pins: a user's project should not carry the version that
- * happened to be current the day we wrote it, and a `7` range would resolve
- * to the 7.0 line, whose client cannot emit declarations (TASK-256).
- * `npm/scripts/typescript-version.test.mjs` holds the docs to the same spec. */
-const scaffoldedTypeScript = 'next'
+/** What a scaffolded project installs: the exact TypeScript this repository
+ * is tested against, read from its manifest rather than repeated here — a
+ * user then runs the compiler against the version it was verified with
+ * (TASK-256). `npm/scripts/typescript-version.test.mjs` holds the published
+ * instructions to the same one. */
+const repositoryManifest = JSON.parse(
+  await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
+)
+const scaffoldedTypeScript = repositoryManifest.devDependencies.typescript
 
 test('keeps dependencies on the installer release channel', () => {
   assert.equal(dependencyChannel('0.3.0-dev.20260826'), 'next')
