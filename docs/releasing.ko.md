@@ -118,6 +118,15 @@ GitHub prerelease로 자동 게시합니다. `N`은 GitHub Actions 실행 번호
 `--tag next`로 게시할 때 포인터가 새 버전으로 이동하므로 사용자는
 `@load28/tt-lang@next`로 항상 현재 Nightly를 설치할 수 있습니다.
 
+예약 실행 전에 현재 `main`을 Nightly로 게시해야 하면 CI를 수동 실행합니다.
+
+```sh
+gh workflow run ci.yml --ref main
+```
+
+수동 CI도 새 산출물을 만들고 모든 검증을 통과한 뒤 예약 CI와 같은 `next` 게시 경로로
+자동 승격됩니다. 게시 workflow에 run ID나 npm tag를 직접 입력하지 않습니다.
+
 Beta·RC·Stable·Patch는 성공한 `release-X.Y` CI 뒤 `production` Environment에서
 대기합니다. 승인자는 **Approve and deploy**를 눌러야 게시됩니다. npm 태그와 CI run ID는
 자동으로 선택하므로 입력하지 않습니다. 실패한 CI는 같은 브랜치에 수정 커밋을 넣어
