@@ -118,6 +118,7 @@ jobs:
         run: |
           gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'release-ttc-*' --dir binaries
           gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-vsix --dir vsix
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name release-ts-preview --dir ts-preview
       - name: Assemble packages and release archives
         run: |
           mkdir -p dist/packages dist/assets
@@ -171,3 +172,4 @@ jobs:
           files: |
             dist/assets/*
             vsix/*.vsix
+            ts-preview/*.vsix

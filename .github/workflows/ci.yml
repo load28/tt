@@ -371,12 +371,35 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  release-ts-preview:
+    name: release TypeScript preview VSIX
+    if: >-
+      github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The editor counterpart of the pinned TypeScript nightly: the same
+      # commit's vscode extension under tt's own identity, one VSIX per
+      # platform, with the platform package's tsgo bundled (TASK-258).
+      - name: Build the pinned TypeScript preview extension
+        run: node npm/scripts/build-ts-preview-vsix.mjs ts-preview
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-ts-preview
+          path: ts-preview/*.vsix
+          if-no-files-found: error
+          retention-days: 30
+
   release-metadata:
     name: releasable artifact
     if: >-
       github.event_name != 'pull_request' && github.event_name != 'merge_group' &&
       (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-'))
-    needs: [check, bench, coverage, native, release-version, release-build, release-vsix]
+    needs: [check, bench, coverage, native, release-version, release-build, release-vsix, release-ts-preview]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
