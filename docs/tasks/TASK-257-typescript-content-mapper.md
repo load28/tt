@@ -314,6 +314,21 @@ Node 스크립트 ~30줄로 트리비얼 매퍼를 만들어 고정 tsgo에 물�
   문제다(원격 CI는 ubuntu라 통과). 별도 태스크 감이다.
 - **해결**: 이 태스크에서는 손대지 않는다.
 
+### 이슈 5: 첫 실행에서 hand-written `.ts`의 `@tt/std` import가 TS2307
+
+- **증상**: `node_modules/@tt`가 아직 없는 프로젝트에서, `.ts` 파일이
+  `@tt/std`를 직접 import하면 첫 `tsc --runExternalCode`가 TS2307을 낸다.
+  재실행은 클린 통과.
+- **원인**: 매퍼 프로세스는 첫 `.tt` 조회 때 게으르게 스폰되고, 물질화는
+  `openProject`/`transform`에서 일어난다. 그런데 hand-written `.ts`의
+  bare `@tt/std` 해석은 그보다 먼저 실행될 수 있고, 실패가 기록된 뒤에
+  파일이 생긴다. `.tt`/`.ttx`만 `@tt/std`를 쓰는 프로젝트(rlx-tour 형태)는
+  가상 트리 해석이 transform 뒤라 겪지 않는다.
+- **해결**: 이 태스크에서는 한계로 기록한다. 매퍼 계층에서는 스폰 시점을
+  당길 수 없다. 근본 해법은 `@tt/std`를 실제 npm 패키지로 배포해 물질화
+  자체를 없애는 것(TASK-090의 방향)이며 후속으로 미룬다. 우회는 재실행
+  또는 아무 ttc 실행 한 번.
+
 ## 검증
 
 - [x] `cargo fmt --check`
