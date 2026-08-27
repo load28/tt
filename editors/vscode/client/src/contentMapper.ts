@@ -49,9 +49,12 @@ interface TypeScriptExtensionApi {
   ): Disposable;
 }
 
-/** Extension ids the TypeScript 7 language server has shipped under. */
+/** Extension ids the TypeScript 7 language server has shipped under.
+ * Microsoft's own first; tt's release-asset build (TASK-258) answers when
+ * the marketplace preview predates content mappers. */
 const TYPESCRIPT_EXTENSION_IDS = [
   "TypeScriptTeam.native-preview",
+  "load28.tt-typescript-preview",
   "typescript.native-preview",
 ];
 

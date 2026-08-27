@@ -89,6 +89,14 @@ test("publishing promotes scheduled or dispatched Nightlies and approved formal 
   assert.doesNotMatch(publish, /printf 'enum E \{ A\(x: number\) \}/);
   assert.match(publish, /npm publish "\.\/\$package_dir" --tag "\$NPM_TAG"/);
   assert.match(publish, /action-gh-release/);
+  // The TypeScript preview extension rides the same promotion: built once
+  // in CI, downloaded here, attached as release assets (TASK-258).
+  assert.match(ci, /name: release TypeScript preview VSIX/);
+  assert.match(ci, /build-ts-preview-vsix\.mjs ts-preview/);
+  assert.match(ci, /name: release-ts-preview/);
+  assert.match(ci, /release-build, release-vsix, release-ts-preview\]/);
+  assert.match(publish, /--name release-ts-preview --dir ts-preview/);
+  assert.match(publish, /ts-preview\/\*\.vsix/);
   assert.doesNotMatch(publish, /cargo build|go build|git push origin --delete/);
 });
 

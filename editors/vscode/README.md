@@ -208,6 +208,18 @@ TypeScript 7.1의 언어 서버는 **content mapper**를 통해 `.tt`·`.ttx`를
 (네이티브 프리뷰)에 `.tt`·`.ttx`를 자동 등록하므로, 워크스페이스가
 `@load28/tt-lang`을 설치해 두었다면 에디터 쪽 설정은 없습니다.
 
+마켓플레이스의 TypeScript Native Preview가 아직 content mapper 이전
+빌드라면, tt 릴리스에 첨부된 `tt-typescript-preview-<버전>-<플랫폼>.vsix`
+(고정 나이틀리와 같은 커밋의 빌드, TASK-258)를 받아 설치하세요:
+
+```sh
+code --install-extension tt-typescript-preview-<버전>-<플랫폼>.vsix
+```
+
+`.ts`·`.tsx`를 그 서버가 서빙하게 하려면 워크스페이스 설정에
+`"js/ts.experimental.useTsgo": true`를 둡니다. Microsoft의 Native
+Preview와 동시에 설치하면 명령 ID가 충돌하므로 한쪽만 설치합니다.
+
 CLI(`tsc`)와 tsconfig 기반 프로젝트에서는 `contentMappers` 한 줄이면 됩니다:
 
 ```jsonc

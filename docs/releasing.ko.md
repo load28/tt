@@ -118,6 +118,13 @@ GitHub prerelease로 자동 게시합니다. `N`은 GitHub Actions 실행 번호
 `--tag next`로 게시할 때 포인터가 새 버전으로 이동하므로 사용자는
 `@load28/tt-lang@next`로 항상 현재 Nightly를 설치할 수 있습니다.
 
+릴리스에는 `tt-typescript-preview-<버전>-<플랫폼>.vsix`도 첨부됩니다 — 저장소가
+고정한 TypeScript 나이틀리와 같은 커밋에서 빌드한 VS Code 확장으로, 마켓플레이스의
+TypeScript Native Preview가 content mapper를 싣기 전까지의 에디터 짝입니다
+(TASK-258). 확장 버전은 핀에서 유도되므로(`7.1.0-dev.YYYYMMDD.N` →
+`0.YYYYMMDD.N`) 핀이 움직일 때만 바뀝니다. 7.1 정식과 함께 마켓플레이스 판이
+매퍼를 실으면 이 동봉은 제거합니다.
+
 예약 실행 전에 현재 `main`을 Nightly로 게시해야 하면 CI를 수동 실행합니다.
 
 ```sh
