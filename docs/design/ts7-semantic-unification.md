@@ -292,7 +292,7 @@ position API 폐기 시의 Node 전환 시나리오. 코드 없음(이 문서가
 shadowing(`a_shadowing_binding_is_a_different_binding`), parameter 경계
 (`val_holds_on_a_parameter_and_across_a_function_boundary`), 사용자 정의
 mutator 이름(`val_mutation_is_decided_by_the_method_the_call_resolves_to`),
-literal/enum narrowing(`*_uses_the_narrowed_type_at_the_match`), any 수신자
+literal/variant narrowing(`*_uses_the_narrowed_type_at_the_match`), any 수신자
 (`an_any_receiver_is_never_called_a_mutation`), passthrough 계약
 (`tests/passthrough.rs`). 이들은 **회귀 게이트로 그대로 쓴다**.
 

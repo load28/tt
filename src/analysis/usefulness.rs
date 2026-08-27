@@ -73,16 +73,16 @@ pub(super) enum Cell<'a> {
 /// What a column ranges over.
 #[derive(Clone, Copy)]
 pub(super) enum ColTy<'a> {
-    /// A known enum: its constructors are the column's alphabet, so the
+    /// A known variant: its constructors are the column's alphabet, so the
     /// column can be *completed* and a missing constructor named.
-    Enum(&'a Entry),
+    Variant(&'a Entry),
     /// Nothing was written here at all — a tuple position every arm left
     /// as `_`. It constrains nothing, and saying so (`_`) is a complete
     /// answer, not a gap in one.
     Unconstrained,
     /// Constructors were written here, but which alphabet they belong to
     /// could not be identified — a hand-written union, a payload whose
-    /// declared type names no enum. Only a wildcard covers it, and any
+    /// declared type names no variant. Only a wildcard covers it, and any
     /// witness that passes through is a **guess**: tt does not know what
     /// else the column admits.
     Unknown,
@@ -235,7 +235,7 @@ fn usefulness<'a>(
     match query[0] {
         // A constructor query asks only about that constructor.
         Cell::Tag(pattern) => {
-            let ColTy::Enum(entry) = column else {
+            let ColTy::Variant(entry) = column else {
                 // The column's alphabet is unknown, so nothing can be
                 // proven redundant here.
                 return vec![vec![Witness::Unknown; types.len()]];
@@ -253,12 +253,12 @@ fn usefulness<'a>(
         Cell::Wild => {
             let used = used_tags(rows);
             let complete = match column {
-                ColTy::Enum(entry) => entry.constructors.iter().all(|c| used.contains(&c.tag)),
+                ColTy::Variant(entry) => entry.constructors.iter().all(|c| used.contains(&c.tag)),
                 ColTy::Unconstrained | ColTy::Unknown => false,
             };
             if complete {
-                let ColTy::Enum(entry) = column else {
-                    unreachable!("only an enum column can be complete")
+                let ColTy::Variant(entry) = column else {
+                    unreachable!("only a variant column can be complete")
                 };
                 // Every constructor is written somewhere, so the query
                 // splits into one branch per constructor.
@@ -310,7 +310,7 @@ fn usefulness<'a>(
 /// user can act on.
 fn missing_heads(column: &ColTy<'_>, used: &[String]) -> Vec<Witness> {
     match column {
-        ColTy::Enum(entry) => entry
+        ColTy::Variant(entry) => entry
             .constructors
             .iter()
             .filter(|c| !used.contains(&c.tag))
@@ -378,7 +378,7 @@ fn expand<'a>(pattern: &'a TagPattern, constructor: &MatchConstructor) -> Vec<Ce
 /// way the top-level subject is: by what the patterns written there name.
 ///
 /// The declared field type is consulted first — it is the precise answer
-/// when it names an enum that has every tag used in the column — and the
+/// when it names a variant that has every tag used in the column — and the
 /// patterns themselves decide otherwise. That fallback is what makes a
 /// generic payload (`Ok(value: T)`) analyzable at all: ttc does not
 /// substitute type arguments, but `Some`/`None` written in that column
@@ -419,7 +419,7 @@ fn descend<'a>(
         let resolved = asked
             .or(by_type)
             .or_else(|| cx.table.candidates(&tags).first().copied());
-        out.push(resolved.map_or(ColTy::Unknown, ColTy::Enum));
+        out.push(resolved.map_or(ColTy::Unknown, ColTy::Variant));
     }
     out.extend_from_slice(&types[1..]);
     out

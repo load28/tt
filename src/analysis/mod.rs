@@ -99,10 +99,10 @@ pub(crate) struct SemanticFile {
 /// declaration describes (`docs/design/rust-parity-analysis.md` §10.3).
 pub(crate) type PayloadAlphabet = ((String, String), Vec<String>);
 
-/// One enum of the analysis' declaration table.
+/// One variant of the analysis' declaration table.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeclaredVariant {
-    /// The enum's name in the analyzed file's scope (an import alias, or
+    /// The variant's name in the analyzed file's scope (an import alias, or
     /// `ns.Name` for a namespace import).
     pub name: String,
     /// Where the declaration came from.
@@ -122,9 +122,9 @@ pub struct ResolvedName {
     pub start: usize,
     /// End of the name's span.
     pub end: usize,
-    /// The enum it resolved in.
+    /// The variant it resolved in.
     pub variant_name: String,
-    /// Where that enum was declared.
+    /// Where that variant was declared.
     pub origin: Origin,
     /// For a field, the case whose payload it belongs to.
     pub tag: Option<String>,
@@ -151,7 +151,7 @@ pub struct PatternSite {
     /// Byte offset of the construct's keyword (the declaration keyword for
     /// a let-else, `if` for an `if let`) — the site's identity.
     pub keyword_off: usize,
-    /// What the pattern is over, when its tag names an enum the analysis
+    /// What the pattern is over, when its tag names a variant the analysis
     /// knows. `None` is not an error: a tag pattern also matches any
     /// hand-written tagged union (`language.md` §3.2).
     pub subject: Option<MatchSubject>,
@@ -179,9 +179,9 @@ pub struct UnresolvedName {
     pub start: usize,
     /// End of the name's span.
     pub end: usize,
-    /// The enum the name was resolved against.
+    /// The variant the name was resolved against.
     pub variant_name: String,
-    /// Where that enum was declared — an error names the origin.
+    /// Where that variant was declared — an error names the origin.
     pub origin: Origin,
     /// For a field, the case whose payload it was looked up in.
     pub tag: Option<String>,
@@ -219,7 +219,7 @@ pub struct MatchAnalysis {
     pub body_close: usize,
     /// One subject per scrutinee position: one entry for a single match,
     /// one per position for a tuple match. `None` when the position's arm
-    /// tags belong to no known enum — the match still analyzes, its
+    /// tags belong to no known variant — the match still analyzes, its
     /// declared types are simply unknown (TypeScript may still know).
     pub subjects: Vec<Option<MatchSubject>>,
     /// The arms, in source order.
@@ -227,7 +227,7 @@ pub struct MatchAnalysis {
     /// The exhaustiveness answer — for a single match over its subject's
     /// tags, for a tuple match over the product of its positions. `None`
     /// when the question does not arise: a wildcard arm covers everything,
-    /// the tags identify no known enum, or the match is a literal one
+    /// the tags identify no known variant, or the match is a literal one
     /// (whose exhaustiveness is a question about a TypeScript type —
     /// [`crate::literal_matches`]). This is what sema reports on; there is
     /// no second implementation of the rule.
@@ -240,17 +240,17 @@ pub struct MatchAnalysis {
     pub has_unresolved: bool,
 }
 
-/// What a match is over: the resolved enum and its constructors.
+/// What a match is over: the resolved variant and its constructors.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchSubject {
-    /// The enum's name in this file's scope (alias or `ns.Name` for an
+    /// The variant's name in this file's scope (alias or `ns.Name` for an
     /// imported one).
     pub variant_name: String,
-    /// The enum's constructors, in declaration order.
+    /// The variant's constructors, in declaration order.
     pub constructors: Vec<MatchConstructor>,
 }
 
-/// One constructor (case) of a subject enum.
+/// One constructor (case) of a subject variant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MatchConstructor {
     /// The case tag.
@@ -308,10 +308,10 @@ pub struct PatternBinding {
     pub tag: String,
     /// The declared type of the destructured field (`| undefined` applied
     /// for an optional field). `None` when the subject — or, for a nested
-    /// leaf, the field's enum — is unknown, or the constructor has no such
+    /// leaf, the field's variant — is unknown, or the constructor has no such
     /// field.
     pub ty: Option<String>,
-    /// The enum [`PatternBinding::ty`] was read from, when it is known.
+    /// The variant [`PatternBinding::ty`] was read from, when it is known.
     pub variant_name: Option<String>,
     /// Byte span of the whole alternative list this occurrence belongs to
     /// (`A(x) | B(x)` for either `x`) — what a consumer replaces when it
@@ -351,7 +351,7 @@ pub struct BodyBinding {
 /// is a combination.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Coverage {
-    /// One entry per scrutinee position: the enum whose cases that position
+    /// One entry per scrutinee position: the variant whose cases that position
     /// enumerates. `None` for a *universal* position of a tuple match —
     /// every arm writes `_` there, so it constrains nothing.
     pub positions: Vec<Option<CoveredVariant>>,
@@ -394,7 +394,7 @@ pub struct Uncovered {
     /// set.
     ///
     /// `false` means some column's alphabet was not identifiable — a
-    /// hand-written union, a payload whose declared type names no enum —
+    /// hand-written union, a payload whose declared type names no variant —
     /// so this witness is tt's best guess rather than its knowledge. The
     /// default compile path reports it anyway (a conservative "you may
     /// have missed something" is the only answer available without types);
@@ -422,7 +422,7 @@ impl Coverage {
 /// "variant T (imported from \"./token.tt\")").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CoveredVariant {
-    /// The enum's name in this file's scope.
+    /// The variant's name in this file's scope.
     pub name: String,
     /// Where the declaration came from.
     pub origin: Origin,
@@ -438,7 +438,7 @@ pub enum Origin {
     /// Imported from another module.
     Imported {
         /// The specifier as written (`./token.tt`), when the collector
-        /// recorded it — an error message quotes it to say *which* enum.
+        /// recorded it — an error message quotes it to say *which* variant.
         from: Option<String>,
     },
     /// A built-in variant (`Option`, `Result`).
@@ -1348,7 +1348,7 @@ fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
     let cx = Alphabets::of(table);
     let mut best: Option<(&Entry, Vec<Uncovered>)> = None;
     for entry in table.candidates(&rows.tags) {
-        let types = [ColTy::Enum(entry)];
+        let types = [ColTy::Variant(entry)];
         let missing = render_witnesses(&usefulness::missing(&rows.rows, &types, &cx));
         if missing.is_empty() {
             best = Some((entry, missing));
@@ -1363,7 +1363,7 @@ fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
         positions: vec![Some(entry.covered_variant())],
         covered: rows.covered,
         missing,
-        unreachable: unreachable_arms(&rows.arm_rows, &[ColTy::Enum(entry)], &cx),
+        unreachable: unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx),
     })
 }
 
@@ -1409,7 +1409,7 @@ pub(crate) fn checked_coverage(
                 })
                 .collect(),
         };
-        let types = [ColTy::Enum(&entry)];
+        let types = [ColTy::Variant(&entry)];
         let missing = render_witnesses(&usefulness::missing(&rows.rows, &types, &cx));
         found.push((
             expr.keyword_off,
@@ -1447,7 +1447,7 @@ pub(crate) fn checked_coverage(
         let types: Vec<ColTy> = entries
             .iter()
             .map(|entry| match entry {
-                Some(entry) => ColTy::Enum(entry),
+                Some(entry) => ColTy::Variant(entry),
                 None => ColTy::Unconstrained,
             })
             .collect();
@@ -1705,7 +1705,7 @@ fn tuple_coverage_of(expr: &TupleMatchExpr, table: &Table) -> Option<Coverage> {
         // unanswerable — the same conservatism as before.
         let entry = *table.candidates(tags).first()?;
         positions.push(Some(entry.covered_variant()));
-        types.push(ColTy::Enum(entry));
+        types.push(ColTy::Variant(entry));
     }
     if positions.iter().all(Option::is_none) {
         return None;

@@ -29,7 +29,7 @@
 ## 프로젝트와 설계 계약
 
 **tt**은 TypeScript로 컴파일되는 초경량 전처리 언어이고, **ttc**는 Rust
-컴파일러입니다. tt은 Rust 스타일 `enum`, `match`, `try`, `let-else`, `if let`,
+컴파일러입니다. tt은 Rust 스타일 `variant`, `match`, `try`, `let-else`, `if let`,
 `|>`/`flow`, `result` 블록과 `val` 바인딩 수식자를 TypeScript에 추가합니다.
 
 다음 세 계약은 기능·수정·리팩터링에서 깨뜨릴 수 없습니다.

@@ -1052,7 +1052,7 @@ impl<'a> Emitter<'a> {
                 Statement::Adt(adt) => {
                     // The union type and constructor object are this
                     // declaration's glue: a frame inside a generated
-                    // constructor belongs to the `enum` that wrote it.
+                    // constructor belongs to the `variant` that wrote it.
                     let span = self.span(adt.node);
                     out.anchored(
                         AnchorKind::Variant,

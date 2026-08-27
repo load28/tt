@@ -308,12 +308,12 @@
       {
         "kind": "code",
         "label": "example.tt",
-        "html": "<span style=\"color:#FF7B72\">enum</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#79C0FF\">  Circle</span><span style=\"color:#E6EDF3\">(radius</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#79C0FF\">  Rect</span><span style=\"color:#E6EDF3\">(width</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">, height</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#E6EDF3\">}</span><br><br><span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> area</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">shape</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#FF7B72\"> =></span><br><span style=\"color:#FF7B72\">  match</span><span style=\"color:#E6EDF3\"> (shape) {</span><br><span style=\"color:#79C0FF\">    Circle</span><span style=\"color:#E6EDF3\">(radius) </span><span style=\"color:#FF7B72\">=></span><span style=\"color:#E6EDF3\"> Math.</span><span style=\"color:#79C0FF\">PI</span><span style=\"color:#FF7B72\"> *</span><span style=\"color:#E6EDF3\"> radius </span><span style=\"color:#FF7B72\">**</span><span style=\"color:#79C0FF\"> 2</span><span style=\"color:#E6EDF3\">,</span><br><span style=\"color:#E6EDF3\">  };</span>"
+        "html": "<span style=\"color:#FF7B72\">variant</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#79C0FF\">  Circle</span><span style=\"color:#E6EDF3\">(radius</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#79C0FF\">  Rect</span><span style=\"color:#E6EDF3\">(width</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">, height</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#E6EDF3\">}</span><br><br><span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> area</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">shape</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#FF7B72\"> =></span><br><span style=\"color:#FF7B72\">  match</span><span style=\"color:#E6EDF3\"> (shape) {</span><br><span style=\"color:#79C0FF\">    Circle</span><span style=\"color:#E6EDF3\">(radius) </span><span style=\"color:#FF7B72\">=></span><span style=\"color:#E6EDF3\"> Math.</span><span style=\"color:#79C0FF\">PI</span><span style=\"color:#FF7B72\"> *</span><span style=\"color:#E6EDF3\"> radius </span><span style=\"color:#FF7B72\">**</span><span style=\"color:#79C0FF\"> 2</span><span style=\"color:#E6EDF3\">,</span><br><span style=\"color:#E6EDF3\">  };</span>"
       },
       {
         "kind": "code",
         "label": "output",
-        "html": "<span>error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing \"Rect\"<br> --> shape.tt:7:3<br>  |<br>7 |   match (shape) {<br>  |   ^^^^^^^^^^^^^<br>  |<br>  = help: add the missing arms<br>  |     Rect(width, height) => undefined,<br>  = help: or add a final `_` arm: `_ => undefined,`</span>"
+        "html": "<span>error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing \"Rect\"</span><br><span> --> shape.tt:7:3</span><br><span>  |</span><br><span>7 |   match (shape) {</span><br><span>  |   ^^^^^^^^^^^^^</span><br><span>  |</span><br><span>  = help: add the missing arms</span><br><span>  |     Rect(width, height) => undefined,</span><br><span>  = help: or add a final `_` arm: `_ => undefined,`</span>"
       },
       {
         "kind": "paragraph",
@@ -467,7 +467,7 @@
           },
           {
             "kind": "code",
-            "text": "enum"
+            "text": "variant"
           },
           {
             "kind": "text",
@@ -859,12 +859,12 @@
       {
         "kind": "code",
         "label": "example.tt",
-        "html": "<span style=\"color:#FF7B72\">enum</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#79C0FF\">  Circle</span><span style=\"color:#E6EDF3\">(radius</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#79C0FF\">  Rect</span><span style=\"color:#E6EDF3\">(width</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">, height</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#E6EDF3\">}</span><br><br><span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> area</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">shape</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#FF7B72\"> =></span><br><span style=\"color:#FF7B72\">  match</span><span style=\"color:#E6EDF3\"> (shape) {</span><br><span style=\"color:#79C0FF\">    Circle</span><span style=\"color:#E6EDF3\">(radius) </span><span style=\"color:#FF7B72\">=></span><span style=\"color:#E6EDF3\"> Math.</span><span style=\"color:#79C0FF\">PI</span><span style=\"color:#FF7B72\"> *</span><span style=\"color:#E6EDF3\"> radius </span><span style=\"color:#FF7B72\">**</span><span style=\"color:#79C0FF\"> 2</span><span style=\"color:#E6EDF3\">,</span><br><span style=\"color:#E6EDF3\">  };</span>"
+        "html": "<span style=\"color:#FF7B72\">variant</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#79C0FF\">  Circle</span><span style=\"color:#E6EDF3\">(radius</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#79C0FF\">  Rect</span><span style=\"color:#E6EDF3\">(width</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">, height</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#E6EDF3\">),</span><br><span style=\"color:#E6EDF3\">}</span><br><br><span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> area</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">shape</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> Shape</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> number</span><span style=\"color:#FF7B72\"> =></span><br><span style=\"color:#FF7B72\">  match</span><span style=\"color:#E6EDF3\"> (shape) {</span><br><span style=\"color:#79C0FF\">    Circle</span><span style=\"color:#E6EDF3\">(radius) </span><span style=\"color:#FF7B72\">=></span><span style=\"color:#E6EDF3\"> Math.</span><span style=\"color:#79C0FF\">PI</span><span style=\"color:#FF7B72\"> *</span><span style=\"color:#E6EDF3\"> radius </span><span style=\"color:#FF7B72\">**</span><span style=\"color:#79C0FF\"> 2</span><span style=\"color:#E6EDF3\">,</span><br><span style=\"color:#E6EDF3\">  };</span>"
       },
       {
         "kind": "code",
         "label": "output",
-        "html": "<span>error[match-not-exhaustive]: match on enum Shape is not exhaustive: missing \"Rect\"<br> --> shape.tt:7:3<br>  |<br>7 |   match (shape) {<br>  |   ^^^^^^^^^^^^^<br>  |<br>  = help: add the missing arms<br>  |     Rect(width, height) => undefined,<br>  = help: or add a final `_` arm: `_ => undefined,`</span>"
+        "html": "<span>error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing \"Rect\"</span><br><span> --> shape.tt:7:3</span><br><span>  |</span><br><span>7 |   match (shape) {</span><br><span>  |   ^^^^^^^^^^^^^</span><br><span>  |</span><br><span>  = help: add the missing arms</span><br><span>  |     Rect(width, height) => undefined,</span><br><span>  = help: or add a final `_` arm: `_ => undefined,`</span>"
       },
       {
         "kind": "paragraph",
@@ -1014,7 +1014,7 @@
           },
           {
             "kind": "code",
-            "text": "enum"
+            "text": "variant"
           },
           {
             "kind": "text",

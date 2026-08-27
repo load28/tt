@@ -140,7 +140,7 @@ import * as Result from "@tt/std/result";
 - Constructors take only their own variant's type: `Result.Ok(1)` → `TOk<number>`, `Result.Err("bad")` → `TErr<string>` (NOT `Result.Ok<number, string>(1)` — one type arg each). Both fit any `TResult<T, E>` slot; annotate the variable/return type when you need the full Result. Combinators take/return `TResult<T, E>`.
 - `andThen`/`andThenP` UNION the error types: `TResult<T, E>` + `(T) => TResult<U, F>` → `TResult<U, E | F>`, so a pipeline of steps that each fail differently ends up with every error type (also works on the scattered `TOk<T> | TErr<E1> | TErr<E2>` a `try`/`result` value infers as; `TErrorOf<R>` is exported for reading the error side out). `map`/`mapP` add no failure → error type unchanged.
 - `andThenP` reads its input type off the function you pass: named function → nothing to write; inline arrow → ANNOTATE the parameter (`Result.andThenP((u: User) => f(u))`), else it is `unknown`.
-- Both are BUILT-IN enums: `_`-less match on their tags is exhaustiveness-checked even without import. Built-ins give checking only — import (or declare) to construct values.
+- Both are BUILT-IN variants: `_`-less match on their tags is exhaustiveness-checked even without import. Built-ins give checking only — import (or declare) to construct values.
 - Combinators = data-first static fns; `*P` = data-last curried for pipelines.
   - Option: map andThen orElse filter unwrapOr unwrapOrElse expect okOr fromNullable toNullable isSome isNone zip flatten transpose collect (+P: map andThen orElse filter unwrapOr unwrapOrElse expect okOr)
   - Result: map mapErr andThen orElse unwrapOr unwrapOrElse expect ok err fromThrowable fromPromise isOk isErr flatten transpose collect (+P: map mapErr andThen orElse unwrapOr unwrapOrElse expect)
@@ -166,7 +166,7 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 ## Modules
 
 - Import `.tt`/`.ttx` files by relative path WITH extension: `./token.tt` → `./token.js`, `./view.ttx` → `./view.jsx` by default (`--rewrite-imports ts` emits `.ts`/`.tsx`; `off` preserves source specifiers).
-- Exhaustiveness sees exported enums from DIRECT (1-hop) relative `.tt`/`.ttx` imports (named/aliased/`* as ns`); re-export chains & package paths NOT collected → those matches compile unchecked.
+- Exhaustiveness sees exported variants from DIRECT (1-hop) relative `.tt`/`.ttx` imports (named/aliased/`* as ns`); re-export chains & package paths NOT collected → those matches compile unchecked.
 - Dynamic `import()` specifiers not rewritten.
 
 ## Install

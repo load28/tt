@@ -1,7 +1,7 @@
 {
   "name": "@load28/tt-lang",
   "version": "0.0.0-dev",
-  "description": "tt — a tiny TypeScript preprocessor adding Rust-style enums, match expressions, try, let-else, if let and the pipeline operator. Installs the ttc compiler.",
+  "description": "tt — a tiny TypeScript preprocessor adding Rust-style variants, match expressions, try, let-else, if let and the pipeline operator. Installs the ttc compiler.",
   "license": "MIT",
   "bin": {
     "ttc": "bin/ttc.js"
@@ -29,7 +29,7 @@
     "typescript",
     "compiler",
     "preprocessor",
-    "enum",
+    "tagged-union",
     "pattern-matching",
     "match",
     "tt"

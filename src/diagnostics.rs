@@ -30,7 +30,7 @@ pub enum Severity {
 /// The stable identity of a tt rule — what makes the same violation the
 /// same diagnostic in every pipeline and every consumer.
 ///
-/// Codes are per *rule*, not per message: the wording may name the enum or
+/// Codes are per *rule*, not per message: the wording may name the variant or
 /// the binding, the code says which rule fired. [`DiagnosticCode::as_str`]
 /// is the wire form (`--server`, editors).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -682,7 +682,7 @@ impl Diagnostic {
 /// drift apart on phrasing (TASK-117 symptom 2).
 ///
 /// `subject` names what the match is over when the reporter knows it
-/// (`enum Shape`, `(Token, _)`, `literal union`); the typed pass, which
+/// (`variant Shape`, `(Token, _)`, `literal union`); the typed pass, which
 /// knows the alphabet but not the declaration, passes `None`. `missing`
 /// entries arrive fully rendered (quoted tags, `(a, b)` combinations);
 /// `tuple` picks the truncation unit.

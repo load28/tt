@@ -43,9 +43,9 @@ define_ids! {
     /// One HIR node — anything the source map can place: a statement, an
     /// expression head, a pattern piece, a declaration name.
     NodeId,
-    /// An item that owns nested definitions (an enum owning its variants).
+    /// An item that owns nested definitions (a variant declaration owning its cases).
     OwnerId,
-    /// A definition the resolver produced (Phase 2): an enum, a variant as
+    /// A definition the resolver produced (Phase 2): a variant declaration, a case as
     /// a value, an import target. Reserved here so the source map's shape
     /// is final.
     DefId,
@@ -63,7 +63,7 @@ define_ids! {
     /// One pattern site — the construct-neutral unit every pattern-carrying
     /// syntax lowers to ([`super::PatternSite`]).
     PatternSiteId,
-    /// One enum variant, across every enum of the file.
+    /// One case, across every variant declaration in the file.
     VariantId,
     /// One payload field, across every variant of the file.
     FieldId,

@@ -28,7 +28,9 @@ test('creates a complete Vite project without installing', async () => {
   assert.equal('typescript' in manifest.devDependencies, false)
   assert.match(await readFile(join(root, 'vite.config.ts'), 'utf8'), /@load28\/unplugin-tt\/vite/)
   assert.equal(await readFile(join(root, 'src/main.ts'), 'utf8'), "import './app.tt'\n")
-  assert.match(await readFile(join(root, 'src/app.tt'), 'utf8'), /match \(greeting\)/)
+  const appSource = await readFile(join(root, 'src/app.tt'), 'utf8')
+  assert.match(appSource, /variant Greeting/)
+  assert.match(appSource, /match \(greeting\)/)
 })
 
 test('persists a selected local registry for a new Bun project', async () => {

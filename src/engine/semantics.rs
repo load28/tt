@@ -339,17 +339,17 @@ fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
 /// `{ kind: "OutOfRange"; value: number; }` — and the reader is left to
 /// match it back against a declaration by eye. tt can do that matching: the
 /// tag and the payload's field names name a case, and the table says which
-/// enum declares it.
+/// variant declaration declares it.
 ///
 /// Two rules keep the restatement honest, and both are the whitelist rule
 /// of [`translate`] again:
 ///
-/// - A tag two enums in scope declare is **not** named. The point is to say
+/// - A tag two variants in scope declare is **not** named. The point is to say
 ///   which declaration this is, and a guess between two says nothing.
 /// - A member whose field names are not exactly the case's is not named
 ///   either — it is some other type that happens to carry the same tag.
 ///
-/// A union of members that covers every case of one enum is the enum
+/// A union of members that covers every case of one variant is the variant
 /// itself (`ParseError`), which is how the return type in the motivating
 /// example comes back to its declared name; a partial union stays a union
 /// of named cases (`ParseError.NotANumber | ParseError.Overflow`).
@@ -389,7 +389,7 @@ struct CaseMember {
     /// Byte span of the `{ ... }` in the message.
     start: usize,
     end: usize,
-    /// The enum that declares the case, under the name the analyzed file
+    /// The variant that declares the case, under the name the analyzed file
     /// calls it by.
     variant_name: String,
     /// The case's tag.
@@ -453,8 +453,8 @@ fn union_runs(message: &str, members: &[CaseMember]) -> Vec<Run> {
     runs
 }
 
-/// The enum name a whole union collapses to — `Some` only when its members
-/// are the cases of one enum, each once, all of them.
+/// The variant name a whole union collapses to — `Some` only when its members
+/// are the cases of one variant, each once, all of them.
 fn collapsed(run: &[CaseMember], declarations: &[DeclaredVariant]) -> Option<String> {
     let first = run.first()?;
     if run.iter().any(|m| m.variant_name != first.variant_name) {
@@ -471,7 +471,7 @@ fn collapsed(run: &[CaseMember], declarations: &[DeclaredVariant]) -> Option<Str
         .then(|| first.variant_name.clone())
 }
 
-/// The case an object type names — `Some((enum, tag))` when exactly one
+/// The case an object type names — `Some((variant, tag))` when exactly one
 /// declaration in scope declares the tag *and* its payload is exactly the
 /// fields written here.
 fn recognize(text: &str, declarations: &[DeclaredVariant]) -> Option<(String, String)> {
@@ -914,7 +914,7 @@ pub(crate) fn report(
         };
         // The nested columns are resolved from declarations, so the
         // imported ones have to be collected — otherwise a payload whose
-        // type is an imported enum reads as an unknown alphabet and its
+        // type is an imported variant reads as an unknown alphabet and its
         // holes go unreported. The cached semantics carry them.
         let externs: &[crate::VariantSymbol] = semantics
             .get(&file.source_path)
@@ -1183,7 +1183,7 @@ pub(crate) fn match_declarations(
 
 /// The variant declarations one file's direct `.tt` imports bring into scope,
 /// preferring the snapshot's own text for a file it holds — the same
-/// 1-hop collection every other surface does, so an imported enum is known
+/// 1-hop collection every other surface does, so an imported variant is known
 /// under the name the import gave it.
 /// The imported declarations in `file`'s scope, read from the snapshot's
 /// cached per-file symbols where the import target is in the snapshot —

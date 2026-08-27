@@ -70,7 +70,7 @@ AST를 복제하지 않고, TT이 생성하는 범위만 구조화한다.
 
 ### Printer
 
-target IR 조각을 평탄화하고 source span mapping·mark·anchor를 함께 계산한다. enum
+target IR 조각을 평탄화하고 source span mapping·mark·anchor를 함께 계산한다. variant
 이름 해석, pattern decision 구성, async 필요 여부, 임시 이름 생성은 판단하지 않는다.
 
 ## 3. 불변조건

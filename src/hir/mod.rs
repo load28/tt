@@ -61,7 +61,7 @@ pub struct HirFile {
     /// The file's items (variant declarations, lifted imports), in source
     /// order. An item's position in this list is its [`OwnerId`].
     pub items: Vec<Item>,
-    /// Every variant of every enum of the file, in declaration order.
+    /// Every case of every variant declaration in the file, in declaration order.
     pub variants: Arena<VariantId, VariantData>,
     /// Every payload field of every variant, in declaration order.
     pub fields: Arena<FieldId, FieldData>,
@@ -210,7 +210,7 @@ pub struct VariantItem {
     pub variants: Vec<VariantId>,
 }
 
-/// One variant of an enum, owned by it.
+/// One case of a variant declaration, owned by it.
 #[derive(Debug)]
 pub struct VariantData {
     /// The tag's node (span = the tag).

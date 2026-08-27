@@ -2,7 +2,7 @@
 //! TypeScript.
 //!
 //! The other target feeds the compiler noise and asks it not to crash.
-//! This one feeds it tt — enums, matches over them with every case
+//! This one feeds it tt — variants, matches over them with every case
 //! covered, pipelines, `try`, `result` blocks, `if let` — and asks for the
 //! answer to be right in the two ways a lowering can be wrong without
 //! anyone noticing:
@@ -37,11 +37,11 @@ enum Body {
     /// A pipeline over the bound value: two steps, so the runtime helper is
     /// needed and its import has to be placed.
     Piped,
-    /// A nested match on a second enum.
+    /// A nested match on a second variant declaration.
     Nested,
 }
 
-/// One case of a generated enum: a tag, and how many payload fields.
+/// One case of a generated variant declaration: a tag, and how many payload fields.
 #[derive(Arbitrary, Debug)]
 struct Case {
     fields: u8,
@@ -90,8 +90,8 @@ impl Program {
         out.push_str("declare function fallible(n: number): TResult<number, string>;\n");
         out.push_str("import type { TResult } from \"@tt/std\";\n\n");
 
-        // The subject, plus a second enum for nested arms to match on.
-        out.push_str("export enum E {\n");
+        // The subject, plus a second variant declaration for nested arms to match on.
+        out.push_str("export variant E {\n");
         for (index, fields) in cases.iter().enumerate() {
             out.push_str("  ");
             out.push_str(&tag(index));
@@ -105,7 +105,7 @@ impl Program {
             }
             out.push_str(",\n");
         }
-        out.push_str("}\n\nexport enum F { Yes, No }\n\n");
+        out.push_str("}\n\nexport variant F { Yes, No }\n\n");
 
         out.push_str("export function run(e: E, f: F, n: number): number {\n");
         if self.with_if_let {

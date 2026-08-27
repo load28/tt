@@ -298,7 +298,7 @@ const indexHtml = `<!doctype html>
 </html>
 `
 
-const starterSource = `enum Greeting {
+const starterSource = `variant Greeting {
   Hello(name: string),
   Welcome,
 }

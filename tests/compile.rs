@@ -763,7 +763,7 @@ variant Shape { Circle(radius: number), Point }
 
 #[test]
 fn match_on_unknown_tags_is_not_checked() {
-    // Hand-written unions / imported enums: ttc has no type info, so no
+    // Hand-written unions / imported variants: ttc has no type info, so no
     // exhaustiveness check — the runtime guard still protects.
     let out = ok(r#"
 type AppEvent = { kind: "click"; x: number } | { kind: "key"; code: string };
@@ -776,7 +776,7 @@ const f = (e: AppEvent) => match (e) {
 
 #[test]
 fn match_on_builtin_option_is_exhaustiveness_checked() {
-    // Option/Result are built-in enums: checked without a local declaration.
+    // Option/Result are built-in variants: checked without a local declaration.
     let e = err("const f = (o: Option<number>) => match (o) { Some(value) => value };\n");
     assert!(
         e.message
@@ -813,7 +813,7 @@ fn wildcard_exempts_builtin_exhaustiveness() {
 }
 
 #[test]
-fn local_enum_shadows_builtin() {
+fn local_variant_shadows_builtin() {
     // A file-local tt variant named Option replaces the built-in for this file.
     let e = err(
         "variant Option { Some(), Stale }\nconst f = (o: Option) => match (o) { Some => 1 };\n",
@@ -829,7 +829,7 @@ fn local_enum_shadows_builtin() {
 
 #[test]
 fn a_candidate_the_arms_satisfy_makes_the_match_exhaustive() {
-    // Two enums contain every arm tag. The arms cover `Small` completely,
+    // Two variants contain every arm tag. The arms cover `Small` completely,
     // so nothing is missing — the check names an variant only when *no*
     // candidate is satisfied, and then the one left fewest cases.
     ok(
@@ -1781,7 +1781,7 @@ const area = match (Shape.Point) {
 }
 
 /* ------------------------------------------------------------------ */
-/* project-wide exhaustiveness (extern enums)                          */
+/* project-wide exhaustiveness (extern variants)                       */
 /* ------------------------------------------------------------------ */
 
 fn token_extern() -> ttc::ExternVariant {
@@ -1793,7 +1793,7 @@ fn token_extern() -> ttc::ExternVariant {
 }
 
 #[test]
-fn extern_enum_makes_match_checked() {
+fn extern_variant_makes_match_checked() {
     let externs = [token_extern()];
     let opts = Options {
         extern_variants: &externs,
@@ -1815,7 +1815,7 @@ fn extern_enum_makes_match_checked() {
 }
 
 #[test]
-fn extern_enum_full_coverage_compiles() {
+fn extern_variant_full_coverage_compiles() {
     let externs = [token_extern()];
     let opts = Options {
         extern_variants: &externs,
@@ -1830,7 +1830,7 @@ fn extern_enum_full_coverage_compiles() {
 }
 
 #[test]
-fn local_enum_shadows_extern_of_same_name() {
+fn local_variant_shadows_extern_of_same_name() {
     // The local Token has only two cases; the extern one must not resurrect
     // a third. Full local coverage compiles.
     let externs = [token_extern()];
@@ -1847,7 +1847,7 @@ fn local_enum_shadows_extern_of_same_name() {
 }
 
 #[test]
-fn extern_enum_shadows_builtin_of_same_name() {
+fn extern_variant_shadows_builtin_of_same_name() {
     // An imported `Option` with an extra case replaces the built-in: the
     // two-case match that satisfies the built-in must now be an error.
     let externs = [ttc::ExternVariant {
@@ -2132,7 +2132,7 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
 }
 
 #[test]
-fn a_nested_enum_declaration_is_laid_out_from_its_own_line() {
+fn a_nested_variant_declaration_is_laid_out_from_its_own_line() {
     let out = ok("function make() {\n  variant Inner { A(x: number), B }\n  return Inner.B;\n}\n");
     assert!(
         out.contains("\n  type Inner =\n    | { kind: \"A\"; x: number }"),
@@ -4389,7 +4389,7 @@ function f(): number {
 
 #[test]
 fn a_misspelled_case_in_a_tuple_match_position_is_reported() {
-    // Payload cases make these tt enums rather than TypeScript ones.
+    // Payload cases make these tt variants rather than TypeScript enums.
     let e = err(r#"variant Dir { North(dx: number), South }
 variant Speed { Fast(v: number), Slow }
 const n = match (d, s) {
@@ -4723,7 +4723,7 @@ fn compile_report_still_emits_under_recoverable_errors() {
 }
 
 #[test]
-fn duplicate_enum_case_emits_only_one_constructor_property() {
+fn duplicate_variant_case_emits_only_one_constructor_property() {
     let src = "variant E { A(x: number), B, A(y: number) }\n";
     let report = ttc::compile_report(src, &Options::default());
     assert_eq!(report.diagnostics.len(), 1, "{:#?}", report.diagnostics);

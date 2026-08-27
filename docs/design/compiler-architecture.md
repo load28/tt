@@ -44,7 +44,7 @@ TypeScript 텍스트
 파싱된 파일은 `Program` = 소스 순서의 `Segment` 목록이다:
 
 - `Verbatim(Span)` — tt 구문이 아닌 모든 것. 원본 바이트 범위 그대로.
-- `Enum(EnumDecl)` / `Match(MatchExpr)` / `Try(TryStmt)` /
+- `Variant(VariantDecl)` / `Match(MatchExpr)` / `Try(TryStmt)` /
   `LetElse(LetElseStmt)` — 완전하게 파싱된 tt 구문.
 - `TtImport(Span)` — 정적 import/re-export의 상대 경로 `.tt` 지정자 문자열
   (따옴표 포함). 문장의 나머지는 verbatim으로 남고, codegen이
@@ -85,21 +85,21 @@ expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍�
 tt 수준 *에러*(중복 케이스 등)는 전부 sema의 몫이다. 중첩 코드(스크루티니,
 arm body, 보간)는 같은 토큰 스트림의 부분 슬라이스로 재귀 파싱된다.
 
-TypeScript `enum` 통과와 tt `variant` 소유권 규칙을
-`const enum`/`declare enum` 제외, 예약어 규칙도 파서 소관이다.
+TypeScript `enum` 통과와 tt `variant` 소유권 규칙을 구분한다.
+`const enum`/`declare enum`을 포함한 TypeScript 선언과 예약어 규칙도 파서 소관이다.
 
 ### 4. `sema` — 의미 검사
 
 AST를 소스 순서로 깊이 우선 순회하며(노드 자체 규칙 → 자식 순),
 첫 위반을 바이트 오프셋과 함께 `TtError`로 보고한다:
 
-- enum: 중복 케이스 금지; 검증 활성 시 필드 타입이 TS 타입 조각으로
+- variant: 중복 케이스 금지; 검증 활성 시 필드 타입이 TS 타입 조각으로
   파싱되는지(swc) 검사.
 - match: 와일드카드 `_`는 마지막 arm; 중복 arm 금지.
-- 소진성: sema는 **보고만** 한다. 후보 enum 표(로컬 > 임포트 > 내장),
+- 소진성: sema는 **보고만** 한다. 후보 variant 표(로컬 > 임포트 > 내장),
   커버 규칙(가드·중첩 패턴 arm은 커버하지 않음), 튜플 곱집합은
   `analysis.rs`가 계산해 `Coverage`로 답하고(`match-analysis.md` §5),
-  sema는 그 답을 순회 **종료 후** 위치 있는 에러로 옮긴다 (match가 enum
+  sema는 그 답을 순회 **종료 후** 위치 있는 에러로 옮긴다 (match가 variant
   선언보다 앞서도 무관). 알 수 없는 태그의 match는 검사하지 않는다 —
   ttc에 타입 정보가 없다.
 
@@ -140,7 +140,7 @@ AST 노드 위에서 표현되면 sema, 통과 영역의 토큰 위에서 표현
 ### 5. `codegen` — 무오류 방출
 
 sema를 통과한 AST에서 텍스트로의 순수 매핑이다. verbatim 구간은 원본
-바이트를 그대로 복사하고, enum은 유니언 `type` + 생성자 `const`로 방출한다.
+바이트를 그대로 복사하고, variant는 유니언 `type` + 생성자 `const`로 방출한다.
 값을 만드는 match는 ProgramSyntax와 Evaluation IR이 정한 owner continuation에
 따라 statement slot + `switch` 또는 expression-boundary intrinsic으로 방출한다. JSX
 속성·자식 expression은 `Jsx` protocol frame의 순서 있는 eager position이며,

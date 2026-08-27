@@ -288,7 +288,7 @@ async function main() {
         () => checker.getTypeAtPosition(module, positions),
         () => positions.map((p) => checker.getTypeAtPosition(module, p)),
       ));
-    // A project's matches share their scrutinee types: one enum matched in
+    // A project's matches share their scrutinee types: one variant matched in
     // three hundred places is one type, and the answers derived from a type
     // — its constituents, each constituent's `kind` — depend on nothing
     // else. Both are asked once per type, not once per match. (Type ids are
@@ -321,7 +321,7 @@ async function main() {
         if (missing) out.literalMissing.push({ index: entry.index, missing });
         return;
       }
-      // A tt enum lowers to a discriminated union, so the question is
+      // A tt variant lowers to a discriminated union, so the question is
       // "which `kind` values does the scrutinee's type still allow?" —
       // again at the match, so a case an earlier guard removed is not
       // demanded back.

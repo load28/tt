@@ -4,7 +4,7 @@
  * What lives here is cursor-context detection over raw text: masking
  * strings/comments/templates/regexes so offsets survive, finding the word
  * or the `Base.` member access at the cursor. What deliberately does NOT
- * live here any more is tt *semantics* — which enums are visible, what a
+ * live here any more is tt *semantics* — which variants are visible, what a
  * match is over, what a case's fields are. That used to be a second,
  * regex-based implementation of the compiler's rules and could disagree
  * with it (docs/design/rust-parity-analysis.md GAP-3); the compiler now

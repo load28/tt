@@ -43,7 +43,7 @@ fn a_variant_defines_a_type_and_a_constructor_value() {
 
 #[test]
 fn same_spelling_is_not_same_identity() {
-    // Two enums both declare `Empty`. The two uses resolve to *different*
+    // Two variant declarations both declare `Empty`. The two uses resolve to *different*
     // variants — identity is the (variant, index) pair, not the string.
     let src = "variant A { Empty, Ok(x: number) }\n\
         variant B { Empty, Fail(code: number) }\n\

@@ -50,7 +50,7 @@ main.ts:10  Notice  → src/notice.tt:9:16      ← export variant Notice
 타입은 tsc의 책임이다.
 
 반대로 **위치 대응**은 ttc만 알 수 있다. codegen이 통과 구간을 바이트 단위로
-복사하므로 tt↔ts 구간 대응표를 정확히 낼 수 있고, `--symbols`는 이미 enum
+복사하므로 tt↔ts 구간 대응표를 정확히 낼 수 있고, `--symbols`는 이미 variant
 선언의 행·열을 내고 있다.
 
 그래서 역할을 이렇게 나눈다.

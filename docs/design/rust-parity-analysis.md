@@ -13,7 +13,7 @@ TASK-096(typed match analysis)·TASK-097(coverage 단일 원천)은 `match`를
 한 줄 결론:
 
 > 바인딩의 **타입**은 이미 거의 다 맞다. 맞지 않는 것은 tt 자신의 **이름**이다.
-> ttc에는 enum 이름·케이스 태그·페이로드 필드를 선언에 **해석(resolve)** 하는
+> ttc에는 variant 이름·케이스 태그·페이로드 필드를 선언에 **해석(resolve)** 하는
 > 단계가 없고, 그래서 (1) 오타가 tt 에러가 아니라 글루 위의 TS 에러로 새고,
 > (2) 소진성 검사가 조용히 꺼지며, (3) 그 이름들에 대한 LSP 답을 에디터의
 > 두 번째 구현(정규식 기반 `analysis.ts`)이 대신 지어내고 있다.
@@ -78,7 +78,7 @@ tt 자신의 이름에 관한 모든 질문 — 이 비어 있다.
 
 ### GAP-1 — tt 이름을 선언에 해석하는 단계가 없다 (근본)
 
-tt에는 TypeScript가 모르는 이름 공간이 셋 있다: **enum 이름**, **케이스
+tt에는 TypeScript가 모르는 이름 공간이 셋 있다: **variant 이름**, **케이스
 태그**, **페이로드 필드명**. `MatchAnalysis`는 subject를 해석해 필드 **타입**을
 읽지만, 이름의 사용이 선언에 **닿지 않는다는 사실 자체는 아무도 보고하지
 않는다.** rustc는 그 반대다 — 패턴 경로와 필드를 먼저 해석하고(E0599·E0026·
@@ -105,7 +105,7 @@ variant가 사라지고**, 그 결과 `coverage`가 `None`이 되어 — 빠진 
 
 `codegen/enums.rs::emit_enum`은 선언 전체를 `format!`으로 **합성해**
 `push_lit`으로 넣는다. `ttc --emit-map`으로 확인하면 위 파일의 첫 매핑은
-`src:79` — 즉 `enum` 선언 78바이트에 대응하는 매핑이 **하나도 없다.**
+`src:79` — 즉 `variant` 선언 78바이트에 대응하는 매핑이 **하나도 없다.**
 
 엔진의 규칙과 겹치면 결과는 이렇다.
 
@@ -113,7 +113,7 @@ variant가 사라지고**, 그 결과 `coverage`가 `None`이 되어 — 빠진 
 - `map_target`이 `None` → 선언으로 향하는 **모든 답이 버려진다.** 다른 파일에서
   `Shape`의 정의로 이동해도 목적지가 없다.
 - `rename`은 편집이 하나라도 매핑되지 않으면 **전체를 거부**한다(반쪽 rename은
-  프로그램을 깨뜨리므로 옳은 정책이다). 따라서 **enum 이름·케이스 태그·필드명은
+  프로그램을 깨뜨리므로 옳은 정책이다). 따라서 **variant 이름·케이스 태그·필드명은
   에디터에서 이름 바꾸기가 아예 불가능하다.**
 
 여기서 중요한 판단: 이것은 "매핑을 붙이면 되는 버그"가 **아니다**. 케이스 태그는
@@ -171,7 +171,7 @@ verbatim 바이트로 위치를 옮기고 `(in code ttc generated for this const
 
 ### GAP-5 — tt 자리의 자동완성은 match 암 전용
 
-지금 있는 것: match 암 시작 위치의 태그 완성과 `Enum.` 멤버 완성(둘 다 shadow
+지금 있는 것: match 암 시작 위치의 태그 완성과 `Variant.` 멤버 완성(둘 다 shadow
 층), 그리고 미완성 파이프라인(`x |> .`)의 멤버 완성(엔진 프로브).
 
 없는 것:
@@ -195,7 +195,7 @@ rust-analyzer는 이 자리 전부에서 변형·필드를 완성한다. 이 자
   (`type-inference-gaps.md` §4.3).~~ — TASK-103이 usefulness로 바꾸면서 해제됐다
   (§9의 "이 교체는 세 가지를 한꺼번에 준다"). 안쪽은 깊이 제한 없이 검사되고
   (`P(j: M(k: B()))`), 튜플 위치 안의 중첩도 같다. 남은 것은 그 자리의 알파벳을
-  아무도 댈 수 없을 때뿐이다 — 선언 타입도 패턴도 enum을 지목하지 못하면 그
+  아무도 댈 수 없을 때뿐이다 — 선언 타입도 패턴도 variant를 지목하지 못하면 그
   자리는 `_`만 커버로 인정한다(typed 경로에서는 TASK-109가 체커에게 묻는다).
 - ~~**let-else·`if let`에 or-패턴이 없다.**~~ — TASK-133에서 해소. match와
   같은 대안 문법·바인딩 집합 규칙으로 지원한다(중첩과의 조합 불가 포함).
@@ -217,7 +217,7 @@ rust-analyzer는 이 자리 전부에서 변형·필드를 완성한다. 이 자
    바인딩의 타입"이었으므로 모델은 subject→필드 타입 방향만 갖췄다. 사용→선언
    방향(해석)과 그 실패(미해결 이름)는 모델에 자리가 없다.
 2. **tt 이름에 대한 답의 소유자가 정해진 적이 없다.** 바인딩은 "체커 우선,
-   분석 폴백"이라는 규범이 있지만(match-analysis.md §3), enum·태그·필드에는
+   분석 폴백"이라는 규범이 있지만(match-analysis.md §3), variant·태그·필드에는
    그런 표가 없어 에디터가 자기 구현으로 메웠다. `lsp-architecture.md` §33은
    "tt 구조 기능은 TT 자체(analysis.ts)"라고 적고 있는데, 그 "TT 자체"가
    엔진이 아니라 **Node 쪽 정규식 구현**을 가리킨 것이 드리프트의 출발점이다.
@@ -248,7 +248,7 @@ P1의 사이트마다 태그·필드를 선언에 해석하고, 실패를 **ttc�
 보고한다. 편집 거리 기반 "did you mean" 제안을 붙인다.
 
 ```
-ttc: shape.tt:9:9: enum Shape has no case `Circel` — did you mean `Circle`?
+ttc: shape.tt:9:9: variant Shape has no case `Circel` — did you mean `Circle`?
 ttc: shape.tt:14:16: case Shape.Circle has no field `radiuz` — did you mean `radius`?
 ```
 
@@ -263,7 +263,7 @@ ttc: shape.tt:14:16: case Shape.Circle has no field `radiuz` — did you mean `r
 
 엔진에 tt 이름 전용 표면을 추가하고, 에디터의 shadow 구현을 **폐기**한다.
 
-- `tt_symbol_at(path, pos)` → enum/케이스/필드의 hover·definition. 재료는
+- `tt_symbol_at(path, pos)` → variant/케이스/필드의 hover·definition. 재료는
   P1의 분석 + 기존 extern 수집(1-hop import).
 - `tt_completions(path, pos)` → 패턴 자리의 태그·필드 완성(구문 중립, 미완성
   버퍼 내성). 커버된 태그는 제외하는 기존 arm 완성 동작을 유지·일반화한다.
@@ -272,7 +272,7 @@ ttc: shape.tt:14:16: case Shape.Circle has no field `radiuz` — did you mean `r
   하나의 원자적 편집 목록으로 낸다. 어느 한쪽이 불완전하면 지금처럼 **전체
   거부**한다.
 - 답의 우선순위 표를 규범으로 못박는다(match-analysis.md §3의 확장):
-  **tt 이름 = tt 소유, 그 밖 = 체커 소유.** shadow 층의 "아무 enum이나" 폴백은
+  **tt 이름 = tt 소유, 그 밖 = 체커 소유.** shadow 층의 "아무 variant나" 폴백은
   없앤다(모르면 답하지 않는다).
 - 대안으로 검토했으나 기각: *variant 선언에 emit-map을 붙여 tsc가 답하게 하기* —
   패턴 자리에는 TS 대응물이 없어 rename이 원리상 완전해질 수 없고(§GAP-2),
@@ -372,7 +372,7 @@ usefulness의 나머지 절반이다.
 
 여기에 rustc의 `DefId`에 해당하는 **안정 식별자**를 붙인다. 지금 분석 결과는
 span만 들고 있어 "이 태그와 저 태그가 같은 케이스인가"를 이름 비교로만 답할 수
-있다. `EnumId`/`CaseId`/`FieldId`(모듈 경로 + 선언 순서)를 도입하면
+있다. `VariantId`/`CaseId`/`FieldId`(모듈 경로 + 선언 순서)를 도입하면
 references·rename이 이름 문자열이 아니라 정의 동일성 위에서 성립한다 — GAP-2의
 rename 합성이 정확해지는 전제다.
 
@@ -403,13 +403,13 @@ ttc는 타입을 모른다.** 이것이 유일하고 근본적인 차이이고, 
 | | 재료 | 언제나 가능한가 |
 |---|---|---|
 | **구조 검사** (이름 해석, 필드 집합, 원소 수, 태그 소진성) | ttc의 선언 표 | ✔ 툴체인 없이도 |
-| **타입 검사** (대상이 정말 그 enum인가, 좁혀진 타입, 제네릭 인스턴스화) | TypeScript 체커 | typed 경로에서만 |
+| **타입 검사** (대상이 정말 그 variant인가, 좁혀진 타입, 제네릭 인스턴스화) | TypeScript 체커 | typed 경로에서만 |
 
 여기서 파생되는 정직한 한계 셋:
 
 1. **배치(untyped) 빌드에서는 절반만 답한다.** 이름 해석·필드·소진성은 답하고,
-   "이 스크루티니가 정말 그 enum인가"는 답하지 않는다. rustc는 이 구분이 없다.
-2. **세계가 닫혀 있지 않다.** rustc의 enum은 변형 목록이 닫혀 있지만, tt의
+   "이 스크루티니가 정말 그 variant인가"는 답하지 않는다. rustc는 이 구분이 없다.
+2. **세계가 닫혀 있지 않다.** rustc의 enum은 변형 목록이 닫혀 있지만, tt의 variant는
    스크루티니는 손으로 쓴 TS 유니언이거나 여러 tt variant의 합일 수 있다. 그래서
    resolve는 **후보를 하나도 못 찾으면 침묵**해야 한다 — 오탐은 통과 계약보다
    비싸다. rustc에는 이 규칙이 필요 없다.
@@ -423,7 +423,7 @@ ttc는 타입을 모른다.** 이것이 유일하고 근본적인 차이이고, 
 
 | 제안 | rustc 대응 | 조정 내용 |
 |---|---|---|
-| **P1** | THIR typed pattern | 그대로. 단, 사이트에 **안정 식별자**(EnumId/CaseId/FieldId)를 추가한다 |
+| **P1** | THIR typed pattern | 그대로. 단, 사이트에 **안정 식별자**(VariantId/CaseId/FieldId)를 추가한다 |
 | **P2** | resolve + `E0599`/`E0026`/`E0023` | 그대로. **독립 단계**로 두고, 해석 실패 시 그 사이트의 이후 판정(소진성)은 중단하되 다른 사이트는 계속 검사한다 (rustc의 에러 복구 방식) |
 | **P3** | rustc ↔ rust-analyzer 공유 구조 | 그대로. 안정 식별자 위에서 rename/references를 합성한다 |
 | **P4** | `check_pat`의 타입 절반 | tt 고유 — 체커에 위임하는 분업이 rustc에는 없는 층이다 |
