@@ -19,7 +19,8 @@ jobs:
     name: verify promoted CI build
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      ((github.event.workflow_run.event == 'schedule' &&
+      (((github.event.workflow_run.event == 'schedule' ||
+         github.event.workflow_run.event == 'workflow_dispatch') &&
         github.event.workflow_run.head_branch == 'main') ||
        (github.event.workflow_run.event == 'push' &&
         startsWith(github.event.workflow_run.head_branch, 'release-')))
@@ -55,7 +56,7 @@ jobs:
           test "$SOURCE_SHA" = "$(jq -r .headSha /tmp/run.json)"
           test "$SOURCE_BRANCH" = "$(jq -r .headBranch /tmp/run.json)"
           if [ "$SOURCE_BRANCH" = main ]; then
-            test "$RUN_EVENT" = schedule
+            case "$RUN_EVENT" in schedule|workflow_dispatch) ;; *) exit 1 ;; esac
             test "$NPM_TAG" = next
             ENVIRONMENT_NAME=nightly
           else

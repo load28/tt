@@ -66,9 +66,10 @@ test("release commands mirror TypeScript's create, sync, and bump boundaries", (
   }
 });
 
-test("publishing promotes scheduled Nightlies and approved formal releases without manual identifiers", () => {
+test("publishing promotes scheduled or dispatched Nightlies and approved formal releases without manual identifiers", () => {
   assert.match(publish, /workflow_run:/);
   assert.match(publish, /github\.event\.workflow_run\.event == 'schedule'/);
+  assert.match(publish, /github\.event\.workflow_run\.event == 'workflow_dispatch'/);
   assert.match(publish, /github\.event\.workflow_run\.head_branch == 'main'/);
   assert.match(publish, /github\.event\.workflow_run\.event == 'push'/);
   assert.match(publish, /startsWith\(github\.event\.workflow_run\.head_branch, 'release-'\)/);
@@ -88,7 +89,7 @@ test("publishing promotes scheduled Nightlies and approved formal releases witho
 });
 
 test("publish validates the source branch and immutable npm versions", () => {
-  assert.match(publish, /test "\$RUN_EVENT" = schedule/);
+  assert.match(publish, /case "\$RUN_EVENT" in schedule\|workflow_dispatch/);
   assert.match(publish, /test "\$RUN_EVENT" = push/);
   assert.match(publish, /test "\$SOURCE_BRANCH" = main/);
   assert.match(publish, /case "\$SOURCE_BRANCH" in release-\*/);

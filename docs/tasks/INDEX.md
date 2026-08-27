@@ -260,7 +260,8 @@
 | TASK-250 | 파이프라인 optional postfix step — 구조화 tail과 평가 계약 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-250](./TASK-250-optional-postfix-pipeline.md) |
 | TASK-251 | TypeScript 방식의 고유한 Nightly 버전 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-251](./TASK-251-unique-nightly-versions.md) |
 | TASK-252 | Stable 0.3 사용자 설치 가이드 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-252](./TASK-252-stable-0.3-user-guide.md) |
+| TASK-253 | main 수동 Nightly dispatch | 완료 | 2026-08-27 | 2026-08-27 | [TASK-253](./TASK-253-manual-nightly-dispatch.md) |
 
 ## 다음 태스크 번호
 
-**TASK-253**
+**TASK-254**
