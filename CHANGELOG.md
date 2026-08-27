@@ -28,6 +28,28 @@
 
 ### Changed
 
+- **TypeScript는 프로젝트가 설치한 npm 패키지 하나에서만 온다**
+  (TASK-255, TASK-256). ttc가 구동하는 TypeScript 7은 이제 그 프로젝트의
+  `node_modules`에서만 해석되고, 다른 것을 지목할 방법이 없다.
+  `TTC_TSGO_API`·`TTC_TSGO_BIN`·`TTC_TSGO_ROOT` 환경 변수와 `../typescript-go`
+  형제 체크아웃 탐색은 제거했다 — 두 번째 경로가 있는 한 에디터와 CLI가 서로
+  다른 TypeScript를 쓸 수 있고, 실제로 그것이 "컴파일은 되는데 에디터의 타입
+  추론·자동완성이 전부 침묵하는" 장애의 원인이었다. **업그레이드하려면
+  프로젝트에 `typescript`를 설치한다**(설치 명령은 README와 설치 가이드에
+  있는 고정 버전을 그대로 쓴다). typescript-go를 직접 빌드해 환경 변수로
+  가리키던 설정은 더 이상 쓰이지 않는다.
+
+- **VS Code 확장이 프로젝트가 설치한 `@load28/tt-lang`의 ttc를 실행한다**
+  (TASK-255). 이전에는 워크스페이스에서 빌드한 바이너리나 PATH의 `ttc`만
+  찾았기 때문에, npm으로 패키지만 설치한 프로젝트에서는 확장이 컴파일러 없이
+  동작했다. 어느 바이너리인지는 그 패키지 자신이 답하므로 게시본 설치와
+  `file:` 개발 설치가 같은 경로로 해석된다.
+
+- **로컬 개발 설정에 고를 툴체인이 없어졌다** (TASK-256). `./scripts/setup`은
+  인자를 받지 않고 `npm ci` → release `ttc` → VS Code 확장만 만든다.
+  `--tsgo-root`/`--tsgo-npm` 모드와 `.tt-dev/toolchain.json`은 제거했고, Go
+  툴체인도 더 이상 필요 없다.
+
 - **표준 라이브러리가 멤버 단위로 트리셰이킹된다** (TASK-162). 타입은
   `@tt/std`에서 `TOption`·`TResult`로 가져오고, 런타임 연산은
   `import * as Option from "@tt/std/option"`과
