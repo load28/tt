@@ -434,10 +434,22 @@ pub enum Expr {
 pub struct PipeStep {
     /// Span = the step text.
     pub node: NodeId,
-    /// A method step (`|> .m(...)`) chains as postfix text.
-    pub postfix: bool,
+    /// How the step consumes the accumulator.
+    pub kind: PipeStepKind,
     /// The step's expression.
     pub body: ExprId,
+}
+
+/// The syntactic class of one pipeline step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PipeStepKind {
+    /// An ordinary unary function step.
+    Call,
+    /// A structurally validated postfix tail.
+    Postfix {
+        /// Whether the first operation is optional (`?.`) rather than `.`.
+        optional: bool,
+    },
 }
 
 /// One template component. Keeping raw chunks in HIR lets backend lowering

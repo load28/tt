@@ -1,0 +1,3 @@
+declare const user: { name: string } | undefined;
+
+export const name = user |> ?.name + "!" |> String;

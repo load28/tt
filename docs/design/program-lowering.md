@@ -321,6 +321,12 @@ compiler slot에 materialize됐거나 입력 재배치가 `Effects::NONE`으로 
 `$tt_ap(v, f)`를 직접 `f(v)`로 낮춘다. 그 밖의 receiver와 pipeline은 기존 capture와
 helper가 평가 순서를 보존한다.
 
+optional postfix pipeline step은 Core `ApplyMode`가 조건부 도달성을 소유한다.
+그 tail 안의 computed key·call argument에 tt 제어 흐름이 있어도 Apply 앞의
+statement slot으로 끌어내지 않고 tail 내부 expression boundary에서 낮춘다.
+따라서 nullish receiver에서는 해당 값이 실행되지 않으며, 일반 postfix와
+receiver 괄호·reference 방출 규칙은 공유한다.
+
 모든 IIFE에 PURE를 붙이는 방식은 채택하지 않는다. arm, scrutinee, getter, fallback throw의
 효과를 지울 수 있기 때문이다. 출력 모양이 자연스러워져 번들러 분석이 쉬워지는 것과
 프로그램이 순수하다는 것은 별개의 판단이다.

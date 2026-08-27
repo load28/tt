@@ -559,7 +559,12 @@ impl Lower {
                 let body = self.lower_expr_program(&step.body, Self::span(step.span));
                 PipeStep {
                     node: step_node,
-                    postfix: step.postfix,
+                    kind: match step.kind {
+                        ast::PipeStepKind::Call => PipeStepKind::Call,
+                        ast::PipeStepKind::Postfix { optional } => {
+                            PipeStepKind::Postfix { optional }
+                        }
+                    },
                     body,
                 }
             })

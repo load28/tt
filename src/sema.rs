@@ -371,7 +371,7 @@ impl Checker {
                     // its first step must be an ordinary function step.
                     if pipe.head.is_none()
                         && let Some(first) = pipe.steps.first()
-                        && first.postfix
+                        && matches!(first.kind, PipeStepKind::Postfix { .. })
                     {
                         self.error(
                             TtError::span(
@@ -386,6 +386,28 @@ impl Checker {
                                 "write the step as a function — \
                                  `flow |> ((s: string) => s.trim()) |> ...`",
                             ),
+                        );
+                    }
+                    if pipe.head_kind == PipeHeadKind::BareSuper
+                        && pipe.steps.first().is_some_and(|step| {
+                            matches!(step.kind, PipeStepKind::Postfix { optional: true })
+                        })
+                    {
+                        self.error(
+                            TtError::span(
+                                pipe.head_span.start,
+                                pipe.head_span.end,
+                                "pipeline: `super` cannot be an optional-chain receiver"
+                                    .to_string(),
+                            )
+                            .code(DiagnosticCode::InvalidOptionalReceiver)
+                            .owner(
+                                pipe.head_span.start,
+                                pipe.steps
+                                    .last()
+                                    .map_or(pipe.head_span.end, |step| step.span.end),
+                            )
+                            .help("access a concrete `super.member` before the optional step"),
                         );
                     }
                     // Head and steps are expressions — `try` inside them is

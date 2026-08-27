@@ -5,7 +5,8 @@
   [`std.md`](../reference/std.md#파이프라인-변형-p)
 - **태스크**: [TASK-013](../tasks/TASK-013-pipeline-operator-proposal.md) (제안),
   [TASK-043](../tasks/TASK-043-pipeline-operator-impl.md) (구현),
-  [TASK-063](../tasks/TASK-063-flow-composition.md) (`flow` 합성)
+  [TASK-063](../tasks/TASK-063-flow-composition.md) (`flow` 합성),
+  [TASK-250](../tasks/TASK-250-optional-postfix-pipeline.md) (optional postfix)
 
 ## 1. 목표
 
@@ -59,6 +60,7 @@ Ramda 스타일 `pipe(f, g, h)(x)`를 std 함수로 제공하는 방법부터 �
 head       ::= 식                     // 임의의 TypeScript 표현식
 step       ::= 식                     // 적용 스텝: 단항 함수로 평가되는 식
              | "." 포스트픽스-체인    // 메서드 스텝: 파이프 값에 대한 체인
+             | "?." 포스트픽스-tail   // JavaScript optional chain step
 ```
 
 ### 3.1 적용 스텝: F# 스타일
@@ -83,7 +85,14 @@ const total = csv |> .trim() |> .split(",") |> .map(Number) |> sum;
 - `|>` 다음의 `.`은 유효 TS에 존재할 수 없는 위치이고, step의 첫 유의
   바이트만 보면 판별되므로 바이트 단위 구조 파싱과 완전히 호환된다.
   (Hack 스타일 topic처럼 step 내부를 식 문법으로 파싱할 필요가 없다.)
-- `?.` 시작은 1차 범위에서 제외한다 (향후 확장 여지).
+- `?.name`, `?.[key]`, `?.(args)`로 시작하는 step은 JavaScript optional
+  chain과 같은 단락 평가를 한다. 한 step 안에서 일반·optional member,
+  index, call을 이어 쓸 수 있다. optional step은 그 tail만 보호하며 다음
+  `|>` step은 `undefined`도 평범하게 입력으로 받는다.
+- incomplete tail, tagged template, private field, optional construction은
+  optional step 전체를 하나의 tt 오류로 거부한다. parser가 tail을 완전히
+  검증한 뒤 AST→HIR→Core IR의 `Postfix { optional }` 계약으로 넘기므로
+  codegen은 문자열 모양을 다시 판정하지 않는다.
 
 파이프라인은 **표현식**이다. `match`처럼 인자 위치, 템플릿 보간, match 암
 본문 등 표현식이 오는 어디에나 쓸 수 있다.

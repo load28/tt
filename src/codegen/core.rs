@@ -1914,7 +1914,7 @@ impl<'a> Emitter<'a> {
                     let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
                     let mut next = Rope::new();
                     match step.mode {
-                        ApplyMode::Postfix => {
+                        ApplyMode::Postfix { .. } => {
                             push_receiver(&mut next, acc);
                             next.append(body);
                         }
@@ -1971,7 +1971,7 @@ impl<'a> Emitter<'a> {
             next.push_lit("$tt_fl(");
             next.append(acc);
             match step.mode {
-                ApplyMode::Postfix => {
+                ApplyMode::Postfix { .. } => {
                     next.push_lit(", (($tt_v) => ($tt_v)");
                     next.append(body);
                     next.push_lit("))");
@@ -2268,7 +2268,8 @@ impl<'a> Emitter<'a> {
             inner.push_lit(";");
         }
         for step in &apply.steps {
-            let step_value = if self.core.has_statement_form(step.value) {
+            let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
+            let step_value = if self.core.has_statement_form(step.value) && !conditionally_reached {
                 let slot = self
                     .structured_value_slot(step.value)
                     .unwrap_or_else(|| crate::ice::bug!("structured apply step has no value slot"));
@@ -2290,7 +2291,7 @@ impl<'a> Emitter<'a> {
             };
             inner.push_break(1);
             match step.mode {
-                ApplyMode::Postfix => {
+                ApplyMode::Postfix { .. } => {
                     inner.push_lit(format!("{accumulator} = {accumulator}"));
                     inner.append(step_value);
                     inner.push_lit(";");

@@ -190,10 +190,11 @@ impl Lowering<'_> {
                     .map(|step| ApplyStep {
                         node: step.node,
                         value: step.body,
-                        mode: if step.postfix {
-                            ApplyMode::Postfix
-                        } else {
-                            ApplyMode::Call
+                        mode: match step.kind {
+                            hir::PipeStepKind::Call => ApplyMode::Call,
+                            hir::PipeStepKind::Postfix { optional } => {
+                                ApplyMode::Postfix { optional }
+                            }
                         },
                     })
                     .collect(),
@@ -573,7 +574,7 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
                     validate_node(step.node, semantic);
                     validate_expr(step.value, file);
                     match step.mode {
-                        ApplyMode::Call | ApplyMode::Postfix => {}
+                        ApplyMode::Call | ApplyMode::Postfix { .. } => {}
                     }
                 }
             }

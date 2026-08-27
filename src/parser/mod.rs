@@ -493,8 +493,43 @@ impl Parser<'_> {
                 TokenKind::PipeOp => {
                     if !expr.1
                         && expr.0 < i
-                        && let Some((next_i, pipe)) = pipes::parse_pipeline(self, tokens, expr.0, i)
+                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i)
                     {
+                        let (next_i, pipe) = match attempt {
+                            pipes::Attempt::Parsed(next_i, pipe) => (next_i, pipe),
+                            pipes::Attempt::MalformedOptional {
+                                next,
+                                head_span,
+                                error_span,
+                                extent,
+                            } => {
+                                seg_start =
+                                    rewind_segments(&mut segments, head_span.start, seg_start);
+                                malformed.push(
+                                    crate::error::TtError::span(
+                                        error_span.start,
+                                        error_span.end,
+                                        "pipeline: invalid optional postfix tail".to_string(),
+                                    )
+                                    .code(
+                                        crate::diagnostics::DiagnosticCode::MalformedPipelinePostfix,
+                                    )
+                                    .owner(extent.start, extent.end)
+                                    .help(
+                                        "an optional postfix step starts with `?.name`, \
+                                         `?.[key]`, or `?.(args)` and continues only with member, \
+                                         index, or call operations",
+                                    ),
+                                );
+                                recoveries.push(RecoveryNode {
+                                    span: extent,
+                                    kind: RecoveryKind::Expression,
+                                });
+                                i = next;
+                                expr = (i, false);
+                                continue;
+                            }
+                        };
                         // The head may span constructs already lifted as
                         // segments (a template, a match) — rewind them and
                         // let the head's sub-program own those bytes.

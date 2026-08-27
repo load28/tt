@@ -2287,6 +2287,67 @@ console.log(order.join(","), out);
 }
 
 #[test]
+fn optional_postfix_preserves_short_circuit_order_and_method_receiver() {
+    require_toolchain!();
+    let lines = run(r#"
+const order: string[] = [];
+const mark = (name: string, value: number): number => { order.push(name); return value; };
+const key = (): "method" => { order.push("key"); return "method"; };
+const live = {
+  base: 10,
+  method(value: number): number {
+    order.push(this === live ? "this" : "lost-this");
+    return this.base + value;
+  },
+};
+const absent = (() => undefined as typeof live | undefined)();
+const hit = (order.push("head-hit"), live) |> ?.[key()]?.(mark("arg", 2));
+const miss = (order.push("head-miss"), absent) |> ?.[key()]?.(mark("skipped", 3));
+const after = miss |> (value => { order.push("after"); return value ?? -1; });
+console.log(hit, miss, after, order.join(","));
+"#);
+    assert_eq!(
+        lines,
+        ["12 undefined -1 head-hit,key,arg,this,head-miss,after"],
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn optional_postfix_keeps_nested_tt_values_inside_the_conditional_tail() {
+    require_toolchain!();
+    let lines = run(r#"
+variant E { A(value: number), B }
+const order: string[] = [];
+const subject = (): E => { order.push("subject"); return E.A(4); };
+const live = { method(value: number): number { order.push("method"); return value; } };
+const absent = (() => undefined as typeof live | undefined)();
+const miss = absent |> ?.method(match (subject()) { A(value) => value, B => 0 });
+const hit = live |> ?.method(match (subject()) { A(value) => value, B => 0 });
+console.log(miss, hit, order.join(","));
+"#);
+    assert_eq!(lines, ["undefined 4 subject,method"], "{lines:?}");
+}
+
+#[test]
+fn optional_postfix_types_are_checked_as_plain_typescript() {
+    require_toolchain!();
+    let (ok, out) = typecheck(
+        "declare const value: { n: number } | undefined;\n\
+         const maybe: number | undefined = value |> ?.n;\n\
+         const project = flow |> ((v: { n: number } | undefined) => v) |> ?.n;\n\
+         const also: number | undefined = project(value);\n",
+    );
+    assert!(ok, "{out}");
+
+    let (ok, out) = typecheck(
+        "declare const value: { n: number } | undefined;\n\
+         const bad = value |> ?.n |> ((n: number) => n + 1);\n",
+    );
+    assert!(!ok, "{out}");
+}
+
+#[test]
 fn a_materialized_pipeline_keeps_head_before_callee() {
     require_toolchain!();
     let lines = run(r#"

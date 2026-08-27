@@ -752,9 +752,10 @@ mod tests {
     fn parser_error_nodes_recover_only_their_own_source_ranges() {
         let source = "const broken = 1 |> ;\n\
             const independent: string = 1;\n\
+            const optional = value |> ?.member + 1;\n\
             const malformed = match value { Missing => 0 };\n";
         let file = project(source);
-        assert_eq!(file.recovered.len(), 2, "{:#?}", file.recovered);
+        assert_eq!(file.recovered.len(), 3, "{:#?}", file.recovered);
         assert!(file.emit.code.contains("const independent: string = 1;"));
         let independent = source.find("independent").unwrap();
         assert!(

@@ -59,13 +59,15 @@ impl CoreFile {
             Expr::Sequence(body) => self
                 .body_value_expr(*body)
                 .is_some_and(|inner| self.has_statement_form(inner)),
-            // A pipeline is worth structuring only when some part of it is.
+            // An optional postfix owns the conditional reach of every value
+            // in its tail. Those values must stay at an expression boundary
+            // inside that tail instead of being lifted into the Apply region.
             Expr::Apply(apply) => apply.head.is_some_and(|head| {
                 self.has_statement_form(head)
-                    || apply
-                        .steps
-                        .iter()
-                        .any(|step| self.has_statement_form(step.value))
+                    || apply.steps.iter().any(|step| {
+                        !matches!(step.mode, ApplyMode::Postfix { optional: true })
+                            && self.has_statement_form(step.value)
+                    })
             }),
             Expr::Opaque(_) | Expr::Template(_) => false,
         }
@@ -333,7 +335,7 @@ pub(crate) struct ApplyStep {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApplyMode {
     Call,
-    Postfix,
+    Postfix { optional: bool },
 }
 
 #[derive(Debug)]

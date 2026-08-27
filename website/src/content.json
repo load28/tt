@@ -411,28 +411,30 @@
         "en": "Pass a value through functions from left to right.",
         "ko": "값을 왼쪽에서 오른쪽으로 함수에 전달합니다."
       },
-      "code": "const label = input\n  |> parse\n  |> Option.mapP(value => value.trim())\n  |> Option.unwrapOrP(\"unknown\")\n  |> .toUpperCase();",
+      "code": "const label = input\n  |> parse\n  |> ?.profile?.name\n  |> (value => value ?? \"unknown\")\n  |> .toUpperCase();",
       "works": {
         "en": [
           "x |> f compiles as f(x).",
           "A step beginning with . chains methods on the current value.",
+          "A ?. step uses JavaScript optional-chain short-circuiting for that step.",
           "Curried *P standard-library helpers preserve left-to-right flow."
         ],
         "ko": [
           "x |> f는 f(x)로 컴파일됩니다.",
           ".으로 시작하는 단계는 현재 값에 메서드를 연결합니다.",
+          "?. 단계는 해당 단계에서 JavaScript optional chain처럼 단락 평가합니다.",
           "표준 라이브러리의 커리된 *P 함수로 흐름을 유지합니다."
         ]
       },
       "limits": {
         "en": [
           "Parenthesize arrow functions and ternaries used as a head or step.",
-          "Optional-chain ?. steps and empty steps are rejected.",
+          "Incomplete optional tails and empty steps are rejected.",
           "Use an arrow or curried function for additional arguments."
         ],
         "ko": [
           "head나 step의 화살표 함수와 삼항식은 괄호로 감싸야 합니다.",
-          "옵셔널 체이닝 ?. 단계와 빈 단계는 허용하지 않습니다.",
+          "완성되지 않은 optional tail과 빈 단계는 허용하지 않습니다.",
           "추가 인자는 화살표 함수나 커리된 함수를 사용해야 합니다."
         ]
       }
