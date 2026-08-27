@@ -254,7 +254,8 @@
 | TASK-244 | GitHub Discussion 숙의 봇 | 완료 | 2026-08-26 | 2026-08-26 | [TASK-244](./TASK-244-github-deliberation-bots.md) |
 | TASK-245 | `variant` 기반 tt 태그드 유니언 선언 | 완료 | 2026-08-26 | 2026-08-27 | [TASK-245](./TASK-245-variant-declarations.md) |
 | TASK-246 | GitHub Discussion·PR 숙의 봇 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-246](./TASK-246-pr-review-deliberation.md) |
+| TASK-247 | 공식 홈페이지 Google Analytics | 완료 | 2026-08-27 | 2026-08-27 | [TASK-247](./TASK-247-google-analytics.md) |
 
 ## 다음 태스크 번호
 
-**TASK-247**
+**TASK-248**
