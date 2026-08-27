@@ -60,12 +60,30 @@ Download `tt-language-<version>.vsix` from the newest pre-release on
 
 ```sh
 code --install-extension ./tt-language-<version>.vsix
+code --install-extension ./tt-typescript-preview-<version>-<platform>.vsix
 ```
+
+The second VSIX is the TypeScript editor itself. For performance tt drives
+TypeScript 7 (the native compiler) and uses APIs from the 7.1 line — content
+mappers, which let `.ts` files import `.tt` with nothing on disk — that the
+Marketplace TypeScript extension does not ship yet. Until it does, install
+the TypeScript extension from the same nightly release, and turn on
+`useTsgo` so the TypeScript extension serves `.ts`/`.tsx` through the new
+API:
+
+```jsonc
+// .vscode/settings.json (or user settings)
+"js/ts.experimental.useTsgo": true,
+"typescript.experimental.useTsgo": true
+```
+
+Once TypeScript 7.1 is officially released, install the extension through
+the official route instead — and the `useTsgo` setting is no longer needed.
 
 For a manual compiler-only install:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
+bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 Compile a file or source tree, or check it without writing output:

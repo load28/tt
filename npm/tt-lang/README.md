@@ -21,7 +21,7 @@ bunx @load28/create-tt@0.3.0 init
 looks. The TT installer does not add it for you:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
+bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 Declaration output (`ttc --types`, editor `.tt.d.ts` sidecars) and content

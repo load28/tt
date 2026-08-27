@@ -90,7 +90,7 @@ proxies third-party packages such as Vite.
 Install the compiler and the TypeScript it drives:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
+bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
@@ -113,7 +113,7 @@ to `.gitignore`. Do not edit generated files.
 Install the direct-source plugin in addition to the compiler:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0 @load28/unplugin-tt@0.1.0
+bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
 ```
 
 Put `tt()` first in the bundler's plugins array:
@@ -174,7 +174,25 @@ with **Extensions: Install from VSIX...** in the VS Code Command Palette, or:
 
 ```sh
 code --install-extension ./tt-language-<version>.vsix
+code --install-extension ./tt-typescript-preview-<version>-<platform>.vsix
 ```
+
+The second VSIX is the TypeScript editor itself. For performance tt drives
+TypeScript 7 (the native compiler) and uses APIs from the 7.1 line — content
+mappers, which let `.ts` files import `.tt` with nothing on disk — that the
+Marketplace TypeScript extension does not ship yet. Until it does, install
+the TypeScript extension from the same nightly release, and turn on
+`useTsgo` so the TypeScript extension serves `.ts`/`.tsx` through the new
+API:
+
+```jsonc
+// .vscode/settings.json (or user settings)
+"js/ts.experimental.useTsgo": true,
+"typescript.experimental.useTsgo": true
+```
+
+Once TypeScript 7.1 is officially released, install the extension through
+the official route instead — and the `useTsgo` setting is no longer needed.
 
 Open the project root. The extension runs the `ttc` your project installed,
 which uses the TypeScript your project installed — no environment variables,
