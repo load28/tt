@@ -1,22 +1,6 @@
 # Install tt
 
-You need [Bun](https://bun.sh/) to run the recommended setup command. TT
-packages and the prebuilt `ttc` compiler are installed from npm.
-
-`ttc` drives TypeScript 7, which it takes from your project's own
-`node_modules` — the same package your build uses, and the only place it
-looks. Install it alongside TT:
-
-```sh
-bun add -d typescript@7.1.0-dev.20260826.1
-```
-
-There is nothing to export and no editor-specific configuration: the
-extension runs your project's `ttc`, which resolves your project's
-TypeScript. Declaration output (`ttc --types` and the editor's `.tt.d.ts`
-sidecars) and content mappers (`.ts` importing `.tt` with nothing on disk)
-use APIs that arrived in TypeScript 7.1; everything else works
-on 7.0.
+You need [Bun](https://bun.sh/) for the recommended setup.
 
 ## Automatic setup
 
@@ -36,15 +20,12 @@ bunx @load28/create-tt@0.3.0 init
 bun run tt:check
 ```
 
-`init` detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm from
-`package.json`. The `0.3.0` initializer adds the stable channels of
-`@load28/tt-lang` and `@load28/unplugin-tt`, plus TT scripts. It does not add
-an npm TypeScript package; add `typescript@7.1.0-dev.20260826.1` yourself as shown above.
-For bundlers with a declarative config it writes an `tt.*.config.mjs` wrapper
-that composes the existing config; it never rewrites the user's config source.
-Run `bun run tt:dev` or `bun run tt:build` to use that wrapper. esbuild build
-scripts are arbitrary JavaScript, so the command prints the one manual plugin
-line that must be added instead.
+`init` performs these steps:
+
+- Detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, or Farm
+- Adds `@load28/tt-lang`, `@load28/unplugin-tt`, TypeScript, and TT scripts
+- Creates `tt.*.config.mjs` for declarative bundlers
+- Prints the plugin code to add for esbuild
 
 Useful non-interactive options:
 
@@ -55,35 +36,8 @@ bunx @load28/create-tt@0.3.0 init --no-install
 bunx @load28/create-tt@0.3.0 init --package-manager bun
 ```
 
-New projects always use Bun. An existing project keeps the package manager in
-its `packageManager` field or lockfile unless `--package-manager` is passed.
-
-## Repository development: install locally built packages through a registry
-
-For compiler development, run a real npm-compatible registry instead of
-replacing dependencies with `file:` paths. Start Verdaccio in one terminal:
-
-```sh
-bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
-```
-
-Build `ttc`, assemble packages for the current OS and CPU, and publish
-`@load28/tt-lang`, its platform binary, `@load28/unplugin-tt`, and `@load28/create-tt` to that registry:
-
-```sh
-bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
-```
-
-The publisher prints the exact bootstrap command. It has this form:
-
-```sh
-BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
-  bunx @load28/create-tt@latest my-app --registry http://127.0.0.1:4873
-```
-
-`--registry` passes the registry to `bun install` and writes it to the new
-project's `bunfig.toml`. Verdaccio serves the locally built TT packages and
-proxies third-party packages such as Vite.
+New projects use Bun. Existing projects keep the package manager from their
+`packageManager` field or lockfile.
 
 ## Manual compiler setup
 
@@ -177,13 +131,7 @@ code --install-extension ./tt-language-<version>.vsix
 code --install-extension ./tt-typescript-preview-<version>-<platform>.vsix
 ```
 
-The second VSIX is the TypeScript editor itself. For performance tt drives
-TypeScript 7 (the native compiler) and uses APIs from the 7.1 line — content
-mappers, which let `.ts` files import `.tt` with nothing on disk — that the
-Marketplace TypeScript extension does not ship yet. Until it does, install
-the TypeScript extension from the same nightly release, and turn on
-`useTsgo` so the TypeScript extension serves `.ts`/`.tsx` through the new
-API:
+After installing both VSIX files, enable TypeScript 7 in the editor:
 
 ```jsonc
 // .vscode/settings.json (or user settings)
@@ -191,9 +139,4 @@ API:
 "typescript.experimental.useTsgo": true
 ```
 
-Once TypeScript 7.1 is officially released, install the extension through
-the official route instead — and the `useTsgo` setting is no longer needed.
-
-Open the project root. The extension runs the `ttc` your project installed,
-which uses the TypeScript your project installed — no environment variables,
-and no way for the editor and the build to disagree.
+Open the project root in VS Code.

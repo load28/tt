@@ -94,64 +94,37 @@
         "ko": "설치"
       },
       "title": {
-        "en": "Install published TT packages with TypeScript 7 from npm.",
-        "ko": "공식 TT 패키지와 npm의 TypeScript 7으로 시작합니다."
+        "en": "Install tt in a new or existing TypeScript project.",
+        "ko": "새 프로젝트나 기존 TypeScript 프로젝트에 tt을 설치합니다."
       },
       "summary": {
-        "en": "TT itself is installed from npm, and so is the TypeScript it drives: ttc resolves TypeScript 7 from the project's own node_modules and nowhere else. create-tt does not add the TypeScript package for you.",
-        "ko": "TT 자체도, ttc가 구동하는 TypeScript도 npm에서 설치합니다 — ttc는 프로젝트 자신의 node_modules에서만 TypeScript 7을 찾습니다. create-tt은 TypeScript 패키지를 대신 추가하지 않습니다."
+        "en": "Use create-tt to configure the compiler, TypeScript, bundler integration, and project scripts.",
+        "ko": "create-tt으로 컴파일러, TypeScript, 번들러 연동, 프로젝트 스크립트를 구성합니다."
       },
-      "code": "bunx @load28/create-tt@0.3.0 my-app\n\n# Or, inside an existing TypeScript project:\nbunx @load28/create-tt@0.3.0 init\nbun run tt:check",
+      "code": "bunx @load28/create-tt@0.3.0 my-app\ncd my-app\nbun run dev",
       "works": {
         "en": [
-          "TT packages and the prebuilt ttc binary come from the public npm registry.",
-          "The next dist-tag tracks the newest Nightly — the channel the manual installs on this page use, and the one that carries the content mapper.",
-          "create-tt@0.3.0 installs the stable channels of tt-lang and unplugin-tt, without an npm TypeScript package.",
-          "The tsgo executable and sync API client both come from the installed TypeScript 7 package.",
-          "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm are detected."
+          "New projects use Vite, TypeScript, and Bun.",
+          "Existing projects support Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm.",
+          "Manual installs use the next channel for the latest Nightly.",
+          "Prebuilt compilers support Linux x64/arm64, macOS x64/arm64, and Windows x64."
         ],
         "ko": [
-          "TT 패키지와 프리빌트 ttc 바이너리는 공개 npm 레지스트리에서 설치합니다.",
-          "next dist-tag는 최신 Nightly를 가리킵니다 — 이 페이지의 수동 설치가 쓰는 채널이고, content mapper가 실리는 채널입니다.",
-          "create-tt@0.3.0은 npm TypeScript 패키지 없이 tt-lang과 unplugin-tt의 Stable 채널을 설치합니다.",
-          "tsgo 실행 파일과 sync API 클라이언트는 설치된 TypeScript 7 패키지 하나에서 함께 옵니다.",
-          "Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 감지합니다."
-        ]
-      },
-      "limits": {
-        "en": [
-          "The initializer does not rewrite arbitrary JavaScript config source.",
-          "esbuild scripts need the printed plugin line because they have no standard config shape.",
-          "Add typescript@7.1.0-dev.20260826.1 yourself; ttc --types sidecars additionally need the 7.1 declaration-emit API.",
-          "A bundler transpiles sources; keep ttc --check-types as a separate type-check step."
-        ],
-        "ko": [
-          "설치기는 임의 형태의 JavaScript 설정 소스를 재작성하지 않습니다.",
-          "esbuild 스크립트에는 표준 설정 형태가 없어 출력된 플러그인 줄을 직접 추가합니다.",
-          "typescript@7.1.0-dev.20260826.1은 직접 추가합니다. ttc --types 사이드카는 7.1의 선언 방출 API가 추가로 필요합니다.",
-          "번들러는 소스를 변환할 뿐이므로 ttc --check-types 검사를 별도로 유지합니다."
+          "새 프로젝트는 Vite, TypeScript, Bun으로 구성합니다.",
+          "기존 프로젝트는 Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm을 지원합니다.",
+          "수동 설치는 최신 Nightly를 가리키는 next 채널을 사용합니다.",
+          "프리빌트 컴파일러는 Linux x64/arm64, macOS x64/arm64, Windows x64를 지원합니다."
         ]
       },
       "sections": [
-        {
-          "title": {
-            "en": "TypeScript 7 prerequisite",
-            "ko": "TypeScript 7 사전 준비"
-          },
-          "body": {
-            "en": "Install TypeScript 7 in the project. It ships the native executable and the sync API client together, and ttc resolves both from node_modules — there is no environment variable, and no way for the editor and the build to use different TypeScripts.",
-            "ko": "프로젝트에 TypeScript 7을 설치합니다. 네이티브 실행 파일과 sync API 클라이언트가 한 패키지에 함께 들어 있고 ttc가 둘 다 node_modules에서 찾습니다 — 환경 변수도 없고, 에디터와 빌드가 다른 TypeScript를 쓸 방법도 없습니다."
-          },
-          "code": "bun add -d typescript@7.1.0-dev.20260826.1"
-        },
         {
           "title": {
             "en": "New project",
             "ko": "새 프로젝트"
           },
           "body": {
-            "en": "The official npm installer creates src/main.ts with a starter src/app.tt module, installs with Bun, and adds dev, build, and check scripts.",
-            "ko": "공식 npm 설치기가 src/main.ts와 첫 src/app.tt 모듈을 만들고 Bun으로 설치하며 dev, build, check 스크립트를 추가합니다."
+            "en": "Create a ready-to-run Vite and TypeScript project.",
+            "ko": "바로 실행할 수 있는 Vite와 TypeScript 프로젝트를 만듭니다."
           },
           "code": "bunx @load28/create-tt@0.3.0 my-app\ncd my-app\nbun run dev"
         },
@@ -161,10 +134,10 @@
             "ko": "기존 프로젝트"
           },
           "body": {
-            "en": "Run init at the package root. Use --bundler when detection is ambiguous and --no-install for a lockfile-only or CI workflow.",
-            "ko": "패키지 루트에서 init을 실행합니다. 감지가 모호하면 --bundler를 지정하고 lockfile 전용 작업이나 CI에서는 --no-install을 사용합니다."
+            "en": "Run init from the package root, then check the tt source tree.",
+            "ko": "패키지 루트에서 init을 실행한 뒤 tt 소스 트리를 검사합니다."
           },
-          "code": "bunx @load28/create-tt@0.3.0 init\nbunx @load28/create-tt@0.3.0 init --bundler vite --no-install"
+          "code": "bunx @load28/create-tt@0.3.0 init\nbun run tt:check"
         },
         {
           "title": {
@@ -172,8 +145,8 @@
             "ko": "VS Code 확장"
           },
           "body": {
-            "en": "Development extensions are distributed as VSIX files on GitHub Releases, not through the Marketplace. From the newest pre-release download two files — tt-language-<version>.vsix (the tt language extension) and tt-typescript-preview-<version>-<platform>.vsix (the TypeScript editor, below) — then install both with Extensions: Install from VSIX... in the Command Palette or the CLI here.",
-            "ko": "개발 확장은 Marketplace가 아니라 GitHub Releases의 VSIX 파일로 배포합니다. 최신 pre-release에서 두 파일 — tt-language-<버전>.vsix(tt 언어 확장)와 tt-typescript-preview-<버전>-<플랫폼>.vsix(아래의 에디터용 TypeScript) — 를 내려받아 명령 팔레트의 Extensions: Install from VSIX... 또는 아래 CLI로 둘 다 설치합니다."
+            "en": "Download tt-language-<version>.vsix and tt-typescript-preview-<version>-<platform>.vsix from the latest GitHub pre-release, then install both in VS Code.",
+            "ko": "최신 GitHub pre-release에서 tt-language-<버전>.vsix와 tt-typescript-preview-<버전>-<플랫폼>.vsix를 내려받아 VS Code에 설치합니다."
           },
           "link": {
             "href": "https://github.com/load28/tt/releases",
@@ -188,8 +161,8 @@
             "ko": "에디터 TypeScript (useTsgo)"
           },
           "body": {
-            "en": "For performance tt drives TypeScript 7 (the native compiler), and it uses APIs from the 7.1 line — content mappers, which let .ts files import .tt with nothing on disk — that the Marketplace TypeScript extension does not ship yet. So install the TypeScript extension from this project's nightly build above, and turn on useTsgo so the TypeScript extension serves .ts/.tsx through the new API. Once TypeScript 7.1 is officially released, install the extension through the official route instead and the useTsgo setting is no longer needed.",
-            "ko": "tt은 성능을 위해 TypeScript 7(네이티브 컴파일러)을 구동하고, 그중에서도 7.1 라인의 API — .ts가 .tt을 디스크 생성물 없이 import하게 하는 content mapper — 를 사용합니다. Marketplace의 TypeScript 확장은 아직 이 API를 싣지 않았으므로, 위의 나이틀리 빌드로 TypeScript 확장을 직접 설치하고 useTsgo 설정을 켜서 TypeScript 확장이 최신 API로 .ts/.tsx를 서빙하게 합니다. TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고 useTsgo 설정도 필요 없어집니다."
+            "en": "Enable TypeScript 7 so the editor can resolve .tt imports from .ts and .tsx files.",
+            "ko": "에디터가 .ts와 .tsx 파일에서 .tt import를 해석하도록 TypeScript 7을 활성화합니다."
           },
           "code": "// .vscode/settings.json (or user settings)\n\"js/ts.experimental.useTsgo\": true,\n\"typescript.experimental.useTsgo\": true"
         },
@@ -199,8 +172,8 @@
             "ko": "컴파일러 수동 설치"
           },
           "body": {
-            "en": "Prerequisite: install typescript@7.1.0-dev.20260826.1 as shown above. Then install the published TT compiler from npm.",
-            "ko": "선행 조건: 위와 같이 typescript@7.1.0-dev.20260826.1을 설치합니다. 그다음 npm에서 공식 TT 컴파일러를 설치합니다."
+            "en": "Install the compiler and the supported TypeScript version, then compile or check the source tree.",
+            "ko": "컴파일러와 지원하는 TypeScript 버전을 설치한 뒤 소스 트리를 컴파일하거나 검사합니다."
           },
           "code": "bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
@@ -210,10 +183,10 @@
             "ko": "번들러 수동 설정"
           },
           "body": {
-            "en": "This path has the same typescript@7.1.0-dev.20260826.1 prerequisite as the manual compiler. Install @load28/unplugin-tt and add tt() first in the plugins array. Replace vite with rollup, rolldown, webpack, rspack, esbuild, or farm for that adapter.",
-            "ko": "이 절차에도 컴파일러 수동 설치와 같은 typescript@7.1.0-dev.20260826.1 선행 조건이 적용됩니다. @load28/unplugin-tt을 설치하고 plugins 배열 맨 앞에 tt()을 넣습니다. 어댑터 이름은 vite 대신 rollup, rolldown, webpack, rspack, esbuild, farm을 사용할 수 있습니다."
+            "en": "Install the bundler plugin and add tt() first in the plugins array. Use the adapter for your bundler.",
+            "ko": "번들러 플러그인을 설치하고 plugins 배열 맨 앞에 tt()을 추가합니다. 사용하는 번들러에 맞는 어댑터를 선택합니다."
           },
-          "code": "bun add -d @load28/tt-lang@next @load28/unplugin-tt@next\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
+          "code": "bun add -d @load28/tt-lang@next @load28/unplugin-tt@next typescript@7.1.0-dev.20260826.1\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]
     },

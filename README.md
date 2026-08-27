@@ -24,52 +24,38 @@ export const area = (shape: Shape): number =>
 
 Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file is a valid `.ttx` file. tt only transforms syntax it owns, reports language errors such as non-exhaustive matches itself, and emits readable TypeScript or TSX without a runtime dependency.
 
-## Install and use
+## Get started
 
-Install TT's official development packages from npm. Rust is not required on
-supported platforms, and neither is a source build of anything: `ttc` uses
-the TypeScript your project installed, so TypeScript is the only other
-dependency. There is nothing to export and nothing to configure — the
-compiler, the editor extension and your build all read the same package.
-
-```sh
-bun add -d typescript@7.1.0-dev.20260826.1
-```
-
-An exact prerelease on purpose, and the same one this repository tests
-against. Two things tt uses arrived in the TypeScript 7.1 line — the
-declaration emit API (`ttc --types`, the editor's `.tt.d.ts` sidecars) and
-content mappers (`.ts` importing `.tt` with nothing on disk) — and a plain
-`typescript@7` resolves to the 7.0 line because npm ranges do not match
-prereleases. Naming the version rather than a tag means a nightly published
-tonight cannot change how your build behaves tomorrow. When 7.1 is
-released this moves to `typescript@7`, everywhere at once.
+### New project
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
-bunx @load28/create-tt@0.3.0 init       # in an existing TypeScript project
+cd my-app
+bun run dev
 ```
 
-The automatic installer uses Bun for new projects. The complete automatic and
-manual paths are in the [installation guide](./docs/getting-started.md).
+### Existing TypeScript project
 
-The development VS Code extension is not published to the Marketplace.
-Download `tt-language-<version>.vsix` from the newest pre-release on
-[GitHub Releases](https://github.com/load28/tt/releases), then run
-**Extensions: Install from VSIX...** from the Command Palette or:
+```sh
+cd existing-project
+bunx @load28/create-tt@0.3.0 init
+bun run tt:check
+```
+
+See the [installation guide](./docs/getting-started.md) for automatic and
+bundler-specific manual setup.
+
+### VS Code extension
+
+Install `tt-language-<version>.vsix` from the latest pre-release on
+[GitHub Releases](https://github.com/load28/tt/releases):
 
 ```sh
 code --install-extension ./tt-language-<version>.vsix
 code --install-extension ./tt-typescript-preview-<version>-<platform>.vsix
 ```
 
-The second VSIX is the TypeScript editor itself. For performance tt drives
-TypeScript 7 (the native compiler) and uses APIs from the 7.1 line — content
-mappers, which let `.ts` files import `.tt` with nothing on disk — that the
-Marketplace TypeScript extension does not ship yet. Until it does, install
-the TypeScript extension from the same nightly release, and turn on
-`useTsgo` so the TypeScript extension serves `.ts`/`.tsx` through the new
-API:
+After installing both VSIX files, enable TypeScript 7 in the editor:
 
 ```jsonc
 // .vscode/settings.json (or user settings)
@@ -77,32 +63,18 @@ API:
 "typescript.experimental.useTsgo": true
 ```
 
-Once TypeScript 7.1 is officially released, install the extension through
-the official route instead — and the `useTsgo` setting is no longer needed.
-
-For a manual compiler-only install:
+### Use the CLI
 
 ```sh
 bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bunx ttc -o build src        # emit TypeScript
+bunx ttc --check src         # check tt
+bunx ttc --check-types src   # check tt and TypeScript
 ```
 
-Compile a file or source tree, or check it without writing output:
-
-```sh
-bunx ttc -o build src
-bunx ttc --check src
-bunx ttc --check-types src
-```
-
-`ttc` emits `.ts` from `.tt` and `.tsx` from `.ttx`. JSX is preserved, so React projects keep using their existing `jsx` compiler option and JSX runtime. For direct `.tt` or `.ttx` imports, use [`@load28/unplugin-tt`](./integrations/unplugin) with Vite, Rollup, webpack, Rspack, esbuild, or Farm.
-
-Prebuilt binaries are available for Linux x64/arm64, macOS x64/arm64, and Windows x64. On another platform, build from source:
-
-```sh
-cargo install --git https://github.com/load28/tt
-```
-
-Run `ttc --help` for compiler options or `ttc help <topic>` for the built-in language guide.
+- Output: `.tt` → `.ts`, `.ttx` → `.tsx`
+- Bundlers: [`@load28/unplugin-tt`](./integrations/unplugin) for Vite, Rollup, webpack, Rspack, esbuild, and Farm
+- Help: `ttc --help`, `ttc help <topic>`
 
 ## The language at a glance
 
@@ -117,41 +89,18 @@ For the reasoning behind the language, read [Why I built tt](./docs/why-tt.md).
 
 ## Develop tt
 
-The compiler is a Rust crate with a small public API and an `ttc` CLI. Rust
-1.98 or newer is required — the version `rust-toolchain.toml` pins, and the
-one every build here is checked with. The complete local environment also
-needs Bun and Node.js.
+The required tools are Rust 1.98, Node.js, and Bun.
 
 ```sh
 git clone https://github.com/load28/tt.git
 cd tt
 npm ci
 ./scripts/setup
+./scripts/ci
 ```
 
-`npm ci` installs TypeScript at the version `package.json` pins; the typed
-test suites and the editor both read it, the same way a consumer project's
-would. `scripts/setup` then builds a release `ttc` and the VS Code
-extension; it never updates the Git checkout.
-
-To test exactly what package consumers receive, publish the local TT packages
-to an npm-compatible registry:
-
-```sh
-bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
-bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
-```
-
-The second command prints the matching `create-tt` bootstrap command. Full
-contributor setup details are in [CONTRIBUTING.md](./CONTRIBUTING.md).
-
-Before submitting a change, run the repository gates:
-
-```sh
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-```
+- Contribution workflow: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- Architecture: [`docs/design`](./docs/design)
 
 The compiler can also be embedded as a Rust library:
 
@@ -160,8 +109,6 @@ use ttc::{compile, Options};
 
 let typescript = compile(source, &Options::default())?;
 ```
-
-Architecture records live in [`docs/design`](./docs/design).
 
 ## License
 

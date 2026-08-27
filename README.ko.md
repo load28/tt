@@ -24,50 +24,38 @@ export const area = (shape: Shape): number =>
 
 모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이고, 모든 유효한 TSX 파일은 유효한 `.ttx` 파일입니다. tt은 자신이 소유한 구문만 변환하고, 소진되지 않은 match 같은 언어 오류를 직접 보고하며, 런타임 의존성 없는 읽기 쉬운 TypeScript 또는 TSX를 방출합니다.
 
-## 설치와 사용
+## 시작하기
 
-npm에서 TT의 공식 개발 패키지를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지
-않고, 무언가를 소스에서 빌드할 일도 없습니다. `ttc`는 **프로젝트가 설치한**
-TypeScript를 쓰므로 다른 의존성은 TypeScript 하나뿐입니다. 내보낼 환경
-변수도, 설정할 것도 없습니다 — 컴파일러·에디터 확장·빌드가 모두 같은 패키지를
-읽습니다.
-
-```sh
-bun add -d typescript@7.1.0-dev.20260826.1
-```
-
-정확한 프리릴리스인 것은 의도이고, 이 저장소가 검증하는 바로 그 버전입니다.
-tt이 쓰는 두 가지가 TypeScript 7.1 라인 신규입니다 — 선언 방출 API(`ttc
---types`, 에디터의 `.tt.d.ts` 사이드카)와 content mapper(`.ts`가 `.tt`을
-디스크 생성물 없이 import하는 경로) — 그리고 npm 범위는 프리릴리스를
-매칭하지 않으므로 `typescript@7`은 7.0 라인으로 해석됩니다. 태그가 아니라 버전을 명시하므로 오늘 밤 올라온
-나이틀리가 내일 빌드 동작을 바꾸는 일이 없습니다. 7.1이 정식 릴리스되면
-`typescript@7`로 한 번에 모두 옮깁니다.
+### 새 프로젝트
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
-bunx @load28/create-tt@0.3.0 init       # 기존 TypeScript 프로젝트에서 실행
+cd my-app
+bun run dev
 ```
 
-새 프로젝트의 자동 설치에는 Bun을 사용합니다. 자동 설치와 번들러별 수동 절차는
-[설치 가이드](./docs/getting-started.ko.md)에 정리되어 있습니다.
+### 기존 TypeScript 프로젝트
 
-개발용 VS Code 확장은 Marketplace에 게시하지 않습니다. 최신
-[GitHub Releases](https://github.com/load28/tt/releases) pre-release에서
-`tt-language-<버전>.vsix`를 내려받고 명령 팔레트에서
-**Extensions: Install from VSIX...**를 실행하거나 다음 명령으로 설치합니다.
+```sh
+cd existing-project
+bunx @load28/create-tt@0.3.0 init
+bun run tt:check
+```
+
+[설치 가이드](./docs/getting-started.ko.md)에서 자동 설치와 번들러별 수동 절차를
+확인할 수 있습니다.
+
+### VS Code 확장
+
+최신 [GitHub Releases](https://github.com/load28/tt/releases) pre-release의
+`tt-language-<버전>.vsix`를 설치합니다.
 
 ```sh
 code --install-extension ./tt-language-<버전>.vsix
 code --install-extension ./tt-typescript-preview-<버전>-<플랫폼>.vsix
 ```
 
-두 번째 VSIX가 에디터용 TypeScript 자체입니다. tt은 성능을 위해
-TypeScript 7(네이티브 컴파일러)을 구동하고, 그중 7.1 라인의 API —
-`.ts`가 `.tt`을 디스크 생성물 없이 import하게 하는 content mapper — 를
-사용합니다. Marketplace의 TypeScript 확장은 아직 이 API를 싣지 않았으므로,
-같은 나이틀리 릴리스의 빌드로 TypeScript 확장을 직접 설치하고 `useTsgo`
-설정을 켜서 TypeScript 확장이 최신 API로 `.ts`/`.tsx`를 서빙하게 합니다.
+두 VSIX를 설치한 뒤 에디터에서 TypeScript 7을 사용하도록 설정합니다.
 
 ```jsonc
 // .vscode/settings.json (또는 사용자 설정)
@@ -75,32 +63,18 @@ TypeScript 7(네이티브 컴파일러)을 구동하고, 그중 7.1 라인의 AP
 "typescript.experimental.useTsgo": true
 ```
 
-TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
-`useTsgo` 설정도 필요 없어집니다.
-
-컴파일러만 수동으로 설치할 때:
+### CLI 사용
 
 ```sh
 bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bunx ttc -o build src        # TypeScript 방출
+bunx ttc --check src         # tt 검사
+bunx ttc --check-types src   # tt + TypeScript 검사
 ```
 
-파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
-
-```sh
-bunx ttc -o build src
-bunx ttc --check src
-bunx ttc --check-types src
-```
-
-`ttc`는 `.tt`을 `.ts`로, `.ttx`를 `.tsx`로 방출합니다. JSX는 그대로 보존하므로 React 프로젝트의 기존 `jsx` 컴파일러 옵션과 JSX 런타임을 계속 사용합니다. `.tt` 또는 `.ttx` 파일을 번들러에서 직접 import하려면 Vite, Rollup, webpack, Rspack, esbuild, Farm을 지원하는 [`@load28/unplugin-tt`](./integrations/unplugin)을 사용하세요.
-
-프리빌트 바이너리는 Linux x64/arm64, macOS x64/arm64, Windows x64를 지원합니다. 다른 플랫폼에서는 소스에서 빌드하세요.
-
-```sh
-cargo install --git https://github.com/load28/tt
-```
-
-컴파일러 옵션은 `ttc --help`, 내장 언어 가이드는 `ttc help <topic>`으로 확인할 수 있습니다.
+- 출력: `.tt` → `.ts`, `.ttx` → `.tsx`
+- 번들러: Vite, Rollup, webpack, Rspack, esbuild, Farm용 [`@load28/unplugin-tt`](./integrations/unplugin)
+- 도움말: `ttc --help`, `ttc help <topic>`
 
 ## 언어 한눈에 보기
 
@@ -115,40 +89,18 @@ cargo install --git https://github.com/load28/tt
 
 ## tt 개발하기
 
-컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.98
-이상이 필요합니다 — `rust-toolchain.toml`이 고정한, 그리고 모든 빌드가 실제로
-검증되는 그 버전입니다. 전체 로컬 환경에는 Bun과 Node.js도 필요합니다.
+필요한 도구는 Rust 1.98, Node.js, Bun입니다.
 
 ```sh
 git clone https://github.com/load28/tt.git
 cd tt
 npm ci
 ./scripts/setup
+./scripts/ci
 ```
 
-`npm ci`는 `package.json`이 고정한 버전의 TypeScript를 설치합니다 — typed
-테스트와 에디터가 소비자 프로젝트와 똑같은 방식으로 그것을 읽습니다.
-`scripts/setup`은 그 위에 release `ttc`와 VS Code 확장을 빌드하며, Git
-체크아웃을 자동으로 갱신하지 않습니다.
-
-패키지 사용자가 받는 형태를 그대로 시험하려면 로컬 TT 패키지를 npm 호환
-레지스트리에 게시합니다.
-
-```sh
-bunx verdaccio@6 --config scripts/verdaccio.local.yaml --listen 127.0.0.1:4873
-bun scripts/publish-local-registry.mjs http://127.0.0.1:4873
-```
-
-두 번째 명령이 같은 레지스트리를 사용하는 `create-tt` 실행 명령을 출력합니다.
-전체 기여자 설정은 [CONTRIBUTING.md](./CONTRIBUTING.md)에 있습니다.
-
-변경을 제출하기 전에 저장소 검증 게이트를 실행합니다.
-
-```sh
-cargo fmt --check
-cargo clippy --all-targets -- -D warnings
-cargo test
-```
+- 기여 절차: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- 아키텍처: [`docs/design`](./docs/design)
 
 컴파일러는 Rust 라이브러리로도 포함할 수 있습니다.
 
@@ -157,8 +109,6 @@ use ttc::{compile, Options};
 
 let typescript = compile(source, &Options::default())?;
 ```
-
-아키텍처 기록은 [`docs/design`](./docs/design)에 있습니다.
 
 ## 라이선스
 
