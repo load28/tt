@@ -110,8 +110,8 @@
   usefulness 알고리즘으로 곱집합을 판정한다.
 
   ```tt
-  enum Dir { North(deg: number), South(deg: number) }
-  enum Speed { Slow(v: number), Fast(v: number) }
+  variant Dir { North(deg: number), South(deg: number) }
+  variant Speed { Slow(v: number), Fast(v: number) }
   const label = match (d, s) {
     (North, Slow) => "ns",
     (North, Fast) => "nf",
@@ -132,7 +132,7 @@
 
   ```tt
   type Inner = { kind: "Yes"; n: number } | { kind: "No" };
-  enum Outer { Wrap(inner: Inner), Bare }
+  variant Outer { Wrap(inner: Inner), Bare }
   const a = match (o) { Wrap(inner: Yes(n)) => n, Bare => -1 };
   // ttc --check-types → missing "Wrap(inner: No())"
   ```
@@ -163,7 +163,7 @@
   `enumSignature`)이 삭제됐다.
 
   - `if let`·let-else·중첩 패턴에서 hover·정의 이동·완성이 **처음으로** 동작한다.
-  - 케이스와 이름이 같은 지역 변수가 enum 케이스로 hover되던 오탐이 사라졌다.
+  - 케이스와 이름이 같은 지역 변수가 variant 케이스로 hover되던 오탐이 사라졌다.
   - 규칙이 하나가 됐다 — 이전의 정규식 구현은 컴파일러와 다른 후보 선택 규칙을
     갖고 있었다.
 
@@ -176,7 +176,7 @@
   - 자리 판정은 **토큰 스트림**으로 한다 — 완성이 필요한 순간은 구문이 아직
     파싱되지 않는 순간이므로, 파서에 기대면 정작 그때 침묵한다.
 
-- **tt 이름의 semantic 표면이 엔진에 생겼다** (TASK-105). enum 이름·케이스
+- **tt 이름의 semantic 표면이 엔진에 생겼다** (TASK-105). variant 이름·케이스
   태그·페이로드 필드는 방출 TypeScript에 존재하지 않아(선언은 매핑 없는 합성
   텍스트, 태그는 문자열 리터럴, 필드는 구조 분해 키) 체커에게 물을 수 없다.
   이제 tt이 직접 답한다 — `ttc --server`의 `ttSymbol`, 라이브러리의
@@ -186,7 +186,7 @@
     에서도 답한다(에디터의 기존 구현은 match 본문만 알았다).
   - **체커에게 물을 수 있는 자리에는 답하지 않는다.** `Shape.Circle(1)` 같은
     사용처나 타입 주석은 평범한 TypeScript이므로 서비스가 답한다 — 케이스와
-    이름이 같은 지역 변수가 enum 케이스로 hover되던 오탐이 사라진다.
+    이름이 같은 지역 변수가 variant 케이스로 hover되던 오탐이 사라진다.
   - 툴체인도 프로젝트도 필요 없다(`semanticTokens`와 같은 가용성).
   - 공개 API: `FieldSymbol::offset`, `PatternAnalyses::resolved`,
     `PatternAnalyses::declarations`.
@@ -224,7 +224,7 @@
     **실제로 소진된 match가 거절**됐다(`missing "Ok"`). 이제 통과한다.
   - 빠진 것은 태그가 아니라 **패턴**으로 지목된다 — 그대로 arm으로 붙여넣을 수
     있다: `missing "Ok(value: None())"`, `missing "Wrap(inner: No())"`.
-  - 안쪽 위치의 enum은 필드의 선언된 타입으로, 그것이 enum을 지목하지 않으면
+  - 안쪽 위치의 variant는 필드의 선언된 타입으로, 그것이 variant를 지목하지 않으면
     (제네릭 페이로드 `T`) 그 자리에 쓰인 패턴들로 정한다 — match의 스크루티니를
     arm 태그로 정하는 것과 같은 규칙이다.
   - 도달 불가 arm도 같은 재귀가 답하지만 **보고하지 않는다**: tt에는 경고 계층이
@@ -236,12 +236,12 @@
   let-else, `if let`이 같은 규칙을 쓴다.
 
   ```
-  ttc: shape.tt:2:23: enum Shape has no case `Circel` — did you mean `Circle`?
-  ttc: shape.tt:5:29: enum Shape: case `Circle` has no field `radiuz` — did you mean `radius`?
+  ttc: shape.tt:2:23: variant Shape has no case `Circel` — did you mean `Circle`?
+  ttc: shape.tt:5:29: variant Shape: case `Circle` has no field `radiuz` — did you mean `radius`?
   ```
 
   - 이전에는 이런 오타가 ttc를 그냥 통과해 **생성된 코드 위에서** tsc 에러
-    (`TS2678`/`TS2367`/`TS2339`)로 나타났고, 태그 오타의 경우 후보 표에서 enum이
+    (`TS2678`/`TS2367`/`TS2339`)로 나타났고, 태그 오타의 경우 후보 표에서 variant가
     사라져 **그 match의 소진성 검사가 조용히 꺼졌다.**
   - 보고 조건은 "해석 실패"가 아니라 **"고칠 이름을 댈 수 있음"** 이다. 태그
     패턴은 손으로 쓴 `kind` 유니언에도 쓸 수 있으므로(`language.md` §3.2),
@@ -310,7 +310,7 @@
     진단은 실행 도중이 아니라 끝난 뒤 입력 순서대로 나온다.
   - 드라이버가 입력을 **파일당 한 번만 읽고 한 번만 파싱**한다 (신규 공개
     API `scan_module()`가 `.tt` import 목록과 `@tt/std` 사용 여부를 한 번에
-    준다). 임포트된 모듈의 enum 선언 테이블도 실행당 한 번만 만든다 —
+    준다). 임포트된 모듈의 variant 선언 테이블도 실행당 한 번만 만든다 —
     공유 모듈을 N개 파일이 임포트할 때 N번 읽고 파싱하던 것이 1번이 됐다.
   - 코드젠 로프가 원본을 복사하지 않고 빌려오며, 줄 끝 주석 검사가 전체
     출력이 아니라 마지막 줄만 본다. 렉서는 토큰 벡터를 미리 확보하고
@@ -413,7 +413,7 @@
   문서**로 TS 언어 서비스에 서빙한다. 방출물이 순수 TS이므로 match 암
   본문·스크루티니·`try`/`let-else`/`if let` 식·파이프라인 스텝 내부에서도
   호버·자동완성·정의 이동·참조·이름 변경이 온전한 타입 추론으로 동작하고,
-  match 암 자동완성은 스크루티니의 TS 추론 타입으로 대상 enum을 특정한다
+  match 암 자동완성은 스크루티니의 TS 추론 타입으로 대상 variant를 특정한다
   (구조적 추론 실패 시, 선언 파일 교차 검증). 컴파일러가 없거나 방출이
   버퍼를 못 따라온 순간에는 종전의 원문 서빙으로 자동 폴백한다. (TASK-050)
 
@@ -439,7 +439,7 @@
     선언은 소스 지정자(`"./x.tt"`, `"@tt/std"`)를 그대로 보존해 소비 측
     `rootDirs`/`paths` 설정만으로 `tsc --noEmit`과 에디터가 동작한다.
 
-- VSCode 언어 서버에 TypeScript 언어 서비스 위임: tt 심볼(enum·케이스)이
+- VSCode 언어 서버에 TypeScript 언어 서비스 위임: tt 심볼(variant·케이스)이
   아닌 **일반 TS 심볼(변수·함수·타입·import된 값)의 정의 이동·호버·
   자동완성(`obj.` 멤버 포함)·참조 찾기·이름 변경**이 `.ts` 파일에서처럼
   동작한다 (완성은 tt 항목이 우선, tt 심볼의 이름 변경은 안전하게 거부).
@@ -447,19 +447,19 @@
   연결하며, TS 진단은 표출하지 않는다 (에러는 ttc가 정본).
   (TASK-024, TASK-025)
 
-- 심볼 인터페이스: `ttc --symbols <file>`이 tt enum 선언(1-기반 위치 포함)과
+- 심볼 인터페이스: `ttc --symbols <file>`이 tt variant 선언(1-기반 위치 포함)과
   직접 `.tt` import(참조 파일의 exported 선언 포함)를 JSON으로 출력. VSCode
   언어 서버가 이를 소비해 **크로스 파일 정의 이동·자동완성·호버·빠른 수정**
-  제공 (named import 별칭 반영). 라이브러리 API: `enum_symbols` /
-  `EnumSymbol`/`CaseSymbol`/`FieldSymbol` / `line_col`. 모듈 그래프 로드맵
+  제공 (named import 별칭 반영). 라이브러리 API: `variant_symbols` /
+  `VariantSymbol`/`CaseSymbol`/`FieldSymbol` / `line_col`. 모듈 그래프 로드맵
   3단계 완결. (TASK-023)
 
-- 프로젝트 단위 소진성 검사: 직접 import한 `.tt` 파일의 exported enum에
+- 프로젝트 단위 소진성 검사: 직접 import한 `.tt` 파일의 exported variant에
   대한 match도 빠진 케이스를 컴파일 에러로 보고
-  (`match on enum Token (imported from "./token.tt") is not exhaustive`).
+  (`match on variant Token (imported from "./token.tt") is not exhaustive`).
   CLI가 import 절 이름(별칭·`* as ns` 포함)대로 선언을 자동 수집하며,
   섀도잉은 로컬 > 임포트 > 내장 순. 라이브러리 API: `tt_imports` /
-  `exported_enums` / `ExternEnum` / `Options::extern_enums`. 모듈 그래프
+  `exported_variants` / `ExternVariant` / `Options::extern_variants`. 모듈 그래프
   로드맵의 2단계. (TASK-022)
 
 - `.tt` 간 import: 상대 경로 `.tt` import 지정자를 방출 시 재작성
@@ -477,8 +477,8 @@
 - `Option`/`Result` 표준 라이브러리: `ttc --emit-std <file>`이 함수형
   콤비네이터(`map`/`andThen`/`unwrapOr` 등)를 담은 순수 TypeScript 모듈을
   생성 (`docs/reference/std.md`, 라이브러리 API `ttc::STD_SOURCE`).
-  `Option`(Some/None)·`Result`(Ok/Err)는 내장 enum으로 인식되어 파일에 선언이
-  없어도 match 소진성 검사를 받는다 — 같은 이름의 로컬 tt enum이 있으면
+  `Option`(Some/None)·`Result`(Ok/Err)는 내장 variant로 인식되어 파일에 선언이
+  없어도 match 소진성 검사를 받는다 — 같은 이름의 로컬 tt variant가 있으면
   로컬이 우선. (TASK-011)
 
 - 태스크 관리 체계 (`docs/tasks/`) 및 `CLAUDE.md` 작업 가이드. (TASK-001)

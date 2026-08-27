@@ -56,12 +56,12 @@ pub enum Literal {
 }
 
 /// A wildcard-free tag `match` — one typed exhaustiveness question about an
-/// enum. Produced by [`crate::tag_matches`].
+/// variant declaration. Produced by [`crate::tag_matches`].
 ///
 /// ttc can answer this one from its own declaration table, and does when no
 /// checker is available. A checker answers it *better*: the scrutinee's type
 /// at the `match` is the narrowed one, so a case an earlier guard already
-/// removed is not demanded back, and an enum declared in another module
+/// removed is not demanded back, and a variant declared in another module
 /// needs no declaration collecting.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TagMatch {

@@ -424,7 +424,7 @@ pub(crate) struct VariantCase {
     pub fields: Option<Vec<Field>>,
 }
 
-/// One field of a payload-carrying enum case.
+/// One field of a payload-carrying variant case.
 #[derive(Debug)]
 pub(crate) struct Field {
     pub name: String,
@@ -461,7 +461,7 @@ pub(crate) struct MatchExpr {
 /// must be a parenthesized tuple pattern (or a final bare `_`), otherwise
 /// the whole thing parses as a single match over a comma expression, so
 /// existing programs keep their meaning. Exhaustiveness is checked over the
-/// cartesian product of the per-position enums.
+/// cartesian product of the per-position variants.
 #[derive(Debug)]
 pub(crate) struct TupleMatchExpr {
     /// Byte offset of the `match` keyword, for error reporting.

@@ -281,7 +281,7 @@ capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 
 | `Decision` | `match`, `if let`, `let-else` | branch/switch, bind, result join 또는 exit |
 | `Propagate` | `try`, `result` binding | 단일 평가, 실패 edge, success payload bind |
 | `Apply` | pipe, `flow` | reference-aware call graph와 좌우 평가 순서 |
-| `Adt`/source edit | enum, import, `val`, template | 구조화 선언 또는 국소 source edit |
+| `Adt`/source edit | variant, import, `val`, template | 구조화 선언 또는 국소 source edit |
 
 optimizer는 `match`라는 단어를 보지 않는다. `Decision`의 branch, `Propagate`의 exit,
 `Apply`의 call처럼 공통 primitive만 본다. 새 tt 문법이 기존 primitive로 낮아지면 프로그램

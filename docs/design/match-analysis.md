@@ -50,7 +50,7 @@ seam(`typescript/backend.rs`·`service.rs`) 뒤에 격리. MatchAnalysis도 그
 ```
 src/analysis.rs            ← 순수 단계 (probe.rs·sema.rs와 같은 층위)
    pattern_analyses(source, externs: &[VariantSymbol]) -> PatternAnalyses
-   · 선언 테이블: 로컬 enum > import된 enum > 내장 Option/Result
+   · 선언 테이블: 로컬 variant > import된 variant > 내장 Option/Result
      (sema의 소진성 해석과 같은 섀도잉·후보 규칙)
    · match마다: subjects(위치별) / arms / coverage
    · arm마다: patternBindings(span-키) / bodyBindings(이름-키, 병합)
@@ -83,14 +83,14 @@ MatchAnalysis
   arms:      Vec<AnalyzedArm>
   coverage:  Option<Coverage>            // §5
 
-MatchSubject   { enum_name, constructors: Vec<MatchConstructor> }
+MatchSubject   { variant_name, constructors: Vec<MatchConstructor> }
 MatchConstructor { tag, fields: Option<Vec<PayloadField>> }
 
 AnalyzedArm
   pattern_bindings: Vec<PatternBinding>  // span-키: 출현마다 하나
   body_bindings:    Vec<BodyBinding>     // 이름-키: 대안 병합
 
-PatternBinding { name, span, tag, ty, enum_name,
+PatternBinding { name, span, tag, ty, variant_name,
                  group span, alternative span, alternatives }
 BodyBinding    { name, ty /* 병합; 하나라도 모르면 None */ }
 ```
@@ -121,7 +121,7 @@ or-pattern 분석 순서는 고정이다: ① 각 대안을 subject에 대해 **
      projection을 되서빙한다.
 3. 선언 테이블 폴백 (`const x: <declared>` + 출처 문서화)
    — 프로브가 실패하거나(서비스 사망, 미완성 버퍼) 툴체인 자체가 없을
-     때. 내장/제네릭 enum은 선언 그대로 `T`를 보여준다 — 인스턴스화는
+     때. 내장/제네릭 variant는 선언 그대로 `T`를 보여준다 — 인스턴스화는
      checker의 몫이라는 정직한 답. subject를 못 찾으면 답하지 않는다
      (모르는 타입을 지어내지 않는다).
 ```
@@ -190,7 +190,7 @@ sema는 이제 자기 후보 표를 갖지 않는다.
   질문이라 계속 **첫 후보**를 쓴다 — 두 질문에 두 해석이 있는 것이 아니라,
   같은 표에 두 질의가 있는 것이다.
 
-내장 enum(`Option`/`Result`)의 선언도 이 표 하나뿐이다. sema가 태그만 담긴
+내장 variant(`Option`/`Result`)의 선언도 이 표 하나뿐이다. sema가 태그만 담긴
 사본(`stdlib::BUILTIN_ENUMS`)을 따로 보던 것은 함께 없앴다.
 
 extern 입력의 모양이 둘인 것(컴파일러의 `ExternVariant` — 태그와 지정자,
@@ -201,7 +201,7 @@ extern 입력의 모양이 둘인 것(컴파일러의 `ExternVariant` — 태그
 ## 6. 한계 (알고 유지하는 것)
 
 - 폴백 타입은 **선언 텍스트**다. narrowing·제네릭 인스턴스화·다른 tt
-  enum들의 TS-union scrutinee는 checker 경로(1·2번)만 안다. 이것이 "TT
+  variant들의 TS-union scrutinee는 checker 경로(1·2번)만 안다. 이것이 "TT
   타입체커를 만들지 않는다"는 계약의 형태다. TASK-098이 위치별로 확인한
   결과, 매핑이 없어 checker가 도달하지 못하는 자리는 **or-pattern
   binding(단일 match와 튜플 원소) 둘뿐**이고 그 둘은 프로브가 덮는다 —
@@ -230,7 +230,7 @@ TASK-102이 그 질문을 같은 모델에 넣었다. rustc의 단계 구성과 
 
 ```
 PatternAnalyses.unresolved: Vec<UnresolvedName>
-   { kind: Case | Field, name, span, enum_name, origin, tag, suggestion }
+   { kind: Case | Field, name, span, variant_name, origin, tag, suggestion }
 ```
 
 규범이 되는 규칙 둘:
@@ -242,10 +242,10 @@ PatternAnalyses.unresolved: Vec<UnresolvedName>
   이 판단은 분석의 것이고, sema는 문안만 만든다 — `Coverage`와 같은 분업이다.
 - **지목(identify)은 세 번째 질의다.** 표에는 이미 두 질의가 있었다:
   `resolve`(타입을 읽을 선언)와 `resolve_coverage`(소진성을 잴 선언). 해석은
-  "이 사이트가 말하는 enum"을 묻는다 — 모든 태그를 포함하는 후보, 없으면 가장
+  "이 사이트가 말하는 variant"를 묻는다 — 모든 태그를 포함하는 후보, 없으면 가장
   많이 포함하는 **유일한** 후보. 동점이거나 하나도 없으면 답하지 않는다.
   단일 패턴 사이트(let-else·`if let`)는 다른 태그의 뒷받침이 없으므로 **편집
   한 번** 거리로 면허를 좁힌다.
 
 남은 것은 타입이 있어야 아는 것들이다 — 오타가 아닌 틀린 이름, 스크루티니가
-정말 그 enum인지. 그것은 체커에 묻는 질문이고 P4의 몫이다.
+정말 그 variant인지. 그것은 체커에 묻는 질문이고 P4의 몫이다.

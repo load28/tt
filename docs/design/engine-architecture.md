@@ -24,7 +24,7 @@
 
 ```
 ttc [files] → main.rs::compile_jobs
-  load_jobs(병렬 read+scan) → ExternCache(1-hop enum 수집)
+  load_jobs(병렬 read+scan) → ExternCache(1-hop variant 수집)
   → par_map(compile per file, defer_to_checker=false)
   → 진단 입력 순서 취합 → 쓰기
 ```
@@ -63,7 +63,7 @@ VSCode ── LSP ──> server.ts (1712줄 단일 모듈)
    │    TsgoProject ── tsgo --lsp -stdio (자체 JSON-RPC 클라이언트, lsp.ts)
    ├─ virtualDocs / diskVirtuals / pendingVirtual: 자체 가상문서 저장소
    │    (ttc --emit-map 스폰, 미열람 import는 execFileSync 동기 블로킹)
-   ├─ analysis.ts: tt 구문의 821줄 재구현 (enum/match/masking)
+   ├─ analysis.ts: tt 구문의 821줄 재구현 (variant/match/masking)
    └─ virtual.ts:  mapper.rs와 드리프트된 두 번째 매핑 구현
 ```
 

@@ -492,7 +492,7 @@ pub fn variant_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<V
 /// starting at byte `src` of the source appear at byte `out` of the output.
 /// Produced by [`emit_mapped`]; chunks are non-overlapping in both
 /// coordinate spaces. Compiler-written glue (region scaffolding,
-/// destructurings, enum emissions) has no mapping.
+/// destructurings, variant emissions) has no mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmitMapping {
     /// Byte offset of the chunk in the source.

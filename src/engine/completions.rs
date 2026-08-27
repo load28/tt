@@ -77,8 +77,8 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
             });
             items
         }
-        // A pattern position with nothing to say which enum it is over —
-        // an `if let` names its enum only by the tag being typed. Every
+        // A pattern position with nothing to say which variant it is over —
+        // an `if let` names its variant only by the tag being typed. Every
         // visible case is a candidate, and the editor filters by prefix.
         Some(Context::Case { of: None }) => declarations
             .iter()
@@ -114,7 +114,7 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
 #[derive(Debug, PartialEq, Eq)]
 enum Context {
     /// A tag is expected. `of` carries the tags already written in the same
-    /// match, which is what says *which* enum — `None` when the position
+    /// match, which is what says *which* variant — `None` when the position
     /// has no such evidence (an `if let`).
     Case { of: Option<Vec<String>> },
     /// A payload field name of `tag` is expected.
@@ -329,7 +329,7 @@ fn arm_tags(
     tags
 }
 
-/// The enum the table resolves a tag set to: the first declaration holding
+/// The variant the table resolves a tag set to: the first declaration holding
 /// every one of them — the shadowing order the table is already in, and the
 /// same rule pattern resolution uses.
 fn resolve<'a>(
@@ -342,7 +342,7 @@ fn resolve<'a>(
     })
 }
 
-/// The enum a declared field type names, when it names one plainly.
+/// The variant a declared field type names, when it names one plainly.
 fn type_variant<'a>(declarations: &'a [DeclaredVariant], ty: &str) -> Option<&'a DeclaredVariant> {
     let trimmed = ty.trim();
     let base: String = trimmed

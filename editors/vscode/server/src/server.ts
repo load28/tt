@@ -12,7 +12,7 @@
  *   signature help, type diagnostics — comes back from it already in `.tt`
  *   coordinates. No projection, source mapping, TypeScript session or
  *   probe logic lives in this process.
- * - **tt's own names** — enum names, case tags, payload fields — come from
+ * - **tt's own names** — variant names, case tags, payload fields — come from
  *   the engine too (`ttSymbol`, `ttCompletions`), even though no type is
  *   involved: they exist nowhere in the emitted TypeScript, so the
  *   compiler's declaration table is the only thing that knows them, and a
@@ -828,7 +828,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   const offset = doc.offsetAt(params.position);
   const visible = (await declarationsOf(doc)).variants;
 
-  // `Enum.` member access → the enum's case constructors, then everything
+  // `Variant.` member access → the variant's case constructors, then everything
   // else TypeScript offers on that same object. Both halves are needed:
   // the constructors are tt's (case signature, field snippet, tags an
   // unimported built-in still has), while the rest of a standard-library
@@ -848,7 +848,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
   // A `.` with no identifier in front of it is a member access all the same
   // (`x |> .`, `f().`, `(a + b).`): members belong there, and nothing else —
-  // no enum names, no keyword snippets.
+  // no variant names, no keyword snippets.
   if (atMemberAccess(masked, offset)) {
     return tsCompletions(doc, offset, true);
   }
@@ -886,7 +886,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     }));
   }
 
-  // General position → enum names + tt keyword snippets, then everything
+  // General position → variant names + tt keyword snippets, then everything
   // TypeScript would offer in a .ts file (sorted after the tt items).
   const items: CompletionItem[] = visible.map((e) => ({
     label: e.name,
@@ -1032,7 +1032,7 @@ connection.onHover(async (params) => {
     }
   }
 
-  // A tt name — an enum, a case tag, a payload field. None of the three
+  // A tt name — a variant, a case tag, a payload field. None of the three
   // survives lowering in a form the TypeScript service can be pointed at,
   // so the engine answers from the compiler's own declaration table. It
   // answers only where the service cannot be asked; everywhere else
@@ -1083,7 +1083,7 @@ connection.onDefinition(async (params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
 
-  // A tt name first: an enum, a case tag, a payload field. The engine
+  // A tt name first: a variant, a case tag, a payload field. The engine
   // knows where each is declared — in this file or in the `.tt` the import
   // names — because the emitted TypeScript carries none of them.
   const ttPath = enginePath(doc);

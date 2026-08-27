@@ -785,7 +785,7 @@ impl Checker {
                         }
                     }
                     // A nested pattern may mismatch, so — like a guard —
-                    // the arm identifies the enum but covers nothing.
+                    // the arm identifies the variant declaration but covers nothing.
                     if arm.guard.is_none() && !alts.iter().any(has_nested) {
                         covered.append(&mut arm_tags);
                     }
@@ -996,7 +996,7 @@ fn report_coverage(
     }
 }
 
-/// How an error names the enum a match is over — the declaration's origin,
+/// How an error names the variant a match is over — the declaration's origin,
 /// so "which `Token`?" is answerable from the message alone.
 fn describe(subject: &CoveredVariant) -> String {
     match &subject.origin {

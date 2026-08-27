@@ -234,7 +234,7 @@ fn multibyte_content_preserved() {
 
 #[test]
 fn plain_ts_using_option_result_names_is_untouched() {
-    // The built-in Option/Result enums must never affect pure TypeScript: a
+    // The built-in Option/Result variants must never affect pure TypeScript: a
     // file that works with these names on its own (import, constructors, a
     // switch over the tags) contains no tt syntax and passes through.
     assert_passthrough(

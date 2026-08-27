@@ -350,7 +350,7 @@ Backend:
 > declaration owner"만 물었지만, 실제로는 **접근 경로의 뿌리가 어느 바인딩인지**도
 > 같은 symbol 질의로 답한다(`Resolution.id`). 그래서 섀도잉·재선언·구조 분해가
 > 전부 TypeScript 자신의 해석으로 풀린다 — 어휘 스코프 모델을 흉내 내지 않는다.
-> enum 소진성(`TagQuery`)도 같은 경로로 옮겨졌다.
+> variant 소진성(`TagQuery`)도 같은 경로로 옮겨졌다.
 
 ## CLI 모드 재정리
 
@@ -501,7 +501,7 @@ positive 방지 테스트 통과.
 > | 2 Backend seam | 완료 — `src/typescript/backend.rs` (TASK-073) |
 > | 3 Project graph parity | 완료. shim이 아니라 `x.tt.ts` 이름으로 해결 (TASK-073·074) |
 > | 4 Mapping and diagnostics | 완료 — `mapper.rs`. 글루에 걸린 진단은 그 구문 위치로 보고하고 출처를 밝힌다 |
-> | 5 Literal match migration | 완료 (TASK-073). enum 소진성까지 같이 옮겼다 |
+> | 5 Literal match migration | 완료 (TASK-073). variant 소진성까지 같이 옮겼다 |
 > | 6 `val` migration | 완료 (TASK-073). symbol identity로 바인딩 짝짓기까지 |
 > | 7 Emit migration | 완료 — 선언은 컴파일러가 방출하고 사이드카 map만 ttc가 만든다 (TASK-073) |
 > | 8 Language service | 완료 — 에디터가 `tsgo --lsp`에 직접 붙는다 (TASK-077) |

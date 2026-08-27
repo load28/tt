@@ -53,7 +53,7 @@ loader를 명시합니다.
 컴파일 에러는 ttc의 진단이 그대로 빌드 에러가 됩니다.
 
 ```
-[@load28/unplugin-tt] src/notice.tt:22:16: match on enum Notice is not exhaustive:
+[@load28/unplugin-tt] src/notice.tt:22:16: match on variant Notice is not exhaustive:
               missing "Warn" (add the missing arms or a final `_` arm)
 ```
 

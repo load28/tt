@@ -11,7 +11,7 @@
 //!
 //! tt-specific shape: rustc's resolver knows the scrutinee's type before
 //! it resolves a pattern's path; ttc does not (types are TypeScript's).
-//! So resolution here starts with **subject identification** — which enum
+//! So resolution here starts with **subject identification** — which variant
 //! a site's tags collectively name (all-tags candidate first, then the
 //! unique best-overlap holder; silence on a tie or no overlap, because tag
 //! patterns legitimately match hand-written unions tt has no declaration
@@ -111,7 +111,7 @@ pub struct Resolution {
     /// contributes its constructor object here).
     pub value_ns: HashMap<String, DefId>,
     /// Each pattern site's identified subject, one per scrutinee position
-    /// (`None` where the tags name no known enum).
+    /// (`None` where the tags name no known variant).
     pub sites: HashMap<PatternSiteId, SiteResolution>,
     /// Every resolved name use, keyed by the name's HIR node: a pattern's
     /// tag, a pattern's payload field. This is what definition/hover/rename
@@ -131,8 +131,8 @@ impl Resolution {
         }
     }
 
-    /// The enum definition behind `def` — itself for a type-namespace
-    /// enum, the owner for a constructor-object value.
+    /// The variant definition behind `def` — itself for a type-namespace
+    /// variant, the owner for a constructor-object value.
     pub fn variant_of(&self, def: DefId) -> Option<(DefId, &VariantDef)> {
         match &self.defs[def].kind {
             DefKind::Variant(data) => Some((def, data)),
@@ -160,7 +160,7 @@ impl Resolution {
 
 /// The namespaces tt names live in. Pattern binding locals get their own
 /// space when the resolver takes over local scopes (Phase 5's flow work
-/// feeds it); enum variants and payload fields are addressed through their
+/// feeds it); variant cases and payload fields are addressed through their
 /// owner, not by bare name, so they need no top-level namespace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Namespace {
@@ -255,10 +255,10 @@ pub struct FieldDecl {
 }
 
 /// A variant, addressed through its owner — the identity form of "the
-/// `Circle` of `Shape`", never confusable with another enum's `Circle`.
+/// `Circle` of `Shape`", never confusable with another variant's `Circle`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VariantRef {
-    /// The owning enum's definition.
+    /// The owning variant's definition.
     pub variant_def: DefId,
     /// Index into the owner's variant list.
     pub index: u32,
@@ -294,8 +294,8 @@ pub enum Res {
 /// One pattern site's identified subjects.
 #[derive(Debug)]
 pub struct SiteResolution {
-    /// One entry per scrutinee position: the enum that position's tags
-    /// identify, or `None` when they name no known enum.
+    /// One entry per scrutinee position: the variant that position's tags
+    /// identify, or `None` when they name no known variant.
     pub subjects: Vec<Option<DefId>>,
 }
 
@@ -313,7 +313,7 @@ pub struct UnresolvedUse {
     pub name: String,
     /// Case tag or payload field.
     pub kind: UseKind,
-    /// The enum the name was resolved against.
+    /// The variant the name was resolved against.
     pub against: DefId,
     /// For a field, the case whose payload it was looked up in.
     pub tag: Option<String>,
@@ -502,7 +502,7 @@ impl Resolver {
             }
             let subject = self.identify(&tags);
             // Resolve this position's constructor uses against the
-            // identified enum — or, for a statement site whose evidence is
+            // identified variant — or, for a statement site whose evidence is
             // a **single** tag, under the strict one-edit licence (an
             // or-pattern's several tags are match-grade evidence, so they
             // go through `identify` like an arm list and get no licence).
@@ -534,8 +534,8 @@ impl Resolver {
     }
 
     /// The subject identification rule, shared with the analysis (see the
-    /// module docs): an enum containing **every** tag, in shadowing order;
-    /// otherwise the unique enum containing the most of them (at least
+    /// module docs): a variant containing **every** tag, in shadowing order;
+    /// otherwise the unique variant containing the most of them (at least
     /// one); a tie or no overlap identifies nothing.
     fn identify(&self, tags: &[&str]) -> Option<DefId> {
         if tags.is_empty() {
@@ -650,14 +650,14 @@ impl Resolver {
             }
             None => {
                 // Same-domain suggestions only: the candidates are this
-                // enum's variants, never another enum's homonyms.
+                // variant's cases, never another variant's homonyms.
                 let suggestion = {
                     // `variant_def` was just read out of the resolution's
-                    // own enum table, and nothing removes from it.
+                    // own variant table, and nothing removes from it.
                     let (_, data) = self
                         .resolution
                         .variant_of(variant_def)
-                        .expect("the id came from the enum table");
+                        .expect("the id came from the variant table");
                     nearest(&path.name, data.variants.iter().map(|v| v.name.as_str()))
                 };
                 self.resolution.uses.insert(path.node, Res::Unresolved);
@@ -714,7 +714,7 @@ impl Resolver {
                         .uses
                         .insert(field_pat.node, Res::Field(field_ref));
                     // A nested pattern resolves against the field's own
-                    // declared type, when that type names an enum this
+                    // declared type, when that type names a variant this
                     // file can see.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
                         && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
@@ -753,7 +753,7 @@ impl Resolver {
 
     /// The single-pattern near-miss licence: one tag is thin evidence, so
     /// an unidentified `if let`/let-else tag is reported only when exactly
-    /// one enum has a case a *single* edit away (transposition included).
+    /// one variant has a case a *single* edit away (transposition included).
     fn report_near_miss(&mut self, hir: &HirFile, site: PatternSiteId, pattern: PatternId) {
         let Pat::Constructor { path, .. } = &hir.patterns[pattern] else {
             return;
@@ -790,9 +790,9 @@ impl Resolver {
         }
     }
 
-    /// The enum a declared type text names — a bare (possibly dotted)
+    /// The variant a declared type text names — a bare (possibly dotted)
     /// identifier, optionally with type arguments; anything else (a union,
-    /// an array…) names no single enum. Same rule as the analysis'.
+    /// an array…) names no single variant. Same rule as the analysis'.
     fn variant_of_type(&self, ty: &str) -> Option<DefId> {
         let trimmed = ty.trim();
         let base_len = trimmed
@@ -841,7 +841,7 @@ fn collect_position_tags<'h>(
             }
         }
         // Top-level tags only: a nested pattern's tag is evidence about
-        // the *payload*'s enum, not the subject's — same rule as the
+        // the *payload*'s variant, not the subject's — same rule as the
         // analysis.
         Pat::Constructor { path, .. } => out.push(&path.name),
     }

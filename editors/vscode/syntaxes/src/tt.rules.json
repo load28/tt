@@ -87,7 +87,7 @@
       "patterns": [
         { "include": "#comment" },
         {
-          "name": "meta.enum.case.payload.tt",
+          "name": "meta.variant.case.payload.tt",
           "begin": "([$_[:alpha:]][$_[:alnum:]]*)\\s*(\\()",
           "beginCaptures": {
             "1": { "name": "variable.other.enummember.ts" },

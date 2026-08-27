@@ -75,8 +75,8 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 | completion | tsgo LSP | API에 `getCompletionsAtPosition`이 있으나 resolve가 item-echo 방식(LSP형) — 한 백엔드로 통일 |
 | TS 진단 (에디터) | tsgo LSP pull | parse-error 가드(코드<2000) 등 기존 계약이 이 표면 위에 정의됨 |
 | typed tt 진단·소진성·val | tsgo **API server** (기존 Query/Answers) | TASK-073~085의 규범 경로 그대로 |
-| tt 구조 기능 (완성의 enum 목록, 문서 심볼, quick fix의 삽입 지점) | **엔진** (`engine/declarations.rs`, `declarations`) | 규칙의 단일 원천은 resolve — 정규식 재구현(구 analysis.ts)은 컴파일러와 다른 답을 했다 (TASK-127·128) |
-| tt 이름 hover/definition (enum·케이스·필드) | **엔진** (`engine/names.rs`, `ttSymbol`) | 위와 같은 이유지만 구현이 엔진에 있어야 규칙이 하나다 — 정규식 재구현은 컴파일러와 다른 답을 했다 (TASK-105) |
+| tt 구조 기능 (완성의 variant 목록, 문서 심볼, quick fix의 삽입 지점) | **엔진** (`engine/declarations.rs`, `declarations`) | 규칙의 단일 원천은 resolve — 정규식 재구현(구 analysis.ts)은 컴파일러와 다른 답을 했다 (TASK-127·128) |
+| tt 이름 hover/definition (variant·케이스·필드) | **엔진** (`engine/names.rs`, `ttSymbol`) | 위와 같은 이유지만 구현이 엔진에 있어야 규칙이 하나다 — 정규식 재구현은 컴파일러와 다른 답을 했다 (TASK-105) |
 | 패턴 자리 완성 (태그·필드) | **엔진** (`engine/completions.rs`, `ttCompletions`) | 같은 이유. 자리 판정은 토큰 스트림이라 미완성 버퍼에서도 답한다 (TASK-106) |
 
 **갱신 (TASK-107)**: 위 두 행을 에디터가 실제로 채택했다. `analysis.ts`에서
@@ -85,7 +85,7 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 — `match` 키워드 위치, 멤버 접근 판정, 문서 심볼, 빠진 암 quick fix.
 
 **갱신 (TASK-128)**: 그 "스스로 읽는 구조"도 의미론 절반이 컴파일러로
-넘어갔다. 보이는 enum 목록·케이스/필드·match 사이트(암 삽입 지점 포함)는
+넘어갔다. 보이는 variant 목록·케이스/필드·match 사이트(암 삽입 지점 포함)는
 서버의 `declarations` 메서드(resolve 기반)가 답하고, `analysis.ts`의
 `parseEnums`/`parseMatches`/`visibleEnums`/`BUILTIN_ENUMS`는 삭제됐다.
 Node에 남은 것은 **텍스트 형태** 유틸뿐이다 — 마스킹, 커서의 단어, 멤버
