@@ -83,6 +83,8 @@ test("publishing promotes scheduled or dispatched Nightlies and approved formal 
   assert.doesNotMatch(publish, /workflow_dispatch:|inputs\.run_id|inputs\.npm_tag/);
   assert.match(publish, /\.conclusion \/tmp\/run\.json\)" = success/);
   assert.match(publish, /gh run download "\$RUN_ID"/);
+  assert.match(publish, /printf 'variant E \{ A\(x: number\) \}/);
+  assert.doesNotMatch(publish, /printf 'enum E \{ A\(x: number\) \}/);
   assert.match(publish, /npm publish "\.\/\$package_dir" --tag "\$NPM_TAG"/);
   assert.match(publish, /action-gh-release/);
   assert.doesNotMatch(publish, /cargo build|go build|git push origin --delete/);
