@@ -8,7 +8,8 @@
 //!
 //! Client and server are **one unit**: the protocol carries no version
 //! negotiation and the client is generated from the server's Go source, so
-//! both are resolved from the same typescript-go tree (see [`Toolchain`]).
+//! both come from one install. *Which* install is [`super::toolchain`]'s
+//! answer — the language service asks it the same question for its own half.
 //! Everything unstable about TypeScript 7 lives behind this module and
 //! [`super::backend::TypeScriptBackend`].
 
@@ -18,147 +19,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use super::backend::*;
+use super::toolchain::{self, Client};
 
 /// The host script, embedded so a released `ttc` needs no files beside it.
 const HOST: &str = include_str!("host.mjs");
-
-/// Where the TypeScript compiler comes from.
-///
-/// Two shapes work, and both keep the client and the server from one build —
-/// the protocol between them carries no version negotiation:
-///
-/// - an **installed package** (`node_modules/typescript`, or
-///   `@typescript/native-preview`), which ships the API client and the
-///   native executable together. The client finds its own executable, so
-///   ttc names only the client.
-/// - a **built typescript-go tree**, for working against the compiler's own
-///   `main`. Both halves are named explicitly.
-///
-/// Resolution order, first hit wins:
-///
-/// 1. `TTC_TSGO_API` (+ optional `TTC_TSGO_BIN`) — named directly.
-/// 2. `TTC_TSGO_ROOT` — a typescript-go checkout, built in place.
-/// 3. `../typescript-go`, likewise built.
-/// 4. an installed package, searched for in `node_modules` from the project
-///    upwards — the workspace's own TypeScript, which is the one its code is
-///    written against.
-///
-/// No path is compiled in, and a tree that is not built yet is reported as
-/// such rather than guessed around.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Toolchain {
-    /// The `tsgo` executable to run as the API server, or `None` to let the
-    /// API client run the one shipped beside it.
-    pub bin: Option<PathBuf>,
-    /// The JS client module the host imports (`.../api/sync/api.js`).
-    pub api: PathBuf,
-}
-
-/// `tsgo`'s path inside a built typescript-go tree.
-const BIN_IN_TREE: &str = "built/local/tsgo";
-/// The JS API client's path inside a built typescript-go tree.
-const API_IN_TREE: &str = "_packages/native-preview/dist/api/sync/api.js";
-
-impl Toolchain {
-    /// Resolves the toolchain from the environment. The error names what is
-    /// missing and how to produce it.
-    pub(crate) fn resolve(from: &Path) -> Result<Toolchain, String> {
-        if let Some(api) = env_path("TTC_TSGO_API") {
-            return Toolchain {
-                bin: env_path("TTC_TSGO_BIN"),
-                api,
-            }
-            .check();
-        }
-        if let Some(root) = env_path("TTC_TSGO_ROOT") {
-            return Toolchain::in_tree(&root).check();
-        }
-        let tree = Toolchain::in_tree(Path::new("../typescript-go"));
-        if tree.api.exists() {
-            return tree.check();
-        }
-        match installed(from) {
-            Some(toolchain) => toolchain.check(),
-            None => Err(format!(
-                "no TypeScript compiler found — install one \
-                 (`npm i -D typescript@7`), or build a typescript-go checkout \
-                 (`go build -o {BIN_IN_TREE} ./cmd/tsgo` plus `npm ci && npx \
-                 tsc -b _packages/native-preview`) and point ttc at it with \
-                 TTC_TSGO_ROOT"
-            )),
-        }
-    }
-
-    /// The two halves of a built typescript-go checkout.
-    fn in_tree(root: &Path) -> Toolchain {
-        Toolchain {
-            bin: Some(root.join(BIN_IN_TREE)),
-            api: root.join(API_IN_TREE),
-        }
-    }
-
-    /// Rejects a toolchain whose halves are not both present, naming the
-    /// step that produces the missing one.
-    fn check(self) -> Result<Toolchain, String> {
-        if let Some(bin) = &self.bin
-            && !bin.exists()
-        {
-            return Err(format!(
-                "no tsgo executable at {} — build one with `go build -o {} \
-                 ./cmd/tsgo` in a typescript-go checkout",
-                bin.display(),
-                BIN_IN_TREE,
-            ));
-        }
-        if !self.api.exists() {
-            return Err(format!(
-                "no TypeScript API client at {} — in a typescript-go checkout \
-                 build it with `npm ci && npx tsc -b _packages/native-preview` \
-                 (the client and the executable must come from one build)",
-                self.api.display(),
-            ));
-        }
-        // The host imports the client by path and runs in the project's
-        // directory, so a relative path here would resolve against neither.
-        Ok(Toolchain {
-            bin: self.bin.map(absolute),
-            api: absolute(self.api),
-        })
-    }
-}
-
-/// The API client of an installed package, searched for in `node_modules`
-/// from `from` upwards. The client resolves the executable shipped beside
-/// it, so only the client is named.
-fn installed(from: &Path) -> Option<Toolchain> {
-    const PACKAGES: [&str; 2] = ["typescript", "@typescript/native-preview"];
-    let mut dir = from.canonicalize().unwrap_or_else(|_| from.to_path_buf());
-    loop {
-        for package in PACKAGES {
-            let api = dir
-                .join("node_modules")
-                .join(package)
-                .join("dist/api/sync/api.js");
-            if api.exists() {
-                return Some(Toolchain { bin: None, api });
-            }
-        }
-        if !dir.pop() {
-            return None;
-        }
-    }
-}
-
-/// The path as the host will see it, from wherever it is run.
-fn absolute(path: PathBuf) -> PathBuf {
-    path.canonicalize().unwrap_or(path)
-}
-
-fn env_path(var: &str) -> Option<PathBuf> {
-    std::env::var_os(var)
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-}
 
 /// A [`TypeScriptBackend`] over a running compiler.
 ///
@@ -168,7 +32,7 @@ fn env_path(var: &str) -> Option<PathBuf> {
 /// keystroke.
 #[derive(Debug)]
 pub(crate) struct NativeBackend {
-    toolchain: Toolchain,
+    toolchain: Client,
     /// The `node` binary that runs the host (`--node`, else `node` on PATH).
     node: PathBuf,
     session: RefCell<Option<Session>>,
@@ -192,7 +56,7 @@ impl NativeBackend {
     /// started until the first question.
     pub(crate) fn new(node: Option<PathBuf>, from: &Path) -> Result<NativeBackend, String> {
         Ok(NativeBackend {
-            toolchain: Toolchain::resolve(from)?,
+            toolchain: toolchain::client(from)?,
             node: node.unwrap_or_else(|| PathBuf::from("node")),
             session: RefCell::new(None),
         })
@@ -220,7 +84,6 @@ impl NativeBackend {
         let mut stdout = BufReader::new(child.stdout.take().expect("stdout piped"));
 
         let open = serde_json::json!({
-            "tsgoBin": self.toolchain.bin,  // null: the client runs the one beside it
             "apiModule": self.toolchain.api,
             "cwd": root,
             "tsconfig": tsconfig,
@@ -252,10 +115,10 @@ fn host_died(child: &mut Child) -> String {
         let _ = pipe.read_to_string(&mut stderr);
     }
     if status.and_then(|s| s.code()) == Some(5) {
-        return "the resolved TypeScript can check but cannot emit declarations \
-                — that API is newer than the released package. Use --check-types \
-                (which writes nothing), or point ttc at a built typescript-go \
-                checkout with TTC_TSGO_ROOT"
+        return "the installed TypeScript can check but cannot emit \
+                declarations — that API arrived in TypeScript 7.1. Install a \
+                7.1 in this project (`npm i -D typescript@7.1`), or use \
+                --check-types, which writes nothing"
             .to_string();
     }
     let stderr = stderr.trim();

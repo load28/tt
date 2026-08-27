@@ -27,20 +27,21 @@ export const area = (shape: Shape): number =>
 ## 설치와 사용
 
 npm에서 TT의 공식 개발 패키지를 설치합니다. 지원 플랫폼에서는 Rust가 필요하지
-않습니다. `ttc`가 사용할 typescript-go는 최신 소스에서 직접 빌드합니다.
+않고, 무언가를 소스에서 빌드할 일도 없습니다. `ttc`는 **프로젝트가 설치한**
+TypeScript를 쓰므로 다른 의존성은 TypeScript 하나뿐입니다. 내보낼 환경
+변수도, 설정할 것도 없습니다 — 컴파일러·에디터 확장·빌드가 모두 같은 패키지를
+읽습니다.
 
 ```sh
-git clone https://github.com/microsoft/typescript-go.git
-cd typescript-go
-npm ci
-mkdir -p built/local
-go build -o built/local/tsgo ./cmd/tsgo
-npx tsc -b _packages/native-preview
-export TTC_TSGO_ROOT="$PWD"
+bun add -d typescript@7.1.0-dev.20260826.1
 ```
 
-`ttc`를 실행하는 환경에 `TTC_TSGO_ROOT`를 유지하고 같은 셸에서 VS Code를
-실행합니다. 실행 파일과 API 클라이언트는 같은 체크아웃에서 빌드해야 합니다.
+정확한 프리릴리스인 것은 의도이고, 이 저장소가 검증하는 바로 그 버전입니다.
+선언 방출 — `ttc --types`와 에디터의 `.tt.d.ts` 사이드카 — 은 7.1에서 들어온
+emit API를 쓰는데, npm 범위는 프리릴리스를 매칭하지 않으므로 `typescript@7`은
+7.0 라인으로 해석됩니다. 태그가 아니라 버전을 명시하므로 오늘 밤 올라온
+나이틀리가 내일 빌드 동작을 바꾸는 일이 없습니다. 7.1이 정식 릴리스되면
+`typescript@7`로 한 번에 모두 옮깁니다.
 
 ```sh
 bunx @load28/create-tt@0.3.0 my-app
@@ -59,11 +60,10 @@ bunx @load28/create-tt@0.3.0 init       # 기존 TypeScript 프로젝트에서 �
 code --install-extension ./tt-language-<버전>.vsix
 ```
 
-컴파일러만 수동으로 설치할 때도 먼저 위의 typescript-go 빌드를 완료하고
-`TTC_TSGO_ROOT`를 설정한 상태로 유지해야 합니다.
+컴파일러만 수동으로 설치할 때:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
 
 파일이나 소스 트리를 컴파일하거나, 출력 없이 검사합니다.
@@ -99,18 +99,18 @@ cargo install --git https://github.com/load28/tt
 
 컴파일러는 작은 공개 API와 `ttc` CLI를 제공하는 Rust 크레이트입니다. Rust 1.98
 이상이 필요합니다 — `rust-toolchain.toml`이 고정한, 그리고 모든 빌드가 실제로
-검증되는 그 버전입니다. 전체 로컬 환경에는 Bun, Node.js, Go, typescript-go
-체크아웃도 필요합니다.
+검증되는 그 버전입니다. 전체 로컬 환경에는 Bun과 Node.js도 필요합니다.
 
 ```sh
 git clone https://github.com/load28/tt.git
-git clone https://github.com/microsoft/typescript-go.git
 cd tt
-./scripts/setup --tsgo-root ../typescript-go
+npm ci
+./scripts/setup
 ```
 
-`scripts/setup`은 현재 typescript-go 체크아웃, release `ttc`, VS Code 확장을
-빌드합니다. 이후 실행은 `.tt-dev/toolchain.json`의 설정을 재사용하며 두 Git
+`npm ci`는 `package.json`이 고정한 버전의 TypeScript를 설치합니다 — typed
+테스트와 에디터가 소비자 프로젝트와 똑같은 방식으로 그것을 읽습니다.
+`scripts/setup`은 그 위에 release `ttc`와 VS Code 확장을 빌드하며, Git
 체크아웃을 자동으로 갱신하지 않습니다.
 
 패키지 사용자가 받는 형태를 그대로 시험하려면 로컬 TT 패키지를 npm 호환

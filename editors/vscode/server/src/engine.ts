@@ -20,7 +20,6 @@
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
 
-import { ttcSpawnEnv } from "./dev";
 
 /** The name a rename asks the engine for, standing in for the new name in
  * every edit's `newText` (see `onRenameRequest`). */
@@ -147,6 +146,11 @@ let engineServer: EngineServer | null = null;
 let engineServerCompiler: string | null = null;
 /** Consecutive server losses without a single answer; two disable it. */
 let engineServerStrikes = 0;
+/** Which compiler those strikes are against. A ttc that cannot serve says
+ * nothing about the next one, so a different path — a `tt.compilerPath` that
+ * arrived after the first documents, a freshly installed package — starts
+ * with a clean count instead of inheriting a verdict it never earned. */
+let strikingCompiler: string | null = null;
 
 /** Called whenever a fresh server comes up (first spawn or respawn after a
  * crash), so the owner can re-send the documents it holds open — a new
@@ -158,6 +162,10 @@ export function setOnSessionStart(callback: (() => void) | null): void {
 }
 
 function engineServerFor(compiler: string): EngineServer | null {
+  if (strikingCompiler !== compiler) {
+    strikingCompiler = compiler;
+    engineServerStrikes = 0;
+  }
   if (engineServerStrikes >= 2) return null;
   if (engineServer && engineServer.alive && engineServerCompiler === compiler) {
     return engineServer;
@@ -167,10 +175,6 @@ function engineServerFor(compiler: string): EngineServer | null {
   try {
     child = spawn(compiler, ["--server"], {
       stdio: ["pipe", "pipe", "ignore"],
-      // The engine resolves its TypeScript toolchain from the environment;
-      // a local-development setup (scripts/setup) is handed over here so the
-      // editor drives the same toolchain as the CLI launcher (dev.ts).
-      env: ttcSpawnEnv(compiler),
     });
   } catch {
     engineServerStrikes += 1;
@@ -187,7 +191,11 @@ function engineServerFor(compiler: string): EngineServer | null {
   const fail = () => {
     if (!server.alive) return;
     server.alive = false;
-    if (!server.answered) engineServerStrikes += 1;
+    // Only against the compiler this session was for: another one may have
+    // been asked for since, and it has not failed at anything.
+    if (!server.answered && strikingCompiler === compiler) {
+      engineServerStrikes += 1;
+    }
     for (const [, entry] of server.pending) {
       clearTimeout(entry.timer);
       entry.resolve(null);
@@ -270,6 +278,17 @@ export function engineRequest(
       },
     );
   });
+}
+
+/**
+ * Re-arms a compiler that struck out. The strikes answer "this ttc has no
+ * `--server`"; an explicit change to the environment — new settings, a
+ * compiler that just appeared on disk — is new evidence, and the next
+ * request gets to find out.
+ */
+export function retryEngineServer(): void {
+  engineServerStrikes = 0;
+  strikingCompiler = null;
 }
 
 /** Ends the engine server, if one is running. Tests call this so the

@@ -33,18 +33,20 @@ jobs:
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
 
-      # Pinned for the same reason the type-checking job pins it: a
-      # floating `main` would break this gate on someone else's commit.
-      - name: Check out typescript-go
-        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          repository: microsoft/typescript-go
-          ref: c6b013f5706d58582f566df778cc0df2683b58f5
-          path: typescript-go
+          node-version: "22"
+
+      # The corpus is this repository's own TypeScript plus the standard
+      # library declarations inside the installed TypeScript package, so
+      # the install is what makes the run whole rather than a thin sample.
+      # Pinned for the same reason the type-checking job pins it: a
+      # floating version would break this gate on someone else's commit.
+      - name: Install TypeScript
+        run: npm ci
 
       - name: Every file, not a sample
         env:
-          TTC_TSGO_ROOT: ${{ github.workspace }}/typescript-go
           TTC_CORPUS_FULL: "1"
           TTC_REQUIRE_CORPUS: "1"
         run: cargo test --test corpus --release -- --nocapture

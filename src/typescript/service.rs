@@ -362,80 +362,11 @@ pub(crate) fn uri_path(uri: &str) -> Option<PathBuf> {
     Some(PathBuf::from(String::from_utf8_lossy(&out).into_owned()))
 }
 
-/// Where the `tsgo` executable that serves the LSP comes from — the same
-/// places the compiler backend looks ([`super::native::Toolchain`]), plus
-/// the platform package an installed TypeScript ships its binary in.
-///
-/// Always absolute. The server is spawned with its working directory in
-/// the *project*, so a relative answer — the sibling checkout's, or a
-/// relative `TTC_TSGO_ROOT` — would be resolved against a directory it was
-/// never measured from, and the session would fail to start for one
-/// project while working for another (TASK-217). The compiler backend
-/// settled this for itself in `Toolchain::check`; this is the same rule on
-/// the same reasoning.
-pub(crate) fn service_binary(root: &Path) -> Result<PathBuf, String> {
-    if let Some(bin) = env_path("TTC_TSGO_BIN")
-        && bin.exists()
-    {
-        return Ok(absolute(bin));
-    }
-    if let Some(tree) = env_path("TTC_TSGO_ROOT") {
-        let bin = tree.join("built/local/tsgo");
-        if bin.exists() {
-            return Ok(absolute(bin));
-        }
-    }
-    let sibling = Path::new("../typescript-go/built/local/tsgo");
-    if sibling.exists() {
-        return Ok(absolute(sibling.to_path_buf()));
-    }
-    let platform = format!("{}-{}", os_name(), arch_name());
-    let mut dir = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    loop {
-        for package in [
-            format!("@typescript/typescript-{platform}"),
-            format!("@typescript/native-preview-{platform}"),
-        ] {
-            let exe = dir.join("node_modules").join(&package).join("lib/tsc");
-            if exe.exists() {
-                return Ok(exe);
-            }
-        }
-        if !dir.pop() {
-            return Err("no tsgo language server found — install TypeScript 7 \
-                 (`npm i -D typescript@7`) or point TTC_TSGO_ROOT at a built \
-                 typescript-go checkout"
-                .to_string());
-        }
-    }
-}
-
-/// A path the spawned server can resolve from any working directory.
-fn absolute(path: PathBuf) -> PathBuf {
-    path.canonicalize().unwrap_or(path)
-}
-
-fn os_name() -> &'static str {
-    match std::env::consts::OS {
-        "macos" => "darwin",
-        "windows" => "win32",
-        other => other,
-    }
-}
-
-fn arch_name() -> &'static str {
-    match std::env::consts::ARCH {
-        "x86_64" => "x64",
-        "aarch64" => "arm64",
-        other => other,
-    }
-}
-
-fn env_path(var: &str) -> Option<PathBuf> {
-    std::env::var_os(var)
-        .filter(|v| !v.is_empty())
-        .map(PathBuf::from)
-}
+/// Where the `tsgo` executable that serves the LSP comes from: the one
+/// resolution both halves of the TypeScript toolchain share
+/// ([`super::toolchain`]). Re-exported here because this module is what the
+/// engine asks for a language server.
+pub(crate) use super::toolchain::service_binary;
 
 #[cfg(test)]
 mod tests {

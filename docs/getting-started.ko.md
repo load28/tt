@@ -3,23 +3,17 @@
 권장 설치 명령에는 [Bun](https://bun.sh/)이 필요합니다. TT 패키지와 프리빌트
 `ttc` 컴파일러는 npm 공식 배포본을 설치합니다.
 
-현재 개발 단계에서는 `ttc`가 사용할 도구 체인을 최신
-[typescript-go 소스](https://github.com/microsoft/typescript-go)에서 직접
-빌드합니다. TT 자체는 npm 공식 배포본을 사용합니다.
+`ttc`는 TypeScript 7을 구동하며, 그것을 **프로젝트 자신의 `node_modules`**
+에서만 찾습니다 — 빌드가 쓰는 바로 그 패키지입니다. TT와 함께 설치합니다.
 
 ```sh
-git clone https://github.com/microsoft/typescript-go.git
-cd typescript-go
-npm ci
-mkdir -p built/local
-go build -o built/local/tsgo ./cmd/tsgo
-npx tsc -b _packages/native-preview
-export TTC_TSGO_ROOT="$PWD"
+bun add -d typescript@7.1.0-dev.20260826.1
 ```
 
-`ttc`를 실행하는 모든 셸에 `TTC_TSGO_ROOT`를 유지합니다. TT 에디터 서비스를
-사용할 때는 같은 셸에서 VS Code를 실행합니다. 실행 파일과 API 클라이언트의
-프로토콜에는 버전 협상이 없으므로 둘은 같은 체크아웃에서 빌드해야 합니다.
+내보낼 환경 변수도, 에디터 전용 설정도 없습니다. 확장은 프로젝트의 `ttc`를
+띄우고, 그 `ttc`가 프로젝트의 TypeScript를 찾습니다. 선언 방출
+(`ttc --types`와 에디터의 `.tt.d.ts` 사이드카)은 TypeScript 7.1에서 들어온
+API를 사용하며, 나머지 기능은 7.0에서 모두 동작합니다.
 
 ## 자동 설치
 
@@ -42,7 +36,7 @@ bun run tt:check
 `init`은 `package.json`에서 Vite, Rollup, Rolldown, webpack, Rspack,
 esbuild, Farm을 감지합니다. `0.3.0` 설치기는 `@load28/tt-lang`과
 `@load28/unplugin-tt`의 Stable 채널과 TT용 스크립트를 추가합니다. npm TypeScript
-패키지는 추가하지 않으며 `ttc`는 위에서 빌드한 typescript-go를 사용합니다.
+패키지는 추가하지 않으므로 위와 같이 `typescript@7.1.0-dev.20260826.1`을 직접 설치합니다.
 선언형 설정을 쓰는 번들러에는 기존 설정을 합성하는
 `tt.*.config.mjs` 래퍼를 생성하며 사용자 설정 소스는 고치지 않습니다. 생성된
 래퍼는 `bun run tt:dev` 또는 `bun run tt:build`로 사용합니다. esbuild 빌드
@@ -90,11 +84,10 @@ Vite 같은 외부 패키지는 프록시합니다.
 
 ## 컴파일러 수동 설치
 
-이 절차를 사용하기 전에 이 문서 상단의 typescript-go 소스 빌드를 완료하고
-`TTC_TSGO_ROOT`가 설정된 상태를 유지해야 합니다. 그다음 컴파일러를 설치합니다.
+컴파일러와 그것이 구동할 TypeScript를 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.
@@ -114,7 +107,6 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 
 ## 번들러 수동 설치
 
-이 절차에도 빌드된 typescript-go 체크아웃과 `TTC_TSGO_ROOT`가 필요합니다.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
@@ -181,4 +173,6 @@ import { render } from "./notice.tt";
 code --install-extension ./tt-language-<버전>.vsix
 ```
 
-`TTC_TSGO_ROOT`가 설정된 셸에서 프로젝트 루트를 엽니다.
+프로젝트 루트를 엽니다. 확장은 프로젝트가 설치한 `ttc`를 띄우고 그 `ttc`는
+프로젝트가 설치한 TypeScript를 쓰므로, 에디터와 빌드가 다른 TypeScript를 쓰는
+상황이 성립하지 않습니다.

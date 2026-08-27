@@ -11,27 +11,17 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { refreshSidecar } from "../sidecar";
-
-const COMPILER = "ttc";
-
-function compilerAvailable(): boolean {
-  try {
-    execFileSync(COMPILER, ["-v"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { COMPILER, compilerAvailable } from "./toolchain";
+import { caseDir } from "./workspace";
 
 /**
  * Whether a TypeScript that can *emit declarations* is resolvable — the
  * probe runs the same command the refresh runs, so a skip means the
  * toolchain cannot do this, never that the refresh quietly did nothing.
- * A released 7.0 package can check but not emit; a built typescript-go
- * checkout can do both.
+ * A TypeScript 7.0 can check but not emit; 7.1 added the API.
  */
 function toolchainAvailable(): boolean {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-toolchain-probe-"));
+  const dir = caseDir("tt-toolchain-probe-");
   try {
     fs.writeFileSync(path.join(dir, "probe.tt"), "export const n: number = 1;\n");
     // `-o` the way `refreshSidecar` passes it: on its own `--types` writes
@@ -47,7 +37,7 @@ function toolchainAvailable(): boolean {
 }
 
 const skip = !compilerAvailable()
-  ? "ttc not on PATH"
+  ? "no ttc — none built, installed, or on PATH"
   : !toolchainAvailable()
     ? "no TypeScript compiler for ttc to drive"
     : false;
@@ -69,7 +59,7 @@ const SOURCE = [
 ].join("\n");
 
 function workspace(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-sidecar-test-"));
+  const dir = caseDir("tt-sidecar-test-");
   fs.writeFileSync(path.join(dir, "notice.tt"), SOURCE);
   return dir;
 }
@@ -101,7 +91,7 @@ test("always mode writes both sidecar files", { skip }, async () => {
 });
 
 test("ttx saves refresh TSX declarations and map back to the ttx source", { skip }, async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ttx-sidecar-test-"));
+  const dir = caseDir("ttx-sidecar-test-");
   const ttx = path.join(dir, "view.ttx");
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),

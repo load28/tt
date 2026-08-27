@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 function workflow(name) {
@@ -24,12 +24,14 @@ test("CI follows TypeScript's main and release-X.Y branch model", () => {
   assert.match(ci, /actions\/runs\/\$GITHUB_RUN_ID.*--jq \.created_at/);
   assert.match(ci, /needs: release-version/);
   assert.doesNotMatch(ci, /git show -s --format=%cd/);
-  assert.match(ci, /repository: microsoft\/typescript-go/);
-  assert.match(ci, /go build -o built\/local\/tsgo \.\/cmd\/tsgo/);
+  // TypeScript is a dependency of this repository, not a checkout CI builds:
+  // `npm ci` installs the version package.json pins, and ttc resolves it
+  // from node_modules exactly as a consumer project does (TASK-256).
+  assert.doesNotMatch(ci, /typescript-go/);
+  assert.doesNotMatch(ci, /TTC_TSGO_/);
+  assert.match(ci, /name: Install TypeScript\n\s+run: npm ci/);
   assert.match(ci, /name: tsgo type checking \+ vscode extension/);
-  assert.match(ci, /TTC_TSGO_ROOT: \$\{\{ github\.workspace \}\}\/typescript-go/);
   assert.doesNotMatch(ci, /^  extension:/m);
-  assert.doesNotMatch(ci, /npm install .*typescript@7/);
   assert.doesNotMatch(ci, /needs: \[[^\]]*extension/);
   assert.doesNotMatch(ci, /npm publish|action-gh-release/);
 });
@@ -102,4 +104,63 @@ test("publish validates the source branch and immutable npm versions", () => {
   assert.match(publish, /run_event=\$RUN_EVENT/);
   assert.match(publish, /npm view "\$name@\$version" version/);
   assert.match(publish, /test -z "\$git_head" \|\| test "\$git_head" = "\$SOURCE_SHA"/);
+});
+
+/**
+ * A job that runs npm without setting Node up works only by accident — the
+ * runner image happens to carry one, at whatever version it happens to
+ * carry. The local gate cannot see this class of mistake at all: it shows
+ * up only on the hosted runner, and only sometimes. TASK-256 introduced one
+ * (`npm ci` replaced a checkout in soak's corpus job, which had never
+ * needed Node), so the rule is checked rather than remembered.
+ */
+test("every workflow job that runs npm sets Node up", () => {
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  for (const file of readdirSync(dir).filter((n) => n.endsWith(".yml"))) {
+    const text = readFileSync(new URL(file, dir), "utf8");
+    const body = text.split(/^jobs:$/m)[1];
+    if (!body) continue;
+    // Job keys sit at exactly two spaces of indentation.
+    const jobs = body.split(/\n(?=  [A-Za-z0-9_-]+:\n)/);
+    for (const job of jobs) {
+      const name = job.trim().split(":")[0];
+      const runsNpm = /\b(npm|npx) /.test(job);
+      if (!runsNpm) continue;
+      assert.match(
+        job,
+        /actions\/setup-node/,
+        `${file}: job "${name}" runs npm without actions/setup-node`,
+      );
+    }
+  }
+});
+
+/**
+ * A key that must hold a mapping — `env:`, `with:` — with nothing under it
+ * is invalid, and GitHub does not fail it the way a broken job fails: the
+ * run is created and dies before any step, in zero seconds, listed under
+ * the file path instead of the workflow's name. Nothing local sees it,
+ * because reading the file is not parsing it (TASK-256 shipped exactly this
+ * — a regex removed the last key from an `env:` and left the header).
+ *
+ * This is not a YAML validator; it is the one shape that editing these
+ * files by pattern actually produces.
+ */
+test("no workflow leaves a mapping key empty", () => {
+  const dir = new URL("../../.github/workflows/", import.meta.url);
+  const BLOCK_KEYS = /^(\s*)(env|with|outputs|defaults):\s*$/;
+  for (const file of readdirSync(dir).filter((n) => n.endsWith(".yml"))) {
+    const lines = readFileSync(new URL(file, dir), "utf8").split("\n");
+    lines.forEach((line, i) => {
+      const match = BLOCK_KEYS.exec(line);
+      if (!match) return;
+      const indent = match[1].length;
+      const next = lines.slice(i + 1).find((l) => l.trim() !== "" && !/^\s*#/.test(l));
+      const nextIndent = next === undefined ? -1 : next.length - next.trimStart().length;
+      assert.ok(
+        next !== undefined && nextIndent > indent,
+        `${file}:${i + 1}: \`${match[2]}:\` has nothing under it`,
+      );
+    });
+  }
 });

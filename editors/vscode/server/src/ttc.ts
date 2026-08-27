@@ -11,7 +11,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 
-import { devPackageCompiler, ttcSpawnEnv } from "./dev";
+import { packageCompiler } from "./install";
 import { engineRequest } from "./engine";
 
 /** A typed check opens a project and starts a compiler; it is slower than
@@ -77,9 +77,20 @@ const CANDIDATE_PATHS = [
 ];
 
 /**
- * Resolve the compiler to run: explicit setting > locally built binary in a
- * workspace root > the ttc of a `file:`-installed local @load28/tt-lang package
- * (a test project set up via `scripts/setup`, see dev.ts) > `ttc` on PATH.
+ * Resolve the compiler to run:
+ *
+ * 1. the explicit `tt.compilerPath` setting;
+ * 2. a binary built in a workspace root — the TT repository itself, open in
+ *    the editor that is developing it;
+ * 3. the ttc of the `@load28/tt-lang` package the project installed, which the
+ *    package resolves itself (install.ts) — a published install, a `file:`
+ *    development install, or `TTC_BINARY`;
+ * 4. `ttc` on PATH.
+ *
+ * Step 3 is how a project that merely *consumes* tt gets a compiler: the one
+ * it installed, the same one `npx ttc` runs. Everything above it is for
+ * someone building the compiler; everything below it is a machine-wide
+ * install.
  */
 export function findCompiler(
   configuredPath: string,
@@ -96,43 +107,38 @@ export function findCompiler(
       }
     }
   }
-  const dev = devPackageCompiler(workspaceRoots);
-  if (dev !== "") return dev;
+  const installed = packageCompiler(workspaceRoots);
+  if (installed !== "") return installed;
   return "ttc";
 }
 
 /**
- * Whether a TypeScript language toolchain is around, from the same places
- * the engine looks: a built typescript-go checkout named by
- * `TTC_TSGO_ROOT`, or the executable an installed TypeScript package ships
- * beside its own files. The engine resolves its own; this mirror exists so
- * the tests can tell "the feature answered nothing" from "the toolchain is
- * missing" — and skip, not fail, on the latter.
+ * Whether a TypeScript language toolchain is around, from the one place
+ * the engine looks: the TypeScript the project installed
+ * (`src/typescript/toolchain.rs`). The engine resolves its own; this mirror
+ * exists so the tests can tell "the feature answered nothing" from "the
+ * toolchain is missing" — and skip, not fail, on the latter.
+ *
+ * A guard that mirrors only part of the compiler's rules answers "no
+ * toolchain" where the compiler finds one, and then a suite skips, or an
+ * unguarded case fails, depending on which half of the rules the machine
+ * happens to satisfy (TASK-217).
  */
 export function findTsgo(workspaceRoots: string[]): string {
-  // The order the compiler itself resolves in (`src/typescript/service.rs`
-  // `service_binary`). A guard that mirrors only part of it answers "no
-  // toolchain" where the compiler finds one — and then a suite skips, or
-  // an unguarded case fails, depending on which half of the rules the
-  // machine happens to satisfy (TASK-217).
-  const named = process.env.TTC_TSGO_BIN;
-  if (named && exists(named)) return named;
-  const root = process.env.TTC_TSGO_ROOT;
-  if (root) {
-    const built = path.join(root, "built/local/tsgo");
-    if (exists(built)) return built;
-  }
-  const sibling = path.join("..", "typescript-go", "built/local/tsgo");
-  if (exists(sibling)) return sibling;
   const platform = `${process.platform}-${process.arch}`;
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  // The published layout: the executable sits in the platform package's
+  // `lib/`, named for its distribution — `typescript` ships `tsc`, the
+  // preview channel ships `tsgo`.
+  const packages: [string, string][] = [
+    [`@typescript/typescript-${platform}`, "tsc"],
+    [`@typescript/native-preview-${platform}`, "tsgo"],
+  ];
   for (const start of [...workspaceRoots, process.cwd()]) {
     let dir = start;
-    while (true) {
-      for (const pkg of [
-        `@typescript/typescript-${platform}`,
-        `@typescript/native-preview-${platform}`,
-      ]) {
-        const exe = path.join(dir, "node_modules", pkg, "lib", "tsc");
+    for (;;) {
+      for (const [pkg, bin] of packages) {
+        const exe = path.join(dir, "node_modules", pkg, "lib", `${bin}${suffix}`);
         if (exists(exe)) return exe;
       }
       const parent = path.dirname(dir);
@@ -212,7 +218,7 @@ function runCheckOnce(
     execFile(
       compiler,
       args,
-      { timeout: 15000, maxBuffer: 4 * 1024 * 1024, env: ttcSpawnEnv(compiler) },
+      { timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
       (err, _stdout, stderr) => {
         if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
           resolve({ kind: "not-found", compiler });
@@ -296,7 +302,7 @@ export function runSymbols(
     execFile(
       compiler,
       ["--symbols", file],
-      { timeout: 15000, maxBuffer: 16 * 1024 * 1024, env: ttcSpawnEnv(compiler) },
+      { timeout: 15000, maxBuffer: 16 * 1024 * 1024 },
       (err, stdout) => {
         if (err) {
           resolve(null);
@@ -431,7 +437,6 @@ function runTypedCheckOnce(
           cwd,
           timeout: TYPED_CHECK_TIMEOUT_MS,
           maxBuffer: 4 * 1024 * 1024,
-          env: ttcSpawnEnv(compiler),
         },
         (err, _stdout, stderr) => {
           const diagnostics = parseStderr(String(stderr), shown);

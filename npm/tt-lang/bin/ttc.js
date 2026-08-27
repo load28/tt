@@ -6,9 +6,8 @@
  *
  * In a local development install (`scripts/setup` in the TT repository,
  * then `pnpm add -D file:.../npm/tt-lang`) the binary is the repository's
- * release build instead, and the TypeScript toolchain setup configured is
- * handed to it as TTC_TSGO_* variables — set on this child process only,
- * never on the user's shell (dev.js).
+ * release build instead (dev.js). Nothing else differs: TypeScript comes
+ * from the consuming project either way.
  * ----------------------------------------------------------------------- */
 "use strict";
 
@@ -18,25 +17,16 @@ const { binaryPath } = require("../index.js");
 const { devEnvironment } = require("../dev.js");
 
 let binary;
-let env = process.env;
 try {
   // TTC_BINARY stays the strongest override, exactly as in binaryPath().
   const dev = process.env.TTC_BINARY ? null : devEnvironment();
-  if (dev) {
-    binary = dev.binary;
-    env = { ...process.env, ...dev.env };
-  } else {
-    binary = binaryPath();
-  }
+  binary = dev ? dev.binary : binaryPath();
 } catch (error) {
   console.error(error.message);
   process.exit(1);
 }
 
-const result = spawnSync(binary, process.argv.slice(2), {
-  stdio: "inherit",
-  env,
-});
+const result = spawnSync(binary, process.argv.slice(2), { stdio: "inherit" });
 if (result.error) {
   console.error(`ttc: failed to run ${binary}: ${result.error.message}`);
   process.exit(1);

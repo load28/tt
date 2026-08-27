@@ -9,6 +9,17 @@ const versions = {
   '@load28/tt-lang': ttChannel,
   '@load28/unplugin-tt': ttChannel,
   vite: '^8.0.0',
+  // ttc drives the TypeScript the project installs and looks nowhere else,
+  // so a scaffolded project has to install one — the exact version this
+  // repository tests against, which is the whole point: a user runs the
+  // compiler against the TypeScript it was verified with, and an upstream
+  // nightly cannot change their build overnight. Not `7`: declaration
+  // output (`ttc --types`, the editor's `.tt.d.ts` sidecars) needs the emit
+  // API that arrived in 7.1, and `7` resolves to the 7.0 line because
+  // ranges do not match prereleases (TASK-256). When 7.1 is released this
+  // moves to `7` everywhere at once, held by
+  // npm/scripts/typescript-version.test.mjs.
+  typescript: "7.1.0-dev.20260826.1",
 }
 
 export function dependencyChannel(packageVersion) {
@@ -102,6 +113,7 @@ export async function createProject(options) {
     devDependencies: {
       '@load28/tt-lang': versions['@load28/tt-lang'],
       '@load28/unplugin-tt': versions['@load28/unplugin-tt'],
+      typescript: versions.typescript,
       vite: versions.vite,
     },
   }
@@ -129,6 +141,7 @@ export async function initializeExisting(options) {
   const bundler = options.bundler === 'auto' ? detectBundler(manifest) : options.bundler
   const devDependencies = manifest.devDependencies ?? {}
   devDependencies['@load28/tt-lang'] ??= versions['@load28/tt-lang']
+  devDependencies.typescript ??= versions.typescript
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
   manifest.scripts['tt:check'] ??= 'ttc --check-types src'

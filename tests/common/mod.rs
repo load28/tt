@@ -49,12 +49,7 @@ pub struct Workspace {
 impl Workspace {
     /// A fresh directory named for `tag`, the process, and the case.
     pub fn new(tag: &str) -> Workspace {
-        let path = std::env::temp_dir().join(format!(
-            "tt-{tag}-{}-{}-{}",
-            std::process::id(),
-            nonce(),
-            SEQ.fetch_add(1, Ordering::SeqCst),
-        ));
+        let path = std::env::temp_dir().join(Workspace::name(tag));
         std::fs::create_dir_all(&path).expect("a writable temporary directory");
         Workspace { path }
     }
@@ -64,6 +59,39 @@ impl Workspace {
         let workspace = Workspace::new(tag);
         std::fs::create_dir_all(workspace.path.join(sub)).expect("a writable temporary directory");
         workspace
+    }
+
+    /// A workspace under the repository's `target/`.
+    ///
+    /// For a case that needs the project to have **dependencies**: a
+    /// TypeScript project resolves its compiler from `node_modules` walking
+    /// upwards (`src/typescript/toolchain.rs`), so a project in the system
+    /// temp directory has none, while one under the repository inherits the
+    /// repository's — exactly as a package of a monorepo inherits its
+    /// root's. The naming, and therefore the collision argument above, is
+    /// unchanged.
+    pub fn in_repo(tag: &str) -> Workspace {
+        let base = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/tt-tests");
+        let path = base.join(Workspace::name(tag));
+        std::fs::create_dir_all(&path).expect("a writable target directory");
+        Workspace { path }
+    }
+
+    /// The same, with `sub` created inside it.
+    pub fn in_repo_with_subdir(tag: &str, sub: &str) -> Workspace {
+        let workspace = Workspace::in_repo(tag);
+        std::fs::create_dir_all(workspace.path.join(sub)).expect("a writable temporary directory");
+        workspace
+    }
+
+    /// The per-run unique directory name (see the module comment).
+    fn name(tag: &str) -> String {
+        format!(
+            "tt-{tag}-{}-{}-{}",
+            std::process::id(),
+            nonce(),
+            SEQ.fetch_add(1, Ordering::SeqCst),
+        )
     }
 
     pub fn path(&self) -> &Path {

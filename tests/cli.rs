@@ -843,11 +843,11 @@ fn a_missing_backend_still_reports_tt_diagnostics() {
          const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n",
     )
     .unwrap();
+    // A temporary directory has no `node_modules` above it, so the project
+    // has no TypeScript and the backend cannot run — the one way to say
+    // that now that a toolchain comes from the project and nowhere else.
     let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(["--check-types", dir.to_str().unwrap()])
-        // Point the toolchain at nothing: the backend cannot run.
-        .env("TTC_TSGO_API", dir.join("nonexistent-api.js"))
-        .env_remove("TTC_TSGO_ROOT")
         .output()
         .expect("failed to run ttc");
     let stderr = String::from_utf8_lossy(&out.stderr);

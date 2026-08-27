@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # scripts/ci — run the merge gates on this machine.
 #
-# GitHub Actions no longer runs CI per push or per pull request; the workflow
-# is manual (see .github/workflows/ci.yml). The gates did not shrink, they
-# moved here, which makes this script the gate rather than a convenience. It
-# mirrors ci.yml stage by stage and every deliberate difference is a comment
-# saying why.
+# GitHub Actions runs the same gates on pushes to main and release-X.Y and
+# on pull requests targeting them (.github/workflows/ci.yml). This script is
+# what you run before asking for that: it mirrors ci.yml stage by stage and
+# every deliberate difference is a comment saying why. Passing here is not a
+# substitute for the hosted run — the workflow files, the release builds and
+# the other platforms only exist there.
 #
 # The stages, in the order they run:
 #
@@ -34,7 +35,6 @@
 set -u
 
 TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-CONFIG="$TT_ROOT/.tt-dev/toolchain.json"
 LOG_DIR="$TT_ROOT/.tt-dev"
 
 ALL_STAGES="agents rust npm native extension"
@@ -162,43 +162,23 @@ require npm
 # resolve it — from the setup choice saved in .tt-dev/toolchain.json. CI
 # installs one per job; here it is whatever this checkout was set up with,
 # and naming it explicitly is what keeps the native suite from skipping.
-TSGO_KIND=""
-if [ -f "$CONFIG" ]; then
-  TSGO_KIND="$(node -e '
-    try {
-      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).kind;
-      if (typeof value === "string") process.stdout.write(value);
-    } catch {}
-  ' "$CONFIG")"
-  TSGO_ROOT="$(node -e '
-    try {
-      const value = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).root;
-      if (typeof value === "string") process.stdout.write(value);
-    } catch {}
-  ' "$CONFIG")"
-  if [ "$TSGO_KIND" = "checkout" ]; then
-    TSGO_BIN="$TSGO_ROOT/built/local/tsgo"
-    TSGO_API="$TSGO_ROOT/_packages/native-preview/dist/api/sync/api.js"
-    if [ -f "$TSGO_BIN" ] && [ -f "$TSGO_API" ]; then
-      export TTC_TSGO_ROOT="$TSGO_ROOT"
-      export TTC_TSGO_BIN="$TSGO_BIN"
-      export TTC_TSGO_API="$TSGO_API"
-    else
-      TSGO_KIND="unbuilt"
-    fi
-  fi
+# A project's TypeScript is the one in its own node_modules and there is no
+# way to name another (src/typescript/toolchain.rs). For this repository
+# that is package.json's pin, installed by `npm ci`.
+TS_VERSION=""
+if [ -f "$TT_ROOT/node_modules/typescript/package.json" ]; then
+  TS_VERSION="$(node -p "require('$TT_ROOT/node_modules/typescript/package.json').version" 2> /dev/null || true)"
 fi
 
 heading "environment"
 note "  root:  $TT_ROOT"
 note "  rust:  $(rustc --version 2> /dev/null || echo 'unknown')"
 note "  node:  $(node --version)"
-case "$TSGO_KIND" in
-  checkout) note "  tsgo:  $TTC_TSGO_ROOT" ;;
-  unbuilt) warn "the configured typescript-go checkout is not built; run ./scripts/setup" ;;
-  npm) warn "toolchain mode is 'npm': there is no local TypeScript 7, so the native stage cannot run" ;;
-  *) warn "no toolchain configured ($CONFIG); run ./scripts/setup" ;;
-esac
+if [ -n "$TS_VERSION" ]; then
+  note "  ts:    $TS_VERSION"
+else
+  warn "TypeScript is not installed (npm ci at the repository root); the native stage cannot run"
+fi
 
 # Tools CI installs before testing. Without them the suites do not fail —
 # they skip, and a skipped suite is green in every other way, which is the
@@ -251,8 +231,8 @@ stage_npm() {
 # missing toolchain is a failure rather than a warning — passing it without
 # one would undo the guard CI put here.
 stage_native() {
-  [ -n "${TTC_TSGO_API:-}" ] || {
-    fail "no TypeScript 7 toolchain: set one up with ./scripts/setup --tsgo-root <path>,
+  [ -n "$TS_VERSION" ] || {
+    fail "no TypeScript: install this repository's dependencies with npm ci,
   or exclude this stage with ./scripts/ci --skip native"
     return 1
   }
@@ -288,25 +268,18 @@ stage_extension() {
   status="${PIPESTATUS[0]}"
   [ "$status" -eq 0 ] || return 1
 
-  # A skip is not a pass. Which skips are legitimate depends on the
-  # toolchain: a released TypeScript 7 cannot emit declarations, but a built
-  # checkout can, so with one configured the whole suite must run — the same
-  # split CI draws between its `extension` and `native` jobs.
-  if [ "$TSGO_KIND" = "checkout" ]; then
-    grep -Eq "^(#|ℹ) skipped 0$" "$log" || {
-      fail "the extension suite skipped a test a built checkout can satisfy (see $log)"
-      return 1
-    }
-  else
-    grep -q "SKIP ttc not on PATH" "$log" && {
-      fail "the extension suite could not find ttc (see $log)"
-      return 1
-    }
-    grep -q "SKIP no tsgo executable" "$log" && {
-      fail "the extension suite could not find tsgo (see $log)"
-      return 1
-    }
-  fi
+  # A skip is not a pass: the two things the suite skips for — a compiler
+  # and a TypeScript — are both present once this checkout is built and its
+  # dependencies installed, so skipping for either is a broken environment,
+  # not a legitimate gap.
+  grep -q "SKIP no ttc" "$log" && {
+    fail "the extension suite could not find ttc (see $log)"
+    return 1
+  }
+  grep -q "SKIP no tsgo executable" "$log" && {
+    fail "the extension suite could not find TypeScript (see $log)"
+    return 1
+  }
   return 0
 }
 
@@ -321,8 +294,8 @@ stage_coverage() {
   rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked"
     return 1
   }
-  [ -n "${TTC_TSGO_API:-}" ] || {
-    fail "no TypeScript 7 toolchain: the baseline was measured with one, so a run
+  [ -n "$TS_VERSION" ] || {
+    fail "no TypeScript: the baseline was measured with one, so a run
   without one would compare two different programs"
     return 1
   }

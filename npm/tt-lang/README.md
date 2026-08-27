@@ -16,17 +16,17 @@ bunx @load28/create-tt@0.3.0 my-app
 bunx @load28/create-tt@0.3.0 init
 ```
 
-During early development, `ttc` uses APIs that are not yet available from an
-official TypeScript npm release. Build a current
-[typescript-go](https://github.com/microsoft/typescript-go) checkout and set
-`TTC_TSGO_ROOT` as described in the
-[installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md)
-before running the compiler. The current TT installer does not add a
-TypeScript npm package.
+`ttc` drives TypeScript 7 and takes it from your project's own
+`node_modules` — the same package your build uses, and the only place it
+looks. The TT installer does not add it for you:
 
 ```sh
-bun add -d @load28/tt-lang@0.3.0
+bun add -d @load28/tt-lang@0.3.0 typescript@7.1.0-dev.20260826.1
 ```
+
+Declaration output (`ttc --types`, editor `.tt.d.ts` sidecars) uses an API
+that arrived in TypeScript 7.1; everything else works on 7.0. See the
+[installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md).
 
 ```sh
 bunx ttc -o build src/     # compile a source tree to TypeScript
@@ -72,17 +72,17 @@ binaryPath(); // absolute path to the ttc binary for this platform
 ## Local development install
 
 In a checkout of the [tt repository](https://github.com/load28/tt),
-`./scripts/setup --tsgo-root /path/to/typescript-go` stamps this directory for local installs. A project can
+`./scripts/setup` stamps this directory for local installs. A project can
 then use the work-in-progress compiler like any other dependency:
 
 ```sh
 pnpm add -D file:/path/to/tt/npm/tt-lang
 ```
 
-The launcher runs the repository's `target/release/ttc` and, when setup was
-pointed at a typescript-go checkout, hands that toolchain to the spawned
-compiler process only — your shell environment is never modified. Published
-installs are unaffected (the stamp file is not committed or published).
+The launcher runs the repository's `target/release/ttc`; TypeScript still
+comes from the consuming project, exactly as it does for a published
+install. Published installs are unaffected (the stamp file is not committed
+or published).
 
 ## Documentation
 

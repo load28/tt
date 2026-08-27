@@ -19,21 +19,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { findTsgo } from "./toolchain";
+import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 const SERVER = path.join(__dirname, "..", "server.js");
-const COMPILER = "ttc";
-
-function compilerAvailable(): boolean {
-  try {
-    execFileSync(COMPILER, ["-v"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const skip = compilerAvailable() ? false : "ttc not on PATH";
+const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** Answers that need the TypeScript language service. A skip must mean a
  * tool is missing, never that a feature quietly answered nothing — so the
  * cases below that ask TypeScript guard on tsgo as well as on ttc. */
@@ -121,7 +111,7 @@ function connect(): Client {
 
 /** A server with `source` open as a tt-family document, ready to be asked. */
 async function open(source: string, languageId: "tt" | "ttx" = "tt") {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-server-test-"));
+  const dir = caseDir("tt-server-test-");
   const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
   const uri = pathToFileURL(file).toString();

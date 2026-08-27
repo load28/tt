@@ -18,6 +18,9 @@
 //!
 //! - [`backend::TypeScriptBackend`] is the seam. tt features speak to it in
 //!   tt's own terms (queries and answers), never in the compiler's.
+//! - [`toolchain`] answers *which* TypeScript 7 and where its files are —
+//!   one order and one layout, read by both halves below, because they are
+//!   two halves of one install.
 //! - [`native`] is the only module that knows how the compiler is reached
 //!   (a `tsgo` API server, driven through the host script it was built
 //!   with). Its instability is contained here.
@@ -35,3 +38,4 @@ pub(crate) mod backend;
 pub(crate) mod mapper;
 pub(crate) mod native;
 pub(crate) mod service;
+pub(crate) mod toolchain;

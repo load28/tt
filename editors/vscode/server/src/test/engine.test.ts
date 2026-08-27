@@ -16,9 +16,10 @@ import * as path from "node:path";
 import * as engine from "../engine";
 import { positionAt, sliceOf, spanOf } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 const skip = !compilerAvailable()
-  ? "ttc not on PATH"
+  ? "no ttc — none built, installed, or on PATH"
   : findTsgo() === null
     ? "no tsgo executable"
     : false;
@@ -42,7 +43,7 @@ const RENDER = [
 ].join("\n");
 
 function workspace(): { dir: string; tt: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-engine-test-"));
+  const dir = caseDir("tt-engine-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),
@@ -86,7 +87,7 @@ const TTX_SOURCE = [
 ].join("\n");
 
 function ttxWorkspace(): { dir: string; ttx: string } {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ttx-engine-test-"));
+  const dir = caseDir("ttx-engine-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),
@@ -418,7 +419,7 @@ test("a closed document is the disk's again", { skip }, async () => {
 
 /* Hints need no TypeScript at all — they are the parse-only surface, like
  * semantic tokens — so they answer wherever ttc itself is available. */
-const skipTtOnly = compilerAvailable() ? false : "ttc not on PATH";
+const skipTtOnly = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 
 const DEAD_ARM = [
   "variant Shape {",

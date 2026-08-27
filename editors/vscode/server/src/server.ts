@@ -124,7 +124,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 });
 
 connection.onInitialized(() => {
-  // Nothing further; settings are pulled per-request when supported.
+  // The engine session is keyed by the compiler path, and the document
+  // sync that starts it cannot await settings — so `tt.compilerPath` is
+  // resolved once here, before the first buffer arrives.
+  void refreshCompiler();
 });
 
 // ---------------------------------------------------------------- settings
@@ -147,7 +150,7 @@ const DEFAULT_SETTINGS: TtSettings = {
   sidecarDir: "",
 };
 
-async function getSettings(uri: string): Promise<TtSettings> {
+async function getSettings(uri?: string): Promise<TtSettings> {
   if (!hasConfigurationCapability) return DEFAULT_SETTINGS;
   const conf = (await connection.workspace.getConfiguration({
     scopeUri: uri,
@@ -165,12 +168,18 @@ async function getSettings(uri: string): Promise<TtSettings> {
 
 connection.onDidChangeConfiguration(() => {
   warnedCompilerMissing = false;
+  // `tt.compilerPath` may be what changed, and a compiler that struck out
+  // has earned another try either way.
+  engine.retryEngineServer();
+  void refreshCompiler();
   for (const doc of documents.all()) scheduleValidation(doc);
 });
 
 connection.onDidChangeWatchedFiles(() => {
   // A freshly built ttc appeared (or changed) — try validating again.
   warnedCompilerMissing = false;
+  engine.retryEngineServer();
+  void refreshCompiler();
   for (const doc of documents.all()) scheduleValidation(doc);
 });
 
@@ -246,6 +255,24 @@ let servedCompiler: string | null = null;
 
 function currentCompiler(): string {
   return servedCompiler ?? ttc.findCompiler("", workspaceRoots);
+}
+
+/**
+ * Resolves the compiler from configuration and remembers it. One engine
+ * session serves the window, so the setting is read at the first workspace
+ * folder's scope; a folder that configures its own path is served the
+ * moment one of its files is validated ([validate]).
+ *
+ * The engine session is keyed by the compiler, so a change of path starts a
+ * new session by itself; every open buffer is re-sent to it
+ * (`setOnSessionStart`).
+ */
+async function refreshCompiler(): Promise<void> {
+  const scope = workspaceRoots[0]
+    ? URI.file(workspaceRoots[0]).toString()
+    : undefined;
+  const settings = await getSettings(scope);
+  servedCompiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
 }
 
 const logEngine = (message: string) => connection.console.warn(message);

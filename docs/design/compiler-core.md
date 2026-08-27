@@ -32,8 +32,9 @@ TypeScript 타입 체커를 재구현하지 않는다.
 2. 파서는 무오류(infallible) 구조 파서로 유지한다. 완전히 파싱된 tt 구문만
    AST로 올린다.
 3. 생성물은 runtime/type trick 없는 plain TypeScript다 (계약 2).
-4. tsgo 세부사항은 `src/typescript/native.rs`·`service.rs` 밖으로 새지
-   않는다 — `backend.rs`의 Query/Answers seam이 경계다.
+4. tsgo 세부사항은 `src/typescript/` 밖으로 새지 않는다 — 도달 방법은
+   `native.rs`(API 서버)와 `service.rs`(언어 서버)가, *어느* TypeScript인지는
+   `toolchain.rs`가 알고, `backend.rs`의 Query/Answers seam이 경계다.
 5. CLI·server·editor는 최종적으로 동일한 engine semantic result를 소비한다.
 6. 기존 `compile()` 공개 API와 현재 출력 형태는 마이그레이션 기간 동안
    호환을 유지한다.
