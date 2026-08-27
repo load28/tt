@@ -261,7 +261,8 @@
 | TASK-251 | TypeScript 방식의 고유한 Nightly 버전 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-251](./TASK-251-unique-nightly-versions.md) |
 | TASK-252 | Stable 0.3 사용자 설치 가이드 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-252](./TASK-252-stable-0.3-user-guide.md) |
 | TASK-253 | main 수동 Nightly dispatch | 완료 | 2026-08-27 | 2026-08-27 | [TASK-253](./TASK-253-manual-nightly-dispatch.md) |
+| TASK-254 | 릴리스 smoke test의 variant 전환 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-254](./TASK-254-release-smoke-variant.md) |
 
 ## 다음 태스크 번호
 
-**TASK-254**
+**TASK-255**

@@ -134,7 +134,7 @@ jobs:
       - name: Smoke-test the promoted compiler
         run: |
           test "$(dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version)" = "$VERSION"
-          printf 'enum E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/release-smoke.tt
+          printf 'variant E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/release-smoke.tt
           dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/release-smoke.tt | grep -q 'kind: "A"'
       - name: Publish immutable npm packages
         env:
