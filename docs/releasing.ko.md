@@ -122,8 +122,10 @@ GitHub prerelease로 자동 게시합니다. `N`은 GitHub Actions 실행 번호
 고정한 TypeScript 나이틀리와 같은 커밋에서 빌드한 VS Code 확장으로, 마켓플레이스의
 TypeScript Native Preview가 content mapper를 싣기 전까지의 에디터 짝입니다
 (TASK-258). 확장 버전은 핀에서 유도되므로(`7.1.0-dev.YYYYMMDD.N` →
-`0.YYYYMMDD.N`) 핀이 움직일 때만 바뀝니다. 7.1 정식과 함께 마켓플레이스 판이
-매퍼를 실으면 이 동봉은 제거합니다.
+`0.YYYYMMDD.N`) 핀이 움직일 때만 바뀝니다. 확장 ID는 업스트림 그대로
+(`TypeScriptTeam.native-preview`)입니다 — 내장 TypeScript 확장이 그 ID에만
+양보하기 때문이며(TASK-259), 마켓플레이스 정식 프리뷰가 매퍼를 실으면 같은
+ID의 자동 업데이트가 이 빌드를 교체하고 이 동봉은 제거합니다.
 
 예약 실행 전에 현재 `main`을 Nightly로 게시해야 하면 CI를 수동 실행합니다.
 

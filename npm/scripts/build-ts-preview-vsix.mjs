@@ -37,11 +37,20 @@ export const PLATFORMS = [
   { target: "win32-x64", npmPackage: "@typescript/typescript-win32-x64" },
 ];
 
-/** The extension's identity: ours, with the provenance in the open. */
+/** The extension's identity: the upstream id, on purpose.
+ *
+ * VS Code's built-in TypeScript extension yields its semantic service only
+ * when `useTsgo` is set AND an extension from its hardcoded list —
+ * `typescriptteam.vscode-typescript`, `typescriptteam.native-preview` — is
+ * installed (TASK-259). A renamed id therefore leaves two servers running
+ * and the built-in reports TS2307 on every `.tt` import. This build is a
+ * stopgap the marketplace release supersedes (same id, higher version →
+ * auto-update replaces it), never something tt distributes as its own
+ * product; the description carries the provenance. */
 export const EXTENSION_IDENTITY = {
-  publisher: "load28",
-  name: "tt-typescript-preview",
-  displayName: "TypeScript Preview (tt build)",
+  publisher: "TypeScriptTeam",
+  name: "native-preview",
+  displayName: "TypeScript (Native Preview)",
 };
 
 /**

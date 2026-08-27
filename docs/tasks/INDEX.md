@@ -267,6 +267,8 @@
 | TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 완료 | 2026-08-27 | 2026-08-27 | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 | TASK-258 | TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-258](./TASK-258-ts-preview-vsix.md) |
 
+| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 진행 중 | 2026-08-27 | — | [TASK-259](./TASK-259-upstream-extension-id.md) |
+
 ## 다음 태스크 번호
 
-**TASK-259**
+**TASK-260**
