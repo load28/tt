@@ -256,7 +256,7 @@
 | TASK-246 | GitHub Discussion·PR 숙의 봇 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-246](./TASK-246-pr-review-deliberation.md) |
 | TASK-247 | 공식 홈페이지 Google Analytics | 완료 | 2026-08-27 | 2026-08-27 | [TASK-247](./TASK-247-google-analytics.md) |
 | TASK-248 | 공식 홈페이지 `variant` 전환 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-248](./TASK-248-website-variant-content.md) |
-| TASK-249 | 비태스크 파일 `variant` 계약 정합성 | 진행 중 | 2026-08-27 | — | [TASK-249](./TASK-249-variant-contract-cleanup.md) |
+| TASK-249 | 비태스크 파일 `variant` 계약 정합성 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-249](./TASK-249-variant-contract-cleanup.md) |
 
 ## 다음 태스크 번호
 
