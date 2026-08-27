@@ -9,13 +9,12 @@ import { createProject, dependencyChannel, detectBundler, initializeExisting, ru
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const expectedDependencyChannel = dependencyChannel(ownManifest.version)
 
-/** The TypeScript this repository pins — a scaffolded project gets the same
- * one, so what a user's editor and build drive is what the compiler is
- * tested against (TASK-256). */
-const repositoryManifest = JSON.parse(
-  await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
-)
-const pinnedTypeScript = repositoryManifest.devDependencies.typescript
+/** What a scaffolded project installs. `next` rather than the exact nightly
+ * this repository pins: a user's project should not carry the version that
+ * happened to be current the day we wrote it, and a `7` range would resolve
+ * to the 7.0 line, whose client cannot emit declarations (TASK-256).
+ * `npm/scripts/typescript-version.test.mjs` holds the docs to the same spec. */
+const scaffoldedTypeScript = 'next'
 
 test('keeps dependencies on the installer release channel', () => {
   assert.equal(dependencyChannel('0.3.0-dev.20260826'), 'next')
@@ -33,7 +32,7 @@ test('creates a complete Vite project without installing', async () => {
   assert.equal(result.packageManager, 'bun')
   assert.equal(manifest.scripts.check, 'ttc --check-types src')
   assert.equal(manifest.devDependencies['@load28/unplugin-tt'], expectedDependencyChannel)
-  assert.equal(manifest.devDependencies.typescript, pinnedTypeScript)
+  assert.equal(manifest.devDependencies.typescript, scaffoldedTypeScript)
   assert.match(await readFile(join(root, 'vite.config.ts'), 'utf8'), /@load28\/unplugin-tt\/vite/)
   assert.equal(await readFile(join(root, 'src/main.ts'), 'utf8'), "import './app.tt'\n")
   const appSource = await readFile(join(root, 'src/app.tt'), 'utf8')
@@ -73,7 +72,7 @@ test('initializes Vite through a wrapper and preserves the user config', async (
   assert.equal(manifest.scripts.dev, 'vite')
   assert.match(manifest.scripts['tt:build'], /tt\.vite\.config\.mjs/)
   assert.equal(manifest.devDependencies['@load28/tt-lang'], expectedDependencyChannel)
-  assert.equal(manifest.devDependencies.typescript, pinnedTypeScript)
+  assert.equal(manifest.devDependencies.typescript, scaffoldedTypeScript)
   const wrapper = await readFile(join(root, 'tt.vite.config.mjs'), 'utf8')
   assert.match(wrapper, /import base from '.\/vite\.config\.ts'/)
   assert.match(wrapper, /plugins: \[tt\(\), \.\.\.\(config\.plugins/)
