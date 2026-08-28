@@ -12,8 +12,8 @@ For a complete Bun + Vite project, or to add tt to an existing TypeScript
 project, use the initializer instead:
 
 ```sh
-bunx @load28/create-tt@0.3.0 my-app
-bunx @load28/create-tt@0.3.0 init
+bunx @load28/create-tt@next my-app
+bunx @load28/create-tt@next init
 ```
 
 `ttc` drives TypeScript 7 and takes it from your project's own

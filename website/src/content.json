@@ -101,7 +101,7 @@
         "en": "Use create-tt to configure the compiler, TypeScript, bundler integration, and project scripts.",
         "ko": "create-tt으로 컴파일러, TypeScript, 번들러 연동, 프로젝트 스크립트를 구성합니다."
       },
-      "code": "bunx @load28/create-tt@0.3.0 my-app\ncd my-app\nbun run dev",
+      "code": "bunx @load28/create-tt@next my-app\ncd my-app\nbun run dev",
       "works": {
         "en": [
           "New projects use Vite, TypeScript, and Bun.",
@@ -126,7 +126,7 @@
             "en": "Create a ready-to-run Vite and TypeScript project.",
             "ko": "바로 실행할 수 있는 Vite와 TypeScript 프로젝트를 만듭니다."
           },
-          "code": "bunx @load28/create-tt@0.3.0 my-app\ncd my-app\nbun run dev"
+          "code": "bunx @load28/create-tt@next my-app\ncd my-app\nbun run dev"
         },
         {
           "title": {
@@ -137,7 +137,7 @@
             "en": "Run init from the package root, then check the tt source tree.",
             "ko": "패키지 루트에서 init을 실행한 뒤 tt 소스 트리를 검사합니다."
           },
-          "code": "bunx @load28/create-tt@0.3.0 init\nbun run tt:check"
+          "code": "bunx @load28/create-tt@next init\nbun run tt:check"
         },
         {
           "title": {
@@ -760,22 +760,22 @@
         "ko": "릴리스 절차"
       },
       "summary": {
-        "en": "tt follows TypeScript's single-main development line: Nightlies come from main, while each release line is stabilized from Beta through patches.",
-        "ko": "tt은 TypeScript의 단일 main 개발선을 따릅니다. Nightly는 main에서 만들고, 각 릴리스 라인은 Beta부터 Patch까지 안정화합니다."
+        "en": "tt is in early development. Only Nightly builds from main are published, and every npm installation uses the next channel.",
+        "ko": "tt은 초기 개발 단계입니다. main의 Nightly 빌드만 게시하며 모든 npm 설치에는 next 채널을 사용합니다."
       },
-      "code": "# release-0.4\n0.4.0-beta  →  0.4.1-rc  →  0.4.2  →  0.4.3\n    Beta            RC       Stable     Patch",
+      "code": "bunx @load28/create-tt@next my-app\nbun add -d @load28/tt-lang@next @load28/unplugin-tt@next",
       "works": {
         "en": [
-          "Nightly publishes the scheduled main CI automatically to npm next.",
-          "Beta, RC, Stable, and Patch use one long-lived release-X.Y branch.",
-          "Release preparation pushes a version commit; that push starts CI automatically.",
-          "A production approval publishes only the successful CI artifacts."
+          "Scheduled or manually dispatched main CI builds can publish a Nightly.",
+          "Every npm package is published under the next dist-tag.",
+          "Each Nightly is attached to a GitHub pre-release.",
+          "Formal Beta, RC, Stable, and Patch publishing is disabled."
         ],
         "ko": [
-          "Nightly는 예약된 main CI를 npm next로 자동 게시합니다.",
-          "Beta, RC, Stable, Patch는 하나의 장기 release-X.Y 브랜치를 사용합니다.",
-          "릴리스 준비 액션이 버전 커밋을 push하고, 그 push가 CI를 자동 시작합니다.",
-          "production 승인은 성공한 CI 산출물만 게시합니다."
+          "예약되었거나 수동 실행된 main CI 빌드만 Nightly를 게시할 수 있습니다.",
+          "모든 npm 패키지는 next dist-tag로 게시합니다.",
+          "각 Nightly는 GitHub pre-release에 첨부합니다.",
+          "Beta, RC, Stable, Patch 정식 게시는 비활성화되어 있습니다."
         ]
       },
       "limits": {
@@ -785,47 +785,36 @@
       "sections": [
         {
           "title": {
-            "en": "What work belongs in each stage?",
-            "ko": "각 단계에는 어떤 변경을 넣습니까?"
+            "en": "Where does release work land?",
+            "ko": "릴리스 변경은 어디에 넣습니까?"
           },
           "body": {
-            "en": "Put features, breaking changes, and ordinary fixes into main early in Beta. RC is for fixes and remaining editor work. After RC, restrict the release line to high-priority fixes; patches are for safe regressions and performance or editor fixes that should not wait for the next minor.",
-            "ko": "새 기능·큰 변경·일반 수정은 Beta 초기에 main에 넣습니다. RC에는 버그 수정과 남은 에디터 연동을 넣습니다. RC 뒤 릴리스 라인은 높은 우선순위 수정으로 제한하고, Patch에는 다음 minor까지 기다리기 어려운 안전한 회귀·성능·에디터 수정을 넣습니다."
+            "en": "All development lands in main through reviewed pull requests. There is no active formal release branch while tt remains Nightly-only.",
+            "ko": "모든 개발 변경은 리뷰된 pull request를 통해 main에 들어갑니다. Nightly 전용 기간에는 활성 정식 릴리스 브랜치를 두지 않습니다."
           },
-          "code": "# Beta: main accepts feature work\n# RC: fixes and remaining editor work\n# Stable / Patch: prioritized safe fixes only"
+          "code": "git switch main\ngit pull --ff-only origin main"
         },
         {
           "title": {
-            "en": "How does branching work?",
-            "ko": "브랜치는 어떻게 사용합니까?"
+            "en": "How is a Nightly built?",
+            "ko": "Nightly는 어떻게 빌드합니까?"
           },
           "body": {
-            "en": "Development normally lands in main through a squash-merged PR. Create release-X.Y from main for Beta. Sync main into that release branch during Beta and before RC. After RC, do not merge main wholesale: cherry-pick only the required main PR commit into release-X.Y.",
-            "ko": "일반 개발은 PR을 squash merge해 main에 넣습니다. Beta에서 main을 기준으로 release-X.Y를 만듭니다. Beta와 RC 직전에는 main을 해당 브랜치에 sync합니다. RC 뒤에는 main 전체를 병합하지 않고, 필요한 PR의 squash merge 커밋만 release-X.Y에 cherry-pick합니다."
+            "en": "Scheduled or manually dispatched main CI creates one immutable artifact set. The source version is converted to a unique development version for that run.",
+            "ko": "예약 또는 수동 실행된 main CI가 하나의 불변 산출물 세트를 만듭니다. 소스 버전은 해당 실행의 고유 개발 버전으로 변환됩니다."
           },
-          "code": "git switch release-0.4\ngit cherry-pick <main-squash-merge-commit>\ngit push origin HEAD:release-0.4"
+          "code": "# source: 1.0.0\n# artifact: 1.0.0-dev.YYYYMMDD.N"
         },
         {
           "title": {
-            "en": "What is the release command sequence?",
-            "ko": "릴리스 액션 순서는 무엇입니까?"
+            "en": "How is a Nightly published?",
+            "ko": "Nightly는 어떻게 게시합니까?"
           },
           "body": {
-            "en": "The three commands have separate boundaries, matching TypeScript's create, sync, and bump commands. They create the release branch, merge main, and advance the version respectively. The App identity pushes the resulting commit; do not create a version commit or dispatch CI yourself.",
-            "ko": "세 액션은 TypeScript의 create·sync·bump 경계를 그대로 나눕니다. 각각 릴리스 브랜치 생성, main 병합, 버전 증가를 담당합니다. App 신원이 결과 커밋을 push하므로 사람이 버전 커밋이나 CI dispatch를 만들지 않습니다."
+            "en": "Publish Release reuses the successful CI artifacts, publishes every npm package with next, and creates a GitHub pre-release with the matching immutable version.",
+            "ko": "Publish Release는 성공한 CI 산출물을 재사용하고 모든 npm 패키지를 next로 게시하며 같은 불변 버전의 GitHub pre-release를 만듭니다."
           },
-          "code": "gh workflow run new-release-branch.yml --ref main -f line=0.4\ngh workflow run sync-release-branch.yml --ref main -f line=0.4\ngh workflow run bump-release-version.yml --ref main -f line=0.4"
-        },
-        {
-          "title": {
-            "en": "When is a release actually published?",
-            "ko": "실제 게시는 언제 일어납니까?"
-          },
-          "body": {
-            "en": "A release-branch push starts CI. On success, Publish Release takes that CI's immutable artifacts and waits at the production environment. A reviewer publishes by selecting Approve and deploy. Do not approve an intermediate sync CI that still has an already-published version; bump first to create the next publishable version.",
-            "ko": "릴리스 브랜치 push가 CI를 시작합니다. 성공하면 Publish Release가 그 CI의 불변 산출물을 가져와 production Environment에서 대기합니다. 승인자는 Approve and deploy를 눌러 게시합니다. 이미 게시한 버전과 같은 sync CI는 중간 검증이므로 승인하지 말고, 먼저 bump하여 다음 게시 버전을 만듭니다."
-          },
-          "code": "# CI succeeds → Publish Release waits in production\n# Approve and deploy → npm beta / rc / latest + GitHub Release"
+          "code": "npm install --save-dev @load28/tt-lang@next @load28/unplugin-tt@next"
         }
       ]
     }

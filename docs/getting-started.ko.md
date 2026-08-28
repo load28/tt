@@ -7,7 +7,7 @@
 첫 `.tt` 모듈이 포함된 Vite + TypeScript 프로젝트를 만듭니다.
 
 ```sh
-bunx @load28/create-tt@0.3.0 my-app
+bunx @load28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -16,7 +16,7 @@ bun run dev
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@0.3.0 init
+bunx @load28/create-tt@next init
 bun run tt:check
 ```
 
@@ -30,10 +30,10 @@ bun run tt:check
 비대화형 실행 옵션은 다음과 같습니다.
 
 ```sh
-bunx @load28/create-tt@0.3.0 init --bundler vite
-bunx @load28/create-tt@0.3.0 init --bundler none
-bunx @load28/create-tt@0.3.0 init --no-install
-bunx @load28/create-tt@0.3.0 init --package-manager bun
+bunx @load28/create-tt@next init --bundler vite
+bunx @load28/create-tt@next init --bundler none
+bunx @load28/create-tt@next init --no-install
+bunx @load28/create-tt@next init --package-manager bun
 ```
 
 새 프로젝트는 Bun을 사용합니다. 기존 프로젝트는 `packageManager` 필드나

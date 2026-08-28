@@ -3,14 +3,14 @@
 Create a ready-to-run Vite + TypeScript + tt project:
 
 ```sh
-bunx @load28/create-tt@0.3.0 my-app
+bunx @load28/create-tt@next my-app
 ```
 
 Add tt to an existing TypeScript project. The initializer detects Vite,
 Rollup, Rolldown, webpack, Rspack, esbuild, or Farm from `package.json`:
 
 ```sh
-bunx @load28/create-tt@0.3.0 init
+bunx @load28/create-tt@next init
 ```
 
 The initializer updates `package.json` structurally. For bundlers with a
@@ -25,10 +25,10 @@ registry through the entire bootstrap:
 
 ```sh
 BUN_CONFIG_REGISTRY=http://127.0.0.1:4873 \
-  bunx @load28/create-tt@latest my-app --registry http://127.0.0.1:4873
+  bunx @load28/create-tt@next my-app --registry http://127.0.0.1:4873
 ```
 
-The `0.3.0` initializer installs the officially published stable channels of
+The Nightly initializer installs the `next` channels of
 `@load28/tt-lang` and `@load28/unplugin-tt`. The current TypeScript toolchain
 prerequisite is documented in the repository
 [installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md).

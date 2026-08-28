@@ -29,7 +29,7 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 ### New project
 
 ```sh
-bunx @load28/create-tt@0.3.0 my-app
+bunx @load28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -38,7 +38,7 @@ bun run dev
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@0.3.0 init
+bunx @load28/create-tt@next init
 bun run tt:check
 ```
 
