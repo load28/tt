@@ -262,6 +262,41 @@ fn an_imported_field_error_is_a_tt_diagnostic_at_the_field_token() {
 }
 
 #[test]
+fn an_imported_case_error_survives_a_wildcard_arm() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function fee(method: PaymentMethod): number {\n\
+         \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { fee } from \"./payment.tt\";\nvoid fee;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("payment.tt(4,27): error tt25") && text.contains("has no case `Crad`"),
+        "expected the mapper's source-level case diagnostic, got:\n{text}"
+    );
+    assert!(
+        !text.contains("TS2678"),
+        "the mapper must not add the generated consequence:\n{text}"
+    );
+}
+
+#[test]
 fn a_type_error_inside_glue_reports_at_the_construct() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

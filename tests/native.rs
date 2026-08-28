@@ -1095,6 +1095,45 @@ fn a_reported_imported_field_error_owns_only_its_match_exhaustiveness() {
 }
 
 #[test]
+fn an_imported_case_near_miss_is_reported_with_a_wildcard_on_typed_paths() {
+    require_tsgo!();
+    let source = "import { PaymentMethod } from \"./domain.tt\";\n\
+        export function fee(method: PaymentMethod): number {\n\
+        \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+        ),
+        ("src/payment.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("has no case `Crad`")
+            && out.contains("a case with a similar name exists: `Card`")
+            && !out.contains("ts2678"),
+        "the typed CLI reports the source cause only: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/payment.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let case = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "unknown-case")
+        .unwrap_or_else(|| panic!("missing imported case diagnostic: {answer}"));
+    assert_eq!(source_slice(source, case), "Crad");
+    assert_eq!(case["suggestions"][0]["edit"]["replacement"], "Card");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "ts2678"),
+        "the source cause owns its generated consequence: {answer}"
+    );
+}
+
+#[test]
 fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
     require_tsgo!();
     let dir = project(&[(

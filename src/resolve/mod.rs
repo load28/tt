@@ -25,8 +25,7 @@
 use std::collections::HashMap;
 
 use crate::hir::{
-    self, Arena, DefId, FieldBinding, HirFile, NodeId, Pat, PatternId, PatternSiteId, SiteKind,
-    Span,
+    self, Arena, DefId, FieldBinding, HirFile, NodeId, Pat, PatternId, PatternSiteId, Span,
 };
 
 /// An imported declaration as the resolver receives it: the name it is
@@ -502,7 +501,6 @@ impl Resolver {
 
     fn resolve_site(&mut self, hir: &HirFile, site_id: PatternSiteId) {
         let site = &hir.sites[site_id];
-        let single_pattern = matches!(site.kind, SiteKind::IfLet | SiteKind::LetElse);
         let positions = site.subjects.len();
         let mut subjects: Vec<Option<DefId>> = Vec::with_capacity(positions);
         for position in 0..positions {
@@ -514,10 +512,12 @@ impl Resolver {
             }
             let subject = self.identify(&tags);
             // Resolve this position's constructor uses against the
-            // identified variant — or, for a statement site whose evidence is
-            // a **single** tag, under the strict one-edit licence (an
-            // or-pattern's several tags are match-grade evidence, so they
-            // go through `identify` like an arm list and get no licence).
+            // identified variant — or, when this position has exactly one
+            // named constructor, under the strict one-edit licence. A
+            // wildcard contributes no name evidence, so adding one can
+            // change coverage but never name resolution. Several named
+            // constructors are match-grade evidence and go through
+            // `identify`; they get no fallback licence.
             match subject {
                 Some(variant_def) => {
                     for arm in &site.arms {
@@ -531,7 +531,7 @@ impl Resolver {
                         );
                     }
                 }
-                None if single_pattern && tags.len() == 1 => {
+                None if tags.len() == 1 => {
                     for arm in &site.arms {
                         self.report_near_miss(hir, site_id, arm.pattern);
                     }
@@ -762,9 +762,9 @@ impl Resolver {
         }
     }
 
-    /// The single-pattern near-miss licence: one tag is thin evidence, so
-    /// an unidentified `if let`/let-else tag is reported only when exactly
-    /// one variant has a case a *single* edit away (transposition included).
+    /// The single-constructor near-miss licence: one tag is thin evidence, so
+    /// it is reported only when exactly one visible variant has a case a
+    /// *single* edit away (transposition included).
     fn report_near_miss(&mut self, hir: &HirFile, site: PatternSiteId, pattern: PatternId) {
         let Pat::Constructor { path, .. } = &hir.patterns[pattern] else {
             return;

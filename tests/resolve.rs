@@ -171,6 +171,45 @@ fn imported_payload_fields_resolve_with_their_source_declaration() {
 }
 
 #[test]
+fn a_wildcard_does_not_hide_a_unique_single_case_near_miss() {
+    let externs = [ExternVariant {
+        name: "PaymentMethod".to_string(),
+        generics: String::new(),
+        cases: vec![ExternVariantCase {
+            tag: "Card".to_string(),
+            fields: Some(vec![ExternVariantField {
+                name: "brand".to_string(),
+                optional: false,
+                ty: "string".to_string(),
+            }]),
+        }],
+        from: Some("./domain.tt".to_string()),
+    }];
+    let source = "const fee = match (method) { Crad(brand) => 1, _ => 0 };\n";
+    let (hir, resolution) = resolved(source, &externs);
+    let unresolved = resolution.unresolved.first().expect("case misspelling");
+    assert_eq!(unresolved.kind, UseKind::Case);
+    assert_eq!(unresolved.name, "Crad");
+    assert_eq!(unresolved.suggestion, "Card");
+    assert_eq!(span_text(source, &hir, unresolved.node), "Crad");
+
+    let ambiguous = ["Left", "Right"].map(|name| ExternVariant {
+        name: name.to_string(),
+        generics: String::new(),
+        cases: vec![ExternVariantCase {
+            tag: "Card".to_string(),
+            fields: None,
+        }],
+        from: None,
+    });
+    let (_, resolution) = resolved(source, &ambiguous);
+    assert!(
+        resolution.unresolved.is_empty(),
+        "an ambiguous replacement is not a diagnostic"
+    );
+}
+
+#[test]
 fn unknown_case_suggestions_stay_in_the_identified_variants_domain() {
     // `Circel` misses in Shape; Other also has a `Circle`. The suggestion
     // must come from Shape (the identified subject), and resolution must

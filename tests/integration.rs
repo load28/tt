@@ -1799,6 +1799,38 @@ fn cli_diagnoses_fields_against_imported_variant_declarations() {
 }
 
 #[test]
+fn cli_diagnoses_an_imported_case_even_with_a_wildcard() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\
+         export function fee(method: PaymentMethod): number {\n\
+         \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--check", "payment.tt"]);
+    assert!(!ok, "expected the imported case error:\n{err}");
+    assert!(
+        err.contains(
+            "error[unknown-case]: variant PaymentMethod (imported from \"./domain.tt\") \
+             has no case `Crad`"
+        ),
+        "{err}"
+    );
+    assert!(
+        err.contains("a case with a similar name exists: `Card`"),
+        "{err}"
+    );
+}
+
+#[test]
 fn cli_skips_unresolvable_imports_silently() {
     // A missing module is tsc's problem (TS2307); the match simply stays
     // unchecked, as before phase 2.
