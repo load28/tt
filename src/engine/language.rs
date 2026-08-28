@@ -889,7 +889,14 @@ impl Project {
                     break;
                 }
             }
-            if let Some((anchor, class)) = glue.and_then(|anchor| {
+            // The whole-pipeline anchor shares its kind with the step
+            // anchors but not their meaning: only a step anchor (one
+            // carrying a producer context) may speak in step vocabulary —
+            // the same gate the CLI report applies.
+            let translates = |anchor: &crate::EmitAnchor| {
+                anchor.kind != crate::AnchorKind::Pipe || anchor.context.is_some()
+            };
+            if let Some((anchor, class)) = glue.filter(translates).and_then(|anchor| {
                 crate::engine::semantics::translation_class(anchor.kind, code)
                     .map(|class| (anchor, class))
             }) && !translated_seen.insert((anchor.src, anchor.kind, class))
@@ -910,23 +917,25 @@ impl Project {
                         .declarations
                         .clone()
                 });
-                let entry =
-                    match crate::engine::semantics::translate(anchor.kind, code, &raw, declared) {
-                        Some(said) => ServiceDiagnostic {
-                            range,
-                            message: said,
-                            code,
-                            warning: severity == 2,
-                            related: related.clone(),
-                        },
-                        None => ServiceDiagnostic {
-                            range,
-                            message: format!("{raw} (in code ttc generated for this construct)"),
-                            code,
-                            warning: severity == 2,
-                            related: related.clone(),
-                        },
-                    };
+                let translated = translates(&anchor)
+                    .then(|| crate::engine::semantics::translate(anchor.kind, code, &raw, declared))
+                    .flatten();
+                let entry = match translated {
+                    Some(said) => ServiceDiagnostic {
+                        range,
+                        message: said,
+                        code,
+                        warning: severity == 2,
+                        related: related.clone(),
+                    },
+                    None => ServiceDiagnostic {
+                        range,
+                        message: format!("{raw} (in code ttc generated for this construct)"),
+                        code,
+                        warning: severity == 2,
+                        related: related.clone(),
+                    },
+                };
                 // One construct's glue can draw several TypeScript errors
                 // that all mean the same tt thing.
                 if !out.contains(&entry) {

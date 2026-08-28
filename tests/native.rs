@@ -786,6 +786,31 @@ fn a_curried_combinator_chain_blames_the_step_with_the_wrong_argument() {
 }
 
 #[test]
+fn a_whole_pipeline_mismatch_keeps_the_generic_wording() {
+    require_tsgo!();
+    // Every boundary of this pipeline is fine; its *result* does not fit
+    // the call it sits in. That diagnostic lands on the whole-pipeline
+    // anchor (no producer context) and must not claim a step rejected
+    // anything (PR #85 review).
+    let dir = project(&[(
+        "src/arg.tt",
+        "const inc = (n: number): number => n + 1;\n\
+         declare function takesString(s: string): void;\n\
+         takesString(1 |> inc);\n",
+    )]);
+    let out = check(&dir);
+    let mismatch = block(&out, "ts2345");
+    assert!(
+        mismatch.contains("type mismatch: expected `string`, found `number`"),
+        "the pipeline's result is an ordinary mismatch: {out}"
+    );
+    assert!(
+        !out.contains("this pipeline step"),
+        "no step is blamed when no boundary failed: {out}"
+    );
+}
+
+#[test]
 fn a_pipeline_mismatch_labels_the_producing_step() {
     require_tsgo!();
     // Rust-style secondary span: the primary carets sit on the rejecting

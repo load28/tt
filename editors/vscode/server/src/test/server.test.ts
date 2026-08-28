@@ -553,6 +553,31 @@ async function published(source: string): Promise<any[]> {
 }
 
 test(
+  "the published diagnostic keeps its labels after the typed layer replaces the service one",
+  { skip: skipTyped, timeout },
+  async () => {
+    // Under the default settings the typed pass replaces the
+    // language-service layer wholesale, so the secondary labels must ride
+    // the typed diagnostics or the final publish loses them.
+    const source = [
+      "const inc = (n: number): number => n + 1;",
+      "const shout = (s: string): string => s.toUpperCase();",
+      "const a = 1 |> inc |> shout;",
+      "",
+    ].join("\n");
+    const diagnostics = await published(source);
+    const mismatch = diagnostics.find(
+      (d: any) => String(d.code ?? "") === "ts2345",
+    );
+    assert.ok(mismatch, JSON.stringify(diagnostics));
+    const related = mismatch.relatedInformation ?? [];
+    assert.equal(related.length, 1, JSON.stringify(mismatch));
+    assert.equal(related[0].message, "the piped value is produced here");
+    assert.equal(covered(source, related[0].location.range), "inc");
+  },
+);
+
+test(
   "a new diagnostic generation never drops an untouched typed error",
   { skip: skipTyped, timeout },
   async () => {

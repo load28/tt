@@ -273,7 +273,8 @@
 | TASK-262 | Require English documentation | Complete | 2026-08-28 | 2026-08-28 | [TASK-262](./TASK-262-english-documentation-policy.md) |
 | TASK-263 | Pipeline diagnostics name the rejecting step | Complete | 2026-08-28 | 2026-08-28 | [TASK-263](./TASK-263-pipeline-step-diagnostics.md) |
 | TASK-264 | Rust-style labeled diagnostics (secondary spans) | Complete | 2026-08-28 | 2026-08-28 | [TASK-264](./TASK-264-rust-style-labeled-diagnostics.md) |
+| TASK-265 | PR #85 review fixes — step-anchor gating and typed-path labels | Complete | 2026-08-28 | 2026-08-28 | [TASK-265](./TASK-265-pr85-review-fixes.md) |
 
 ## 다음 태스크 번호
 
-**TASK-265**
+**TASK-266**

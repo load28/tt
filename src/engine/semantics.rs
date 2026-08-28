@@ -326,17 +326,26 @@ fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredVariant
     message
 }
 
+/// Whether an anchor is a pipeline *step* anchor — the per-step input
+/// position, which alone justifies the step-boundary wording. The anchor
+/// covering a whole pipeline is the same kind but carries no producer
+/// context: a mismatch there is about the pipeline's result in its
+/// surrounding position (an argument, an annotation), not about any step.
+fn pipe_step_anchor(anchor: &crate::EmitAnchor) -> bool {
+    anchor.kind == AnchorKind::Pipe && anchor.context.is_some()
+}
+
 /// [`diagnostic_message`], said in the vocabulary of the construct whose
 /// glue the diagnostic landed on. A pipeline's per-step anchor already
 /// underlines the step that rejected the value, so its mismatch reads as
 /// what that step expects versus what the pipeline feeds it; every other
-/// construct keeps the generic wording.
+/// anchor — the whole-pipeline one included — keeps the generic wording.
 fn anchored_diagnostic_message(
-    kind: AnchorKind,
+    anchor: &crate::EmitAnchor,
     diagnostic: &TsDiagnostic,
     declarations: &[DeclaredVariant],
 ) -> String {
-    if kind == AnchorKind::Pipe
+    if pipe_step_anchor(anchor)
         && let Some(mismatch) = &diagnostic.mismatch
     {
         let (mut expected, mut found, mut required) = mismatch_pair(mismatch, declarations);
@@ -885,14 +894,19 @@ pub(crate) fn report(
                     path: file.source_path.clone(),
                     position: Some(crate::line_col(&file.source, anchor.src)),
                     end: Some(crate::line_col(&file.source, anchor.src_end)),
-                    message: anchored_diagnostic_message(anchor.kind, diagnostic, declared),
+                    message: anchored_diagnostic_message(&anchor, diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
                     labels: checker_labels(files, file, Some(&anchor), diagnostic),
                 });
                 continue;
             }
-            if let Some(class) = translation_class(anchor.kind, diagnostic.code)
+            // The whole-pipeline anchor shares its kind with the step
+            // anchors but not their meaning: only a step anchor may speak
+            // in step vocabulary.
+            let translates = anchor.kind != AnchorKind::Pipe || pipe_step_anchor(&anchor);
+            if translates
+                && let Some(class) = translation_class(anchor.kind, diagnostic.code)
                 && !translated_seen.insert((
                     file.source_path.clone(),
                     anchor.src,
@@ -906,8 +920,9 @@ pub(crate) fn report(
                 .get(&file.source_path)
                 .map(|s| s.analyses.declarations.as_slice())
                 .unwrap_or_default();
-            if let Some(said) =
-                translate(anchor.kind, diagnostic.code, &diagnostic.message, declared)
+            if translates
+                && let Some(said) =
+                    translate(anchor.kind, diagnostic.code, &diagnostic.message, declared)
             {
                 let entry = Diagnostic {
                     path: file.source_path.clone(),
