@@ -1831,6 +1831,44 @@ fn cli_diagnoses_an_imported_case_even_with_a_wildcard() {
 }
 
 #[test]
+fn cli_diagnoses_a_nested_field_from_a_generic_result_payload() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), Cash }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("nested.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import { PaymentMethod } from \"./domain.tt\";\n\
+         export function brand(r: TResult<PaymentMethod, string>): string {\n\
+         \x20 return match (r) {\n\
+         \x20   Ok(value: Card(brnd)) => brnd,\n\
+         \x20   Ok(value) => \"other\",\n\
+         \x20   Err(error) => \"error\",\n\
+         \x20 };\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--check", "nested.tt"]);
+    assert!(!ok, "expected the nested field error:\n{err}");
+    assert!(
+        err.contains(
+            "error[unknown-field]: variant PaymentMethod (imported from \"./domain.tt\"): \
+             case `Card` has no field `brnd`"
+        ),
+        "{err}"
+    );
+    assert!(err.contains("--> nested.tt:5:20"), "{err}");
+    assert!(
+        err.contains("a field with a similar name exists: `brand`"),
+        "{err}"
+    );
+}
+
+#[test]
 fn cli_skips_unresolvable_imports_silently() {
     // A missing module is tsc's problem (TS2307); the match simply stays
     // unchecked, as before phase 2.

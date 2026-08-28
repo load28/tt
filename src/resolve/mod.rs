@@ -725,11 +725,16 @@ impl Resolver {
                         .uses
                         .insert(field_pat.node, Res::Field(field_ref));
                     // A nested pattern resolves against the field's own
-                    // declared type, when that type names a variant this
-                    // file can see.
+                    // declared type. A generic payload cannot name its
+                    // instantiation syntactically; in that case an exact tag
+                    // shared by exactly one visible variant is sufficient
+                    // declaration evidence. Ambiguity stays unresolved for
+                    // hand-written TypeScript unions.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
-                        && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                         && let Pat::Constructor { path, fields } = &hir.patterns[*inner]
+                        && let Some(nested_variant) = self
+                            .variant_of_type(&declared[index].1)
+                            .or_else(|| self.unique_variant_with_tag(&path.name))
                     {
                         self.resolve_constructor(
                             hir,
@@ -799,6 +804,29 @@ impl Resolver {
                 suggestion,
             });
         }
+    }
+
+    /// The one visible variant that declares `tag`, when there is one.
+    /// This is deliberately stricter than top-level match identification:
+    /// one exact nested tag can recover a generic payload's declaration, but
+    /// it cannot choose between two equally valid TypeScript instantiations.
+    fn unique_variant_with_tag(&self, tag: &str) -> Option<DefId> {
+        let mut found = None;
+        for (id, def) in self.resolution.defs.iter() {
+            let DefKind::Variant(data) = &def.kind else {
+                continue;
+            };
+            if self.resolution.type_ns.get(&def.name) != Some(&id)
+                || !data.variants.iter().any(|variant| variant.name == tag)
+            {
+                continue;
+            }
+            if found.is_some() {
+                return None;
+            }
+            found = Some(id);
+        }
+        found
     }
 
     /// The variant a declared type text names — a bare (possibly dotted)

@@ -297,6 +297,47 @@ fn an_imported_case_error_survives_a_wildcard_arm() {
 }
 
 #[test]
+fn a_nested_imported_field_error_is_reported_at_its_token() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), Cash }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/nested.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function brand(r: TResult<PaymentMethod, string>): string {\n\
+         \x20 return match (r) {\n\
+         \x20   Ok(value: Card(brnd)) => brnd,\n\
+         \x20   Ok(value) => \"other\",\n\
+         \x20   Err(error) => \"error\",\n\
+         \x20 };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { brand } from \"./nested.tt\";\nvoid brand;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("nested.tt(6,20): error tt26")
+            && text.contains("case `Card` has no field `brnd`"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("TS2339") && !text.contains("{ brnd: any; }"),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_type_error_inside_glue_reports_at_the_construct() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

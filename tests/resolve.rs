@@ -261,6 +261,35 @@ fn nested_patterns_resolve_against_the_fields_declared_type() {
 }
 
 #[test]
+fn a_unique_nested_tag_resolves_a_generic_payload_declaration() {
+    let source = "variant PaymentMethod { Card(brand: string), Cash }\n\
+        const brand = match (result) {\n\
+        \x20 Ok(value: Card(brnd)) => brnd,\n\
+        \x20 Ok(value) => \"other\",\n\
+        \x20 Err(error) => \"error\",\n\
+        };\n";
+    let (hir, resolution) = resolved(source, &[]);
+    let unresolved = resolution.unresolved.first().expect("nested field typo");
+    assert_eq!(unresolved.kind, UseKind::Field);
+    assert_eq!(unresolved.name, "brnd");
+    assert_eq!(unresolved.tag.as_deref(), Some("Card"));
+    assert_eq!(unresolved.suggestion, "brand");
+    assert_eq!(span_text(source, &hir, unresolved.node), "brnd");
+
+    let ambiguous = "variant PaymentMethod { Card(brand: string) }\n\
+        variant Identity { Card(number: string) }\n\
+        const brand = match (result) {\n\
+        \x20 Ok(value: Card(brnd)) => brnd,\n\
+        \x20 Err(error) => \"error\",\n\
+        };\n";
+    let (_, resolution) = resolved(ambiguous, &[]);
+    assert!(
+        resolution.unresolved.is_empty(),
+        "two exact Card declarations provide no source-level owner"
+    );
+}
+
+#[test]
 fn a_single_pattern_site_reports_only_a_unique_one_edit_miss() {
     // `Circel` is one transposition from Shape's `Circle` and nothing
     // else is that close → reported. `Cxxcle` is not → silence.

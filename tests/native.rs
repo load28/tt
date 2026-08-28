@@ -821,6 +821,52 @@ fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
 }
 
 #[test]
+fn a_nested_imported_field_error_uses_source_vocabulary_and_span() {
+    require_tsgo!();
+    let source = "import type { TResult } from \"@tt/std\";\n\
+        import { PaymentMethod } from \"./domain.tt\";\n\
+        export function brand(r: TResult<PaymentMethod, string>): string {\n\
+        \x20 return match (r) {\n\
+        \x20   Ok(value: Card(brnd)) => brnd,\n\
+        \x20   Ok(value) => \"other\",\n\
+        \x20   Err(error) => \"error\",\n\
+        \x20 };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant PaymentMethod { Card(brand: string), Cash }\n",
+        ),
+        ("src/nested.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(out.contains("case `Card` has no field `brnd`"), "{out}");
+    assert!(out.contains("--> src/nested.tt:5:20"), "{out}");
+    assert!(
+        !out.contains("expected `{ brnd: any; }`")
+            && !out.contains("type mismatch:")
+            && !out.contains("ts2339"),
+        "generated structural consequences are owned by the source error: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/nested.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let field = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "unknown-field")
+        .unwrap_or_else(|| panic!("missing nested field diagnostic: {answer}"));
+    assert_eq!(source_slice(source, field), "brnd");
+    assert_eq!(field["suggestions"][0]["edit"]["replacement"], "brand");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "ts2339"),
+        "{answer}"
+    );
+}
+
+#[test]
 fn a_pipeline_mismatch_names_the_step_that_rejects_the_value() {
     require_tsgo!();
     // The mismatch is at the second boundary, where the checker blames the
