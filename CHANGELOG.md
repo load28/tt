@@ -15,7 +15,7 @@
   보고하고, computed key·인자 안의 tt 제어 흐름도 평가 순서와 `this`를 보존한다.
 
 - **Bun 기반 프로젝트 설치기와 로컬 레지스트리 개발 흐름을 제공한다**
-  (TASK-167). `bunx @load28/create-tt@latest`로 Vite 프로젝트를 만들고 `init`으로 기존
+  (TASK-167). `bunx @openload28/create-tt@latest`로 Vite 프로젝트를 만들고 `init`으로 기존
   TypeScript 프로젝트의 번들러를 감지해 TT 설정을 합성한다. 자동·수동 설치법은
   영문·한글 가이드와 공식 웹사이트에서 제공하며, 공개 전 패키지는 Verdaccio에
   현재 플랫폼 빌드를 게시해 같은 설치 프로토콜로 검증할 수 있다.
@@ -39,7 +39,7 @@
   있는 고정 버전을 그대로 쓴다). typescript-go를 직접 빌드해 환경 변수로
   가리키던 설정은 더 이상 쓰이지 않는다.
 
-- **VS Code 확장이 프로젝트가 설치한 `@load28/tt-lang`의 ttc를 실행한다**
+- **VS Code 확장이 프로젝트가 설치한 `@openload28/tt-lang`의 ttc를 실행한다**
   (TASK-255). 이전에는 워크스페이스에서 빌드한 바이너리나 PATH의 `ttc`만
   찾았기 때문에, npm으로 패키지만 설치한 프로젝트에서는 확장이 컴파일러 없이
   동작했다. 어느 바이너리인지는 그 패키지 자신이 답하므로 게시본 설치와
@@ -445,12 +445,12 @@
   (구조적 추론 실패 시, 선언 파일 교차 검증). 컴파일러가 없거나 방출이
   버퍼를 못 따라온 순간에는 종전의 원문 서빙으로 자동 폴백한다. (TASK-050)
 
-- npm 패키징: `npm install --save-dev @load28/tt-lang`으로 ttc가 프리빌트
+- npm 패키징: `npm install --save-dev @openload28/tt-lang`으로 ttc가 프리빌트
   바이너리로 설치된다 (bin `ttc`, esbuild/swc 방식의 플랫폼 패키지
   optionalDependencies — linux-x64/arm64는 musl 정적 링크, darwin-x64/arm64,
   win32-x64). 릴리스 워크플로(`release.yml`)가 태그 `vX.Y.Z`에서 빌드·npm
-  배포·GitHub Release 업로드를 자동화한다. `@load28/unplugin-tt`은 설치된
-  `@load28/tt-lang`의 바이너리를 자동으로 찾는다 (`@load28/tt-lang`의 `binaryPath()` 공개
+  배포·GitHub Release 업로드를 자동화한다. `@openload28/unplugin-tt`은 설치된
+  `@openload28/tt-lang`의 바이너리를 자동으로 찾는다 (`@openload28/tt-lang`의 `binaryPath()` 공개
   API, 없으면 종전대로 PATH의 `ttc`). (TASK-048)
 
 - 통일된 타입·빌드 파이프라인 (TASK-036 계획, TASK-037):

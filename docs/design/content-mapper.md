@@ -26,8 +26,8 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
 | --- | --- |
 | `src/content_mapper.rs` (`ttc --content-mapper`) | 프로토콜 프로세스. JSON-RPC 2.0 over stdio, `Content-Length` 프레이밍. `initialize`/`openProject`/`transform`/`closeProject` |
 | `npm/tt-lang/package.json`의 `typescript.contentMapper` | TypeScript가 매퍼 프로세스를 스폰하는 방법: `["node", "bin/ttc.js", "--content-mapper"]` — launcher가 플랫폼 바이너리와 로컬 개발 설치를 해석한다 |
-| 소비 tsconfig의 `contentMappers` | `{ "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] }` 한 줄. CLI는 `tsc --runExternalCode` |
-| VS Code 확장 `client/src/contentMapper.ts` | TypeScript 확장의 `registerContentMappers`에 `.tt`/`.ttx`를 자동 등록. 워크스페이스의 `@load28/tt-lang`이 있으면 그 `binaryPath()`로 추론 프로젝트 매니페스트까지 제공 |
+| 소비 tsconfig의 `contentMappers` | `{ "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }` 한 줄. CLI는 `tsc --runExternalCode` |
+| VS Code 확장 `client/src/contentMapper.ts` | TypeScript 확장의 `registerContentMappers`에 `.tt`/`.ttx`를 자동 등록. 워크스페이스의 `@openload28/tt-lang`이 있으면 그 `binaryPath()`로 추론 프로젝트 매니페스트까지 제공 |
 
 ## transform의 계약
 

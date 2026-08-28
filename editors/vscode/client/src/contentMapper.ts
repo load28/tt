@@ -7,7 +7,7 @@
  * before any tsconfig is discovered, that something has to be an editor
  * extension. The TypeScript "native preview" extension publishes exactly
  * that hook (`ExtensionAPI.registerContentMappers`); this module calls it,
- * so a workspace that installed `@load28/tt-lang` needs no editor
+ * so a workspace that installed `@openload28/tt-lang` needs no editor
  * configuration at all.
  *
  * The mapper process is the workspace's own install: the package's
@@ -92,7 +92,7 @@ async function typeScriptExtensionApi(): Promise<TypeScriptExtensionApi | undefi
 /**
  * The `.tt`/`.ttx` contribution: always the extensions (they trigger
  * configured-project discovery for open documents), plus an
- * inferred-project manifest when a workspace folder has `@load28/tt-lang`
+ * inferred-project manifest when a workspace folder has `@openload28/tt-lang`
  * installed.
  */
 function contribution(): ContentMapperContribution {
@@ -108,7 +108,7 @@ function contribution(): ContentMapperContribution {
 
 /**
  * The mapper manifest of the first workspace folder that installed
- * `@load28/tt-lang`, or `undefined` when none has: the package's own
+ * `@openload28/tt-lang`, or `undefined` when none has: the package's own
  * `binaryPath()` answers with the exact compiler `npx ttc` would run
  * (published platform package, `file:` development install, `TTC_BINARY`),
  * and the manifest execs that binary directly — no `node` on the language
@@ -119,13 +119,13 @@ function workspaceMapper(): ContentMapperManifest | undefined {
     if (folder.uri.scheme !== "file") continue;
     try {
       const require = createRequire(path.join(folder.uri.fsPath, "package.json"));
-      const manifestPath = require.resolve("@load28/tt-lang/package.json");
-      const loaded = require("@load28/tt-lang") as { binaryPath?: () => string };
+      const manifestPath = require.resolve("@openload28/tt-lang/package.json");
+      const loaded = require("@openload28/tt-lang") as { binaryPath?: () => string };
       const binary = loaded.binaryPath?.();
       if (binary === undefined || binary === "") continue;
       const version = (require(manifestPath) as { version?: string }).version;
       return {
-        name: "@load28/tt-lang",
+        name: "@openload28/tt-lang",
         version,
         exec: [binary, "--content-mapper"],
         cwd: Uri.file(path.dirname(manifestPath)),

@@ -1,5 +1,5 @@
 {
-  "name": "@load28/tt-lang",
+  "name": "@openload28/tt-lang",
   "version": "1.0.0",
   "description": "tt — a tiny TypeScript preprocessor adding Rust-style variants, match expressions, try, let-else, if let and the pipeline operator. Installs the ttc compiler.",
   "license": "MIT",
@@ -43,10 +43,10 @@
     "node": ">=18"
   },
   "optionalDependencies": {
-    "@load28/tt-lang-linux-x64": "1.0.0",
-    "@load28/tt-lang-linux-arm64": "1.0.0",
-    "@load28/tt-lang-darwin-x64": "1.0.0",
-    "@load28/tt-lang-darwin-arm64": "1.0.0",
-    "@load28/tt-lang-win32-x64-msvc": "1.0.0"
+    "@openload28/tt-lang-linux-x64": "1.0.0",
+    "@openload28/tt-lang-linux-arm64": "1.0.0",
+    "@openload28/tt-lang-darwin-x64": "1.0.0",
+    "@openload28/tt-lang-darwin-arm64": "1.0.0",
+    "@openload28/tt-lang-win32-x64-msvc": "1.0.0"
   }
 }

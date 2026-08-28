@@ -101,7 +101,7 @@
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the `ttc` compiler used for diagnostics and language features. When empty, the extension looks for `target/release/ttc` or `target/debug/ttc` in the workspace, then for the `ttc` of the `@load28/tt-lang` package the project installed (the same binary `npx ttc` runs), then falls back to `ttc` on PATH."
+          "markdownDescription": "Path to the `ttc` compiler used for diagnostics and language features. When empty, the extension looks for `target/release/ttc` or `target/debug/ttc` in the workspace, then for the `ttc` of the `@openload28/tt-lang` package the project installed (the same binary `npx ttc` runs), then falls back to `ttc` on PATH."
         },
         "tt.verify": {
           "scope": "resource",

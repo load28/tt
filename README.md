@@ -29,7 +29,7 @@ Every valid TypeScript file is also a valid `.tt` file, and every valid TSX file
 ### New project
 
 ```sh
-bunx @load28/create-tt@next my-app
+bunx @openload28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -38,7 +38,7 @@ bun run dev
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@next init
+bunx @openload28/create-tt@next init
 bun run tt:check
 ```
 
@@ -66,14 +66,14 @@ After installing both VSIX files, enable TypeScript 7 in the editor:
 ### Use the CLI
 
 ```sh
-bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 bunx ttc -o build src        # emit TypeScript
 bunx ttc --check src         # check tt
 bunx ttc --check-types src   # check tt and TypeScript
 ```
 
 - Output: `.tt` → `.ts`, `.ttx` → `.tsx`
-- Bundlers: [`@load28/unplugin-tt`](./integrations/unplugin) for Vite, Rollup, webpack, Rspack, esbuild, and Farm
+- Bundlers: [`@openload28/unplugin-tt`](./integrations/unplugin) for Vite, Rollup, webpack, Rspack, esbuild, and Farm
 - Help: `ttc --help`, `ttc help <topic>`
 
 ## The language at a glance

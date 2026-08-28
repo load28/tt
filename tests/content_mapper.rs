@@ -2,7 +2,7 @@
 //!
 //! These cases spawn the repository's installed TypeScript (`npm ci`,
 //! TASK-256) with `--runExternalCode` on a project whose tsconfig names
-//! `@load28/tt-lang` as a content mapper, and the mapper it spawns is this
+//! `@openload28/tt-lang` as a content mapper, and the mapper it spawns is this
 //! build's `ttc`. That is the whole consumer contract in one process tree:
 //! TypeScript resolves the mapper package, speaks JSON-RPC to `ttc
 //! --content-mapper`, holds the transformed `.tt`/`.ttx` files virtually,
@@ -99,7 +99,7 @@ macro_rules! require_mapper_toolchain {
     };
 }
 
-/// A consumer project: a tsconfig naming `@load28/tt-lang` as the mapper
+/// A consumer project: a tsconfig naming `@openload28/tt-lang` as the mapper
 /// for `.tt`/`.ttx`, and a stub install of that package whose mapper
 /// process is this build's `ttc`.
 fn mapper_project(jsx: bool) -> Workspace {
@@ -117,16 +117,16 @@ fn mapper_project(jsx: bool) -> Workspace {
     fs::write(
         workspace.path().join("tsconfig.json"),
         format!(
-            "{{\n  \"compilerOptions\": {{\n    {jsx_option}\"strict\": true,\n    \"noEmit\": true,\n    \"target\": \"es2022\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"skipLibCheck\": true\n  }},\n  \"contentMappers\": [\n    {{ \"package\": \"@load28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }}\n  ],\n  \"include\": [\"src\"]\n}}\n"
+            "{{\n  \"compilerOptions\": {{\n    {jsx_option}\"strict\": true,\n    \"noEmit\": true,\n    \"target\": \"es2022\",\n    \"module\": \"esnext\",\n    \"moduleResolution\": \"bundler\",\n    \"skipLibCheck\": true\n  }},\n  \"contentMappers\": [\n    {{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }}\n  ],\n  \"include\": [\"src\"]\n}}\n"
         ),
     )
     .unwrap();
-    let package = workspace.path().join("node_modules/@load28/tt-lang");
+    let package = workspace.path().join("node_modules/@openload28/tt-lang");
     fs::create_dir_all(&package).unwrap();
     fs::write(
         package.join("package.json"),
         format!(
-            "{{\n  \"name\": \"@load28/tt-lang\",\n  \"version\": \"0.0.0-test\",\n  \"typescript\": {{\n    \"contentMapper\": {{\n      \"exec\": [{:?}, \"--content-mapper\"]\n    }}\n  }}\n}}\n",
+            "{{\n  \"name\": \"@openload28/tt-lang\",\n  \"version\": \"0.0.0-test\",\n  \"typescript\": {{\n    \"contentMapper\": {{\n      \"exec\": [{:?}, \"--content-mapper\"]\n    }}\n  }}\n}}\n",
             env!("CARGO_BIN_EXE_ttc")
         ),
     )

@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process'
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const ttChannel = dependencyChannel(ownManifest.version)
 const versions = {
-  '@load28/tt-lang': ttChannel,
-  '@load28/unplugin-tt': ttChannel,
+  '@openload28/tt-lang': ttChannel,
+  '@openload28/unplugin-tt': ttChannel,
   vite: '^8.0.0',
   // ttc drives the TypeScript the project installs and looks nowhere else,
   // so a scaffolded project has to install one — the exact version this
@@ -32,49 +32,49 @@ const bundlers = {
   vite: {
     packages: ['vite'],
     configs: ['vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs'],
-    module: '@load28/unplugin-tt/vite',
+    module: '@openload28/unplugin-tt/vite',
     wrapper: 'tt.vite.config.mjs',
     commands: { dev: 'vite', build: 'vite build' },
   },
   rollup: {
     packages: ['rollup'],
     configs: ['rollup.config.ts', 'rollup.config.js', 'rollup.config.mjs'],
-    module: '@load28/unplugin-tt/rollup',
+    module: '@openload28/unplugin-tt/rollup',
     wrapper: 'tt.rollup.config.mjs',
     commands: { dev: 'rollup --watch', build: 'rollup' },
   },
   rolldown: {
     packages: ['rolldown'],
     configs: ['rolldown.config.ts', 'rolldown.config.js', 'rolldown.config.mjs'],
-    module: '@load28/unplugin-tt/rolldown',
+    module: '@openload28/unplugin-tt/rolldown',
     wrapper: 'tt.rolldown.config.mjs',
     commands: { dev: 'rolldown --watch', build: 'rolldown' },
   },
   webpack: {
     packages: ['webpack'],
     configs: ['webpack.config.ts', 'webpack.config.js', 'webpack.config.cjs', 'webpack.config.mjs'],
-    module: '@load28/unplugin-tt/webpack',
+    module: '@openload28/unplugin-tt/webpack',
     wrapper: 'tt.webpack.config.mjs',
     commands: { dev: 'webpack serve', build: 'webpack' },
   },
   rspack: {
     packages: ['@rspack/core'],
     configs: ['rspack.config.ts', 'rspack.config.js', 'rspack.config.mjs'],
-    module: '@load28/unplugin-tt/rspack',
+    module: '@openload28/unplugin-tt/rspack',
     wrapper: 'tt.rspack.config.mjs',
     commands: { dev: 'rspack serve', build: 'rspack build' },
   },
   farm: {
     packages: ['@farmfe/core'],
     configs: ['farm.config.ts', 'farm.config.js', 'farm.config.mjs'],
-    module: '@load28/unplugin-tt/farm',
+    module: '@openload28/unplugin-tt/farm',
     wrapper: 'tt.farm.config.mjs',
     commands: { dev: 'farm start', build: 'farm build' },
   },
   esbuild: {
     packages: ['esbuild'],
     configs: [],
-    module: '@load28/unplugin-tt/esbuild',
+    module: '@openload28/unplugin-tt/esbuild',
   },
 }
 
@@ -111,8 +111,8 @@ export async function createProject(options) {
       check: 'ttc --check-types src',
     },
     devDependencies: {
-      '@load28/tt-lang': versions['@load28/tt-lang'],
-      '@load28/unplugin-tt': versions['@load28/unplugin-tt'],
+      '@openload28/tt-lang': versions['@openload28/tt-lang'],
+      '@openload28/unplugin-tt': versions['@openload28/unplugin-tt'],
       typescript: versions.typescript,
       vite: versions.vite,
     },
@@ -140,7 +140,7 @@ export async function initializeExisting(options) {
   const packageManager = options.packageManager ?? detectPackageManager(root, manifest)
   const bundler = options.bundler === 'auto' ? detectBundler(manifest) : options.bundler
   const devDependencies = manifest.devDependencies ?? {}
-  devDependencies['@load28/tt-lang'] ??= versions['@load28/tt-lang']
+  devDependencies['@openload28/tt-lang'] ??= versions['@openload28/tt-lang']
   devDependencies.typescript ??= versions.typescript
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
@@ -149,7 +149,7 @@ export async function initializeExisting(options) {
   const files = []
   let manualModule
   if (bundler && bundler !== 'none') {
-    devDependencies['@load28/unplugin-tt'] ??= versions['@load28/unplugin-tt']
+    devDependencies['@openload28/unplugin-tt'] ??= versions['@openload28/unplugin-tt']
     const adapter = bundlers[bundler]
     if (!adapter) throw new Error(`unsupported bundler: ${bundler}`)
     const base = adapter.configs.find((file) => existsSync(join(root, file)))
@@ -297,7 +297,7 @@ async function writeJson(path, value, space = '  ') {
 }
 
 const viteConfig = `import { defineConfig } from 'vite'
-import tt from '@load28/unplugin-tt/vite'
+import tt from '@openload28/unplugin-tt/vite'
 
 export default defineConfig({
   plugins: [tt()],
@@ -326,8 +326,8 @@ document.querySelector<HTMLDivElement>('#app')!.textContent = match (greeting) {
 const help = `Create a new tt project or add tt to an existing TypeScript project.
 
 Usage:
-  bunx @load28/create-tt@next [directory] [--no-install]
-  bunx @load28/create-tt@next init [directory] [--bundler vite]
+  bunx @openload28/create-tt@next [directory] [--no-install]
+  bunx @openload28/create-tt@next init [directory] [--bundler vite]
 
 Options:
   --bundler <auto|none|vite|rollup|rolldown|webpack|rspack|esbuild|farm>

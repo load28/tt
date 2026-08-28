@@ -1,4 +1,4 @@
-# @load28/unplugin-tt
+# @openload28/unplugin-tt
 
 `.tt`과 `.ttx` 모듈을 번들러에서 그대로 import합니다. 중간 `.ts`/`.tsx` 트리를 만들지 않고,
 번들러가 소스를 직접 읽습니다.
@@ -9,7 +9,7 @@
 ```ts
 // vite.config.ts
 import { defineConfig } from "vite";
-import tt from "@load28/unplugin-tt/vite";
+import tt from "@openload28/unplugin-tt/vite";
 
 export default defineConfig({ plugins: [tt()] });
 ```
@@ -19,19 +19,19 @@ export default defineConfig({ plugins: [tt()] });
 import { Notice, render } from "./notice.tt";
 ```
 
-컴파일러는 [`@load28/tt-lang`](https://www.npmjs.com/package/@load28/tt-lang)을 함께
-설치하면 자동으로 찾습니다 (`npm install --save-dev @load28/tt-lang@next @load28/unplugin-tt@next`). @load28/tt-lang이
+컴파일러는 [`@openload28/tt-lang`](https://www.npmjs.com/package/@openload28/tt-lang)을 함께
+설치하면 자동으로 찾습니다 (`npm install --save-dev @openload28/tt-lang@next @openload28/unplugin-tt@next`). @openload28/tt-lang이
 없으면 PATH의 `ttc`(`cargo install --path .`)로 폴백합니다.
 
 ## 서브패스
 
 | import | 상태 |
 |--------|------|
-| `@load28/unplugin-tt/vite` | 예제(`tt-interop`)로 검증 |
-| `@load28/unplugin-tt/esbuild` | 번들·실행 검증 |
-| `@load28/unplugin-tt/rollup`, `/rolldown`, `/webpack`, `/rspack`, `/farm` | unplugin이 제공하는 어댑터 — 미검증 |
+| `@openload28/unplugin-tt/vite` | 예제(`tt-interop`)로 검증 |
+| `@openload28/unplugin-tt/esbuild` | 번들·실행 검증 |
+| `@openload28/unplugin-tt/rollup`, `/rolldown`, `/webpack`, `/rspack`, `/farm` | unplugin이 제공하는 어댑터 — 미검증 |
 
-`@load28/unplugin-tt`를 그대로 import하면 `unplugin` 객체와 `vitePlugin`·
+`@openload28/unplugin-tt`를 그대로 import하면 `unplugin` 객체와 `vitePlugin`·
 `esbuildPlugin` 같은 이름들이 나옵니다.
 
 ## 동작
@@ -53,7 +53,7 @@ loader를 명시합니다.
 컴파일 에러는 ttc의 진단이 그대로 빌드 에러가 됩니다.
 
 ```
-[@load28/unplugin-tt] src/notice.tt:22:16: match on variant Notice is not exhaustive:
+[@openload28/unplugin-tt] src/notice.tt:22:16: match on variant Notice is not exhaustive:
               missing "Warn" (add the missing arms or a final `_` arm)
 ```
 
@@ -61,7 +61,7 @@ loader를 명시합니다.
 
 | 옵션 | 기본값 | 설명 |
 |------|--------|------|
-| `compiler` | 설치된 `@load28/tt-lang`의 바이너리, 없으면 `"ttc"` | ttc 실행 파일 경로 |
+| `compiler` | 설치된 `@openload28/tt-lang`의 바이너리, 없으면 `"ttc"` | ttc 실행 파일 경로 |
 | `verify` | `true` | `false`면 `--no-verify`를 넘겨 방출물 자가 검사를 생략합니다 |
 
 타입 선언(`index.d.ts`와 서브패스별 `.d.ts`)을 함께 싣습니다 — 소비자가

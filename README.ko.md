@@ -29,7 +29,7 @@ export const area = (shape: Shape): number =>
 ### 새 프로젝트
 
 ```sh
-bunx @load28/create-tt@next my-app
+bunx @openload28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -38,7 +38,7 @@ bun run dev
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@next init
+bunx @openload28/create-tt@next init
 bun run tt:check
 ```
 
@@ -66,14 +66,14 @@ code --install-extension ./tt-typescript-preview-<버전>-<플랫폼>.vsix
 ### CLI 사용
 
 ```sh
-bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 bunx ttc -o build src        # TypeScript 방출
 bunx ttc --check src         # tt 검사
 bunx ttc --check-types src   # tt + TypeScript 검사
 ```
 
 - 출력: `.tt` → `.ts`, `.ttx` → `.tsx`
-- 번들러: Vite, Rollup, webpack, Rspack, esbuild, Farm용 [`@load28/unplugin-tt`](./integrations/unplugin)
+- 번들러: Vite, Rollup, webpack, Rspack, esbuild, Farm용 [`@openload28/unplugin-tt`](./integrations/unplugin)
 - 도움말: `ttc --help`, `ttc help <topic>`
 
 ## 언어 한눈에 보기

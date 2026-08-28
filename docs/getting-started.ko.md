@@ -7,7 +7,7 @@
 첫 `.tt` 모듈이 포함된 Vite + TypeScript 프로젝트를 만듭니다.
 
 ```sh
-bunx @load28/create-tt@next my-app
+bunx @openload28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -16,24 +16,24 @@ bun run dev
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@next init
+bunx @openload28/create-tt@next init
 bun run tt:check
 ```
 
 `init`이 수행하는 작업:
 
 - Vite, Rollup, Rolldown, webpack, Rspack, esbuild, Farm 감지
-- `@load28/tt-lang`, `@load28/unplugin-tt`, TypeScript, TT 스크립트 추가
+- `@openload28/tt-lang`, `@openload28/unplugin-tt`, TypeScript, TT 스크립트 추가
 - 선언형 번들러용 `tt.*.config.mjs` 생성
 - esbuild에 추가할 플러그인 코드 출력
 
 비대화형 실행 옵션은 다음과 같습니다.
 
 ```sh
-bunx @load28/create-tt@next init --bundler vite
-bunx @load28/create-tt@next init --bundler none
-bunx @load28/create-tt@next init --no-install
-bunx @load28/create-tt@next init --package-manager bun
+bunx @openload28/create-tt@next init --bundler vite
+bunx @openload28/create-tt@next init --bundler none
+bunx @openload28/create-tt@next init --no-install
+bunx @openload28/create-tt@next init --package-manager bun
 ```
 
 새 프로젝트는 Bun을 사용합니다. 기존 프로젝트는 `packageManager` 필드나
@@ -44,7 +44,7 @@ lockfile의 패키지 매니저를 유지합니다.
 컴파일러와 그것이 구동할 TypeScript를 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 소스는 `src/**/*.tt` 또는 `src/**/*.ttx`에 두고 다음 스크립트를 추가합니다.
@@ -67,34 +67,34 @@ TypeScript 빌드의 입력을 이 트리로 지정합니다. `.tt-build/`와 `.
 컴파일러와 함께 직접 소스 플러그인을 설치합니다.
 
 ```sh
-bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
+bun add -d @openload28/tt-lang@next @openload28/unplugin-tt@next
 ```
 
 각 번들러의 plugins 배열 맨 앞에 `tt()`을 넣습니다.
 
 ```ts
 // Vite: vite.config.ts
-import tt from "@load28/unplugin-tt/vite";
+import tt from "@openload28/unplugin-tt/vite";
 export default { plugins: [tt()] };
 
 // Rollup: rollup.config.js
-import tt from "@load28/unplugin-tt/rollup";
+import tt from "@openload28/unplugin-tt/rollup";
 export default { plugins: [tt()] };
 
 // Rolldown: rolldown.config.js
-import tt from "@load28/unplugin-tt/rolldown";
+import tt from "@openload28/unplugin-tt/rolldown";
 export default { plugins: [tt()] };
 
 // webpack: webpack.config.mjs
-import tt from "@load28/unplugin-tt/webpack";
+import tt from "@openload28/unplugin-tt/webpack";
 export default { plugins: [tt()] };
 
 // Rspack: rspack.config.mjs
-import tt from "@load28/unplugin-tt/rspack";
+import tt from "@openload28/unplugin-tt/rspack";
 export default { plugins: [tt()] };
 
 // Farm: farm.config.ts
-import tt from "@load28/unplugin-tt/farm";
+import tt from "@openload28/unplugin-tt/farm";
 export default { plugins: [tt()] };
 ```
 
@@ -102,7 +102,7 @@ esbuild는 JavaScript API에서 연결합니다.
 
 ```js
 import { build } from "esbuild";
-import tt from "@load28/unplugin-tt/esbuild";
+import tt from "@openload28/unplugin-tt/esbuild";
 
 await build({ entryPoints: ["src/main.tt"], bundle: true, plugins: [tt()] });
 ```

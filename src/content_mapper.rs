@@ -7,7 +7,7 @@
 //!
 //! ```jsonc
 //! { "contentMappers": [
-//!     { "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] } ] }
+//!     { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] } ] }
 //! ```
 //!
 //! — and every surface of that TypeScript (CLI `tsc --runExternalCode`,
