@@ -1027,6 +1027,74 @@ fn a_pattern_typo_suppresses_typed_exhaustiveness_for_that_match() {
 }
 
 #[test]
+fn a_reported_imported_field_error_owns_only_its_match_exhaustiveness() {
+    require_tsgo!();
+    let source = "import { Fulfillment, PaymentMethod } from \"./domain.tt\";\n\
+        export function label(state: Fulfillment): string {\n\
+        \x20 return match (state) {\n\
+        \x20   Pending => \"Pending\",\n\
+        \x20   Shipped(carrier, trackng) => `${carrier} ${trackng}`,\n\
+        \x20 };\n\
+        }\n\
+        export function fee(method: PaymentMethod): number {\n\
+        \x20 return match (method) { Card(brand) => brand.length };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant Fulfillment {\n\
+             \x20 Pending,\n\
+             \x20 Shipped(carrier: string, tracking: string),\n\
+             \x20 Delivered,\n\
+             \x20 Cancelled,\n\
+             }\n\
+             export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+        ),
+        ("src/combo.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("case `Shipped` has no field `trackng`"),
+        "the source cause is reported: {out}"
+    );
+    assert!(
+        !out.contains("Delivered") && !out.contains("Cancelled"),
+        "the reported cause owns its match's coverage consequence: {out}"
+    );
+    assert!(
+        out.contains("missing \"BankTransfer\""),
+        "an independent match keeps its coverage result: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/combo.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "unknown-field"),
+        "the server reports the same owner: {answer}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "match-not-exhaustive"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("BankTransfer"))
+        }),
+        "the server preserves the independent coverage result: {answer}"
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| {
+            diagnostic["message"].as_str().is_none_or(|message| {
+                !message.contains("Delivered") && !message.contains("Cancelled")
+            })
+        }),
+        "the owned coverage consequence stays suppressed: {answer}"
+    );
+}
+
+#[test]
 fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
     require_tsgo!();
     let dir = project(&[(

@@ -888,9 +888,7 @@ pub(crate) fn report(
         if let DiagnosticOrigin::Anchor(anchor) = origin {
             if anchor.kind == AnchorKind::Match
                 && semantics.get(&file.source_path).is_some_and(|semantics| {
-                    semantics.analyses.matches.iter().any(|analysis| {
-                        analysis.keyword_off == anchor.src && analysis.has_unresolved
-                    })
+                    semantics.analyses.match_has_resolution_error(anchor.src)
                 })
             {
                 continue;
@@ -1127,13 +1125,10 @@ pub(crate) fn report(
         for (offset, coverage) in
             crate::analysis::checked_coverage(&file.source, externs, asked, asked_payloads)
         {
-            if semantics.get(&file.source_path).is_some_and(|semantics| {
-                semantics
-                    .analyses
-                    .matches
-                    .iter()
-                    .any(|analysis| analysis.keyword_off == offset && analysis.has_unresolved)
-            }) {
+            if semantics
+                .get(&file.source_path)
+                .is_some_and(|semantics| semantics.analyses.match_has_resolution_error(offset))
+            {
                 continue;
             }
             // A single match's witness is one pattern, quoted the way the

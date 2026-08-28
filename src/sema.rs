@@ -89,9 +89,9 @@ pub(crate) fn check_all(
     // One analysis, two reports. Resolution comes first — a pattern whose
     // names do not resolve has no exhaustiveness question worth asking, and
     // answering both at once would bury the cause under its effect. With
-    // accumulation the suppression is per match ([`MatchAnalysis::
-    // has_unresolved`]), not per file: match B's coverage is not match A's
-    // typo's business.
+    // accumulation the suppression is per match
+    // ([`PatternAnalyses::match_has_resolution_error`]), not per file: match
+    // B's coverage is not match A's typo's business.
     checker.errors.extend(resolution_errors(analyses));
     if !defer_to_checker {
         report_coverage(
@@ -958,7 +958,10 @@ fn report_coverage(
     let uncovered = analyses
         .matches
         .iter()
-        .filter(|m| !m.has_unresolved && !suppressed.contains(&m.keyword_off))
+        .filter(|m| {
+            !analyses.match_has_resolution_error(m.keyword_off)
+                && !suppressed.contains(&m.keyword_off)
+        })
         .filter_map(|m| m.coverage.as_ref().map(|c| (m, c)))
         .filter(|(_, c)| !c.missing.is_empty());
 

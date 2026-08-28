@@ -275,7 +275,7 @@
 | TASK-264 | Rust-style labeled diagnostics (secondary spans) | Complete | 2026-08-28 | 2026-08-28 | [TASK-264](./TASK-264-rust-style-labeled-diagnostics.md) |
 | TASK-265 | PR #85 review fixes — step-anchor gating and typed-path labels | Complete | 2026-08-28 | 2026-08-28 | [TASK-265](./TASK-265-pr85-review-fixes.md) |
 | TASK-266 | Diagnose fields of imported variants in every compiler path | Complete | 2026-08-28 | 2026-08-28 | [TASK-266](./TASK-266-imported-variant-field-diagnostics.md) |
-| TASK-267 | Preserve typed exhaustiveness when pattern diagnostics are reportable | Pending | 2026-08-28 | — | [TASK-267](./TASK-267-pattern-resolution-suppression.md) |
+| TASK-267 | Preserve typed exhaustiveness when pattern diagnostics are reportable | Complete | 2026-08-28 | 2026-08-28 | [TASK-267](./TASK-267-pattern-resolution-suppression.md) |
 | TASK-268 | Diagnose unknown cases independently of wildcard coverage | Pending | 2026-08-28 | — | [TASK-268](./TASK-268-wildcard-independent-case-resolution.md) |
 | TASK-269 | Respect tsconfig source boundaries and surface backend failures | Pending | 2026-08-28 | — | [TASK-269](./TASK-269-typed-project-boundaries.md) |
 | TASK-270 | Render nested pattern errors in source vocabulary | Pending | 2026-08-28 | — | [TASK-270](./TASK-270-nested-pattern-diagnostics.md) |
