@@ -115,12 +115,37 @@ pub struct Checked {
     pub diagnostics: Vec<Diagnostic>,
     /// The declarations the compiler emitted, when they were requested.
     pub declarations: Declarations,
-    /// Why the TypeScript layer could not answer, when it could not — the
-    /// backend failed to run (no toolchain, a dead process). The tt-level
-    /// diagnostics above are still complete: a missing type checker
-    /// removes the *typed* facts, not tt's own answers
+    /// Why the TypeScript layer could not answer, classified as unavailable
+    /// infrastructure or an internal backend contract failure. The tt-level
+    /// diagnostics above are still complete: a missing type checker removes
+    /// the *typed* facts, not tt's own answers
     /// (`docs/design/compiler-core.md` §7).
-    pub backend_error: Option<String>,
+    pub backend_error: Option<BackendError>,
+}
+
+/// The public, TypeScript-free classification of a typed-layer failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackendError {
+    /// Stable classification for consumer presentation and exit policy.
+    pub kind: BackendErrorKind,
+    /// Human-readable detail from the backend boundary.
+    pub message: String,
+}
+
+/// Whether a typed-layer failure is environmental or an internal compiler
+/// failure. Consumers must not infer this from message text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackendErrorKind {
+    /// A compatible TypeScript toolchain or process cannot be started.
+    Unavailable,
+    /// A running compiler backend violated its execution or protocol contract.
+    Internal,
+}
+
+impl std::fmt::Display for BackendError {
+    fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        out.write_str(&self.message)
+    }
 }
 
 /// The declarations of one emitting pass, matched back to their sources.
@@ -766,7 +791,20 @@ pub(crate) fn report(
     tt_only: bool,
     semantics: &HashMap<PathBuf, Arc<FileSemantics>>,
 ) -> Vec<Diagnostic> {
-    let files = snapshot.files();
+    let all_files = snapshot.files();
+    let files_storage;
+    let files = match &answers.project_modules {
+        Some(modules) => {
+            let modules: HashSet<&std::path::Path> = modules.iter().map(PathBuf::as_path).collect();
+            files_storage = all_files
+                .iter()
+                .filter(|file| modules.contains(file.module_path.as_path()))
+                .cloned()
+                .collect::<Vec<_>>();
+            files_storage.as_slice()
+        }
+        None => all_files,
+    };
     let mut out = Vec::new();
 
     for file in snapshot.blocked() {

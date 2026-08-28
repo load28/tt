@@ -331,6 +331,122 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
 }
 
 #[test]
+fn files_outside_tsconfig_do_not_receive_typed_queries() {
+    require_tsgo!();
+    let source = "import { importedMutation } from \"../shared/reachable.tt\";\n\
+        export function mutate(): number {\n\
+        \x20 val const values = new Map<string, number>();\n\
+        \x20 values.set(\"answer\", 42);\n\
+        \x20 return values.size + importedMutation();\n\
+        }\n";
+    let dir = project(&[("src/main.tt", source)]);
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    write(
+        &dir,
+        "shared/reachable.tt",
+        "export function importedMutation(): number {\n\
+         \x20 val const values = new Set<number>();\n\
+         \x20 values.add(1);\n\
+         \x20 return values.size;\n\
+         }\n",
+    );
+    fs::create_dir_all(dir.join("examples")).unwrap();
+    write(
+        &dir,
+        "examples/demo.tt",
+        "export function shout(name: string): string {\n\
+         \x20 val const text = name.trim();\n\
+         \x20 return `${text}!`;\n\
+         }\n",
+    );
+
+    let out = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "the val diagnostic is a code error: {stderr}"
+    );
+    assert!(stderr.contains("error[val-mutation]"), "{stderr}");
+    assert!(stderr.contains("--> src/main.tt:4:3"), "{stderr}");
+    assert!(stderr.contains("--> shared/reachable.tt:3:3"), "{stderr}");
+    assert!(
+        !stderr.contains("backend failed") && !stderr.contains("demo.tt.ts"),
+        "{stderr}"
+    );
+
+    let answer = typed_server(&dir, "src/main.tt", source);
+    assert!(answer.get("error").is_none(), "{answer}");
+    assert!(answer["result"]["backendError"].is_null(), "{answer}");
+    assert!(
+        answer["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|d| d["code"] == "val-mutation")),
+        "{answer}"
+    );
+}
+
+#[test]
+fn a_backend_contract_failure_uses_cli_ice_and_server_backend_error_contracts() {
+    require_tsgo!();
+    let source = "val const values = new Map<string, number>();\nvalues.set(\"a\", 1);\n";
+    let dir = project(&[("src/main.tt", source)]);
+
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .env("TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST", "1")
+        .current_dir(&dir)
+        .output()
+        .expect("ttc runs");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(101), "{stderr}");
+    assert!(
+        stderr.starts_with("error: internal compiler error:"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("injected TypeScript backend contract failure"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("github.com/load28/tt/issues"), "{stderr}");
+    assert!(
+        !stderr.contains("at handle") && !stderr.contains("host.mjs:"),
+        "{stderr}"
+    );
+
+    use std::io::Write;
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let request = serde_json::json!({
+        "id": 1,
+        "method": "typedCheck",
+        "params": { "path": file, "text": source, "includeTypes": true },
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .env("TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST", "1")
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    drop(child.stdin.take());
+    let output = child.wait_with_output().expect("server answers");
+    let answer: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(answer.get("error").is_none(), "{answer}");
+    assert_eq!(
+        answer["result"]["backendError"]["kind"], "internal",
+        "{answer}"
+    );
+    assert!(
+        answer["result"]["backendError"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("injected TypeScript backend contract failure")),
+        "{answer}"
+    );
+}
+
+#[test]
 fn a_hand_written_tsx_file_imports_an_ttx_file_by_its_specifier() {
     require_tsgo!();
     let dir = project(&[

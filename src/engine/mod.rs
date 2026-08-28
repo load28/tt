@@ -64,7 +64,10 @@ pub use language::{
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
 pub use project::{Blocked, CheckRequest, Project, collect_sources};
 pub use projection::ProjectedDocument;
-pub use semantics::{Checked, Declarations, Diagnostic, DiagnosticLabel, ModuleDeclaration};
+pub use semantics::{
+    BackendError, BackendErrorKind, Checked, Declarations, Diagnostic, DiagnosticLabel,
+    ModuleDeclaration,
+};
 pub use snapshot::Snapshot;
 pub use tokens::{SemanticToken, SemanticTokenKind, semantic_tokens, semantic_tokens_with_kind};
 
@@ -103,10 +106,11 @@ impl Engine {
     /// Opens the project `inputs` belong to.
     ///
     /// The project's own configuration is what the checker runs with: the
-    /// named `tsconfig` or the nearest one above the inputs. The graph is
-    /// the project's, not the input list's — every `.tt` file under the
-    /// root joins it, because a named input may import one that was not
-    /// named. What was named decides only what an emitting pass writes.
+    /// named `tsconfig` or the nearest one above the inputs. Candidate `.tt`
+    /// files under the root are layered so tsconfig globs and imports can
+    /// discover them; TypeScript's configured program then decides which
+    /// candidates join. What was named decides only what an emitting pass
+    /// writes.
     ///
     /// The error is a ready-to-print sentence: nothing collected, an
     /// unreadable input, or no TypeScript toolchain.
@@ -121,9 +125,9 @@ impl Engine {
             Err(e) => return Err(e.to_string()),
         };
         let (tsconfig, root) = identity_of(&collected, options);
-        // The graph is the project's, not the command line's: every `.tt`
-        // file under the project root joins the first pass, because a named
-        // input may import one that was not named.
+        // Scan candidates for the layered filesystem. Membership is not
+        // inferred from this walk: the configured TypeScript program admits
+        // include/files roots and everything reachable through its graph.
         let initial =
             match project::project_sources(&root, options.out_dir.as_deref(), &["tt", "ttx"]) {
                 Ok(all) if !all.is_empty() => all,

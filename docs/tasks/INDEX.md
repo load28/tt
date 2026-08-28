@@ -277,7 +277,7 @@
 | TASK-266 | Diagnose fields of imported variants in every compiler path | Complete | 2026-08-28 | 2026-08-28 | [TASK-266](./TASK-266-imported-variant-field-diagnostics.md) |
 | TASK-267 | Preserve typed exhaustiveness when pattern diagnostics are reportable | Complete | 2026-08-28 | 2026-08-28 | [TASK-267](./TASK-267-pattern-resolution-suppression.md) |
 | TASK-268 | Diagnose unknown cases independently of wildcard coverage | Complete | 2026-08-28 | 2026-08-28 | [TASK-268](./TASK-268-wildcard-independent-case-resolution.md) |
-| TASK-269 | Respect tsconfig source boundaries and surface backend failures | Pending | 2026-08-28 | — | [TASK-269](./TASK-269-typed-project-boundaries.md) |
+| TASK-269 | Respect tsconfig source boundaries and surface backend failures | Complete | 2026-08-28 | 2026-08-28 | [TASK-269](./TASK-269-typed-project-boundaries.md) |
 | TASK-270 | Render nested pattern errors in source vocabulary | Pending | 2026-08-28 | — | [TASK-270](./TASK-270-nested-pattern-diagnostics.md) |
 | TASK-271 | Diagnose deep expression `try` placement before verification | Pending | 2026-08-28 | — | [TASK-271](./TASK-271-deep-try-placement.md) |
 | TASK-272 | Point malformed `result` tails at the trailing semicolon | Pending | 2026-08-28 | — | [TASK-272](./TASK-272-result-tail-semicolon.md) |

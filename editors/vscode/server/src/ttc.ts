@@ -353,7 +353,13 @@ export type ValCheckResult =
   | { kind: "ok"; diagnostics: TtcDiagnostic[] }
   /** The check could not run (no toolchain, crash, or nothing to check).
    * Distinct from "ran and found nothing": the caller keeps what it has. */
-  | { kind: "unavailable"; detail: string };
+  | {
+      kind: "unavailable";
+      detail: string;
+      /** Environmental absence stays quiet; an internal backend failure
+       * must be surfaced as a compiler failure by the presentation layer. */
+      cause: "availability" | "internal";
+    };
 
 export async function runTypedCheck(
   compiler: string,
@@ -364,7 +370,11 @@ export async function runTypedCheck(
   // The overlay stands in for a file of the project, so there has to be one:
   // a buffer that was never saved has no place in the project graph yet.
   if (!exists(fsPath)) {
-    return { kind: "unavailable", detail: "not on disk yet" };
+    return {
+      kind: "unavailable",
+      detail: "the document is not on disk yet",
+      cause: "availability",
+    };
   }
   // The engine session keeps the project — and the TypeScript compiler
   // behind it — alive between checks, so this answers in milliseconds
@@ -379,11 +389,19 @@ export async function runTypedCheck(
   if (answer && "error" in answer) {
     // The session ran and the request failed (no toolchain, a backend
     // crash) — what the one-shot reports as "could not run".
-    return { kind: "unavailable", detail: answer.error };
+    return {
+      kind: "unavailable",
+      detail: answer.error,
+      cause: "internal",
+    };
   }
   if (answer && "result" in answer) {
     const result = answer.result as {
       blocked?: boolean;
+      backendError?: {
+        kind: "unavailable" | "internal";
+        message: string;
+      } | null;
       diagnostics?: {
         path: string;
         line: number;
@@ -396,6 +414,16 @@ export async function runTypedCheck(
         labels?: TtcLabel[];
       }[];
     };
+    if (result.backendError) {
+      return {
+        kind: "unavailable",
+        detail: result.backendError.message,
+        cause:
+          result.backendError.kind === "internal"
+            ? "internal"
+            : "availability",
+      };
+    }
     const all = result.diagnostics ?? [];
     let real = fsPath;
     try {
@@ -411,6 +439,7 @@ export async function runTypedCheck(
       return {
         kind: "unavailable",
         detail: "the check reported only outside this file",
+        cause: "availability",
       };
     }
     return {
@@ -468,6 +497,7 @@ function runTypedCheckOnce(
             resolve({
               kind: "unavailable",
               detail: `${compiler} (${String(code)}): ${String(stderr).trim() || err.message}`,
+              cause: code === 101 ? "internal" : "availability",
             });
             return;
           }
@@ -475,7 +505,11 @@ function runTypedCheckOnce(
         },
       );
     } catch (e) {
-      resolve({ kind: "unavailable", detail: String(e) });
+      resolve({
+        kind: "unavailable",
+        detail: String(e),
+        cause: "availability",
+      });
       return;
     }
     // The buffer is the overlay; the compiler reads it from stdin.

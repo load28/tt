@@ -12,6 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { runTypedCheck } from "../ttc";
+import { shutdownEngineServer } from "../engine";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 import { caseDir } from "./workspace";
 
@@ -40,6 +41,31 @@ test("a buffer that was never saved has no place in the project", async () => {
   // Not "ok with no diagnostics": that would render as a clean file.
   assert.equal(result.kind, "unavailable");
 });
+
+test(
+  "an internal backend failure is distinct from toolchain availability",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = tmpProject();
+    const file = path.join(dir, "backend.tt");
+    const source = "export const value = 1;\n";
+    fs.writeFileSync(file, source);
+
+    shutdownEngineServer();
+    process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST = "1";
+    try {
+      const result = await runTypedCheck(COMPILER, source, file, true);
+      assert.equal(result.kind, "unavailable");
+      if (result.kind !== "unavailable") return;
+      assert.equal(result.cause, "internal");
+      assert.match(result.detail, /injected TypeScript backend contract failure/);
+      assert.doesNotMatch(result.detail, /host\.mjs:|at handle/);
+    } finally {
+      delete process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST;
+      shutdownEngineServer();
+    }
+  },
+);
 
 test(
   "a pipeline mismatch keeps its secondary labels through the typed check",

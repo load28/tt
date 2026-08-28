@@ -24,7 +24,7 @@ use super::projection::{self, ProjectedDocument};
 use super::semantics::{self, Checked, FileSemantics};
 use super::snapshot::Snapshot;
 use crate::CompileError;
-use crate::typescript::backend::TypeScriptBackend;
+use crate::typescript::backend::{FailureKind, TypeScriptBackend};
 use crate::typescript::native::NativeBackend;
 
 /// What counts as a tt source, and what counts as hand-written TypeScript.
@@ -61,11 +61,12 @@ pub struct Project {
     /// The output tree a scan must not descend into (`--types`'s sidecar
     /// directory).
     out_dir: Option<PathBuf>,
-    /// The inputs' `.tt` files — what a `--types` run writes. The graph is
-    /// always the whole project; this only narrows emission.
+    /// The inputs' `.tt` files — what a `--types` run writes. The TypeScript
+    /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
-    /// The file set the first pass runs over, fixed at open: the project
-    /// scan, or the inputs themselves when the scan found nothing.
+    /// Candidate files for the first layered-filesystem pass, fixed at open:
+    /// the project scan, or the inputs when the scan found nothing. The
+    /// configured TypeScript program filters these to actual members.
     initial: Vec<PathBuf>,
     /// The project's hand-written TypeScript, listed only when there is no
     /// `tsconfig.json` to decide the program's files — see
@@ -153,17 +154,16 @@ impl Project {
         self.overlays.remove(path);
     }
 
-    /// Every `.tt` file of the project, as sorted absolute paths — the
-    /// compiler resolves modules by absolute path, and so must the modules
-    /// ttc adds. Scanned fresh so a file created since the last call is
-    /// seen.
+    /// Every candidate `.tt` file under the project root, as sorted absolute
+    /// paths. TypeScript later decides which candidates are configured or
+    /// reachable. Scanned fresh so a newly created file is seen.
     pub fn scan(&self) -> std::io::Result<Vec<PathBuf>> {
         project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)
     }
 
-    /// The file set the first pass runs over, decided when the project was
-    /// opened: the project scan, or — when that found nothing (inputs
-    /// outside the root) — the inputs themselves.
+    /// The candidate set the first pass layers, decided when the project was
+    /// opened: the project scan, or — when that found nothing (inputs outside
+    /// the root) — the inputs themselves.
     pub fn initial_files(&self) -> Vec<PathBuf> {
         self.initial.clone()
     }
@@ -337,9 +337,24 @@ impl Project {
         let (answers, backend_error) = match &self.backend {
             Ok(backend) => match backend.ask(self.tsconfig.as_deref(), &self.root, &query) {
                 Ok(answers) => (answers, None),
-                Err(error) => (Default::default(), Some(error)),
+                Err(error) => (
+                    Default::default(),
+                    Some(super::BackendError {
+                        kind: match error.kind {
+                            FailureKind::Unavailable => super::BackendErrorKind::Unavailable,
+                            FailureKind::Internal => super::BackendErrorKind::Internal,
+                        },
+                        message: error.message,
+                    }),
+                ),
             },
-            Err(missing) => (Default::default(), Some(missing.clone())),
+            Err(missing) => (
+                Default::default(),
+                Some(super::BackendError {
+                    kind: super::BackendErrorKind::Unavailable,
+                    message: missing.clone(),
+                }),
+            ),
         };
         let declarations = if request.emit_declarations && backend_error.is_none() {
             semantics::match_declarations(snapshot, &answers, &self.root, &self.requested)
