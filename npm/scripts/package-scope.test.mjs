@@ -8,14 +8,14 @@ const platforms = readJson(new URL("../tt-lang/platforms.json", import.meta.url)
 const unplugin = readJson(new URL("../../integrations/unplugin/package.json", import.meta.url));
 const initializer = readJson(new URL("../../packages/create-tt/package.json", import.meta.url));
 
-test("every published npm package belongs to the load28 scope", () => {
+test("every published npm package belongs to the openload28 scope", () => {
   const names = [
     main.name,
     ...Object.values(platforms).map((target) => target.package),
     unplugin.name,
     initializer.name,
   ];
-  assert.ok(names.every((name) => name.startsWith("@load28/")));
+  assert.ok(names.every((name) => name.startsWith("@openload28/")));
 });
 
 test("static packages publish publicly to npmjs", () => {

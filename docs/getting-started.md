@@ -7,7 +7,7 @@ You need [Bun](https://bun.sh/) for the recommended setup.
 Create a Vite + TypeScript project with a starter `.tt` module:
 
 ```sh
-bunx @load28/create-tt@next my-app
+bunx @openload28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -16,24 +16,24 @@ Add tt to an existing TypeScript project:
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@next init
+bunx @openload28/create-tt@next init
 bun run tt:check
 ```
 
 `init` performs these steps:
 
 - Detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, or Farm
-- Adds `@load28/tt-lang`, `@load28/unplugin-tt`, TypeScript, and TT scripts
+- Adds `@openload28/tt-lang`, `@openload28/unplugin-tt`, TypeScript, and TT scripts
 - Creates `tt.*.config.mjs` for declarative bundlers
 - Prints the plugin code to add for esbuild
 
 Useful non-interactive options:
 
 ```sh
-bunx @load28/create-tt@next init --bundler vite
-bunx @load28/create-tt@next init --bundler none
-bunx @load28/create-tt@next init --no-install
-bunx @load28/create-tt@next init --package-manager bun
+bunx @openload28/create-tt@next init --bundler vite
+bunx @openload28/create-tt@next init --bundler none
+bunx @openload28/create-tt@next init --no-install
+bunx @openload28/create-tt@next init --package-manager bun
 ```
 
 New projects use Bun. Existing projects keep the package manager from their
@@ -44,7 +44,7 @@ New projects use Bun. Existing projects keep the package manager from their
 Install the compiler and the TypeScript it drives:
 
 ```sh
-bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
@@ -67,34 +67,34 @@ to `.gitignore`. Do not edit generated files.
 Install the direct-source plugin in addition to the compiler:
 
 ```sh
-bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
+bun add -d @openload28/tt-lang@next @openload28/unplugin-tt@next
 ```
 
 Put `tt()` first in the bundler's plugins array:
 
 ```ts
 // Vite: vite.config.ts
-import tt from "@load28/unplugin-tt/vite";
+import tt from "@openload28/unplugin-tt/vite";
 export default { plugins: [tt()] };
 
 // Rollup: rollup.config.js
-import tt from "@load28/unplugin-tt/rollup";
+import tt from "@openload28/unplugin-tt/rollup";
 export default { plugins: [tt()] };
 
 // Rolldown: rolldown.config.js
-import tt from "@load28/unplugin-tt/rolldown";
+import tt from "@openload28/unplugin-tt/rolldown";
 export default { plugins: [tt()] };
 
 // webpack: webpack.config.mjs
-import tt from "@load28/unplugin-tt/webpack";
+import tt from "@openload28/unplugin-tt/webpack";
 export default { plugins: [tt()] };
 
 // Rspack: rspack.config.mjs
-import tt from "@load28/unplugin-tt/rspack";
+import tt from "@openload28/unplugin-tt/rspack";
 export default { plugins: [tt()] };
 
 // Farm: farm.config.ts
-import tt from "@load28/unplugin-tt/farm";
+import tt from "@openload28/unplugin-tt/farm";
 export default { plugins: [tt()] };
 ```
 
@@ -102,7 +102,7 @@ esbuild uses its JavaScript API:
 
 ```js
 import { build } from "esbuild";
-import tt from "@load28/unplugin-tt/esbuild";
+import tt from "@openload28/unplugin-tt/esbuild";
 
 await build({ entryPoints: ["src/main.tt"], bundle: true, plugins: [tt()] });
 ```

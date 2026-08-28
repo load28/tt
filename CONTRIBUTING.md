@@ -139,6 +139,6 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
 개발자 릴리스 절차, 자동·수동 경계, Beta·RC·Stable·Patch의 처리 기준은 [`docs/releasing.ko.md`](./docs/releasing.ko.md)에 단일 가이드로 정리합니다.
 
 ```sh
-bun add -d @load28/tt-lang@next @load28/unplugin-tt@next
-bunx @load28/create-tt@next my-app
+bun add -d @openload28/tt-lang@next @openload28/unplugin-tt@next
+bunx @openload28/create-tt@next my-app
 ```

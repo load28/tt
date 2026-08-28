@@ -1,4 +1,4 @@
-# @load28/tt-lang
+# @openload28/tt-lang
 
 **tt** is a tiny preprocessor language that compiles to TypeScript. It adds
 Rust-style tagged unions and pattern matching, concise `Option`/`Result`
@@ -12,8 +12,8 @@ For a complete Bun + Vite project, or to add tt to an existing TypeScript
 project, use the initializer instead:
 
 ```sh
-bunx @load28/create-tt@next my-app
-bunx @load28/create-tt@next init
+bunx @openload28/create-tt@next my-app
+bunx @openload28/create-tt@next init
 ```
 
 `ttc` drives TypeScript 7 and takes it from your project's own
@@ -21,7 +21,7 @@ bunx @load28/create-tt@next init
 looks. The TT installer does not add it for you:
 
 ```sh
-bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1
+bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
 Declaration output (`ttc --types`, editor `.tt.d.ts` sidecars) and content
@@ -42,11 +42,11 @@ virtually (no sidecar files). Declare it once in `tsconfig.json` and run
 
 ```jsonc
 "contentMappers": [
-  { "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] }
+  { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
 ]
 ```
 
-Using a bundler? [`@load28/unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
+Using a bundler? [`@openload28/unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
 reads `.tt` files directly in Vite, Rollup, webpack, Rspack, esbuild and
 Farm, and finds this package's binary automatically.
 
@@ -61,11 +61,11 @@ matching your machine.
 
 | Package | OS | CPU |
 |---------|----|----|
-| `@load28/tt-lang-linux-x64` | Linux | x64 (static musl build) |
-| `@load28/tt-lang-linux-arm64` | Linux | arm64 (static musl build) |
-| `@load28/tt-lang-darwin-x64` | macOS | x64 |
-| `@load28/tt-lang-darwin-arm64` | macOS | arm64 |
-| `@load28/tt-lang-win32-x64-msvc` | Windows | x64 (MSVC) |
+| `@openload28/tt-lang-linux-x64` | Linux | x64 (static musl build) |
+| `@openload28/tt-lang-linux-arm64` | Linux | arm64 (static musl build) |
+| `@openload28/tt-lang-darwin-x64` | macOS | x64 |
+| `@openload28/tt-lang-darwin-arm64` | macOS | arm64 |
+| `@openload28/tt-lang-win32-x64-msvc` | Windows | x64 (MSVC) |
 
 On other platforms, build from source
 (`cargo install --git https://github.com/load28/tt`) and set the
@@ -77,7 +77,7 @@ The package exports one helper for tools that want to spawn the compiler
 directly:
 
 ```js
-const { binaryPath } = require("@load28/tt-lang");
+const { binaryPath } = require("@openload28/tt-lang");
 binaryPath(); // absolute path to the ttc binary for this platform
 ```
 

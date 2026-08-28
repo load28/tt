@@ -116,7 +116,7 @@ GitHub prerelease로 자동 게시합니다. `N`은 GitHub Actions 실행 번호
 
 `next`는 버전이 아니라 최신 Nightly를 가리키는 npm dist-tag입니다. 새 불변 버전을
 `--tag next`로 게시할 때 포인터가 새 버전으로 이동하므로 사용자는
-`@load28/tt-lang@next`로 항상 현재 Nightly를 설치할 수 있습니다.
+`@openload28/tt-lang@next`로 항상 현재 Nightly를 설치할 수 있습니다.
 
 릴리스에는 `tt-typescript-preview-<버전>-<플랫폼>.vsix`도 첨부됩니다 — 저장소가
 고정한 TypeScript 나이틀리와 같은 커밋에서 빌드한 VS Code 확장으로, 마켓플레이스의

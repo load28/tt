@@ -1,5 +1,5 @@
 {
-  "name": "@load28/unplugin-tt",
+  "name": "@openload28/unplugin-tt",
   "version": "0.1.0",
   "description": "Compile .tt and .ttx modules with ttc in Vite, Rollup, webpack, Rspack, esbuild and Farm",
   "license": "MIT",

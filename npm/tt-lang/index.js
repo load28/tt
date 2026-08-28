@@ -1,10 +1,10 @@
 /* --------------------------------------------------------------------------
- * @load28/tt-lang — locate the platform-specific ttc binary.
+ * @openload28/tt-lang — locate the platform-specific ttc binary.
  *
- * The actual compiler ships in per-platform packages (@load28/tt-lang-linux-x64,
- * @load28/tt-lang-darwin-arm64, ...) wired up as optionalDependencies: npm installs
+ * The actual compiler ships in per-platform packages (@openload28/tt-lang-linux-x64,
+ * @openload28/tt-lang-darwin-arm64, ...) wired up as optionalDependencies: npm installs
  * only the one matching the host. This module finds that binary so tools
- * (the `ttc` bin launcher, @load28/unplugin-tt, editor servers) can spawn it
+ * (the `ttc` bin launcher, @openload28/unplugin-tt, editor servers) can spawn it
  * directly without paying for an extra node process per call.
  * ----------------------------------------------------------------------- */
 "use strict";
@@ -49,15 +49,15 @@ function binaryPath() {
     return require.resolve(`${pkg}/bin/${exe}`);
   } catch {
     const reason = pkg
-      ? `the ${pkg} package is not installed — it is an optionalDependency of @load28/tt-lang, ` +
+      ? `the ${pkg} package is not installed — it is an optionalDependency of @openload28/tt-lang, ` +
         `so this usually means optional dependencies were disabled (--no-optional / ` +
         `--omit=optional) or the lockfile was created on a different platform. ` +
-        `Reinstalling @load28/tt-lang should fix it.`
+        `Reinstalling @openload28/tt-lang should fix it.`
       : `no prebuilt ttc binary is published for ${key}. Prebuilt platforms: ` +
         `${SUPPORTED.join(", ")}. You can build from source with ` +
         `"cargo install --git https://github.com/load28/tt" and point the ` +
         `TTC_BINARY environment variable at the resulting binary.`;
-    throw new Error(`@load28/tt-lang: cannot find the ttc binary: ${reason}`);
+    throw new Error(`@openload28/tt-lang: cannot find the ttc binary: ${reason}`);
   }
 }
 

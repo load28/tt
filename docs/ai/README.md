@@ -26,7 +26,7 @@ curl -o docs/tt-ai-guide.md \
 | Codex · Jules 등 AGENTS.md 계열 | 프로젝트 `AGENTS.md`에 내용 추가 또는 링크 |
 | 그 외 (챗 기반) | 대화 시작 시 파일 내용을 시스템 프롬프트/첫 메시지로 붙여넣기 |
 
-`npm install @load28/tt-lang`을 쓰는 프로젝트라면 설치된 패키지 대신 위처럼 저장소의
+`npm install @openload28/tt-lang`을 쓰는 프로젝트라면 설치된 패키지 대신 위처럼 저장소의
 최신 문서를 받아 두고, tt 버전을 올릴 때 함께 갱신하는 것을 권장합니다.
 
 **같은 가이드가 컴파일러에도 임베드되어 있습니다** — 설치된 ttc에서
@@ -42,7 +42,7 @@ curl -o docs/tt-ai-guide.md \
   패턴 없음, 소진성 검사에서 가드/중첩 암이 커버로 인정되지 않는 것 등.
 - **`@tt/std` 치트시트**: `Option`/`Result`의 필드명(`value`/`error`)과
   콤비네이터, 파이프라인용 `*P` 변형.
-- **빌드 파이프라인**: `ttc` 명령, `tsconfig` 설정, 번들러(@load28/unplugin-tt),
+- **빌드 파이프라인**: `ttc` 명령, `tsconfig` 설정, 번들러(@openload28/unplugin-tt),
   `.tt-types` 사이드카.
 - **에러 읽는 법과 마무리 체크리스트**.
 

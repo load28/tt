@@ -1,10 +1,10 @@
 /* --------------------------------------------------------------------------
- * make-platform-package.mjs — assemble one @load28/tt-lang-<os>-<cpu> npm package.
+ * make-platform-package.mjs — assemble one @openload28/tt-lang-<os>-<cpu> npm package.
  *
  *   node make-platform-package.mjs <os>-<cpu> <path/to/ttc[.exe]> <out-dir> \
  *        [version]
  *
- * Writes <out-dir>/@load28/tt-lang-<os>-<cpu>/ with package.json, the binary under
+ * Writes <out-dir>/@openload28/tt-lang-<os>-<cpu>/ with package.json, the binary under
  * bin/, and a one-line README. The release workflow runs this once per build
  * matrix entry; version defaults to 0.0.0-dev for local smoke tests.
  * ----------------------------------------------------------------------- */
@@ -39,7 +39,7 @@ fs.writeFileSync(
     {
       name,
       version,
-      description: `Prebuilt ttc binary (tt compiler) for ${key}. Install @load28/tt-lang instead of this package.`,
+      description: `Prebuilt ttc binary (tt compiler) for ${key}. Install @openload28/tt-lang instead of this package.`,
       license: "MIT",
       repository: { type: "git", url: "https://github.com/load28/tt", directory: "npm/tt-lang" },
       publishConfig: { access: "public", registry: "https://registry.npmjs.org/" },
@@ -53,7 +53,7 @@ fs.writeFileSync(
 );
 fs.writeFileSync(
   path.join(root, "README.md"),
-  `# ${name}\n\nPrebuilt \`ttc\` binary for ${key}. This is an internal platform package —\ninstall [\`@load28/tt-lang\`](https://www.npmjs.com/package/@load28/tt-lang) instead.\n`,
+  `# ${name}\n\nPrebuilt \`ttc\` binary for ${key}. This is an internal platform package —\ninstall [\`@openload28/tt-lang\`](https://www.npmjs.com/package/@openload28/tt-lang) instead.\n`,
 );
 
 console.log(root);

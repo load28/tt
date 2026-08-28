@@ -1,6 +1,6 @@
 /* The compiler a project provides (install.ts) and the ladder that consumes
  * it (ttc.findCompiler). Everything runs against fake installs in temp
- * directories — a real @load28/tt-lang is never needed, and what is
+ * directories — a real @openload28/tt-lang is never needed, and what is
  * exercised is the published package's own `binaryPath()` contract. */
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
@@ -18,7 +18,7 @@ function scratch(prefix: string): string {
 }
 
 /**
- * A workspace with `@load28/tt-lang` installed the way npm installs it: a
+ * A workspace with `@openload28/tt-lang` installed the way npm installs it: a
  * launcher package that resolves the binary out of the per-platform package
  * its optional dependencies brought in. The files are the published
  * package's, reduced to the resolution contract this module consumes.
@@ -32,8 +32,8 @@ function install(
   workspace: string,
   { platform = "host", withBinary = true } = {},
 ): string {
-  const scope = path.join(workspace, "node_modules", "@load28");
-  const platformPackage = `@load28/tt-lang-${platform}`;
+  const scope = path.join(workspace, "node_modules", "@openload28");
+  const platformPackage = `@openload28/tt-lang-${platform}`;
   const binary = path.join(scope, `tt-lang-${platform}`, "bin", EXE);
   if (withBinary) {
     fs.mkdirSync(path.dirname(binary), { recursive: true });
@@ -49,7 +49,7 @@ function install(
   fs.writeFileSync(
     path.join(launcher, "package.json"),
     JSON.stringify({
-      name: "@load28/tt-lang",
+      name: "@openload28/tt-lang",
       version: "0.0.0",
       main: "index.js",
     }),

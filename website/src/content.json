@@ -101,7 +101,7 @@
         "en": "Use create-tt to configure the compiler, TypeScript, bundler integration, and project scripts.",
         "ko": "create-tt으로 컴파일러, TypeScript, 번들러 연동, 프로젝트 스크립트를 구성합니다."
       },
-      "code": "bunx @load28/create-tt@next my-app\ncd my-app\nbun run dev",
+      "code": "bunx @openload28/create-tt@next my-app\ncd my-app\nbun run dev",
       "works": {
         "en": [
           "New projects use Vite, TypeScript, and Bun.",
@@ -126,7 +126,7 @@
             "en": "Create a ready-to-run Vite and TypeScript project.",
             "ko": "바로 실행할 수 있는 Vite와 TypeScript 프로젝트를 만듭니다."
           },
-          "code": "bunx @load28/create-tt@next my-app\ncd my-app\nbun run dev"
+          "code": "bunx @openload28/create-tt@next my-app\ncd my-app\nbun run dev"
         },
         {
           "title": {
@@ -137,7 +137,7 @@
             "en": "Run init from the package root, then check the tt source tree.",
             "ko": "패키지 루트에서 init을 실행한 뒤 tt 소스 트리를 검사합니다."
           },
-          "code": "bunx @load28/create-tt@next init\nbun run tt:check"
+          "code": "bunx @openload28/create-tt@next init\nbun run tt:check"
         },
         {
           "title": {
@@ -175,7 +175,7 @@
             "en": "Install the compiler and the supported TypeScript version, then compile or check the source tree.",
             "ko": "컴파일러와 지원하는 TypeScript 버전을 설치한 뒤 소스 트리를 컴파일하거나 검사합니다."
           },
-          "code": "bun add -d @load28/tt-lang@next typescript@7.1.0-dev.20260826.1\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "code": "bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
         },
         {
           "title": {
@@ -186,7 +186,7 @@
             "en": "Install the bundler plugin and add tt() first in the plugins array. Use the adapter for your bundler.",
             "ko": "번들러 플러그인을 설치하고 plugins 배열 맨 앞에 tt()을 추가합니다. 사용하는 번들러에 맞는 어댑터를 선택합니다."
           },
-          "code": "bun add -d @load28/tt-lang@next @load28/unplugin-tt@next typescript@7.1.0-dev.20260826.1\n\nimport tt from \"@load28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
+          "code": "bun add -d @openload28/tt-lang@next @openload28/unplugin-tt@next typescript@7.1.0-dev.20260826.1\n\nimport tt from \"@openload28/unplugin-tt/vite\";\nexport default { plugins: [tt()] };"
         }
       ]
     },
@@ -209,25 +209,25 @@
           "Ordinary TSX remains valid in .ttx; JSX tags and text pass through byte for byte.",
           "tt constructs work inside JSX children and attribute expression containers.",
           "Concise arrow components preserve lexical scope and JSX evaluation order.",
-          "Relative .ttx imports work through the CLI, editor, and @load28/unplugin-tt."
+          "Relative .ttx imports work through the CLI, editor, and @openload28/unplugin-tt."
         ],
         "ko": [
           "일반 TSX는 .ttx에서도 유효하며 JSX 태그와 텍스트는 바이트 그대로 통과합니다.",
           "JSX 자식과 속성 expression container 안에서 tt 구문을 사용할 수 있습니다.",
           "concise arrow 컴포넌트의 렉시컬 범위와 JSX 평가 순서를 보존합니다.",
-          "상대 .ttx import는 CLI, 에디터, @load28/unplugin-tt에서 동일하게 동작합니다."
+          "상대 .ttx import는 CLI, 에디터, @openload28/unplugin-tt에서 동일하게 동작합니다."
         ]
       },
       "limits": {
         "en": [
           ".ttx emits .tsx; your TypeScript project still chooses the jsx compiler option.",
           "React, Preact, and other JSX runtimes remain application dependencies, not tt dependencies.",
-          "Use @load28/unplugin-tt when a bundler imports .ttx files directly."
+          "Use @openload28/unplugin-tt when a bundler imports .ttx files directly."
         ],
         "ko": [
           ".ttx는 .tsx를 방출하며 jsx 컴파일러 옵션은 TypeScript 프로젝트가 선택합니다.",
           "React·Preact 같은 JSX 런타임은 tt이 아니라 애플리케이션 의존성입니다.",
-          "번들러가 .ttx를 직접 import할 때는 @load28/unplugin-tt을 사용합니다."
+          "번들러가 .ttx를 직접 import할 때는 @openload28/unplugin-tt을 사용합니다."
         ]
       }
     },
@@ -763,7 +763,7 @@
         "en": "tt is in early development. Only Nightly builds from main are published, and every npm installation uses the next channel.",
         "ko": "tt은 초기 개발 단계입니다. main의 Nightly 빌드만 게시하며 모든 npm 설치에는 next 채널을 사용합니다."
       },
-      "code": "bunx @load28/create-tt@next my-app\nbun add -d @load28/tt-lang@next @load28/unplugin-tt@next",
+      "code": "bunx @openload28/create-tt@next my-app\nbun add -d @openload28/tt-lang@next @openload28/unplugin-tt@next",
       "works": {
         "en": [
           "Scheduled or manually dispatched main CI builds can publish a Nightly.",
@@ -814,7 +814,7 @@
             "en": "Publish Release reuses the successful CI artifacts, publishes every npm package with next, and creates a GitHub pre-release with the matching immutable version.",
             "ko": "Publish Release는 성공한 CI 산출물을 재사용하고 모든 npm 패키지를 next로 게시하며 같은 불변 버전의 GitHub pre-release를 만듭니다."
           },
-          "code": "npm install --save-dev @load28/tt-lang@next @load28/unplugin-tt@next"
+          "code": "npm install --save-dev @openload28/tt-lang@next @openload28/unplugin-tt@next"
         }
       ]
     }

@@ -121,12 +121,12 @@ head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되�
 씁니다. 그래서 TT 저장소를 직접 빌드하지 않는 개발자의 절차는 이렇습니다.
 
 ```sh
-npm i -D @load28/tt-lang typescript@7.1.0-dev.20260826.1                 # ttc + TypeScript 7
+npm i -D @openload28/tt-lang typescript@7.1.0-dev.20260826.1                 # ttc + TypeScript 7
 code --install-extension tt-language-<version>.vsix   # 릴리스의 VSIX
 ```
 
 설정할 것도, 내보낼 환경 변수도 없습니다. 확장은 그 프로젝트의
-`@load28/tt-lang`이 가리키는 ttc를 띄우고, ttc는 같은 프로젝트의 TypeScript를
+`@openload28/tt-lang`이 가리키는 ttc를 띄우고, ttc는 같은 프로젝트의 TypeScript를
 찾아 언어 서비스를 몰아 줍니다 — `npx ttc`와 **완전히 같은 툴체인**입니다.
 다른 것을 지목할 방법이 없으므로 에디터와 빌드가 갈라질 수 없습니다.
 
@@ -139,12 +139,12 @@ code --install-extension tt-language-<version>.vsix   # 릴리스의 VSIX
 1. `tt.compilerPath` 설정
 2. 워크스페이스의 `target/release/ttc` → `target/debug/ttc` (TT 저장소 자체를
    열어 컴파일러를 개발하는 경우)
-3. **프로젝트가 설치한 `@load28/tt-lang`의 ttc** — 어느 바이너리인지는 그
+3. **프로젝트가 설치한 `@openload28/tt-lang`의 ttc** — 어느 바이너리인지는 그
    패키지 자신이 답하므로(`binaryPath()`), 게시본 설치·`file:` 개발 설치·
    `TTC_BINARY` 지정이 모두 같은 경로로 해석됩니다 (`server/src/install.ts`)
 4. PATH의 `ttc`
 
-즉 **프로젝트에 `@load28/tt-lang`을 설치했다면 아무 설정 없이 동작합니다** —
+즉 **프로젝트에 `@openload28/tt-lang`을 설치했다면 아무 설정 없이 동작합니다** —
 `npx ttc`가 실행하는 바로 그 컴파일러를 확장도 실행합니다. 3번은 워크스페이스
 루트에서 위로 올라가며 `node_modules`를 찾으므로, 모노레포 루트에 설치한
 패키지도 하위 폴더의 파일에 적용됩니다.
@@ -206,7 +206,7 @@ TypeScript 7.1의 언어 서버는 **content mapper**를 통해 `.tt`·`.ttx`를
 가상으로 들고 검사합니다 — 디스크에 생성물이 없고, `rootDirs`/`paths`
 배선도 필요 없습니다. 이 확장이 활성화될 때 TypeScript 확장
 (네이티브 프리뷰)에 `.tt`·`.ttx`를 자동 등록하므로, 워크스페이스가
-`@load28/tt-lang`을 설치해 두었다면 에디터 쪽 설정은 없습니다.
+`@openload28/tt-lang`을 설치해 두었다면 에디터 쪽 설정은 없습니다.
 
 마켓플레이스의 TypeScript Native Preview가 아직 content mapper 이전
 빌드라면, tt 릴리스에 첨부된 `tt-typescript-preview-<버전>-<플랫폼>.vsix`
@@ -238,7 +238,7 @@ CLI(`tsc`)와 tsconfig 기반 프로젝트에서는 `contentMappers` 한 줄이�
 ```jsonc
 // tsconfig.json
 "contentMappers": [
-  { "package": "@load28/tt-lang", "extensions": [".tt", ".ttx"] }
+  { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
 ]
 ```
 

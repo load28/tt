@@ -1,7 +1,7 @@
 /* --------------------------------------------------------------------------
  * The compiler a *project* provides.
  *
- * A project consumes tt by installing `@load28/tt-lang`; that package is what
+ * A project consumes tt by installing `@openload28/tt-lang`; that package is what
  * knows where the ttc binary for this machine is (`binaryPath()` in
  * npm/tt-lang/index.js — the `TTC_BINARY` override, a `file:` development
  * install, then the platform package npm picked). The package documents
@@ -20,10 +20,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 /** The package a project installs to get tt. */
-const PACKAGE = ["@load28", "tt-lang"];
+const PACKAGE = ["@openload28", "tt-lang"];
 
 /**
- * The ttc of the `@load28/tt-lang` installed for one of `workspaceRoots`, or
+ * The ttc of the `@openload28/tt-lang` installed for one of `workspaceRoots`, or
  * "" when no root has one. Each root is searched the way Node resolves a
  * package: `node_modules` from the root upwards.
  */

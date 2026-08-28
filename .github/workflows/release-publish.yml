@@ -134,9 +134,9 @@ jobs:
           node npm/scripts/stamp-version.mjs "$VERSION" --unplugin-version "$UNPLUGIN_VERSION"
       - name: Smoke-test the promoted compiler
         run: |
-          test "$(dist/packages/@load28/tt-lang-linux-x64/bin/ttc --version)" = "$VERSION"
+          test "$(dist/packages/@openload28/tt-lang-linux-x64/bin/ttc --version)" = "$VERSION"
           printf 'variant E { A(x: number) }\nconst v = E.A(1);\n' > /tmp/release-smoke.tt
-          dist/packages/@load28/tt-lang-linux-x64/bin/ttc -p /tmp/release-smoke.tt | grep -q 'kind: "A"'
+          dist/packages/@openload28/tt-lang-linux-x64/bin/ttc -p /tmp/release-smoke.tt | grep -q 'kind: "A"'
       - name: Publish immutable npm packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -156,7 +156,7 @@ jobs:
               npm publish "./$package_dir" --tag "$NPM_TAG" --provenance --access public
             fi
           }
-          for package_dir in dist/packages/@load28/tt-lang-*; do publish_package "$package_dir"; done
+          for package_dir in dist/packages/@openload28/tt-lang-*; do publish_package "$package_dir"; done
           publish_package npm/tt-lang
           publish_package integrations/unplugin independent
           publish_package packages/create-tt

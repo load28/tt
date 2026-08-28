@@ -82,7 +82,7 @@ const CANDIDATE_PATHS = [
  * 1. the explicit `tt.compilerPath` setting;
  * 2. a binary built in a workspace root — the TT repository itself, open in
  *    the editor that is developing it;
- * 3. the ttc of the `@load28/tt-lang` package the project installed, which the
+ * 3. the ttc of the `@openload28/tt-lang` package the project installed, which the
  *    package resolves itself (install.ts) — a published install, a `file:`
  *    development install, or `TTC_BINARY`;
  * 4. `ttc` on PATH.
