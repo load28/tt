@@ -192,7 +192,17 @@ Bundler alternative: `@openload28/unplugin-tt` (`import tt from "@openload28/unp
 ## Workflow
 
 - Edit loop: change `.tt` → `npx ttc --check src` (fast tt-level, no TypeScript) → `npx ttc --check-types src` (types, exhaustiveness by narrowed type, `val`).
-- `.ts` importing `.tt` (TypeScript 7.1+): declare the content mapper once in tsconfig — `"contentMappers": [{ "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }]` — and run `tsc` with `--runExternalCode`. TypeScript holds the transform virtually (no files on disk, no `rootDirs`/`paths`); diagnostics land at original `.tt` positions, tt-level rules under the `tt` source. The VS Code extension auto-registers the mapper with the TypeScript extension. Editor prerequisites until TypeScript 7.1 is officially released: install BOTH VSIXes from the newest nightly GitHub Release (`tt-language-*` and `tt-typescript-preview-*-<platform>`, the 7.1-API TypeScript build the Marketplace extension does not ship yet) and set `"js/ts.experimental.useTsgo": true` + `"typescript.experimental.useTsgo": true`. After the official 7.1 release: official extension route, no useTsgo needed.
+- `.ts` importing `.tt` (TypeScript 7.1+): declare the content mapper once as the top-level `contentMappers` key in tsconfig, alongside—not inside—`compilerOptions`:
+  ```jsonc
+  {
+    "compilerOptions": { "strict": true, "noEmit": true },
+    "contentMappers": [
+      { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
+    ],
+    "include": ["src"]
+  }
+  ```
+  Run `tsc` with `--runExternalCode`. TypeScript holds the transform virtually (no files on disk, no `rootDirs`/`paths`); diagnostics land at original `.tt` positions, tt-level rules under the `tt` source. The VS Code extension auto-registers the mapper with the TypeScript extension. Editor prerequisites until TypeScript 7.1 is officially released: install BOTH VSIXes from the newest nightly GitHub Release (`tt-language-*` and `tt-typescript-preview-*-<platform>`, the 7.1-API TypeScript build the Marketplace extension does not ship yet) and set `"js/ts.experimental.useTsgo": true` + `"typescript.experimental.useTsgo": true`. After the official 7.1 release: official extension route, no useTsgo needed.
 - `.ts` importing `.tt` (classic tsserver, LEGACY): keep `npx ttc --types -w src` running so editor/tsc resolve `./x.tt` + `@tt/std` via sidecars; if not watching, re-run `--types` after variant changes.
 - Build: `npm run build` (ttc emits TS tree then tsc) or bundler build. CI: `ttc --check src && tsc --noEmit` + tests.
 - `ttc <dir>`: `.tt`→`.ts`, `.ttx`→`.tsx`, hand-written `.ts`/`.tsx` passthrough; `-o <dir>` separate tree (in-place overwrite refused); `@tt/std` auto-materialized when imported. `ttc -w` watches and also recompiles importers of changed files (cross-file exhaustiveness). Files compile in parallel (one per core) with identical output/diagnostics either way; `-j <n>` sets the count, `-j 1` = sequential.

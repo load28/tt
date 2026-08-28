@@ -282,7 +282,7 @@
 | TASK-271 | Diagnose deep expression `try` placement before verification | Complete | 2026-08-28 | 2026-08-28 | [TASK-271](./TASK-271-deep-try-placement.md) |
 | TASK-272 | Point malformed `result` tails at the trailing semicolon | Complete | 2026-08-28 | 2026-08-28 | [TASK-272](./TASK-272-result-tail-semicolon.md) |
 | TASK-273 | Suppress checker cascades owned by proven tt errors | Complete | 2026-08-28 | 2026-08-28 | [TASK-273](./TASK-273-owned-checker-cascades.md) |
-| TASK-274 | Show the top-level `contentMappers` configuration shape | Pending | 2026-08-28 | — | [TASK-274](./TASK-274-content-mapper-documentation.md) |
+| TASK-274 | Show the top-level `contentMappers` configuration shape | Complete | 2026-08-28 | 2026-08-28 | [TASK-274](./TASK-274-content-mapper-documentation.md) |
 
 ## 다음 태스크 번호
 

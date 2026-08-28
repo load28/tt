@@ -233,18 +233,26 @@ mapper를 실은 정식 프리뷰가 마켓플레이스에 올라오면 같은 I
 TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
 `useTsgo` 설정도 필요 없어집니다.
 
-CLI(`tsc`)와 tsconfig 기반 프로젝트에서는 `contentMappers` 한 줄이면 됩니다:
+For CLI (`tsc`) and tsconfig-based projects, `contentMappers` is a top-level
+key. It must be a sibling of `compilerOptions`, not a property inside it:
 
 ```jsonc
 // tsconfig.json
-"contentMappers": [
-  { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
-]
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true
+  },
+  "contentMappers": [
+    { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
+  ],
+  "include": ["src"]
+}
 ```
 
-`tsc`는 외부 프로세스 실행을 허용하는 `--runExternalCode`와 함께 실행합니다.
-진단은 원본 `.tt`·`.ttx` 위치로 보고되고, tt 수준 오류는 `tt` 소스로
-함께 나옵니다.
+Run `tsc` with `--runExternalCode` so TypeScript may start the mapper process.
+Diagnostics point to the original `.tt` and `.ttx` positions, and tt-level
+errors use `tt` as their source.
 
 ### 클래식 tsserver — 사이드카 (레거시)
 
