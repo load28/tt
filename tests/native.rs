@@ -666,6 +666,149 @@ fn a_precise_tt_error_owns_an_overlapping_type_consequence() {
 }
 
 #[test]
+fn a_pipeline_mismatch_names_the_step_that_rejects_the_value() {
+    require_tsgo!();
+    // The mismatch is at the second boundary, where the checker blames the
+    // accumulated helper call — compiler glue. The per-step anchor re-homes
+    // it onto the step that rejected the value instead of underlining the
+    // whole pipeline (TASK-263).
+    let dir = project(&[(
+        "src/pipe.tt",
+        "const inc = (n: number): number => n + 1;\n\
+         const shout = (s: string): string => s.toUpperCase();\n\
+         const a = 1 |> inc |> shout;\n",
+    )]);
+    let out = check(&dir);
+    let step = block(&out, "ts2345");
+    assert!(
+        step.contains("this pipeline step expects `string`, but receives `number`"),
+        "the boundary is said in pipeline vocabulary: {out}"
+    );
+    assert!(
+        step.contains("--> src/pipe.tt:3:23"),
+        "reported at the rejecting step, not over the whole pipeline: {out}"
+    );
+}
+
+#[test]
+fn each_failing_pipeline_boundary_gets_its_own_step_diagnostic() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/chain.tt",
+        "const inc = (n: number): number => n + 1;\n\
+         const shout = (s: string): string => s.toUpperCase();\n\
+         const g = 10\n\
+         \x20 |> inc\n\
+         \x20 |> shout\n\
+         \x20 |> inc;\n",
+    )]);
+    let out = check(&dir);
+    let first = block(&out, "src/chain.tt:5:6");
+    assert!(
+        first.contains("this pipeline step expects `string`, but receives `number`"),
+        "the step rejecting the number is the first boundary: {out}"
+    );
+    let second = block(&out, "src/chain.tt:6:6");
+    assert!(
+        second.contains("this pipeline step expects `number`, but receives `string`"),
+        "the step after the failed one reports its own boundary: {out}"
+    );
+}
+
+#[test]
+fn a_flow_mismatch_names_the_composed_step_and_the_boundary_types() {
+    require_tsgo!();
+    // A `flow` boundary mismatches as two function types; the diagnostic
+    // descends to the value types of the boundary and keeps the complete
+    // function obligation as context.
+    let dir = project(&[(
+        "src/flow.tt",
+        "const inc = (n: number): number => n + 1;\n\
+         const shout = (s: string): string => s.toUpperCase();\n\
+         const label = flow |> inc |> inc |> shout;\n",
+    )]);
+    let out = check(&dir);
+    let step = block(&out, "ts2345");
+    assert!(
+        step.contains("this pipeline step expects `string`, but receives `number`"),
+        "the boundary's value types, not the whole function types: {out}"
+    );
+    assert!(
+        step.contains("required type: `(n: number) => string`"),
+        "the complete obligation remains visible: {out}"
+    );
+    assert!(
+        step.contains("--> src/flow.tt:3:37"),
+        "reported at the composed step that rejects the chain: {out}"
+    );
+}
+
+#[test]
+fn a_curried_combinator_chain_blames_the_step_with_the_wrong_argument() {
+    require_tsgo!();
+    // The report's original shape: std combinator steps whose error used to
+    // underline the whole chain. `unwrapOrP(0)` fixes `T = number` while
+    // the previous step produced `TOption<string>`.
+    let dir = project(&[(
+        "src/labels.tt",
+        "import type { TOption } from \"@tt/std\";\n\
+         import * as Option from \"@tt/std/option\";\n\
+         declare function half(n: number): TOption<number>;\n\
+         export function halfLabel(n: number): string {\n\
+         \x20 return half(n)\n\
+         \x20   |> Option.mapP((x: number) => String(x))\n\
+         \x20   |> Option.unwrapOrP(0)\n\
+         \x20   |> .toUpperCase();\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    let step = block(&out, "ts2345");
+    assert!(
+        step.contains("this pipeline step expects `number`, but receives `string`"),
+        "the incompatible payloads, not the lowered object types: {out}"
+    );
+    assert!(
+        step.contains("required type: `TOption<number>`"),
+        "the step's complete obligation remains visible: {out}"
+    );
+    assert!(
+        step.contains("|> Option.unwrapOrP(0)"),
+        "the snippet shows the rejecting step's own line: {out}"
+    );
+    assert!(
+        !step.contains("|> Option.mapP"),
+        "the span does not swallow the healthy steps: {out}"
+    );
+}
+
+#[test]
+fn the_server_reports_a_pipeline_mismatch_over_the_step_text() {
+    require_tsgo!();
+    let source = "const inc = (n: number): number => n + 1;\n\
+        const shout = (s: string): string => s.toUpperCase();\n\
+        const a = 1 |> inc |> shout;\n";
+    let dir = project(&[("src/pipe.tt", source)]);
+    let answer = typed_server(&dir, "src/pipe.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let mismatch = diagnostics
+        .iter()
+        .find(|d| d["code"] == "ts2345")
+        .unwrap_or_else(|| panic!("no ts2345 diagnostic: {diagnostics:?}"));
+    assert_eq!(
+        source_slice(source, mismatch),
+        "shout",
+        "the range covers exactly the rejecting step: {mismatch:?}"
+    );
+    assert!(
+        mismatch["message"]
+            .as_str()
+            .unwrap()
+            .contains("this pipeline step expects `string`, but receives `number`"),
+        "the server carries the same wording as the CLI: {mismatch:?}"
+    );
+}
+
+#[test]
 fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
     require_tsgo!();
     let source = "import type { TResult } from \"@tt/std\";\n\
