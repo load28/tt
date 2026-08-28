@@ -846,6 +846,31 @@ impl Parser<'_> {
                             kind: RecoveryKind::Expression,
                         });
                     }
+                    results::Attempt::TrailingValueSemicolon {
+                        semicolon,
+                        recovery,
+                    } => {
+                        malformed.push(
+                            crate::error::TtError::span(
+                                semicolon.start,
+                                semicolon.end,
+                                "`result` block's final expression must not end with `;`"
+                                    .to_string(),
+                            )
+                            .code(crate::DiagnosticCode::ResultTailSemicolon)
+                            .owner(recovery.start, recovery.end)
+                            .suggest(
+                                "remove the trailing `;`",
+                                semicolon.start,
+                                semicolon.end,
+                                "",
+                            ),
+                        );
+                        recoveries.push(RecoveryNode {
+                            span: recovery,
+                            kind: RecoveryKind::Expression,
+                        });
+                    }
                     results::Attempt::MissingKeyword { span, recovery } => {
                         result_missing_kw.push(span);
                         recoveries.push(RecoveryNode {

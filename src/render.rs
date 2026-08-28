@@ -773,7 +773,11 @@ fn write_suggestions(
             // machine applies are unchanged — they travel in the wire
             // form, not in this drawing.
             let text = edit.replacement.trim_matches('\n');
-            if text.contains('\n') {
+            if text.is_empty() {
+                // The sentence already names a deletion. Empty backticks
+                // would depict no source and make the actionable advice
+                // harder to read.
+            } else if text.contains('\n') {
                 // A fix that spans lines is quoted the way the snippet
                 // above quotes source, so it reads as code rather than as
                 // a sentence with newlines in it. Each line keeps the
@@ -1095,6 +1099,20 @@ mod tests {
             out.ends_with("  = help: a case with a similar name exists: `Circle`"),
             "{out}",
         );
+    }
+
+    #[test]
+    fn a_deletion_suggestion_needs_no_empty_code_sample() {
+        let fix = [Suggestion {
+            message: "remove the trailing `;`".to_string(),
+            edit: Some(Edit {
+                start: 0,
+                end: 1,
+                replacement: String::new(),
+            }),
+        }];
+        let out = render(&report(None, &fix), None, Styles::PLAIN);
+        assert!(out.ends_with(" = help: remove the trailing `;`"), "{out}");
     }
 
     #[test]

@@ -3355,6 +3355,31 @@ fn result_block_without_a_trailing_expression_is_an_error() {
 }
 
 #[test]
+fn result_block_value_semicolon_is_reported_at_the_punctuation() {
+    let src = "const a = result {\n  const x <- f();\n  { value: x };\n};\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultTailSemicolon);
+    let start = diagnostic.start.expect("semicolon start");
+    let end = diagnostic.end.expect("semicolon end");
+    assert_eq!(&src[start..end], ";");
+    let edit = diagnostic.suggestions[0]
+        .edit
+        .as_ref()
+        .expect("deletion edit");
+    assert_eq!(
+        (edit.start, edit.end, edit.replacement.as_str()),
+        (start, end, "")
+    );
+
+    let statement_tail = "const a = result {\n  const x <- f();\n  return x;\n};\n";
+    let diagnostics = ttc::analyze(statement_tail, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::StrayResult);
+}
+
+#[test]
 fn a_binding_without_a_declaration_keyword_is_a_located_error() {
     // The block is claimed by its other binding, so the file is not
     // TypeScript and ttc can say where the mistake is — instead of

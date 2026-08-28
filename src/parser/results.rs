@@ -43,6 +43,8 @@ pub(super) enum Attempt<'t> {
     /// The block carries a Result binding but does not parse as a whole —
     /// recorded for the semantic phase (it cannot pass through either).
     Malformed(Span),
+    /// The final top-level run is a value expression terminated by `;`.
+    TrailingValueSemicolon { semicolon: Span, recovery: Span },
     /// A binding that forgot its declaration keyword (`b <- f();`), over
     /// the complete span of the name. Only reported where the text cannot be
     /// TypeScript — see [`no_keyword_is_certain`].
@@ -86,6 +88,7 @@ pub(super) fn parse_result_block<'t>(
     // Where the statement run currently being scanned starts.
     let mut run_start = open + 1;
     let mut depth = 0usize;
+    let mut trailing_value_semicolon = None;
 
     for k in open + 1..close {
         let t = &cur.tokens[k];
@@ -110,7 +113,22 @@ pub(super) fn parse_result_block<'t>(
         if !boundary {
             continue;
         }
-        match scan_bind(&cur, run_start, k) {
+        let bind_run = scan_bind(&cur, run_start, k);
+        let run_starts_with_value = run_start < k
+            && match cur.tokens[run_start].kind {
+                TokenKind::Ident => {
+                    !super::tries::STMT_ONLY_WORDS.contains(&cur.text(&cur.tokens[run_start]))
+                }
+                _ => true,
+            };
+        if k + 1 == close
+            && matches!(t.kind, TokenKind::Punct(b';'))
+            && matches!(&bind_run, BindRun::NotBind)
+            && run_starts_with_value
+        {
+            trailing_value_semicolon = Some(t.span);
+        }
+        match bind_run {
             BindRun::NotBind => {} // ordinary statements — keep accumulating
             BindRun::NoKeyword { span } => missing.push(span),
             BindRun::Malformed => return (Attempt::Malformed(recovery), nested),
@@ -184,6 +202,15 @@ pub(super) fn parse_result_block<'t>(
         return (Attempt::MissingKeyword { span, recovery }, nested);
     }
     if run_start == close {
+        if let Some(semicolon) = trailing_value_semicolon {
+            return (
+                Attempt::TrailingValueSemicolon {
+                    semicolon,
+                    recovery,
+                },
+                nested,
+            );
+        }
         return (Attempt::Malformed(recovery), nested); // nothing after the last `;`
     }
     let value_start = cur.tokens[run_start].span.start;

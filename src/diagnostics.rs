@@ -48,6 +48,8 @@ pub enum DiagnosticCode {
     StrayIfLet,
     /// A `result` block the parser could not claim.
     StrayResult,
+    /// A `result` block value expression terminated by a semicolon.
+    ResultTailSemicolon,
     /// A `variant` committed to tt syntax but not fully parsed.
     MalformedVariant,
     /// A `match` committed to tt syntax but not fully parsed.
@@ -116,6 +118,7 @@ impl DiagnosticCode {
             DiagnosticCode::InvalidOptionalReceiver => "invalid-optional-receiver",
             DiagnosticCode::StrayIfLet => "stray-if-let",
             DiagnosticCode::StrayResult => "stray-result",
+            DiagnosticCode::ResultTailSemicolon => "result-tail-semicolon",
             DiagnosticCode::MalformedVariant => "malformed-variant",
             DiagnosticCode::MalformedMatch => "malformed-match",
             DiagnosticCode::ResultMissingKeyword => "result-missing-keyword",
@@ -157,6 +160,7 @@ impl DiagnosticCode {
         DiagnosticCode::InvalidOptionalReceiver,
         DiagnosticCode::StrayIfLet,
         DiagnosticCode::StrayResult,
+        DiagnosticCode::ResultTailSemicolon,
         DiagnosticCode::MalformedVariant,
         DiagnosticCode::MalformedMatch,
         DiagnosticCode::ResultMissingKeyword,
@@ -261,6 +265,15 @@ one `<-` binding. Once claimed, every binding needs its declaration
 keyword and a trailing `;`, and the block's final value expression must
 have no `;`. Text that is meant to be an ordinary identifier followed by a
 block passes through untouched; text with a `<-` in it does not."
+            }
+
+            DiagnosticCode::ResultTailSemicolon => {
+                "\
+A `result` block's final value expression ends with a semicolon.
+
+Bindings and ordinary statements inside the block end with `;`, but the
+last expression is the block's value and must not. Remove that final
+semicolon; keep the block's closing `}`."
             }
 
             DiagnosticCode::MalformedVariant => {
@@ -585,6 +598,7 @@ look up."
                 | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::StrayResult
+                | DiagnosticCode::ResultTailSemicolon
                 | DiagnosticCode::MalformedVariant
                 | DiagnosticCode::MalformedMatch
                 | DiagnosticCode::ResultMissingKeyword
@@ -907,7 +921,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 32);
+        assert_eq!(DiagnosticCode::ALL.len(), 33);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();
