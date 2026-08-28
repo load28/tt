@@ -769,13 +769,13 @@
           "Scheduled or manually dispatched main CI builds can publish a Nightly.",
           "Every npm package is published under the next dist-tag.",
           "Each Nightly is attached to a GitHub pre-release.",
-          "Formal Beta, RC, Stable, and Patch publishing is disabled."
+          "Public installation guidance is Nightly-only while tt remains in early development."
         ],
         "ko": [
           "예약되었거나 수동 실행된 main CI 빌드만 Nightly를 게시할 수 있습니다.",
           "모든 npm 패키지는 next dist-tag로 게시합니다.",
           "각 Nightly는 GitHub pre-release에 첨부합니다.",
-          "Beta, RC, Stable, Patch 정식 게시는 비활성화되어 있습니다."
+          "tt이 초기 개발 단계인 동안 공개 설치 가이드는 Nightly만 안내합니다."
         ]
       },
       "limits": {
@@ -789,8 +789,8 @@
             "ko": "릴리스 변경은 어디에 넣습니까?"
           },
           "body": {
-            "en": "All development lands in main through reviewed pull requests. There is no active formal release branch while tt remains Nightly-only.",
-            "ko": "모든 개발 변경은 리뷰된 pull request를 통해 main에 들어갑니다. Nightly 전용 기간에는 활성 정식 릴리스 브랜치를 두지 않습니다."
+            "en": "All development lands in main through reviewed pull requests. Current public builds are Nightlies produced from that line.",
+            "ko": "모든 개발 변경은 리뷰된 pull request를 통해 main에 들어갑니다. 현재 공개 빌드는 이 개발선에서 만든 Nightly입니다."
           },
           "code": "git switch main\ngit pull --ff-only origin main"
         },

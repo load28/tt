@@ -76,8 +76,8 @@ export function ReleasePage({ language }: { language: Language }) {
         <aside className="release-rule">
           <p className="release-rule__label">{language === 'ko' ? '핵심 규칙' : 'Core rule'}</p>
           <p>{language === 'ko'
-            ? '현재는 Nightly만 게시합니다. npm 설치 명령은 모두 next dist-tag를 사용합니다.'
-            : 'Only Nightlies are published. Every npm installation command uses the next dist-tag.'}</p>
+            ? '현재 공개 설치는 Nightly를 사용합니다. npm 설치 명령은 모두 next dist-tag를 사용합니다.'
+            : 'Public installations currently use Nightlies. Every npm installation command uses the next dist-tag.'}</p>
         </aside>
 
         <section className="release-flow" aria-labelledby="release-flow-heading">
