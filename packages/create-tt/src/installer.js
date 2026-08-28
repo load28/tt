@@ -326,8 +326,8 @@ document.querySelector<HTMLDivElement>('#app')!.textContent = match (greeting) {
 const help = `Create a new tt project or add tt to an existing TypeScript project.
 
 Usage:
-  bunx @load28/create-tt@latest [directory] [--no-install]
-  bunx @load28/create-tt@latest init [directory] [--bundler vite]
+  bunx @load28/create-tt@next [directory] [--no-install]
+  bunx @load28/create-tt@next init [directory] [--bundler vite]
 
 Options:
   --bundler <auto|none|vite|rollup|rolldown|webpack|rspack|esbuild|farm>

@@ -1,6 +1,6 @@
 [package]
 name = "ttc"
-version = "0.4.0-dev.1"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.98"
 description = "Compiler for tt — a tiny TypeScript preprocessor adding Rust-style variants and match expressions on top of 100%-compatible TypeScript."

@@ -68,17 +68,17 @@ test("release commands mirror TypeScript's create, sync, and bump boundaries", (
   }
 });
 
-test("publishing promotes scheduled or dispatched Nightlies and approved formal releases without manual identifiers", () => {
+test("publishing promotes only scheduled or dispatched Nightlies without manual identifiers", () => {
   assert.match(publish, /workflow_run:/);
   assert.match(publish, /github\.event\.workflow_run\.event == 'schedule'/);
   assert.match(publish, /github\.event\.workflow_run\.event == 'workflow_dispatch'/);
   assert.match(publish, /github\.event\.workflow_run\.head_branch == 'main'/);
-  assert.match(publish, /github\.event\.workflow_run\.event == 'push'/);
-  assert.match(publish, /startsWith\(github\.event\.workflow_run\.head_branch, 'release-'\)/);
+  assert.doesNotMatch(publish, /github\.event\.workflow_run\.event == 'push'/);
+  assert.doesNotMatch(publish, /startsWith\(github\.event\.workflow_run\.head_branch, 'release-'\)/);
   assert.match(publish, /RUN_ID: \$\{\{ github\.event\.workflow_run\.id \}\}/);
   assert.match(publish, /environment:\n      name: \$\{\{ needs\.verify\.outputs\.environment_name \}\}/);
   assert.match(publish, /ENVIRONMENT_NAME=nightly/);
-  assert.match(publish, /ENVIRONMENT_NAME=production/);
+  assert.doesNotMatch(publish, /ENVIRONMENT_NAME=production/);
   assert.match(publish, /name: Reject a superseded build/);
   assert.match(publish, /gh run list .* --branch "\$SOURCE_BRANCH" --event "\$RUN_EVENT" --limit 1/);
   assert.match(publish, /test "\$RUN_ID" = "\$latest_run_id"/);
@@ -102,13 +102,9 @@ test("publishing promotes scheduled or dispatched Nightlies and approved formal 
 
 test("publish validates the source branch and immutable npm versions", () => {
   assert.match(publish, /case "\$RUN_EVENT" in schedule\|workflow_dispatch/);
-  assert.match(publish, /test "\$RUN_EVENT" = push/);
   assert.match(publish, /test "\$SOURCE_BRANCH" = main/);
-  assert.match(publish, /case "\$SOURCE_BRANCH" in release-\*/);
-  assert.match(publish, /\*-beta\) EXPECTED_TAG=beta/);
-  assert.match(publish, /\*-rc\) EXPECTED_TAG=rc/);
-  assert.match(publish, /\*\) EXPECTED_TAG=latest/);
-  assert.match(publish, /test "\$NPM_TAG" = "\$EXPECTED_TAG"/);
+  assert.match(publish, /test "\$NPM_TAG" = next/);
+  assert.doesNotMatch(publish, /EXPECTED_TAG|ENVIRONMENT_NAME=production/);
   assert.match(publish, /run_event=\$RUN_EVENT/);
   assert.match(publish, /npm view "\$name@\$version" version/);
   assert.match(publish, /test -z "\$git_head" \|\| test "\$git_head" = "\$SOURCE_SHA"/);

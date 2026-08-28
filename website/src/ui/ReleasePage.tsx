@@ -20,36 +20,25 @@ const stages: Stage[] = [
     },
   },
   {
-    version: 'X.Y.0-beta',
+    version: '1.0.0-dev.YYYYMMDD.N',
     en: {
-      name: 'Beta',
-      body: 'Create release-X.Y from main. New features and large changes receive their widest testing here.',
+      name: 'Immutable build',
+      body: 'A successful scheduled or manually dispatched main CI run produces one versioned artifact set.',
     },
     ko: {
-      name: 'Beta',
-      body: 'main에서 release-X.Y를 만듭니다. 새 기능과 큰 변경은 이 단계에서 가장 넓게 검증합니다.',
+      name: '불변 빌드',
+      body: '성공한 예약 또는 수동 main CI 실행이 하나의 버전 지정 산출물 세트를 만듭니다.',
     },
   },
   {
-    version: 'X.Y.1-rc',
+    version: 'npm next',
     en: {
-      name: 'Release candidate',
-      body: 'Sync main one last time, then limit the line to fixes needed for this release.',
+      name: 'Nightly channel',
+      body: 'The verified artifacts are published to npm next and attached to a GitHub pre-release.',
     },
     ko: {
-      name: '릴리스 후보',
-      body: '마지막으로 main을 sync한 뒤, 이 릴리스에 필요한 수정으로 범위를 제한합니다.',
-    },
-  },
-  {
-    version: 'X.Y.2 → X.Y.3',
-    en: {
-      name: 'Stable and patches',
-      body: 'Publish the stable release, then cherry-pick only prioritized fixes for later patches.',
-    },
-    ko: {
-      name: 'Stable과 Patch',
-      body: 'Stable을 게시한 뒤, 우선순위가 높은 수정만 cherry-pick하여 Patch로 냅니다.',
+      name: 'Nightly 채널',
+      body: '검증된 산출물을 npm next에 게시하고 GitHub pre-release에 첨부합니다.',
     },
   },
 ]
@@ -69,7 +58,7 @@ export function ReleasePage({ language }: { language: Language }) {
         <section className="release-stages" aria-labelledby="release-stages-heading">
           <div className="release-section-heading">
             <p className="release-section-kicker">{language === 'ko' ? '단계' : 'Stages'}</p>
-            <h2 id="release-stages-heading">{language === 'ko' ? '한 릴리스 라인이 지나가는 순서' : 'How a release line moves forward'}</h2>
+            <h2 id="release-stages-heading">{language === 'ko' ? 'Nightly가 게시되는 순서' : 'How a Nightly is published'}</h2>
           </div>
           <ol className="release-stage-list">
             {stages.map((stage) => (
@@ -87,8 +76,8 @@ export function ReleasePage({ language }: { language: Language }) {
         <aside className="release-rule">
           <p className="release-rule__label">{language === 'ko' ? '핵심 규칙' : 'Core rule'}</p>
           <p>{language === 'ko'
-            ? 'RC 전에는 main을 release-X.Y에 sync합니다. RC 뒤에는 main 전체를 가져오지 않고, 필요한 PR의 squash merge 커밋만 cherry-pick합니다.'
-            : 'Before RC, sync main into release-X.Y. After RC, do not merge main wholesale; cherry-pick only the squash-merge commits required for that release.'}</p>
+            ? '현재는 Nightly만 게시합니다. npm 설치 명령은 모두 next dist-tag를 사용합니다.'
+            : 'Only Nightlies are published. Every npm installation command uses the next dist-tag.'}</p>
         </aside>
 
         <section className="release-flow" aria-labelledby="release-flow-heading">

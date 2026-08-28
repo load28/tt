@@ -7,7 +7,7 @@ You need [Bun](https://bun.sh/) for the recommended setup.
 Create a Vite + TypeScript project with a starter `.tt` module:
 
 ```sh
-bunx @load28/create-tt@0.3.0 my-app
+bunx @load28/create-tt@next my-app
 cd my-app
 bun run dev
 ```
@@ -16,7 +16,7 @@ Add tt to an existing TypeScript project:
 
 ```sh
 cd existing-project
-bunx @load28/create-tt@0.3.0 init
+bunx @load28/create-tt@next init
 bun run tt:check
 ```
 
@@ -30,10 +30,10 @@ bun run tt:check
 Useful non-interactive options:
 
 ```sh
-bunx @load28/create-tt@0.3.0 init --bundler vite
-bunx @load28/create-tt@0.3.0 init --bundler none
-bunx @load28/create-tt@0.3.0 init --no-install
-bunx @load28/create-tt@0.3.0 init --package-manager bun
+bunx @load28/create-tt@next init --bundler vite
+bunx @load28/create-tt@next init --bundler none
+bunx @load28/create-tt@next init --no-install
+bunx @load28/create-tt@next init --package-manager bun
 ```
 
 New projects use Bun. Existing projects keep the package manager from their
