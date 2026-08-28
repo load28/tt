@@ -775,10 +775,82 @@ fn a_curried_combinator_chain_blames_the_step_with_the_wrong_argument() {
         step.contains("|> Option.unwrapOrP(0)"),
         "the snippet shows the rejecting step's own line: {out}"
     );
+    // The healthy step before it appears only as the producer label —
+    // dashes, never the primary carets.
+    let caret_rows = step.lines().filter(|line| line.contains('^')).count();
+    assert_eq!(caret_rows, 1, "one primary underline: {out}");
     assert!(
-        !step.contains("|> Option.mapP"),
-        "the span does not swallow the healthy steps: {out}"
+        step.contains("--- the piped value is produced here"),
+        "the producing step is labeled: {out}"
     );
+}
+
+#[test]
+fn a_pipeline_mismatch_labels_the_producing_step() {
+    require_tsgo!();
+    // Rust-style secondary span: the primary carets sit on the rejecting
+    // step, and a `-` label points back at the step that produced the
+    // value.
+    let dir = project(&[(
+        "src/pipe.tt",
+        "const inc = (n: number): number => n + 1;\n\
+         const shout = (s: string): string => s.toUpperCase();\n\
+         const a = 1 |> inc |> shout;\n",
+    )]);
+    let out = check(&dir);
+    let step = block(&out, "ts2345");
+    assert!(
+        step.contains("--- the piped value is produced here"),
+        "the producer is labeled under the snippet: {out}"
+    );
+}
+
+#[test]
+fn a_checker_related_place_becomes_a_labeled_span() {
+    require_tsgo!();
+    // The checker's own related information — here the property whose
+    // declared type the literal violates — is mapped back to `.tt`
+    // coordinates and drawn as a label, the way rustc labels "expected
+    // because of this".
+    let dir = project(&[(
+        "src/opts.tt",
+        "type Opts = { name: string };\n\
+         export const o: Opts = { name: 1 };\n",
+    )]);
+    let out = check(&dir);
+    let mismatch = block(&out, "ts2322");
+    assert!(
+        mismatch.contains("---- The expected type comes from property 'name'"),
+        "the declaration is labeled: {out}"
+    );
+    assert!(
+        mismatch.contains("1 | type Opts = { name: string };"),
+        "the labeled line is quoted in the same snippet: {out}"
+    );
+}
+
+#[test]
+fn the_server_carries_pipeline_labels() {
+    require_tsgo!();
+    let source = "const inc = (n: number): number => n + 1;\n\
+        const shout = (s: string): string => s.toUpperCase();\n\
+        const a = 1 |> inc |> shout;\n";
+    let dir = project(&[("src/pipe.tt", source)]);
+    let answer = typed_server(&dir, "src/pipe.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let mismatch = diagnostics
+        .iter()
+        .find(|d| d["code"] == "ts2345")
+        .unwrap_or_else(|| panic!("no ts2345 diagnostic: {diagnostics:?}"));
+    let labels = mismatch["labels"].as_array().unwrap_or_else(|| {
+        panic!("the wire diagnostic carries its labels: {mismatch:?}");
+    });
+    assert_eq!(
+        labels[0]["message"], "the piped value is produced here",
+        "{labels:?}"
+    );
+    // 1-based coordinates, like the diagnostic itself: `inc` on line 3.
+    assert_eq!(labels[0]["line"], 3, "{labels:?}");
 }
 
 #[test]

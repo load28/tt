@@ -59,6 +59,24 @@ pub struct Diagnostic {
     /// keeps the typed path from silently dropping a fix the untyped pass
     /// already computed.
     pub suggestions: Vec<crate::Suggestion>,
+    /// Secondary places this diagnostic points at, each with its own words
+    /// — rustc's labeled spans ("the piped value comes from this step",
+    /// "the expected type comes from this declaration"). Empty for a
+    /// diagnostic that has only its primary span.
+    pub labels: Vec<DiagnosticLabel>,
+}
+
+/// One secondary span of a [`Diagnostic`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticLabel {
+    /// The file the span is in, when it is not the diagnostic's own file.
+    pub path: Option<PathBuf>,
+    /// 1-based line and column of the label's start.
+    pub position: (usize, usize),
+    /// 1-based line and column just past the label's range.
+    pub end: (usize, usize),
+    /// What this place explains.
+    pub message: String,
 }
 
 /// The typed pass's copy of the advice that closes a match — the same
@@ -389,6 +407,52 @@ fn mismatch_pair(
     (expected, found, None)
 }
 
+/// The secondary places a checker diagnostic points at, in `.tt`
+/// coordinates: the construct anchor's companion span first (a pipeline's
+/// producing step), then the checker's own related information, each mapped
+/// back through the same origin machinery the primary span traveled. A
+/// related place in a file the snapshot does not hold (a lib file, an
+/// uncompiled dependency) is dropped rather than guessed at.
+fn checker_labels(
+    files: &[Arc<ProjectedDocument>],
+    host: &ProjectedDocument,
+    anchor: Option<&crate::EmitAnchor>,
+    diagnostic: &TsDiagnostic,
+) -> Vec<DiagnosticLabel> {
+    let mut labels = Vec::new();
+    if let Some(anchor) = anchor
+        && anchor.kind == AnchorKind::Pipe
+        && let Some((start, end)) = anchor.context
+    {
+        labels.push(DiagnosticLabel {
+            path: None,
+            position: crate::line_col(&host.source, start),
+            end: crate::line_col(&host.source, end),
+            message: "the piped value is produced here".to_string(),
+        });
+    }
+    for related in &diagnostic.related {
+        let Some(file) = files.iter().find(|f| f.module_path == related.file) else {
+            continue;
+        };
+        let Some(origin) = projection::diagnostic_origin(file, related.start, related.end) else {
+            continue;
+        };
+        let (start, end) = match origin {
+            DiagnosticOrigin::Exact { start, end } => (start, end.max(start.saturating_add(1))),
+            DiagnosticOrigin::Anchor(anchor) => (anchor.src, anchor.src_end),
+            DiagnosticOrigin::Nearest { start } => (start, start.saturating_add(1)),
+        };
+        labels.push(DiagnosticLabel {
+            path: (file.source_path != host.source_path).then(|| file.source_path.clone()),
+            position: crate::line_col(&file.source, start),
+            end: crate::line_col(&file.source, end),
+            message: related.message.clone(),
+        });
+    }
+    labels
+}
+
 fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
     diagnostic
         .mismatch
@@ -705,6 +769,7 @@ pub(crate) fn report(
                 message: diagnostic.message.clone(),
                 code: Some(diagnostic.code.as_str().to_string()),
                 suggestions: diagnostic.suggestions.clone(),
+                labels: Vec::new(),
             });
         }
     }
@@ -723,6 +788,7 @@ pub(crate) fn report(
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
                 suggestions: d.suggestions.clone(),
+                labels: Vec::new(),
             });
         }
     }
@@ -758,6 +824,7 @@ pub(crate) fn report(
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: Vec::new(),
             });
             continue;
         };
@@ -776,6 +843,7 @@ pub(crate) fn report(
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: Vec::new(),
             });
             continue;
         };
@@ -820,6 +888,7 @@ pub(crate) fn report(
                     message: anchored_diagnostic_message(anchor.kind, diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
+                    labels: checker_labels(files, file, Some(&anchor), diagnostic),
                 });
                 continue;
             }
@@ -847,6 +916,7 @@ pub(crate) fn report(
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
+                    labels: checker_labels(files, file, Some(&anchor), diagnostic),
                 };
                 // One construct's glue can draw several TypeScript errors
                 // that all mean the same tt thing (`$tt_t.kind` and
@@ -870,6 +940,7 @@ pub(crate) fn report(
                     message: diagnostic_message(diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
+                    labels: checker_labels(files, file, None, diagnostic),
                 });
             }
             DiagnosticOrigin::Anchor(anchor) => out.push(Diagnostic {
@@ -882,6 +953,7 @@ pub(crate) fn report(
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: checker_labels(files, file, Some(&anchor), diagnostic),
             }),
             DiagnosticOrigin::Nearest { start } => out.push(Diagnostic {
                 path: file.source_path.clone(),
@@ -893,6 +965,7 @@ pub(crate) fn report(
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: checker_labels(files, file, None, diagnostic),
             }),
         }
     }
@@ -932,6 +1005,7 @@ pub(crate) fn report(
                 site_of(anchor),
                 &uncovered,
             ),
+            labels: Vec::new(),
         });
     }
 
@@ -1077,6 +1151,7 @@ pub(crate) fn report(
                     }
                     None => vec![non_exhaustive_help()],
                 },
+                labels: Vec::new(),
             });
         }
     }
@@ -1147,6 +1222,7 @@ pub(crate) fn report(
             message,
             code: Some(crate::DiagnosticCode::ValMutation.as_str().to_string()),
             suggestions: Vec::new(),
+            labels: Vec::new(),
         });
     }
 
@@ -1220,6 +1296,7 @@ pub(crate) fn report(
             ),
             code: Some(crate::DiagnosticCode::ValPass.as_str().to_string()),
             suggestions: Vec::new(),
+            labels: Vec::new(),
         });
     }
 
@@ -1539,6 +1616,7 @@ mod tests {
             message: "same".to_string(),
             code: Some(code.to_string()),
             suggestions: Vec::new(),
+            labels: Vec::new(),
         };
         let finished = finish_diagnostics(vec![at(2, "ts9999"), at(1, "ts1000"), at(2, "ts1001")]);
         assert_eq!(finished.len(), 2);

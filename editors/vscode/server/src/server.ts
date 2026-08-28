@@ -537,6 +537,18 @@ async function typeDiagnostics(
     message: d.message,
     code: d.code,
     source: "ts",
+    // The compiler's secondary labeled spans, as the LSP's own related
+    // information — the editor renders each as a clickable "here" link
+    // under the diagnostic.
+    relatedInformation: d.related?.length
+      ? d.related.map((r) => ({
+          location: {
+            uri: r.path ? URI.file(r.path).toString() : doc.uri,
+            range: r.range,
+          },
+          message: r.message,
+        }))
+      : undefined,
   }));
 }
 

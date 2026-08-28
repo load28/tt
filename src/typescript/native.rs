@@ -242,6 +242,22 @@ fn parse_answers(stdout: &str) -> Result<Answers, String> {
             code: d["code"].as_u64().unwrap_or_default() as u32,
             message: d["message"].as_str().unwrap_or_default().to_string(),
             mismatch: parse_type_mismatch(&d["mismatch"]),
+            related: d["related"]
+                .as_array()
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter_map(|r| {
+                            Some(RelatedInformation {
+                                file: PathBuf::from(r["file"].as_str()?),
+                                start: r["start"].as_u64()? as usize,
+                                end: r["end"].as_u64()? as usize,
+                                message: r["message"].as_str()?.to_string(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
         });
     }
     for m in array(&value, "literalMissing") {

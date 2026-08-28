@@ -440,6 +440,20 @@ fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
     let inner_arg = outer_arg + "$tt_ap(".len();
     let owner = m.anchor_at(inner_arg).expect("anchored glue");
     assert_eq!(&src[owner.src..owner.src_end], "g");
+
+    // Each step anchor also names where the value it consumes was
+    // produced — the previous step, or the head — so a diagnostic there
+    // can label the producer.
+    let produced: Vec<(&str, &str)> = pipes
+        .iter()
+        .filter_map(|a| {
+            a.context
+                .map(|(from, to)| (&src[a.src..a.src_end], &src[from..to]))
+        })
+        .collect();
+    for pair in [("f", "one()"), ("g", "f"), ("h", "g")] {
+        assert!(produced.contains(&pair), "{pair:?} in {produced:?}");
+    }
 }
 
 #[test]

@@ -241,6 +241,25 @@ test("a type error inside a pipeline is reported", { skip }, async () => {
   assert.equal(sliceOf(BAD_PIPE, diagnostics[0].range), "length");
 });
 
+const BAD_BOUNDARY = [
+  "const inc = (n: number): number => n + 1;",
+  "const shout = (s: string): string => s.toUpperCase();",
+  "const a = 1 |> inc |> shout;",
+  "",
+].join("\n");
+
+test("a pipeline boundary mismatch labels the producing step", { skip }, async () => {
+  const dir = fixture("tt-std-test-", { "calc.tt": BAD_BOUNDARY });
+  const file = path.join(dir, "calc.tt");
+  const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+  assert.equal(diagnostics.length, 1, JSON.stringify(diagnostics));
+  assert.equal(sliceOf(BAD_BOUNDARY, diagnostics[0].range), "shout");
+  const related = diagnostics[0].related ?? [];
+  assert.equal(related.length, 1, JSON.stringify(diagnostics));
+  assert.equal(related[0].message, "the piped value is produced here");
+  assert.equal(sliceOf(BAD_BOUNDARY, related[0].range), "inc");
+});
+
 const BAD_ARM = [
   "variant Shape {",
   "  Circle(radius: number),",

@@ -270,6 +270,15 @@ types reduce to the value types of the boundary, with the complete
 obligation kept as `required type:` context). The `pipe-step-input`
 translation class also deduplicates per step in the editor.
 
+Since TASK-264 each per-step anchor also records where the consumed value
+was produced (`EmitAnchor::context` — the previous step, or the head), and
+the report layers attach it as a labeled secondary span: the CLI draws it
+rustc-style in the same snippet (`--- the piped value is produced here`),
+and the editor serves it as LSP related information. The same label
+mechanism carries the checker's own `relatedInformation` for every other
+construct ("the expected type comes from property … declared here"), mapped
+back through the same origin machinery.
+
 ### 5.2 기존 구문과의 상호작용
 
 - **`try` 식 내부**: `const a = try readCfg() |> normalize;` — try의 식은

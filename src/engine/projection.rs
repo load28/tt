@@ -736,6 +736,7 @@ mod tests {
             code,
             message: message.to_string(),
             mismatch: None,
+            related: Vec::new(),
         }
     }
 

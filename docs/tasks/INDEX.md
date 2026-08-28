@@ -272,7 +272,8 @@
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
 | TASK-262 | Require English documentation | Complete | 2026-08-28 | 2026-08-28 | [TASK-262](./TASK-262-english-documentation-policy.md) |
 | TASK-263 | Pipeline diagnostics name the rejecting step | Complete | 2026-08-28 | 2026-08-28 | [TASK-263](./TASK-263-pipeline-step-diagnostics.md) |
+| TASK-264 | Rust-style labeled diagnostics (secondary spans) | Complete | 2026-08-28 | 2026-08-28 | [TASK-264](./TASK-264-rust-style-labeled-diagnostics.md) |
 
 ## 다음 태스크 번호
 
-**TASK-264**
+**TASK-265**

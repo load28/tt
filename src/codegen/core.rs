@@ -1915,8 +1915,13 @@ impl<'a> Emitter<'a> {
             Some(head) => {
                 let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0);
                 let mut accumulator_is_inert = self.expression_is_inert(head);
+                // Where the value flowing into the current step was
+                // produced: the head, then each step in turn — the place a
+                // label on a rejected value points back at.
+                let mut produced = self.span(apply.node);
                 for step in &apply.steps {
                     let step_span = self.span(step.node);
+                    let context = Some((produced.start, produced.end));
                     let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
                     let mut next = Rope::new();
                     // The value flowing into a step occupies a position the
@@ -1929,11 +1934,12 @@ impl<'a> Emitter<'a> {
                     match step.mode {
                         ApplyMode::Postfix { .. } => {
                             push_receiver(&mut input, acc);
-                            next.anchored(
+                            next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
                                 step_span.end,
                                 end,
+                                context,
                                 input,
                             );
                             next.append(body);
@@ -1943,11 +1949,12 @@ impl<'a> Emitter<'a> {
                                 push_grouped(&mut next, body);
                                 next.push_lit("(");
                                 push_grouped(&mut input, acc);
-                                next.anchored(
+                                next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
                                     step_span.end,
                                     end,
+                                    context,
                                     input,
                                 );
                                 next.push_lit(")");
@@ -1955,11 +1962,12 @@ impl<'a> Emitter<'a> {
                                 self.used_pipe.set(true);
                                 next.push_lit("$tt_ap(");
                                 push_grouped(&mut input, acc);
-                                next.anchored(
+                                next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
                                     step_span.end,
                                     end,
+                                    context,
                                     input,
                                 );
                                 next.push_lit(", ");
@@ -1973,6 +1981,7 @@ impl<'a> Emitter<'a> {
                     // can have arbitrary effects. Only the original head's
                     // syntax proof can authorize inline reordering.
                     accumulator_is_inert = false;
+                    produced = step_span;
                 }
                 acc
             }
@@ -1993,6 +2002,7 @@ impl<'a> Emitter<'a> {
             &mut acc,
             guard_line_comment(self.emit_expr(first.value).trim(), 0),
         );
+        let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
             let step_span = self.span(step.node);
@@ -2002,11 +2012,12 @@ impl<'a> Emitter<'a> {
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
             // `emit_apply`).
-            next.anchored(
+            next.anchored_with_context(
                 AnchorKind::Pipe,
                 step_span.start,
                 step_span.end,
                 owner_end,
+                Some((produced.start, produced.end)),
                 acc,
             );
             match step.mode {
@@ -2022,6 +2033,7 @@ impl<'a> Emitter<'a> {
                 }
             }
             acc = next;
+            produced = step_span;
         }
         acc
     }
@@ -2311,6 +2323,7 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
+        let mut produced = self.span(apply.node);
         for step in &apply.steps {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
             let step_value = if self.core.has_statement_form(step.value) && !conditionally_reached {
@@ -2335,6 +2348,7 @@ impl<'a> Emitter<'a> {
             };
             inner.push_break(1);
             let step_span = self.span(step.node);
+            let context = Some((produced.start, produced.end));
             // The re-piped accumulator is the value this step consumes — a
             // mismatch on it belongs to this step (see `emit_apply`).
             let mut input = Rope::new();
@@ -2342,7 +2356,14 @@ impl<'a> Emitter<'a> {
             match step.mode {
                 ApplyMode::Postfix { .. } => {
                     inner.push_lit(format!("{accumulator} = "));
-                    inner.anchored(AnchorKind::Pipe, step_span.start, step_span.end, end, input);
+                    inner.anchored_with_context(
+                        AnchorKind::Pipe,
+                        step_span.start,
+                        step_span.end,
+                        end,
+                        context,
+                        input,
+                    );
                     inner.append(step_value);
                     inner.push_lit(";");
                 }
@@ -2354,10 +2375,18 @@ impl<'a> Emitter<'a> {
                     inner.push_lit(format!("{accumulator} = "));
                     push_grouped(&mut inner, step_value);
                     inner.push_lit("(");
-                    inner.anchored(AnchorKind::Pipe, step_span.start, step_span.end, end, input);
+                    inner.anchored_with_context(
+                        AnchorKind::Pipe,
+                        step_span.start,
+                        step_span.end,
+                        end,
+                        context,
+                        input,
+                    );
                     inner.push_lit(");");
                 }
             }
+            produced = step_span;
         }
         inner.push_break(1);
         if continuation.is_unwrapped_assignment_to(accumulator) {

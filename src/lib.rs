@@ -587,6 +587,12 @@ pub struct EmitAnchor {
     /// diagnostic underlines only `match (subject)`, while an error in any
     /// arm still owns consequences produced by that match's glue.
     pub owner_end: usize,
+    /// A second source range that explains a diagnostic on this glue —
+    /// where the emitter alone knows the relationship. A pipeline's
+    /// per-step anchor names the step that produced the rejected value
+    /// here, so a reporter can label it ("the piped value comes from this
+    /// step"). `None` when the construct has no such companion place.
+    pub context: Option<(usize, usize)>,
     /// What kind of construct wrote it.
     pub kind: AnchorKind,
 }

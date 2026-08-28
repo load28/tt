@@ -242,6 +242,7 @@ async function main() {
     for (const d of project.program.getSemanticDiagnostics()) {
       if (!d.fileName) continue;
       const mismatch = contextualMismatch(project, checker, d, isExpression);
+      const related = relatedPlaces(d);
       out.diagnostics.push({
         file: d.fileName,
         start: d.pos,
@@ -249,6 +250,7 @@ async function main() {
         code: d.code,
         message: d.text,
         ...(mismatch ? { mismatch } : {}),
+        ...(related.length > 0 ? { related } : {}),
       });
     }
     /**
@@ -412,6 +414,29 @@ async function main() {
  * call arguments and future lowered constructs all participate through the
  * checker’s contextual typing relation.
  */
+/**
+ * The checker's own related places — "the expected type comes from this
+ * declaration", "first declared here" — normalized to the diagnostic item
+ * shape. The property names differ between clients, so both spellings are
+ * accepted; an entry missing a file or a position is dropped rather than
+ * guessed at.
+ */
+function relatedPlaces(diagnostic) {
+  const entries = diagnostic.relatedInformation ?? diagnostic.related ?? [];
+  const out = [];
+  for (const entry of entries) {
+    const file = entry.fileName ?? entry.file;
+    const start = entry.pos ?? entry.start;
+    const end = entry.end ?? (typeof entry.length === "number" ? start + entry.length : undefined);
+    const message = entry.text ?? entry.message ?? entry.messageText;
+    if (typeof file !== "string" || typeof start !== "number" || typeof end !== "number") continue;
+    if (typeof message !== "string") continue;
+    out.push({ file, start, end, message });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function contextualMismatch(project, checker, diagnostic, isExpression) {
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
