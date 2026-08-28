@@ -2729,7 +2729,7 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
     let e = err("const r = match (a, b) {\n  (A) => 1,\n  _ => 0,\n};\n");
     assert!(
         e.message
-            .contains("tuple pattern has 1 elements but the match has 2 scrutinees"),
+            .contains("tuple pattern has 1 element but the match has 2 scrutinees"),
         "{e}"
     );
     assert_eq!((e.line, e.col), (2, 3));
@@ -2737,7 +2737,7 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
     let e = err("const r = match (a) {\n  (A, B) => 1,\n  _ => 0,\n};\n");
     assert!(
         e.message
-            .contains("tuple pattern has 2 elements but the match has 1 scrutinees"),
+            .contains("tuple pattern has 2 elements but the match has 1 scrutinee"),
         "{e}"
     );
 }

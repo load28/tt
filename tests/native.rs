@@ -782,6 +782,66 @@ fn a_precise_tt_error_owns_an_overlapping_type_consequence() {
 }
 
 #[test]
+fn proven_statement_and_tuple_errors_own_only_their_checker_cascades() {
+    require_tsgo!();
+    let source = "variant PaymentMethod { Card(brand: string, last4: string), Cash }\n\
+        variant Fulfillment { Pending, Picked, Cancelled }\n\
+        export function card(method: PaymentMethod): string {\n\
+        \x20 const Card(brand, last4) = method else { console.log(\"other\"); };\n\
+        \x20 return brand + last4;\n\
+        }\n\
+        export function label(state: Fulfillment, method: PaymentMethod): string {\n\
+        \x20 return match (state, method) {\n\
+        \x20   (Picked, Card) => \"picked card\",\n\
+        \x20   (Picked, Cash) => \"picked cash\",\n\
+        \x20   (Picked) => \"picked\",\n\
+        \x20   _ => \"other\",\n\
+        \x20 };\n\
+        }\n\
+        const independent: string = 1;\n";
+    let dir = project(&[("src/cascades.tt", source)]);
+
+    let out = check(&dir);
+    assert!(out.contains("error[let-else-not-diverging]"), "{out}");
+    assert!(out.contains("error[match-tuple-arity]"), "{out}");
+    assert!(out.contains("tuple pattern has 1 element"), "{out}");
+    assert!(
+        !out.contains("error[ts2339]") && !out.contains("error[ts2367]"),
+        "checker consequences owned by the invalid constructs remain: {out}"
+    );
+    assert!(
+        out.contains("type mismatch: expected `string`, found `1`"),
+        "the independent source error must remain: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/cascades.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "let-else-not-diverging"),
+        "{answer}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "match-tuple-arity"),
+        "{answer}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic["code"] != "ts2339" && diagnostic["code"] != "ts2367" })
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "ts2322"),
+        "{answer}"
+    );
+}
+
+#[test]
 fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
     require_tsgo!();
     let source = "import { PaymentMethod } from \"./domain.tt\";\n\

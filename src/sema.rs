@@ -498,6 +498,7 @@ impl Checker {
                     "let-else: every path through the `else` block must diverge".to_string(),
                 )
                 .code(DiagnosticCode::LetElseNotDiverging)
+                .owner(stmt.head_span.start, stmt.head_span.end)
                 .help(
                     "end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` \
                      counts when both branches do)",
@@ -853,17 +854,28 @@ impl Checker {
                 }
                 TuplePattern::Elems(elems) => {
                     if elems.len() != arity {
+                        let elements = if elems.len() == 1 {
+                            "element"
+                        } else {
+                            "elements"
+                        };
+                        let scrutinees = if arity == 1 {
+                            "scrutinee"
+                        } else {
+                            "scrutinees"
+                        };
+                        let owner = expr.head_span();
                         self.error(
                             TtError::span(
                                 arm.pattern_span.start,
                                 arm.pattern_span.end,
                                 format!(
-                                    "match: tuple pattern has {} elements but the match has {} scrutinees",
-                                    elems.len(),
-                                    arity
+                                    "match: tuple pattern has {} {elements} but the match has {} {scrutinees}",
+                                    elems.len(), arity
                                 ),
                             )
-                            .code(DiagnosticCode::MatchTupleArity),
+                            .code(DiagnosticCode::MatchTupleArity)
+                            .owner(owner.start, owner.end),
                         );
                     }
                     // Every element's or-alternatives share one
