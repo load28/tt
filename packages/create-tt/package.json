@@ -1,6 +1,6 @@
 {
   "name": "@openload28/create-tt",
-  "version": "1.0.0",
+  "version": "1.0.0-beta",
   "description": "Create a new tt project or add tt to an existing TypeScript project",
   "license": "MIT",
   "publishConfig": {
