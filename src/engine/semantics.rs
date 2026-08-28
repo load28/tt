@@ -802,6 +802,31 @@ pub(crate) fn report(
         }
     }
 
+    // A projection is deliberately file-local, so it cannot resolve names
+    // against declarations imported from another source. The cached semantic
+    // file can. Render those answers through sema's one diagnostic author and
+    // merge them with the projection results; local names may appear in both,
+    // while imported names appear only here.
+    for file in files {
+        let Some(semantics) = semantics.get(&file.source_path) else {
+            continue;
+        };
+        for error in crate::sema::resolution_errors(&semantics.analyses) {
+            let diagnostic = Diagnostic {
+                path: file.source_path.clone(),
+                position: error.offset.map(|at| crate::line_col(&file.source, at)),
+                end: error.end.map(|at| crate::line_col(&file.source, at)),
+                message: error.message,
+                code: Some(error.code.as_str().to_string()),
+                suggestions: error.suggestions,
+                labels: Vec::new(),
+            };
+            if !out.contains(&diagnostic) {
+                out.push(diagnostic);
+            }
+        }
+    }
+
     // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
     let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };

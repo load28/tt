@@ -274,7 +274,16 @@
 | TASK-263 | Pipeline diagnostics name the rejecting step | Complete | 2026-08-28 | 2026-08-28 | [TASK-263](./TASK-263-pipeline-step-diagnostics.md) |
 | TASK-264 | Rust-style labeled diagnostics (secondary spans) | Complete | 2026-08-28 | 2026-08-28 | [TASK-264](./TASK-264-rust-style-labeled-diagnostics.md) |
 | TASK-265 | PR #85 review fixes — step-anchor gating and typed-path labels | Complete | 2026-08-28 | 2026-08-28 | [TASK-265](./TASK-265-pr85-review-fixes.md) |
+| TASK-266 | Diagnose fields of imported variants in every compiler path | Complete | 2026-08-28 | 2026-08-28 | [TASK-266](./TASK-266-imported-variant-field-diagnostics.md) |
+| TASK-267 | Preserve typed exhaustiveness when pattern diagnostics are reportable | Pending | 2026-08-28 | — | [TASK-267](./TASK-267-pattern-resolution-suppression.md) |
+| TASK-268 | Diagnose unknown cases independently of wildcard coverage | Pending | 2026-08-28 | — | [TASK-268](./TASK-268-wildcard-independent-case-resolution.md) |
+| TASK-269 | Respect tsconfig source boundaries and surface backend failures | Pending | 2026-08-28 | — | [TASK-269](./TASK-269-typed-project-boundaries.md) |
+| TASK-270 | Render nested pattern errors in source vocabulary | Pending | 2026-08-28 | — | [TASK-270](./TASK-270-nested-pattern-diagnostics.md) |
+| TASK-271 | Diagnose deep expression `try` placement before verification | Pending | 2026-08-28 | — | [TASK-271](./TASK-271-deep-try-placement.md) |
+| TASK-272 | Point malformed `result` tails at the trailing semicolon | Pending | 2026-08-28 | — | [TASK-272](./TASK-272-result-tail-semicolon.md) |
+| TASK-273 | Suppress checker cascades owned by proven tt errors | Pending | 2026-08-28 | — | [TASK-273](./TASK-273-owned-checker-cascades.md) |
+| TASK-274 | Show the top-level `contentMappers` configuration shape | Pending | 2026-08-28 | — | [TASK-274](./TASK-274-content-mapper-documentation.md) |
 
 ## 다음 태스크 번호
 
-**TASK-266**
+**TASK-275**

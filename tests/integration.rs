@@ -1766,6 +1766,39 @@ fn cli_checks_exhaustiveness_across_tt_imports() {
 }
 
 #[test]
+fn cli_diagnoses_fields_against_imported_variant_declarations() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("domain.tt"),
+        "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\
+         export function brand(method: PaymentMethod): string {\n\
+         \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--check", "payment.tt"]);
+    assert!(!ok, "expected the imported field error:\n{err}");
+    assert!(
+        err.contains(
+            "error[unknown-field]: variant PaymentMethod (imported from \"./domain.tt\"): \
+             case `Card` has no field `brnad`"
+        ),
+        "{err}"
+    );
+    assert!(err.contains("--> payment.tt:3:32"), "{err}");
+    assert!(
+        err.contains("a field with a similar name exists: `brand`"),
+        "{err}"
+    );
+}
+
+#[test]
 fn cli_skips_unresolvable_imports_silently() {
     // A missing module is tsc's problem (TS2307); the match simply stays
     // unchecked, as before phase 2.

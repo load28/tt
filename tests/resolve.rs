@@ -2,9 +2,9 @@
 //! the fidelity of the conversion into the analysis surface (the analysis
 //! consumes this resolver — Phase 3, TASK-123·129).
 
-use ttc::ExternVariant;
 use ttc::hir::{self, FileId};
 use ttc::resolve::{self, DefKind, Namespace, Res, Resolution, UseKind};
+use ttc::{ExternVariant, ExternVariantCase, ExternVariantField};
 
 fn resolved(source: &str, externs: &[ExternVariant]) -> (hir::HirFile, Resolution) {
     let mut hir = hir::lower_source(FileId(0), source);
@@ -78,7 +78,14 @@ fn locals_shadow_imports_shadow_builtins() {
         const a = match (o) { Just(v) => v, Nothing => 0 };\n";
     let externs = [ExternVariant {
         name: "Token".to_string(),
-        tags: vec!["Num".to_string(), "Eof".to_string()],
+        generics: String::new(),
+        cases: ["Num", "Eof"]
+            .into_iter()
+            .map(|tag| ttc::ExternVariantCase {
+                tag: tag.to_string(),
+                fields: None,
+            })
+            .collect(),
         from: Some("./token.tt".to_string()),
     }];
     let (hir, resolution) = resolved(src, &externs);
@@ -122,7 +129,14 @@ fn an_import_alias_is_the_name_in_scope() {
     // `import { Token as T }`) — resolution happens under it.
     let externs = [ExternVariant {
         name: "T".to_string(),
-        tags: vec!["Num".to_string(), "Eof".to_string()],
+        generics: String::new(),
+        cases: ["Num", "Eof"]
+            .into_iter()
+            .map(|tag| ttc::ExternVariantCase {
+                tag: tag.to_string(),
+                fields: None,
+            })
+            .collect(),
         from: Some("./token.tt".to_string()),
     }];
     let src = "const v = match (t) { Num => 1, Eof => 0 };\n";
@@ -130,6 +144,30 @@ fn an_import_alias_is_the_name_in_scope() {
     let site_id = hir.sites.iter().next().unwrap().0;
     let subject = resolution.sites[&site_id].subjects[0].expect("identified");
     assert_eq!(resolution.defs[subject].name, "T");
+}
+
+#[test]
+fn imported_payload_fields_resolve_with_their_source_declaration() {
+    let externs = [ExternVariant {
+        name: "PaymentMethod".to_string(),
+        generics: String::new(),
+        cases: vec![ExternVariantCase {
+            tag: "Card".to_string(),
+            fields: Some(vec![ExternVariantField {
+                name: "brand".to_string(),
+                optional: false,
+                ty: "string".to_string(),
+            }]),
+        }],
+        from: Some("./domain.tt".to_string()),
+    }];
+    let source = "const value = match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n";
+    let (hir, resolution) = resolved(source, &externs);
+    let unresolved = resolution.unresolved.first().expect("field misspelling");
+    assert_eq!(unresolved.kind, UseKind::Field);
+    assert_eq!(unresolved.name, "brnad");
+    assert_eq!(unresolved.suggestion, "brand");
+    assert_eq!(span_text(source, &hir, unresolved.node), "brnad");
 }
 
 #[test]

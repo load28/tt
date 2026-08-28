@@ -666,6 +666,45 @@ fn a_precise_tt_error_owns_an_overlapping_type_consequence() {
 }
 
 #[test]
+fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
+    require_tsgo!();
+    let source = "import { PaymentMethod } from \"./domain.tt\";\n\
+        export function brand(method: PaymentMethod): string {\n\
+        \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+        ),
+        ("src/payment.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("case `Card` has no field `brnad`")
+            && out.contains("a field with a similar name exists: `brand`")
+            && !out.contains("type mismatch:"),
+        "the typed CLI reports the source cause only: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/payment.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let field = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "unknown-field")
+        .unwrap_or_else(|| panic!("missing imported field diagnostic: {answer}"));
+    assert_eq!(source_slice(source, field), "brnad");
+    assert_eq!(field["suggestions"][0]["edit"]["replacement"], "brand");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "ts2339"),
+        "the source error owns its generated consequence: {answer}"
+    );
+}
+
+#[test]
 fn a_pipeline_mismatch_names_the_step_that_rejects_the_value() {
     require_tsgo!();
     // The mismatch is at the second boundary, where the checker blames the

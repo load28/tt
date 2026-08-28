@@ -69,8 +69,7 @@ pub struct TtCaseDecl {
     /// `true` when the case is declared without parens — the constructor
     /// is a plain value, not a call.
     pub unit: bool,
-    /// The payload fields (empty for a unit case, and for imported
-    /// declarations that carried tags only).
+    /// The payload fields (empty for a unit case).
     pub fields: Vec<TtFieldDecl>,
 }
 

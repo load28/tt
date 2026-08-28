@@ -477,7 +477,8 @@ fn collect_extern_variants(file: &Path, imports: &[ttc::TtImport]) -> Vec<ttc::E
             ttc::TtImportNames::Namespace(ns) => {
                 externs.extend(decls.into_iter().map(|d| ttc::ExternVariant {
                     name: format!("{ns}.{}", d.name),
-                    tags: d.tags,
+                    generics: d.generics,
+                    cases: d.cases,
                     from: from.clone(),
                 }));
             }
@@ -486,7 +487,8 @@ fn collect_extern_variants(file: &Path, imports: &[ttc::TtImport]) -> Vec<ttc::E
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         externs.push(ttc::ExternVariant {
                             name: alias.clone().unwrap_or_else(|| name.clone()),
-                            tags: d.tags.clone(),
+                            generics: d.generics.clone(),
+                            cases: d.cases.clone(),
                             from: from.clone(),
                         });
                     }

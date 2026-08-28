@@ -559,10 +559,9 @@ pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnaly
 /// of the rule.
 ///
 /// `externs` are the imported declarations the CLI collects for sema
-/// ([`crate::Options::extern_variants`]); they carry tags without field types,
-/// which is all coverage needs. Pattern bindings are therefore not analyzed
-/// and every arm comes back empty — [`pattern_analyses`] is the entry point
-/// for those.
+/// ([`crate::Options::extern_variants`]). The resolver still validates their
+/// case and field names; only binding-type analysis is skipped, so every arm
+/// comes back empty — [`pattern_analyses`] is the entry point for bindings.
 #[cfg(test)]
 pub(crate) fn coverage_analyses(program: &Program, externs: &[ExternVariant]) -> PatternAnalyses {
     coverage_semantics(program, externs).patterns
@@ -750,9 +749,7 @@ struct Entry {
     /// Where it was declared — carried into [`Coverage`] so a consumer can
     /// name the origin without a table of its own.
     origin: Origin,
-    /// The constructors, in declaration order. An imported declaration that
-    /// only carried tags ([`ExternVariant`], sema's input) has `fields: None`
-    /// throughout — enough for coverage, which is all that path asks.
+    /// The constructors, in declaration order, including payload fields.
     constructors: Vec<MatchConstructor>,
 }
 
@@ -2052,7 +2049,14 @@ mod tests {
         let src = "import { Token } from \"./token.tt\";\nconst v = match (t) { Word => 0 };\n";
         let externs = [ExternVariant {
             name: "Token".to_string(),
-            tags: vec!["Word".to_string(), "Punct".to_string()],
+            generics: String::new(),
+            cases: ["Word", "Punct"]
+                .into_iter()
+                .map(|tag| crate::ExternVariantCase {
+                    tag: tag.to_string(),
+                    fields: None,
+                })
+                .collect(),
             from: Some("./token.tt".to_string()),
         }];
         let program = crate::parser::parse(src);

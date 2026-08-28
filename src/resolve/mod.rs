@@ -31,8 +31,7 @@ use crate::hir::{
 
 /// An imported declaration as the resolver receives it: the name it is
 /// known by in the importing file's scope (aliases applied), where it came
-/// from, and its variants — with payload fields when the collector had
-/// them ([`crate::VariantSymbol`]), tags only otherwise ([`crate::ExternVariant`]).
+/// from, and its variants with their payload fields.
 #[derive(Debug, Clone)]
 pub struct ExternDecl {
     /// The name in the importing file's scope.
@@ -57,8 +56,22 @@ impl From<&crate::ExternVariant> for ExternDecl {
         ExternDecl {
             name: e.name.clone(),
             from: e.from.clone(),
-            generics: String::new(),
-            variants: e.tags.iter().map(|t| (t.clone(), None)).collect(),
+            generics: e.generics.clone(),
+            variants: e
+                .cases
+                .iter()
+                .map(|case| {
+                    (
+                        case.tag.clone(),
+                        case.fields.as_ref().map(|fields| {
+                            fields
+                                .iter()
+                                .map(|field| (field.name.clone(), field.optional, field.ty.clone()))
+                                .collect()
+                        }),
+                    )
+                })
+                .collect(),
         }
     }
 }
@@ -234,8 +247,7 @@ pub struct VariantDecl {
     /// The lowered syntax this declaration came from, for a local one —
     /// the bridge between the declaration world and the file's HIR.
     pub hir: Option<hir::VariantId>,
-    /// The payload fields; `None` for a unit case, and for imported
-    /// declarations that carried tags only.
+    /// The payload fields; `None` for a unit case.
     pub fields: Option<Vec<FieldDecl>>,
 }
 
@@ -691,8 +703,7 @@ impl Resolver {
                     .collect::<Vec<_>>()
             })
         }) else {
-            // No field list to compare against (a unit case, or an import
-            // that carried tags only) — nothing to say.
+            // A unit case has no field list to compare against.
             return;
         };
         let variant_name = self

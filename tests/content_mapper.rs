@@ -226,6 +226,42 @@ fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
 }
 
 #[test]
+fn an_imported_field_error_is_a_tt_diagnostic_at_the_field_token() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function brand(method: PaymentMethod): string {\n\
+         \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { brand } from \"./payment.tt\";\nvoid brand;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("payment.tt(4,32): error tt26")
+            && text.contains("case `Card` has no field `brnad`"),
+        "expected the mapper's source-level field diagnostic, got:\n{text}"
+    );
+    assert!(
+        !text.contains("TS2339"),
+        "the mapper must not add the generated consequence:\n{text}"
+    );
+}
+
+#[test]
 fn a_type_error_inside_glue_reports_at_the_construct() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

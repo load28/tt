@@ -92,7 +92,7 @@ pub(crate) fn check_all(
     // accumulation the suppression is per match ([`MatchAnalysis::
     // has_unresolved`]), not per file: match B's coverage is not match A's
     // typo's business.
-    report_resolution(analyses, &mut checker.errors);
+    checker.errors.extend(resolution_errors(analyses));
     if !defer_to_checker {
         report_coverage(
             source,
@@ -116,7 +116,8 @@ pub(crate) fn check_all(
 /// an unresolved name is reportable belongs to the analysis (which is what
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
-fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut Vec<TtError>) {
+pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> Vec<TtError> {
+    let mut errors = Vec::with_capacity(analyses.unresolved.len());
     for unresolved in &analyses.unresolved {
         let described = describe(&CoveredVariant {
             name: unresolved.variant_name.clone(),
@@ -154,6 +155,7 @@ fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut V
                 ),
         );
     }
+    errors
 }
 
 struct Checker {

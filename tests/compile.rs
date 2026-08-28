@@ -1787,7 +1787,14 @@ const area = match (Shape.Point) {
 fn token_extern() -> ttc::ExternVariant {
     ttc::ExternVariant {
         name: "Token".to_string(),
-        tags: vec!["Num".to_string(), "Ident".to_string(), "Eof".to_string()],
+        generics: String::new(),
+        cases: ["Num", "Ident", "Eof"]
+            .into_iter()
+            .map(|tag| ttc::ExternVariantCase {
+                tag: tag.to_string(),
+                fields: None,
+            })
+            .collect(),
         from: Some("./token.tt".to_string()),
     }
 }
@@ -1852,7 +1859,14 @@ fn extern_variant_shadows_builtin_of_same_name() {
     // two-case match that satisfies the built-in must now be an error.
     let externs = [ttc::ExternVariant {
         name: "Option".to_string(),
-        tags: vec!["Some".to_string(), "None".to_string(), "Maybe".to_string()],
+        generics: String::new(),
+        cases: ["Some", "None", "Maybe"]
+            .into_iter()
+            .map(|tag| ttc::ExternVariantCase {
+                tag: tag.to_string(),
+                fields: None,
+            })
+            .collect(),
         from: Some("./opt.tt".to_string()),
     }];
     let opts = Options {
@@ -1890,7 +1904,15 @@ fn exported_variants_returns_exported_tt_enums_only() {
     );
     assert_eq!(decls.len(), 2);
     assert_eq!(decls[0].name, "Token");
-    assert_eq!(decls[0].tags, vec!["Num".to_string(), "Eof".to_string()]);
+    assert_eq!(
+        decls[0]
+            .cases
+            .iter()
+            .map(|case| case.tag.as_str())
+            .collect::<Vec<_>>(),
+        ["Num", "Eof"]
+    );
+    assert_eq!(decls[0].cases[0].fields.as_ref().unwrap()[0].name, "value");
     assert_eq!(decls[0].from, None);
     assert_eq!(decls[1].name, "Color");
 }

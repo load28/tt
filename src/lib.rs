@@ -167,7 +167,7 @@ impl SourceKind {
 }
 
 /// A variant declaration from another module, made available to [`compile`]'s
-/// exhaustiveness checking via [`Options::extern_variants`].
+/// pattern semantics via [`Options::extern_variants`].
 ///
 /// Collected by build tools (the `ttc` CLI does this for direct relative
 /// `.tt`/`.ttx` imports) with [`exported_variants`] over the imported file's source,
@@ -178,12 +178,34 @@ pub struct ExternVariant {
     /// applied; `ns.Name` for a namespace import). A local declaration of
     /// the same name shadows it; it shadows a built-in of the same name.
     pub name: String,
-    /// The variant's case tags.
-    pub tags: Vec<String>,
+    /// The verbatim `<...>` generic parameter list, or `""`.
+    pub generics: String,
+    /// The variant's cases, including their payload declarations.
+    pub cases: Vec<ExternVariantCase>,
     /// Where the declaration came from, quoted in error messages —
     /// typically the import specifier as written (e.g. `./token.tt`).
     /// [`exported_variants`] leaves it `None`; the collector fills it in.
     pub from: Option<String>,
+}
+
+/// One case of an [`ExternVariant`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternVariantCase {
+    /// The case tag.
+    pub tag: String,
+    /// `None` for a unit case without parentheses; `Some` for a payload case.
+    pub fields: Option<Vec<ExternVariantField>>,
+}
+
+/// One payload field of an [`ExternVariantCase`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternVariantField {
+    /// The field name.
+    pub name: String,
+    /// Whether the field is optional (`name?: T`).
+    pub optional: bool,
+    /// The verbatim declared type text.
+    pub ty: String,
 }
 
 /// One static relative `.tt`/`.ttx` import (or re-export) of a source file, in
@@ -207,10 +229,10 @@ pub enum TtImportNames {
     None,
 }
 
-/// Extracts the exported tt variant declarations (name + case tags) of a
-/// source file, without compiling it — the declaration-table half of
-/// project-wide exhaustiveness checking. Non-exported variants and
-/// TypeScript enums are not included. The returned entries have
+/// Extracts the exported tt variant declarations of a source file, without
+/// compiling it. Case payloads are retained so every pattern rule works across
+/// a module boundary exactly as it does for a local declaration. Non-exported
+/// variants and TypeScript enums are not included. The returned entries have
 /// [`ExternVariant::from`] set to `None`.
 ///
 /// ```
@@ -219,7 +241,8 @@ pub enum TtImportNames {
 /// );
 /// assert_eq!(decls.len(), 1);
 /// assert_eq!(decls[0].name, "Token");
-/// assert_eq!(decls[0].tags, ["Num", "Eof"]);
+/// assert_eq!(decls[0].cases[0].tag, "Num");
+/// assert_eq!(decls[0].cases[0].fields.as_ref().unwrap()[0].name, "value");
 /// ```
 pub fn exported_variants(source: &str) -> Vec<ExternVariant> {
     exported_variants_with_kind(source, SourceKind::TypeScript)
@@ -234,7 +257,24 @@ pub fn exported_variants_with_kind(source: &str, source_kind: SourceKind) -> Vec
         .filter_map(|segment| match segment {
             ast::Segment::Variant(decl) if decl.exported => Some(ExternVariant {
                 name: decl.name.clone(),
-                tags: decl.cases.iter().map(|c| c.tag.clone()).collect(),
+                generics: decl.generics.clone(),
+                cases: decl
+                    .cases
+                    .iter()
+                    .map(|case| ExternVariantCase {
+                        tag: case.tag.clone(),
+                        fields: case.fields.as_ref().map(|fields| {
+                            fields
+                                .iter()
+                                .map(|field| ExternVariantField {
+                                    name: field.name.clone(),
+                                    optional: field.optional,
+                                    ty: field.ty.clone(),
+                                })
+                                .collect()
+                        }),
+                    })
+                    .collect(),
                 from: None,
             }),
             _ => None,
