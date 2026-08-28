@@ -1,5 +1,6 @@
-# Promotion of one successful CI artifact set. Scheduled or manually dispatched
-# main CI runs publish Nightlies. This workflow does not publish formal releases.
+# Promotion of one successful CI artifact set. Scheduled main CI runs promote
+# Nightlies automatically; successful release branch CI runs wait for the
+# production environment approval. Neither path compiles source again.
 name: Publish Release
 run-name: Publish ${{ github.event.workflow_run.head_branch }} from CI ${{ github.event.workflow_run.id }}
 
@@ -18,9 +19,11 @@ jobs:
     name: verify promoted CI build
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
-      (github.event.workflow_run.event == 'schedule' ||
-       github.event.workflow_run.event == 'workflow_dispatch') &&
-      github.event.workflow_run.head_branch == 'main'
+      (((github.event.workflow_run.event == 'schedule' ||
+         github.event.workflow_run.event == 'workflow_dispatch') &&
+        github.event.workflow_run.head_branch == 'main') ||
+       (github.event.workflow_run.event == 'push' &&
+        startsWith(github.event.workflow_run.head_branch, 'release-')))
     runs-on: ubuntu-latest
     outputs:
       run_id: ${{ steps.release.outputs.run_id }}
@@ -52,10 +55,27 @@ jobs:
           RUN_EVENT="$(jq -r .event /tmp/run.json)"
           test "$SOURCE_SHA" = "$(jq -r .headSha /tmp/run.json)"
           test "$SOURCE_BRANCH" = "$(jq -r .headBranch /tmp/run.json)"
-          test "$SOURCE_BRANCH" = main
-          case "$RUN_EVENT" in schedule|workflow_dispatch) ;; *) exit 1 ;; esac
-          test "$NPM_TAG" = next
-          ENVIRONMENT_NAME=nightly
+          if [ "$SOURCE_BRANCH" = main ]; then
+            case "$RUN_EVENT" in schedule|workflow_dispatch) ;; *) exit 1 ;; esac
+            test "$NPM_TAG" = next
+            ENVIRONMENT_NAME=nightly
+          else
+            test "$RUN_EVENT" = push
+            case "$SOURCE_BRANCH" in release-*) ;; *) exit 1 ;; esac
+            case "$VERSION" in
+              *-beta) EXPECTED_TAG=beta ;;
+              *-rc) EXPECTED_TAG=rc ;;
+              *-dev.*) exit 1 ;;
+              *) EXPECTED_TAG=latest ;;
+            esac
+            test "$NPM_TAG" = "$EXPECTED_TAG"
+            ENVIRONMENT_NAME=production
+          fi
+          if [ "$NPM_TAG" = next ]; then
+            test "$SOURCE_BRANCH" = main
+          else
+            case "$SOURCE_BRANCH" in release-*) ;; *) exit 1 ;; esac
+          fi
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           echo "source_branch=$SOURCE_BRANCH" >> "$GITHUB_OUTPUT"
