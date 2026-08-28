@@ -1,54 +1,53 @@
-# TASK-NNN: <제목>
+# TASK-NNN: <Title>
 
-- **상태**: 대기 | 진행 중 | 완료 | 보류 | 취소
-- **시작일**: YYYY-MM-DD
-- **완료일**: —
-- **커밋**: —
+- **Status**: Pending | In progress | Complete | Blocked | Cancelled
+- **Started**: YYYY-MM-DD
+- **Completed**: —
+- **Commit**: —
 
-## 목적
+## Purpose
 
-이 태스크가 왜 필요한지 한두 문장으로.
+Explain why this task is needed in one or two sentences.
 
-## 범위
+## Scope
 
-- 포함: 무엇을 하는지
-- 제외: 명시적으로 하지 않는 것 (범위 확장 방지)
+- Included: What this task changes
+- Excluded: Explicit boundaries that prevent scope expansion
 
-## 의사결정
+## Decisions
 
-작업 중 내린 모든 유의미한 결정을 기록한다. 각 결정마다:
+Record every meaningful decision made during the task. For each decision:
 
-### 결정 1: <결정 내용 한 줄 요약>
+### Decision 1: <One-line decision summary>
 
-- **상황**: 어떤 선택이 필요했는지, 왜 이 시점에 결정해야 했는지.
-- **검토한 대안**: 대안 A / 대안 B / ... 각각의 장단점.
-- **선택과 근거**: 무엇을 선택했고, 왜 그 대안이 다른 대안보다 나은지.
-  (근거가 측정·확인 가능한 것이면 그 방법도: 예 — 벤치마크, `cargo metadata`,
-  테스트 결과)
+- **Context**: What choice was required and why it had to be made now
+- **Alternatives considered**: Alternatives and their tradeoffs
+- **Decision and rationale**: What was selected, why it was preferable, and any
+  measurable evidence such as benchmarks, `cargo metadata`, or test results
 
-## 작업 내역
+## Work log
 
-실제로 수행한 작업을 시간순으로, 재현 가능할 만큼 구체적으로 기록한다.
-무엇을 어떤 파일에 어떻게 바꿨는지, 어떤 명령으로 확인했는지 포함.
+Record the work chronologically with enough detail to reproduce it. Include
+the files changed and the commands used for verification.
 
 - YYYY-MM-DD: ...
 
-## 이슈 및 해결
+## Issues and resolutions
 
-작업 중 만난 문제를 기록한다. 없었다면 "없음"이라고 명시한다. 각 이슈마다:
+Write `None.` when there were no issues. For each issue:
 
-### 이슈 1: <증상 한 줄 요약>
+### Issue 1: <One-line symptom summary>
 
-- **증상**: 무엇이 어떻게 실패/오동작했는지 (에러 메시지, 로그 포함).
-- **원인**: 조사 과정과 파악된 근본 원인.
-- **해결**: 어떻게 고쳤는지. 우회했다면 그 이유와 남은 부채도 기록.
+- **Symptom**: What failed, including relevant errors or logs
+- **Cause**: How the root cause was identified
+- **Resolution**: How it was fixed, including any workaround or remaining debt
 
-## 검증
+## Verification
 
 - [ ] `cargo fmt --check`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`
 
-## 결과
+## Result
 
-변경된 파일 요약과 최종 결과. 후속 작업이 필요하면 새 태스크로 등록하고 여기 링크.
+Summarize the changed files and final outcome. Link any follow-up task.

@@ -60,21 +60,33 @@ CLI·에디터·서버는 모두 engine 소비자이고 tsgo 개념은 `src/type
 새면 안 됩니다. 더 자세한 현재 구조는 `docs/design/compiler-architecture.md`와
 관련 설계 문서를 확인합니다.
 
-새 구문은 AST·parser·HIR·codegen, 새 의미 검사는 resolve·analysis·sema, 방출
-형태는 codegen처럼 책임 있는 단계에만 둡니다. 언어 표면을 바꾸면
-`docs/ai/tt.md`도 갱신하고, 사용자가 처음 접하는 기능이면 영문·한글 README도
-같이 갱신합니다.
+Place new syntax only in AST, parser, HIR, and codegen; place new semantic
+checks only in resolve, analysis, and sema; and keep emitted forms in codegen.
+When the language surface changes, update `docs/ai/tt.md`. Update user-facing
+documentation when a feature is introduced to users.
 
-## 태스크 관리
+## Documentation language
 
-모든 개발 작업은 `docs/tasks/INDEX.md`와 개별 `docs/tasks/TASK-NNN-<slug>.md`로
-관리합니다.
+- Write all new documentation in English.
+- Write every documentation update in English, including task records, design
+  notes, guides, READMEs, changelogs, website copy, and documentation comments.
+- Do not add or maintain parallel Korean documentation. Existing non-English
+  documents are not required to be translated unless the task changes them.
+- Use English for task titles, status values, decisions, work logs, validation
+  results, and issue records in `docs/tasks/`.
 
-1. 변경 전에 INDEX의 다음 번호와 `docs/tasks/TEMPLATE.md`로 문서를 만들고
-   `진행 중`으로 등록합니다.
-2. 선택한 대안과 근거, 시간순 작업 내역, 문제의 증상·원인·해결을 기록합니다.
-3. 완료 전에 검증 결과와 변경 파일을 기록하고 INDEX와 문서를 `완료`로 바꿉니다.
-4. 커밋 제목은 `TASK-NNN: subject`로 시작합니다.
+## Task management
+
+Track every development task in `docs/tasks/INDEX.md` and an individual
+`docs/tasks/TASK-NNN-<slug>.md` record.
+
+1. Before making changes, use the next number in the index and
+   `docs/tasks/TEMPLATE.md` to create a record with status `In progress`.
+2. Record alternatives and rationale, the chronological work log, and each
+   issue's symptom, cause, and resolution.
+3. Before completion, record verification results and changed files, then set
+   both the index and task record to `Complete`.
+4. Start commit titles with `TASK-NNN: subject`.
 
 버전은 작업 단위로 올리지 않습니다. `main`의 Nightly 버전은 예약 CI가 산출물에만
 날짜로 스탬프합니다. Beta 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.

@@ -270,7 +270,8 @@
 | TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 진행 중 | 2026-08-27 | — | [TASK-259](./TASK-259-upstream-extension-id.md) |
 | TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 진행 중 | 2026-08-28 | — | [TASK-260](./TASK-260-nightly-install-docs.md) |
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
+| TASK-262 | Require English documentation | Complete | 2026-08-28 | 2026-08-28 | [TASK-262](./TASK-262-english-documentation-policy.md) |
 
 ## 다음 태스크 번호
 
-**TASK-262**
+**TASK-263**
