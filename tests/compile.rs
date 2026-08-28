@@ -971,10 +971,25 @@ fn try_at_module_top_level_is_an_error() {
 
 #[test]
 fn try_cannot_be_used_in_expression_position() {
-    for src in [
-        "function f() { return try read(); }\n",
-        "function f() { const run = () => try read(); }\n",
-        "function f(c: boolean) { const x = c ? 0 : try read(); }\n",
+    for (src, misplaced) in [
+        ("function f() { return try read(); }\n", "try read()"),
+        (
+            "function f() { const run = () => try read(); }\n",
+            "try read()",
+        ),
+        (
+            "function f(c: boolean) { const x = c ? 0 : try read(); }\n",
+            "try read()",
+        ),
+        (
+            "function f() { return Result.Ok(Math.round(try total() * 1.1)); }\n",
+            "try total() * 1.1",
+        ),
+        ("function f() { return `v=${try read()}`; }\n", "try read()"),
+        (
+            "function f() { return Result.Ok({ amount: try total() }); }\n",
+            "try total()",
+        ),
     ] {
         let diagnostics = ttc::analyze(src, &Options::default());
         assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
@@ -988,7 +1003,7 @@ fn try_cannot_be_used_in_expression_position() {
         );
         let start = diagnostics[0].start.expect("placement start");
         let end = diagnostics[0].end.expect("placement end");
-        assert_eq!(&src[start..end], "try read()");
+        assert_eq!(&src[start..end], misplaced);
     }
 }
 

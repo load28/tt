@@ -453,12 +453,91 @@ fn starts_statement(src: &str, tokens: &[Token], idx: usize, in_ternary: bool) -
     false
 }
 
+/// A colon normally admits a following statement (labels, `case`, match
+/// arms), but a colon inside an object literal introduces a value expression.
+/// This recognizes the object-literal brace from the token that introduced it
+/// instead of guessing from the spelling of the property.
+fn follows_object_member_colon(src: &str, tokens: &[Token], idx: usize) -> bool {
+    if !idx
+        .checked_sub(1)
+        .and_then(|previous| tokens.get(previous))
+        .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b':')))
+    {
+        return false;
+    }
+
+    let mut depth = 0usize;
+    for open in (0..idx - 1).rev() {
+        match tokens[open].kind {
+            TokenKind::Punct(b'}') => depth += 1,
+            TokenKind::Punct(b'{') if depth > 0 => depth -= 1,
+            TokenKind::Punct(b'{') => {
+                let Some(before) = open.checked_sub(1).and_then(|at| tokens.get(at)) else {
+                    return false;
+                };
+                return match before.kind {
+                    TokenKind::Punct(b'(' | b'[' | b',' | b'=' | b':' | b'?') => true,
+                    TokenKind::Ident => {
+                        matches!(&src[before.span.start..before.span.end], "return" | "yield")
+                    }
+                    _ => false,
+                };
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Returns true for the `= try` portion of a declaration. A declaration try
+/// without its required semicolon is an incomplete tt statement, not a
+/// misplaced expression, and must retain its rollback candidate.
+fn follows_declaration_equals(src: &str, tokens: &[Token], idx: usize) -> bool {
+    if !idx
+        .checked_sub(1)
+        .and_then(|previous| tokens.get(previous))
+        .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'=')))
+    {
+        return false;
+    }
+
+    let mut depth = 0usize;
+    for at in (0..idx - 1).rev() {
+        match tokens[at].kind {
+            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') if depth > 0 => depth -= 1,
+            TokenKind::Punct(b';') if depth == 0 => return false,
+            TokenKind::Ident
+                if depth == 0
+                    && matches!(
+                        &src[tokens[at].span.start..tokens[at].span.end],
+                        "const" | "let" | "var"
+                    ) =>
+            {
+                return true;
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
 impl Parser<'_> {
     /// Parses a lexed token range covering `bytes[start..end]` into a
     /// [`Program`] whose segments cover the byte range exactly, in source
     /// order. Bytes between lifted constructs — trivia included — become
     /// verbatim segments.
     pub(crate) fn parse_tokens(&self, tokens: &[Token], start: usize, end: usize) -> Program {
+        self.parse_tokens_with_context(tokens, start, end, false)
+    }
+
+    fn parse_tokens_with_context(
+        &self,
+        tokens: &[Token],
+        start: usize,
+        end: usize,
+        expression_root: bool,
+    ) -> Program {
         let mut segments: Vec<Segment> = Vec::new();
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
@@ -640,28 +719,32 @@ impl Parser<'_> {
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
             if !dotted && word == "try" {
+                let misplaced = (expression_root && i == 0)
+                    || !starts_statement(self.src, tokens, i, expr.1)
+                    || follows_object_member_colon(self.src, tokens, i);
+                if misplaced
+                    && !follows_declaration_equals(self.src, tokens, i)
+                    && let Some((next_i, span)) =
+                        tries::parse_misplaced_try(Cursor::new(self, tokens, i + 1, end), tok.span)
+                {
+                    malformed.push(
+                        crate::error::TtError::span(
+                            span.start,
+                            span.end,
+                            "`try` is a statement, not an expression".to_string(),
+                        )
+                        .code(crate::DiagnosticCode::TryPlacement)
+                        .help("bind its value first with `const value = try <expression>;`"),
+                    );
+                    recoveries.push(RecoveryNode {
+                        span,
+                        kind: RecoveryKind::Expression,
+                    });
+                    i = next_i;
+                    continue;
+                }
                 match tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, mut stmt)) => {
-                        if !starts_statement(self.src, tokens, i, expr.1) {
-                            malformed.push(
-                                crate::error::TtError::span(
-                                    stmt.span.start,
-                                    stmt.span.end,
-                                    "`try` is a statement, not an expression".to_string(),
-                                )
-                                .code(crate::DiagnosticCode::TryPlacement)
-                                .help(
-                                    "bind its value first with \
-                                     `const value = try <expression>;`",
-                                ),
-                            );
-                            recoveries.push(RecoveryNode {
-                                span: stmt.span,
-                                kind: RecoveryKind::Expression,
-                            });
-                            i = cur.idx;
-                            continue;
-                        }
                         stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::Try(stmt));
@@ -879,9 +962,9 @@ impl Parser<'_> {
             .iter()
             .map(|part| match part {
                 TplPart::Raw(span) => TemplateChunk::Raw(*span),
-                TplPart::Interp { span, tokens } => {
-                    TemplateChunk::Interp(self.parse_tokens(tokens, span.start, span.end))
-                }
+                TplPart::Interp { span, tokens } => TemplateChunk::Interp(
+                    self.parse_tokens_with_context(tokens, span.start, span.end, true),
+                ),
             })
             .collect();
         Template { chunks }

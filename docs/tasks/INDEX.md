@@ -279,7 +279,7 @@
 | TASK-268 | Diagnose unknown cases independently of wildcard coverage | Complete | 2026-08-28 | 2026-08-28 | [TASK-268](./TASK-268-wildcard-independent-case-resolution.md) |
 | TASK-269 | Respect tsconfig source boundaries and surface backend failures | Complete | 2026-08-28 | 2026-08-28 | [TASK-269](./TASK-269-typed-project-boundaries.md) |
 | TASK-270 | Render nested pattern errors in source vocabulary | Complete | 2026-08-28 | 2026-08-28 | [TASK-270](./TASK-270-nested-pattern-diagnostics.md) |
-| TASK-271 | Diagnose deep expression `try` placement before verification | Pending | 2026-08-28 | — | [TASK-271](./TASK-271-deep-try-placement.md) |
+| TASK-271 | Diagnose deep expression `try` placement before verification | Complete | 2026-08-28 | 2026-08-28 | [TASK-271](./TASK-271-deep-try-placement.md) |
 | TASK-272 | Point malformed `result` tails at the trailing semicolon | Pending | 2026-08-28 | — | [TASK-272](./TASK-272-result-tail-semicolon.md) |
 | TASK-273 | Suppress checker cascades owned by proven tt errors | Pending | 2026-08-28 | — | [TASK-273](./TASK-273-owned-checker-cascades.md) |
 | TASK-274 | Show the top-level `contentMappers` configuration shape | Pending | 2026-08-28 | — | [TASK-274](./TASK-274-content-mapper-documentation.md) |
