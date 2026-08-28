@@ -42,6 +42,30 @@ test("a buffer that was never saved has no place in the project", async () => {
 });
 
 test(
+  "a pipeline mismatch keeps its secondary labels through the typed check",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = tmpProject();
+    const file = path.join(dir, "pipe.tt");
+    const source =
+      "const inc = (n: number): number => n + 1;\n" +
+      "const shout = (s: string): string => s.toUpperCase();\n" +
+      "const a = 1 |> inc |> shout;\n";
+    fs.writeFileSync(file, source);
+
+    const result = await runTypedCheck(COMPILER, source, file, true);
+    if (result.kind === "unavailable") return;
+    const mismatch = result.diagnostics.find((d) => d.code === "ts2345");
+    assert.ok(mismatch, JSON.stringify(result.diagnostics));
+    const labels = mismatch?.labels ?? [];
+    assert.equal(labels.length, 1, JSON.stringify(mismatch));
+    assert.equal(labels[0].message, "the piped value is produced here");
+    // 1-based, like the diagnostic itself: `inc` on line 3.
+    assert.equal(labels[0].line, 3);
+  },
+);
+
+test(
   "the buffer is what gets checked, and the message is the compiler's",
   { skip: skipTyped, timeout },
   async () => {

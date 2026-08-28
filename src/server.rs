@@ -256,12 +256,32 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 .service_diagnostics(path)?
                 .into_iter()
                 .map(|d| {
-                    json!({
+                    let mut entry = json!({
                         "range": range_json(d.range),
                         "message": d.message,
                         "code": d.code,
                         "warning": d.warning,
-                    })
+                    });
+                    // Secondary labeled spans ride only when there are any,
+                    // so consumers of the existing shape see no new field
+                    // until a diagnostic actually carries one.
+                    if !d.related.is_empty() {
+                        entry["related"] = d
+                            .related
+                            .iter()
+                            .map(|r| {
+                                let mut related = json!({
+                                    "range": range_json(r.range),
+                                    "message": r.message,
+                                });
+                                if let Some(path) = &r.path {
+                                    related["path"] = json!(path);
+                                }
+                                related
+                            })
+                            .collect();
+                    }
+                    entry
                 })
                 .collect();
             Ok(json!({ "diagnostics": diagnostics }))
@@ -700,7 +720,7 @@ fn typed_check(
                         .map(|d| {
                             let (line, col) = d.position.unwrap_or((0, 0));
                             let (end_line, end_col) = d.end.unwrap_or((0, 0));
-                            json!({
+                            let mut entry = json!({
                                 "path": d.path,
                                 "line": line,
                                 "col": col,
@@ -712,7 +732,14 @@ fn typed_check(
                                     &d.suggestions,
                                     snapshot.source_of(&d.path),
                                 ),
-                            })
+                            });
+                            // Labels ride only when there are any, so a
+                            // consumer of the existing shape sees no new
+                            // field until a diagnostic actually carries one.
+                            if !d.labels.is_empty() {
+                                entry["labels"] = labels_json(&d.labels);
+                            }
+                            entry
                         })
                         .collect();
                     // `backendError`: the TypeScript layer could not run —
@@ -730,6 +757,29 @@ fn typed_check(
         project.close_document(&canonical);
     }
     Ok(response)
+}
+
+/// A diagnostic's secondary labeled spans as the JSON the protocol speaks:
+/// 1-based line/column pairs like the diagnostic itself, plus the label's
+/// words, and a `path` only when the span is in another file.
+fn labels_json(labels: &[ttc::engine::DiagnosticLabel]) -> serde_json::Value {
+    use serde_json::json;
+    labels
+        .iter()
+        .map(|label| {
+            let mut entry = json!({
+                "line": label.position.0,
+                "col": label.position.1,
+                "endLine": label.end.0,
+                "endCol": label.end.1,
+                "message": label.message,
+            });
+            if let Some(path) = &label.path {
+                entry["path"] = json!(path);
+            }
+            entry
+        })
+        .collect()
 }
 
 fn text_param(params: &serde_json::Value) -> Result<&str, String> {

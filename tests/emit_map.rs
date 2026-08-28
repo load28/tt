@@ -410,6 +410,53 @@ fn anchors_nest_innermost_first() {
 }
 
 #[test]
+fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
+    let src = "const a = one() |> f |> g |> h;\n";
+    let m = emit_mapped(src);
+    let pipes: Vec<&ttc::EmitAnchor> = m
+        .anchors
+        .iter()
+        .filter(|a| a.kind == ttc::AnchorKind::Pipe)
+        .collect();
+    // One anchor per step plus the whole pipeline: a mismatch on the value
+    // flowing into step N belongs to step N, and anything wider still
+    // belongs to the pipeline.
+    let spans: Vec<&str> = pipes.iter().map(|a| &src[a.src..a.src_end]).collect();
+    for step in ["f", "g", "h"] {
+        assert!(spans.contains(&step), "step {step} is anchored: {spans:?}");
+    }
+    assert!(
+        spans.contains(&"one() |> f |> g |> h"),
+        "the whole pipeline stays anchored: {spans:?}"
+    );
+
+    // The value argument of the outermost helper call is the accumulated
+    // inner call; a diagnostic starting on its glue belongs to the step
+    // that consumes it — the innermost anchor covering that byte.
+    let outer_arg = m.code.find("$tt_ap($tt_ap(").expect("nested helpers") + "$tt_ap(".len();
+    let owner = m.anchor_at(outer_arg).expect("anchored glue");
+    assert_eq!(&src[owner.src..owner.src_end], "h");
+
+    let inner_arg = outer_arg + "$tt_ap(".len();
+    let owner = m.anchor_at(inner_arg).expect("anchored glue");
+    assert_eq!(&src[owner.src..owner.src_end], "g");
+
+    // Each step anchor also names where the value it consumes was
+    // produced — the previous step, or the head — so a diagnostic there
+    // can label the producer.
+    let produced: Vec<(&str, &str)> = pipes
+        .iter()
+        .filter_map(|a| {
+            a.context
+                .map(|(from, to)| (&src[a.src..a.src_end], &src[from..to]))
+        })
+        .collect();
+    for pair in [("f", "one()"), ("g", "f"), ("h", "g")] {
+        assert!(produced.contains(&pair), "{pair:?} in {produced:?}");
+    }
+}
+
+#[test]
 fn anchors_do_not_change_the_emitted_bytes() {
     // Anchors are zero-length notes; the output must be what it always was.
     let src = r#"variant E { A(x: number), B }

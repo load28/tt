@@ -330,6 +330,7 @@ mod tests {
             src: 42,
             src_end: 51,
             owner_end: 60,
+            context: None,
             kind: crate::AnchorKind::Match,
         }];
         assert_eq!(source_byte_at(5, &[], &anchors), Some(42));

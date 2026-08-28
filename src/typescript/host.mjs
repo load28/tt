@@ -242,6 +242,7 @@ async function main() {
     for (const d of project.program.getSemanticDiagnostics()) {
       if (!d.fileName) continue;
       const mismatch = contextualMismatch(project, checker, d, isExpression);
+      const related = relatedPlaces(d);
       out.diagnostics.push({
         file: d.fileName,
         start: d.pos,
@@ -249,6 +250,7 @@ async function main() {
         code: d.code,
         message: d.text,
         ...(mismatch ? { mismatch } : {}),
+        ...(related.length > 0 ? { related } : {}),
       });
     }
     /**
@@ -412,6 +414,29 @@ async function main() {
  * call arguments and future lowered constructs all participate through the
  * checker’s contextual typing relation.
  */
+/**
+ * The checker's own related places — "the expected type comes from this
+ * declaration", "first declared here" — normalized to the diagnostic item
+ * shape. The property names differ between clients, so both spellings are
+ * accepted; an entry missing a file or a position is dropped rather than
+ * guessed at.
+ */
+function relatedPlaces(diagnostic) {
+  const entries = diagnostic.relatedInformation ?? diagnostic.related ?? [];
+  const out = [];
+  for (const entry of entries) {
+    const file = entry.fileName ?? entry.file;
+    const start = entry.pos ?? entry.start;
+    const end = entry.end ?? (typeof entry.length === "number" ? start + entry.length : undefined);
+    const message = entry.text ?? entry.message ?? entry.messageText;
+    if (typeof file !== "string" || typeof start !== "number" || typeof end !== "number") continue;
+    if (typeof message !== "string") continue;
+    out.push({ file, start, end, message });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function contextualMismatch(project, checker, diagnostic, isExpression) {
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
@@ -500,12 +525,83 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
           }
         }
       }
+      // Two instantiations of one declaration with no retained type
+      // arguments (an instantiated object literal, e.g. a lowered variant
+      // case) differ where a declared property differs.
+      const property = propertyLeaf(checker, found, counterpart, depth);
+      if (property) return property;
     }
+  }
+  // Two single-signature function types differ where their results (or a
+  // parameter) differ — a pipeline `flow` boundary is the canonical case.
+  // The signature API is optional on the native bridge; without it the
+  // complete function types remain the leaf.
+  try {
+    const foundCalls = found.getCallSignatures?.() ?? [];
+    const expectedCalls = expected.getCallSignatures?.() ?? [];
+    if (foundCalls.length === 1 && expectedCalls.length === 1) {
+      const foundReturn = foundCalls[0].getReturnType?.();
+      const expectedReturn = expectedCalls[0].getReturnType?.();
+      if (
+        foundReturn &&
+        expectedReturn &&
+        !checker.isTypeAssignableTo(foundReturn, expectedReturn)
+      ) {
+        return (
+          incompatibleLeaf(checker, foundReturn, expectedReturn, depth + 1) ?? {
+            expected: checker.typeToString(expectedReturn),
+            found: checker.typeToString(foundReturn),
+          }
+        );
+      }
+    }
+  } catch {
+    // Fall through to the complete pair.
   }
   return {
     expected: checker.typeToString(expected),
     found: checker.typeToString(found),
   };
+}
+
+/**
+ * Where two instantiations of one declaration differ: the single declared
+ * property whose types are incompatible, descended recursively. Reached
+ * only through an identity-matched counterpart, so apparent members of
+ * primitives never qualify. Anything ambiguous — no shared properties, or
+ * more than one differing — keeps the complete pair. The property APIs are
+ * optional on the native bridge.
+ */
+function propertyLeaf(checker, found, expected, depth) {
+  try {
+    const properties = found.getProperties?.() ?? [];
+    if (properties.length === 0) return null;
+    let shared = 0;
+    let incompatible = 0;
+    let pair = null;
+    for (const property of properties) {
+      const name = property.getName?.() ?? property.name;
+      if (!name) continue;
+      const counterpart = checker.getPropertyOfType(expected, name);
+      if (!counterpart) continue;
+      shared += 1;
+      const foundType = checker.getTypeOfSymbol(property);
+      const expectedType = checker.getTypeOfSymbol(counterpart);
+      if (!checker.isTypeAssignableTo(foundType, expectedType)) {
+        incompatible += 1;
+        pair = { foundType, expectedType };
+      }
+    }
+    if (shared === 0 || incompatible !== 1 || !pair) return null;
+    return (
+      incompatibleLeaf(checker, pair.foundType, pair.expectedType, depth + 1) ?? {
+        expected: checker.typeToString(pair.expectedType),
+        found: checker.typeToString(pair.foundType),
+      }
+    );
+  } catch {
+    return null;
+  }
 }
 
 function incompatibleLeaves(checker, found, expected) {

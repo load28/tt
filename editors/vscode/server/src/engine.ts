@@ -88,6 +88,10 @@ export interface EngineDiagnostic {
   message: string;
   code: number;
   warning: boolean;
+  /** Secondary labeled spans ("the piped value is produced here"), absent
+   * when the diagnostic has only its primary range. `path` names another
+   * file; without it the span is in the diagnostic's own file. */
+  related?: { range: EngineRange; message: string; path?: string }[];
 }
 
 export interface EngineTtSymbol {

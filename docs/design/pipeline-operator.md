@@ -243,6 +243,42 @@ error[stray-pipe]: pipeline: `|>` could not be parsed here
   = help: a step is an expression — parenthesize a ternary or an arrow function
 ```
 
+### 5.1.1 Checker mismatches name the rejecting step (TASK-263)
+
+The nested `$tt_ap`/`$tt_fl` emission puts the accumulated value in the
+helper's first argument, and TypeScript infers `A` from the step function —
+so a boundary mismatch lands on the *value* argument, which for every
+boundary after the first is compiler glue. Emission therefore anchors each
+piped-value position (`AnchorKind::Pipe`) to the **step that consumes it**:
+a diagnostic crossing that glue re-homes onto the step that rejected the
+value, while verbatim spans keep resolving exactly. The whole pipeline
+remains anchored for context errors (e.g. the pipeline's result not fitting
+an annotation).
+
+The shared CLI/editor translation table renders the boundary as
+
+```
+error[ts2345]: this pipeline step expects `string`, but receives `number`
+ --> file.tt:4:23
+  |
+4 | const a = 1 |> inc |> shout;
+  |                       ^^^^^
+```
+
+descending to the minimal incompatible pair (a `flow` boundary's function
+types reduce to the value types of the boundary, with the complete
+obligation kept as `required type:` context). The `pipe-step-input`
+translation class also deduplicates per step in the editor.
+
+Since TASK-264 each per-step anchor also records where the consumed value
+was produced (`EmitAnchor::context` — the previous step, or the head), and
+the report layers attach it as a labeled secondary span: the CLI draws it
+rustc-style in the same snippet (`--- the piped value is produced here`),
+and the editor serves it as LSP related information. The same label
+mechanism carries the checker's own `relatedInformation` for every other
+construct ("the expected type comes from property … declared here"), mapped
+back through the same origin machinery.
+
 ### 5.2 기존 구문과의 상호작용
 
 - **`try` 식 내부**: `const a = try readCfg() |> normalize;` — try의 식은

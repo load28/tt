@@ -39,6 +39,23 @@ export interface TtcDiagnostic {
    * a fix the editor can apply; one without names advice only. Older
    * compilers omit the field. */
   suggestions?: TtcSuggestion[];
+  /** Secondary labeled spans ("the piped value is produced here"), absent
+   * when the diagnostic has only its primary range or the compiler
+   * predates them. */
+  labels?: TtcLabel[];
+}
+
+/** One secondary labeled span of a diagnostic — 1-based line/column pairs,
+ * `endLine`/`endCol` past the last character, the same coordinates the
+ * diagnostic itself is reported in. `path` names another file; without it
+ * the span is in the diagnostic's own file. */
+export interface TtcLabel {
+  line: number;
+  col: number;
+  endLine: number;
+  endCol: number;
+  message: string;
+  path?: string;
 }
 
 /** One way to resolve a diagnostic (`ttc`'s `Suggestion`). */
@@ -376,6 +393,7 @@ export async function runTypedCheck(
         message: string;
         code?: string;
         suggestions?: TtcSuggestion[];
+        labels?: TtcLabel[];
       }[];
     };
     const all = result.diagnostics ?? [];
@@ -405,6 +423,7 @@ export async function runTypedCheck(
         message: d.message,
         code: d.code,
         suggestions: d.suggestions,
+        labels: d.labels,
       })),
     };
   }

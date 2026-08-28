@@ -15,7 +15,7 @@ use super::projection::{self, Probes, ProjectedDocument};
 use super::snapshot::Snapshot;
 use crate::AnchorKind;
 use crate::analysis::{DeclaredVariant, PayloadAlphabet};
-use crate::typescript::backend::{Answers, Diagnostic as TsDiagnostic, Resolution};
+use crate::typescript::backend::{Answers, Diagnostic as TsDiagnostic, Resolution, TypeMismatch};
 use crate::typescript::mapper::DiagnosticOrigin;
 
 /// One reported problem, at a position in a file the user can open.
@@ -59,6 +59,24 @@ pub struct Diagnostic {
     /// keeps the typed path from silently dropping a fix the untyped pass
     /// already computed.
     pub suggestions: Vec<crate::Suggestion>,
+    /// Secondary places this diagnostic points at, each with its own words
+    /// — rustc's labeled spans ("the piped value comes from this step",
+    /// "the expected type comes from this declaration"). Empty for a
+    /// diagnostic that has only its primary span.
+    pub labels: Vec<DiagnosticLabel>,
+}
+
+/// One secondary span of a [`Diagnostic`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticLabel {
+    /// The file the span is in, when it is not the diagnostic's own file.
+    pub path: Option<PathBuf>,
+    /// 1-based line and column of the label's start.
+    pub position: (usize, usize),
+    /// 1-based line and column just past the label's range.
+    pub end: (usize, usize),
+    /// What this place explains.
+    pub message: String,
 }
 
 /// The typed pass's copy of the advice that closes a match — the same
@@ -211,6 +229,15 @@ pub(crate) fn translate(
         (AnchorKind::Match, 2678) | (AnchorKind::LetElse | AnchorKind::IfLet, 2367) => {
             "this pattern's case is not one the value can be".to_string()
         }
+        // The value flowing into a pipeline step does not fit the step. The
+        // span already names the rejecting step (the per-step anchor); the
+        // sentence names the two sides.
+        (AnchorKind::Pipe, 2345) => match assignability_pair(message) {
+            Some((found, expected)) => {
+                format!("this pipeline step expects `{expected}`, but receives `{found}`")
+            }
+            None => "this pipeline step cannot accept the value flowing into it".to_string(),
+        },
         _ => return None,
     };
     let message = message.trim();
@@ -235,8 +262,34 @@ pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static 
         (AnchorKind::Match, 2678) | (AnchorKind::LetElse | AnchorKind::IfLet, 2367) => {
             Some("impossible-case")
         }
+        (AnchorKind::Pipe, 2345) => Some("pipe-step-input"),
         _ => None,
     }
+}
+
+/// The tightest `'found' is not assignable to … type 'expected'` pair in a
+/// checker message. TypeScript's elaboration lines descend from the outer
+/// types toward the incompatible leaf, so the last pair is the most
+/// specific one — the same reduction [`TypeMismatch::differences`] proves
+/// structurally when the checker's structured facts are available.
+fn assignability_pair(message: &str) -> Option<(String, String)> {
+    const NEEDLE: &str = "' is not assignable to ";
+    let mut result = None;
+    let mut from = 0;
+    while let Some(at) = message[from..].find(NEEDLE) {
+        let at = from + at;
+        from = at + NEEDLE.len();
+        let found = message[..at].rfind('\'').map(|open| &message[open + 1..at]);
+        let tail = &message[from..];
+        let tail = tail.strip_prefix("parameter of ").unwrap_or(tail);
+        let expected = tail
+            .strip_prefix("type '")
+            .and_then(|rest| rest.find('\'').map(|close| &rest[..close]));
+        if let (Some(found), Some(expected)) = (found, expected) {
+            result = Some((found.to_string(), expected.to_string()));
+        }
+    }
+    result
 }
 
 /// A checker message in tt's vocabulary.
@@ -265,6 +318,71 @@ fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredVariant
     let Some(mismatch) = &diagnostic.mismatch else {
         return ts_message(&diagnostic.message, declarations);
     };
+    let (expected, found, required) = mismatch_pair(mismatch, declarations);
+    let mut message = format!("type mismatch: expected `{expected}`, found `{found}`");
+    if let Some(required) = required {
+        message.push_str(&format!("\n  required type: `{required}`"));
+    }
+    message
+}
+
+/// Whether an anchor is a pipeline *step* anchor — the per-step input
+/// position, which alone justifies the step-boundary wording. The anchor
+/// covering a whole pipeline is the same kind but carries no producer
+/// context: a mismatch there is about the pipeline's result in its
+/// surrounding position (an argument, an annotation), not about any step.
+fn pipe_step_anchor(anchor: &crate::EmitAnchor) -> bool {
+    anchor.kind == AnchorKind::Pipe && anchor.context.is_some()
+}
+
+/// [`diagnostic_message`], said in the vocabulary of the construct whose
+/// glue the diagnostic landed on. A pipeline's per-step anchor already
+/// underlines the step that rejected the value, so its mismatch reads as
+/// what that step expects versus what the pipeline feeds it; every other
+/// anchor — the whole-pipeline one included — keeps the generic wording.
+fn anchored_diagnostic_message(
+    anchor: &crate::EmitAnchor,
+    diagnostic: &TsDiagnostic,
+    declarations: &[DeclaredVariant],
+) -> String {
+    if pipe_step_anchor(anchor)
+        && let Some(mismatch) = &diagnostic.mismatch
+    {
+        let (mut expected, mut found, mut required) = mismatch_pair(mismatch, declarations);
+        // A `flow` boundary mismatches as two function types the structural
+        // reduction does not descend into; the checker's own elaboration
+        // does, and its deepest pair is the boundary's value types.
+        let unreduced = expected == named_type(&mismatch.expected, declarations)
+            && found == named_type(&mismatch.found, declarations);
+        if unreduced
+            && let Some((found_leaf, expected_leaf)) = assignability_pair(&diagnostic.message)
+        {
+            let expected_leaf = named_type(&expected_leaf, declarations);
+            let found_leaf = named_type(&found_leaf, declarations);
+            if expected_leaf != expected || found_leaf != found {
+                required = Some(expected);
+                expected = expected_leaf;
+                found = found_leaf;
+            }
+        }
+        let mut message =
+            format!("this pipeline step expects `{expected}`, but receives `{found}`");
+        if let Some(required) = required {
+            message.push_str(&format!("\n  required type: `{required}`"));
+        }
+        return message;
+    }
+    diagnostic_message(diagnostic, declarations)
+}
+
+/// The expected/found pair a structured mismatch renders: the minimal
+/// incompatible leaves when the checker reduced to a single expected type,
+/// else the complete pair — plus the complete contextual type when the pair
+/// shown was reduced from it.
+fn mismatch_pair(
+    mismatch: &TypeMismatch,
+    declarations: &[DeclaredVariant],
+) -> (String, String, Option<String>) {
     let expected = named_type(&mismatch.expected, declarations);
     let found = named_type(&mismatch.found, declarations);
     let differences: Vec<(String, String)> = mismatch
@@ -292,14 +410,56 @@ fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredVariant
             }
         }
         let found_leaf = found_leaves.join(" | ");
-        let mut message =
-            format!("type mismatch: expected `{expected_leaf}`, found `{found_leaf}`");
-        if expected_leaf != expected || found_leaf != found {
-            message.push_str(&format!("\n  required type: `{expected}`"));
-        }
-        return message;
+        let required = (expected_leaf != expected || found_leaf != found).then(|| expected.clone());
+        return (expected_leaf.to_string(), found_leaf, required);
     }
-    format!("type mismatch: expected `{expected}`, found `{found}`")
+    (expected, found, None)
+}
+
+/// The secondary places a checker diagnostic points at, in `.tt`
+/// coordinates: the construct anchor's companion span first (a pipeline's
+/// producing step), then the checker's own related information, each mapped
+/// back through the same origin machinery the primary span traveled. A
+/// related place in a file the snapshot does not hold (a lib file, an
+/// uncompiled dependency) is dropped rather than guessed at.
+fn checker_labels(
+    files: &[Arc<ProjectedDocument>],
+    host: &ProjectedDocument,
+    anchor: Option<&crate::EmitAnchor>,
+    diagnostic: &TsDiagnostic,
+) -> Vec<DiagnosticLabel> {
+    let mut labels = Vec::new();
+    if let Some(anchor) = anchor
+        && anchor.kind == AnchorKind::Pipe
+        && let Some((start, end)) = anchor.context
+    {
+        labels.push(DiagnosticLabel {
+            path: None,
+            position: crate::line_col(&host.source, start),
+            end: crate::line_col(&host.source, end),
+            message: "the piped value is produced here".to_string(),
+        });
+    }
+    for related in &diagnostic.related {
+        let Some(file) = files.iter().find(|f| f.module_path == related.file) else {
+            continue;
+        };
+        let Some(origin) = projection::diagnostic_origin(file, related.start, related.end) else {
+            continue;
+        };
+        let (start, end) = match origin {
+            DiagnosticOrigin::Exact { start, end } => (start, end.max(start.saturating_add(1))),
+            DiagnosticOrigin::Anchor(anchor) => (anchor.src, anchor.src_end),
+            DiagnosticOrigin::Nearest { start } => (start, start.saturating_add(1)),
+        };
+        labels.push(DiagnosticLabel {
+            path: (file.source_path != host.source_path).then(|| file.source_path.clone()),
+            position: crate::line_col(&file.source, start),
+            end: crate::line_col(&file.source, end),
+            message: related.message.clone(),
+        });
+    }
+    labels
 }
 
 fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
@@ -618,6 +778,7 @@ pub(crate) fn report(
                 message: diagnostic.message.clone(),
                 code: Some(diagnostic.code.as_str().to_string()),
                 suggestions: diagnostic.suggestions.clone(),
+                labels: Vec::new(),
             });
         }
     }
@@ -636,6 +797,7 @@ pub(crate) fn report(
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
                 suggestions: d.suggestions.clone(),
+                labels: Vec::new(),
             });
         }
     }
@@ -671,6 +833,7 @@ pub(crate) fn report(
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: Vec::new(),
             });
             continue;
         };
@@ -689,6 +852,7 @@ pub(crate) fn report(
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: Vec::new(),
             });
             continue;
         };
@@ -730,13 +894,19 @@ pub(crate) fn report(
                     path: file.source_path.clone(),
                     position: Some(crate::line_col(&file.source, anchor.src)),
                     end: Some(crate::line_col(&file.source, anchor.src_end)),
-                    message: diagnostic_message(diagnostic, declared),
+                    message: anchored_diagnostic_message(&anchor, diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
+                    labels: checker_labels(files, file, Some(&anchor), diagnostic),
                 });
                 continue;
             }
-            if let Some(class) = translation_class(anchor.kind, diagnostic.code)
+            // The whole-pipeline anchor shares its kind with the step
+            // anchors but not their meaning: only a step anchor may speak
+            // in step vocabulary.
+            let translates = anchor.kind != AnchorKind::Pipe || pipe_step_anchor(&anchor);
+            if translates
+                && let Some(class) = translation_class(anchor.kind, diagnostic.code)
                 && !translated_seen.insert((
                     file.source_path.clone(),
                     anchor.src,
@@ -750,8 +920,9 @@ pub(crate) fn report(
                 .get(&file.source_path)
                 .map(|s| s.analyses.declarations.as_slice())
                 .unwrap_or_default();
-            if let Some(said) =
-                translate(anchor.kind, diagnostic.code, &diagnostic.message, declared)
+            if translates
+                && let Some(said) =
+                    translate(anchor.kind, diagnostic.code, &diagnostic.message, declared)
             {
                 let entry = Diagnostic {
                     path: file.source_path.clone(),
@@ -760,6 +931,7 @@ pub(crate) fn report(
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
+                    labels: checker_labels(files, file, Some(&anchor), diagnostic),
                 };
                 // One construct's glue can draw several TypeScript errors
                 // that all mean the same tt thing (`$tt_t.kind` and
@@ -783,6 +955,7 @@ pub(crate) fn report(
                     message: diagnostic_message(diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
+                    labels: checker_labels(files, file, None, diagnostic),
                 });
             }
             DiagnosticOrigin::Anchor(anchor) => out.push(Diagnostic {
@@ -795,6 +968,7 @@ pub(crate) fn report(
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: checker_labels(files, file, Some(&anchor), diagnostic),
             }),
             DiagnosticOrigin::Nearest { start } => out.push(Diagnostic {
                 path: file.source_path.clone(),
@@ -806,6 +980,7 @@ pub(crate) fn report(
                 ),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
+                labels: checker_labels(files, file, None, diagnostic),
             }),
         }
     }
@@ -845,6 +1020,7 @@ pub(crate) fn report(
                 site_of(anchor),
                 &uncovered,
             ),
+            labels: Vec::new(),
         });
     }
 
@@ -990,6 +1166,7 @@ pub(crate) fn report(
                     }
                     None => vec![non_exhaustive_help()],
                 },
+                labels: Vec::new(),
             });
         }
     }
@@ -1060,6 +1237,7 @@ pub(crate) fn report(
             message,
             code: Some(crate::DiagnosticCode::ValMutation.as_str().to_string()),
             suggestions: Vec::new(),
+            labels: Vec::new(),
         });
     }
 
@@ -1133,6 +1311,7 @@ pub(crate) fn report(
             ),
             code: Some(crate::DiagnosticCode::ValPass.as_str().to_string()),
             suggestions: Vec::new(),
+            labels: Vec::new(),
         });
     }
 
@@ -1366,6 +1545,67 @@ mod tests {
             Some("try-error-type")
         );
         assert_eq!(translation_class(AnchorKind::Pipe, 2339), None);
+        assert_eq!(
+            translation_class(AnchorKind::Pipe, 2345),
+            Some("pipe-step-input")
+        );
+    }
+
+    #[test]
+    fn a_pipe_mismatch_translates_to_the_steps_expectation() {
+        let said = translate(
+            AnchorKind::Pipe,
+            2345,
+            "Argument of type 'number' is not assignable to parameter of type 'string'.",
+            &[],
+        )
+        .expect("translated");
+        assert!(
+            said.starts_with("this pipeline step expects `string`, but receives `number`"),
+            "{said}"
+        );
+        assert!(said.contains("ts2345:"), "the original rides along: {said}");
+    }
+
+    #[test]
+    fn a_pipe_translation_uses_the_deepest_elaborated_pair() {
+        // A flow boundary mismatches as two function types; the elaboration
+        // descends to the value types, and the deepest pair is the boundary.
+        let said = translate(
+            AnchorKind::Pipe,
+            2345,
+            "Argument of type '(n: number) => number' is not assignable to parameter of type \
+             '(n: number) => string'.\n  Type 'number' is not assignable to type 'string'.",
+            &[],
+        )
+        .expect("translated");
+        assert!(
+            said.starts_with("this pipeline step expects `string`, but receives `number`"),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn an_unparseable_pipe_mismatch_still_says_what_the_step_meant() {
+        let said =
+            translate(AnchorKind::Pipe, 2345, "something unusual.", &[]).expect("translated");
+        assert!(
+            said.starts_with("this pipeline step cannot accept the value flowing into it"),
+            "{said}"
+        );
+    }
+
+    #[test]
+    fn assignability_pairs_parse_both_sentence_forms() {
+        assert_eq!(
+            assignability_pair("Argument of type 'A' is not assignable to parameter of type 'B'."),
+            Some(("A".to_string(), "B".to_string()))
+        );
+        assert_eq!(
+            assignability_pair("Type 'A' is not assignable to type 'B'."),
+            Some(("A".to_string(), "B".to_string()))
+        );
+        assert_eq!(assignability_pair("This expression is not callable."), None);
     }
 
     #[test]
@@ -1391,6 +1631,7 @@ mod tests {
             message: "same".to_string(),
             code: Some(code.to_string()),
             suggestions: Vec::new(),
+            labels: Vec::new(),
         };
         let finished = finish_diagnostics(vec![at(2, "ts9999"), at(1, "ts1000"), at(2, "ts1001")]);
         assert_eq!(finished.len(), 2);

@@ -174,6 +174,21 @@ pub struct ServiceDiagnostic {
     pub code: u32,
     /// True for a warning; everything else reported here is an error.
     pub warning: bool,
+    /// Secondary places this diagnostic points at, each with its own words
+    /// — served to the editor as LSP related information. Empty when the
+    /// diagnostic has only its primary range.
+    pub related: Vec<ServiceRelated>,
+}
+
+/// One secondary span of a [`ServiceDiagnostic`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServiceRelated {
+    /// The file the span is in, when it is not the diagnostic's own.
+    pub path: Option<PathBuf>,
+    /// Where, in that file's source.
+    pub range: Range,
+    /// What this place explains.
+    pub message: String,
 }
 
 /// The live language-service half of a [`Project`]: the running `tsgo --lsp`
@@ -833,7 +848,55 @@ impl Project {
             let raw = item["message"].as_str().unwrap_or_default().to_string();
             let code = item["code"].as_u64().unwrap_or(0) as u32;
             let glue = projected_anchor.or_else(|| glue_anchor(&doc, start));
-            if let Some((anchor, class)) = glue.and_then(|anchor| {
+            // The diagnostic's secondary places: the pipeline anchor's
+            // producing step, then the checker's own related information —
+            // the same two producers the CLI report attaches
+            // (`semantics::checker_labels`). Same-file spans only: a place
+            // in another module has no projection at hand here.
+            let mut related: Vec<ServiceRelated> = Vec::new();
+            if let Some(anchor) = glue
+                && anchor.kind == crate::AnchorKind::Pipe
+                && let Some((context_start, context_end)) = anchor.context
+            {
+                let from = mapper::to_utf16(&doc.source, context_start);
+                let to = mapper::to_utf16(&doc.source, context_end).max(from + 1);
+                related.push(ServiceRelated {
+                    path: None,
+                    range: source_range(&doc.source, from, to),
+                    message: "the piped value is produced here".to_string(),
+                });
+            }
+            // The tsgo preview omits `relatedInformation` from pull
+            // diagnostics today; when it starts sending it, these entries
+            // become labels with no further work here.
+            let served = served_uri(&path);
+            for entry in item["relatedInformation"].as_array().into_iter().flatten() {
+                if entry["location"]["uri"].as_str() != Some(served.as_str()) {
+                    continue;
+                }
+                let from = u16_offset(&doc.code, position_of(&entry["location"]["range"]["start"]));
+                let to = u16_offset(&doc.code, position_of(&entry["location"]["range"]["end"]));
+                let Some((from, to, _)) = diagnostic_source_span(&doc, from, to) else {
+                    continue;
+                };
+                let to = if to > from { to } else { from + 1 };
+                related.push(ServiceRelated {
+                    path: None,
+                    range: source_range(&doc.source, from, to),
+                    message: entry["message"].as_str().unwrap_or_default().to_string(),
+                });
+                if related.len() >= 3 {
+                    break;
+                }
+            }
+            // The whole-pipeline anchor shares its kind with the step
+            // anchors but not their meaning: only a step anchor (one
+            // carrying a producer context) may speak in step vocabulary —
+            // the same gate the CLI report applies.
+            let translates = |anchor: &crate::EmitAnchor| {
+                anchor.kind != crate::AnchorKind::Pipe || anchor.context.is_some()
+            };
+            if let Some((anchor, class)) = glue.filter(translates).and_then(|anchor| {
                 crate::engine::semantics::translation_class(anchor.kind, code)
                     .map(|class| (anchor, class))
             }) && !translated_seen.insert((anchor.src, anchor.kind, class))
@@ -854,21 +917,25 @@ impl Project {
                         .declarations
                         .clone()
                 });
-                let entry =
-                    match crate::engine::semantics::translate(anchor.kind, code, &raw, declared) {
-                        Some(said) => ServiceDiagnostic {
-                            range,
-                            message: said,
-                            code,
-                            warning: severity == 2,
-                        },
-                        None => ServiceDiagnostic {
-                            range,
-                            message: format!("{raw} (in code ttc generated for this construct)"),
-                            code,
-                            warning: severity == 2,
-                        },
-                    };
+                let translated = translates(&anchor)
+                    .then(|| crate::engine::semantics::translate(anchor.kind, code, &raw, declared))
+                    .flatten();
+                let entry = match translated {
+                    Some(said) => ServiceDiagnostic {
+                        range,
+                        message: said,
+                        code,
+                        warning: severity == 2,
+                        related: related.clone(),
+                    },
+                    None => ServiceDiagnostic {
+                        range,
+                        message: format!("{raw} (in code ttc generated for this construct)"),
+                        code,
+                        warning: severity == 2,
+                        related: related.clone(),
+                    },
+                };
                 // One construct's glue can draw several TypeScript errors
                 // that all mean the same tt thing.
                 if !out.contains(&entry) {
@@ -894,6 +961,7 @@ impl Project {
                 message,
                 code,
                 warning: severity == 2,
+                related,
             });
         }
         Ok(out)

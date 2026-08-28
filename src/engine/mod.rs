@@ -58,13 +58,13 @@ pub use declarations::{
 pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{
     CompletionAnswer, CompletionDetail, CompletionItem, HoverInfo, Location, Position,
-    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, Signature, SignatureHelp,
-    SignatureParameter,
+    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated, Signature,
+    SignatureHelp, SignatureParameter,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
 pub use project::{Blocked, CheckRequest, Project, collect_sources};
 pub use projection::ProjectedDocument;
-pub use semantics::{Checked, Declarations, Diagnostic, ModuleDeclaration};
+pub use semantics::{Checked, Declarations, Diagnostic, DiagnosticLabel, ModuleDeclaration};
 pub use snapshot::Snapshot;
 pub use tokens::{SemanticToken, SemanticTokenKind, semantic_tokens, semantic_tokens_with_kind};
 

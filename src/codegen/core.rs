@@ -1906,28 +1906,70 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_apply(&self, apply: &Apply) -> Rope<'a> {
+        let start = self.span(apply.node).start;
+        let end = apply.steps.last().map_or_else(
+            || self.span(apply.node).end,
+            |step| self.span(step.node).end,
+        );
         let inner = match apply.head {
             Some(head) => {
                 let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0);
                 let mut accumulator_is_inert = self.expression_is_inert(head);
+                // Where the value flowing into the current step was
+                // produced: the head, then each step in turn — the place a
+                // label on a rejected value points back at.
+                let mut produced = self.span(apply.node);
                 for step in &apply.steps {
+                    let step_span = self.span(step.node);
+                    let context = Some((produced.start, produced.end));
                     let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
                     let mut next = Rope::new();
+                    // The value flowing into a step occupies a position the
+                    // checker types against that step, so a diagnostic that
+                    // lands on it belongs to the step that rejected the
+                    // value — each piped-value position is anchored to the
+                    // step consuming it. Verbatim spans still resolve
+                    // exactly; only glue-crossing spans re-home here.
+                    let mut input = Rope::new();
                     match step.mode {
                         ApplyMode::Postfix { .. } => {
-                            push_receiver(&mut next, acc);
+                            push_receiver(&mut input, acc);
+                            next.anchored_with_context(
+                                AnchorKind::Pipe,
+                                step_span.start,
+                                step_span.end,
+                                end,
+                                context,
+                                input,
+                            );
                             next.append(body);
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
                                 push_grouped(&mut next, body);
                                 next.push_lit("(");
-                                push_grouped(&mut next, acc);
+                                push_grouped(&mut input, acc);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
                                 next.push_lit(")");
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit("$tt_ap(");
-                                push_grouped(&mut next, acc);
+                                push_grouped(&mut input, acc);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
                                 next.push_lit(", ");
                                 push_grouped(&mut next, body);
                                 next.push_lit(")");
@@ -1939,22 +1981,18 @@ impl<'a> Emitter<'a> {
                     // can have arbitrary effects. Only the original head's
                     // syntax proof can authorize inline reordering.
                     accumulator_is_inert = false;
+                    produced = step_span;
                 }
                 acc
             }
-            None => self.emit_flow(apply),
+            None => self.emit_flow(apply, end),
         };
-        let start = self.span(apply.node).start;
-        let end = apply.steps.last().map_or_else(
-            || self.span(apply.node).end,
-            |step| self.span(step.node).end,
-        );
         let mut out = Rope::new();
         out.anchored(AnchorKind::Pipe, start, end, end, inner);
         out
     }
 
-    fn emit_flow(&self, apply: &Apply) -> Rope<'a> {
+    fn emit_flow(&self, apply: &Apply, owner_end: usize) -> Rope<'a> {
         let mut steps = apply.steps.iter();
         let first = steps
             .next()
@@ -1964,12 +2002,24 @@ impl<'a> Emitter<'a> {
             &mut acc,
             guard_line_comment(self.emit_expr(first.value).trim(), 0),
         );
+        let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
+            let step_span = self.span(step.node);
             let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
             let mut next = Rope::new();
             next.push_lit("$tt_fl(");
-            next.append(acc);
+            // The composition built so far is what this step composes onto;
+            // a mismatch on it means this step rejected it (see
+            // `emit_apply`).
+            next.anchored_with_context(
+                AnchorKind::Pipe,
+                step_span.start,
+                step_span.end,
+                owner_end,
+                Some((produced.start, produced.end)),
+                acc,
+            );
             match step.mode {
                 ApplyMode::Postfix { .. } => {
                     next.push_lit(", (($tt_v) => ($tt_v)");
@@ -1983,6 +2033,7 @@ impl<'a> Emitter<'a> {
                 }
             }
             acc = next;
+            produced = step_span;
         }
         acc
     }
@@ -2238,6 +2289,11 @@ impl<'a> Emitter<'a> {
             return None;
         }
         let head = apply.head?;
+        let start = self.span(apply.node).start;
+        let end = apply.steps.last().map_or_else(
+            || self.span(apply.node).end,
+            |step| self.span(step.node).end,
+        );
         let accumulator = self
             .value_slots
             .get(&expr)
@@ -2267,6 +2323,7 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
+        let mut produced = self.span(apply.node);
         for step in &apply.steps {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
             let step_value = if self.core.has_statement_form(step.value) && !conditionally_reached {
@@ -2290,9 +2347,23 @@ impl<'a> Emitter<'a> {
                 guard_line_comment(self.emit_expr(step.value).trim(), 1)
             };
             inner.push_break(1);
+            let step_span = self.span(step.node);
+            let context = Some((produced.start, produced.end));
+            // The re-piped accumulator is the value this step consumes — a
+            // mismatch on it belongs to this step (see `emit_apply`).
+            let mut input = Rope::new();
+            input.push_lit(accumulator.clone());
             match step.mode {
                 ApplyMode::Postfix { .. } => {
-                    inner.push_lit(format!("{accumulator} = {accumulator}"));
+                    inner.push_lit(format!("{accumulator} = "));
+                    inner.anchored_with_context(
+                        AnchorKind::Pipe,
+                        step_span.start,
+                        step_span.end,
+                        end,
+                        context,
+                        input,
+                    );
                     inner.append(step_value);
                     inner.push_lit(";");
                 }
@@ -2303,9 +2374,19 @@ impl<'a> Emitter<'a> {
                     // call position without changing source evaluation.
                     inner.push_lit(format!("{accumulator} = "));
                     push_grouped(&mut inner, step_value);
-                    inner.push_lit(format!("({accumulator});"));
+                    inner.push_lit("(");
+                    inner.anchored_with_context(
+                        AnchorKind::Pipe,
+                        step_span.start,
+                        step_span.end,
+                        end,
+                        context,
+                        input,
+                    );
+                    inner.push_lit(");");
                 }
             }
+            produced = step_span;
         }
         inner.push_break(1);
         if continuation.is_unwrapped_assignment_to(accumulator) {
@@ -2317,11 +2398,6 @@ impl<'a> Emitter<'a> {
         }
         inner.push_break(0);
         inner.push_lit("} while (false);");
-        let start = self.span(apply.node).start;
-        let end = apply.steps.last().map_or_else(
-            || self.span(apply.node).end,
-            |step| self.span(step.node).end,
-        );
         let mut out = Rope::new();
         out.anchored(AnchorKind::Pipe, start, end, end, Rope::scoped(inner));
         Some(out)

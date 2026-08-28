@@ -54,6 +54,7 @@ enum Piece<'a> {
         src: usize,
         src_end: usize,
         owner_end: usize,
+        context: Option<(usize, usize)>,
         kind: AnchorKind,
     },
     /// Closes the innermost open anchor.
@@ -107,6 +108,7 @@ enum TargetPiece<'a> {
         src: usize,
         src_end: usize,
         owner_end: usize,
+        context: Option<(usize, usize)>,
         kind: AnchorKind,
     },
     Close,
@@ -285,6 +287,7 @@ impl<'a> TargetFile<'a> {
                     src,
                     src_end,
                     owner_end,
+                    context,
                     kind,
                 } => {
                     origins.push(SourceOrigin::Construct {
@@ -297,6 +300,7 @@ impl<'a> TargetFile<'a> {
                         src,
                         src_end,
                         owner_end,
+                        context,
                         kind,
                     });
                 }
@@ -478,23 +482,40 @@ impl<'a> TargetFile<'a> {
         let mut marks: Vec<ScrutineeTemp> = Vec::new();
         let mut payloads: Vec<PayloadTemp> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
-        let mut open: Vec<(usize, usize, usize, usize, AnchorKind)> = Vec::new();
+        let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
             match piece {
                 TargetPiece::Open {
                     src,
                     src_end,
                     owner_end,
+                    context,
                     kind,
-                } => open.push((out.len(), *src, *src_end, *owner_end, *kind)),
+                } => open.push(OpenAnchor {
+                    out: out.len(),
+                    src: *src,
+                    src_end: *src_end,
+                    owner_end: *owner_end,
+                    context: *context,
+                    kind: *kind,
+                }),
                 TargetPiece::Close => {
-                    if let Some((start, src, src_end, owner_end, kind)) = open.pop() {
+                    if let Some(OpenAnchor {
+                        out: start,
+                        src,
+                        src_end,
+                        owner_end,
+                        context,
+                        kind,
+                    }) = open.pop()
+                    {
                         anchors.push(EmitAnchor {
                             out: start,
                             end: out.len(),
                             src,
                             src_end,
                             owner_end,
+                            context,
                             kind,
                         });
                     }
@@ -558,6 +579,17 @@ impl<'a> TargetFile<'a> {
             anchors,
         }
     }
+}
+
+/// One anchor mid-print: opened, not yet closed ([`EmitAnchor`] minus its
+/// end).
+struct OpenAnchor {
+    out: usize,
+    src: usize,
+    src_end: usize,
+    owner_end: usize,
+    context: Option<(usize, usize)>,
+    kind: AnchorKind,
 }
 
 /// One level of generated indentation.
@@ -738,10 +770,25 @@ impl<'a> Rope<'a> {
         owner_end: usize,
         inner: Rope<'a>,
     ) {
+        self.anchored_with_context(kind, src, src_end, owner_end, None, inner);
+    }
+
+    /// [`Rope::anchored`], with a companion source range a diagnostic on
+    /// this glue can label ([`EmitAnchor::context`]).
+    pub(crate) fn anchored_with_context(
+        &mut self,
+        kind: AnchorKind,
+        src: usize,
+        src_end: usize,
+        owner_end: usize,
+        context: Option<(usize, usize)>,
+        inner: Rope<'a>,
+    ) {
         self.pieces.push(Piece::Open {
             src,
             src_end,
             owner_end,
+            context,
             kind,
         });
         self.append(inner);

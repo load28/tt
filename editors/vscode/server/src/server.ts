@@ -537,6 +537,18 @@ async function typeDiagnostics(
     message: d.message,
     code: d.code,
     source: "ts",
+    // The compiler's secondary labeled spans, as the LSP's own related
+    // information — the editor renders each as a clickable "here" link
+    // under the diagnostic.
+    relatedInformation: d.related?.length
+      ? d.related.map((r) => ({
+          location: {
+            uri: r.path ? URI.file(r.path).toString() : doc.uri,
+            range: r.range,
+          },
+          message: r.message,
+        }))
+      : undefined,
   }));
 }
 
@@ -600,6 +612,28 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     message: d.message,
     code: d.code,
     source: "ttc",
+    // The compiler's secondary labeled spans. Typed diagnostics replace
+    // the language-service layer under the default settings, so the
+    // related places must travel on this path too or the editor loses
+    // them the moment the typed answer lands.
+    relatedInformation: d.labels?.length
+      ? d.labels.map((label) => ({
+          location: {
+            uri: label.path ? URI.file(label.path).toString() : doc.uri,
+            range: {
+              start: {
+                line: Math.max(0, label.line - 1),
+                character: Math.max(0, label.col - 1),
+              },
+              end: {
+                line: Math.max(0, label.endLine - 1),
+                character: Math.max(0, label.endCol - 1),
+              },
+            },
+          },
+          message: label.message,
+        }))
+      : undefined,
     // The compiler's own fixes, carried through to `onCodeAction`. LSP
     // round-trips `data` untouched, so the quick fix is the compiler's
     // answer rather than this server's reading of the message.

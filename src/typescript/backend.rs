@@ -121,6 +121,20 @@ pub(crate) struct Diagnostic {
     /// expression and its contextual type. The raw message remains the
     /// lossless fallback; renderers prefer these facts.
     pub mismatch: Option<TypeMismatch>,
+    /// The checker's own related places — "the expected type comes from
+    /// this declaration", "first declared here" — each in the coordinates
+    /// of the file it names. Empty when the checker offered none.
+    pub related: Vec<RelatedInformation>,
+}
+
+/// One place the checker relates a diagnostic to, in that file's own
+/// UTF-16 coordinates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RelatedInformation {
+    pub file: PathBuf,
+    pub start: usize,
+    pub end: usize,
+    pub message: String,
 }
 
 /// A checker-proven type mismatch, independent of the syntax that placed
