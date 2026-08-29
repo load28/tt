@@ -3614,6 +3614,40 @@ fn direct_return_result_region_uses_the_host_function_without_an_iife() {
 }
 
 #[test]
+fn statement_host_result_returns_complete_with_ok() {
+    let value = ok(
+        "function load() { return result {\n  const item <- read();\n  return item;\n  0\n}; }\n",
+    );
+    assert!(
+        value.contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break;"),
+        "{value}"
+    );
+    assert!(value.contains("return $tt_v0;"), "{value}");
+
+    let unit =
+        ok("function load() { return result {\n  const item <- read();\n  return;\n  0\n}; }\n");
+    assert!(
+        unit.contains("$tt_v0 = { kind: \"Ok\" as const, value: undefined }; break;"),
+        "{unit}"
+    );
+}
+
+#[test]
+fn expression_host_result_returns_complete_with_ok() {
+    let value = ok("const result = result {\n  const item <- read();\n  return item;\n  0\n};\n");
+    assert!(
+        value.contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break;"),
+        "{value}"
+    );
+
+    let unit = ok("const result = result {\n  const item <- read();\n  return;\n  0\n};\n");
+    assert!(
+        unit.contains("$tt_v0 = { kind: \"Ok\" as const, value: undefined }; break;"),
+        "{unit}"
+    );
+}
+
+#[test]
 fn result_region_in_a_match_arm_inherits_the_parent_slot() {
     let out = ok(
         "variant E { A, B }\nconst value = match (e) {\n  A => result { const x <- f(); x },\n  B => Result.Ok(0),\n};\n",

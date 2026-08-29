@@ -1239,7 +1239,7 @@ impl<'a> Emitter<'a> {
                 out
             }
             Expr::Apply(apply) => self.emit_apply(apply),
-            Expr::ResultRegion(region) => self.emit_result_region(region),
+            Expr::ResultRegion(region) => self.emit_result_region(expr, region),
             Expr::Template(template) => self.emit_template(template),
         }
     }
@@ -1945,7 +1945,7 @@ impl<'a> Emitter<'a> {
             })
     }
 
-    fn emit_result_region(&self, region: &ResultRegion) -> Rope<'a> {
+    fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
         let mut out = Rope::new();
         self.used_expression_boundary.set(true);
         out.push_lit(if region.is_async {
@@ -1956,7 +1956,15 @@ impl<'a> Emitter<'a> {
         for item in &region.items {
             match item {
                 ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(self.emit_body(*body), 0));
+                    let exits = self
+                        .value_exits
+                        .get(&expr)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]);
+                    out.append(guard_line_comment(
+                        self.emit_result_body_with_exits(*body, exits),
+                        0,
+                    ));
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -1984,8 +1992,42 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    /// Result-owned returns inside the expression-boundary printer complete
+    /// its lexical arrow. They must therefore wrap `Ok`, unlike ordinary
+    /// function returns and unlike the statement-host continuation below.
+    fn emit_result_body_with_exits(&self, body: hir::BodyId, exits: &[HostExit]) -> Rope<'a> {
+        let mut edits = Vec::new();
+        for exit in exits {
+            match exit.argument {
+                Some(argument) => {
+                    edits.push(LocalSourceEdit {
+                        span: SourceSpan {
+                            start: exit.statement.start,
+                            end: argument.start,
+                        },
+                        text: "return { kind: \"Ok\" as const, value: ".to_owned(),
+                    });
+                    edits.push(LocalSourceEdit {
+                        span: SourceSpan {
+                            start: argument.end,
+                            end: exit.statement.end,
+                        },
+                        text: " };".to_owned(),
+                    });
+                }
+                None => edits.push(LocalSourceEdit {
+                    span: exit.statement,
+                    text: "return { kind: \"Ok\" as const, value: undefined };".to_owned(),
+                }),
+            }
+        }
+        edits.sort_unstable_by_key(|edit| edit.span.start);
+        self.emit_statements_with_edits(&self.core.bodies[body.index()].statements, &edits)
+    }
+
     fn emit_result_region_continued(
         &self,
+        expr: ExprId,
         region: &ResultRegion,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
@@ -1993,10 +2035,19 @@ impl<'a> Emitter<'a> {
         // The block's own source follows, leading whitespace included, so
         // the opener does not break the line the region body starts on.
         out.push_lit(if continuation.assigns() { "do {" } else { "{" });
+        let success = continuation.wrap_result_ok();
+        let exits = self
+            .value_exits
+            .get(&expr)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         for item in &region.items {
             match item {
                 ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(self.emit_body(*body), 0));
+                    out.append(guard_line_comment(
+                        self.emit_body_with_exits(*body, exits, &success, None),
+                        0,
+                    ));
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -2015,7 +2066,6 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        let success = continuation.wrap_result_ok();
         if let Some(structured) = self.emit_continued_expr(region.value, &success) {
             out.append(structured);
             if continuation.assigns() {
@@ -2435,7 +2485,7 @@ impl<'a> Emitter<'a> {
                 Some(out)
             }
             Expr::ResultRegion(region) => {
-                Some(self.emit_result_region_continued(region, continuation))
+                Some(self.emit_result_region_continued(expr, region, continuation))
             }
             Expr::Propagate(propagate) => {
                 Some(self.emit_expression_propagate(propagate, continuation))

@@ -128,7 +128,7 @@ const data = result {
 - Result only (no Option/Promise do-notation, no `<-` outside a result block). Bindings must be TOP-LEVEL statements of the block — `<-` inside an `if`/loop/function within the block is a located error (it cannot early-return the block); hoist it or `match`.
 - Block is an EXPRESSION: usable anywhere, incl. pipeline head. Statement-capable owners use a result slot and explicit failure/success edges; expression-only owners use the shared named boundary. `await` stays in the surrounding async owner or is awaited at that boundary.
 - Error types UNION automatically: bindings of `TResult<_, E1>` + `TResult<_, E2>` → block assignable to `TResult<T, E1 | E2>`. ttc infers NO types; tsc narrows each step.
-- `return` inside the block returns from the BLOCK. So `try`/let-else directly in the block's statements are FORBIDDEN (located error) — use `<-`; inside a function written in the block they are fine. `if let` is fine anywhere here.
+- `return x` inside the block completes the block with `Ok(x)`; bare `return;` completes it with `Ok(undefined)`. It never returns a raw value from the surrounding function. So `try`/let-else directly in the block's statements are FORBIDDEN (located error) — use `<-`; inside a function written in the block they are fine. `if let` is fine anywhere here.
 - Final expr already a Result → nested `TResult<TResult<...>>`; bind it with `<-` instead.
 
 ## @tt/std

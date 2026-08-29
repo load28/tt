@@ -1,9 +1,9 @@
 # TASK-291: Repair Result completion in both existing printers
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: See git history (`TASK-291`).
 
 ## Purpose
 
@@ -28,19 +28,33 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Keep the projection tail out of Result return capture.
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Projecting `region.value` requires a synthetic `return` in the
+  lexical arrow, but only source-written Result returns are completions that
+  codegen must rewrite.
+- **Alternatives considered**: Capture the synthetic return as a regular
+  `HostExit`; retain the former `0` placeholder; record the synthetic span and
+  exclude it from exit collection.
+- **Decision and rationale**: Record and exclude the synthetic span. The tail
+  keeps its own expression owner, while source-written returns retain exact
+  source spans for the two completion printers.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started auditing the two Result printers and their projection exit-call registration.
+- 2026-08-30: Registered Result projection calls for exit collection, projected
+  `region.value`, and excluded the compiler-written tail return from capture.
+- 2026-08-30: Rewrote source-written Result returns to `Ok` completions in the
+  expression-boundary and statement-host printers.
 
 ## Issues and resolutions
 
-None.
+- **Symptom**: A projected `region.value` produced an unmapped evaluation span
+  when the collector treated the compiler-written tail return as a user exit.
+  **Cause**: The tail return has no source-backed statement span.
+  **Resolution**: The projection records that span as synthetic and the
+  collector excludes it before mapping exits.
 
 ## Verification
 
@@ -48,14 +62,16 @@ Test obligation from the plan: the complete two-row §6.2 matrix, runtime assert
 
 Green condition: each host independently satisfies its §6.2 condition; neither a raw arm nor raw body value returns from the user function; in the same commit, the language guide states that a result-owned `return x` completes the block with `Ok(x)` and a bare `return;` with `Ok(undefined)`. Constructor/generator policy is not part of this slice.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
 Ships to `main` alone: not stated in the plan.
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Changed `src/program_syntax.rs`, `src/codegen/core.rs`, `tests/compile.rs`, and
+`docs/ai/tt.md`. Both existing Result printers now convert source-written
+`return x` and `return;` into `Ok(x)` and `Ok(undefined)` completions while the
+projected tail retains its own expression owner.

@@ -887,6 +887,7 @@ struct PendingOverlay {
     projected: ProjectedSpan,
     core_root: CoreRoot,
     marker: OverlayMarker,
+    synthetic_return: Option<ProjectedSpan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1001,6 +1002,7 @@ impl<'a> ProjectionBuilder<'a> {
             projected: ProjectedSpan { start, end },
             core_root,
             marker: OverlayMarker::Identifier,
+            synthetic_return: None,
         });
         Ok(())
     }
@@ -1223,6 +1225,7 @@ impl<'a> ProjectionBuilder<'a> {
             projected: ProjectedSpan { start, end: start },
             core_root: CoreRoot::Expr(expr),
             marker: OverlayMarker::CallExpression,
+            synthetic_return: None,
         });
         self.code.push('(');
         if region.is_async {
@@ -1235,9 +1238,10 @@ impl<'a> ProjectionBuilder<'a> {
                 crate::core_ir::ResultRegionItem::Propagate(_) => self.code.push(';'),
             }
         }
+        let synthetic_return_start = ProjectedByte(self.code.len());
+        self.code.push_str("return ");
         self.emit_expr(region.value)?;
-        self.code.push(';');
-        self.code.push_str("0;})()");
+        self.code.push_str(";})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
         self.source_segments.insert(
@@ -1249,6 +1253,10 @@ impl<'a> ProjectionBuilder<'a> {
             },
         );
         self.pending[pending_index].projected = projected;
+        self.pending[pending_index].synthetic_return = Some(ProjectedSpan {
+            start: synthetic_return_start,
+            end: ProjectedByte(self.code.len() - 4),
+        });
         Ok(())
     }
 
@@ -1270,6 +1278,7 @@ impl<'a> ProjectionBuilder<'a> {
             projected: ProjectedSpan { start, end: start },
             core_root: CoreRoot::Expr(expr),
             marker: OverlayMarker::DecisionCallExpression,
+            synthetic_return: None,
         });
         self.code.push('(');
         if decision.is_async {
@@ -1408,6 +1417,7 @@ struct ParentCollector {
     expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
     expected_calls: HashMap<ProjectedSpan, TtNodeId>,
     expected_exit_calls: HashSet<TtNodeId>,
+    synthetic_returns: HashSet<ProjectedSpan>,
     found: HashMap<TtNodeId, FoundOverlay>,
     duplicates: Vec<TtNodeId>,
     source_segments: Vec<ProjectionSourceSegment>,
@@ -1707,14 +1717,24 @@ impl ParentCollector {
             .collect();
         let expected_exit_calls = pending
             .iter()
-            .filter(|entry| entry.marker == OverlayMarker::DecisionCallExpression)
+            .filter(|entry| {
+                matches!(
+                    entry.marker,
+                    OverlayMarker::CallExpression | OverlayMarker::DecisionCallExpression
+                )
+            })
             .map(|entry| entry.id)
+            .collect();
+        let synthetic_returns = pending
+            .iter()
+            .filter_map(|entry| entry.synthetic_return)
             .collect();
         Self {
             source_start,
             expected_identifiers,
             expected_calls,
             expected_exit_calls,
+            synthetic_returns,
             found: HashMap::new(),
             duplicates: Vec::new(),
             source_segments: source_segments.to_vec(),
@@ -2157,12 +2177,14 @@ impl VisitAstPath for ParentCollector {
         node: &'ast ReturnStmt,
         path: &mut AstNodePath<'r>,
     ) {
-        if let Some((id, target_depth, region_break_depth)) = self.exit_regions.last().copied()
+        let statement = projected_span(node.span, self.source_start);
+        if !self.synthetic_returns.contains(&statement)
+            && let Some((id, target_depth, region_break_depth)) = self.exit_regions.last().copied()
             && target_depth == self.function_depth
             && let Some(found) = self.found.get_mut(&id)
         {
             found.exits.push(ProjectedHostExit {
-                statement: projected_span(node.span, self.source_start),
+                statement,
                 argument: node
                     .arg
                     .as_ref()
