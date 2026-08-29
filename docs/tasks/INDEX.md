@@ -288,7 +288,8 @@
 | TASK-277 | Diagnose ambiguous result tails without unsafe edits | Complete | 2026-08-29 | 2026-08-29 | [TASK-277](./TASK-277-result-missing-value-diagnostic.md) |
 | TASK-278 | Align resolver documentation with structural ownership | Complete | 2026-08-29 | 2026-08-29 | [TASK-278](./TASK-278-resolver-contract-documentation.md) |
 | TASK-279 | Bound misplaced try recovery at ternary branches | Complete | 2026-08-29 | 2026-08-29 | [TASK-279](./TASK-279-ternary-try-recovery-span.md) |
+| TASK-280 | Lower `try` as an expression through the host evaluation protocol | Complete | 2026-08-29 | 2026-08-29 | [TASK-280](./TASK-280-expression-try.md) |
 
 ## 다음 태스크 번호
 
-**TASK-280**
+**TASK-281**

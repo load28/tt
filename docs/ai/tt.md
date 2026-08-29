@@ -67,13 +67,14 @@ Every arm = tuple pattern (or final bare `_` covering all); element count = scru
 ```tt
 const parsed = try parseNum(cfg);   // in fn returning Result: Err → returned from fn now
 try validateRange(parsed);          // propagate-only; `try await f();` ok
+return Result.Ok(Math.round(try total() * 1.1));
 ```
-- Statement position in a function body ONLY; trailing `;` MANDATORY (else passthrough).
+- Statement forms (`const value = try read();` and `try validate();`) require a trailing `;`. The value form works inside a larger expression and needs no semicolon of its own.
 - Result only (Ok unwraps `.value`; Err returned from enclosing fn). Option unsupported → `Option.okOr(o, err)` first.
 - Enclosing fn return type must be Result compatible with expr's Err type; no auto conversion.
 - UNANNOTATED fn: tsc infers the union of the return paths, so several `try`s with different Err types give `TOk<T> | TErr<E1> | TErr<E2>` = `TResult<T, E1 | E2>`. ttc never collects/unions error types — leave inference to tsc.
-- FORBIDDEN (compile error): expression positions such as `return try f()` (bind first with `const value = try f();`), module top level / namespace body (no function for the emitted `return` to exit), and statement positions directly inside match (scrutinee/arm), template interpolation, `result` block, another try (the propagation would leave the construct's isolated value region). ALLOWED inside a function you write there — `run(() => { try g(); ... })` in a guard/step/arm is Rust's `?` in a closure — and inside if-let bodies / let-else else blocks whose statement sits in a function (inline contexts inherit the function). Placement is a control-flow fact, not a nesting rule.
-- Expr can't start with `(` or `<`: `try f(x);` not `try (f(x));`.
+- The value form binds tightly to the following primary expression, including calls and member/index access: `try total() * 1.1` means `(try total()) * 1.1`. Parenthesize to propagate an arbitrary expression as one operand: `try (flag ? left() : right())`.
+- Placement is a TypeScript control-flow fact. The value form preserves left-to-right, conditional, optional-call, and concise-arrow evaluation inside an enclosing function. It is rejected at module/namespace top level and at expression boundaries that cannot contain the generated early `return`, such as loop headers, parameter defaults, and class field initializers. Statement forms remain forbidden directly inside isolated value regions. A value-form `try` can participate in a lowered `match` value when its return still belongs to the enclosing function, but directly inside a `result` block it must be written as a `<-` binding.
 
 ## let-else
 

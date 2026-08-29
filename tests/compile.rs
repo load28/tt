@@ -970,34 +970,74 @@ fn try_at_module_top_level_is_an_error() {
 }
 
 #[test]
-fn try_cannot_be_used_in_expression_position() {
-    for (src, misplaced) in [
-        ("function f() { return try read(); }\n", "try read()"),
-        (
-            "function f() { const run = () => try read(); }\n",
-            "try read()",
-        ),
-        (
-            "function f(c: boolean) { const x = c ? 0 : try read(); }\n",
-            "try read()",
-        ),
-        (
-            "function f(c: boolean) { const x = c ? try read() : fallback; }\n",
-            "try read()",
-        ),
-        (
-            "function f(c: boolean) { return wrap(try c ? read() : fallback(), 1); }\n",
-            "try c ? read() : fallback()",
-        ),
-        (
-            "function f() { return Result.Ok(Math.round(try total() * 1.1)); }\n",
-            "try total() * 1.1",
-        ),
-        ("function f() { return `v=${try read()}`; }\n", "try read()"),
-        (
-            "function f() { return Result.Ok({ amount: try total() }); }\n",
-            "try total()",
-        ),
+fn try_is_a_value_in_deep_expression_positions() {
+    let out = ok(
+        "function f(): TResult<number, string> {\n  return Result.Ok(Math.round(try total() * 1.1));\n}\n",
+    );
+    assert!(out.contains("const $tt_t0 = total();"), "{out}");
+    assert!(out.contains("$tt_v0 * 1.1"), "{out}");
+
+    let out = ok(
+        "function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }\n",
+    );
+    assert!(
+        out.contains("const $tt_t0 = (flag ? left() : right());"),
+        "{out}"
+    );
+
+    let out =
+        ok("function f(): TResult<string, string> { return Result.Ok(`v=${try read()}`); }\n");
+    assert!(out.contains("`v=${$tt_v0}`"), "{out}");
+
+    let out = ok(
+        "function f(): TResult<{ amount: number }, string> { return Result.Ok({ amount: try total() }); }\n",
+    );
+    assert!(out.contains("{ amount: $tt_v0 }"), "{out}");
+
+    let out = ok(
+        "function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }\n",
+    );
+    assert!(
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{out}"
+    );
+}
+
+#[test]
+fn try_preserves_argument_and_conditional_evaluation_order() {
+    let out = ok(
+        "function f(flag: boolean): TResult<number, string> {\n  return Result.Ok(call(first(), flag && try second(), third()));\n}\n",
+    );
+    let first = out.find("first()").unwrap();
+    let propagation = out.find("const $tt_t0 = second();").unwrap();
+    let third = out.find("third()").unwrap();
+    assert!(first < propagation && propagation < third, "{out}");
+    assert!(out[..propagation].contains("if ("), "{out}");
+
+    let out = ok(
+        "function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }\n",
+    );
+    let guard = out.find("!= null").unwrap();
+    let propagation = out.find("const $tt_t0 = second();").unwrap();
+    assert!(guard < propagation, "{out}");
+}
+
+#[test]
+fn try_turns_a_concise_arrow_into_a_propagating_block() {
+    let out = ok("const f = (): TResult<number, string> => Result.Ok(try read());\n");
+    assert!(out.contains("=> {"), "{out}");
+    assert!(
+        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{out}"
+    );
+}
+
+#[test]
+fn expression_try_reports_a_typescript_control_flow_boundary() {
+    for src in [
+        "function f() { while (try condition()) work(); }\n",
+        "function f(value = try read()) { return value; }\n",
+        "class C { value = try read(); }\n",
     ] {
         let diagnostics = ttc::analyze(src, &Options::default());
         assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
@@ -1005,13 +1045,10 @@ fn try_cannot_be_used_in_expression_position() {
         assert!(
             diagnostics[0]
                 .message
-                .contains("statement, not an expression"),
+                .contains("TypeScript control-flow boundary"),
             "{src}\n{:#?}",
             diagnostics[0]
         );
-        let start = diagnostics[0].start.expect("placement start");
-        let end = diagnostics[0].end.expect("placement end");
-        assert_eq!(&src[start..end], misplaced);
     }
 }
 
@@ -3309,6 +3346,14 @@ fn try_and_let_else_are_rejected_inside_a_result_block() {
         advice(src).iter().any(|a| a.contains("`<-` binding")),
         "{:?}",
         advice(src)
+    );
+
+    let src =
+        "function f() { return result {\n  const x <- read();\n  Result.Ok(try read() + x)\n}; }\n";
+    let e = err(src);
+    assert!(
+        e.message.contains("directly inside a `result` block"),
+        "{e}"
     );
 
     let e = err(

@@ -117,9 +117,11 @@ pub(super) fn parse_let_else<'t>(
             },
             kw: cur.parser.src[kw_span.start..kw_span.end].to_string(),
             alternatives,
-            expr: cur
-                .parser
-                .parse_tokens(&cur.tokens[expr_from..else_idx], expr_start, expr_end),
+            expr: cur.parser.parse_expression_tokens(
+                &cur.tokens[expr_from..else_idx],
+                expr_start,
+                expr_end,
+            ),
             else_body,
             else_off,
             diverges,

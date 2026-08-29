@@ -52,6 +52,7 @@ enum RegionPlacement {
     },
     Nested {
         parent: RegionId,
+        source: Option<SourceSpan>,
     },
     SourceEdit,
 }
@@ -110,6 +111,7 @@ pub(crate) struct LoweringPlan {
     slot_names: Vec<String>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     expression_boundary_name: String,
+    unsupported_expression_propagations: Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)>,
 }
 
 #[derive(Debug)]
@@ -368,6 +370,15 @@ impl LoweringPlan {
     pub(crate) fn expression_boundary_name(&self) -> &str {
         &self.expression_boundary_name
     }
+
+    /// Expression propagations whose host cannot carry the emitted early
+    /// return. The source semantic layer consumes this typed placement fact;
+    /// target emission never attempts an expression-boundary fallback for it.
+    pub(crate) fn unsupported_expression_propagations(
+        &self,
+    ) -> Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)> {
+        self.unsupported_expression_propagations.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -619,12 +630,57 @@ impl EvaluationFile {
             let slot = allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names)?;
             value_slots.insert(expr, slot);
         }
+        let direct_capabilities: HashMap<_, _> = rewrites
+            .iter()
+            .flat_map(|rewrite| &rewrite.values)
+            .map(|value| (value.expr, value.capability))
+            .collect();
+        let mut unsupported_expression_propagations = Vec::new();
+        for region in &self.regions {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                continue;
+            };
+            if !matches!(core.exprs[expr.index()], Expr::Propagate(_)) {
+                continue;
+            }
+            let mut host_region = region;
+            while let RegionPlacement::Nested { parent, .. } = host_region.placement {
+                host_region = &self.regions[parent.0 as usize];
+            }
+            let RegionPlacement::Host { context, .. } = &host_region.placement else {
+                continue;
+            };
+            let capability = match host_region.root {
+                Some(CoreRoot::Expr(host_expr)) => direct_capabilities
+                    .get(&host_expr)
+                    .copied()
+                    .unwrap_or(TargetCapability::StatementRegion),
+                _ => TargetCapability::StatementRegion,
+            };
+            let reason = match (context.owner, capability) {
+                (EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => continue,
+                (_, TargetCapability::ExpressionBoundary(reason)) => reason,
+                (_, TargetCapability::StatementRegion) => {
+                    ExpressionBoundaryReason::OwnerTakesNoStatements
+                }
+            };
+            let source = match &region.placement {
+                RegionPlacement::Host { source, .. } => Some(*source),
+                RegionPlacement::Nested { source, .. } => *source,
+                RegionPlacement::SourceEdit => None,
+            }
+            .ok_or(EvaluationError::MissingHost {
+                root: CoreRoot::Expr(expr),
+            })?;
+            unsupported_expression_propagations.push((expr, source, reason));
+        }
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
             slot_names,
             value_slots,
             expression_boundary_name,
+            unsupported_expression_propagations,
         })
     }
 
@@ -1483,6 +1539,17 @@ impl EvaluationBuilder<'_> {
                 )?;
                 self.walk_decision(decision, region)?;
             }
+            Expr::Propagate(propagate) => {
+                let region = self.add_operation_with_placement(
+                    OperationId::Propagate(propagate.node),
+                    CoreRoot::Expr(expr),
+                    parent,
+                    RegionShape::Propagate,
+                    true,
+                    force_nested,
+                )?;
+                self.walk_nested_expr(propagate.value, region)?;
+            }
             Expr::Apply(apply) => {
                 let region = self.add_operation_with_placement(
                     OperationId::Apply(apply.node),
@@ -1624,8 +1691,8 @@ impl EvaluationBuilder<'_> {
     ) -> Result<RegionId, EvaluationError> {
         let placement = if force_nested {
             let parent = parent.ok_or(EvaluationError::MissingHost { root })?;
-            self.hosts.remove(&root);
-            RegionPlacement::Nested { parent }
+            let source = self.hosts.remove(&root).map(|binding| binding.source);
+            RegionPlacement::Nested { parent, source }
         } else {
             self.placement(root, parent)?
         };
@@ -1653,8 +1720,8 @@ impl EvaluationBuilder<'_> {
             && let Some(binding) = self.hosts.get(&root)
             && self.region_host_owner(parent) == Some(binding.owner)
         {
-            self.hosts.remove(&root);
-            return Ok(RegionPlacement::Nested { parent });
+            let source = self.hosts.remove(&root).map(|binding| binding.source);
+            return Ok(RegionPlacement::Nested { parent, source });
         }
         if let Some(binding) = self.hosts.remove(&root) {
             Ok(RegionPlacement::Host {
@@ -1666,7 +1733,10 @@ impl EvaluationBuilder<'_> {
                 exits: binding.exits,
             })
         } else if let Some(parent) = parent {
-            Ok(RegionPlacement::Nested { parent })
+            Ok(RegionPlacement::Nested {
+                parent,
+                source: None,
+            })
         } else {
             Err(EvaluationError::MissingHost { root })
         }
@@ -1676,7 +1746,7 @@ impl EvaluationBuilder<'_> {
         loop {
             match &self.regions[region.0 as usize].placement {
                 RegionPlacement::Host { host_owner, .. } => return Some(*host_owner),
-                RegionPlacement::Nested { parent } => region = *parent,
+                RegionPlacement::Nested { parent, .. } => region = *parent,
                 RegionPlacement::SourceEdit => return None,
             }
         }
@@ -1769,6 +1839,11 @@ fn blocks_for(
         RegionShape::Propagate => {
             let join = push_block(&mut blocks, EvalTerminator::Complete)?;
             let success = push_block(&mut blocks, EvalTerminator::Goto(join))?;
+            if let Some(value) = result {
+                blocks[success.0 as usize]
+                    .statements
+                    .push(EvalStatement::Produce(value));
+            }
             let failure = push_block(&mut blocks, EvalTerminator::Exit)?;
             blocks[0].terminator = EvalTerminator::Branch { success, failure };
         }
@@ -1944,7 +2019,10 @@ mod tests {
             .expect("propagation region");
         assert_eq!(
             propagation.placement,
-            RegionPlacement::Nested { parent: result.id }
+            RegionPlacement::Nested {
+                parent: result.id,
+                source: None,
+            }
         );
     }
 

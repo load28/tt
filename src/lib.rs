@@ -364,6 +364,7 @@ fn program_uses_pipeline(program: &ast::Program) -> bool {
                 })
         }
         ast::Segment::Try(stmt) => program_uses_pipeline(&stmt.expr),
+        ast::Segment::TryExpr(expr) => program_uses_pipeline(&expr.expr),
         ast::Segment::LetElse(stmt) => {
             program_uses_pipeline(&stmt.expr) || program_uses_pipeline(&stmt.else_body)
         }
@@ -928,6 +929,11 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             );
         }
     };
+    if let Some(first) = try_target_errors(&plan).into_iter().next() {
+        return Err(
+            diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
+        );
+    }
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -992,6 +998,26 @@ fn tt_errors(
     errors
 }
 
+fn try_target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
+    plan.unsupported_expression_propagations()
+        .into_iter()
+        .map(|(_expr, span, _reason)| {
+            TtError::span(
+                span.start,
+                span.end,
+                "`try` cannot be used in this expression context — propagating its `Err` \
+                 would require moving an evaluation across its TypeScript control-flow boundary"
+                    .to_string(),
+            )
+            .code(DiagnosticCode::TryPlacement)
+            .help(
+                "move the propagation into the nearest function-body statement with \
+                 `const value = try <expression>;`",
+            )
+        })
+        .collect()
+}
+
 /// Checks `source` and returns **every** tt-level diagnostic, in source
 /// order — nothing is emitted and nothing stops at the first violation.
 ///
@@ -1013,7 +1039,13 @@ fn tt_errors(
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
     let semantics = analysis::coverage_semantics(&program, options.extern_variants);
-    tt_errors(source, &program, &tokens, options, &semantics)
+    let core = core_ir::lower_semantic(&semantics, source);
+    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
+    if let Ok(plan) = codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+        errors.extend(try_target_errors(&plan));
+        errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+    }
+    errors
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)
         .collect()
@@ -1193,6 +1225,18 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
             };
         }
     };
+    let target_try_errors = try_target_errors(&plan);
+    if !target_try_errors.is_empty() {
+        errors.extend(target_try_errors);
+        errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+        return CompileReport {
+            emit: None,
+            diagnostics: errors
+                .into_iter()
+                .map(diagnostics::Diagnostic::from_tt)
+                .collect(),
+        };
+    }
     let flat = codegen::emit_with_map(
         &semantics,
         &core,

@@ -930,6 +930,7 @@ fn walk(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyse
                 }
             }
             Segment::Try(stmt) => walk(&stmt.expr, table, depth, out),
+            Segment::TryExpr(expr) => walk(&expr.expr, table, depth, out),
             Segment::LetElse(stmt) => {
                 let site = analyze_let_else(stmt, table, depth);
                 out.sites.push(site);
@@ -1539,6 +1540,7 @@ fn collect_matches<'a>(
                 }
             }
             Segment::Try(stmt) => collect_matches(&stmt.expr, out, tuples),
+            Segment::TryExpr(expr) => collect_matches(&expr.expr, out, tuples),
             Segment::LetElse(stmt) => {
                 collect_matches(&stmt.expr, out, tuples);
                 collect_matches(&stmt.else_body, out, tuples);

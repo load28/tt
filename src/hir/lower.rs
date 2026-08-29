@@ -96,6 +96,10 @@ impl Lower {
                     stmts.push(Stmt::Expr(id));
                 }
                 ast::Segment::Try(stmt) => stmts.push(Stmt::Try(self.lower_try(stmt))),
+                ast::Segment::TryExpr(expr) => {
+                    let id = self.lower_try_expr(expr);
+                    stmts.push(Stmt::Expr(id));
+                }
                 ast::Segment::LetElse(stmt) => stmts.push(Stmt::LetElse(self.lower_let_else(stmt))),
                 ast::Segment::IfLet(stmt) => stmts.push(Stmt::IfLet(self.lower_if_let(stmt))),
                 ast::Segment::Template(template) => {
@@ -424,6 +428,12 @@ impl Lower {
             binding,
             expr,
         }
+    }
+
+    fn lower_try_expr(&mut self, expr: &ast::TryExpr) -> ExprId {
+        let node = self.node(Self::span(expr.span), AstOrigin::Try);
+        let value = self.lower_expr_program(&expr.expr, Self::span(expr.span));
+        self.hir.exprs.alloc(Expr::Try { node, value })
     }
 
     fn lower_let_else(&mut self, stmt: &ast::LetElseStmt) -> LetElseStmt {

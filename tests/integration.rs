@@ -871,9 +871,15 @@ function checked(raw: string): TResult<number, string> {
   return Result.Ok(big * 10);
 }
 
+function adjusted(raw: string): TResult<number, string> {
+  return Result.Ok(Math.round(try parseNum(raw) * 1.1));
+}
+
 console.log(JSON.stringify(sumList(["1", "2", "3"])));
 console.log(JSON.stringify(sumList(["1", "x"])));
 console.log(JSON.stringify(checked("4")));
+console.log(JSON.stringify(adjusted("5")));
+console.log(JSON.stringify(adjusted("x")));
 "#,
     );
     assert_eq!(
@@ -882,6 +888,8 @@ console.log(JSON.stringify(checked("4")));
             r#"{"kind":"Ok","value":6}"#,
             r#"{"kind":"Err","error":"not a number: x"}"#,
             r#"{"kind":"Ok","value":40}"#,
+            r#"{"kind":"Ok","value":6}"#,
+            r#"{"kind":"Err","error":"not a number: x"}"#,
         ]
     );
 }

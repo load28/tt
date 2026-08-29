@@ -711,21 +711,22 @@ test(
 );
 
 test(
-  "return try is diagnosed as an expression placement error",
+  "loop-header try is diagnosed at its expression boundary",
   { skip, timeout },
   async () => {
     const source = [
       "const a = () => Result.Err(10);",
       "",
       "function Test(): TResult<string, string> {",
-      "  return try a();",
+      "  while (try a()) work();",
+      "  return Result.Ok(\"done\");",
       "}",
       "",
     ].join("\n");
     const diagnostics = await published(source);
     const failed = diagnostics.find((d: any) => d.code === "try-placement");
     assert.ok(failed, `no placement error in: ${JSON.stringify(diagnostics)}`);
-    assert.match(failed.message, /statement, not an expression/);
+    assert.match(failed.message, /TypeScript control-flow boundary/);
     assert.equal(covered(source, failed.range), "try a()");
   },
 );

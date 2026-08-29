@@ -226,29 +226,22 @@ fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
 }
 
 #[test]
-fn a_deep_expression_try_reports_the_placement_rule_at_its_source() {
+fn a_deep_expression_try_typechecks_through_the_content_mapper() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);
     fs::write(
         project.path().join("src/deep-try.tt"),
-        "declare function total(): TResult<number, string>;\n\
-         export function amount(): TResult<number, string> {\n\
+        "type TResult<T, E> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: E };\n\
+         declare const Result: { Ok<T>(value: T): TResult<T, never> };\n\
+         declare function total(): TResult<number, string>;\n\
+         export function amount(): TResult<{ amount: number }, string> {\n\
          \x20 return Result.Ok({ amount: try total() });\n\
          }\n",
     )
     .unwrap();
 
     let (ok, text) = check(&tsc, project.path());
-    assert!(!ok);
-    assert!(
-        text.contains("deep-try.tt(3,30): error tt11")
-            && text.contains("statement, not an expression"),
-        "expected the source placement diagnostic, got:\n{text}"
-    );
-    assert!(
-        !text.contains("verify-failed") && !text.contains("source-not-typescript"),
-        "verification must not own the parser error:\n{text}"
-    );
+    assert!(ok, "content mapper rejected expression try:\n{text}");
 }
 
 #[test]
