@@ -1,9 +1,9 @@
 # TASK-289: Prerequisite placement matrix gate
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-289: add placement matrix gate`
 
 ## Purpose
 
@@ -28,19 +28,45 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Make one public-analysis matrix the prerequisite proof.
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Placement coverage was distributed across parser, projection,
+  Evaluation IR, and codegen tests, so no test proved the published §4.5
+  classification as one contract.
+- **Alternatives considered**: Rely on existing unit tests; assert only
+  emitted text; invoke private lowering stages directly.
+- **Decision and rationale**: Exercise representative rows through
+  `catch_unwind(ttc::analyze)` and compile accepted rows with default
+  verification. This proves public recovery without duplicating placement.
+
+### Decision 2: Preserve the C-style Test diagnostic code in the matrix.
+
+- **Context**: C-style Test is statement propagation and reports the existing
+  repeated-propagation `LoweringPlanFailed`; Update is expression propagation
+  and reports `try-placement`.
+- **Alternatives considered**: Normalize both positions in this gate; omit
+  the Test row because a focused test already exists.
+- **Decision and rationale**: Assert the established distinct code for Test
+  and `try-placement` for Update. Both are located rejections and neither
+  reaches output verification.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started enumerating the §4.5 placement rows through the public analysis API.
+- 2026-08-30: Added accepted and rejected representatives for function,
+  expression, loop, `using`, concise-arrow, owner, conditional, and Result
+  host categories.
+- 2026-08-30: Ran the required Rust checks and the full repository CI gate.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: A combined repeated-loop sample hid the Test diagnostic contract.
+
+- **Symptom**: A source containing while, C-style Test, and Update reported
+  the Test lowering diagnostic first.
+- **Cause**: C-style Test remains statement propagation, unlike Update.
+- **Resolution**: The matrix gives every repeated position its own row and
+  asserts its specified diagnostic code.
 
 ## Verification
 
@@ -48,14 +74,15 @@ Test obligation from the plan: each row asserts a specific diagnostic code or pa
 
 Green condition: no row panics and no row ends as `verify-failed` “did not parse as a tt `try`”; all P5 claimer cases must therefore be closed before the gate passes.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
 Ships to `main` alone: not stated in the plan.
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Changed `tests/compile.rs` with the public placement matrix gate. The gate
+proves accepted rows emit verified TypeScript, rejected rows preserve their
+specified located code, and no row unwinds or reports `verify-failed`.

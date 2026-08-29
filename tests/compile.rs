@@ -1169,6 +1169,128 @@ fn a_static_block_does_not_capture_a_nested_function_try() {
 }
 
 #[test]
+fn placement_matrix_prerequisite_gate() {
+    enum Expected {
+        Accepted,
+        Placement,
+        LoweringPlan,
+    }
+
+    let cases = [
+        (
+            "function f() { const value = try read(); use(value); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { consume(try read()); new Box(try read()); sink?.(try read()); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { const value = ready ? try read() : fallback(); return value; }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { for (let i = try count();;) { break; } }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { for (const value of try values()) { use(value); } switch (try tag()) { default: break; } }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { using resource = try acquire(); use(resource); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "async function f() { await using resource = try acquire(); use(resource); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "const f = value => try read(value);\nconst g = value => (try read(value));\nconst h = value |> (item => try read(item));\n",
+            Expected::Accepted,
+        ),
+        (
+            "const value = result { const item <- read(); item };\nclass C { field = result { const item <- read(); item }; static { const value = result { const item <- read(); item }; } constructor() { const value = result { const item <- read(); item }; } }\nfunction* values() { const value = result { const item <- read(); item }; yield value; }\n",
+            Expected::Accepted,
+        ),
+        ("try read();\n", Expected::Placement),
+        (
+            "function f(value = try read()) { return value; }\n",
+            Expected::Placement,
+        ),
+        (
+            "class C { field = try read(); static { const value = { item: try read() }; } }\n",
+            Expected::Placement,
+        ),
+        (
+            "class C { constructor() { try read(); } }\nfunction* values() { yield try read(); }\nasync function* asyncValues() { yield try read(); }\n",
+            Expected::Placement,
+        ),
+        (
+            "function f() { while (try ready()) {} }\n",
+            Expected::Placement,
+        ),
+        (
+            "function f() { for (; try ready(); ) {} }\n",
+            Expected::LoweringPlan,
+        ),
+        (
+            "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
+            Expected::Placement,
+        ),
+        (
+            "function f() { switch (value) { case try read(): break; } const [item = try read()] = input; object?.[try read()]; }\n",
+            Expected::Placement,
+        ),
+        (
+            "const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };\n",
+            Expected::Placement,
+        ),
+    ];
+
+    for (source, expected) in cases {
+        let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+            .expect("every placement row must report without unwinding");
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::VerifyFailed),
+            "{source}\n{diagnostics:#?}"
+        );
+        match expected {
+            Expected::Accepted => {
+                assert!(diagnostics.is_empty(), "{source}\n{diagnostics:#?}");
+                let output = ok(source);
+                assert!(!output.is_empty(), "{source}");
+            }
+            Expected::Placement => {
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::TryPlacement),
+                    "{source}\n{diagnostics:#?}"
+                );
+                let try_at = source.find("try").expect("placement source contains try");
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.start == Some(try_at)),
+                    "{source}\n{diagnostics:#?}"
+                );
+            }
+            Expected::LoweringPlan => {
+                assert!(
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed
+                    }),
+                    "{source}\n{diagnostics:#?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn try_inside_a_function_inside_a_scrutinee_is_allowed() {
     let out = ok(
         "const x = match (run(() => { try g(); return h(); })) {\n  Ok(value) => value,\n  Err(error) => 0,\n};\n",
