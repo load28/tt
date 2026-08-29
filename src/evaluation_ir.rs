@@ -112,7 +112,7 @@ pub(crate) struct LoweringPlan {
     slot_names: Vec<String>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     expression_boundary_name: String,
-    unsupported_expression_propagations: Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)>,
+    unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -122,6 +122,18 @@ pub(crate) struct ForInitializerPropagation {
     pub(crate) node: NodeId,
     pub(crate) owner: HostOwner,
     pub(crate) source: SourceSpan,
+}
+
+/// A value-form propagation whose host cannot preserve its function return.
+/// Keep the owner beside the capability reason so public diagnostics can name
+/// the actual TypeScript boundary instead of flattening every case into one
+/// generic expression error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UnsupportedExpressionPropagation {
+    pub(crate) expr: ExprId,
+    pub(crate) source: SourceSpan,
+    pub(crate) owner: EvaluationOwner,
+    pub(crate) reason: ExpressionBoundaryReason,
 }
 
 #[derive(Debug)]
@@ -392,7 +404,7 @@ impl LoweringPlan {
     /// target emission never attempts an expression-boundary fallback for it.
     pub(crate) fn unsupported_expression_propagations(
         &self,
-    ) -> Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)> {
+    ) -> Vec<UnsupportedExpressionPropagation> {
         self.unsupported_expression_propagations.clone()
     }
 }
@@ -778,7 +790,12 @@ impl EvaluationFile {
             .ok_or(EvaluationError::MissingHost {
                 root: CoreRoot::Expr(expr),
             })?;
-            unsupported_expression_propagations.push((expr, source, reason));
+            unsupported_expression_propagations.push(UnsupportedExpressionPropagation {
+                expr,
+                source,
+                owner: context.owner,
+                reason,
+            });
         }
         let for_initializer_propagations = self
             .regions
@@ -1526,6 +1543,7 @@ fn target_capability(
         context.owner,
         EvaluationOwner::ParameterInitializer
             | EvaluationOwner::ClassInitializer
+            | EvaluationOwner::StaticBlock
             | EvaluationOwner::Constructor
             | EvaluationOwner::Generator
     ) {

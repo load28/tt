@@ -296,7 +296,7 @@
 | TASK-285 | P3: Repair concise-arrow propagation | Complete | 2026-08-30 | 2026-08-30 | [TASK-285](./TASK-285-concise-arrow-propagation.md) |
 | TASK-286 | P4: Reject unsound function targets | Complete | 2026-08-30 | 2026-08-30 | [TASK-286](./TASK-286-unsound-function-targets.md) |
 | TASK-287 | P5: Close shipped claimer gaps | Complete | 2026-08-30 | `TASK-287: close shipped claimer gaps` | [TASK-287](./TASK-287-shipped-claimer-gaps.md) |
-| TASK-288 | P6: Preserve placement reasons | Pending | — | — | [TASK-288](./TASK-288-preserve-placement-reasons.md) |
+| TASK-288 | P6: Preserve placement reasons | Complete | 2026-08-30 | `TASK-288: preserve placement reasons` | [TASK-288](./TASK-288-preserve-placement-reasons.md) |
 | TASK-289 | P-matrix: Prerequisite placement matrix gate | Pending | — | — | [TASK-289](./TASK-289-placement-matrix-gate.md) |
 | TASK-290 | M0: Freeze the one-release crossing migration | Pending | — | — | [TASK-290](./TASK-290-crossing-migration-diagnostic.md) |
 | TASK-291 | L0: Repair Result completion in both existing printers | Pending | — | — | [TASK-291](./TASK-291-result-completion-printers.md) |

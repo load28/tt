@@ -931,7 +931,8 @@ fn try_inside_match_arm_is_an_error() {
         "const x = match (r) {\n  Ok(value) => { const y = try f(value); return y; },\n  Err(error) => fallback(error),\n};\n",
     );
     assert!(
-        e.message.contains("`try` cannot be used here"),
+        e.message
+            .contains("`try` cannot be used here, in an isolated value region"),
         "{}",
         e.message
     );
@@ -1098,9 +1099,7 @@ fn try_placement_claims_for_update_and_destructuring_edges() {
         assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
         assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
         assert!(
-            err(src)
-                .message
-                .contains("`try` cannot be used in this expression context"),
+            !err(src).message.contains("did not parse as tt try"),
             "{src}"
         );
     }
@@ -1125,6 +1124,48 @@ fn try_in_spread_operands_enters_the_evaluation_protocol() {
 fn typescript_members_and_properties_named_try_are_passthrough() {
     let source = "const object = { try: 1 };\nobject.try();\n";
     assert_eq!(ok(source), source);
+}
+
+#[test]
+fn try_placement_reports_the_owning_reason() {
+    let cases = [
+        (
+            "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
+            "repeated loop position",
+        ),
+        (
+            "function f(value = try read()) { return value; }\n",
+            "parameter initializer",
+        ),
+        (
+            "class C { static { const value = { item: try read() }; } }\n",
+            "class static block",
+        ),
+        ("class C { constructor() { try read(); } }\n", "constructor"),
+        (
+            "const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };\n",
+            "isolated value region",
+        ),
+    ];
+    for (source, reason) in cases {
+        let error = err(source);
+        assert!(error.message.contains(reason), "{source}\n{error:#?}");
+        assert_eq!(error.line, 1, "{source}\n{error:#?}");
+        assert_eq!(
+            error.col,
+            source.find("try").unwrap() + 1,
+            "{source}\n{error:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_static_block_does_not_capture_a_nested_function_try() {
+    let output = ok("class C { static { const run = () => { try read(); }; } }\n");
+    assert!(
+        output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{output}"
+    );
 }
 
 #[test]

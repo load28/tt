@@ -576,7 +576,7 @@ impl TargetRewritePlan {
         let recovered_propagations: Vec<_> = lowering
             .unsupported_expression_propagations()
             .into_iter()
-            .map(|(expr, source, _)| (expr, source))
+            .map(|failure| (failure.expr, failure.source))
             .collect();
         let recovered: HashSet<_> = recovered_propagations
             .iter()

@@ -1159,6 +1159,32 @@ pub(crate) fn in_function_body(src: &str, tokens: &[Token], at: usize) -> bool {
     stack.iter().any(|&is_function| is_function)
 }
 
+/// Whether `at` is directly enclosed by a class static block. A nested
+/// user-written function remains its own Result scope, so callers combine
+/// this with [`function_target_at`] rather than treating every nested token
+/// as statically owned.
+pub(crate) fn in_static_block(src: &str, tokens: &[Token], at: usize) -> bool {
+    let mut stack: Vec<bool> = Vec::new();
+    for (index, token) in tokens.iter().enumerate().take(at) {
+        match token.kind {
+            TokenKind::Punct(b'{') => stack.push(
+                index
+                    .checked_sub(1)
+                    .and_then(|before| tokens.get(before))
+                    .is_some_and(|previous| {
+                        matches!(previous.kind, TokenKind::Ident)
+                            && &src[previous.span.start..previous.span.end] == "static"
+                    }),
+            ),
+            TokenKind::Punct(b'}') => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    stack.into_iter().any(|is_static| is_static)
+}
+
 /// The kind of user-written function that an early `return` at a token can
 /// reach. Constructors and generators syntactically accept `return`, but a
 /// propagated Result would change their JavaScript completion contract.
