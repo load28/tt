@@ -5,17 +5,11 @@
     "endCol": 16,
     "endLine": 6,
     "line": 6,
-    "message": "`result` block's final expression must not end with `;`",
+    "message": "`result` block must end with a value expression",
     "suggestions": [
       {
-        "edit": {
-          "col": 15,
-          "endCol": 16,
-          "endLine": 6,
-          "line": 6,
-          "replacement": ""
-        },
-        "message": "remove the trailing `;`"
+        "edit": null,
+        "message": "if this statement is the block's value, remove its trailing `;`"
       }
     ]
   }

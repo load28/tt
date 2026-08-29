@@ -285,7 +285,8 @@
 | TASK-274 | Show the top-level `contentMappers` configuration shape | Complete | 2026-08-28 | 2026-08-28 | [TASK-274](./TASK-274-content-mapper-documentation.md) |
 | TASK-275 | Prove variant ownership and preserve typed project boundaries | Complete | 2026-08-29 | 2026-08-29 | [TASK-275](./TASK-275-structural-pattern-ownership.md) |
 | TASK-276 | Preserve typed membership for blocked configured files | Complete | 2026-08-29 | 2026-08-29 | [TASK-276](./TASK-276-blocked-file-typed-membership.md) |
+| TASK-277 | Diagnose ambiguous result tails without unsafe edits | Complete | 2026-08-29 | 2026-08-29 | [TASK-277](./TASK-277-result-missing-value-diagnostic.md) |
 
 ## 다음 태스크 번호
 
-**TASK-277**
+**TASK-278**

@@ -3348,14 +3348,38 @@ fn result_block_value_semicolon_is_reported_at_the_punctuation() {
     let start = diagnostic.start.expect("semicolon start");
     let end = diagnostic.end.expect("semicolon end");
     assert_eq!(&src[start..end], ";");
-    let edit = diagnostic.suggestions[0]
-        .edit
-        .as_ref()
-        .expect("deletion edit");
     assert_eq!(
-        (edit.start, edit.end, edit.replacement.as_str()),
-        (start, end, "")
+        diagnostic.message,
+        "`result` block must end with a value expression"
     );
+    assert_eq!(diagnostic.suggestions.len(), 1);
+    assert!(diagnostic.suggestions[0].edit.is_none());
+    assert!(
+        diagnostic.suggestions[0]
+            .message
+            .contains("if this statement is the block's value")
+    );
+
+    let call_tail = "const a = result {\n  const x <- f();\n  log(x);\n};\n";
+    let diagnostics = ttc::analyze(call_tail, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        ttc::DiagnosticCode::ResultTailSemicolon
+    );
+    assert_eq!(diagnostics[0].suggestions.len(), 1);
+    assert!(diagnostics[0].suggestions[0].edit.is_none());
+
+    let labeled_tail = "const a = result {\n  const x <- f();\n  label: doWork();\n};\n";
+    let diagnostics = ttc::analyze(labeled_tail, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultTailSemicolon);
+    assert_eq!(
+        &labeled_tail[diagnostic.start.unwrap()..diagnostic.end.unwrap()],
+        "label: doWork();"
+    );
+    assert!(diagnostic.suggestions.is_empty());
 
     let statement_tail = "const a = result {\n  const x <- f();\n  return x;\n};\n";
     let diagnostics = ttc::analyze(statement_tail, &Options::default());

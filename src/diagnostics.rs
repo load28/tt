@@ -269,11 +269,14 @@ block passes through untouched; text with a `<-` in it does not."
 
             DiagnosticCode::ResultTailSemicolon => {
                 "\
-A `result` block's final value expression ends with a semicolon.
+A `result` block ends with a statement instead of a value expression.
 
-Bindings and ordinary statements inside the block end with `;`, but the
-last expression is the block's value and must not. Remove that final
-semicolon; keep the block's closing `}`."
+Bindings and ordinary statements inside the block end with `;`, and a final
+expression without `;` supplies the block's value. When the last item is an
+expression statement, ttc cannot know whether it was meant as a side effect
+or as that value; the diagnostic therefore offers guidance but no automatic
+edit. Add a value expression, or remove the semicolon when that statement was
+intended to be the value."
             }
 
             DiagnosticCode::MalformedVariant => {

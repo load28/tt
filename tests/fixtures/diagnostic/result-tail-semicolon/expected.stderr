@@ -1,7 +1,7 @@
-error[result-tail-semicolon]: `result` block's final expression must not end with `;`
+error[result-tail-semicolon]: `result` block must end with a value expression
  --> input.tt:6:15
   |
 6 |     { amount };
   |               ^
   |
-  = help: remove the trailing `;`
+  = help: if this statement is the block's value, remove its trailing `;`

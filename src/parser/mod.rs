@@ -846,26 +846,25 @@ impl Parser<'_> {
                             kind: RecoveryKind::Expression,
                         });
                     }
-                    results::Attempt::TrailingValueSemicolon {
-                        semicolon,
+                    results::Attempt::MissingValue {
+                        span,
                         recovery,
+                        may_be_value,
                     } => {
-                        malformed.push(
-                            crate::error::TtError::span(
-                                semicolon.start,
-                                semicolon.end,
-                                "`result` block's final expression must not end with `;`"
-                                    .to_string(),
+                        let error = crate::error::TtError::span(
+                            span.start,
+                            span.end,
+                            "`result` block must end with a value expression".to_string(),
+                        )
+                        .code(crate::DiagnosticCode::ResultTailSemicolon)
+                        .owner(recovery.start, recovery.end);
+                        malformed.push(if may_be_value {
+                            error.help(
+                                "if this statement is the block's value, remove its trailing `;`",
                             )
-                            .code(crate::DiagnosticCode::ResultTailSemicolon)
-                            .owner(recovery.start, recovery.end)
-                            .suggest(
-                                "remove the trailing `;`",
-                                semicolon.start,
-                                semicolon.end,
-                                "",
-                            ),
-                        );
+                        } else {
+                            error
+                        });
                         recoveries.push(RecoveryNode {
                             span: recovery,
                             kind: RecoveryKind::Expression,
