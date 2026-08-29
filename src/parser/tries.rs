@@ -77,6 +77,7 @@ pub(super) fn parse_misplaced_try(cur: Cursor<'_>, kw_span: Span) -> Option<(usi
     }
 
     let mut depth = 0usize;
+    let mut ternaries = 0usize;
     let mut k = cur.idx;
     let mut end = first.span.start;
     while let Some(token) = cur.tokens.get(k) {
@@ -87,6 +88,14 @@ pub(super) fn parse_misplaced_try(cur: Cursor<'_>, kw_span: Span) -> Option<(usi
             )
         {
             break;
+        }
+        if depth == 0 {
+            match token.kind {
+                TokenKind::Punct(b'?') => ternaries += 1,
+                TokenKind::Punct(b':') if ternaries == 0 => break,
+                TokenKind::Punct(b':') => ternaries -= 1,
+                _ => {}
+            }
         }
         if depth == 0
             && k > cur.idx

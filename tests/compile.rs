@@ -982,6 +982,14 @@ fn try_cannot_be_used_in_expression_position() {
             "try read()",
         ),
         (
+            "function f(c: boolean) { const x = c ? try read() : fallback; }\n",
+            "try read()",
+        ),
+        (
+            "function f(c: boolean) { return wrap(try c ? read() : fallback(), 1); }\n",
+            "try c ? read() : fallback()",
+        ),
+        (
             "function f() { return Result.Ok(Math.round(try total() * 1.1)); }\n",
             "try total() * 1.1",
         ),
