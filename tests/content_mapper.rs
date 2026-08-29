@@ -252,7 +252,7 @@ fn a_deep_expression_try_reports_the_placement_rule_at_its_source() {
 }
 
 #[test]
-fn an_imported_field_error_is_a_tt_diagnostic_at_the_field_token() {
+fn an_imported_field_error_is_checker_owned_at_the_field_token() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);
     fs::write(
@@ -277,18 +277,15 @@ fn an_imported_field_error_is_a_tt_diagnostic_at_the_field_token() {
     let (ok, text) = check(&tsc, project.path());
     assert!(!ok);
     assert!(
-        text.contains("payment.tt(4,32): error tt26")
-            && text.contains("case `Card` has no field `brnad`"),
-        "expected the mapper's source-level field diagnostic, got:\n{text}"
+        text.contains("payment.tt(4,32): error TS2339")
+            && text.contains("Property 'brnad' does not exist"),
+        "expected the checker's source-mapped field diagnostic, got:\n{text}"
     );
-    assert!(
-        !text.contains("TS2339"),
-        "the mapper must not add the generated consequence:\n{text}"
-    );
+    assert!(!text.contains("error tt26"), "{text}");
 }
 
 #[test]
-fn an_imported_case_error_survives_a_wildcard_arm() {
+fn an_imported_case_error_with_a_wildcard_is_checker_owned() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);
     fs::write(
@@ -313,13 +310,11 @@ fn an_imported_case_error_survives_a_wildcard_arm() {
     let (ok, text) = check(&tsc, project.path());
     assert!(!ok);
     assert!(
-        text.contains("payment.tt(4,27): error tt25") && text.contains("has no case `Crad`"),
-        "expected the mapper's source-level case diagnostic, got:\n{text}"
+        text.contains("payment.tt(4,10): error TS2678")
+            && text.contains("Type '\"Crad\"' is not comparable"),
+        "expected the checker's source-mapped case diagnostic, got:\n{text}"
     );
-    assert!(
-        !text.contains("TS2678"),
-        "the mapper must not add the generated consequence:\n{text}"
-    );
+    assert!(!text.contains("error tt25"), "{text}");
 }
 
 #[test]
@@ -353,12 +348,12 @@ fn a_nested_imported_field_error_is_reported_at_its_token() {
     let (ok, text) = check(&tsc, project.path());
     assert!(!ok);
     assert!(
-        text.contains("nested.tt(6,20): error tt26")
-            && text.contains("case `Card` has no field `brnd`"),
+        text.contains("nested.tt(6,20): error TS2339")
+            && text.contains("Property 'brnd' does not exist"),
         "{text}"
     );
     assert!(
-        !text.contains("TS2339") && !text.contains("{ brnd: any; }"),
+        !text.contains("{ brnd: any; }") && !text.contains("error tt26"),
         "{text}"
     );
 }

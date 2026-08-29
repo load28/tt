@@ -1802,13 +1802,9 @@ const area = match (Shape.Point) {
 fn token_extern() -> ttc::ExternVariant {
     ttc::ExternVariant {
         name: "Token".to_string(),
-        generics: String::new(),
-        cases: ["Num", "Ident", "Eof"]
+        tags: ["Num", "Ident", "Eof"]
             .into_iter()
-            .map(|tag| ttc::ExternVariantCase {
-                tag: tag.to_string(),
-                fields: None,
-            })
+            .map(str::to_string)
             .collect(),
         from: Some("./token.tt".to_string()),
     }
@@ -1874,13 +1870,9 @@ fn extern_variant_shadows_builtin_of_same_name() {
     // two-case match that satisfies the built-in must now be an error.
     let externs = [ttc::ExternVariant {
         name: "Option".to_string(),
-        generics: String::new(),
-        cases: ["Some", "None", "Maybe"]
+        tags: ["Some", "None", "Maybe"]
             .into_iter()
-            .map(|tag| ttc::ExternVariantCase {
-                tag: tag.to_string(),
-                fields: None,
-            })
+            .map(str::to_string)
             .collect(),
         from: Some("./opt.tt".to_string()),
     }];
@@ -1919,15 +1911,7 @@ fn exported_variants_returns_exported_tt_enums_only() {
     );
     assert_eq!(decls.len(), 2);
     assert_eq!(decls[0].name, "Token");
-    assert_eq!(
-        decls[0]
-            .cases
-            .iter()
-            .map(|case| case.tag.as_str())
-            .collect::<Vec<_>>(),
-        ["Num", "Eof"]
-    );
-    assert_eq!(decls[0].cases[0].fields.as_ref().unwrap()[0].name, "value");
+    assert_eq!(decls[0].tags, ["Num", "Eof"]);
     assert_eq!(decls[0].from, None);
     assert_eq!(decls[1].name, "Color");
 }
@@ -4232,20 +4216,19 @@ const a = match (s) { Circel(radius) => radius, Empty => 0 };
 }
 
 #[test]
-fn misspelled_case_in_let_else_and_if_let_is_reported() {
-    let e = err(r#"variant Shape { Circle(radius: number), Empty }
+fn single_pattern_spelling_without_a_subject_owner_waits_for_typescript() {
+    let out = ok(r#"variant Shape { Circle(radius: number), Empty }
 function f(): number {
   const Circel(radius) = s else { return 0; };
   return radius;
 }
 "#);
-    assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
+    assert!(out.contains("kind !== \"Circel\""), "{out}");
 
-    let e = err(r#"variant Shape { Circle(radius: number), Empty }
+    let out = ok(r#"variant Shape { Circle(radius: number), Empty }
 if let Circel(radius) = s { log(radius); }
 "#);
-    assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
-    assert_eq!((e.line, e.col), (2, 8));
+    assert!(out.contains("kind === \"Circel\""), "{out}");
 }
 
 /// Applies one of a diagnostic's suggestions to `source` — what an

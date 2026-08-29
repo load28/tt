@@ -368,6 +368,7 @@ impl Project {
                 &probes,
                 request.tt_only,
                 &semantics,
+                &self.requested,
             ),
             declarations,
             backend_error,

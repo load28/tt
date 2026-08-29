@@ -2044,14 +2044,7 @@ mod tests {
         let src = "import { Token } from \"./token.tt\";\nconst v = match (t) { Word => 0 };\n";
         let externs = [ExternVariant {
             name: "Token".to_string(),
-            generics: String::new(),
-            cases: ["Word", "Punct"]
-                .into_iter()
-                .map(|tag| crate::ExternVariantCase {
-                    tag: tag.to_string(),
-                    fields: None,
-                })
-                .collect(),
+            tags: vec!["Word".to_string(), "Punct".to_string()],
             from: Some("./token.tt".to_string()),
         }];
         let program = crate::parser::parse(src);
@@ -2176,7 +2169,7 @@ mod tests {
     }
 
     #[test]
-    fn resolution_reports_a_misspelling_and_stays_quiet_otherwise() {
+    fn resolution_reports_owned_misspellings_and_stays_quiet_otherwise() {
         let typo = pattern_analyses(
             "variant E { Alpha(x: string), Beta }\nconst v = match (e) { Alhpa(x) => x, Beta => 0 };\n",
             &[],
@@ -2190,12 +2183,11 @@ mod tests {
         );
         assert!(typo.match_has_resolution_error(typo.matches[0].keyword_off));
 
-        let if_let = pattern_analyses(
+        let unowned_if_let = pattern_analyses(
             "variant E { Alpha(x: string), Beta }\nif let Alhpa(x) = e { use(x); }\n",
             &[],
         );
-        assert_eq!(if_let.unresolved.len(), 1);
-        assert_eq!(if_let.unresolved[0].match_owner, None);
+        assert!(unowned_if_let.unresolved.is_empty());
 
         // A name that is nobody's misspelling is not an error: the pattern
         // may be over a hand-written tagged union.

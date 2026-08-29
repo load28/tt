@@ -340,6 +340,13 @@ fn named_type(text: &str, declarations: &[DeclaredVariant]) -> String {
 /// editor wording; the raw checker message is only the fallback when the
 /// backend could not prove an expected/found relation.
 fn diagnostic_message(diagnostic: &TsDiagnostic, declarations: &[DeclaredVariant]) -> String {
+    // Property lookup already names the exact member and receiver type. A
+    // contextual mismatch synthesized around the enclosing generated
+    // destructuring is wider and reverses the user's expected/found reading;
+    // keep the checker's direct, source-mappable fact instead.
+    if matches!(diagnostic.code, 2339 | 2551) {
+        return ts_message(&diagnostic.message, declarations);
+    }
     let Some(mismatch) = &diagnostic.mismatch else {
         return ts_message(&diagnostic.message, declarations);
     };
@@ -488,6 +495,9 @@ fn checker_labels(
 }
 
 fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
+    if matches!(diagnostic.code, 2339 | 2551) {
+        return (diagnostic.start, diagnostic.end);
+    }
     diagnostic
         .mismatch
         .as_ref()
@@ -782,6 +792,65 @@ fn string_end(bytes: &[u8], at: usize) -> usize {
     bytes.len()
 }
 
+/// Source membership for a typed report. TypeScript's configured program is
+/// authoritative for project roots; explicit inputs are roots by user
+/// request. Relative tt imports then extend that set through the language's
+/// own module graph, including a source that could not be projected and
+/// therefore could never appear in TypeScript's source-file table.
+fn typed_member_sources(
+    snapshot: &Snapshot,
+    answers: &Answers,
+    requested: &HashSet<PathBuf>,
+) -> Option<HashSet<PathBuf>> {
+    let modules = answers.project_modules.as_ref()?;
+    let configured: HashSet<&std::path::Path> = modules.iter().map(PathBuf::as_path).collect();
+    let mut members: HashSet<PathBuf> = snapshot
+        .files()
+        .iter()
+        .filter(|file| configured.contains(file.module_path.as_path()))
+        .map(|file| file.source_path.clone())
+        .chain(requested.iter().cloned())
+        .collect();
+    let mut pending: Vec<PathBuf> = members.iter().cloned().collect();
+
+    while let Some(source) = pending.pop() {
+        let imports = snapshot
+            .files()
+            .iter()
+            .find(|file| file.source_path == source)
+            .map(|file| file.tt_imports())
+            .or_else(|| {
+                snapshot
+                    .blocked()
+                    .iter()
+                    .find(|file| file.source_path == source)
+                    .map(|file| file.tt_imports())
+            });
+        let Some(imports) = imports else {
+            continue;
+        };
+        let directory = source.parent().unwrap_or(std::path::Path::new("."));
+        for import in imports {
+            let Ok(target) = directory.join(&import.specifier).canonicalize() else {
+                continue;
+            };
+            let held = snapshot
+                .files()
+                .iter()
+                .any(|file| file.source_path == target)
+                || snapshot
+                    .blocked()
+                    .iter()
+                    .any(|file| file.source_path == target);
+            if held && members.insert(target.clone()) {
+                pending.push(target);
+            }
+        }
+    }
+
+    Some(members)
+}
+
 /// Builds the pass's diagnostics from the checker's answers, in the exact
 /// order and wording the report has always had.
 pub(crate) fn report(
@@ -790,15 +859,16 @@ pub(crate) fn report(
     probes: &Probes,
     tt_only: bool,
     semantics: &HashMap<PathBuf, Arc<FileSemantics>>,
+    requested: &HashSet<PathBuf>,
 ) -> Vec<Diagnostic> {
     let all_files = snapshot.files();
+    let member_sources = typed_member_sources(snapshot, answers, requested);
     let files_storage;
-    let files = match &answers.project_modules {
-        Some(modules) => {
-            let modules: HashSet<&std::path::Path> = modules.iter().map(PathBuf::as_path).collect();
+    let files = match &member_sources {
+        Some(members) => {
             files_storage = all_files
                 .iter()
-                .filter(|file| modules.contains(file.module_path.as_path()))
+                .filter(|file| members.contains(&file.source_path))
                 .cloned()
                 .collect::<Vec<_>>();
             files_storage.as_slice()
@@ -807,7 +877,11 @@ pub(crate) fn report(
     };
     let mut out = Vec::new();
 
-    for file in snapshot.blocked() {
+    for file in snapshot.blocked().iter().filter(|file| {
+        member_sources
+            .as_ref()
+            .is_none_or(|members| members.contains(&file.source_path))
+    }) {
         for diagnostic in &file.diagnostics {
             out.push(Diagnostic {
                 path: file.source_path.clone(),
@@ -845,11 +919,18 @@ pub(crate) fn report(
     // file can. Render those answers through sema's one diagnostic author and
     // merge them with the projection results; local names may appear in both,
     // while imported names appear only here.
+    let mut resolution_spans: HashMap<PathBuf, Vec<(usize, usize)>> = HashMap::new();
     for file in files {
         let Some(semantics) = semantics.get(&file.source_path) else {
             continue;
         };
         for error in crate::sema::resolution_errors(&semantics.analyses) {
+            if let (Some(start), Some(end)) = (error.offset, error.end) {
+                resolution_spans
+                    .entry(file.source_path.clone())
+                    .or_default()
+                    .push((start, end));
+            }
             let diagnostic = Diagnostic {
                 path: file.source_path.clone(),
                 position: error.offset.map(|at| crate::line_col(&file.source, at)),
@@ -919,6 +1000,17 @@ pub(crate) fn report(
             });
             continue;
         };
+        if let DiagnosticOrigin::Exact { start, end } = origin
+            && resolution_spans
+                .get(&file.source_path)
+                .is_some_and(|spans| {
+                    spans
+                        .iter()
+                        .any(|&(owner_start, owner_end)| start < owner_end && owner_start < end)
+                })
+        {
+            continue;
+        }
         // Glue is not the user's code. When ttc can say what the construct
         // meant, it says that — over the construct's own text. The
         // declaration table its wording names types from is built only for

@@ -19,7 +19,13 @@ pub(crate) struct BlockedFile {
     pub(crate) source_path: std::path::PathBuf,
     pub(crate) source: String,
     pub(crate) diagnostics: Vec<crate::Diagnostic>,
-    variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
+    metadata: std::sync::OnceLock<Box<BlockedMetadata>>,
+}
+
+#[derive(Debug)]
+struct BlockedMetadata {
+    variant_symbols: Vec<crate::VariantSymbol>,
+    imports: Vec<crate::TtImport>,
 }
 
 impl BlockedFile {
@@ -32,16 +38,25 @@ impl BlockedFile {
             source_path,
             source,
             diagnostics,
-            variant_symbols: std::sync::OnceLock::new(),
+            metadata: std::sync::OnceLock::new(),
         }
     }
 
     pub(crate) fn variant_symbols(&self) -> &[crate::VariantSymbol] {
-        self.variant_symbols.get_or_init(|| {
-            crate::variant_symbols_with_kind(
-                &self.source,
-                crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
-            )
+        &self.metadata().variant_symbols
+    }
+
+    pub(crate) fn tt_imports(&self) -> &[crate::TtImport] {
+        &self.metadata().imports
+    }
+
+    fn metadata(&self) -> &BlockedMetadata {
+        self.metadata.get_or_init(|| {
+            let kind = crate::SourceKind::from_path(&self.source_path).unwrap_or_default();
+            Box::new(BlockedMetadata {
+                variant_symbols: crate::variant_symbols_with_kind(&self.source, kind),
+                imports: crate::tt_imports_with_kind(&self.source, kind),
+            })
         })
     }
 }

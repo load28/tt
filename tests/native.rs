@@ -387,6 +387,32 @@ fn files_outside_tsconfig_do_not_receive_typed_queries() {
 }
 
 #[test]
+fn a_malformed_file_outside_tsconfig_does_not_enter_typed_diagnostics() {
+    require_tsgo!();
+    let source = "export const answer: number = 42;\n";
+    let dir = project(&[("src/main.tt", source)]);
+    fs::create_dir_all(dir.join("examples")).unwrap();
+    write(
+        &dir,
+        "examples/demo.tt",
+        "export function demo(): number {\n return result { value; };\n}\n",
+    );
+
+    let out = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(!stderr.contains("examples/demo.tt"), "{stderr}");
+
+    let answer = typed_server(&dir, "src/main.tt", source);
+    assert!(
+        answer["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "{answer}"
+    );
+}
+
+#[test]
 fn a_backend_contract_failure_uses_cli_ice_and_server_backend_error_contracts() {
     require_tsgo!();
     let source = "val const values = new Map<string, number>();\nvalues.set(\"a\", 1);\n";
@@ -881,7 +907,7 @@ fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
 }
 
 #[test]
-fn a_nested_imported_field_error_uses_source_vocabulary_and_span() {
+fn a_nested_imported_field_error_uses_checker_evidence_and_source_span() {
     require_tsgo!();
     let source = "import type { TResult } from \"@tt/std\";\n\
         import { PaymentMethod } from \"./domain.tt\";\n\
@@ -901,27 +927,27 @@ fn a_nested_imported_field_error_uses_source_vocabulary_and_span() {
     ]);
 
     let out = check(&dir);
-    assert!(out.contains("case `Card` has no field `brnd`"), "{out}");
+    assert!(
+        out.contains("error[ts2339]: Property 'brnd' does not exist"),
+        "{out}"
+    );
     assert!(out.contains("--> src/nested.tt:5:20"), "{out}");
     assert!(
-        !out.contains("expected `{ brnd: any; }`")
-            && !out.contains("type mismatch:")
-            && !out.contains("ts2339"),
-        "generated structural consequences are owned by the source error: {out}"
+        !out.contains("expected `{ brnd: any; }`") && !out.contains("type mismatch:"),
+        "the direct property fact replaces the generated structural mismatch: {out}"
     );
 
     let answer = typed_server(&dir, "src/nested.tt", source);
     let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
     let field = diagnostics
         .iter()
-        .find(|diagnostic| diagnostic["code"] == "unknown-field")
+        .find(|diagnostic| diagnostic["code"] == "ts2339")
         .unwrap_or_else(|| panic!("missing nested field diagnostic: {answer}"));
     assert_eq!(source_slice(source, field), "brnd");
-    assert_eq!(field["suggestions"][0]["edit"]["replacement"], "brand");
     assert!(
         diagnostics
             .iter()
-            .all(|diagnostic| diagnostic["code"] != "ts2339"),
+            .all(|diagnostic| diagnostic["code"] != "unknown-field"),
         "{answer}"
     );
 }
@@ -1347,7 +1373,7 @@ fn a_reported_imported_field_error_owns_only_its_match_exhaustiveness() {
 }
 
 #[test]
-fn an_imported_case_near_miss_is_reported_with_a_wildcard_on_typed_paths() {
+fn an_imported_case_without_declaration_ownership_uses_checker_evidence() {
     require_tsgo!();
     let source = "import { PaymentMethod } from \"./domain.tt\";\n\
         export function fee(method: PaymentMethod): number {\n\
@@ -1363,25 +1389,29 @@ fn an_imported_case_near_miss_is_reported_with_a_wildcard_on_typed_paths() {
 
     let out = check(&dir);
     assert!(
-        out.contains("has no case `Crad`")
-            && out.contains("a case with a similar name exists: `Card`")
-            && !out.contains("ts2678"),
-        "the typed CLI reports the source cause only: {out}"
+        out.contains("error[ts2678]")
+            && out.contains("Type '\"Crad\"' is not comparable")
+            && !out.contains("unknown-case"),
+        "the typed CLI reports the checker-proven incompatibility: {out}"
     );
 
     let answer = typed_server(&dir, "src/payment.tt", source);
     let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
     let case = diagnostics
         .iter()
-        .find(|diagnostic| diagnostic["code"] == "unknown-case")
+        .find(|diagnostic| diagnostic["code"] == "ts2678")
         .unwrap_or_else(|| panic!("missing imported case diagnostic: {answer}"));
-    assert_eq!(source_slice(source, case), "Crad");
-    assert_eq!(case["suggestions"][0]["edit"]["replacement"], "Card");
+    assert!(
+        case["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("Crad")),
+        "the checker fact names the incompatible case: {answer}"
+    );
     assert!(
         diagnostics
             .iter()
-            .all(|diagnostic| diagnostic["code"] != "ts2678"),
-        "the source cause owns its generated consequence: {answer}"
+            .all(|diagnostic| diagnostic["code"] != "unknown-case"),
+        "no spelling-based owner is inferred: {answer}"
     );
 }
 

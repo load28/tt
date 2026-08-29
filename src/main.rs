@@ -623,8 +623,7 @@ fn collect_extern_variants(
             TtImportNames::Namespace(ns) => {
                 externs.extend(decls.iter().map(|d| ExternVariant {
                     name: format!("{ns}.{}", d.name),
-                    generics: d.generics.clone(),
-                    cases: d.cases.clone(),
+                    tags: d.tags.clone(),
                     from: from.clone(),
                 }));
             }
@@ -633,8 +632,7 @@ fn collect_extern_variants(
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         externs.push(ExternVariant {
                             name: alias.clone().unwrap_or_else(|| name.clone()),
-                            generics: d.generics.clone(),
-                            cases: d.cases.clone(),
+                            tags: d.tags.clone(),
                             from: from.clone(),
                         });
                     }

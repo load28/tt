@@ -1766,7 +1766,7 @@ fn cli_checks_exhaustiveness_across_tt_imports() {
 }
 
 #[test]
-fn cli_diagnoses_fields_against_imported_variant_declarations() {
+fn untyped_cli_does_not_infer_imported_field_ownership() {
     let dir = tmpdir();
     fs::write(
         dir.join("domain.tt"),
@@ -1783,23 +1783,11 @@ fn cli_diagnoses_fields_against_imported_variant_declarations() {
     .unwrap();
 
     let (ok, err) = run_ttc(&dir, &["--check", "payment.tt"]);
-    assert!(!ok, "expected the imported field error:\n{err}");
-    assert!(
-        err.contains(
-            "error[unknown-field]: variant PaymentMethod (imported from \"./domain.tt\"): \
-             case `Card` has no field `brnad`"
-        ),
-        "{err}"
-    );
-    assert!(err.contains("--> payment.tt:3:32"), "{err}");
-    assert!(
-        err.contains("a field with a similar name exists: `brand`"),
-        "{err}"
-    );
+    assert!(ok, "the typed checker owns imported field identity:\n{err}");
 }
 
 #[test]
-fn cli_diagnoses_an_imported_case_even_with_a_wildcard() {
+fn untyped_cli_does_not_infer_a_single_imported_case_owner() {
     let dir = tmpdir();
     fs::write(
         dir.join("domain.tt"),
@@ -1816,22 +1804,14 @@ fn cli_diagnoses_an_imported_case_even_with_a_wildcard() {
     .unwrap();
 
     let (ok, err) = run_ttc(&dir, &["--check", "payment.tt"]);
-    assert!(!ok, "expected the imported case error:\n{err}");
     assert!(
-        err.contains(
-            "error[unknown-case]: variant PaymentMethod (imported from \"./domain.tt\") \
-             has no case `Crad`"
-        ),
-        "{err}"
-    );
-    assert!(
-        err.contains("a case with a similar name exists: `Card`"),
-        "{err}"
+        ok,
+        "the typed checker owns the scrutinee's case domain:\n{err}"
     );
 }
 
 #[test]
-fn cli_diagnoses_a_nested_field_from_a_generic_result_payload() {
+fn untyped_cli_does_not_infer_a_generic_payload_owner() {
     let dir = tmpdir();
     fs::write(
         dir.join("domain.tt"),
@@ -1853,18 +1833,9 @@ fn cli_diagnoses_a_nested_field_from_a_generic_result_payload() {
     .unwrap();
 
     let (ok, err) = run_ttc(&dir, &["--check", "nested.tt"]);
-    assert!(!ok, "expected the nested field error:\n{err}");
     assert!(
-        err.contains(
-            "error[unknown-field]: variant PaymentMethod (imported from \"./domain.tt\"): \
-             case `Card` has no field `brnd`"
-        ),
-        "{err}"
-    );
-    assert!(err.contains("--> nested.tt:5:20"), "{err}");
-    assert!(
-        err.contains("a field with a similar name exists: `brand`"),
-        "{err}"
+        ok,
+        "generic substitution belongs to the typed checker:\n{err}"
     );
 }
 

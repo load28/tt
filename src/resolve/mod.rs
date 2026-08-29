@@ -30,7 +30,8 @@ use crate::hir::{
 
 /// An imported declaration as the resolver receives it: the name it is
 /// known by in the importing file's scope (aliases applied), where it came
-/// from, and its variants with their payload fields.
+/// from, and its variants. Legacy [`crate::ExternVariant`] inputs carry tags
+/// only; language-tooling [`crate::VariantSymbol`] inputs carry fields too.
 #[derive(Debug, Clone)]
 pub struct ExternDecl {
     /// The name in the importing file's scope.
@@ -55,22 +56,8 @@ impl From<&crate::ExternVariant> for ExternDecl {
         ExternDecl {
             name: e.name.clone(),
             from: e.from.clone(),
-            generics: e.generics.clone(),
-            variants: e
-                .cases
-                .iter()
-                .map(|case| {
-                    (
-                        case.tag.clone(),
-                        case.fields.as_ref().map(|fields| {
-                            fields
-                                .iter()
-                                .map(|field| (field.name.clone(), field.optional, field.ty.clone()))
-                                .collect()
-                        }),
-                    )
-                })
-                .collect(),
+            generics: String::new(),
+            variants: e.tags.iter().map(|tag| (tag.clone(), None)).collect(),
         }
     }
 }
@@ -246,7 +233,8 @@ pub struct VariantDecl {
     /// The lowered syntax this declaration came from, for a local one —
     /// the bridge between the declaration world and the file's HIR.
     pub hir: Option<hir::VariantId>,
-    /// The payload fields; `None` for a unit case.
+    /// The payload fields; `None` for a unit case or a legacy imported
+    /// declaration that carries tags only.
     pub fields: Option<Vec<FieldDecl>>,
 }
 
@@ -512,31 +500,20 @@ impl Resolver {
             }
             let subject = self.identify(&tags);
             // Resolve this position's constructor uses against the
-            // identified variant — or, when this position has exactly one
-            // named constructor, under the strict one-edit licence. A
-            // wildcard contributes no name evidence, so adding one can
-            // change coverage but never name resolution. Several named
-            // constructors are match-grade evidence and go through
-            // `identify`; they get no fallback licence.
-            match subject {
-                Some(variant_def) => {
-                    for arm in &site.arms {
-                        self.resolve_position(
-                            hir,
-                            site_id,
-                            arm.pattern,
-                            position,
-                            positions,
-                            variant_def,
-                        );
-                    }
+            // identified variant. A site with no matching case provides no
+            // declaration evidence: its subject may be a hand-written
+            // TypeScript union, so the typed checker owns that question.
+            if let Some(variant_def) = subject {
+                for arm in &site.arms {
+                    self.resolve_position(
+                        hir,
+                        site_id,
+                        arm.pattern,
+                        position,
+                        positions,
+                        variant_def,
+                    );
                 }
-                None if tags.len() == 1 => {
-                    for arm in &site.arms {
-                        self.report_near_miss(hir, site_id, arm.pattern);
-                    }
-                }
-                None => {}
             }
             subjects.push(subject);
         }
@@ -703,7 +680,8 @@ impl Resolver {
                     .collect::<Vec<_>>()
             })
         }) else {
-            // A unit case has no field list to compare against.
+            // A unit case or a tags-only legacy import has no field list to
+            // compare against.
             return;
         };
         let variant_name = self
@@ -724,17 +702,13 @@ impl Resolver {
                     self.resolution
                         .uses
                         .insert(field_pat.node, Res::Field(field_ref));
-                    // A nested pattern resolves against the field's own
-                    // declared type. A generic payload cannot name its
-                    // instantiation syntactically; in that case an exact tag
-                    // shared by exactly one visible variant is sufficient
-                    // declaration evidence. Ambiguity stays unresolved for
-                    // hand-written TypeScript unions.
+                    // A nested pattern resolves only when the field's
+                    // declaration names its owner. A type parameter does not:
+                    // its instantiation belongs to TypeScript and an exact tag
+                    // elsewhere in scope is not proof of ownership.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
                         && let Pat::Constructor { path, fields } = &hir.patterns[*inner]
-                        && let Some(nested_variant) = self
-                            .variant_of_type(&declared[index].1)
-                            .or_else(|| self.unique_variant_with_tag(&path.name))
+                        && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                     {
                         self.resolve_constructor(
                             hir,
@@ -765,68 +739,6 @@ impl Resolver {
                 }
             }
         }
-    }
-
-    /// The single-constructor near-miss licence: one tag is thin evidence, so
-    /// it is reported only when exactly one visible variant has a case a
-    /// *single* edit away (transposition included).
-    fn report_near_miss(&mut self, hir: &HirFile, site: PatternSiteId, pattern: PatternId) {
-        let Pat::Constructor { path, .. } = &hir.patterns[pattern] else {
-            return;
-        };
-        let mut found: Option<(DefId, String)> = None;
-        for (id, def) in self.resolution.defs.iter() {
-            let DefKind::Variant(data) = &def.kind else {
-                continue;
-            };
-            if self.resolution.type_ns.get(&def.name) != Some(&id) {
-                continue;
-            }
-            let Some((suggestion, _)) =
-                nearest_within(&path.name, data.variants.iter().map(|v| v.name.as_str()), 1)
-            else {
-                continue;
-            };
-            if found.is_some() {
-                return; // ambiguous — an ambiguous suggestion is none
-            }
-            found = Some((id, suggestion));
-        }
-        if let Some((variant_def, suggestion)) = found {
-            self.resolution.uses.insert(path.node, Res::Unresolved);
-            self.resolution.unresolved.push(UnresolvedUse {
-                site,
-                node: path.node,
-                name: path.name.clone(),
-                kind: UseKind::Case,
-                against: variant_def,
-                tag: None,
-                suggestion,
-            });
-        }
-    }
-
-    /// The one visible variant that declares `tag`, when there is one.
-    /// This is deliberately stricter than top-level match identification:
-    /// one exact nested tag can recover a generic payload's declaration, but
-    /// it cannot choose between two equally valid TypeScript instantiations.
-    fn unique_variant_with_tag(&self, tag: &str) -> Option<DefId> {
-        let mut found = None;
-        for (id, def) in self.resolution.defs.iter() {
-            let DefKind::Variant(data) = &def.kind else {
-                continue;
-            };
-            if self.resolution.type_ns.get(&def.name) != Some(&id)
-                || !data.variants.iter().any(|variant| variant.name == tag)
-            {
-                continue;
-            }
-            if found.is_some() {
-                return None;
-            }
-            found = Some(id);
-        }
-        found
     }
 
     /// The variant a declared type text names — a bare (possibly dotted)
