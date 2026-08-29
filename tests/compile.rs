@@ -3425,6 +3425,30 @@ fn try_and_let_else_are_rejected_inside_a_result_block() {
 }
 
 #[test]
+fn result_value_try_has_one_located_placement_diagnostic_at_every_host() {
+    let cases = [
+        "function f() { return result { const x <- next(); (try next()) }; }\n",
+        "const r = result { const x <- next(); (try next()) };\n",
+    ];
+    for source in cases {
+        let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+            .expect("Result value try must not unwind while host planning");
+        let placement: Vec<_> = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == ttc::DiagnosticCode::TryPlacement)
+            .collect();
+        assert_eq!(placement.len(), 1, "{diagnostics:#?}");
+        assert_eq!(placement[0].start, Some(source.find("try").unwrap()));
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+            "{diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn if_let_is_allowed_inside_a_result_block() {
     let out = ok(r#"
 const a = result {

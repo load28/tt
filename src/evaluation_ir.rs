@@ -738,6 +738,15 @@ impl EvaluationFile {
             let RegionPlacement::Host { context, .. } = &host_region.placement else {
                 continue;
             };
+            if let Some(CoreRoot::Expr(host_expr)) = host_region.root
+                && matches!(core.exprs[host_expr.index()], Expr::ResultRegion(_))
+            {
+                // The current Result language rejects value-form `try` in
+                // semantic analysis. Its Result-owned diagnostic is the
+                // one public result; do not add a second host-capability
+                // error after the projection has supplied the inner host.
+                continue;
+            }
             let capability = match host_region.root {
                 Some(CoreRoot::Expr(host_expr)) => direct_capabilities
                     .get(&host_expr)

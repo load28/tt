@@ -1131,6 +1131,8 @@ impl<'a> ProjectionBuilder<'a> {
                 crate::core_ir::ResultRegionItem::Propagate(_) => self.code.push(';'),
             }
         }
+        self.emit_expr(region.value)?;
+        self.code.push(';');
         self.code.push_str("0;})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };

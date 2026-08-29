@@ -1,8 +1,8 @@
 # TASK-284: Repair expression-boundary Result hosting
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
 - **Commit**: —
 
 ## Purpose
@@ -28,19 +28,37 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Project the Result value into the host placeholder
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: A value-form `try` in a claimed Result value had no nested
+  ProgramSyntax host, so Evaluation IR could report `MissingHost` alongside
+  the existing semantic placement diagnostic.
+- **Alternatives considered**: Suppress `MissingHost` at the public boundary;
+  add a codegen fallback; or project the Result value with its body.
+- **Decision and rationale**: The Result projection now visits the value
+  expression before closing its synthetic call. Evaluation IR recognizes that
+  Result already owns the current language's placement diagnostic and does
+  not add a second host-capability error.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Reproduced the duplicate `MissingHost` path with a parenthesized
+  value-form `try` in a claimed Result block.
+- 2026-08-30: Projected the Result value expression and suppressed the
+  redundant host-capability result under the Result host.
+- 2026-08-30: Verified the same diagnostic through compile, server, and
+  Engine paths, then ran the complete local gate.
 
 ## Issues and resolutions
 
-None.
+### Missing nested Result value host
+
+- **Symptom**: A validly claimed Result value containing `try` reported both
+  the semantic placement diagnostic and `lowering-plan-failed: MissingHost`.
+- **Cause**: ProgramSyntax omitted `region.value` while projecting the
+  synthetic Result call.
+- **Resolution**: The projection visits `region.value`, and Evaluation IR
+  retains the existing Result-owned placement diagnostic as the only result.
 
 ## Verification
 
@@ -48,14 +66,16 @@ Test obligation from the plan: the same Result input in statement-capable and ex
 
 Green condition: no `MissingHost`, no unwind, and a stable located code at every host.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
 Ships to `main` alone: yes.
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+`src/program_syntax.rs` projects the Result value. `src/evaluation_ir.rs`
+prevents a redundant host-capability diagnostic. `tests/compile.rs`,
+`tests/cli.rs`, and `tests/engine_cache.rs` fix the one-diagnostic contract
+across direct, server, and Engine clients.
