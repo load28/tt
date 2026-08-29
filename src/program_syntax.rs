@@ -75,6 +75,10 @@ struct ProjectedSpan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SyntaxCategory {
     Expression,
+    /// A `try` statement projected as an expression plus its terminator.
+    /// This stays valid in both ordinary statement streams and C-style
+    /// `for` initializer headers.
+    Propagation,
     Statement,
     Item,
 }
@@ -413,6 +417,10 @@ pub(crate) enum HostContinuation {
     Return,
     ArrowReturn,
     Initialize,
+    /// A declaration initializer in a C-style `for` header. Its propagation
+    /// prelude runs before the loop, while the header retains the payload
+    /// declaration.
+    ForInitialize,
     Discard,
     Compose,
 }
@@ -440,7 +448,10 @@ impl EvaluationContext {
     ) -> Self {
         let (owner, owner_edge) = evaluation_owner(parents);
         let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
-        if category != SyntaxCategory::Expression {
+        if !matches!(
+            category,
+            SyntaxCategory::Expression | SyntaxCategory::Propagation
+        ) {
             return Self {
                 frequency: frequency_within_owner(parents, owner_edge),
                 owner_reach,
@@ -621,6 +632,12 @@ fn value_role(parents: &[AstParentKind]) -> ValueRole {
 }
 
 fn host_continuation(parents: &[AstParentKind]) -> HostContinuation {
+    if parents
+        .iter()
+        .any(|parent| matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init)))
+    {
+        return HostContinuation::ForInitialize;
+    }
     let significant = parents
         .iter()
         .rev()
@@ -794,12 +811,16 @@ impl ProgramSyntax {
                 return Err(ProgramSyntaxError::MissingOverlay { id: entry.id });
             }
             match entry.category {
-                SyntaxCategory::Expression | SyntaxCategory::Statement | SyntaxCategory::Item => {}
+                SyntaxCategory::Expression
+                | SyntaxCategory::Propagation
+                | SyntaxCategory::Statement
+                | SyntaxCategory::Item => {}
             }
             match entry.context.continuation {
                 HostContinuation::Return
                 | HostContinuation::ArrowReturn
                 | HostContinuation::Initialize
+                | HostContinuation::ForInitialize
                 | HostContinuation::Discard
                 | HostContinuation::Compose => {}
             }
@@ -939,13 +960,13 @@ impl<'a> ProjectionBuilder<'a> {
         let id = TtNodeId(ordinal);
         let owner_start = ProjectedByte(self.code.len());
         match category {
-            SyntaxCategory::Expression => self.code.push('('),
+            SyntaxCategory::Expression | SyntaxCategory::Propagation => self.code.push('('),
             SyntaxCategory::Statement => self.code.push('{'),
             SyntaxCategory::Item => self.code.push_str("const "),
         }
         let start = ProjectedByte(self.code.len());
         let prefix = match category {
-            SyntaxCategory::Expression => "$tt_syntax_expr_",
+            SyntaxCategory::Expression | SyntaxCategory::Propagation => "$tt_syntax_expr_",
             SyntaxCategory::Statement => "$tt_syntax_stmt_",
             SyntaxCategory::Item => "$tt_syntax_item_",
         };
@@ -954,6 +975,7 @@ impl<'a> ProjectionBuilder<'a> {
         let end = ProjectedByte(self.code.len());
         match category {
             SyntaxCategory::Expression => self.code.push(')'),
+            SyntaxCategory::Propagation => self.code.push_str(");"),
             SyntaxCategory::Statement => self.code.push_str(";}"),
             SyntaxCategory::Item => self.code.push_str(" = 0;"),
         }
@@ -1034,8 +1056,12 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_propagate(&mut self, propagate: &Propagate) -> Result<(), ProgramSyntaxError> {
+        // A declaration-form propagation can occur in a C-style `for`
+        // initializer. Project it as an expression so that header remains
+        // valid TypeScript; its typed continuation decides the eventual
+        // statement shape in target lowering.
         self.push_placeholder(
-            SyntaxCategory::Statement,
+            SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
             CoreRoot::Propagate(propagate.node),
         )
@@ -3089,12 +3115,12 @@ mod tests {
     }
 
     #[test]
-    fn a_try_declaration_gets_a_whole_statement_overlay() {
+    fn a_try_declaration_gets_a_whole_propagation_overlay() {
         let syntax = syntax(
             "function run(r: Result<number, string>) {\n  const n = try r;\n  return n;\n}\n",
         );
         assert!(syntax.overlay.iter().any(|entry| {
-            entry.category == SyntaxCategory::Statement
+            entry.category == SyntaxCategory::Propagation
                 && matches!(entry.core_root, CoreRoot::Propagate(_))
         }));
     }

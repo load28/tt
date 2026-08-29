@@ -108,10 +108,20 @@ pub(crate) struct EvaluationFile {
 #[derive(Debug, Default)]
 pub(crate) struct LoweringPlan {
     owners: Vec<HostRewrite>,
+    for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     expression_boundary_name: String,
     unsupported_expression_propagations: Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)>,
+}
+
+/// A propagation declaration in a C-style `for` initializer. Its evaluation
+/// and error exit are emitted before the loop; the header keeps its payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ForInitializerPropagation {
+    pub(crate) node: NodeId,
+    pub(crate) owner: HostOwner,
+    pub(crate) source: SourceSpan,
 }
 
 #[derive(Debug)]
@@ -371,6 +381,12 @@ impl LoweringPlan {
         &self.expression_boundary_name
     }
 
+    pub(crate) fn for_initializer_propagations(
+        &self,
+    ) -> impl Iterator<Item = ForInitializerPropagation> + '_ {
+        self.for_initializer_propagations.iter().copied()
+    }
+
     /// Expression propagations whose host cannot carry the emitted early
     /// return. The source semantic layer consumes this typed placement fact;
     /// target emission never attempts an expression-boundary fallback for it.
@@ -423,6 +439,22 @@ pub(crate) enum EvaluationError {
         root: CoreRoot,
         owner: HostOwner,
         value: SourceSpan,
+    },
+    /// A Result expression used as a statement cannot preserve its failure
+    /// completion. Reject it before target source-preservation would see an
+    /// incomplete rewrite.
+    DiscardedResult {
+        source: SourceSpan,
+    },
+    /// A statement propagation in a loop header would be re-evaluated on
+    /// each iteration if hoisted to its statement owner.
+    RepeatedPropagation {
+        source: SourceSpan,
+    },
+    /// Only a declaration initializer can retain its successful payload in a
+    /// C-style `for` header. An assignment has no statement-safe rewrite.
+    UnsupportedForInitializer {
+        source: SourceSpan,
     },
 }
 
@@ -491,6 +523,20 @@ impl EvaluationFile {
 
     pub(crate) fn lowering_plan(&self, core: &CoreFile) -> Result<LoweringPlan, EvaluationError> {
         let mut owners: HashMap<HostOwner, Vec<PendingPlannedValue>> = HashMap::new();
+        for region in &self.regions {
+            let Some(CoreRoot::Propagate(_)) = region.root else {
+                continue;
+            };
+            let RegionPlacement::Host {
+                context, source, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            if context.owner_reach == OwnerReach::Repeated {
+                return Err(EvaluationError::RepeatedPropagation { source: *source });
+            }
+        }
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
@@ -643,6 +689,40 @@ impl EvaluationFile {
             .flat_map(|rewrite| &rewrite.values)
             .map(|value| (value.expr, value.capability))
             .collect();
+        for region in &self.regions {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                continue;
+            };
+            if !matches!(core.exprs[expr.index()], Expr::Propagate(_)) {
+                continue;
+            }
+            let RegionPlacement::Host {
+                context, source, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            if context.continuation == HostContinuation::ForInitialize {
+                return Err(EvaluationError::UnsupportedForInitializer { source: *source });
+            }
+        }
+        for region in &self.regions {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                continue;
+            };
+            if !matches!(core.exprs[expr.index()], Expr::ResultRegion(_)) {
+                continue;
+            }
+            let RegionPlacement::Host {
+                context, source, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            if context.continuation == HostContinuation::Discard {
+                return Err(EvaluationError::DiscardedResult { source: *source });
+            }
+        }
         let mut unsupported_expression_propagations = Vec::new();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
@@ -682,9 +762,35 @@ impl EvaluationFile {
             })?;
             unsupported_expression_propagations.push((expr, source, reason));
         }
+        let for_initializer_propagations = self
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let CoreRoot::Propagate(node) = region.root? else {
+                    return None;
+                };
+                let RegionPlacement::Host {
+                    context,
+                    host_owner,
+                    source,
+                    ..
+                } = &region.placement
+                else {
+                    return None;
+                };
+                (context.continuation == HostContinuation::ForInitialize).then_some(
+                    ForInitializerPropagation {
+                        node,
+                        owner: *host_owner,
+                        source: *source,
+                    },
+                )
+            })
+            .collect();
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
+            for_initializer_propagations,
             slot_names,
             value_slots,
             expression_boundary_name,

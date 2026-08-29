@@ -291,7 +291,7 @@
 | TASK-280 | Lower `try` as an expression through the host evaluation protocol | Complete | 2026-08-29 | 2026-08-29 | [TASK-280](./TASK-280-expression-try.md) |
 | TASK-281 | Record the ratified `try`/`result` scopes consensus | Complete | 2026-08-29 | 2026-08-29 | [TASK-281](./TASK-281-try-result-scopes-consensus.md) |
 | TASK-282 | P0: Preserve the planner's existing failure return | Complete | 2026-08-29 | 2026-08-29 | [TASK-282](./TASK-282-planner-failure-return.md) |
-| TASK-283 | P1: Close host projection and source-preservation crashes | Pending | — | — | [TASK-283](./TASK-283-host-projection-crashes.md) |
+| TASK-283 | P1: Close host projection and source-preservation crashes | Complete | 2026-08-29 | 2026-08-30 | [TASK-283](./TASK-283-host-projection-crashes.md) |
 | TASK-284 | P2: Repair expression-boundary Result hosting | Pending | — | — | [TASK-284](./TASK-284-expression-boundary-result-hosting.md) |
 | TASK-285 | P3: Repair concise-arrow propagation | Pending | — | — | [TASK-285](./TASK-285-concise-arrow-propagation.md) |
 | TASK-286 | P4: Reject unsound function targets | Pending | — | — | [TASK-286](./TASK-286-unsound-function-targets.md) |

@@ -1616,29 +1616,61 @@ fn no_verify_does_not_bypass_the_lowering_precondition() {
 }
 
 #[test]
-fn fallible_host_lowering_reports_a_located_diagnostic_without_unwinding() {
-    // These host shapes currently expose different Evaluation IR planning
-    // gaps. Public compilation APIs must preserve those failures as tt
-    // diagnostics until their placement-specific prerequisite lands.
-    let cases = ["function f() { for (let i = try next();;) {} }\n"];
+fn try_declaration_in_for_initializer_runs_before_the_loop() {
+    let output = ok("function f() { for (let i = try next();;) {} }\n");
+    let prelude = output.find("const $tt_t0 = next();").unwrap();
+    let loop_header = output.find("for (let i = $tt_t0.value;;)").unwrap();
+    assert!(prelude < loop_header, "{output}");
+    assert!(
+        output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{output}"
+    );
+}
 
-    for source in cases {
-        let result = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()));
-        let diagnostics = result.expect("host lowering must not unwind");
-        assert!(!diagnostics.is_empty(), "{source}");
-        assert!(
-            diagnostics
-                .iter()
-                .all(|diagnostic| diagnostic.start.is_some()),
-            "{diagnostics:#?}"
-        );
-        assert!(
-            diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
-            "{diagnostics:#?}"
-        );
-    }
+#[test]
+fn discarded_result_reports_a_located_lowering_diagnostic_without_unwinding() {
+    let source = "function f() { result { const x <- next(); x }; }\n";
+    let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+        .expect("discarded Result must not reach source-preservation ICE");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+        "{diagnostics:#?}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.start.is_some()),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn try_in_repeated_for_test_reports_a_located_lowering_diagnostic() {
+    let source = "function f() { for (; try next(); ) {} }\n";
+    let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+        .expect("repeated for-test propagation must not reach output verification");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+        "{diagnostics:#?}"
+    );
+    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
+}
+
+#[test]
+fn try_assignment_in_for_initializer_reports_a_located_lowering_diagnostic() {
+    let source = "function f() { for (i = try next();;) {} }\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+        "{diagnostics:#?}"
+    );
+    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
 }
 
 #[test]

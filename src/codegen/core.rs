@@ -154,6 +154,7 @@ pub(crate) fn emit_with_map<'a>(
         rewrite_imports,
         std_imports,
         owner_slot_rewrites: target.owner_slots,
+        for_initializer_propagations: target.for_initializer_propagations,
         compose_rewrites: target.composes,
         source_replacements: target.source_replacements,
         consumed_exprs: target.consumed_exprs,
@@ -478,6 +479,7 @@ fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpa
 
 struct TargetRewritePlan {
     owner_slots: Vec<OwnerSlotRewrite>,
+    for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     composes: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
     /// The source spans of values whose lowering moves them into a prelude
@@ -507,6 +509,13 @@ struct OwnerSlotRewrite {
     owner: SourceSpan,
     expr: ExprId,
     slot: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ForInitializerPropagationRewrite {
+    node: NodeId,
+    owner: SourceSpan,
+    source: SourceSpan,
 }
 
 #[derive(Debug, Clone)]
@@ -555,6 +564,14 @@ struct LocalSourceEdit {
 
 impl TargetRewritePlan {
     fn build(lowering: &LoweringPlan) -> Self {
+        let for_initializer_propagations: Vec<_> = lowering
+            .for_initializer_propagations()
+            .map(|propagation| ForInitializerPropagationRewrite {
+                node: propagation.node,
+                owner: propagation.owner.span,
+                source: propagation.source,
+            })
+            .collect();
         let recovered_propagations: Vec<_> = lowering
             .unsupported_expression_propagations()
             .into_iter()
@@ -685,6 +702,11 @@ impl TargetRewritePlan {
             .filter(|value| hoisted.contains(&value.expr))
             .map(|value| value.source)
             .collect();
+        relocated_values.extend(
+            for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.source),
+        );
         relocated_values.extend(compose_operations().map(|operation| operation.parent));
         // The operator frame of a lowered conditional operation (its tokens
         // between the fragments the region re-emits) is claimed source.
@@ -744,6 +766,7 @@ impl TargetRewritePlan {
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
         Self {
             owner_slots,
+            for_initializer_propagations,
             composes,
             source_replacements,
             relocated_values,
@@ -768,6 +791,7 @@ struct Emitter<'a> {
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
     owner_slot_rewrites: Vec<OwnerSlotRewrite>,
+    for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     compose_rewrites: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
     consumed_exprs: HashSet<ExprId>,
@@ -944,6 +968,11 @@ impl<'a> Emitter<'a> {
             .iter()
             .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
             .peekable();
+        let mut propagation_insertions = self
+            .for_initializer_propagations
+            .iter()
+            .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
+            .peekable();
         let mut compose_insertions = self
             .compose_rewrites
             .iter()
@@ -966,6 +995,11 @@ impl<'a> Emitter<'a> {
             }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
                 rope.append(self.emit_owner_slot_rewrite(rewrite));
+            }
+            while let Some(rewrite) =
+                propagation_insertions.next_if(|rewrite| rewrite.owner.start == cursor)
+            {
+                rope.append(self.emit_for_initializer_propagation_prelude(rewrite));
             }
             while let Some(rewrite) =
                 compose_insertions.next_if(|rewrite| rewrite.owner.start == cursor)
@@ -998,6 +1032,9 @@ impl<'a> Emitter<'a> {
             let next_compose = compose_insertions
                 .peek()
                 .map_or(span.end, |rewrite| rewrite.owner.start);
+            let next_propagation = propagation_insertions
+                .peek()
+                .map_or(span.end, |rewrite| rewrite.owner.start);
             let next_compose_end = compose_endings
                 .peek()
                 .map_or(span.end, |rewrite| rewrite.owner.end);
@@ -1014,6 +1051,7 @@ impl<'a> Emitter<'a> {
                 .unwrap_or(span.end);
             let next = next_insertion
                 .min(next_compose)
+                .min(next_propagation)
                 .min(next_compose_end)
                 .min(next_replacement)
                 .min(span.end);
@@ -1126,13 +1164,12 @@ impl<'a> Emitter<'a> {
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
                     let span = self.span(propagate.node);
-                    out.anchored(
-                        AnchorKind::Try,
-                        span.start,
-                        span.end,
-                        span.end,
-                        self.emit_propagate(propagate),
-                    );
+                    let emitted = if self.is_for_initializer_propagation(propagate.node) {
+                        self.emit_for_initializer_payload(propagate)
+                    } else {
+                        self.emit_propagate(propagate)
+                    };
+                    out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
@@ -1216,6 +1253,51 @@ impl<'a> Emitter<'a> {
         out.push_break(0);
         out.append(anchored);
         out.push_break(0);
+        Rope::scoped(out)
+    }
+
+    fn is_for_initializer_propagation(&self, node: NodeId) -> bool {
+        self.for_initializer_propagations
+            .iter()
+            .any(|rewrite| rewrite.node == node)
+    }
+
+    fn emit_for_initializer_propagation_prelude(
+        &self,
+        rewrite: &ForInitializerPropagationRewrite,
+    ) -> Rope<'a> {
+        let propagate = self
+            .core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .find_map(|statement| match statement {
+                Statement::Propagate(propagate) if propagate.node == rewrite.node => {
+                    Some(propagate)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                crate::ice::bug!("for initializer propagation is missing from Core IR")
+            });
+        let temp = temp_name(propagate.temporary);
+        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        out.push_break(0);
+        out.push_lit(format!(
+            "if ({temp}.{} !== \"{}\") return {temp};",
+            propagate.layout.discriminant_field, propagate.layout.success_tag
+        ));
+        Rope::scoped(out)
+    }
+
+    fn emit_for_initializer_payload(&self, propagate: &Propagate) -> Rope<'a> {
+        let temp = temp_name(propagate.temporary);
+        let mut out = Rope::new();
+        if let Some(binding) = propagate.binding {
+            out.push_lit(format!("{} ", binding_keyword(binding.mode)));
+            out.append(self.source_rope(binding.node));
+            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+        }
         Rope::scoped(out)
     }
 
