@@ -809,6 +809,16 @@ fn typed_member_sources(
         .iter()
         .filter(|file| configured.contains(file.module_path.as_path()))
         .map(|file| file.source_path.clone())
+        .chain(
+            snapshot
+                .blocked()
+                .iter()
+                .filter(|file| {
+                    configured
+                        .contains(super::projection::module_path_of(&file.source_path).as_path())
+                })
+                .map(|file| file.source_path.clone()),
+        )
         .chain(requested.iter().cloned())
         .collect();
     let mut pending: Vec<PathBuf> = members.iter().cloned().collect();

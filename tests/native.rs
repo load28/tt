@@ -413,6 +413,59 @@ fn a_malformed_file_outside_tsconfig_does_not_enter_typed_diagnostics() {
 }
 
 #[test]
+fn a_malformed_included_file_still_fails_single_file_typed_checks() {
+    require_tsgo!();
+    let source = "export const answer: number = 42;\n";
+    let dir = project(&[
+        ("src/main.tt", source),
+        (
+            "src/orphan.tt",
+            "export function demo(): number {\n return result { value; };\n}\n",
+        ),
+    ]);
+
+    let out = run(&dir, &["--check-types", "src/main.tt"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("error["), "{stderr}");
+    assert!(stderr.contains("--> src/orphan.tt"), "{stderr}");
+
+    let answer = typed_server(&dir, "src/main.tt", source);
+    assert!(answer.get("error").is_none(), "{answer}");
+    assert!(answer["result"]["backendError"].is_null(), "{answer}");
+    assert!(
+        answer["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|diagnostic| {
+                diagnostic["path"]
+                    .as_str()
+                    .is_some_and(|path| path.ends_with("src/orphan.tt"))
+            })),
+        "{answer}"
+    );
+}
+
+#[test]
+fn an_import_reached_blocked_file_outside_tsconfig_is_reported() {
+    require_tsgo!();
+    let source = "import { demo } from \"../shared/broken.tt\";\n\
+                  export const answer = demo();\n";
+    let dir = project(&[("src/main.tt", source)]);
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    write(
+        &dir,
+        "shared/broken.tt",
+        "export function demo(): number {\n return result { value; };\n}\n",
+    );
+
+    let out = run(&dir, &["--check-types", "src/main.tt"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("error["), "{stderr}");
+    assert!(stderr.contains("--> shared/broken.tt"), "{stderr}");
+}
+
+#[test]
 fn a_backend_contract_failure_uses_cli_ice_and_server_backend_error_contracts() {
     require_tsgo!();
     let source = "val const values = new Map<string, number>();\nvalues.set(\"a\", 1);\n";

@@ -329,7 +329,12 @@ impl Project {
     /// changed since the last ask travels.
     pub fn check(&self, snapshot: &Snapshot, request: &CheckRequest) -> Result<Checked, String> {
         let semantics = self.file_semantics(snapshot);
-        let (mut query, probes) = projection::assemble(snapshot.files(), &self.root, &self.sources);
+        let (mut query, probes) = projection::assemble(
+            snapshot.files(),
+            snapshot.blocked(),
+            &self.root,
+            &self.sources,
+        );
         query.emit_declarations = request.emit_declarations;
         // A backend that cannot run removes the typed facts, not the pass:
         // every typed answer degrades to unknown and the tt layer still
