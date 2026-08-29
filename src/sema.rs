@@ -268,7 +268,7 @@ enum Place {
     ValueRegion,
     /// Inside an isolated value region nested in a `result` block. The
     /// current function-targeted `try` would cross that region once Result
-    /// scope becomes lexical, so M0 reports its migration diagnostic here.
+    /// scope becomes lexical, so the permanent crossing diagnostic reports it.
     ResultValueRegion,
     /// Inside a `result` block, whose generated region owns its returns.
     ResultRegion,

@@ -44,8 +44,6 @@ pub enum SemanticTokenKind {
     /// `match(...)` naming a plain function. Reported so the editor
     /// *un*-colors what the grammar over-approximated.
     Function,
-    /// The `<-` of a claimed Result binding.
-    Operator,
 }
 
 impl SemanticTokenKind {
@@ -58,7 +56,6 @@ impl SemanticTokenKind {
             SemanticTokenKind::Variable => "variable",
             SemanticTokenKind::Property => "property",
             SemanticTokenKind::Function => "function",
-            SemanticTokenKind::Operator => "operator",
         }
     }
 }
@@ -422,8 +419,8 @@ mod tests {
 
     #[test]
     fn unclaimed_result_block_is_a_variable() {
-        // No `<-` binding, so the parser passes it through — and the
-        // identifier should be shown as one.
+        // No `try` expression follows, so the parser passes it through —
+        // and the identifier should be shown as one.
         let src = "const r = result\n{ a: 1 };\n";
         assert!(kinds_at(src).contains(&("result".into(), SemanticTokenKind::Variable)));
     }

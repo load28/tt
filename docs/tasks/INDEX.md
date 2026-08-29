@@ -306,7 +306,8 @@
 | TASK-295 | L4: Remove `<-` and the old tail surface | Complete | 2026-08-30 | See git history | [TASK-295](./TASK-295-remove-result-bind.md) |
 | TASK-296 | L5: Add typed nested-Result diagnostics | Complete | 2026-08-30 | See git history | [TASK-296](./TASK-296-typed-nested-result.md) |
 | TASK-297 | L6: Complete public documentation and release gates | Complete | 2026-08-30 | See git history | [TASK-297](./TASK-297-try-result-docs-and-gates.md) |
+| TASK-298 | Remove pre-1.0 Result migration compatibility | Complete | 2026-08-30 | 2026-08-30 | [TASK-298](./TASK-298-remove-result-migration.md) |
 
 ## 다음 태스크 번호
 
-**TASK-298**
+**TASK-299**

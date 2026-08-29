@@ -1,8 +1,0 @@
-declare function total(): TResult<number, string>;
-
-export function checkout(): TResult<object, string> {
-  return result {
-    const amount <- total();
-    { amount };
-  };
-}

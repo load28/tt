@@ -215,16 +215,16 @@ fn result_block_bindings_are_mapped_to_emitted_declarations() {
 import * as Result from "@tt/std/result";
 function load(): TResult<number, string> { return Result.Ok(1); }
 const total = result {
-  const first <- load();
-  let { a, b }: { a: number; b: number } <- load2();
-  first + a + b
+  const first = try load();
+  let { a, b }: { a: number; b: number } = try load2();
+  return first + a + b;
 };
 "#;
     let m = emit_mapped(src);
     assert_mapping_invariants(src, &m);
 
     // A plain binding name reaches the emitted declaration.
-    let first = src.find("const first <-").unwrap() + "const ".len();
+    let first = src.find("const first =").unwrap() + "const ".len();
     let out = map_offset(&m, first).expect("binding name is mapped");
     assert_eq!(&m.code[out..out + "first".len()], "first");
 

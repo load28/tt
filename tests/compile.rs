@@ -1169,7 +1169,7 @@ fn a_static_block_does_not_capture_a_nested_function_try() {
 }
 
 #[test]
-fn result_try_crossing_an_isolated_match_arm_is_a_migration_diagnostic() {
+fn result_try_crossing_an_isolated_match_arm_is_a_placement_diagnostic() {
     let source = "const value = result {\n  const item = try read();\n  match (item) { Ok(value) => try next(value), Err(error) => error }\n  return item;\n};\n";
     let diagnostics = ttc::analyze(source, &Options::default());
     assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
@@ -1713,7 +1713,7 @@ fn let_else_divergence_stops_at_an_isolated_value_region() {
         "if let Ok(value) = r { log(value); } else { return 1; }",
         "if let Ok(value) = r { return value; } else { log(\"x\"); }",
         "const x = match (r) { Ok(value) => value, Err(error) => 0 }; log(x);",
-        "const y = result { const a <- find(); a }; log(y);",
+        "const y = result { const a = try find(); return a; }; log(y);",
         "try find();",
         "const Ok(value) = r else { return 1; }; log(value);",
     ] {
@@ -2457,7 +2457,7 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
         // A pipeline whose head is itself a lowering, so the steps get a
         // region rather than one inline call.
         "const r = match (e) { A(v) => v, B => 0 } |> pick |> .toString();",
-        "const r = result { const v <- ask(); v };",
+        "const r = result { const v = try ask(); return v; };",
         // These two lower inline; the rule still has to hold for them,
         // which here means staying inline at every indentation.
         "if let A(v) = e { use(v); }",
@@ -3649,21 +3649,6 @@ fn nested_function_try_inside_a_result_preserves_its_own_function_boundary() {
     );
     assert!(out.contains("const inner = () =>"), "{out}");
     assert!(out.contains("return $tt_t0;"), "{out}");
-}
-
-#[test]
-fn legacy_result_binding_reports_an_applicable_marker_edit() {
-    let source = "const value = result { const item <- read(); return item; };\n";
-    let diagnostics = ttc::analyze(source, &Options::default());
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
-    let diagnostic = &diagnostics[0];
-    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultLegacyBinding);
-    let edit = diagnostic.suggestions[0]
-        .edit
-        .as_ref()
-        .expect("migration edit");
-    assert_eq!(&source[edit.start..edit.end], "<-");
-    assert_eq!(edit.replacement, "= try");
 }
 
 #[test]

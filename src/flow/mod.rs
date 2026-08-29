@@ -2030,7 +2030,9 @@ mod tests {
         assert!(!check(
             "const x = match (o) { Some(n) => n, None => 0 }; log(x);"
         ));
-        assert!(!check("const y = result { const a <- load(); a }; log(y);"));
+        assert!(!check(
+            "const y = result { const a = try load(); return a; }; log(y);"
+        ));
         assert!(!check("try load();"));
         assert!(!check(
             "const Ok(value) = r else { return 1; }; log(value);"

@@ -1,7 +1,0 @@
-error[result-legacy-binding]: `<-` is no longer valid in a `result` block
- --> input.tt:5:5
-  |
-5 |     const amount <- total();
-  |     ^^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = help: replace `<-` with `= try`; then add an explicit Result return: `= try`

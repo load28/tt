@@ -58,8 +58,6 @@ pub enum DiagnosticCode {
     /// A Result expression is evaluated only for its side effects, which
     /// would discard a possible Err result.
     ResultValueDiscarded,
-    /// Removed `<-` Result binding syntax with a migration edit.
-    ResultLegacyBinding,
     /// A Result block return would wrap an already-Result value.
     ResultReturnNested,
     /// A `break` would leave a ResultRegion.
@@ -138,7 +136,6 @@ impl DiagnosticCode {
             DiagnosticCode::MalformedMatch => "malformed-match",
             DiagnosticCode::ResultNoSuccessValue => "result-no-success-value",
             DiagnosticCode::ResultValueDiscarded => "result-value-discarded",
-            DiagnosticCode::ResultLegacyBinding => "result-legacy-binding",
             DiagnosticCode::ResultReturnNested => "result-return-nested",
             DiagnosticCode::ResultBreakCrossing => "result-break-crossing",
             DiagnosticCode::ResultContinueCrossing => "result-continue-crossing",
@@ -187,7 +184,6 @@ impl DiagnosticCode {
         DiagnosticCode::MalformedMatch,
         DiagnosticCode::ResultNoSuccessValue,
         DiagnosticCode::ResultValueDiscarded,
-        DiagnosticCode::ResultLegacyBinding,
         DiagnosticCode::ResultReturnNested,
         DiagnosticCode::ResultBreakCrossing,
         DiagnosticCode::ResultContinueCrossing,
@@ -290,11 +286,11 @@ rather than passed through, because its text cannot be emitted as TS."
                 "\
 A `result` block was claimed but could not be parsed.
 
-`result` is contextual: a block is claimed only when it contains at least
-one `<-` binding. Once claimed, every binding needs its declaration
-keyword and a trailing `;`, and the block's final value expression must
-have no `;`. Text that is meant to be an ordinary identifier followed by a
-block passes through untouched; text with a `<-` in it does not."
+`result` is contextual: a block is claimed only when it contains a direct
+`try` expression. Once claimed, every binding needs its declaration keyword
+and a trailing `;`, and the block's final value expression must have no `;`.
+Text that is meant to be an ordinary identifier followed by a block passes
+through untouched."
             }
 
             DiagnosticCode::MalformedVariant => {
@@ -358,14 +354,6 @@ A `result` expression was used as a discarded statement value.
 
 Store, return, or otherwise consume the Result so its `Err` remains observable."
             }
-            DiagnosticCode::ResultLegacyBinding => {
-                "\
-`<-` is no longer Result binding syntax.
-
-Write an ordinary declaration with `= try expression;`, then complete the
-Result block with `return value;`."
-            }
-
             DiagnosticCode::ResultReturnNested => {
                 "\
 A `result` block return already has a Result value.
@@ -994,7 +982,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 40);
+        assert_eq!(DiagnosticCode::ALL.len(), 39);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();

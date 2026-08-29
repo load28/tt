@@ -882,31 +882,6 @@ impl Parser<'_> {
                         i = cur.idx;
                         continue;
                     }
-                    results::Attempt::LegacyBinding {
-                        span,
-                        arrow,
-                        recovery,
-                    } => {
-                        malformed.push(
-                            crate::error::TtError::span(
-                                span.start,
-                                span.end,
-                                "`<-` is no longer valid in a `result` block".to_string(),
-                            )
-                            .code(crate::DiagnosticCode::ResultLegacyBinding)
-                            .suggest(
-                                "replace `<-` with `= try`; then add an explicit Result return",
-                                arrow.start,
-                                arrow.end,
-                                "= try",
-                            )
-                            .owner(recovery.start, recovery.end),
-                        );
-                        recoveries.push(RecoveryNode {
-                            span: recovery,
-                            kind: RecoveryKind::Expression,
-                        });
-                    }
                     results::Attempt::Pass => {}
                 }
             }

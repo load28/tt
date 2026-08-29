@@ -1498,7 +1498,7 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
          }\n\
          export function nested(value: number): TResult<number, string> {\n\
          \x20 return result {\n\
-         \x20   const first <- read(value);\n\
+         \x20   const first = try read(value);\n\
          \x20   if (first > 0) { const second = try read(first); }\n\
          \x20   return first;\n\
          \x20 };\n\
@@ -1510,10 +1510,6 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
          export const malformed = match value { Missing => 0 };\n",
     )]);
     let out = check(&dir);
-    assert!(
-        out.contains("result-legacy-binding"),
-        "the first tt error remains visible: {out}"
-    );
     assert!(
         out.contains("tt `match` could not be parsed")
             && out.contains("a match scrutinee is parenthesized"),
