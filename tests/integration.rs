@@ -231,6 +231,11 @@ fn recoverable_codegen_errors_do_not_create_tsc_errors() {
 
 /// Compile tt source, emit JS with tsc, execute with node, return stdout lines.
 fn run(src: &str) -> Vec<String> {
+    run_with_tsc_flags(src, &[])
+}
+
+/// Run one program with extra TypeScript flags needed by a language feature.
+fn run_with_tsc_flags(src: &str, extra_flags: &[&str]) -> Vec<String> {
     let code =
         compile(&as_module(src), &options_with_runtime("./runtime.js")).expect("tt compile failed");
     let dir = tmpdir();
@@ -244,6 +249,7 @@ fn run(src: &str) -> Vec<String> {
         .arg("--outDir")
         .arg(&dir)
         .args(TSC_FLAGS)
+        .args(extra_flags)
         .output()
         .expect("failed to run tsc");
     assert!(
@@ -2776,6 +2782,93 @@ console.log(JSON.stringify(chain(false)), steps.join(","));
         vec![
             r#"{"kind":"Ok","value":"abc"} a,b,c"#,
             r#"{"kind":"Err","error":"failed:b"} a,b"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_using_disposes_when_try_propagates_err() {
+    require_toolchain!();
+    let lines = run_with_tsc_flags(
+        r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+
+const events: string[] = [];
+const fail = (): Res<number, string> => Res.Err("boom");
+
+const sync = () => {
+  using resource = {
+    [Symbol.dispose]() { events.push("sync-dispose"); },
+  };
+  const value = try fail();
+  return Res.Ok(value);
+};
+
+const asyncRun = async () => {
+  await using resource = {
+    async [Symbol.asyncDispose]() { events.push("async-dispose"); },
+  };
+  const value = try fail();
+  return Res.Ok(value);
+};
+
+console.log(JSON.stringify(sync()), events.join(","));
+events.length = 0;
+asyncRun().then((value) => console.log(JSON.stringify(value), events.join(",")));
+"#,
+        &["--lib", "es2022,dom,esnext.disposable"],
+    );
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"kind":"Err","error":"boom"} sync-dispose"#,
+            r#"{"kind":"Err","error":"boom"} async-dispose"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_nested_results_preserve_constructor_and_generator_protocols() {
+    require_toolchain!();
+    for source in [
+        "class C { constructor() { try fail(); } }\n",
+        "function* values() { yield try fail(); }\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{source}\n{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+    }
+
+    let lines = run(r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const fail = (): Res<number, string> => Res.Err("boom");
+
+class C {
+  outcome;
+  constructor() {
+    this.outcome = result { return try fail(); };
+  }
+}
+
+function* values() {
+  yield result { return try fail(); };
+  yield "after";
+}
+
+const instance = new C();
+console.log(instance instanceof C, JSON.stringify(instance.outcome));
+const iterator = values();
+console.log(JSON.stringify(iterator.next()));
+console.log(JSON.stringify(iterator.next()));
+console.log(Array.from(values()).map((value) => JSON.stringify(value)).join(","));
+"#);
+    assert_eq!(
+        lines,
+        vec![
+            r#"true {"kind":"Err","error":"boom"}"#,
+            r#"{"value":{"kind":"Err","error":"boom"},"done":false}"#,
+            r#"{"value":"after","done":false}"#,
+            r#"{"kind":"Err","error":"boom"},"after""#,
         ]
     );
 }

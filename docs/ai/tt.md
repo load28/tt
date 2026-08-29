@@ -71,8 +71,8 @@ try validateRange(parsed);          // propagate-only; `try await f();` ok
 return Result.Ok(Math.round(try total() * 1.1));
 ```
 - Statement forms (`const value = try read();` and `try validate();`) require a trailing `;`. The value form works inside a larger expression and needs no semicolon of its own.
-- Result only (Ok unwraps `.value`; Err returned from enclosing fn). Option unsupported → `Option.okOr(o, err)` first.
-- Enclosing fn return type must be Result compatible with expr's Err type; no auto conversion.
+- Result only (Ok unwraps `.value`; Err exits the nearest Result scope: the innermost `result` block, otherwise the enclosing function). Option unsupported → `Option.okOr(o, err)` first.
+- A function-targeted `try` requires its enclosing function return type to be Result compatible with the expression's Err type; no auto conversion.
 - UNANNOTATED fn: tsc infers the union of the return paths, so several `try`s with different Err types give `TOk<T> | TErr<E1> | TErr<E2>` = `TResult<T, E1 | E2>`. ttc never collects/unions error types — leave inference to tsc.
 - The value form binds tightly to the following primary expression, including calls and member/index access: `try total() * 1.1` means `(try total()) * 1.1`. Parenthesize to propagate an arbitrary expression as one operand: `try (flag ? left() : right())`.
 - Placement is a TypeScript control-flow fact. The value form preserves left-to-right, conditional, optional-call, and concise-arrow evaluation inside an enclosing function. It is rejected at module/namespace top level and at expression boundaries that cannot contain the generated early `return`, such as loop headers, parameter defaults, and class field initializers. Inside a statement-bodied `result`, `try` exits that Result block with its `Err`; it does not return from the surrounding function. A `try` crossing an isolated Result value region reports `try-crosses-value-region`.

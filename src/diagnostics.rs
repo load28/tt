@@ -287,10 +287,10 @@ rather than passed through, because its text cannot be emitted as TS."
 A `result` block was claimed but could not be parsed.
 
 `result` is contextual: a block is claimed only when it contains a direct
-`try` expression. Once claimed, every binding needs its declaration keyword
-and a trailing `;`, and the block's final value expression must have no `;`.
-Text that is meant to be an ordinary identifier followed by a block passes
-through untouched."
+`try` expression. Its body is a statement list: write `const value = try expr;`
+to unwrap a success value, and use an explicit `return value;` or `return;` to
+complete the block successfully. Text that is meant to be an ordinary
+identifier followed by a block passes through untouched."
             }
 
             DiagnosticCode::MalformedVariant => {
@@ -395,10 +395,11 @@ outside the block."
                 "\
 A `try` crosses an isolated value region inside a `result` block.
 
-The current compiler propagates this failure to the enclosing function, but
-the upcoming lexical Result scopes would make that target ambiguous. Extract
-the affected expression into a nested function only when that preserves its
-captures and evaluation order; otherwise handle the Result explicitly."
+The nearest Result scope is outside a value region that owns its own exits, so
+the failure cannot reach that Result scope without changing the region's value
+semantics. Extract the affected expression into a nested function only when
+that preserves its captures and evaluation order; otherwise handle the Result
+explicitly."
             }
 
             DiagnosticCode::LetElsePlacement => {

@@ -216,7 +216,7 @@ fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
     // The diagnostic is the mapper's own: tt's source name, tt's stable
     // code number, at the match's position in the original file.
     assert!(
-        text.contains("partial.tt(4,10): error tt25"),
+        text.contains("partial.tt(4,10): error tt27"),
         "expected the tt exhaustiveness diagnostic at its source, got:\n{text}"
     );
     assert!(

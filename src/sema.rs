@@ -453,7 +453,7 @@ impl Checker {
                 TtError::span(
                     stmt.span.start,
                     stmt.span.end,
-                    "`try` crosses an isolated value region inside a `result` block — the next Result-scope rules would change its failure target".to_string(),
+                    "`try` crosses an isolated value region whose exits cannot target the enclosing `result` block".to_string(),
                 )
                 .code(DiagnosticCode::TryCrossesValueRegion)
                 .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
@@ -485,7 +485,7 @@ impl Checker {
                 TtError::span(
                     expr.span.start,
                     expr.span.end,
-                    "`try` crosses an isolated value region inside a `result` block — the next Result-scope rules would change its failure target".to_string(),
+                    "`try` crosses an isolated value region whose exits cannot target the enclosing `result` block".to_string(),
                 )
                 .code(DiagnosticCode::TryCrossesValueRegion)
                 .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
