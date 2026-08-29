@@ -1159,6 +1159,64 @@ pub(crate) fn in_function_body(src: &str, tokens: &[Token], at: usize) -> bool {
     stack.iter().any(|&is_function| is_function)
 }
 
+/// The kind of user-written function that an early `return` at a token can
+/// reach. Constructors and generators syntactically accept `return`, but a
+/// propagated Result would change their JavaScript completion contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FunctionTarget {
+    Ordinary,
+    Constructor,
+    Generator,
+}
+
+/// Returns the innermost user function enclosing `at`.
+pub(crate) fn function_target_at(src: &str, tokens: &[Token], at: usize) -> Option<FunctionTarget> {
+    let mut stack: Vec<Option<FunctionTarget>> = Vec::new();
+    for (index, token) in tokens.iter().enumerate().take(at) {
+        match token.kind {
+            TokenKind::Punct(b'{') => stack.push(function_target_brace(src, tokens, index)),
+            TokenKind::Punct(b'}') => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    stack.into_iter().rev().flatten().next()
+}
+
+fn function_target_brace(src: &str, tokens: &[Token], brace: usize) -> Option<FunctionTarget> {
+    if !function_body_brace(src, tokens, brace) {
+        return None;
+    }
+    if matches!(
+        tokens.get(brace.wrapping_sub(1)).map(|token| &token.kind),
+        Some(TokenKind::Arrow)
+    ) {
+        return Some(FunctionTarget::Ordinary);
+    }
+    let close = (0..brace)
+        .rev()
+        .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b')')))?;
+    let open = find_open(tokens, close)?;
+    let word = |index: usize| match tokens.get(index) {
+        Some(token) if matches!(token.kind, TokenKind::Ident) => {
+            Some(&src[token.span.start..token.span.end])
+        }
+        _ => None,
+    };
+    let before = open.checked_sub(1)?;
+    if word(before) == Some("constructor") {
+        return Some(FunctionTarget::Constructor);
+    }
+    let generator = matches!(tokens[before].kind, TokenKind::Punct(b'*'))
+        || (before >= 1 && matches!(tokens[before - 1].kind, TokenKind::Punct(b'*')));
+    Some(if generator {
+        FunctionTarget::Generator
+    } else {
+        FunctionTarget::Ordinary
+    })
+}
+
 /// Heads whose parenthesized clause is followed by a *control* body, not a
 /// function body.
 const CONTROL_PAREN_WORDS: &[&str] = &["if", "for", "while", "switch", "catch", "with"];

@@ -1,9 +1,9 @@
 # TASK-286: Reject unsound function targets
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-286: reject unsound function targets`
 
 ## Purpose
 
@@ -28,19 +28,36 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Classify unsafe return targets before target emission
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: constructors and generators accept JavaScript `return`, but
+  neither can carry a propagated Result failure safely.
+- **Alternatives considered**: rely on TypeScript diagnostics; reject only
+  statement `try`; or retain function kind through both semantic paths.
+- **Decision and rationale**: classify statement hosts from the parser's
+  brace model and expression hosts from SWC's function visitor, then reject
+  both with the existing `try-placement` diagnostic.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started tracing constructor and generator owner classification.
+- 2026-08-30: Added parser-side function-target classification for statement
+  propagation.
+- 2026-08-30: Carried constructor and generator ownership through the SWC
+  overlay for expression propagation.
+- 2026-08-30: Added statement and expression regression coverage for
+  constructor, generator, and async-generator hosts.
 
 ## Issues and resolutions
 
-None.
+### Unsafe return completion
+
+- **Symptom**: generated propagation could return an Err from a constructor
+  or complete a generator with an Err value.
+- **Cause**: both function kinds were previously classified as ordinary
+  function bodies.
+- **Resolution**: the semantic and host-evaluation paths now preserve the
+  unsafe function kind and refuse statement-region lowering.
 
 ## Verification
 
@@ -48,14 +65,16 @@ Test obligation from the plan: located `try-placement` for both forms; runtime g
 
 Green condition: unsafe inputs emit nothing and never rely on `ts2409`, TypeScript types, or consumer behavior as the signal.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
 Ships to `main` alone: yes.
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+`src/flow/mod.rs` classifies statement hosts. `src/program_syntax.rs` retains
+constructor and generator ownership for expression hosts. `src/evaluation_ir.rs`
+refuses their statement regions, while `src/sema.rs` reports statement placement.
+`tests/compile.rs` covers both forms and all unsafe function kinds.

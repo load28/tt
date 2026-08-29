@@ -81,6 +81,8 @@ pub(crate) fn check_all(
     analyses: &crate::analysis::PatternAnalyses,
 ) -> Vec<TtError> {
     let mut checker = Checker {
+        source: source.to_owned(),
+        tokens: crate::lexer::lex(source, 0, source.len()),
         verify,
         errors: Vec::new(),
         coverage_suppressed: Vec::new(),
@@ -159,6 +161,8 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
 }
 
 struct Checker {
+    source: String,
+    tokens: Vec<crate::lexer::Token>,
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,
@@ -444,6 +448,25 @@ impl Checker {
     /// `return` would exit the construct's own value region, or fall at the
     /// module's top level, where there is nothing to return from.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
+        let at = self
+            .tokens
+            .iter()
+            .position(|token| token.span.start >= stmt.span.start)
+            .unwrap_or(self.tokens.len());
+        if matches!(
+            crate::flow::function_target_at(&self.source, &self.tokens, at),
+            Some(crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator)
+        ) {
+            self.error(
+                TtError::span(
+                    stmt.span.start,
+                    stmt.span.end,
+                    "`try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return".to_string(),
+                )
+                .code(DiagnosticCode::TryPlacement)
+                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
+            );
+        }
         self.check_try_placement(stmt.span, stmt.in_function, place);
         self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
     }

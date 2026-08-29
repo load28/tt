@@ -399,6 +399,8 @@ pub(crate) enum OwnerReach {
 pub(crate) enum EvaluationOwner {
     Module,
     FunctionBody,
+    Constructor,
+    Generator,
     ParameterInitializer,
     ClassInitializer,
     StaticBlock,
@@ -445,8 +447,12 @@ impl EvaluationContext {
         category: SyntaxCategory,
         parents: &[AstParentKind],
         host_owner_edge: usize,
+        function_target: Option<EvaluationOwner>,
     ) -> Self {
-        let (owner, owner_edge) = evaluation_owner(parents);
+        let (mut owner, owner_edge) = evaluation_owner(parents);
+        if let Some(function_target) = function_target {
+            owner = function_target;
+        }
         let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
         if !matches!(
             category,
@@ -1409,6 +1415,7 @@ struct ParentCollector {
     protocol_frames: Vec<ProjectedProtocolFrame>,
     occupied_names: HashSet<String>,
     function_depth: usize,
+    function_targets: Vec<Option<EvaluationOwner>>,
     /// How many enclosing statements consume an unlabeled `break`
     /// (loops and `switch`).
     break_capture_depth: usize,
@@ -1428,6 +1435,7 @@ struct FoundOverlay {
     host_owners: Vec<ProjectedHostOwner>,
     protocol_frames: Vec<ProjectedProtocolFrame>,
     exits: Vec<ProjectedHostExit>,
+    function_target: Option<EvaluationOwner>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1714,6 +1722,7 @@ impl ParentCollector {
             protocol_frames: Vec::new(),
             occupied_names: HashSet::new(),
             function_depth: 0,
+            function_targets: Vec::new(),
             break_capture_depth: 0,
             exit_regions: Vec::new(),
         }
@@ -1729,6 +1738,7 @@ impl ParentCollector {
                     host_owners: self.host_owners.clone(),
                     protocol_frames: self.protocol_frames.clone(),
                     exits: Vec::new(),
+                    function_target: self.function_targets.iter().rev().flatten().copied().next(),
                 },
             )
             .is_some()
@@ -1793,6 +1803,7 @@ impl ParentCollector {
                     entry.category,
                     &found.parents,
                     projected_owner.edge,
+                    found.function_target,
                 ),
                 // A frame outside the host owner is not this owner's
                 // evaluation obligation: a statement (or a concise arrow
@@ -2107,6 +2118,7 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
+        self.function_targets.push(None);
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
@@ -2114,12 +2126,16 @@ impl VisitAstPath for ParentCollector {
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.host_owners.pop();
+        self.function_targets.pop();
         self.function_depth -= 1;
     }
 
     fn visit_function<'ast: 'r, 'r>(&mut self, node: &'ast Function, path: &mut AstNodePath<'r>) {
         self.function_depth += 1;
+        self.function_targets
+            .push(node.is_generator.then_some(EvaluationOwner::Generator));
         <Function as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.function_targets.pop();
         self.function_depth -= 1;
     }
 
@@ -2129,7 +2145,10 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
+        self.function_targets
+            .push(Some(EvaluationOwner::Constructor));
         <Constructor as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.function_targets.pop();
         self.function_depth -= 1;
     }
 

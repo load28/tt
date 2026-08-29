@@ -1073,6 +1073,22 @@ fn expression_try_reports_a_typescript_control_flow_boundary() {
 }
 
 #[test]
+fn try_in_constructor_or_generator_is_a_placement_error() {
+    for src in [
+        "class C { constructor() { try read(); } }\n",
+        "class C { constructor() { const value = try read(); } }\n",
+        "function* values() { try read(); }\n",
+        "function* values() { yield try read(); }\n",
+        "async function* values() { try read(); }\n",
+        "async function* values() { yield try read(); }\n",
+    ] {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+    }
+}
+
+#[test]
 fn try_inside_a_function_inside_a_scrutinee_is_allowed() {
     let out = ok(
         "const x = match (run(() => { try g(); return h(); })) {\n  Ok(value) => value,\n  Err(error) => 0,\n};\n",
