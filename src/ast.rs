@@ -120,6 +120,8 @@ pub(crate) enum Segment {
     TupleMatch(TupleMatchExpr),
     /// A tt `try` statement (Rust-style error propagation).
     Try(TryStmt),
+    /// A value-producing tt `try` inside a TypeScript expression.
+    TryExpr(TryExpr),
     /// A tt let-else statement (Rust-style refutable binding).
     LetElse(LetElseStmt),
     /// A tt `if let` statement (conditional refutable binding).
@@ -422,6 +424,19 @@ pub(crate) struct TryStmt {
     /// into an isolated value region) the region boundary is the construct, so only a
     /// function the user wrote *inside* it counts.
     pub in_function: bool,
+}
+
+/// A structurally parsed value-producing `try <expr>`.
+///
+/// The operand is the following primary expression. Parentheses widen it to
+/// an arbitrary expression. Core lowering preserves the host expression's
+/// evaluation order.
+#[derive(Debug)]
+pub(crate) struct TryExpr {
+    /// The propagation itself, from `try` through its operand.
+    pub span: Span,
+    /// The operand after `try`, recursively parsed.
+    pub expr: Program,
 }
 
 /// A structurally parsed tt `variant` declaration.

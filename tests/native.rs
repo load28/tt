@@ -1006,9 +1006,10 @@ fn a_nested_imported_field_error_uses_checker_evidence_and_source_span() {
 }
 
 #[test]
-fn deep_expression_try_is_identical_on_typed_cli_and_server_paths() {
+fn deep_expression_try_is_accepted_on_typed_cli_and_server_paths() {
     require_tsgo!();
-    let source = "import { Result, type TResult } from \"@tt/std\";\n\
+    let source = "import type { TResult } from \"@tt/std\";\n\
+        import * as Result from \"@tt/std/result\";\n\
         declare function total(): TResult<number, string>;\n\
         export function amount(): TResult<number, string> {\n\
         \x20 return Result.Ok(Math.round(try total() * 1.1));\n\
@@ -1016,23 +1017,11 @@ fn deep_expression_try_is_identical_on_typed_cli_and_server_paths() {
     let dir = project(&[("src/deep-try.tt", source)]);
 
     let out = check(&dir);
-    assert!(out.contains("error[try-placement]"), "{out}");
-    assert!(out.contains("--> src/deep-try.tt:4:31"), "{out}");
-    assert!(
-        !out.contains("verify-failed") && !out.contains("source-not-typescript"),
-        "{out}"
-    );
+    assert!(!out.contains("error["), "{out}");
 
     let answer = typed_server(&dir, "src/deep-try.tt", source);
     let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
-    let placement = diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic["code"] == "try-placement")
-        .unwrap_or_else(|| panic!("missing deep try placement diagnostic: {answer}"));
-    assert_eq!(source_slice(source, placement), "try total() * 1.1");
-    assert!(diagnostics.iter().all(|diagnostic| {
-        diagnostic["code"] != "verify-failed" && diagnostic["code"] != "source-not-typescript"
-    }));
+    assert!(diagnostics.is_empty(), "{answer}");
 }
 
 #[test]

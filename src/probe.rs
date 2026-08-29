@@ -171,6 +171,7 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
             }
             Segment::IfLet(stmt) => payload_if_let(stmt, out),
             Segment::Try(stmt) => payload_walk(&stmt.expr, out),
+            Segment::TryExpr(expr) => payload_walk(&expr.expr, out),
             Segment::LetElse(stmt) => {
                 payload_walk(&stmt.expr, out);
                 payload_walk(&stmt.else_body, out);
@@ -339,6 +340,7 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
                 }
             }
             Segment::Try(stmt) => walk(&stmt.expr, src, out),
+            Segment::TryExpr(expr) => walk(&expr.expr, src, out),
             Segment::LetElse(stmt) => {
                 walk(&stmt.expr, src, out);
                 walk(&stmt.else_body, src, out);

@@ -172,7 +172,7 @@ pub(super) fn parse_result_block<'t>(
                         end: binding_end,
                     },
                     expr_span,
-                    expr: cur.parser.parse_tokens(
+                    expr: cur.parser.parse_expression_tokens(
                         &cur.tokens[expr_from..k],
                         expr_span.start,
                         expr_span.end,
@@ -241,9 +241,11 @@ pub(super) fn parse_result_block<'t>(
         cut,
         value_start,
     )));
-    let value = cur
-        .parser
-        .parse_tokens(&cur.tokens[run_start..close], value_start, body_span.end);
+    let value = cur.parser.parse_expression_tokens(
+        &cur.tokens[run_start..close],
+        value_start,
+        body_span.end,
+    );
 
     let byte_end = cur.tokens[close].span.end;
     cur.idx = close + 1;

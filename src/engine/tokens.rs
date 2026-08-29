@@ -159,6 +159,10 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                 }
                 walk(src, &t.expr, out);
             }
+            Segment::TryExpr(expr) => {
+                out.push((expr.span.start, 3, SemanticTokenKind::Keyword));
+                walk(src, &expr.expr, out);
+            }
             Segment::LetElse(stmt) => {
                 for alt in &stmt.alternatives {
                     tag_pattern(alt, out);

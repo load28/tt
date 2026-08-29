@@ -1054,6 +1054,11 @@ impl<'a> ProjectionBuilder<'a> {
             Expr::Opaque(node) => self.push_source(*node),
             Expr::Sequence(body) => self.emit_body(*body),
             Expr::Decision(decision) => self.emit_decision_region(expr, decision),
+            Expr::Propagate(propagate) => self.push_placeholder(
+                SyntaxCategory::Expression,
+                self.source_span(propagate.node)?,
+                CoreRoot::Expr(expr),
+            ),
             Expr::Apply(apply) => self.emit_apply(expr, apply),
             Expr::ResultRegion(region) => self.emit_result_region(expr, region),
             Expr::Template(template) => self.emit_template(template),

@@ -219,6 +219,7 @@ fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)) {
                 }
             }
             Segment::Try(stmt) => visit_programs(&stmt.expr, visit),
+            Segment::TryExpr(expr) => visit_programs(&expr.expr, visit),
             Segment::LetElse(stmt) => {
                 visit_programs(&stmt.expr, visit);
                 visit_programs(&stmt.else_body, visit);
@@ -323,6 +324,7 @@ fn segment_start(seg: &Segment) -> usize {
         Segment::Match(m) => m.keyword_off,
         Segment::TupleMatch(m) => m.keyword_off,
         Segment::Try(t) => t.keyword_off,
+        Segment::TryExpr(expr) => expr.span.start,
         Segment::LetElse(l) => l.keyword_off,
         Segment::IfLet(s) => s.keyword_off,
         Segment::TtImport(d) => d.spec.start,
@@ -531,6 +533,15 @@ impl Parser<'_> {
         self.parse_tokens_with_context(tokens, start, end, false)
     }
 
+    pub(super) fn parse_expression_tokens(
+        &self,
+        tokens: &[Token],
+        start: usize,
+        end: usize,
+    ) -> Program {
+        self.parse_tokens_with_context(tokens, start, end, true)
+    }
+
     fn parse_tokens_with_context(
         &self,
         tokens: &[Token],
@@ -722,24 +733,21 @@ impl Parser<'_> {
                 let misplaced = (expression_root && i == 0)
                     || !starts_statement(self.src, tokens, i, expr.1)
                     || follows_object_member_colon(self.src, tokens, i);
+                let parenthesized_declaration_operand =
+                    follows_declaration_equals(self.src, tokens, i)
+                        && tokens
+                            .get(i + 1)
+                            .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'(')));
                 if misplaced
-                    && !follows_declaration_equals(self.src, tokens, i)
-                    && let Some((next_i, span)) =
-                        tries::parse_misplaced_try(Cursor::new(self, tokens, i + 1, end), tok.span)
+                    && (!follows_declaration_equals(self.src, tokens, i)
+                        || parenthesized_declaration_operand)
+                    && let Some((next_i, parsed)) =
+                        tries::parse_try_expr(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    malformed.push(
-                        crate::error::TtError::span(
-                            span.start,
-                            span.end,
-                            "`try` is a statement, not an expression".to_string(),
-                        )
-                        .code(crate::DiagnosticCode::TryPlacement)
-                        .help("bind its value first with `const value = try <expression>;`"),
-                    );
-                    recoveries.push(RecoveryNode {
-                        span,
-                        kind: RecoveryKind::Expression,
-                    });
+                    flush_verbatim(&mut segments, seg_start, tok.span.start);
+                    let span = parsed.span;
+                    segments.push(Segment::TryExpr(parsed));
+                    seg_start = span.end;
                     i = next_i;
                     continue;
                 }

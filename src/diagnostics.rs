@@ -339,14 +339,13 @@ first:
 A `try` was written where its propagation could not go anywhere.
 
 `try` compiles to an early `return` from the enclosing function, so it is
-a statement in a function body and nowhere else. It is rejected in
-expression position (`return try f()` — bind first with
-`const value = try f();`), at module or namespace top level, and directly
-inside another construct's isolated value region: a `match` scrutinee or
-arm, a template interpolation, a `result` block, another `try`.
+a value only where the TypeScript host can preserve that return and the
+original evaluation order. It is rejected at module or namespace top level
+and at expression boundaries with no equivalent statement position, such as
+loop headers, parameter defaults, and class field initializers.
 
-Inside a function you write there it is allowed again — `run(() => { try
-g(); })` is the same rule, not an exception to it."
+Move the propagation into a function-body statement when the surrounding
+expression cannot carry it."
             }
 
             DiagnosticCode::LetElsePlacement => {

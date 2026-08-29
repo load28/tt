@@ -152,7 +152,7 @@ pub(super) fn parse_pipeline(
         steps.push(PipeStep {
             span,
             kind,
-            body: parser.parse_tokens(&tokens[step_from..k], span.start, span.end),
+            body: parser.parse_expression_tokens(&tokens[step_from..k], span.start, span.end),
         });
     }
     if steps.is_empty() {
@@ -160,8 +160,9 @@ pub(super) fn parse_pipeline(
     }
 
     let head_kind = head_kind(parser, tokens, head_idx, pipe_idx);
-    let head = (head_kind != PipeHeadKind::Flow)
-        .then(|| parser.parse_tokens(&tokens[head_idx..pipe_idx], head_span.start, head_span.end));
+    let head = (head_kind != PipeHeadKind::Flow).then(|| {
+        parser.parse_expression_tokens(&tokens[head_idx..pipe_idx], head_span.start, head_span.end)
+    });
     Some(Attempt::Parsed(
         k,
         PipeExpr {

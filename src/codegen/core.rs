@@ -113,6 +113,11 @@ pub(crate) fn emit_with_map<'a>(
             .map(SourceSpan::from)
     }));
     let rewritten_operations = target.rewritten_operations.clone();
+    let target_recovered_propagations: Vec<_> = target
+        .recovered_propagations
+        .iter()
+        .map(|(_, span)| *span)
+        .collect();
     let emitter = Emitter {
         semantic,
         core,
@@ -129,6 +134,11 @@ pub(crate) fn emit_with_map<'a>(
         value_slots: target.value_slots,
         scheduled_slots: target.scheduled_slots,
         value_exits: target.value_exits,
+        recovered_propagations: target
+            .recovered_propagations
+            .into_iter()
+            .map(|(expr, _)| expr)
+            .collect(),
         expression_boundary_name: target.expression_boundary_name,
         conditional_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
@@ -193,6 +203,7 @@ pub(crate) fn emit_with_map<'a>(
         })
         .collect();
     rewritten.extend(rewritten_operations);
+    rewritten.extend(target_recovered_propagations);
     let preservation = SourcePreservation {
         owned: pass_through_spans(semantic, core),
         relocated,
@@ -397,6 +408,9 @@ fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpa
             Expr::Opaque(node) => span(semantic, *node, out),
             Expr::Sequence(body) => walk_body(semantic, core, *body, out),
             Expr::Decision(decision) => walk_decision(semantic, core, decision, out),
+            Expr::Propagate(propagate) => {
+                walk_expr(semantic, core, propagate.value, out);
+            }
             Expr::Apply(apply) => {
                 if let Some(head) = apply.head {
                     walk_expr(semantic, core, head, out);
@@ -445,6 +459,10 @@ struct TargetRewritePlan {
     /// The parent spans of lowered conditional operations: their operator
     /// tokens are claimed source ([`SourcePreservation::rewritten`]).
     rewritten_operations: Vec<SourceSpan>,
+    /// Expression propagations rejected by the host-capability check. The
+    /// recovering projection emits `undefined` for them and claims their
+    /// source so editor/type diagnostics can continue.
+    recovered_propagations: Vec<(ExprId, SourceSpan)>,
     /// tt values a conditional operation consumes; their inline Core
     /// position emits nothing (the operation's replacement covers it).
     consumed_exprs: HashSet<ExprId>,
@@ -509,6 +527,15 @@ struct LocalSourceEdit {
 
 impl TargetRewritePlan {
     fn build(lowering: &LoweringPlan) -> Self {
+        let recovered_propagations: Vec<_> = lowering
+            .unsupported_expression_propagations()
+            .into_iter()
+            .map(|(expr, source, _)| (expr, source))
+            .collect();
+        let recovered: HashSet<_> = recovered_propagations
+            .iter()
+            .map(|(expr, _)| *expr)
+            .collect();
         // Whether a value's control flow may become statements in its host
         // owner was decided by the Evaluation IR and recorded on the value
         // ([`TargetCapability`]); this plan only picks the statement *shape*
@@ -519,12 +546,14 @@ impl TargetRewritePlan {
             .filter_map(|rewrite| {
                 let value = &rewrite.values[0];
                 let ValueTarget::Slot(slot) = value.target;
-                (matches!(
-                    value.context.continuation,
-                    HostContinuation::Initialize
-                        | HostContinuation::Return
-                        | HostContinuation::Discard
-                ) && value.schedule.steps().is_empty()
+                (!recovered.contains(&value.expr)
+                    && matches!(
+                        value.context.continuation,
+                        HostContinuation::Initialize
+                            | HostContinuation::Return
+                            | HostContinuation::Discard
+                    )
+                    && value.schedule.steps().is_empty()
                     && value.capability == TargetCapability::StatementRegion)
                     .then(|| OwnerSlotRewrite {
                         owner: rewrite.owner.span,
@@ -539,7 +568,8 @@ impl TargetRewritePlan {
             .filter_map(|rewrite| {
                 let value = &rewrite.values[0];
                 let ValueTarget::Slot(slot) = value.target;
-                (value.context.continuation == HostContinuation::ArrowReturn
+                (!recovered.contains(&value.expr)
+                    && value.context.continuation == HostContinuation::ArrowReturn
                     && value.schedule.steps().is_empty()
                     && value.capability == TargetCapability::StatementRegion)
                     .then(|| ArrowReturnRewrite {
@@ -553,7 +583,8 @@ impl TargetRewritePlan {
             .filter_map(|rewrite| {
                 let can_compose = !rewrite.values.is_empty()
                     && rewrite.values.iter().all(|value| {
-                        value.context.continuation == HostContinuation::Compose
+                        !recovered.contains(&value.expr)
+                            && value.context.continuation == HostContinuation::Compose
                             && value.capability == TargetCapability::StatementRegion
                     });
                 can_compose.then(|| {
@@ -689,6 +720,7 @@ impl TargetRewritePlan {
             source_replacements,
             relocated_values,
             rewritten_operations,
+            recovered_propagations,
             consumed_exprs,
             arrow_returns,
             slot_exprs,
@@ -716,6 +748,7 @@ struct Emitter<'a> {
     value_slots: HashMap<ExprId, String>,
     scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     value_exits: HashMap<ExprId, Vec<HostExit>>,
+    recovered_propagations: HashSet<ExprId>,
     expression_boundary_name: String,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
@@ -1125,6 +1158,17 @@ impl<'a> Emitter<'a> {
                     self.emit_value_decision(decision, &ValueContinuation::expression(), &[]);
                 let mut out = Rope::new();
                 out.anchored(AnchorKind::Match, head.start, head.end, extent.end, inner);
+                out
+            }
+            Expr::Propagate(propagate) => {
+                if !self.recovered_propagations.contains(&expr) {
+                    crate::ice::bug!("unscheduled expression try reached inline emission");
+                }
+                let span = self.span(propagate.node);
+                let mut generated = Rope::new();
+                generated.push_lit("undefined");
+                let mut out = Rope::new();
+                out.anchored(AnchorKind::Try, span.start, span.end, span.end, generated);
                 out
             }
             Expr::Apply(apply) => self.emit_apply(apply),
@@ -1656,6 +1700,10 @@ impl<'a> Emitter<'a> {
                 let head = self.span(decision.head);
                 let extent = self.span(decision.extent);
                 (AnchorKind::Match, head.start, head.end, extent.end)
+            }
+            Expr::Propagate(propagate) => {
+                let span = self.span(propagate.node);
+                (AnchorKind::Try, span.start, span.end, span.end)
             }
             Expr::ResultRegion(region) => {
                 let (start, end) = self.result_bind_anchor(region);
@@ -2273,10 +2321,41 @@ impl<'a> Emitter<'a> {
             Expr::ResultRegion(region) => {
                 Some(self.emit_result_region_continued(region, continuation))
             }
+            Expr::Propagate(propagate) => {
+                Some(self.emit_expression_propagate(propagate, continuation))
+            }
             Expr::Sequence(body) => self.emit_sequence_continued(*body, continuation),
             Expr::Apply(apply) => self.emit_apply_continued(expr, apply, continuation),
             Expr::Opaque(_) | Expr::Template(_) => None,
         }
+    }
+
+    fn emit_expression_propagate(
+        &self,
+        propagate: &Propagate,
+        continuation: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
+        let temp = temp_name(propagate.temporary);
+        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        out.push_lit(format!(
+            " if ({temp}.{} !== \"{}\") return {temp};",
+            propagate.layout.discriminant_field, propagate.layout.success_tag
+        ));
+        let grouped = false;
+        out.push_lit(continuation.assignment_prefix(grouped));
+        out.push_lit(format!("{temp}.{}", propagate.layout.payload_field));
+        out.push_lit(continuation.assignment_suffix(grouped));
+        out.push_lit(";");
+        let span = self.span(propagate.node);
+        let mut anchored = Rope::new();
+        anchored.anchored(
+            AnchorKind::Try,
+            span.start,
+            span.end,
+            span.end,
+            Rope::scoped(out),
+        );
+        anchored
     }
 
     fn emit_apply_continued(
@@ -2550,16 +2629,24 @@ impl<'a> Emitter<'a> {
         let ArmAction::Yield { body, kind } = arm.action else {
             crate::ice::bug!("match arm does not yield")
         };
-        let body_expr = match self.core.bodies[body.index()].statements.as_slice() {
-            [Statement::Expr(expr)] => Some(*expr),
-            _ => None,
-        };
+        let body_expr = self.core.body_value_expr(body);
+        let structured_body = matches!(kind, ArmBodyKind::Expression)
+            .then(|| {
+                body_expr.and_then(|expr| {
+                    (!continuation.is_expression())
+                        .then(|| self.emit_continued_expr(expr, continuation))
+                        .flatten()
+                })
+            })
+            .flatten();
         // A block arm's body sits between braces this lowering writes, and
         // the author's own line break and indentation after their `{` is
         // the layout the rest of their block is written against — so it
         // stays (TASK-219). Every other body is spliced into a line.
         let block_layout = matches!(kind, ArmBodyKind::Block { .. }) && chain;
-        let body = if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
+        let body = if structured_body.is_some() {
+            Rope::new()
+        } else if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
             let body = self.emit_body_with_exits(body, exits, continuation, exit_label);
             if block_layout {
                 body.trim_end()
@@ -2577,11 +2664,7 @@ impl<'a> Emitter<'a> {
         let mut action = Rope::new();
         match kind {
             ArmBodyKind::Expression => {
-                if let Some(structured) = body_expr.and_then(|expr| {
-                    (!continuation.is_expression())
-                        .then(|| self.emit_continued_expr(expr, continuation))
-                        .flatten()
-                }) {
+                if let Some(structured) = structured_body {
                     action.append(structured);
                     if continuation.assigns() {
                         push_region_break(&mut action, chain_exit_label);

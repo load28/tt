@@ -182,6 +182,15 @@ impl Lowering<'_> {
                 decision.kind = match_kind(&decision);
                 Expr::Decision(decision)
             }
+            hir::Expr::Try { node, value } => Expr::Propagate(Propagate {
+                node: *node,
+                owner: *node,
+                value: *value,
+                temporary: self.temp(*node, false),
+                binding: None,
+                exit: ExitTarget::EnclosingFunction,
+                layout: RESULT_LAYOUT,
+            }),
             hir::Expr::Pipe { node, head, steps } => Expr::Apply(Apply {
                 node: *node,
                 head: *head,
@@ -422,12 +431,20 @@ fn temp_ordinals(semantic: &SemanticFile) -> HashMap<NodeId, u32> {
         }
     }
     for (_, expr) in semantic.hir.exprs.iter() {
-        if let hir::Expr::ResultBlock { items, .. } = expr {
-            for item in items {
-                if let hir::ResultItem::Bind { node, .. } = item {
-                    nodes.push(*node);
+        match expr {
+            hir::Expr::Try { node, .. } => nodes.push(*node),
+            hir::Expr::ResultBlock { items, .. } => {
+                for item in items {
+                    if let hir::ResultItem::Bind { node, .. } = item {
+                        nodes.push(*node);
+                    }
                 }
             }
+            hir::Expr::OpaqueTs(_)
+            | hir::Expr::Seq { .. }
+            | hir::Expr::Match { .. }
+            | hir::Expr::Pipe { .. }
+            | hir::Expr::Template { .. } => {}
         }
     }
     nodes.sort_unstable_by_key(|node| {
@@ -564,6 +581,7 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
             Expr::Opaque(node) => validate_node(*node, semantic),
             Expr::Sequence(body) => validate_body(*body, file),
             Expr::Decision(decision) => validate_decision(decision, file, semantic),
+            Expr::Propagate(propagate) => validate_propagate(propagate, file, semantic),
             Expr::Apply(apply) => {
                 validate_node(apply.node, semantic);
                 if let Some(head) = apply.head {

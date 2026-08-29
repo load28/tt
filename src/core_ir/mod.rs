@@ -56,6 +56,7 @@ impl CoreFile {
                 .iter()
                 .all(|arm| matches!(arm.action, ArmAction::Yield { .. })),
             Expr::ResultRegion(_) => true,
+            Expr::Propagate(_) => true,
             Expr::Sequence(body) => self
                 .body_value_expr(*body)
                 .is_some_and(|inner| self.has_statement_form(inner)),
@@ -83,7 +84,7 @@ impl CoreFile {
         match &self.exprs[expr.index()] {
             Expr::Opaque(_) => false,
             Expr::Sequence(body) => self.body_requires_host(*body),
-            Expr::Decision(_) | Expr::Apply(_) | Expr::ResultRegion(_) => true,
+            Expr::Decision(_) | Expr::Propagate(_) | Expr::Apply(_) | Expr::ResultRegion(_) => true,
             Expr::Template(template) => template.parts.iter().any(|part| match part {
                 TemplatePart::Raw(_) => false,
                 TemplatePart::Interpolation(expr) => self.expr_requires_host(*expr),
@@ -128,6 +129,7 @@ pub(crate) enum Expr {
     Opaque(NodeId),
     Sequence(BodyId),
     Decision(Decision),
+    Propagate(Propagate),
     Apply(Apply),
     ResultRegion(ResultRegion),
     Template(Template),

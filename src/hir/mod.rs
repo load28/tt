@@ -399,6 +399,13 @@ pub enum Expr {
         /// Span = the complete match expression, including its closing `}`.
         extent: NodeId,
     },
+    /// A value-producing Result propagation expression.
+    Try {
+        /// Span = `try <expr>`.
+        node: NodeId,
+        /// The Result-valued operand.
+        value: ExprId,
+    },
     /// A pipeline (`head |> step |> ...`), or a `flow` composition when
     /// `head` is `None`.
     Pipe {

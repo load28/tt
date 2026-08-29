@@ -18,8 +18,9 @@
 
 use super::Claim;
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
-use crate::ast::{Span, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
+use crate::ast::{Span, TryExpr, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
 use crate::lexer::{Token, TokenKind};
+use crate::scanner::is_primary_expression;
 
 /// `cur` is positioned just past the `try` keyword (`kw_span`) of a bare
 /// `try <expr>;` statement. On success returns the advanced cursor, the
@@ -43,7 +44,7 @@ pub(super) fn parse_try_stmt<'t>(
     };
     let expr = cur
         .parser
-        .parse_tokens(expr_tokens, expr_span.start, expr_span.end);
+        .parse_expression_tokens(expr_tokens, expr_span.start, expr_span.end);
     Claim::Parsed((
         cur,
         byte_end,
@@ -66,20 +67,20 @@ pub(super) fn parse_try_stmt<'t>(
     ))
 }
 
-/// Bounds a `try <expr>` that appears inside another expression. Unlike a
-/// statement try, this form ends at its enclosing expression's delimiter and
-/// therefore must not require a semicolon. The caller turns the returned span
-/// into a parser-owned recovery node; no lowering is attempted.
-pub(super) fn parse_misplaced_try(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, Span)> {
+/// Parses a value-producing `try <primary>` inside another expression.
+/// `try` binds like a prefix operator to the following primary expression,
+/// including its calls and member/index postfixes. Parentheses deliberately
+/// widen the operand to an arbitrary expression.
+pub(super) fn parse_try_expr(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, TryExpr)> {
     let first = cur.peek()?;
-    if !is_expr_start(first) {
+    if !is_expr_start(first) && !matches!(first.kind, TokenKind::Punct(b'(')) {
         return None;
     }
 
     let mut depth = 0usize;
-    let mut ternaries = 0usize;
     let mut k = cur.idx;
-    let mut end = first.span.start;
+    let mut operand_end = None;
+    let mut operand_token_end = cur.idx;
     while let Some(token) = cur.tokens.get(k) {
         if depth == 0
             && matches!(
@@ -88,14 +89,6 @@ pub(super) fn parse_misplaced_try(cur: Cursor<'_>, kw_span: Span) -> Option<(usi
             )
         {
             break;
-        }
-        if depth == 0 {
-            match token.kind {
-                TokenKind::Punct(b'?') => ternaries += 1,
-                TokenKind::Punct(b':') if ternaries == 0 => break,
-                TokenKind::Punct(b':') => ternaries -= 1,
-                _ => {}
-            }
         }
         if depth == 0
             && k > cur.idx
@@ -106,20 +99,35 @@ pub(super) fn parse_misplaced_try(cur: Cursor<'_>, kw_span: Span) -> Option<(usi
             break;
         }
 
-        end = token.span.end;
         match token.kind {
             TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
             TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
             _ => {}
         }
         k += 1;
+        if is_primary_expression(cur.parser.src.as_bytes(), first.span.start, token.span.end) {
+            operand_end = Some(token.span.end);
+            operand_token_end = k;
+        }
     }
 
-    (end > first.span.start).then_some((
+    let end = operand_end?;
+    let k = operand_token_end;
+    let expr_span = Span {
+        start: first.span.start,
+        end,
+    };
+    let expr =
+        cur.parser
+            .parse_expression_tokens(&cur.tokens[cur.idx..k], expr_span.start, expr_span.end);
+    Some((
         k,
-        Span {
-            start: kw_span.start,
-            end,
+        TryExpr {
+            span: Span {
+                start: kw_span.start,
+                end,
+            },
+            expr,
         },
     ))
 }
@@ -214,7 +222,7 @@ pub(super) fn parse_try_decl<'t>(
     let (cur, byte_end, expr_span, expr_tokens) = parse_try_tail(cur)?;
     let expr = cur
         .parser
-        .parse_tokens(expr_tokens, expr_span.start, expr_span.end);
+        .parse_expression_tokens(expr_tokens, expr_span.start, expr_span.end);
     Some((
         cur,
         byte_end,

@@ -203,9 +203,9 @@ fn parse_match_complete<'t>(
                     start: cur.tokens[from].span.start,
                     end: cur.tokens[to - 1].span.end,
                 };
-                let program = cur
-                    .parser
-                    .parse_tokens(&cur.tokens[from..to], span.start, span.end);
+                let program =
+                    cur.parser
+                        .parse_expression_tokens(&cur.tokens[from..to], span.start, span.end);
                 (span, program)
             })
             .collect();
@@ -228,7 +228,7 @@ fn parse_match_complete<'t>(
         _ => return None,
     };
 
-    let scrutinee = cur.parser.parse_tokens(
+    let scrutinee = cur.parser.parse_expression_tokens(
         &cur.tokens[open + 1..close],
         scrutinee_span.start,
         scrutinee_span.end,
@@ -428,9 +428,11 @@ fn parse_arm_tail(cur: &mut Cursor, allow_guard: bool) -> Option<ArmTail> {
                 start: g_start,
                 end: g_end,
             },
-            expr: cur
-                .parser
-                .parse_tokens(&cur.tokens[cur.idx..arrow_idx], g_start, g_end),
+            expr: cur.parser.parse_expression_tokens(
+                &cur.tokens[cur.idx..arrow_idx],
+                g_start,
+                g_end,
+            ),
         });
         cur.idx = arrow_idx;
     }
@@ -471,9 +473,13 @@ fn parse_arm_tail(cur: &mut Cursor, allow_guard: bool) -> Option<ArmTail> {
         cur.idx = stop_idx;
     }
 
-    let body = cur
-        .parser
-        .parse_tokens(body_tokens, body_span.start, body_span.end);
+    let body = if block {
+        cur.parser
+            .parse_tokens(body_tokens, body_span.start, body_span.end)
+    } else {
+        cur.parser
+            .parse_expression_tokens(body_tokens, body_span.start, body_span.end)
+    };
     // Whether control can reach the end of a block body is the same
     // question let-else asks of its `else` block, answered on the same CFG
     // (`crate::flow`). An expression body always yields, so the question

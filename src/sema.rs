@@ -260,6 +260,8 @@ enum Place {
     Function,
     /// Inside an isolated tt value region.
     ValueRegion,
+    /// Inside a `result` block, whose generated region owns its returns.
+    ResultRegion,
 }
 
 impl Place {
@@ -364,6 +366,7 @@ impl Checker {
                 Segment::Match(expr) => self.check_match(expr),
                 Segment::TupleMatch(expr) => self.check_tuple_match(expr),
                 Segment::Try(stmt) => self.check_try(stmt, place),
+                Segment::TryExpr(expr) => self.check_try_expr(expr, place),
                 Segment::LetElse(stmt) => self.check_let_else(stmt, place),
                 Segment::IfLet(stmt) => self.check_if_let(stmt, ctx, place),
                 Segment::ResultBlock(block) => self.check_result_block(block),
@@ -441,7 +444,32 @@ impl Checker {
     /// `return` would exit the construct's own value region, or fall at the
     /// module's top level, where there is nothing to return from.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
-        if !stmt.in_function && place != Place::Function {
+        self.check_try_placement(stmt.span, stmt.in_function, place);
+        self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+    }
+
+    fn check_try_expr(&mut self, expr: &crate::ast::TryExpr, place: Place) {
+        // Ordinary expression propagation is judged after the SWC host owner
+        // and evaluation protocol are known. A result block is the one
+        // surface-owned boundary: its `<-` propagation targets that region.
+        if place == Place::ResultRegion {
+            self.error(
+                TtError::span(
+                    expr.span.start,
+                    expr.span.end,
+                    "`try` cannot be used directly inside a `result` block — its generated \
+                     return would leave the block instead of the enclosing function"
+                        .to_string(),
+                )
+                .code(DiagnosticCode::TryPlacement)
+                .help("bind the Result with `<-` inside this block"),
+            );
+        }
+        self.visit_program(&expr.expr, Ctx::Expr, Place::ValueRegion);
+    }
+
+    fn check_try_placement(&mut self, span: Span, in_function: bool, place: Place) {
+        if !in_function && place != Place::Function {
             let (message, help) = if place == Place::Module {
                 (
                     "`try` must be inside a function — it compiles to a `return` that \
@@ -459,12 +487,11 @@ impl Checker {
                 )
             };
             self.error(
-                TtError::span(stmt.span.start, stmt.span.end, message.to_string())
+                TtError::span(span.start, span.end, message.to_string())
                     .code(DiagnosticCode::TryPlacement)
                     .help(help),
             );
         }
-        self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
     }
 
     /// let-else placement is the same flow fact as `try`'s, except the
@@ -473,7 +500,7 @@ impl Checker {
     /// [`Place::ValueRegion`] regions — where the `else`'s exits would leave the
     /// construct's value boundary — need a function written in the region.
     fn check_let_else(&mut self, stmt: &LetElseStmt, place: Place) {
-        if place == Place::ValueRegion && !stmt.in_function {
+        if matches!(place, Place::ValueRegion | Place::ResultRegion) && !stmt.in_function {
             self.error(
                 TtError::span(
                     stmt.head_span.start,
@@ -597,14 +624,14 @@ impl Checker {
         for item in &block.items {
             match item {
                 ResultItem::Stmts(stmts) => {
-                    self.visit_program(stmts, Ctx::Stmt, Place::ValueRegion)
+                    self.visit_program(stmts, Ctx::Stmt, Place::ResultRegion)
                 }
                 ResultItem::Bind(bind) => {
-                    self.visit_program(&bind.expr, Ctx::Expr, Place::ValueRegion)
+                    self.visit_program(&bind.expr, Ctx::Expr, Place::ResultRegion)
                 }
             }
         }
-        self.visit_program(&block.value, Ctx::Expr, Place::ValueRegion);
+        self.visit_program(&block.value, Ctx::Expr, Place::ResultRegion);
     }
 
     fn check_variant(&mut self, decl: &VariantDecl) {

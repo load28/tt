@@ -232,6 +232,7 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
                 }
             }
             Segment::Try(stmt) => collect_matches(&stmt.expr, out),
+            Segment::TryExpr(expr) => collect_matches(&expr.expr, out),
             Segment::LetElse(stmt) => {
                 collect_matches(&stmt.expr, out);
                 collect_matches(&stmt.else_body, out);
