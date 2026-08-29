@@ -6,7 +6,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::core_ir::{
-    ArmAction, CoreFile, Decision, Expr, MissAction, Propagate, ResultRegionItem, Statement,
+    ArmAction, CoreFile, Decision, ExitTarget, Expr, MissAction, Propagate, ResultRegionItem,
+    Statement,
 };
 use crate::hir::ids::Idx;
 use crate::hir::{BodyId, ExprId, NodeId};
@@ -112,6 +113,7 @@ pub(crate) struct LoweringPlan {
     slot_names: Vec<String>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     expression_boundary_name: String,
+    result_return_name: String,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
 }
 
@@ -393,6 +395,10 @@ impl LoweringPlan {
         &self.expression_boundary_name
     }
 
+    pub(crate) fn result_return_name(&self) -> &str {
+        &self.result_return_name
+    }
+
     pub(crate) fn for_initializer_propagations(
         &self,
     ) -> impl Iterator<Item = ForInitializerPropagation> + '_ {
@@ -553,6 +559,19 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
+            // A propagation that terminates a Result region is emitted by
+            // that region's structured body printer. Scheduling it again at
+            // its TypeScript host would both duplicate the exit and make an
+            // enclosing source capture overlap a nested function boundary.
+            if matches!(
+                &core.exprs[expr.index()],
+                Expr::Propagate(Propagate {
+                    exit: ExitTarget::ResultRegion(_),
+                    ..
+                })
+            ) {
+                continue;
+            }
             // A pipeline remains an expression when a nested value has
             // crossed into a separate source-backed owner, such as a
             // concise arrow step. Rewriting the outer Apply as statements
@@ -699,6 +718,15 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
+            if matches!(
+                &core.exprs[expr.index()],
+                Expr::Propagate(Propagate {
+                    exit: ExitTarget::ResultRegion(_),
+                    ..
+                })
+            ) {
+                continue;
+            }
             if region.result.is_none() || value_slots.contains_key(&expr) {
                 continue;
             }
@@ -714,7 +742,10 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            if !matches!(core.exprs[expr.index()], Expr::Propagate(_)) {
+            let Expr::Propagate(propagate) = &core.exprs[expr.index()] else {
+                continue;
+            };
+            if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                 continue;
             }
             let RegionPlacement::Host {
@@ -749,7 +780,10 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            if !matches!(core.exprs[expr.index()], Expr::Propagate(_)) {
+            let Expr::Propagate(propagate) = &core.exprs[expr.index()] else {
+                continue;
+            };
+            if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                 continue;
             }
             let mut host_region = region;
@@ -823,12 +857,14 @@ impl EvaluationFile {
             })
             .collect();
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
+        let result_return_name = allocate_generated_name("$tt_result", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
             for_initializer_propagations,
             slot_names,
             value_slots,
             expression_boundary_name,
+            result_return_name,
             unsupported_expression_propagations,
         })
     }
@@ -866,12 +902,10 @@ impl EvaluationFile {
                 apply.head.is_some_and(nested) || apply.steps.iter().any(|step| nested(step.value))
             }
             Expr::ResultRegion(region) => {
-                region.items.iter().any(|item| match item {
-                    ResultRegionItem::Statements(body) => {
-                        self.body_has_hosted_descendant(core, *body)
-                    }
-                    ResultRegionItem::Propagate(_) => false,
-                }) || nested(region.value)
+                region.items.iter().any(|item| {
+                    let ResultRegionItem::Statements(body) = item;
+                    self.body_has_hosted_descendant(core, *body)
+                }) || region.value.is_some_and(nested)
             }
             Expr::Template(template) => template.parts.iter().any(|part| match part {
                 crate::core_ir::TemplatePart::Raw(_) => false,
@@ -1795,17 +1829,12 @@ impl EvaluationBuilder<'_> {
                     force_nested,
                 )?;
                 for item in &result.items {
-                    match item {
-                        ResultRegionItem::Statements(body) => {
-                            self.walk_body(*body, Some(region))?;
-                        }
-                        ResultRegionItem::Propagate(propagate) => {
-                            let child = self.add_propagate(propagate, Some(region))?;
-                            self.walk_nested_expr(propagate.value, child)?;
-                        }
-                    }
+                    let ResultRegionItem::Statements(body) = item;
+                    self.walk_body(*body, Some(region))?;
                 }
-                self.walk_nested_expr(result.value, region)?;
+                if let Some(value) = result.value {
+                    self.walk_nested_expr(value, region)?;
+                }
             }
             Expr::Template(template) => {
                 for part in &template.parts {
@@ -1879,12 +1908,13 @@ impl EvaluationBuilder<'_> {
         propagate: &Propagate,
         parent: Option<RegionId>,
     ) -> Result<RegionId, EvaluationError> {
-        self.add_operation(
+        self.add_operation_with_placement(
             OperationId::Propagate(propagate.node),
             CoreRoot::Propagate(propagate.node),
             parent,
             RegionShape::Propagate,
             false,
+            matches!(propagate.exit, ExitTarget::ResultRegion(_)),
         )
     }
 
@@ -2110,7 +2140,7 @@ mod tests {
              import { load } from \"./load.tt\";\n\
              function f(e: E) {\n\
                try load();\n\
-               return result { const x <- load(); match (e) { A(value) => x + value, B => 0 } |> done };\n\
+               return result { const x = try load(); return match (e) { A(value) => x + value, B => 0 } |> done; };\n\
              }\n",
         );
         let operations: Vec<_> = file.regions.iter().map(|region| region.operation).collect();
@@ -2225,7 +2255,7 @@ mod tests {
 
     #[test]
     fn a_result_binding_is_nested_under_the_result_region() {
-        let (file, _core) = evaluation("const out = result { const x <- load(); x };\n");
+        let (file, _core) = evaluation("const out = result { const x = try load(); return x; };\n");
         let result = file
             .regions
             .iter()
@@ -2240,7 +2270,7 @@ mod tests {
             propagation.placement,
             RegionPlacement::Nested {
                 parent: result.id,
-                source: None,
+                source: Some(SourceSpan { start: 21, end: 42 }),
             }
         );
     }

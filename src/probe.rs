@@ -186,12 +186,12 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => payload_walk(stmts, out),
-                        ResultItem::Bind(bind) => payload_walk(&bind.expr, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    payload_walk(stmts, out);
                 }
-                payload_walk(&block.value, out);
+                if let Some(value) = &block.value {
+                    payload_walk(value, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {
@@ -356,12 +356,12 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => walk(stmts, src, out),
-                        ResultItem::Bind(bind) => walk(&bind.expr, src, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    walk(stmts, src, out);
                 }
-                walk(&block.value, src, out);
+                if let Some(value) = &block.value {
+                    walk(value, src, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {

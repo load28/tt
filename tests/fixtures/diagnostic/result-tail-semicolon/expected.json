@@ -1,15 +1,21 @@
 [
   {
-    "code": "result-tail-semicolon",
-    "col": 15,
-    "endCol": 16,
-    "endLine": 6,
-    "line": 6,
-    "message": "`result` block must end with a value expression",
+    "code": "result-legacy-binding",
+    "col": 5,
+    "endCol": 29,
+    "endLine": 5,
+    "line": 5,
+    "message": "`<-` is no longer valid in a `result` block",
     "suggestions": [
       {
-        "edit": null,
-        "message": "if this statement is the block's value, remove its trailing `;`"
+        "edit": {
+          "col": 18,
+          "endCol": 20,
+          "endLine": 5,
+          "line": 5,
+          "replacement": "= try"
+        },
+        "message": "replace `<-` with `= try`; then add an explicit Result return"
       }
     ]
   }

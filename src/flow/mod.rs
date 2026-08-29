@@ -172,6 +172,81 @@ pub(crate) fn program_diverges(src: &str, tokens: &[Token], program: &Program) -
     diverges(&lower_region(src, tokens, &heads))
 }
 
+/// The same query for one lexically delimited statement stream inside a
+/// larger file.  The parser keeps source coordinates absolute, so callers
+/// retain the original buffer and select only the tokens owned by the body.
+pub(crate) fn program_diverges_in_span(
+    src: &str,
+    tokens: &[Token],
+    program: &Program,
+    span: crate::ast::Span,
+) -> bool {
+    let start = tokens.partition_point(|token| token.span.start < span.start);
+    let end = start + tokens[start..].partition_point(|token| token.span.end <= span.end);
+    program_diverges(src, &tokens[start..end], program)
+}
+
+/// An abrupt completion that would leave a Result body instead of a
+/// user-written loop or switch inside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OutwardControl {
+    Break {
+        span: crate::ast::Span,
+        labeled: bool,
+    },
+    Continue {
+        span: crate::ast::Span,
+        labeled: bool,
+    },
+    Yield(crate::ast::Span),
+}
+
+/// Finds control transfers that a ResultRegion cannot own. The statement
+/// scanner already resolves lexical loop, switch, and label scopes for the
+/// CFG, so this query uses the same model instead of a second token walk.
+pub(crate) fn outward_controls_in_span(
+    src: &str,
+    tokens: &[Token],
+    program: &Program,
+    span: crate::ast::Span,
+) -> Vec<OutwardControl> {
+    let start = tokens.partition_point(|token| token.span.start < span.start);
+    let end = start + tokens[start..].partition_point(|token| token.span.end <= span.end);
+    let mut heads = IfLetHeads::new();
+    collect_if_let_heads(program, &mut heads);
+    let function_depth = function_depth_at(src, tokens, start);
+    let statements = Scanner {
+        src,
+        tokens: &tokens[start..end],
+        if_lets: &heads,
+    }
+    .statements(0, end - start);
+    let mut controls = Vec::new();
+    collect_outward_controls(&statements, &mut Vec::new(), None, &mut controls);
+    // `yield` can be nested in an expression (`const sent = yield value`),
+    // where the statement model intentionally treats the declaration as
+    // opaque. It still crosses the ResultRegion, so record the lexical
+    // keyword while respecting nested user-written function bodies.
+    for (index, token) in tokens[start..end].iter().enumerate() {
+        let absolute = start + index;
+        if !matches!(token.kind, TokenKind::Ident)
+            || &src[token.span.start..token.span.end] != "yield"
+            || function_depth_at(src, tokens, absolute) != function_depth
+            || absolute
+                .checked_sub(1)
+                .and_then(|previous| tokens.get(previous))
+                .is_some_and(|previous| matches!(previous.kind, TokenKind::Punct(b'.')))
+        {
+            continue;
+        }
+        let control = OutwardControl::Yield(token.span);
+        if !controls.contains(&control) {
+            controls.push(control);
+        }
+    }
+    controls
+}
+
 /// Builds the CFG of one token stream treated as a statement sequence.
 fn lower_region(src: &str, tokens: &[Token], if_lets: &IfLetHeads) -> FlowBody {
     let statements = Scanner {
@@ -235,9 +310,18 @@ enum Stmt<'a> {
     /// `return`/`throw` — leaves the function.
     Return,
     /// `break [label]`.
-    Break(Option<&'a str>),
+    Break {
+        label: Option<&'a str>,
+        span: crate::ast::Span,
+    },
     /// `continue [label]`.
-    Continue(Option<&'a str>),
+    Continue {
+        label: Option<&'a str>,
+        span: crate::ast::Span,
+    },
+    /// `yield` and `yield*` leave a generator frame, which a ResultRegion
+    /// must not capture or re-route.
+    Yield(crate::ast::Span),
     /// `if (…) <then> [else <else>]`.
     If {
         then: Box<Stmt<'a>>,
@@ -311,6 +395,113 @@ enum ScopeKind {
     Switch,
     /// A labeled non-loop statement: captures nothing unlabeled.
     Labeled,
+}
+
+#[derive(Clone, Copy)]
+struct ControlScope<'a> {
+    label: Option<&'a str>,
+    kind: ScopeKind,
+}
+
+fn control_break_target(scopes: &[ControlScope<'_>], label: Option<&str>) -> bool {
+    scopes.iter().rev().any(|scope| match label {
+        Some(name) => scope.label == Some(name),
+        None => matches!(scope.kind, ScopeKind::Iteration | ScopeKind::Switch),
+    })
+}
+
+fn control_continue_target(scopes: &[ControlScope<'_>], label: Option<&str>) -> bool {
+    scopes.iter().rev().any(|scope| {
+        scope.kind == ScopeKind::Iteration && label.is_none_or(|name| scope.label == Some(name))
+    })
+}
+
+fn collect_outward_controls<'a>(
+    statements: &[Stmt<'a>],
+    scopes: &mut Vec<ControlScope<'a>>,
+    label: Option<&'a str>,
+    controls: &mut Vec<OutwardControl>,
+) {
+    for statement in statements {
+        collect_outward_control(statement, scopes, label, controls);
+    }
+}
+
+fn collect_outward_control<'a>(
+    statement: &Stmt<'a>,
+    scopes: &mut Vec<ControlScope<'a>>,
+    label: Option<&'a str>,
+    controls: &mut Vec<OutwardControl>,
+) {
+    match statement {
+        Stmt::Break { label, span } => {
+            if !control_break_target(scopes, *label) {
+                controls.push(OutwardControl::Break {
+                    span: *span,
+                    labeled: label.is_some(),
+                });
+            }
+        }
+        Stmt::Continue { label, span } => {
+            if !control_continue_target(scopes, *label) {
+                controls.push(OutwardControl::Continue {
+                    span: *span,
+                    labeled: label.is_some(),
+                });
+            }
+        }
+        Stmt::Yield(span) => controls.push(OutwardControl::Yield(*span)),
+        Stmt::If { then, else_ } => {
+            collect_outward_control(then, scopes, None, controls);
+            if let Some(else_) = else_ {
+                collect_outward_control(else_, scopes, None, controls);
+            }
+        }
+        Stmt::Block(body) => collect_outward_controls(body, scopes, None, controls),
+        Stmt::Labeled {
+            label: nested,
+            body,
+        } => {
+            scopes.push(ControlScope {
+                label: Some(nested),
+                kind: ScopeKind::Labeled,
+            });
+            collect_outward_control(body, scopes, Some(nested), controls);
+            scopes.pop();
+        }
+        Stmt::Loop { body, .. } => {
+            scopes.push(ControlScope {
+                label,
+                kind: ScopeKind::Iteration,
+            });
+            collect_outward_control(body, scopes, None, controls);
+            scopes.pop();
+        }
+        Stmt::Switch(clauses) => {
+            scopes.push(ControlScope {
+                label,
+                kind: ScopeKind::Switch,
+            });
+            for clause in clauses {
+                collect_outward_controls(&clause.stmts, scopes, None, controls);
+            }
+            scopes.pop();
+        }
+        Stmt::Try {
+            block,
+            catch,
+            finally,
+        } => {
+            collect_outward_controls(block, scopes, None, controls);
+            if let Some(catch) = catch {
+                collect_outward_controls(catch, scopes, None, controls);
+            }
+            if let Some(finally) = finally {
+                collect_outward_controls(finally, scopes, None, controls);
+            }
+        }
+        Stmt::Return | Stmt::Other => {}
+    }
 }
 
 /// Where `break [label]` lands, or `None` when its target lies outside
@@ -395,17 +586,17 @@ impl Builder {
     ) -> BlockId {
         match stmt {
             Stmt::Return => self.block(Terminator::Return),
-            Stmt::Break(name) => {
+            Stmt::Break { label: name, .. } => {
                 let terminator =
                     break_target(scopes, *name).map_or(Terminator::Jump, Terminator::Goto);
                 self.block(terminator)
             }
-            Stmt::Continue(name) => {
+            Stmt::Continue { label: name, .. } => {
                 let terminator =
                     continue_target(scopes, *name).map_or(Terminator::Jump, Terminator::Goto);
                 self.block(terminator)
             }
-            Stmt::Other => self.block(Terminator::Goto(follow)),
+            Stmt::Yield(_) | Stmt::Other => self.block(Terminator::Goto(follow)),
             Stmt::Block(inner) => self.seq(inner, follow, scopes),
             Stmt::If { then, else_ } => {
                 let then_bb = self.stmt(then, follow, scopes);
@@ -587,12 +778,22 @@ impl<'a> Scanner<'a> {
                     !NON_LABEL_WORDS.contains(name) && !self.line_break_before(at + 1)
                 });
                 let stmt = if keyword == "break" {
-                    Stmt::Break(label)
+                    Stmt::Break {
+                        label,
+                        span: self.tokens[at].span,
+                    }
                 } else {
-                    Stmt::Continue(label)
+                    Stmt::Continue {
+                        label,
+                        span: self.tokens[at].span,
+                    }
                 };
                 (stmt, self.statement_end(at, end))
             }
+            Some("yield") => (
+                Stmt::Yield(self.tokens[at].span),
+                self.statement_end(at, end),
+            ),
             Some("if") => match self.if_let_head(at) {
                 Some(head_end) => self.if_let_statement(at, end, head_end),
                 None => self.if_statement(at, end),
@@ -1157,6 +1358,24 @@ pub(crate) fn in_function_body(src: &str, tokens: &[Token], at: usize) -> bool {
         }
     }
     stack.iter().any(|&is_function| is_function)
+}
+
+/// Number of braced user-written function bodies enclosing a token. This is
+/// the lexical-boundary fact speculative `result` claiming needs: an inner
+/// function has its own Result scope even when the enclosing candidate is
+/// already inside another function.
+pub(crate) fn function_depth_at(src: &str, tokens: &[Token], at: usize) -> usize {
+    let mut stack = Vec::new();
+    for (index, token) in tokens.iter().enumerate().take(at) {
+        match token.kind {
+            TokenKind::Punct(b'{') => stack.push(function_body_brace(src, tokens, index)),
+            TokenKind::Punct(b'}') => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    stack.into_iter().filter(|is_function| *is_function).count()
 }
 
 /// Whether `at` is directly enclosed by a class static block. A nested

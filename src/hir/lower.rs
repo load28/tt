@@ -427,13 +427,18 @@ impl Lower {
             owner,
             binding,
             expr,
+            result_target: None,
         }
     }
 
     fn lower_try_expr(&mut self, expr: &ast::TryExpr) -> ExprId {
         let node = self.node(Self::span(expr.span), AstOrigin::Try);
         let value = self.lower_expr_program(&expr.expr, Self::span(expr.span));
-        self.hir.exprs.alloc(Expr::Try { node, value })
+        self.hir.exprs.alloc(Expr::Try {
+            node,
+            value,
+            result_target: None,
+        })
     }
 
     fn lower_let_else(&mut self, stmt: &ast::LetElseStmt) -> LetElseStmt {
@@ -583,30 +588,60 @@ impl Lower {
             Span::new(block.keyword_off, block.body_span.end),
             AstOrigin::ResultBlock,
         );
-        let items = block
+        let items: Vec<ResultItem> = block
             .items
             .iter()
-            .map(|item| match item {
-                ast::ResultItem::Stmts(stmts) => ResultItem::Stmts(self.lower_body(stmts)),
-                ast::ResultItem::Bind(bind) => {
-                    let bind_node = self.node(
-                        Span::new(bind.binding_span.start, bind.expr_span.end),
-                        AstOrigin::ResultBind,
-                    );
-                    let binding = BindingText {
-                        node: self.node(Self::span(bind.binding_span), AstOrigin::BindingText),
-                        mode: Self::binding_mode(&bind.kw),
-                    };
-                    let expr = self.lower_expr_program(&bind.expr, Self::span(bind.expr_span));
-                    ResultItem::Bind {
-                        node: bind_node,
-                        binding,
-                        expr,
-                    }
-                }
+            .map(|item| {
+                let ast::ResultItem::Stmts(stmts) = item;
+                ResultItem::Stmts(self.lower_body(stmts))
             })
             .collect();
-        let value = self.lower_expr_program(&block.value, Self::span(block.body_span));
+        let direct_node = |try_node| {
+            self.hir.source_map.node_span(try_node).is_some_and(|span| {
+                block
+                    .direct_try_spans
+                    .iter()
+                    .any(|direct| direct.start < span.end && span.start < direct.end)
+            })
+        };
+        let direct_exprs: Vec<_> = self
+            .hir
+            .exprs
+            .iter()
+            .filter_map(|(expr, value)| match value {
+                Expr::Try { node: try_node, .. } if direct_node(*try_node) => Some(expr),
+                _ => None,
+            })
+            .collect();
+        for expr in direct_exprs {
+            if let Expr::Try { result_target, .. } = &mut self.hir.exprs[expr] {
+                *result_target = Some(node);
+            }
+        }
+        let direct_statements: Vec<_> = self
+            .hir
+            .bodies
+            .iter()
+            .flat_map(|(_, body)| body.stmts.iter())
+            .filter_map(|statement| match statement {
+                Stmt::Try(statement) if direct_node(statement.node) => Some(statement.node),
+                _ => None,
+            })
+            .collect();
+        let body_ids: Vec<_> = self.hir.bodies.iter().map(|(body, _)| body).collect();
+        for body in body_ids {
+            for statement in &mut self.hir.bodies[body].stmts {
+                if let Stmt::Try(try_statement) = statement
+                    && direct_statements.contains(&try_statement.node)
+                {
+                    try_statement.result_target = Some(node);
+                }
+            }
+        }
+        let value = block
+            .value
+            .as_ref()
+            .map(|value| self.lower_expr_program(value, Self::span(block.body_span)));
         self.hir
             .exprs
             .alloc(Expr::ResultBlock { node, items, value })
@@ -804,37 +839,25 @@ mod tests {
     }
 
     #[test]
-    fn try_and_result_record_bindings_and_single_evaluation_shape() {
-        let src = "function f() {\n  const a = try readNum();\n  const r = result {\n    const b <- parse(a);\n    b\n  };\n  return r;\n}\n";
+    fn try_and_result_record_single_evaluation_shape() {
+        let src = "function f() {\n  const a = try readNum();\n  const r = result {\n    const b = try parse(a);\n    return b;\n  };\n  return r;\n}\n";
         let hir = lower(src);
         // The try and the result block are nested inside the function's
         // verbatim text? No: try/let-else are only claimed in statement
         // streams the parser walks — which includes function bodies. Find
         // them wherever they landed.
         let mut tries = 0;
-        let mut binds = 0;
         for (_, body) in hir.bodies.iter() {
             for stmt in &body.stmts {
                 if let Stmt::Try(t) = stmt {
                     tries += 1;
                     assert!(t.binding.is_some(), "declaration form keeps its binding");
                     let span = hir.source_map.node_span(t.node).unwrap();
-                    assert_eq!(text(src, span), "try readNum()");
+                    assert!(matches!(text(src, span), "try readNum()" | "try parse(a)"));
                 }
             }
         }
-        for (_, expr) in hir.exprs.iter() {
-            if let Expr::ResultBlock { items, .. } = expr {
-                for item in items {
-                    if let ResultItem::Bind { binding, .. } = item {
-                        binds += 1;
-                        let span = hir.source_map.node_span(binding.node).unwrap();
-                        assert_eq!(text(src, span), "b");
-                    }
-                }
-            }
-        }
-        assert_eq!((tries, binds), (1, 1));
+        assert_eq!(tries, 2);
     }
 
     #[test]

@@ -118,6 +118,17 @@ pub(crate) struct SymbolQuery {
     pub position: usize,
 }
 
+/// Whether the type at a position is definitely the two-case Result shape.
+///
+/// This is deliberately structural: aliases and generic instantiations are
+/// accepted when the checker proves both literal `kind` cases and their
+/// payload fields; unions, `any`, and type parameters produce no answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResultShapeQuery {
+    pub module: PathBuf,
+    pub position: usize,
+}
+
 /// Everything asked of one project graph, in one round trip.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Query {
@@ -134,6 +145,7 @@ pub(crate) struct Query {
     pub literals: Vec<LiteralQuery>,
     pub tags: Vec<TagQuery>,
     pub symbols: Vec<SymbolQuery>,
+    pub result_shapes: Vec<ResultShapeQuery>,
     /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.
@@ -267,7 +279,14 @@ pub(crate) struct Answers {
     pub tag_missing: Vec<TagMissing>,
     pub tag_members: Vec<TagMembers>,
     pub resolutions: Vec<Resolution>,
+    pub result_shapes: Vec<ResultShape>,
     pub declarations: Vec<Declaration>,
+}
+
+/// A checker-proven Result shape answer. Absent answers remain unknown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResultShape {
+    pub index: usize,
 }
 
 /// A source of TypeScript semantics for one project.

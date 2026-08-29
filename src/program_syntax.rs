@@ -1164,8 +1164,7 @@ impl<'a> ProjectionBuilder<'a> {
                     .statements
                     .iter()
                     .any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))),
-                crate::core_ir::ResultRegionItem::Propagate(_) => true,
-            }) || self.expr_contains_propagation(region.value),
+            }) || region.value.is_some_and(|value| self.expr_contains_propagation(value)),
             Expr::Opaque(_) | Expr::Template(_) => false,
         }
     }
@@ -1234,13 +1233,18 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("() => {");
         for item in &region.items {
             match item {
-                crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
-                crate::core_ir::ResultRegionItem::Propagate(_) => self.code.push(';'),
+                crate::core_ir::ResultRegionItem::Statements(body) => {
+                    self.emit_result_body(*body)?
+                }
             }
         }
         let synthetic_return_start = ProjectedByte(self.code.len());
         self.code.push_str("return ");
-        self.emit_expr(region.value)?;
+        if let Some(value) = region.value {
+            self.emit_expr(value)?;
+        } else {
+            self.code.push_str("undefined");
+        }
         self.code.push_str(";})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
@@ -1257,6 +1261,71 @@ impl<'a> ProjectionBuilder<'a> {
             start: synthetic_return_start,
             end: ProjectedByte(self.code.len() - 4),
         });
+        Ok(())
+    }
+
+    /// Result-owned `return` exits remain visible to the host projection
+    /// through inline let-else and if-let bodies. Ordinary statement
+    /// projection uses one placeholder for those tt decisions, but that
+    /// would hide their source returns from the enclosing Result arrow.
+    fn emit_result_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
+        for statement in &self.core.bodies[body.index()].statements {
+            match statement {
+                Statement::Decision(decision) => self.emit_result_decision(decision)?,
+                _ => self.emit_body_fragment(statement)?,
+            }
+        }
+        Ok(())
+    }
+
+    fn emit_body_fragment(&mut self, statement: &Statement) -> Result<(), ProgramSyntaxError> {
+        match statement {
+            Statement::Opaque(node) => self.push_source(*node),
+            Statement::Adt(adt) => self.emit_adt(adt),
+            Statement::Import(import) => self.emit_import(import),
+            Statement::Propagate(propagate) => self.emit_propagate(propagate),
+            Statement::Decision(_) => unreachable!("Result body handles decisions separately"),
+            Statement::Expr(expr) => self.emit_expr(*expr),
+        }
+    }
+
+    fn emit_result_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
+        match &decision.kind {
+            crate::core_ir::DecisionKind::LetElse { .. } => {
+                let crate::core_ir::MissAction::Execute(body) = decision.miss else {
+                    crate::ice::bug!("let-else has no else body")
+                };
+                self.code.push_str("if (true) {");
+                self.emit_result_body(body)?;
+                self.code.push('}');
+            }
+            crate::core_ir::DecisionKind::IfLet => {
+                let crate::core_ir::ArmAction::Execute(body) = decision.arms[0].action else {
+                    crate::ice::bug!("if-let has no then body")
+                };
+                self.code.push_str("if (true) {");
+                self.emit_result_body(body)?;
+                self.code.push('}');
+                match &decision.miss {
+                    crate::core_ir::MissAction::Execute(body) => {
+                        self.code.push_str(" else {");
+                        self.emit_result_body(*body)?;
+                        self.code.push('}');
+                    }
+                    crate::core_ir::MissAction::Decision(inner) => {
+                        self.code.push_str(" else ");
+                        self.emit_result_decision(inner)?;
+                    }
+                    crate::core_ir::MissAction::Nothing => {}
+                    crate::core_ir::MissAction::ThrowUnexpected(_) => {
+                        crate::ice::bug!("if-let has match miss action")
+                    }
+                }
+            }
+            crate::core_ir::DecisionKind::Match { .. } => {
+                crate::ice::bug!("expression decision in Result statement body")
+            }
+        }
         Ok(())
     }
 
@@ -3231,7 +3300,7 @@ mod tests {
              function f(e: E) {\n\
                if let A(x) = e { use(x); }\n\
                const A(y) = e else { return 0; };\n\
-               const r = result { const z <- load(); z };\n\
+               const r = result { const z = try load(); return z; };\n\
                return match (e) { A(x) => x, B => r } |> done;\n\
              }\n",
         );
@@ -3301,7 +3370,7 @@ mod tests {
     #[test]
     fn a_result_statement_island_exposes_its_nested_initializer_owner() {
         let syntax = syntax(
-            "const outer = result {\n  const x <- f();\n  const inner = result { const y <- g(); y };\n  inner\n};\n",
+            "const outer = result {\n  const x = try f();\n  const inner = result { const y = try g(); return y; };\n  return inner;\n};\n",
         );
         let mut entries: Vec<_> = syntax
             .overlay

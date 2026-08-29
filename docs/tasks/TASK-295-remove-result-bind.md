@@ -1,9 +1,9 @@
 # TASK-295: Remove `<-` and the old tail surface
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: See git history
 
 ## Purpose
 
@@ -28,15 +28,20 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Keep legacy syntax as a migration diagnostic only
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: `<-` is no longer a Result binding surface, but users need a
+  mechanical first migration step.
+- **Alternatives considered**: silently retain the old lowering, or reject it
+  with a localized replacement.
+- **Decision and rationale**: report `result-legacy-binding` and replace only
+  `<-` with `= try`; the explicit Result completion remains user-authored.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started the legacy Result syntax removal and migration audit.
+- 2026-08-30: Removed ResultBind AST/HIR/anchor paths and semicolon-free tail
+  handling, then updated mapper, token, fixture, and documentation contracts.
 
 ## Issues and resolutions
 
@@ -48,14 +53,12 @@ Test obligation from the plan: applicable edits for old binds, `a < -b` passthro
 
 Green condition: no old syntax is emitted or silently accepted, every supported migration edit is valid, and all external diagnostic surfaces agree.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Ships to `main` alone: not stated in the plan.
-
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Legacy bindings receive one applicable migration edit while unclaimed
+TypeScript comparisons remain byte-exact passthrough.

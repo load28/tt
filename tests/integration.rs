@@ -1541,9 +1541,9 @@ fn std_result_block_output_pipes_into_and_then_p() {
     let (ok, out) = typecheck_with_std(&format!(
         r#"{ERROR_UNION_PRELUDE}
 const user = result {{
-  const config <- loadConfig();
-  const loaded <- loadToken(config);
-  loaded
+  const config = try loadConfig();
+  const loaded = try loadToken(config);
+  return loaded;
 }};
 
 const profile = user |> Result.andThenP(fetchProfile);
@@ -2697,9 +2697,9 @@ fn result_block_unions_the_error_types_of_its_bindings() {
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number): Res<string, UserError | CompanyError> => result {{
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
-  user.name + "@" + company.name
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
+  return user.name + "@" + company.name;
 }};
 "#
     ));
@@ -2714,9 +2714,9 @@ fn result_block_missing_an_error_type_is_a_type_error() {
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number): Res<string, UserError> => result {{
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
-  user.name + "@" + company.name
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
+  return user.name + "@" + company.name;
 }};
 "#
     ));
@@ -2731,10 +2731,10 @@ fn result_block_bindings_are_narrowed_success_values() {
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number) => result {{
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
   const label: string = user.name.toUpperCase() + company.name;
-  {{ user, company, label }}
+  return {{ user, company, label }};
 }};
 const check = (id: number): string => match (view(id)) {{
   Ok(value) => value.label,
@@ -2761,10 +2761,10 @@ const step = (name: string, ok: boolean): Res<string, string> => {
 };
 
 const chain = (secondOk: boolean) => result {
-  const a <- step("a", true);
-  const b <- step("b", secondOk);
-  const c <- step("c", true);
-  a + b + c
+  const a = try step("a", true);
+  const b = try step("b", secondOk);
+  const c = try step("c", true);
+  return a + b + c;
 };
 
 console.log(JSON.stringify(chain(true)), steps.join(","));
@@ -2790,9 +2790,9 @@ const fetchNum = async (n: number): Promise<Res<number, string>> =>
   n > 0 ? Res.Ok(n) : Res.Err("not positive");
 
 const total = async (a: number, b: number) => result {
-  const x <- await fetchNum(a);
-  const y <- await fetchNum(b);
-  x + y
+  const x = try await fetchNum(a);
+  const y = try await fetchNum(b);
+  return x + y;
 };
 
 total(2, 3).then((r) => console.log(JSON.stringify(r)));
@@ -2828,11 +2828,11 @@ const getPermission = (u: User, c: Company): TResult<string, string> =>
   Result.Ok(u.name.trim() + "@" + c.name);
 
 const view = (id: number) => result {
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
   const normalized = user.name |> .trim() |> .toLowerCase();
-  const permission <- getPermission(user, company);
-  { user, company, permission, normalized }
+  const permission = try getPermission(user, company);
+  return { user, company, permission, normalized };
 };
 
 console.log(JSON.stringify(view(1)));

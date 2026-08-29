@@ -1,9 +1,9 @@
 # TASK-293: Cut over syntax and nearest-scope propagation
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: See git history
 
 ## Purpose
 
@@ -28,15 +28,25 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Record the Result target on each claimed `try`
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: A statement-bodied Result block may contain both its own
+  propagation and a nested function's propagation.
+- **Alternatives considered**: Infer the target again during Core lowering,
+  or preserve the claimer's nearest-scope result on the AST node.
+- **Decision and rationale**: Preserve the direct `try` spans on the Result
+  block and assign `ResultRegionId` only to matching HIR nodes. Nested
+  function propagation therefore retains its enclosing-function target.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started tracing the legacy bind-based Result claimer and the expression `try` parser.
+- 2026-08-30: Added speculative statement-body claiming, nearest-scope span
+  recording, Result-targeted Core propagation, and source-preserving return
+  rewriting for direct Result `try` expressions.
+- 2026-08-30: Repaired the nested-function boundary: Result-targeted
+  propagations are emitted only by the Result body printer, while overlapping
+  opaque source ranges retain the nested function's bytes.
 
 ## Issues and resolutions
 
@@ -48,14 +58,12 @@ Test obligation from the plan: every §5 example, nested claim stops, ASI and Ty
 
 Green condition: claimed inner try exits only its nearest ResultRegion; nested function try exits its function; no valid TypeScript bytes change; no M0-affected program silently moves from a function target to a ResultRegion target.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Ships to `main` alone: not stated in the plan.
-
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Result claiming, nearest-target lowering, nested function boundaries, source
+maps, and both host printers use the same Result-region identity.

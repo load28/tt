@@ -200,25 +200,12 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
             Segment::ResultBlock(block) => {
                 out.push((block.keyword_off, 6, SemanticTokenKind::Keyword));
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => walk(src, stmts, out),
-                        ResultItem::Bind(bind) => {
-                            let span = bind.binding_span;
-                            if is_identifier(&src[span.start..span.end]) {
-                                out.push((
-                                    span.start,
-                                    span.end - span.start,
-                                    SemanticTokenKind::Variable,
-                                ));
-                            }
-                            if let Some(arrow_off) = expect_word(src, span.end, "<-") {
-                                out.push((arrow_off, 2, SemanticTokenKind::Operator));
-                            }
-                            walk(src, &bind.expr, out);
-                        }
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    walk(src, stmts, out);
                 }
-                walk(src, &block.value, out);
+                if let Some(value) = &block.value {
+                    walk(src, value, out);
+                }
             }
         }
     }
@@ -352,28 +339,6 @@ fn deny_in(src: &str, tokens: &[Token], out: &mut Vec<(usize, usize, SemanticTok
     }
 }
 
-/// The offset of `word` after `at` when only ASCII whitespace separates
-/// them; `None` otherwise (comments in between — rare — just skip the
-/// token, never mis-place it).
-fn expect_word(src: &str, at: usize, word: &str) -> Option<usize> {
-    let bytes = src.as_bytes();
-    let mut pos = at;
-    while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
-        pos += 1;
-    }
-    src[pos..].starts_with(word).then_some(pos)
-}
-
-fn is_identifier(text: &str) -> bool {
-    let mut chars = text.bytes();
-    chars
-        .next()
-        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_' || b == b'$')
-        && text
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'$')
-}
-
 /// Line starts, for byte-offset → line / UTF-16-column conversion.
 struct LineIndex {
     starts: Vec<usize>,
@@ -465,12 +430,10 @@ mod tests {
 
     #[test]
     fn multi_line_flow_and_result_bind_are_claimed() {
-        let src = "const f = flow\n  |> trim\n  |> parse;\nconst r = result {\n  const n <- get();\n  n\n};\n";
+        let src = "const f = flow\n  |> trim\n  |> parse;\nconst r = result {\n  const n = try get();\n  return n;\n};\n";
         let tokens = kinds_at(src);
         assert!(tokens.contains(&("flow".into(), SemanticTokenKind::Keyword)));
         assert!(tokens.contains(&("result".into(), SemanticTokenKind::Keyword)));
-        assert!(tokens.contains(&("n".into(), SemanticTokenKind::Variable)));
-        assert!(tokens.contains(&("<-".into(), SemanticTokenKind::Operator)));
     }
 
     #[test]

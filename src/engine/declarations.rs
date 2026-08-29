@@ -262,12 +262,12 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => collect_matches(stmts, out),
-                        ResultItem::Bind(bind) => collect_matches(&bind.expr, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    collect_matches(stmts, out);
                 }
-                collect_matches(&block.value, out);
+                if let Some(value) = &block.value {
+                    collect_matches(value, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {

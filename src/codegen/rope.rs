@@ -15,7 +15,7 @@ use std::borrow::Cow;
 
 use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubject};
 use crate::program_syntax::SourceSpan;
-use crate::{AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ScrutineeTemp};
+use crate::{AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp, ScrutineeTemp};
 
 /// What a [`Piece::Mark`] marks — the two things codegen writes that a
 /// type checker can be *asked about*, each paired with the source
@@ -26,6 +26,8 @@ pub(crate) enum MarkKind {
     Scrutinee,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
+    /// A value explicitly returned from a `result` block.
+    ResultReturn,
 }
 
 enum Piece<'a> {
@@ -481,6 +483,7 @@ impl<'a> TargetFile<'a> {
         let mut mappings: Vec<EmitMapping> = Vec::new();
         let mut marks: Vec<ScrutineeTemp> = Vec::new();
         let mut payloads: Vec<PayloadTemp> = Vec::new();
+        let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
@@ -534,6 +537,14 @@ impl<'a> TargetFile<'a> {
                     src: *src,
                     out: out.len(),
                 }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::ResultReturn,
+                } => result_returns.push(ResultReturnTemp {
+                    src: *src,
+                    src_end: *src,
+                    out: out.len(),
+                }),
                 TargetPiece::ScopeOpen => scopes.push(line_indent(&out).to_owned()),
                 TargetPiece::ScopeClose => {
                     scopes.pop();
@@ -571,12 +582,14 @@ impl<'a> TargetFile<'a> {
         }
         marks.sort_by_key(|mark| mark.out);
         payloads.sort_by_key(|mark| mark.out);
+        result_returns.sort_by_key(|mark| mark.out);
         Flat {
             code: out,
             mappings,
             scrutinee_temps: marks,
             payload_temps: payloads,
             anchors,
+            result_return_temps: result_returns,
         }
     }
 }
@@ -756,6 +769,15 @@ impl<'a> Rope<'a> {
         self.pieces.push(Piece::Mark {
             src,
             kind: MarkKind::Payload,
+        });
+    }
+
+    /// Notes that the next copied source byte begins an explicit Result
+    /// return value, so a checker query can use its emitted position.
+    pub(crate) fn push_result_return_mark(&mut self, src: usize) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::ResultReturn,
         });
     }
 
@@ -1040,6 +1062,8 @@ pub(crate) struct Flat {
     pub scrutinee_temps: Vec<ScrutineeTemp>,
     pub payload_temps: Vec<PayloadTemp>,
     pub anchors: Vec<EmitAnchor>,
+    /// Explicit Result return values in source and emitted coordinates.
+    pub result_return_temps: Vec<ResultReturnTemp>,
 }
 
 #[cfg(test)]

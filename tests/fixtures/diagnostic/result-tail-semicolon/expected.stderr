@@ -1,7 +1,7 @@
-error[result-tail-semicolon]: `result` block must end with a value expression
- --> input.tt:6:15
+error[result-legacy-binding]: `<-` is no longer valid in a `result` block
+ --> input.tt:5:5
   |
-6 |     { amount };
-  |               ^
+5 |     const amount <- total();
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^
   |
-  = help: if this statement is the block's value, remove its trailing `;`
+  = help: replace `<-` with `= try`; then add an explicit Result return: `= try`

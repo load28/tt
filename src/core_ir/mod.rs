@@ -350,14 +350,13 @@ pub(crate) struct ResultRegion {
     pub id: ResultRegionId,
     pub node: NodeId,
     pub items: Vec<ResultRegionItem>,
-    pub value: ExprId,
+    pub value: Option<ExprId>,
     pub is_async: bool,
 }
 
 #[derive(Debug)]
 pub(crate) enum ResultRegionItem {
     Statements(BodyId),
-    Propagate(Propagate),
 }
 
 #[derive(Debug)]
@@ -406,32 +405,9 @@ mod tests {
     }
 
     #[test]
-    fn try_and_result_binding_are_one_propagate_ir() {
-        let source = "function f() {\n\
-              const a = try read();\n\
-              return result { const b <- parse(a); b };\n\
-            }\n";
+    fn return_try_in_a_result_body_targets_its_nearest_region() {
+        let source = "const value = result { return try read(); };\n";
         let core = lower(source);
-        let statements = core
-            .bodies
-            .iter()
-            .flat_map(|body| &body.statements)
-            .filter_map(|statement| match statement {
-                Statement::Propagate(propagate) => Some(propagate),
-                _ => None,
-            })
-            .count();
-        let regions = core
-            .exprs
-            .iter()
-            .filter_map(|expr| match expr {
-                Expr::ResultRegion(region) => Some(region),
-                _ => None,
-            })
-            .flat_map(|region| &region.items)
-            .filter(|item| matches!(item, ResultRegionItem::Propagate(_)))
-            .count();
-        assert_eq!((statements, regions), (1, 1));
         let region = core
             .exprs
             .iter()
@@ -440,15 +416,48 @@ mod tests {
                 _ => None,
             })
             .expect("result region");
-        let propagate = region
+        let body = region
             .items
             .iter()
-            .find_map(|item| match item {
-                ResultRegionItem::Propagate(propagate) => Some(propagate),
-                ResultRegionItem::Statements(_) => None,
+            .map(|item| {
+                let ResultRegionItem::Statements(body) = item;
+                *body
             })
-            .expect("result binding");
+            .next()
+            .expect("result statement body");
+        let propagate = core.bodies[body.index()]
+            .statements
+            .iter()
+            .find_map(|statement| match statement {
+                Statement::Expr(expr) => match &core.exprs[expr.index()] {
+                    Expr::Propagate(propagate) => Some(propagate),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .expect("return try propagation");
         assert_eq!(propagate.exit, ExitTarget::ResultRegion(region.id));
+    }
+
+    #[test]
+    fn nested_function_try_keeps_its_function_target() {
+        let source = "const value = result {\n  const inner = () => { return Result.Ok(try step()); };\n  return try inner();\n};\n";
+        let core = lower(source);
+        let exits: Vec<_> = core
+            .exprs
+            .iter()
+            .filter_map(|expr| match expr {
+                Expr::Propagate(propagate) => Some(propagate.exit),
+                _ => None,
+            })
+            .collect();
+        assert!(exits.contains(&ExitTarget::EnclosingFunction), "{core:?}");
+        assert!(
+            exits
+                .iter()
+                .any(|exit| matches!(exit, ExitTarget::ResultRegion(_))),
+            "{core:?}"
+        );
     }
 
     #[test]
@@ -485,7 +494,7 @@ mod tests {
     fn execution_shape_is_fixed_before_target_lowering() {
         let source = "async function f(e: E) {\n\
             const x = match (e) { A => await read(), _ => 0 };\n\
-            return result { const y <- await parse(x); y };\n\
+            return result { const y = try await parse(x); return y; };\n\
         }\n";
         let core = lower(source);
         assert!(
@@ -505,7 +514,7 @@ mod tests {
     fn target_metadata_is_present_for_every_generated_surface() {
         let source = "const a = try read();\n\
             const p = value |> step;\n\
-            const r = result { const b <- parse(a); b };\n";
+            const r = result { const b = try parse(a); return b; };\n";
         let core = lower(source);
         let propagate = core
             .bodies
@@ -520,9 +529,11 @@ mod tests {
         assert!(core.exprs.iter().any(|expr| {
             matches!(expr, Expr::Apply(Apply { steps, .. }) if steps.iter().all(|step| step.node.0 > 0))
         }));
-        assert!(core.exprs.iter().any(|expr| {
-            matches!(expr, Expr::ResultRegion(ResultRegion { items, .. }) if items.iter().any(|item| matches!(item, ResultRegionItem::Propagate(Propagate { node, .. }) if node.0 > 0)))
-        }));
+        assert!(
+            core.exprs
+                .iter()
+                .any(|expr| matches!(expr, Expr::ResultRegion(_)))
+        );
     }
 
     #[test]

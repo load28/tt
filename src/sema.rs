@@ -338,43 +338,9 @@ impl Checker {
                 )
                 .code(DiagnosticCode::StrayResult)
                 .help(
-                    "every binding is `const <binding> <- <expression>;`, and the block must \
-                     end with an expression",
+                    "use `const binding = try expression;` and finish every reachable success \
+                     path with `return`",
                 ),
-            );
-        }
-        for &span in &program.result_missing_kw {
-            self.error(
-                TtError::span(
-                    span.start,
-                    span.end,
-                    "`result` binding is missing its declaration keyword".to_string(),
-                )
-                .code(DiagnosticCode::ResultMissingKeyword)
-                // The keyword goes in front of the binding, so the fix is
-                // one insertion the reporter can write. `const` is the
-                // suggested one; `let` and `var` bind the same way and the
-                // message names them.
-                .suggest(
-                    "declare the binding — `const` (or `let`/`var`) in front of it",
-                    span.start,
-                    span.start,
-                    "const ",
-                ),
-            );
-        }
-        for &span in &program.result_nested_binds {
-            self.error(
-                TtError::span(
-                    span.start,
-                    span.end,
-                    "`<-` binding must be a top-level statement of the `result` block — \
-                     nested inside a block or a function it cannot early-return the \
-                     block's `Err`"
-                        .to_string(),
-                )
-                .code(DiagnosticCode::ResultNestedBinding)
-                .help("hoist it to the block's top level, or `match` on the `Result` instead"),
             );
         }
         for segment in &program.segments {
@@ -513,7 +479,7 @@ impl Checker {
     fn check_try_expr(&mut self, expr: &crate::ast::TryExpr, place: Place) {
         // Ordinary expression propagation is judged after the SWC host owner
         // and evaluation protocol are known. A result block is the one
-        // surface-owned boundary: its `<-` propagation targets that region.
+        // surface-owned boundary: its direct propagation targets that region.
         if place == Place::ResultValueRegion {
             self.error(
                 TtError::span(
@@ -524,23 +490,14 @@ impl Checker {
                 .code(DiagnosticCode::TryCrossesValueRegion)
                 .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
             );
-        } else if place == Place::ResultRegion {
-            self.error(
-                TtError::span(
-                    expr.span.start,
-                    expr.span.end,
-                    "`try` cannot be used directly inside a `result` block — its generated \
-                     return would leave the block instead of the enclosing function"
-                        .to_string(),
-                )
-                .code(DiagnosticCode::TryPlacement)
-                .help("bind the Result with `<-` inside this block"),
-            );
         }
         self.visit_program(&expr.expr, Ctx::Expr, Place::ValueRegion);
     }
 
     fn check_try_placement(&mut self, span: Span, in_function: bool, place: Place) {
+        if place == Place::ResultRegion {
+            return;
+        }
         if !in_function && place != Place::Function {
             let (message, help) = if place == Place::Module {
                 (
@@ -556,7 +513,7 @@ impl Checker {
                      a `return`, which would exit this construct's own IIFE instead of the \
                      enclosing function",
                     "extract the logic into a function (a `try` inside a function written \
-                     here is fine), or use a `<-` binding in a `result` block",
+                     here is fine), or move the propagation into a statement-bodied `result` block",
                 )
             };
             self.error(
@@ -573,7 +530,7 @@ impl Checker {
     /// [`Place::ValueRegion`] regions — where the `else`'s exits would leave the
     /// construct's value boundary — need a function written in the region.
     fn check_let_else(&mut self, stmt: &LetElseStmt, place: Place) {
-        if matches!(place, Place::ValueRegion | Place::ResultRegion) && !stmt.in_function {
+        if matches!(place, Place::ValueRegion | Place::ResultValueRegion) && !stmt.in_function {
             self.error(
                 TtError::span(
                     stmt.head_span.start,
@@ -694,17 +651,93 @@ impl Checker {
     /// let-else there would return from the *block*, not the enclosing
     /// function), and the bindings and the trailing value are expressions.
     fn check_result_block(&mut self, block: &ResultBlock) {
+        let statement_place = if block.value.is_some() {
+            Place::ResultValueRegion
+        } else {
+            Place::ResultRegion
+        };
         for item in &block.items {
-            match item {
-                ResultItem::Stmts(stmts) => {
-                    self.visit_program(stmts, Ctx::Stmt, Place::ResultRegion)
-                }
-                ResultItem::Bind(bind) => {
-                    self.visit_program(&bind.expr, Ctx::Expr, Place::ResultRegion)
-                }
+            let ResultItem::Stmts(stmts) = item;
+            self.visit_program(stmts, Ctx::Stmt, statement_place);
+        }
+        if let Some(value) = &block.value {
+            self.visit_program(value, Ctx::Expr, Place::ResultValueRegion);
+        } else {
+            self.check_result_outward_controls(block);
+            if !self.result_body_completes(block) {
+                self.error(
+                    TtError::span(
+                        block.keyword_off,
+                        block.body_span.end,
+                        "`result` can reach the end of its body without a success value"
+                            .to_string(),
+                    )
+                    .code(DiagnosticCode::ResultNoSuccessValue)
+                    .help("return a value from every reachable path in this `result` block"),
+                );
             }
         }
-        self.visit_program(&block.value, Ctx::Expr, Place::ResultRegion);
+    }
+
+    fn check_result_outward_controls(&mut self, block: &ResultBlock) {
+        let Some(ResultItem::Stmts(body)) = block.items.first() else {
+            return;
+        };
+        for control in
+            crate::flow::outward_controls_in_span(&self.source, &self.tokens, body, block.body_span)
+        {
+            let (span, code, message, help) = match control {
+                crate::flow::OutwardControl::Break {
+                    span,
+                    labeled: false,
+                } => (
+                    span,
+                    DiagnosticCode::ResultBreakCrossing,
+                    "`break` cannot leave a `result` block",
+                    "break only a loop or switch written inside this `result` block",
+                ),
+                crate::flow::OutwardControl::Continue {
+                    span,
+                    labeled: false,
+                } => (
+                    span,
+                    DiagnosticCode::ResultContinueCrossing,
+                    "`continue` cannot leave a `result` block",
+                    "continue only a loop written inside this `result` block",
+                ),
+                crate::flow::OutwardControl::Yield(span) => (
+                    span,
+                    DiagnosticCode::ResultYieldCrossing,
+                    "`yield` cannot cross a `result` block",
+                    "yield outside this `result` block instead",
+                ),
+                crate::flow::OutwardControl::Break {
+                    span,
+                    labeled: true,
+                }
+                | crate::flow::OutwardControl::Continue {
+                    span,
+                    labeled: true,
+                } => (
+                    span,
+                    DiagnosticCode::ResultLabelCrossing,
+                    "a labeled control transfer cannot leave a `result` block",
+                    "keep the label target inside this `result` block",
+                ),
+            };
+            self.error(
+                TtError::span(span.start, span.end, message.to_string())
+                    .code(code)
+                    .help(help),
+            );
+        }
+    }
+
+    fn result_body_completes(&self, block: &ResultBlock) -> bool {
+        let Some(ResultItem::Stmts(body)) = block.items.first() else {
+            return false;
+        };
+        crate::flow::program_diverges_in_span(&self.source, &self.tokens, body, block.body_span)
     }
 
     fn check_variant(&mut self, decl: &VariantDecl) {

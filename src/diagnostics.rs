@@ -48,17 +48,28 @@ pub enum DiagnosticCode {
     StrayIfLet,
     /// A `result` block the parser could not claim.
     StrayResult,
-    /// A `result` block value expression terminated by a semicolon.
-    ResultTailSemicolon,
     /// A `variant` committed to tt syntax but not fully parsed.
     MalformedVariant,
     /// A `match` committed to tt syntax but not fully parsed.
     MalformedMatch,
-    /// A `result` binding missing its declaration keyword.
-    ResultMissingKeyword,
-    /// A `result` binding below the block's top level — it cannot
-    /// early-return the block.
-    ResultNestedBinding,
+    /// A claimed statement-bodied Result block can fall through without an
+    /// explicit successful completion.
+    ResultNoSuccessValue,
+    /// A Result expression is evaluated only for its side effects, which
+    /// would discard a possible Err result.
+    ResultValueDiscarded,
+    /// Removed `<-` Result binding syntax with a migration edit.
+    ResultLegacyBinding,
+    /// A Result block return would wrap an already-Result value.
+    ResultReturnNested,
+    /// A `break` would leave a ResultRegion.
+    ResultBreakCrossing,
+    /// A `continue` would leave a ResultRegion.
+    ResultContinueCrossing,
+    /// A `yield` would leave a ResultRegion.
+    ResultYieldCrossing,
+    /// A labeled jump would leave a ResultRegion.
+    ResultLabelCrossing,
     /// A `flow` composition whose first step is a method step.
     FlowFirstStepMethod,
     /// A `try` outside the top-level statement stream.
@@ -123,11 +134,16 @@ impl DiagnosticCode {
             DiagnosticCode::InvalidOptionalReceiver => "invalid-optional-receiver",
             DiagnosticCode::StrayIfLet => "stray-if-let",
             DiagnosticCode::StrayResult => "stray-result",
-            DiagnosticCode::ResultTailSemicolon => "result-tail-semicolon",
             DiagnosticCode::MalformedVariant => "malformed-variant",
             DiagnosticCode::MalformedMatch => "malformed-match",
-            DiagnosticCode::ResultMissingKeyword => "result-missing-keyword",
-            DiagnosticCode::ResultNestedBinding => "result-nested-binding",
+            DiagnosticCode::ResultNoSuccessValue => "result-no-success-value",
+            DiagnosticCode::ResultValueDiscarded => "result-value-discarded",
+            DiagnosticCode::ResultLegacyBinding => "result-legacy-binding",
+            DiagnosticCode::ResultReturnNested => "result-return-nested",
+            DiagnosticCode::ResultBreakCrossing => "result-break-crossing",
+            DiagnosticCode::ResultContinueCrossing => "result-continue-crossing",
+            DiagnosticCode::ResultYieldCrossing => "result-yield-crossing",
+            DiagnosticCode::ResultLabelCrossing => "result-label-crossing",
             DiagnosticCode::FlowFirstStepMethod => "flow-first-step-method",
             DiagnosticCode::TryPlacement => "try-placement",
             DiagnosticCode::TryCrossesValueRegion => "try-crosses-value-region",
@@ -167,11 +183,16 @@ impl DiagnosticCode {
         DiagnosticCode::InvalidOptionalReceiver,
         DiagnosticCode::StrayIfLet,
         DiagnosticCode::StrayResult,
-        DiagnosticCode::ResultTailSemicolon,
         DiagnosticCode::MalformedVariant,
         DiagnosticCode::MalformedMatch,
-        DiagnosticCode::ResultMissingKeyword,
-        DiagnosticCode::ResultNestedBinding,
+        DiagnosticCode::ResultNoSuccessValue,
+        DiagnosticCode::ResultValueDiscarded,
+        DiagnosticCode::ResultLegacyBinding,
+        DiagnosticCode::ResultReturnNested,
+        DiagnosticCode::ResultBreakCrossing,
+        DiagnosticCode::ResultContinueCrossing,
+        DiagnosticCode::ResultYieldCrossing,
+        DiagnosticCode::ResultLabelCrossing,
         DiagnosticCode::FlowFirstStepMethod,
         DiagnosticCode::TryPlacement,
         DiagnosticCode::TryCrossesValueRegion,
@@ -276,18 +297,6 @@ have no `;`. Text that is meant to be an ordinary identifier followed by a
 block passes through untouched; text with a `<-` in it does not."
             }
 
-            DiagnosticCode::ResultTailSemicolon => {
-                "\
-A `result` block ends with a statement instead of a value expression.
-
-Bindings and ordinary statements inside the block end with `;`, and a final
-expression without `;` supplies the block's value. When the last item is an
-expression statement, ttc cannot know whether it was meant as a side effect
-or as that value; the diagnostic therefore offers guidance but no automatic
-edit. Add a value expression, or remove the semicolon when that statement was
-intended to be the value."
-            }
-
             DiagnosticCode::MalformedVariant => {
                 "\
 The text committed to tt's `variant` syntax but did not parse as one.
@@ -306,28 +315,6 @@ The scrutinee parentheses are mandatory and may not be empty. Each arm is
 needs its own parentheses (`Tag => ({ a: 1 })`), and scrutinees containing
 a top-level `<` or `>` comparison need parenthesizing so they cannot be
 read as type arguments."
-            }
-
-            DiagnosticCode::ResultMissingKeyword => {
-                "\
-A `result` block binding is missing its declaration keyword.
-
-Every binding is `const`, `let`, or `var`:
-
-    const user <- getUser(id);
-
-`y <- g();` is reported rather than passed through because inside a
-claimed `result` block the text cannot be TypeScript. If an actual
-comparison was meant, separate the operators: `y < -g()`."
-            }
-
-            DiagnosticCode::ResultNestedBinding => {
-                "\
-A `<-` binding was written below the top level of its `result` block.
-
-A binding's failure exits the whole block, and a statement inside an `if`,
-a loop or a nested function has no way to do that. Hoist the binding to
-the block's statement list, or handle the failure there with `match`."
             }
 
             DiagnosticCode::FlowFirstStepMethod => {
@@ -355,6 +342,65 @@ loop headers, parameter defaults, and class field initializers.
 
 Move the propagation into a function-body statement when the surrounding
 expression cannot carry it."
+            }
+
+            DiagnosticCode::ResultNoSuccessValue => {
+                "\
+A `result` block can finish without producing an `Ok` value.
+
+A statement-bodied Result block completes successfully only with `return value;`
+or `return;`. Add a return on every reachable path."
+            }
+
+            DiagnosticCode::ResultValueDiscarded => {
+                "\
+A `result` expression was used as a discarded statement value.
+
+Store, return, or otherwise consume the Result so its `Err` remains observable."
+            }
+            DiagnosticCode::ResultLegacyBinding => {
+                "\
+`<-` is no longer Result binding syntax.
+
+Write an ordinary declaration with `= try expression;`, then complete the
+Result block with `return value;`."
+            }
+
+            DiagnosticCode::ResultReturnNested => {
+                "\
+A `result` block return already has a Result value.
+
+`return value;` completes the block with `Ok(value)`, so returning a Result
+there creates a nested Result. Write `return try value;` when the inner Err
+should complete the enclosing block instead. This diagnostic is emitted only
+when the TypeScript checker proves the returned value has the Result shape."
+            }
+            DiagnosticCode::ResultBreakCrossing => {
+                "\
+A `break` in a `result` block would leave the block's generated completion region.
+
+Break only a loop or switch written inside the `result` block, or move the
+control transfer outside the block."
+            }
+            DiagnosticCode::ResultContinueCrossing => {
+                "\
+A `continue` in a `result` block would leave the block's generated completion region.
+
+Continue only a loop written inside the `result` block, or move the control
+transfer outside the block."
+            }
+            DiagnosticCode::ResultYieldCrossing => {
+                "\
+A `yield` in a `result` block would cross the block's completion region.
+
+Yield outside the block, or return a Result value from the generator instead."
+            }
+            DiagnosticCode::ResultLabelCrossing => {
+                "\
+A labeled control transfer in a `result` block would leave the block's completion region.
+
+Keep the label and its target inside the `result` block, or move the transfer
+outside the block."
             }
 
             DiagnosticCode::TryCrossesValueRegion => {
@@ -628,11 +674,8 @@ look up."
                 | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::StrayResult
-                | DiagnosticCode::ResultTailSemicolon
                 | DiagnosticCode::MalformedVariant
                 | DiagnosticCode::MalformedMatch
-                | DiagnosticCode::ResultMissingKeyword
-                | DiagnosticCode::ResultNestedBinding
                 | DiagnosticCode::VariantInvalidFieldType
                 | DiagnosticCode::VerifyFailed
                 | DiagnosticCode::SourceNotTypeScript
@@ -951,7 +994,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 35);
+        assert_eq!(DiagnosticCode::ALL.len(), 40);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();

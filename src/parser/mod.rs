@@ -259,12 +259,12 @@ fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => visit_programs(stmts, visit),
-                        ResultItem::Bind(bind) => visit_programs(&bind.expr, visit),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    visit_programs(stmts, visit);
                 }
-                visit_programs(&block.value, visit);
+                if let Some(value) = &block.value {
+                    visit_programs(value, visit);
+                }
             }
         }
     }
@@ -597,9 +597,7 @@ impl Parser<'_> {
         let mut malformed = Vec::new();
         let mut stray_pipes: Vec<usize> = Vec::new();
         let mut stray_if_lets: Vec<usize> = Vec::new();
-        let mut stray_results: Vec<usize> = Vec::new();
-        let mut result_missing_kw: Vec<Span> = Vec::new();
-        let mut result_nested_binds: Vec<Span> = Vec::new();
+        let stray_results: Vec<usize> = Vec::new();
         let mut seg_start = start;
         let mut i = 0usize;
 
@@ -866,22 +864,16 @@ impl Parser<'_> {
                 });
             }
 
-            // `result { ... }` — a computation block. Only a block that
-            // carries a Result binding (`const x <- ...;`) is claimed: a
-            // declaration keyword followed by `<-` is never valid
-            // TypeScript, while `result` alone is an ordinary identifier
-            // that a block statement may legally follow.
+            // `result { ... }` is contextual: only a body with a nearest
+            // direct tt `try` is claimed. Otherwise `result` remains an
+            // ordinary identifier that a block statement may follow.
             if !dotted
                 && word == "result"
                 && matches!(tokens.get(i + 1), Some(t) if matches!(t.kind, TokenKind::Punct(b'{')))
             {
                 let (attempt, nested) =
                     results::parse_result_block(Cursor::new(self, tokens, i + 1, end), tok.span);
-                result_nested_binds.extend(nested.iter().copied());
-                recoveries.extend(nested.into_iter().map(|span| RecoveryNode {
-                    span,
-                    kind: RecoveryKind::Statement,
-                }));
+                let _ = nested;
                 match attempt {
                     results::Attempt::Claimed(cur, byte_end, block) => {
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
@@ -890,39 +882,26 @@ impl Parser<'_> {
                         i = cur.idx;
                         continue;
                     }
-                    results::Attempt::Malformed(span) => {
-                        stray_results.push(tok.span.start);
-                        recoveries.push(RecoveryNode {
-                            span,
-                            kind: RecoveryKind::Expression,
-                        });
-                    }
-                    results::Attempt::MissingValue {
+                    results::Attempt::LegacyBinding {
                         span,
+                        arrow,
                         recovery,
-                        may_be_value,
                     } => {
-                        let error = crate::error::TtError::span(
-                            span.start,
-                            span.end,
-                            "`result` block must end with a value expression".to_string(),
-                        )
-                        .code(crate::DiagnosticCode::ResultTailSemicolon)
-                        .owner(recovery.start, recovery.end);
-                        malformed.push(if may_be_value {
-                            error.help(
-                                "if this statement is the block's value, remove its trailing `;`",
+                        malformed.push(
+                            crate::error::TtError::span(
+                                span.start,
+                                span.end,
+                                "`<-` is no longer valid in a `result` block".to_string(),
                             )
-                        } else {
-                            error
-                        });
-                        recoveries.push(RecoveryNode {
-                            span: recovery,
-                            kind: RecoveryKind::Expression,
-                        });
-                    }
-                    results::Attempt::MissingKeyword { span, recovery } => {
-                        result_missing_kw.push(span);
+                            .code(crate::DiagnosticCode::ResultLegacyBinding)
+                            .suggest(
+                                "replace `<-` with `= try`; then add an explicit Result return",
+                                arrow.start,
+                                arrow.end,
+                                "= try",
+                            )
+                            .owner(recovery.start, recovery.end),
+                        );
                         recoveries.push(RecoveryNode {
                             span: recovery,
                             kind: RecoveryKind::Expression,
@@ -964,8 +943,6 @@ impl Parser<'_> {
             stray_pipes,
             stray_if_lets,
             stray_results,
-            result_missing_kw,
-            result_nested_binds,
         }
     }
 

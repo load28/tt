@@ -141,6 +141,12 @@ pub(crate) fn emit_with_map<'a>(
             .map(SourceSpan::from)
     }));
     let rewritten_operations = target.rewritten_operations.clone();
+    let result_return_args: Vec<_> = target
+        .value_exits
+        .iter()
+        .filter(|(expr, _)| matches!(core.exprs[expr.index()], Expr::ResultRegion(_)))
+        .flat_map(|(_, exits)| exits.iter().filter_map(|exit| exit.argument))
+        .collect();
     let target_recovered_propagations: Vec<_> = target
         .recovered_propagations
         .iter()
@@ -169,6 +175,7 @@ pub(crate) fn emit_with_map<'a>(
             .map(|(expr, _)| expr)
             .collect(),
         expression_boundary_name: target.expression_boundary_name,
+        result_return_name: target.result_return_name,
         conditional_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
@@ -213,6 +220,7 @@ pub(crate) fn emit_with_map<'a>(
     // argument) is claimed by the exit rewrite, as is the operator frame of
     // a lowered conditional operation; the arguments themselves stay
     // pass-through.
+    let result_return_rewrites = emitter.result_return_rewrite_spans();
     let mut rewritten: Vec<SourceSpan> = emitter
         .value_exits
         .values()
@@ -231,6 +239,27 @@ pub(crate) fn emit_with_map<'a>(
             None => vec![exit.statement],
         })
         .collect();
+    rewritten.extend(result_return_rewrites);
+    // Result-targeted propagation is emitted as a completion sequence rather
+    // than a copied source fragment. Register its complete tt span even when
+    // it sits inside a rewritten Result-owned return.
+    rewritten.extend(core.exprs.iter().filter_map(|expr| {
+        match expr {
+            Expr::ResultRegion(region) => semantic
+                .hir
+                .source_map
+                .node_span(region.node)
+                .map(SourceSpan::from),
+            Expr::Propagate(propagate) if matches!(propagate.exit, ExitTarget::ResultRegion(_)) => {
+                semantic
+                    .hir
+                    .source_map
+                    .node_span(propagate.node)
+                    .map(SourceSpan::from)
+            }
+            _ => None,
+        }
+    }));
     rewritten.extend(rewritten_operations);
     rewritten.extend(target_recovered_propagations);
     let preservation = SourcePreservation {
@@ -238,7 +267,14 @@ pub(crate) fn emit_with_map<'a>(
         relocated,
         rewritten,
     };
-    output.flatten(source, &preservation)
+    let mut flat = output.flatten(source, &preservation);
+    for result_return in &mut flat.result_return_temps {
+        result_return.src_end = result_return_args
+            .iter()
+            .find(|argument| argument.start == result_return.src)
+            .map_or(result_return.src, |argument| argument.end);
+    }
+    flat
 }
 
 /// Inline `$tt_ap(v, f)` as `f(v)` exactly when moving the input behind the
@@ -450,16 +486,12 @@ fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpa
             }
             Expr::ResultRegion(region) => {
                 for item in &region.items {
-                    match item {
-                        ResultRegionItem::Statements(body) => {
-                            walk_body(semantic, core, *body, out);
-                        }
-                        ResultRegionItem::Propagate(propagate) => {
-                            walk_expr(semantic, core, propagate.value, out);
-                        }
-                    }
+                    let ResultRegionItem::Statements(body) = item;
+                    walk_body(semantic, core, *body, out);
                 }
-                walk_expr(semantic, core, region.value, out);
+                if let Some(value) = region.value {
+                    walk_expr(semantic, core, value, out);
+                }
             }
             Expr::Template(template) => {
                 for part in &template.parts {
@@ -502,6 +534,7 @@ struct TargetRewritePlan {
     scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     value_exits: HashMap<ExprId, Vec<HostExit>>,
     expression_boundary_name: String,
+    result_return_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -561,6 +594,7 @@ struct SourceReplacement {
 struct LocalSourceEdit {
     span: SourceSpan,
     text: String,
+    result_return_mark: Option<SourceSpan>,
 }
 
 impl TargetRewritePlan {
@@ -766,6 +800,7 @@ impl TargetRewritePlan {
             .map(|value| (value.expr, value.exits.clone()))
             .collect();
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
+        let result_return_name = lowering.result_return_name().to_owned();
         Self {
             owner_slots,
             for_initializer_propagations,
@@ -781,6 +816,7 @@ impl TargetRewritePlan {
             scheduled_slots,
             value_exits,
             expression_boundary_name,
+            result_return_name,
         }
     }
 }
@@ -804,6 +840,7 @@ struct Emitter<'a> {
     value_exits: HashMap<ExprId, Vec<HostExit>>,
     recovered_propagations: HashSet<ExprId>,
     expression_boundary_name: String,
+    result_return_name: String,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.
@@ -941,6 +978,40 @@ fn push_region_break(out: &mut Rope<'_>, label: Option<&str>) {
 }
 
 impl<'a> Emitter<'a> {
+    fn result_return_rewrite_spans(&self) -> Vec<SourceSpan> {
+        self.core
+            .exprs
+            .iter()
+            .enumerate()
+            .flat_map(|(index, expr)| {
+                let Expr::ResultRegion(region) = expr else {
+                    return Vec::new();
+                };
+                let expr = ExprId::new(index);
+                let exits = self
+                    .value_exits
+                    .get(&expr)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]);
+                region
+                    .items
+                    .iter()
+                    .map(|item| {
+                        let ResultRegionItem::Statements(body) = item;
+                        *body
+                    })
+                    .flat_map(|body| {
+                        exits.iter().filter_map(move |exit| {
+                            exit.argument
+                                .and_then(|argument| self.result_return_propagate(body, argument))
+                                .map(|_| exit.statement)
+                        })
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
     fn span(&self, node: NodeId) -> hir::Span {
         self.semantic
             .hir
@@ -1079,7 +1150,19 @@ impl<'a> Emitter<'a> {
             if cursor < edit.span.start {
                 out.append(self.source_range_rope(hir::Span::new(cursor, edit.span.start)));
             }
-            out.push_lit(edit.text.clone());
+            if let Some(mark) = edit.result_return_mark {
+                let marker_offset = edit
+                    .text
+                    .find(&self.result_return_name)
+                    .unwrap_or_else(|| crate::ice::bug!("Result return edit lost its temporary"));
+                let name_end = marker_offset + self.result_return_name.len();
+                out.push_lit(edit.text[..marker_offset].to_owned());
+                out.push_result_return_mark(mark.start);
+                out.push_lit(edit.text[marker_offset..name_end].to_owned());
+                out.push_lit(edit.text[name_end..].to_owned());
+            } else {
+                out.push_lit(edit.text.clone());
+            }
             cursor = edit.span.end;
         }
         if cursor < span.end {
@@ -1114,6 +1197,7 @@ impl<'a> Emitter<'a> {
                             end: argument.start,
                         },
                         text: continuation.assignment_prefix(grouped),
+                        result_return_mark: None,
                     });
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
@@ -1121,6 +1205,7 @@ impl<'a> Emitter<'a> {
                             end: exit.statement.end,
                         },
                         text: format!("{}; {leave}", continuation.assignment_suffix(grouped)),
+                        result_return_mark: None,
                     });
                 }
                 None => edits.push(LocalSourceEdit {
@@ -1130,6 +1215,7 @@ impl<'a> Emitter<'a> {
                         continuation.assignment_prefix(false),
                         continuation.assignment_suffix(false)
                     ),
+                    result_return_mark: None,
                 }),
             }
         }
@@ -1228,6 +1314,18 @@ impl<'a> Emitter<'a> {
                 out
             }
             Expr::Propagate(propagate) => {
+                if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
+                    let span = self.span(propagate.node);
+                    let mut out = Rope::new();
+                    out.anchored(
+                        AnchorKind::Try,
+                        span.start,
+                        span.end,
+                        span.end,
+                        self.emit_propagate(propagate),
+                    );
+                    return out;
+                }
                 if !self.recovered_propagations.contains(&expr) {
                     crate::ice::bug!("unscheduled expression try reached inline emission");
                 }
@@ -1819,7 +1917,7 @@ impl<'a> Emitter<'a> {
             }
             Expr::ResultRegion(region) => {
                 let (start, end) = self.result_bind_anchor(region);
-                (AnchorKind::ResultBind, start, end, end)
+                (AnchorKind::Result, start, end, end)
             }
             Expr::Sequence(body) => {
                 let value = self
@@ -1843,23 +1941,8 @@ impl<'a> Emitter<'a> {
     }
 
     fn result_bind_anchor(&self, region: &ResultRegion) -> (usize, usize) {
-        region
-            .items
-            .iter()
-            .rev()
-            .find_map(|item| {
-                let ResultRegionItem::Propagate(propagate) = item else {
-                    return None;
-                };
-                let binding = propagate.binding?;
-                let span = self.span(propagate.node);
-                let binding_span = self.span(binding.node);
-                Some((
-                    binding_span.start,
-                    trimmed_end(self.source, binding_span.start, span.end),
-                ))
-            })
-            .unwrap_or_else(|| crate::ice::bug!("result region has no propagation binding"))
+        let span = self.span(region.node);
+        (span.start, span.end)
     }
 
     fn emit_arrow_return_rewrite(&self, rewrite: &ArrowReturnRewrite) -> Rope<'a> {
@@ -1954,41 +2037,28 @@ impl<'a> Emitter<'a> {
             format!("{}(() => {{", self.expression_boundary_name)
         });
         for item in &region.items {
-            match item {
-                ResultRegionItem::Statements(body) => {
-                    let exits = self
-                        .value_exits
-                        .get(&expr)
-                        .map(Vec::as_slice)
-                        .unwrap_or(&[]);
-                    out.append(guard_line_comment(
-                        self.emit_result_body_with_exits(*body, exits),
-                        0,
-                    ));
-                }
-                ResultRegionItem::Propagate(propagate) => {
-                    let span = self.span(propagate.node);
-                    let binding = propagate
-                        .binding
-                        .unwrap_or_else(|| crate::ice::bug!("result propagation has no binding"));
-                    let binding_span = self.span(binding.node);
-                    let one =
-                        self.emit_region_propagate(propagate, &ValueContinuation::expression());
-                    out.anchored(
-                        AnchorKind::ResultBind,
-                        binding_span.start,
-                        trimmed_end(self.source, binding_span.start, span.end),
-                        trimmed_end(self.source, binding_span.start, span.end),
-                        one,
-                    );
-                }
-            }
+            let ResultRegionItem::Statements(body) = item;
+            let exits = self
+                .value_exits
+                .get(&expr)
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let failure = ValueContinuation::expression();
+            let success = failure.wrap_result_ok();
+            out.append(guard_line_comment(
+                self.emit_result_body_with_exits(*body, exits, &failure, &success),
+                0,
+            ));
         }
         out.push_lit("return { kind: \"Ok\" as const, value: ");
-        push_grouped(
-            &mut out,
-            guard_line_comment(self.emit_expr(region.value).trim(), 0),
-        );
+        if let Some(value) = region.value {
+            push_grouped(
+                &mut out,
+                guard_line_comment(self.emit_expr(value).trim(), 0),
+            );
+        } else {
+            out.push_lit("undefined");
+        }
         out.push_lit(if region.is_async { " }; }))" } else { " }; })" });
         out
     }
@@ -1996,9 +2066,28 @@ impl<'a> Emitter<'a> {
     /// Result-owned returns inside the expression-boundary printer complete
     /// its lexical arrow. They must therefore wrap `Ok`, unlike ordinary
     /// function returns and unlike the statement-host continuation below.
-    fn emit_result_body_with_exits(&self, body: hir::BodyId, exits: &[HostExit]) -> Rope<'a> {
+    fn emit_result_body_with_exits(
+        &self,
+        body: hir::BodyId,
+        exits: &[HostExit],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
         let mut edits = Vec::new();
+        let mut propagating_returns = Vec::new();
         for exit in exits {
+            if let Some((expr, propagate)) = exit
+                .argument
+                .and_then(|argument| self.result_return_propagate(body, argument))
+            {
+                propagating_returns.push((
+                    exit.statement,
+                    exit.argument.expect("checked above"),
+                    expr,
+                    propagate,
+                ));
+                continue;
+            }
             match exit.argument {
                 Some(argument) => {
                     edits.push(LocalSourceEdit {
@@ -2006,24 +2095,319 @@ impl<'a> Emitter<'a> {
                             start: exit.statement.start,
                             end: argument.start,
                         },
-                        text: "return { kind: \"Ok\" as const, value: ".to_owned(),
+                        text: format!("{{ const {} = ", self.result_return_name),
+                        result_return_mark: Some(argument),
                     });
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: argument.end,
                             end: exit.statement.end,
                         },
-                        text: " };".to_owned(),
+                        text: format!(
+                            "; {}{}{};{} }}",
+                            success.assignment_prefix(false),
+                            self.result_return_name,
+                            success.assignment_suffix(false),
+                            if success.assigns() { " break;" } else { "" }
+                        ),
+                        result_return_mark: None,
                     });
                 }
-                None => edits.push(LocalSourceEdit {
-                    span: exit.statement,
-                    text: "return { kind: \"Ok\" as const, value: undefined };".to_owned(),
-                }),
+                None => {
+                    let mut text = format!(
+                        "{{{}undefined{};",
+                        success.assignment_prefix(false),
+                        success.assignment_suffix(false),
+                    );
+                    if success.assigns() {
+                        text.push_str(" break;");
+                    }
+                    text.push_str(" }");
+                    edits.push(LocalSourceEdit {
+                        span: exit.statement,
+                        text,
+                        result_return_mark: None,
+                    });
+                }
             }
         }
         edits.sort_unstable_by_key(|edit| edit.span.start);
-        self.emit_statements_with_edits(&self.core.bodies[body.index()].statements, &edits)
+        self.emit_result_statements_with_exits(
+            &self.core.bodies[body.index()].statements,
+            exits,
+            &edits,
+            &propagating_returns,
+            failure,
+            success,
+        )
+    }
+
+    /// Finds a `return try value;` whose `try` belongs directly to this
+    /// Result region. The host parser gives the return argument span, while
+    /// Core IR gives the propagation target; both facts are required before
+    /// replacing an entire TypeScript statement.
+    fn result_return_propagate(
+        &self,
+        body: hir::BodyId,
+        argument: SourceSpan,
+    ) -> Option<(ExprId, &Propagate)> {
+        fn find<'a>(
+            emitter: &'a Emitter<'a>,
+            expr: ExprId,
+            argument: SourceSpan,
+        ) -> Option<(ExprId, &'a Propagate)> {
+            match &emitter.core.exprs[expr.index()] {
+                Expr::Propagate(propagate)
+                    if matches!(propagate.exit, ExitTarget::ResultRegion(_)) && {
+                        let span = SourceSpan::from(emitter.span(propagate.node));
+                        argument.start <= span.start && span.end <= argument.end
+                    } =>
+                {
+                    Some((expr, propagate))
+                }
+                Expr::Sequence(body) => emitter.core.bodies[body.index()]
+                    .statements
+                    .iter()
+                    .find_map(|statement| match statement {
+                        Statement::Expr(inner) => find(emitter, *inner, argument),
+                        _ => None,
+                    }),
+                _ => None,
+            }
+        }
+        self.core.bodies[body.index()]
+            .statements
+            .iter()
+            .find_map(|statement| {
+                let Statement::Expr(expr) = statement else {
+                    return None;
+                };
+                find(self, *expr, argument)
+            })
+    }
+
+    fn emit_result_statements_with_exits(
+        &self,
+        statements: &[Statement],
+        exits: &[HostExit],
+        edits: &[LocalSourceEdit],
+        propagating_returns: &[(SourceSpan, SourceSpan, ExprId, &Propagate)],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        for statement in statements {
+            match statement {
+                Statement::Opaque(node) => {
+                    // An opaque segment may contain both a nested function
+                    // and the Result-owned return that follows it.  Dropping
+                    // the whole segment would also drop the nested function's
+                    // punctuation and source-backed propagation.  Erase only
+                    // the return being rebuilt below; every surrounding byte
+                    // remains pass-through.
+                    let mut opaque_edits = edits.to_vec();
+                    opaque_edits.extend(propagating_returns.iter().map(
+                        |(return_span, _, _, _)| LocalSourceEdit {
+                            span: SourceSpan {
+                                start: return_span.start.max(self.span(*node).start),
+                                end: return_span.end.min(self.span(*node).end),
+                            },
+                            text: String::new(),
+                            result_return_mark: None,
+                        },
+                    ));
+                    opaque_edits.retain(|edit| edit.span.start < edit.span.end);
+                    opaque_edits.sort_unstable_by_key(|edit| edit.span.start);
+                    out.append(self.source_rope_with_edits(*node, &opaque_edits));
+                }
+                Statement::Expr(expr) => {
+                    if let Some((return_span, argument, _, propagate)) = propagating_returns
+                        .iter()
+                        .find(|(_, _, candidate, _)| candidate == expr)
+                    {
+                        let mut replacement = self.emit_region_propagate(propagate, failure);
+                        let temp = temp_name(propagate.temporary);
+                        let mut payload = Rope::new();
+                        let try_span = self.span(propagate.node);
+                        if argument.start < try_span.start {
+                            payload.push_src(
+                                &self.source[argument.start..try_span.start],
+                                argument.start,
+                            );
+                        }
+                        payload.push_lit(format!("{temp}.{}", propagate.layout.payload_field));
+                        if try_span.end < argument.end {
+                            payload
+                                .push_src(&self.source[try_span.end..argument.end], try_span.end);
+                        }
+                        replacement.append(self.emit_value_delivery(payload, None, success));
+                        out.anchored(
+                            AnchorKind::Try,
+                            return_span.start,
+                            return_span.end,
+                            return_span.end,
+                            replacement,
+                        );
+                    } else {
+                        out.append(self.emit_expr(*expr));
+                    }
+                }
+                Statement::Adt(adt) => {
+                    let span = self.span(adt.node);
+                    out.anchored(
+                        AnchorKind::Variant,
+                        span.start,
+                        span.end,
+                        span.end,
+                        emit_adt(adt),
+                    );
+                }
+                Statement::Import(import) => self.emit_import(import, &mut out),
+                Statement::Propagate(propagate) => {
+                    let span = self.span(propagate.node);
+                    let emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
+                        self.emit_region_propagate(propagate, failure)
+                    } else {
+                        self.emit_propagate(propagate)
+                    };
+                    out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
+                }
+                Statement::Decision(decision) => {
+                    self.emit_result_statement_decision(decision, exits, failure, success, &mut out)
+                }
+            }
+        }
+        out
+    }
+
+    fn emit_result_statement_decision(
+        &self,
+        decision: &Decision,
+        exits: &[HostExit],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+        out: &mut Rope<'a>,
+    ) {
+        let span = self.span(decision.head);
+        let (kind, inner) = match &decision.kind {
+            DecisionKind::LetElse { binding_mode, .. } => (
+                AnchorKind::LetElse,
+                self.emit_result_let_else(decision, *binding_mode, exits, failure, success),
+            ),
+            DecisionKind::IfLet => (
+                AnchorKind::IfLet,
+                self.emit_result_if_let(decision, exits, failure, success),
+            ),
+            DecisionKind::Match { .. } => {
+                crate::ice::bug!("expression decision in statement position")
+            }
+        };
+        out.anchored(kind, span.start, span.end, span.end, inner);
+    }
+
+    fn emit_result_let_else(
+        &self,
+        decision: &Decision,
+        mode: BindingMode,
+        exits: &[HostExit],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
+        let subject = &decision.subjects[0];
+        let temp = temp_name(subject.temporary);
+        let arm = &decision.arms[0];
+        let mut out = Rope::new();
+        out.push_lit(format!("const {temp} = "));
+        push_grouped(&mut out, self.emit_expr(subject.value).trim());
+        out.push_lit("; if (");
+        let DecisionKind::LetElse {
+            direct_variants, ..
+        } = &decision.kind
+        else {
+            crate::ice::bug!("let-else has wrong Core decision kind")
+        };
+        if let Some(variants) = direct_variants {
+            for (index, constructor) in variants.iter().enumerate() {
+                if index > 0 {
+                    out.push_lit(" && ");
+                }
+                out.push_lit(format!(
+                    "{temp}.kind !== \"{}\"",
+                    self.constructor_name(constructor)
+                ));
+            }
+        } else {
+            out.push_lit("!(");
+            out.append(self.emit_condition(&arm.pattern, decision));
+            out.push_lit(")");
+        }
+        out.push_lit(") { ");
+        let MissAction::Execute(body) = decision.miss else {
+            crate::ice::bug!("let-else has no else body")
+        };
+        let body = self
+            .emit_result_body_with_exits(body, exits, failure, success)
+            .trim();
+        let newline = if body.last_line_has_line_comment() {
+            "\n"
+        } else {
+            ""
+        };
+        out.append(body);
+        out.push_lit(format!("{newline} }}"));
+        let mut recovery = BindingRecovery::new(self, &arm.pattern);
+        out.append(self.emit_bindings(&arm.pattern, decision, Some(mode), &mut recovery));
+        out
+    }
+
+    fn emit_result_if_let(
+        &self,
+        decision: &Decision,
+        exits: &[HostExit],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
+        let subject = &decision.subjects[0];
+        let temp = temp_name(subject.temporary);
+        let arm = &decision.arms[0];
+        let mut out = Rope::new();
+        out.push_lit(format!("{{ const {temp} = "));
+        push_grouped(&mut out, self.emit_expr(subject.value).trim());
+        out.push_lit("; if (");
+        out.append(self.emit_condition(&arm.pattern, decision));
+        out.push_lit(") { ");
+        let mut recovery = BindingRecovery::new(self, &arm.pattern);
+        out.append(self.emit_bindings(&arm.pattern, decision, None, &mut recovery));
+        let ArmAction::Execute(body) = arm.action else {
+            crate::ice::bug!("if-let has no then body")
+        };
+        out.append(guard_line_comment(
+            self.emit_result_body_with_exits(body, exits, failure, success)
+                .trim(),
+            0,
+        ));
+        out.push_lit(" }");
+        match &decision.miss {
+            MissAction::Execute(body) => {
+                out.push_lit(" else { ");
+                out.append(guard_line_comment(
+                    self.emit_result_body_with_exits(*body, exits, failure, success)
+                        .trim(),
+                    0,
+                ));
+                out.push_lit(" }");
+            }
+            MissAction::Decision(inner) => {
+                out.push_lit(" else ");
+                out.append(self.emit_result_if_let(inner, exits, failure, success));
+            }
+            MissAction::Nothing => {}
+            MissAction::ThrowUnexpected(_) => {
+                crate::ice::bug!("if-let has match miss action")
+            }
+        }
+        out.push_lit(" }");
+        out
     }
 
     fn emit_result_region_continued(
@@ -2043,43 +2427,29 @@ impl<'a> Emitter<'a> {
             .map(Vec::as_slice)
             .unwrap_or(&[]);
         for item in &region.items {
-            match item {
-                ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(
-                        self.emit_body_with_exits(*body, exits, &success, None),
-                        0,
-                    ));
-                }
-                ResultRegionItem::Propagate(propagate) => {
-                    let span = self.span(propagate.node);
-                    let binding = propagate
-                        .binding
-                        .unwrap_or_else(|| crate::ice::bug!("result propagation has no binding"));
-                    let binding_span = self.span(binding.node);
-                    let lowered = self.emit_region_propagate(propagate, continuation);
-                    out.anchored(
-                        AnchorKind::ResultBind,
-                        binding_span.start,
-                        trimmed_end(self.source, binding_span.start, span.end),
-                        trimmed_end(self.source, binding_span.start, span.end),
-                        lowered,
-                    );
-                }
-            }
-        }
-        if let Some(structured) = self.emit_continued_expr(region.value, &success) {
-            out.append(structured);
-            if continuation.assigns() {
-                out.push_lit(" break;");
-            }
-        } else {
-            out.append(self.emit_value_delivery(
-                guard_line_comment(self.emit_expr(region.value).trim(), 0),
-                None,
-                &success,
+            let ResultRegionItem::Statements(body) = item;
+            out.append(guard_line_comment(
+                self.emit_result_body_with_exits(*body, exits, continuation, &success),
+                0,
             ));
         }
-        out.push_break(0);
+        if let Some(value) = region.value {
+            if let Some(structured) = self.emit_continued_expr(value, &success) {
+                out.append(structured);
+                if continuation.assigns() {
+                    out.push_lit(" break;");
+                }
+            } else {
+                out.append(self.emit_value_delivery(
+                    guard_line_comment(self.emit_expr(value).trim(), 0),
+                    None,
+                    &success,
+                ));
+            }
+        }
+        if region.value.is_some() {
+            out.push_break(0);
+        }
         out.push_lit(if continuation.assigns() {
             "} while (false);"
         } else {
@@ -2088,7 +2458,7 @@ impl<'a> Emitter<'a> {
         let (binding_start, binding_end) = self.result_bind_anchor(region);
         let mut anchored = Rope::new();
         anchored.anchored(
-            AnchorKind::ResultBind,
+            AnchorKind::Result,
             binding_start,
             binding_end,
             binding_end,
@@ -3249,10 +3619,6 @@ fn guard_line_comment(mut rope: Rope<'_>, depth: u16) -> Rope<'_> {
         rope.push_break(depth);
     }
     rope
-}
-
-fn trimmed_end(source: &str, start: usize, end: usize) -> usize {
-    start + source[start..end].trim_end().len()
 }
 
 fn binding_keyword(mode: BindingMode) -> &'static str {

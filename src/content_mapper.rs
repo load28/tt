@@ -87,8 +87,6 @@ const CODE_NUMBERS: [&str; 34] = [
     "stray-result",
     "malformed-variant",
     "malformed-match",
-    "result-missing-keyword",
-    "result-nested-binding",
     "flow-first-step-method",
     "try-placement",
     "let-else-placement",
@@ -659,7 +657,7 @@ mod tests {
     #[test]
     fn code_numbers_are_stable_and_start_at_one() {
         assert_eq!(code_number("stray-pipe"), 1);
-        assert_eq!(code_number("match-not-exhaustive"), 27);
+        assert_eq!(code_number("match-not-exhaustive"), 25);
         assert_eq!(code_number("never-heard-of-it"), 0);
     }
 

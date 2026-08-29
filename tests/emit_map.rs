@@ -464,7 +464,7 @@ function f() {
   const a = try readNum();
   const A(x) = e else { return; };
   if let B() = e { log(); }
-  const r = result { const v <- readNum(); v };
+  const r = result { const v = try readNum(); return v; };
   const p = x |> f |> g;
   const m = match (e) { A(x) => x, B => 0 };
 }
@@ -489,7 +489,7 @@ fn a_buffer_whose_typescript_does_not_parse_still_emits() {
     // Without an owner model there are no host rewrites to plan, so the
     // emit degrades to the shape a file needing no host lowering gets —
     // and the diagnostic stays `compile`'s to report.
-    let src = "const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n";
+    let src = "const r = result {\n  const a = try f();\n  const b = ;\n  return a;\n};\n";
     let m = emit_mapped(src);
     assert!(!m.code.is_empty());
     assert_mapping_invariants(src, &m);

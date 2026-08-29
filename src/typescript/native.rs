@@ -221,6 +221,9 @@ fn job_json(query: &Query) -> serde_json::Value {
         "symbolChecks": query.symbols.iter()
             .map(|v| json!({ "module": v.module, "start": v.position }))
             .collect::<Vec<_>>(),
+        "resultShapeChecks": query.result_shapes.iter()
+            .map(|v| json!({ "module": v.module, "start": v.position }))
+            .collect::<Vec<_>>(),
         "emitDeclarations": query.emit_declarations,
     })
 }
@@ -330,6 +333,11 @@ fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
             id: v["id"].as_i64().unwrap_or_default(),
             name: v["name"].as_str().unwrap_or_default().to_string(),
             builtin: v["builtin"].as_bool().unwrap_or(false),
+        });
+    }
+    for v in array(&value, "resultShapes") {
+        answers.result_shapes.push(ResultShape {
+            index: v["index"].as_u64().unwrap_or_default() as usize,
         });
     }
     for d in array(&value, "declarations") {

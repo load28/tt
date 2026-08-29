@@ -1282,8 +1282,8 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
         const test = (): TResult<string, number> => Result.Err(10);\n\
         export function bind(): TResult<number, InputError> {\n\
         \x20 return result {\n\
-        \x20   const n <- test();\n\
-        \x20   n\n\
+        \x20   const n = try test();\n\
+        \x20   return n;\n\
         \x20 };\n\
         }\n\
         export const mixed = (c: Conn): string =>\n\
@@ -1311,7 +1311,10 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
                 && d["line"].as_u64().is_some_and(|line| line > 10)
         })
         .unwrap_or_else(|| panic!("missing result mismatch: {answer}"));
-    assert_eq!(source_slice(source, result_mismatch), "n <- test()");
+    assert!(
+        source_slice(source, result_mismatch).contains("const n = try test();"),
+        "{answer}"
+    );
 
     assert!(
         diagnostics
@@ -1323,6 +1326,32 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
         diagnostics.iter().all(|d| d["code"] != "ts2678"),
         "checker consequences owned by the invalid match are suppressed: {answer}"
     );
+}
+
+#[test]
+fn nested_result_return_is_reported_only_for_a_checker_proven_shape() {
+    require_tsgo!();
+    let source = r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+declare function read(): Res<number, string>;
+
+const definite = result { const value = try read(); return Res.Ok(value); };
+const union = result { const value = try read(); const candidate: Res<number, string> | number = value; return candidate; };
+const nonResult = result { const value = try read(); return String(value); };
+const unknown = result { const value = try read(); const candidate: unknown = value; return candidate; };
+function generic<T>(candidate: T) { return result { const value = try read(); return candidate; }; }
+"#;
+    let dir = project(&[("src/nested.tt", source)]);
+    let answer = typed_server(&dir, "src/nested.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let nested: Vec<_> = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic["code"] == "result-return-nested")
+        .collect();
+    assert_eq!(nested.len(), 1, "{answer}");
+    assert_eq!(source_slice(source, nested[0]), "Res.Ok(value)");
+    let edit = &nested[0]["suggestions"][0]["edit"];
+    assert_eq!(edit["replacement"], "try ");
 }
 
 #[test]
@@ -1470,20 +1499,19 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
          export function nested(value: number): TResult<number, string> {\n\
          \x20 return result {\n\
          \x20   const first <- read(value);\n\
-         \x20   if (first > 0) { const second <- read(first); }\n\
-         \x20   first\n\
+         \x20   if (first > 0) { const second = try read(first); }\n\
+         \x20   return first;\n\
          \x20 };\n\
          }\n\
          const wrong = (): TResult<string, number> => Result.Err(10);\n\
          export function bindNonResult(): TResult<number, string> {\n\
-         \x20 return result { const value <- wrong(); value };\n\
+         \x20 return result { const value = try wrong(); return value; };\n\
          }\n\
          export const malformed = match value { Missing => 0 };\n",
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("result-nested-binding")
-            || out.contains("`<-` binding must be a top-level statement"),
+        out.contains("result-legacy-binding"),
         "the first tt error remains visible: {out}"
     );
     assert!(

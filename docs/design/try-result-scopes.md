@@ -1,7 +1,7 @@
 # Design: one `try`, `result` as a nested Result scope
 
-- **Status**: Ratified consensus. Not implemented. The language model and the
-  implementation order below are agreed; the compiler work is not started.
+- **Status**: Implemented on the Result-scope branch. The language model and
+  implementation order below remain the acceptance contract.
 - **Baseline**: `33acccc` (`TASK-280: lower try through expression evaluation`,
   PR #87). Every claim in this document was checked against that tree.
 - **Audience**: An implementing agent. This document is the full brief. Do not

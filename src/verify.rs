@@ -214,12 +214,23 @@ pub(crate) fn in_source(
         crate::codegen::LoweringFailure::Evaluation {
             error,
             source: span,
-        } => crate::error::TtError::span(
-            span.start.min(source.len()),
-            span.end.min(source.len()),
-            format!("tt host lowering could not plan this construct: {error:?}"),
-        )
-        .code(crate::DiagnosticCode::LoweringPlanFailed),
+        } => match error {
+            crate::evaluation_ir::EvaluationError::DiscardedResult { source: result } => {
+                crate::error::TtError::span(
+                    result.start.min(source.len()),
+                    result.end.min(source.len()),
+                    "`result` is used as a statement, so its `Err` would be discarded".to_string(),
+                )
+                .code(crate::DiagnosticCode::ResultValueDiscarded)
+                .help("assign, return, or otherwise consume this Result value")
+            }
+            _ => crate::error::TtError::span(
+                span.start.min(source.len()),
+                span.end.min(source.len()),
+                format!("tt host lowering could not plan this construct: {error:?}"),
+            )
+            .code(crate::DiagnosticCode::LoweringPlanFailed),
+        },
         crate::codegen::LoweringFailure::HostProjection {
             error,
             source: span,
