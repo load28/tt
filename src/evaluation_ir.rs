@@ -427,6 +427,14 @@ pub(crate) enum EvaluationError {
 }
 
 impl EvaluationFile {
+    pub(crate) fn primary_source(&self) -> SourceSpan {
+        self.tt_spans
+            .iter()
+            .copied()
+            .min_by_key(|span| span.start)
+            .expect("EvaluationFile has at least one tt source span")
+    }
+
     pub(crate) fn build(syntax: &ProgramSyntax, core: &CoreFile) -> Result<Self, EvaluationError> {
         let declared_owners: HashSet<HostOwner> =
             syntax.owners().map(|owner| owner.owner).collect();

@@ -1616,6 +1616,32 @@ fn no_verify_does_not_bypass_the_lowering_precondition() {
 }
 
 #[test]
+fn fallible_host_lowering_reports_a_located_diagnostic_without_unwinding() {
+    // These host shapes currently expose different Evaluation IR planning
+    // gaps. Public compilation APIs must preserve those failures as tt
+    // diagnostics until their placement-specific prerequisite lands.
+    let cases = ["function f() { for (let i = try next();;) {} }\n"];
+
+    for source in cases {
+        let result = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()));
+        let diagnostics = result.expect("host lowering must not unwind");
+        assert!(!diagnostics.is_empty(), "{source}");
+        assert!(
+            diagnostics
+                .iter()
+                .all(|diagnostic| diagnostic.start.is_some()),
+            "{diagnostics:#?}"
+        );
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+            "{diagnostics:#?}"
+        );
+    }
+}
+
+#[test]
 fn a_file_without_tt_constructs_still_reports_through_the_output_self_check() {
     // Nothing to lower ⇒ no projection is built, and the backstop that
     // owned this case keeps owning it.

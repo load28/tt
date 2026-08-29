@@ -31,11 +31,20 @@ use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 /// It is not an internal error and not codegen's to report — the phase that
 /// owns diagnostics turns it into a located one ([`crate::verify::in_source`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SourceNotTypeScript {
-    /// The syntax substrate's message.
-    pub(crate) message: String,
-    /// The source byte the parse stopped at.
-    pub(crate) source: usize,
+pub(crate) enum LoweringFailure {
+    /// The syntax substrate's message and source byte where parsing stopped.
+    SourceNotTypeScript { message: String, source: usize },
+    /// A host projection failure before Evaluation IR planning begins.
+    HostProjection {
+        error: crate::program_syntax::ProgramSyntaxError,
+        source: SourceSpan,
+    },
+    /// A fallible Evaluation IR construction or planning failure, located at
+    /// the first tt construct participating in the failed lowering.
+    Evaluation {
+        error: crate::evaluation_ir::EvaluationError,
+        source: SourceSpan,
+    },
 }
 
 /// Builds the host-lowering plan for a file, ahead of emission.
@@ -44,35 +53,54 @@ pub(crate) struct SourceNotTypeScript {
 /// so the fallible half — projecting the file to TypeScript, joining every tt
 /// value to its owner, and planning the rewrites — is this separate step, run
 /// by the phase that can report. Every failure but
-/// [`SourceNotTypeScript`] is a broken compiler invariant and fails the
-/// build immediately (`docs/design/program-lowering.md` §11).
+/// [`LoweringFailure`] is reported by the phase that owns diagnostics.
 pub(crate) fn lowering_plan(
     semantic: &SemanticFile,
     core: &CoreFile,
     source: &str,
     source_kind: SourceKind,
-) -> Result<LoweringPlan, SourceNotTypeScript> {
+) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() {
         return Ok(LoweringPlan::default());
     }
+    let primary_source = || {
+        semantic
+            .hir
+            .source_map
+            .first_node_span()
+            .map(SourceSpan::from)
+            .unwrap_or(SourceSpan {
+                start: 0,
+                end: source.len(),
+            })
+    };
     let syntax =
         match crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind) {
             Ok(syntax) => syntax,
             Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript {
                 message,
                 source,
-            }) => {
-                return Err(SourceNotTypeScript { message, source });
-            }
+            }) => return Err(LoweringFailure::SourceNotTypeScript { message, source }),
             Err(error) => {
-                crate::ice::bug!("TypeScript owner construction failed: {error:?}")
+                return Err(LoweringFailure::HostProjection {
+                    error,
+                    source: primary_source(),
+                });
             }
         };
-    let evaluation = crate::evaluation_ir::EvaluationFile::build(&syntax, core)
-        .unwrap_or_else(|error| crate::ice::bug!("Evaluation IR construction failed: {error:?}"));
+    let evaluation =
+        crate::evaluation_ir::EvaluationFile::build(&syntax, core).map_err(|error| {
+            LoweringFailure::Evaluation {
+                error,
+                source: primary_source(),
+            }
+        })?;
     let plan = evaluation
         .lowering_plan(core)
-        .unwrap_or_else(|error| crate::ice::bug!("owner lowering plan failed: {error:?}"));
+        .map_err(|error| LoweringFailure::Evaluation {
+            error,
+            source: evaluation.primary_source(),
+        })?;
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts
     // (`docs/design/program-lowering.md` §11).

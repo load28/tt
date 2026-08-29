@@ -1041,10 +1041,11 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
-    if let Ok(plan) = codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
-        errors.extend(try_target_errors(&plan));
-        errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+    match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+        Ok(plan) => errors.extend(try_target_errors(&plan)),
+        Err(failure) => errors.push(verify::in_source(source, &failure)),
     }
+    errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
     errors
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)

@@ -1,7 +1,7 @@
 # TASK-282: Preserve the planner's existing failure return
 
-- **Status**: Pending
-- **Started**: —
+- **Status**: Complete
+- **Started**: 2026-08-29
 - **Completed**: —
 - **Commit**: —
 
@@ -28,19 +28,38 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Preserve a dedicated planner-failure diagnostic at the public boundary
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Evaluation IR and host projection can already return typed
+  failures for source-dependent shapes, but codegen converted them into
+  `ice::bug!` before any public client could report them.
+- **Alternatives considered**: retain the panic for invariant failures; reuse
+  `verify-failed`; or expose the internal error through a new stable code.
+- **Decision and rationale**: introduce `lowering-plan-failed` and convert
+  every fallible host-lowering stage into a located diagnostic. The code
+  distinguishes this input-visible failure from the emitted-TypeScript
+  self-check, and all callers share the same `compile_report`/`analyze` path.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-29: Confirmed that `codegen::lowering_plan` converts
+  `EvaluationFile::lowering_plan` failures into `ice::bug!`, while public
+  compilation clients either omit or cannot represent that failure.
+- 2026-08-29: Added `LoweringFailure`, propagated host projection and
+  Evaluation IR failures through `analyze`, `compile`, and `compile_report`,
+  and registered the public diagnostic code and guide entry.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: C-style `for` declaration initialization reached a generated projection parse failure
+
+- **Symptom**: `for (let i = try next();;)` panicked while constructing the
+  TypeScript host projection.
+- **Cause**: The generated statement overlay is not legal in a C-style loop
+  initializer, and the former wrapper classified every non-source projection
+  failure as an ICE.
+- **Resolution**: Preserve the host projection failure as a located
+  `lowering-plan-failed` diagnostic. TASK-283 owns making this Legal.
 
 ## Verification
 
@@ -48,14 +67,14 @@ Test obligation from the plan: run the for-header, expression-boundary Result, a
 
 Green condition: no source input unwinds and every consumer reports the same tt code.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
 Ships to `main` alone: yes.
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Added located `lowering-plan-failed` reporting for fallible host-lowering
+stages, a regression test for the C-style `for` failure, and guide coverage.
