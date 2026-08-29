@@ -302,8 +302,13 @@ pub(crate) struct Propagate {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExitTarget {
     EnclosingFunction,
-    Region,
+    ResultRegion(ResultRegionId),
 }
+
+/// Stable identity for a lexical Result region. The HIR node is stable for
+/// one snapshot, which is the lifetime of every Core and codegen plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ResultRegionId(pub(crate) NodeId);
 
 /// The structural Result ABI. It is fixed once in semantic lowering rather
 /// than rediscovered by each backend emission site.
@@ -342,6 +347,7 @@ pub(crate) enum ApplyMode {
 
 #[derive(Debug)]
 pub(crate) struct ResultRegion {
+    pub id: ResultRegionId,
     pub node: NodeId,
     pub items: Vec<ResultRegionItem>,
     pub value: ExprId,
@@ -426,6 +432,23 @@ mod tests {
             .filter(|item| matches!(item, ResultRegionItem::Propagate(_)))
             .count();
         assert_eq!((statements, regions), (1, 1));
+        let region = core
+            .exprs
+            .iter()
+            .find_map(|expr| match expr {
+                Expr::ResultRegion(region) => Some(region),
+                _ => None,
+            })
+            .expect("result region");
+        let propagate = region
+            .items
+            .iter()
+            .find_map(|item| match item {
+                ResultRegionItem::Propagate(propagate) => Some(propagate),
+                ResultRegionItem::Statements(_) => None,
+            })
+            .expect("result binding");
+        assert_eq!(propagate.exit, ExitTarget::ResultRegion(region.id));
     }
 
     #[test]

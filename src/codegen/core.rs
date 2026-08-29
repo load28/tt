@@ -1972,7 +1972,8 @@ impl<'a> Emitter<'a> {
                         .binding
                         .unwrap_or_else(|| crate::ice::bug!("result propagation has no binding"));
                     let binding_span = self.span(binding.node);
-                    let one = self.emit_propagate(propagate);
+                    let one =
+                        self.emit_region_propagate(propagate, &ValueContinuation::expression());
                     out.anchored(
                         AnchorKind::ResultBind,
                         binding_span.start,

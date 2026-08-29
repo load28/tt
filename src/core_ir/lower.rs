@@ -208,8 +208,13 @@ impl Lowering<'_> {
                     })
                     .collect(),
             }),
-            hir::Expr::ResultBlock { node, items, value } => Expr::ResultRegion(ResultRegion {
-                node: *node,
+            hir::Expr::ResultBlock {
+                node: region_node,
+                items,
+                value,
+            } => Expr::ResultRegion(ResultRegion {
+                id: ResultRegionId(*region_node),
+                node: *region_node,
                 items: items
                     .iter()
                     .map(|item| match item {
@@ -224,13 +229,13 @@ impl Lowering<'_> {
                             value: *expr,
                             temporary: self.temp(*node, true),
                             binding: Some(*binding),
-                            exit: ExitTarget::Region,
+                            exit: ExitTarget::ResultRegion(ResultRegionId(*region_node)),
                             layout: RESULT_LAYOUT,
                         }),
                     })
                     .collect(),
                 value: *value,
-                is_async: self.node_contains_await(*node),
+                is_async: self.node_contains_await(*region_node),
             }),
             hir::Expr::Template { node, chunks } => Expr::Template(Template {
                 node: *node,
@@ -603,7 +608,12 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
                     match item {
                         ResultRegionItem::Statements(body) => validate_body(*body, file),
                         ResultRegionItem::Propagate(propagate) => {
-                            validate_propagate(propagate, file, semantic)
+                            validate_propagate(propagate, file, semantic);
+                            assert_eq!(
+                                propagate.exit,
+                                ExitTarget::ResultRegion(region.id),
+                                "Core IR propagation targets a non-enclosing Result region"
+                            );
                         }
                     }
                 }
@@ -780,7 +790,8 @@ fn validate_propagate(propagate: &Propagate, file: &CoreFile, semantic: &Semanti
         validate_binding_mode(binding.mode);
     }
     match propagate.exit {
-        ExitTarget::EnclosingFunction | ExitTarget::Region => {}
+        ExitTarget::EnclosingFunction => {}
+        ExitTarget::ResultRegion(_) => {}
     }
     assert!(
         !propagate.layout.success_tag.is_empty()
