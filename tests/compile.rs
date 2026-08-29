@@ -1089,6 +1089,45 @@ fn try_in_constructor_or_generator_is_a_placement_error() {
 }
 
 #[test]
+fn try_placement_claims_for_update_and_destructuring_edges() {
+    for src in [
+        "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
+        "function f() { const [value = try read()] = input; }\n",
+    ] {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+        assert!(
+            err(src)
+                .message
+                .contains("`try` cannot be used in this expression context"),
+            "{src}"
+        );
+    }
+}
+
+#[test]
+fn try_in_spread_operands_enters_the_evaluation_protocol() {
+    for src in [
+        "function f() { const value = { ...try read() }; }\n",
+        "function f() { const value = [ ...try read() ]; }\n",
+    ] {
+        let output = ok(src);
+        assert!(
+            output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+            "{output}"
+        );
+        assert!(output.contains("const value ="), "{output}");
+    }
+}
+
+#[test]
+fn typescript_members_and_properties_named_try_are_passthrough() {
+    let source = "const object = { try: 1 };\nobject.try();\n";
+    assert_eq!(ok(source), source);
+}
+
+#[test]
 fn try_inside_a_function_inside_a_scrutinee_is_allowed() {
     let out = ok(
         "const x = match (run(() => { try g(); return h(); })) {\n  Ok(value) => value,\n  Err(error) => 0,\n};\n",
