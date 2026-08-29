@@ -522,6 +522,7 @@ struct ForInitializerPropagationRewrite {
 struct ArrowReturnRewrite {
     expr: ExprId,
     slot: String,
+    parenthesized: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -620,6 +621,7 @@ impl TargetRewritePlan {
                     .then(|| ArrowReturnRewrite {
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
+                        parenthesized: rewrite.owner.span != value.source,
                     })
             })
             .collect();
@@ -1867,7 +1869,11 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("arrow return rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        out.push_lit("{");
+        if rewrite.parenthesized {
+            out.push_lit("(() => {");
+        } else {
+            out.push_lit("{");
+        }
         out.push_break(1);
         out.push_lit(format!("let {};", rewrite.slot));
         out.push_break(1);
@@ -1875,7 +1881,7 @@ impl<'a> Emitter<'a> {
         out.push_break(1);
         out.push_lit(format!("return {};", rewrite.slot));
         out.push_break(0);
-        out.push_lit("}");
+        out.push_lit(if rewrite.parenthesized { "})()" } else { "}" });
         Rope::scoped(out)
     }
 

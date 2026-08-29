@@ -1033,6 +1033,26 @@ fn try_turns_a_concise_arrow_into_a_propagating_block() {
 }
 
 #[test]
+fn parenthesized_concise_arrow_keeps_try_in_the_arrow() {
+    let parenthesized = ok("const f = () => (try next());\n");
+    assert!(parenthesized.contains("=> {"), "{parenthesized}");
+    assert!(
+        parenthesized.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{parenthesized}"
+    );
+}
+
+#[test]
+fn pipeline_concise_arrow_keeps_try_in_the_arrow() {
+    let pipeline = ok("const f = value |> (x => try next());\n");
+    assert!(pipeline.contains("=> {"), "{pipeline}");
+    assert!(
+        pipeline.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{pipeline}"
+    );
+}
+
+#[test]
 fn expression_try_reports_a_typescript_control_flow_boundary() {
     for src in [
         "function f() { while (try condition()) work(); }\n",

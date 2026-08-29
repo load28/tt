@@ -1098,7 +1098,105 @@ impl<'a> ProjectionBuilder<'a> {
             source.start = source.start.min(step_span.start);
             source.end = source.end.max(step_span.end);
         }
-        self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))
+        // SWC has no pipeline syntax, so the pipeline itself remains one
+        // expression placeholder.  A step can nevertheless contain a tt
+        // value whose real TypeScript owner is an arrow.  Project that step
+        // beside the placeholder in a valid comma expression so the parent
+        // collector sees the arrow boundary instead of assigning its `try`
+        // to the pipeline's enclosing declaration.
+        let shadow_steps: Vec<_> = apply
+            .steps
+            .iter()
+            .filter(|step| self.expr_contains_propagation(step.value))
+            .collect();
+        if shadow_steps.is_empty() {
+            return self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr));
+        }
+        let start = ProjectedByte(self.code.len());
+        self.code.push('(');
+        self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))?;
+        for step in shadow_steps {
+            self.code.push_str(", (");
+            self.emit_shadow_expr(step.value)?;
+            self.code.push(')');
+        }
+        self.code.push(')');
+        self.source_segments.push(ProjectionSourceSegment {
+            projected: ProjectedSpan {
+                start: ProjectedByte(start.0 + 1),
+                end: ProjectedByte(self.code.len() - 1),
+            },
+            source,
+            kind: ProjectionSegmentKind::Placeholder,
+        });
+        Ok(())
+    }
+
+    fn expr_contains_propagation(&self, expr: ExprId) -> bool {
+        match &self.core.exprs[expr.index()] {
+            Expr::Propagate(_) => true,
+            Expr::Sequence(body) => self.core.bodies[body.index()].statements.iter().any(|statement| {
+                matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))
+            }),
+            Expr::Apply(apply) => apply
+                .head
+                .is_some_and(|head| self.expr_contains_propagation(head))
+                || apply
+                    .steps
+                    .iter()
+                    .any(|step| self.expr_contains_propagation(step.value)),
+            Expr::Decision(decision) => decision.subjects.iter().any(|subject| {
+                self.expr_contains_propagation(subject.value)
+            }) || decision.arms.iter().any(|arm| {
+                arm.guard.is_some_and(|guard| self.expr_contains_propagation(guard))
+                    || matches!(arm.action, crate::core_ir::ArmAction::Yield { body, .. } | crate::core_ir::ArmAction::Execute(body) if self.core.bodies[body.index()].statements.iter().any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))))
+            }),
+            Expr::ResultRegion(region) => region.items.iter().any(|item| match item {
+                crate::core_ir::ResultRegionItem::Statements(body) => self.core.bodies[body.index()]
+                    .statements
+                    .iter()
+                    .any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))),
+                crate::core_ir::ResultRegionItem::Propagate(_) => true,
+            }) || self.expr_contains_propagation(region.value),
+            Expr::Opaque(_) | Expr::Template(_) => false,
+        }
+    }
+
+    fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
+        match &self.core.exprs[expr.index()] {
+            Expr::Opaque(node) => self.push_source(*node),
+            Expr::Propagate(propagate) => self.push_placeholder(
+                SyntaxCategory::Expression,
+                self.source_span(propagate.node)?,
+                CoreRoot::Expr(expr),
+            ),
+            Expr::Sequence(body) => self.emit_shadow_body(*body),
+            // A nested pipeline is opaque to SWC for the same reason as its
+            // parent. Its own projection retains the structural placeholder.
+            Expr::Apply(apply) => self.emit_apply(expr, apply),
+            Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Template(_) => self.emit_expr(expr),
+        }
+    }
+
+    fn emit_shadow_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
+        for statement in &self.core.bodies[body.index()].statements {
+            match statement {
+                Statement::Opaque(node) => self.push_source(*node)?,
+                Statement::Expr(expr) => self.emit_shadow_expr(*expr)?,
+                Statement::Propagate(propagate) => self.push_placeholder(
+                    SyntaxCategory::Propagation,
+                    self.source_span(propagate.owner)?,
+                    CoreRoot::Propagate(propagate.node),
+                )?,
+                Statement::Adt(_) | Statement::Import(_) | Statement::Decision(_) => {
+                    return Err(ProgramSyntaxError::InvalidSourceSpan {
+                        start: SourceByte(0),
+                        end: SourceByte(0),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn emit_result_region(

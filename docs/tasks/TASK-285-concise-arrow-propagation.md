@@ -1,9 +1,9 @@
 # TASK-285: Repair concise-arrow propagation
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-285: repair concise arrow propagation`
 
 ## Purpose
 
@@ -28,19 +28,34 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Project pipeline-step arrows beside the opaque pipeline host
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: SWC cannot parse pipeline syntax, while a concise arrow inside
+  a pipeline step must still expose its own `try` owner.
+- **Alternatives considered**: assign the `try` to the enclosing pipeline;
+  rewrite the pipeline as a statement region; or project the arrow separately.
+- **Decision and rationale**: retain the pipeline as its existing placeholder
+  and add a structurally projected step shadow. This lets the owner collector
+  bind the propagation to the arrow without changing pipeline evaluation.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started reproducing concise-arrow propagation across ordinary,
+  parenthesized, and pipeline-step hosts.
+- 2026-08-30: Added arrow-return emission for parenthesized concise bodies.
+- 2026-08-30: Projected propagation-bearing pipeline steps and prevented their
+  outer `Apply` from being promoted into the arrow's statement region.
+- 2026-08-30: Added ordinary, parenthesized, and pipeline regression tests.
 
 ## Issues and resolutions
 
-None.
+### Pipeline-step host was missing
+
+- **Symptom**: `x => try next()` in a pipeline step reported `MissingHost`.
+- **Cause**: the pipeline placeholder hid the nested arrow from the syntax
+  owner collector.
+- **Resolution**: the projection now carries a valid shadow of each affected
+  step, and evaluation keeps the outer pipeline expression-shaped.
 
 ## Verification
 
@@ -48,14 +63,17 @@ Test obligation from the plan: default verification and `--no-verify` output par
 
 Green condition: every accepted output parses and the arrow, never its enclosing function, owns failure.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
 Ships to `main` alone: yes.
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+`src/program_syntax.rs` now preserves arrow ownership for propagation-bearing
+pipeline steps. `src/evaluation_ir.rs` avoids promoting an outer pipeline that
+contains a separately hosted value. `src/codegen/core.rs` emits a valid lexical
+arrow IIFE for a parenthesized concise body. `tests/compile.rs` covers all three
+concise-arrow forms and their verified TypeScript output.

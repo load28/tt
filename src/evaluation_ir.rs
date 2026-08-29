@@ -541,6 +541,15 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
+            // A pipeline remains an expression when a nested value has
+            // crossed into a separate source-backed owner, such as a
+            // concise arrow step. Rewriting the outer Apply as statements
+            // would move that value's propagation target out of the arrow.
+            if matches!(core.exprs[expr.index()], Expr::Apply(_))
+                && self.has_separately_hosted_descendant(core, expr)
+            {
+                continue;
+            }
             let (owner, value, context, protocol, exits) = match &region.placement {
                 RegionPlacement::Host {
                     context:
@@ -805,6 +814,72 @@ impl EvaluationFile {
             expression_boundary_name,
             unsupported_expression_propagations,
         })
+    }
+
+    fn has_separately_hosted_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
+        self.expr_has_hosted_descendant(core, expr)
+    }
+
+    fn expr_has_hosted_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
+        let nested = |child| {
+            self.regions.iter().any(|region| {
+                region.root == Some(CoreRoot::Expr(child))
+                    && matches!(region.placement, RegionPlacement::Host { .. })
+            }) || self.expr_has_hosted_descendant(core, child)
+        };
+        match &core.exprs[expr.index()] {
+            Expr::Opaque(_) | Expr::Propagate(_) => false,
+            Expr::Sequence(body) => self.body_has_hosted_descendant(core, *body),
+            Expr::Decision(decision) => {
+                decision
+                    .subjects
+                    .iter()
+                    .any(|subject| nested(subject.value))
+                    || decision.arms.iter().any(|arm| {
+                        arm.guard.is_some_and(nested)
+                            || match arm.action {
+                                ArmAction::Yield { body, .. } | ArmAction::Execute(body) => {
+                                    self.body_has_hosted_descendant(core, body)
+                                }
+                                ArmAction::BindThrough(_) => false,
+                            }
+                    })
+            }
+            Expr::Apply(apply) => {
+                apply.head.is_some_and(nested) || apply.steps.iter().any(|step| nested(step.value))
+            }
+            Expr::ResultRegion(region) => {
+                region.items.iter().any(|item| match item {
+                    ResultRegionItem::Statements(body) => {
+                        self.body_has_hosted_descendant(core, *body)
+                    }
+                    ResultRegionItem::Propagate(_) => false,
+                }) || nested(region.value)
+            }
+            Expr::Template(template) => template.parts.iter().any(|part| match part {
+                crate::core_ir::TemplatePart::Raw(_) => false,
+                crate::core_ir::TemplatePart::Interpolation(expr) => nested(*expr),
+            }),
+        }
+    }
+
+    fn body_has_hosted_descendant(&self, core: &CoreFile, body: BodyId) -> bool {
+        core.bodies[body.index()]
+            .statements
+            .iter()
+            .any(|statement| match statement {
+                Statement::Expr(expr) => {
+                    self.regions.iter().any(|region| {
+                        region.root == Some(CoreRoot::Expr(*expr))
+                            && matches!(region.placement, RegionPlacement::Host { .. })
+                    }) || self.expr_has_hosted_descendant(core, *expr)
+                }
+                Statement::Opaque(_)
+                | Statement::Adt(_)
+                | Statement::Import(_)
+                | Statement::Propagate(_)
+                | Statement::Decision(_) => false,
+            })
     }
 
     /// Checks the plan's evaluation order and count contracts

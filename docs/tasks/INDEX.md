@@ -293,7 +293,7 @@
 | TASK-282 | P0: Preserve the planner's existing failure return | Complete | 2026-08-29 | 2026-08-29 | [TASK-282](./TASK-282-planner-failure-return.md) |
 | TASK-283 | P1: Close host projection and source-preservation crashes | Complete | 2026-08-29 | 2026-08-30 | [TASK-283](./TASK-283-host-projection-crashes.md) |
 | TASK-284 | P2: Repair expression-boundary Result hosting | Complete | 2026-08-30 | 2026-08-30 | [TASK-284](./TASK-284-expression-boundary-result-hosting.md) |
-| TASK-285 | P3: Repair concise-arrow propagation | Pending | — | — | [TASK-285](./TASK-285-concise-arrow-propagation.md) |
+| TASK-285 | P3: Repair concise-arrow propagation | Complete | 2026-08-30 | 2026-08-30 | [TASK-285](./TASK-285-concise-arrow-propagation.md) |
 | TASK-286 | P4: Reject unsound function targets | Pending | — | — | [TASK-286](./TASK-286-unsound-function-targets.md) |
 | TASK-287 | P5: Close shipped claimer gaps | Pending | — | — | [TASK-287](./TASK-287-shipped-claimer-gaps.md) |
 | TASK-288 | P6: Preserve placement reasons | Pending | — | — | [TASK-288](./TASK-288-preserve-placement-reasons.md) |
