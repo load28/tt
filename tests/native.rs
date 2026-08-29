@@ -331,6 +331,201 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
 }
 
 #[test]
+fn files_outside_tsconfig_do_not_receive_typed_queries() {
+    require_tsgo!();
+    let source = "import { importedMutation } from \"../shared/reachable.tt\";\n\
+        export function mutate(): number {\n\
+        \x20 val const values = new Map<string, number>();\n\
+        \x20 values.set(\"answer\", 42);\n\
+        \x20 return values.size + importedMutation();\n\
+        }\n";
+    let dir = project(&[("src/main.tt", source)]);
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    write(
+        &dir,
+        "shared/reachable.tt",
+        "export function importedMutation(): number {\n\
+         \x20 val const values = new Set<number>();\n\
+         \x20 values.add(1);\n\
+         \x20 return values.size;\n\
+         }\n",
+    );
+    fs::create_dir_all(dir.join("examples")).unwrap();
+    write(
+        &dir,
+        "examples/demo.tt",
+        "export function shout(name: string): string {\n\
+         \x20 val const text = name.trim();\n\
+         \x20 return `${text}!`;\n\
+         }\n",
+    );
+
+    let out = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(1),
+        "the val diagnostic is a code error: {stderr}"
+    );
+    assert!(stderr.contains("error[val-mutation]"), "{stderr}");
+    assert!(stderr.contains("--> src/main.tt:4:3"), "{stderr}");
+    assert!(stderr.contains("--> shared/reachable.tt:3:3"), "{stderr}");
+    assert!(
+        !stderr.contains("backend failed") && !stderr.contains("demo.tt.ts"),
+        "{stderr}"
+    );
+
+    let answer = typed_server(&dir, "src/main.tt", source);
+    assert!(answer.get("error").is_none(), "{answer}");
+    assert!(answer["result"]["backendError"].is_null(), "{answer}");
+    assert!(
+        answer["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|d| d["code"] == "val-mutation")),
+        "{answer}"
+    );
+}
+
+#[test]
+fn a_malformed_file_outside_tsconfig_does_not_enter_typed_diagnostics() {
+    require_tsgo!();
+    let source = "export const answer: number = 42;\n";
+    let dir = project(&[("src/main.tt", source)]);
+    fs::create_dir_all(dir.join("examples")).unwrap();
+    write(
+        &dir,
+        "examples/demo.tt",
+        "export function demo(): number {\n return result { value; };\n}\n",
+    );
+
+    let out = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(!stderr.contains("examples/demo.tt"), "{stderr}");
+
+    let answer = typed_server(&dir, "src/main.tt", source);
+    assert!(
+        answer["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "{answer}"
+    );
+}
+
+#[test]
+fn a_malformed_included_file_still_fails_single_file_typed_checks() {
+    require_tsgo!();
+    let source = "export const answer: number = 42;\n";
+    let dir = project(&[
+        ("src/main.tt", source),
+        (
+            "src/orphan.tt",
+            "export function demo(): number {\n return result { value; };\n}\n",
+        ),
+    ]);
+
+    let out = run(&dir, &["--check-types", "src/main.tt"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("error["), "{stderr}");
+    assert!(stderr.contains("--> src/orphan.tt"), "{stderr}");
+
+    let answer = typed_server(&dir, "src/main.tt", source);
+    assert!(answer.get("error").is_none(), "{answer}");
+    assert!(answer["result"]["backendError"].is_null(), "{answer}");
+    assert!(
+        answer["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|diagnostic| {
+                diagnostic["path"]
+                    .as_str()
+                    .is_some_and(|path| path.ends_with("src/orphan.tt"))
+            })),
+        "{answer}"
+    );
+}
+
+#[test]
+fn an_import_reached_blocked_file_outside_tsconfig_is_reported() {
+    require_tsgo!();
+    let source = "import { demo } from \"../shared/broken.tt\";\n\
+                  export const answer = demo();\n";
+    let dir = project(&[("src/main.tt", source)]);
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    write(
+        &dir,
+        "shared/broken.tt",
+        "export function demo(): number {\n return result { value; };\n}\n",
+    );
+
+    let out = run(&dir, &["--check-types", "src/main.tt"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("error["), "{stderr}");
+    assert!(stderr.contains("--> shared/broken.tt"), "{stderr}");
+}
+
+#[test]
+fn a_backend_contract_failure_uses_cli_ice_and_server_backend_error_contracts() {
+    require_tsgo!();
+    let source = "val const values = new Map<string, number>();\nvalues.set(\"a\", 1);\n";
+    let dir = project(&[("src/main.tt", source)]);
+
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .env("TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST", "1")
+        .current_dir(&dir)
+        .output()
+        .expect("ttc runs");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(101), "{stderr}");
+    assert!(
+        stderr.starts_with("error: internal compiler error:"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.contains("injected TypeScript backend contract failure"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("github.com/load28/tt/issues"), "{stderr}");
+    assert!(
+        !stderr.contains("at handle") && !stderr.contains("host.mjs:"),
+        "{stderr}"
+    );
+
+    use std::io::Write;
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let request = serde_json::json!({
+        "id": 1,
+        "method": "typedCheck",
+        "params": { "path": file, "text": source, "includeTypes": true },
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .env("TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST", "1")
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    drop(child.stdin.take());
+    let output = child.wait_with_output().expect("server answers");
+    let answer: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(answer.get("error").is_none(), "{answer}");
+    assert_eq!(
+        answer["result"]["backendError"]["kind"], "internal",
+        "{answer}"
+    );
+    assert!(
+        answer["result"]["backendError"]["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("injected TypeScript backend contract failure")),
+        "{answer}"
+    );
+}
+
+#[test]
 fn a_hand_written_tsx_file_imports_an_ttx_file_by_its_specifier() {
     require_tsgo!();
     let dir = project(&[
@@ -666,6 +861,181 @@ fn a_precise_tt_error_owns_an_overlapping_type_consequence() {
 }
 
 #[test]
+fn proven_statement_and_tuple_errors_own_only_their_checker_cascades() {
+    require_tsgo!();
+    let source = "variant PaymentMethod { Card(brand: string, last4: string), Cash }\n\
+        variant Fulfillment { Pending, Picked, Cancelled }\n\
+        export function card(method: PaymentMethod): string {\n\
+        \x20 const Card(brand, last4) = method else { console.log(\"other\"); };\n\
+        \x20 return brand + last4;\n\
+        }\n\
+        export function label(state: Fulfillment, method: PaymentMethod): string {\n\
+        \x20 return match (state, method) {\n\
+        \x20   (Picked, Card) => \"picked card\",\n\
+        \x20   (Picked, Cash) => \"picked cash\",\n\
+        \x20   (Picked) => \"picked\",\n\
+        \x20   _ => \"other\",\n\
+        \x20 };\n\
+        }\n\
+        const independent: string = 1;\n";
+    let dir = project(&[("src/cascades.tt", source)]);
+
+    let out = check(&dir);
+    assert!(out.contains("error[let-else-not-diverging]"), "{out}");
+    assert!(out.contains("error[match-tuple-arity]"), "{out}");
+    assert!(out.contains("tuple pattern has 1 element"), "{out}");
+    assert!(
+        !out.contains("error[ts2339]") && !out.contains("error[ts2367]"),
+        "checker consequences owned by the invalid constructs remain: {out}"
+    );
+    assert!(
+        out.contains("type mismatch: expected `string`, found `1`"),
+        "the independent source error must remain: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/cascades.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "let-else-not-diverging"),
+        "{answer}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "match-tuple-arity"),
+        "{answer}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| { diagnostic["code"] != "ts2339" && diagnostic["code"] != "ts2367" })
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "ts2322"),
+        "{answer}"
+    );
+}
+
+#[test]
+fn an_imported_field_error_is_identical_on_typed_cli_and_server_paths() {
+    require_tsgo!();
+    let source = "import { PaymentMethod } from \"./domain.tt\";\n\
+        export function brand(method: PaymentMethod): string {\n\
+        \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+        ),
+        ("src/payment.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("case `Card` has no field `brnad`")
+            && out.contains("a field with a similar name exists: `brand`")
+            && !out.contains("type mismatch:"),
+        "the typed CLI reports the source cause only: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/payment.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let field = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "unknown-field")
+        .unwrap_or_else(|| panic!("missing imported field diagnostic: {answer}"));
+    assert_eq!(source_slice(source, field), "brnad");
+    assert_eq!(field["suggestions"][0]["edit"]["replacement"], "brand");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "ts2339"),
+        "the source error owns its generated consequence: {answer}"
+    );
+}
+
+#[test]
+fn a_nested_imported_field_error_uses_checker_evidence_and_source_span() {
+    require_tsgo!();
+    let source = "import type { TResult } from \"@tt/std\";\n\
+        import { PaymentMethod } from \"./domain.tt\";\n\
+        export function brand(r: TResult<PaymentMethod, string>): string {\n\
+        \x20 return match (r) {\n\
+        \x20   Ok(value: Card(brnd)) => brnd,\n\
+        \x20   Ok(value) => \"other\",\n\
+        \x20   Err(error) => \"error\",\n\
+        \x20 };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant PaymentMethod { Card(brand: string), Cash }\n",
+        ),
+        ("src/nested.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("error[ts2339]: Property 'brnd' does not exist"),
+        "{out}"
+    );
+    assert!(out.contains("--> src/nested.tt:5:20"), "{out}");
+    assert!(
+        !out.contains("expected `{ brnd: any; }`") && !out.contains("type mismatch:"),
+        "the direct property fact replaces the generated structural mismatch: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/nested.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let field = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "ts2339")
+        .unwrap_or_else(|| panic!("missing nested field diagnostic: {answer}"));
+    assert_eq!(source_slice(source, field), "brnd");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "unknown-field"),
+        "{answer}"
+    );
+}
+
+#[test]
+fn deep_expression_try_is_identical_on_typed_cli_and_server_paths() {
+    require_tsgo!();
+    let source = "import { Result, type TResult } from \"@tt/std\";\n\
+        declare function total(): TResult<number, string>;\n\
+        export function amount(): TResult<number, string> {\n\
+        \x20 return Result.Ok(Math.round(try total() * 1.1));\n\
+        }\n";
+    let dir = project(&[("src/deep-try.tt", source)]);
+
+    let out = check(&dir);
+    assert!(out.contains("error[try-placement]"), "{out}");
+    assert!(out.contains("--> src/deep-try.tt:4:31"), "{out}");
+    assert!(
+        !out.contains("verify-failed") && !out.contains("source-not-typescript"),
+        "{out}"
+    );
+
+    let answer = typed_server(&dir, "src/deep-try.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let placement = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "try-placement")
+        .unwrap_or_else(|| panic!("missing deep try placement diagnostic: {answer}"));
+    assert_eq!(source_slice(source, placement), "try total() * 1.1");
+    assert!(diagnostics.iter().all(|diagnostic| {
+        diagnostic["code"] != "verify-failed" && diagnostic["code"] != "source-not-typescript"
+    }));
+}
+
+#[test]
 fn a_pipeline_mismatch_names_the_step_that_rejects_the_value() {
     require_tsgo!();
     // The mismatch is at the second boundary, where the checker blames the
@@ -984,6 +1354,117 @@ fn a_pattern_typo_suppresses_typed_exhaustiveness_for_that_match() {
     assert!(
         !out.contains("not exhaustive"),
         "the typo's typed cascade is suppressed: {out}"
+    );
+}
+
+#[test]
+fn a_reported_imported_field_error_owns_only_its_match_exhaustiveness() {
+    require_tsgo!();
+    let source = "import { Fulfillment, PaymentMethod } from \"./domain.tt\";\n\
+        export function label(state: Fulfillment): string {\n\
+        \x20 return match (state) {\n\
+        \x20   Pending => \"Pending\",\n\
+        \x20   Shipped(carrier, trackng) => `${carrier} ${trackng}`,\n\
+        \x20 };\n\
+        }\n\
+        export function fee(method: PaymentMethod): number {\n\
+        \x20 return match (method) { Card(brand) => brand.length };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant Fulfillment {\n\
+             \x20 Pending,\n\
+             \x20 Shipped(carrier: string, tracking: string),\n\
+             \x20 Delivered,\n\
+             \x20 Cancelled,\n\
+             }\n\
+             export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+        ),
+        ("src/combo.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("case `Shipped` has no field `trackng`"),
+        "the source cause is reported: {out}"
+    );
+    assert!(
+        !out.contains("Delivered") && !out.contains("Cancelled"),
+        "the reported cause owns its match's coverage consequence: {out}"
+    );
+    assert!(
+        out.contains("missing \"BankTransfer\""),
+        "an independent match keeps its coverage result: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/combo.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "unknown-field"),
+        "the server reports the same owner: {answer}"
+    );
+    assert!(
+        diagnostics.iter().any(|diagnostic| {
+            diagnostic["code"] == "match-not-exhaustive"
+                && diagnostic["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains("BankTransfer"))
+        }),
+        "the server preserves the independent coverage result: {answer}"
+    );
+    assert!(
+        diagnostics.iter().all(|diagnostic| {
+            diagnostic["message"].as_str().is_none_or(|message| {
+                !message.contains("Delivered") && !message.contains("Cancelled")
+            })
+        }),
+        "the owned coverage consequence stays suppressed: {answer}"
+    );
+}
+
+#[test]
+fn an_imported_case_without_declaration_ownership_uses_checker_evidence() {
+    require_tsgo!();
+    let source = "import { PaymentMethod } from \"./domain.tt\";\n\
+        export function fee(method: PaymentMethod): number {\n\
+        \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+        }\n";
+    let dir = project(&[
+        (
+            "src/domain.tt",
+            "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+        ),
+        ("src/payment.tt", source),
+    ]);
+
+    let out = check(&dir);
+    assert!(
+        out.contains("error[ts2678]")
+            && out.contains("Type '\"Crad\"' is not comparable")
+            && !out.contains("unknown-case"),
+        "the typed CLI reports the checker-proven incompatibility: {out}"
+    );
+
+    let answer = typed_server(&dir, "src/payment.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let case = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic["code"] == "ts2678")
+        .unwrap_or_else(|| panic!("missing imported case diagnostic: {answer}"));
+    assert!(
+        case["message"]
+            .as_str()
+            .is_some_and(|message| message.contains("Crad")),
+        "the checker fact names the incompatible case: {answer}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic["code"] != "unknown-case"),
+        "no spelling-based owner is inferred: {answer}"
     );
 }
 

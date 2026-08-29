@@ -66,6 +66,64 @@ pub(super) fn parse_try_stmt<'t>(
     ))
 }
 
+/// Bounds a `try <expr>` that appears inside another expression. Unlike a
+/// statement try, this form ends at its enclosing expression's delimiter and
+/// therefore must not require a semicolon. The caller turns the returned span
+/// into a parser-owned recovery node; no lowering is attempted.
+pub(super) fn parse_misplaced_try(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, Span)> {
+    let first = cur.peek()?;
+    if !is_expr_start(first) {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut ternaries = 0usize;
+    let mut k = cur.idx;
+    let mut end = first.span.start;
+    while let Some(token) = cur.tokens.get(k) {
+        if depth == 0
+            && matches!(
+                token.kind,
+                TokenKind::Punct(b')' | b']' | b'}' | b',' | b';')
+            )
+        {
+            break;
+        }
+        if depth == 0 {
+            match token.kind {
+                TokenKind::Punct(b'?') => ternaries += 1,
+                TokenKind::Punct(b':') if ternaries == 0 => break,
+                TokenKind::Punct(b':') => ternaries -= 1,
+                _ => {}
+            }
+        }
+        if depth == 0
+            && k > cur.idx
+            && matches!(token.kind, TokenKind::Ident)
+            && !dotted_at(cur.tokens, cur.idx, k)
+            && STMT_ONLY_WORDS.contains(&cur.text(token))
+        {
+            break;
+        }
+
+        end = token.span.end;
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        k += 1;
+    }
+
+    (end > first.span.start).then_some((
+        k,
+        Span {
+            start: kw_span.start,
+            end,
+        },
+    ))
+}
+
 /// Bounds a `try <expr>` candidate that rolled back before its required
 /// semicolon. This uses the same token/depth rules as the claim itself and
 /// synchronizes before the next statement; no later phase has to infer the

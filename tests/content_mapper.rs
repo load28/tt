@@ -226,6 +226,139 @@ fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
 }
 
 #[test]
+fn a_deep_expression_try_reports_the_placement_rule_at_its_source() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/deep-try.tt"),
+        "declare function total(): TResult<number, string>;\n\
+         export function amount(): TResult<number, string> {\n\
+         \x20 return Result.Ok({ amount: try total() });\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("deep-try.tt(3,30): error tt11")
+            && text.contains("statement, not an expression"),
+        "expected the source placement diagnostic, got:\n{text}"
+    );
+    assert!(
+        !text.contains("verify-failed") && !text.contains("source-not-typescript"),
+        "verification must not own the parser error:\n{text}"
+    );
+}
+
+#[test]
+fn an_imported_field_error_is_checker_owned_at_the_field_token() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function brand(method: PaymentMethod): string {\n\
+         \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { brand } from \"./payment.tt\";\nvoid brand;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("payment.tt(4,32): error TS2339")
+            && text.contains("Property 'brnad' does not exist"),
+        "expected the checker's source-mapped field diagnostic, got:\n{text}"
+    );
+    assert!(!text.contains("error tt26"), "{text}");
+}
+
+#[test]
+fn an_imported_case_error_with_a_wildcard_is_checker_owned() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function fee(method: PaymentMethod): number {\n\
+         \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { fee } from \"./payment.tt\";\nvoid fee;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("payment.tt(4,10): error TS2678")
+            && text.contains("Type '\"Crad\"' is not comparable"),
+        "expected the checker's source-mapped case diagnostic, got:\n{text}"
+    );
+    assert!(!text.contains("error tt25"), "{text}");
+}
+
+#[test]
+fn a_nested_imported_field_error_is_reported_at_its_token() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), Cash }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/nested.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function brand(r: TResult<PaymentMethod, string>): string {\n\
+         \x20 return match (r) {\n\
+         \x20   Ok(value: Card(brnd)) => brnd,\n\
+         \x20   Ok(value) => \"other\",\n\
+         \x20   Err(error) => \"error\",\n\
+         \x20 };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { brand } from \"./nested.tt\";\nvoid brand;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("nested.tt(6,20): error TS2339")
+            && text.contains("Property 'brnd' does not exist"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("{ brnd: any; }") && !text.contains("error tt26"),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_type_error_inside_glue_reports_at_the_construct() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

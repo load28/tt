@@ -167,7 +167,7 @@ impl SourceKind {
 }
 
 /// A variant declaration from another module, made available to [`compile`]'s
-/// exhaustiveness checking via [`Options::extern_variants`].
+/// pattern semantics via [`Options::extern_variants`].
 ///
 /// Collected by build tools (the `ttc` CLI does this for direct relative
 /// `.tt`/`.ttx` imports) with [`exported_variants`] over the imported file's source,
@@ -207,11 +207,13 @@ pub enum TtImportNames {
     None,
 }
 
-/// Extracts the exported tt variant declarations (name + case tags) of a
-/// source file, without compiling it — the declaration-table half of
-/// project-wide exhaustiveness checking. Non-exported variants and
-/// TypeScript enums are not included. The returned entries have
-/// [`ExternVariant::from`] set to `None`.
+/// Extracts the exported tt variant declarations of a source file as tag-only
+/// [`ExternVariant`] entries, without compiling it. Those tags support
+/// exhaustiveness and case-name checking across a module boundary. Rich field
+/// checking in the project engine uses the [`VariantSymbol`] declarations from
+/// [`variant_symbols_with_kind`] instead. Non-exported variants and TypeScript
+/// enums are not included. The returned entries have [`ExternVariant::from`]
+/// set to `None`.
 ///
 /// ```
 /// let decls = ttc::exported_variants(
@@ -234,7 +236,7 @@ pub fn exported_variants_with_kind(source: &str, source_kind: SourceKind) -> Vec
         .filter_map(|segment| match segment {
             ast::Segment::Variant(decl) if decl.exported => Some(ExternVariant {
                 name: decl.name.clone(),
-                tags: decl.cases.iter().map(|c| c.tag.clone()).collect(),
+                tags: decl.cases.iter().map(|case| case.tag.clone()).collect(),
                 from: None,
             }),
             _ => None,

@@ -89,10 +89,10 @@ pub(crate) fn check_all(
     // One analysis, two reports. Resolution comes first — a pattern whose
     // names do not resolve has no exhaustiveness question worth asking, and
     // answering both at once would bury the cause under its effect. With
-    // accumulation the suppression is per match ([`MatchAnalysis::
-    // has_unresolved`]), not per file: match B's coverage is not match A's
-    // typo's business.
-    report_resolution(analyses, &mut checker.errors);
+    // accumulation the suppression is per match
+    // ([`PatternAnalyses::match_has_resolution_error`]), not per file: match
+    // B's coverage is not match A's typo's business.
+    checker.errors.extend(resolution_errors(analyses));
     if !defer_to_checker {
         report_coverage(
             source,
@@ -116,7 +116,8 @@ pub(crate) fn check_all(
 /// an unresolved name is reportable belongs to the analysis (which is what
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
-fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut Vec<TtError>) {
+pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> Vec<TtError> {
+    let mut errors = Vec::with_capacity(analyses.unresolved.len());
     for unresolved in &analyses.unresolved {
         let described = describe(&CoveredVariant {
             name: unresolved.variant_name.clone(),
@@ -154,6 +155,7 @@ fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut V
                 ),
         );
     }
+    errors
 }
 
 struct Checker {
@@ -496,6 +498,7 @@ impl Checker {
                     "let-else: every path through the `else` block must diverge".to_string(),
                 )
                 .code(DiagnosticCode::LetElseNotDiverging)
+                .owner(stmt.head_span.start, stmt.head_span.end)
                 .help(
                     "end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` \
                      counts when both branches do)",
@@ -851,17 +854,28 @@ impl Checker {
                 }
                 TuplePattern::Elems(elems) => {
                     if elems.len() != arity {
+                        let elements = if elems.len() == 1 {
+                            "element"
+                        } else {
+                            "elements"
+                        };
+                        let scrutinees = if arity == 1 {
+                            "scrutinee"
+                        } else {
+                            "scrutinees"
+                        };
+                        let owner = expr.head_span();
                         self.error(
                             TtError::span(
                                 arm.pattern_span.start,
                                 arm.pattern_span.end,
                                 format!(
-                                    "match: tuple pattern has {} elements but the match has {} scrutinees",
-                                    elems.len(),
-                                    arity
+                                    "match: tuple pattern has {} {elements} but the match has {} {scrutinees}",
+                                    elems.len(), arity
                                 ),
                             )
-                            .code(DiagnosticCode::MatchTupleArity),
+                            .code(DiagnosticCode::MatchTupleArity)
+                            .owner(owner.start, owner.end),
                         );
                     }
                     // Every element's or-alternatives share one
@@ -956,7 +970,10 @@ fn report_coverage(
     let uncovered = analyses
         .matches
         .iter()
-        .filter(|m| !m.has_unresolved && !suppressed.contains(&m.keyword_off))
+        .filter(|m| {
+            !analyses.match_has_resolution_error(m.keyword_off)
+                && !suppressed.contains(&m.keyword_off)
+        })
         .filter_map(|m| m.coverage.as_ref().map(|c| (m, c)))
         .filter(|(_, c)| !c.missing.is_empty());
 

@@ -1766,6 +1766,80 @@ fn cli_checks_exhaustiveness_across_tt_imports() {
 }
 
 #[test]
+fn untyped_cli_does_not_infer_imported_field_ownership() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("domain.tt"),
+        "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\
+         export function brand(method: PaymentMethod): string {\n\
+         \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--check", "payment.tt"]);
+    assert!(ok, "the typed checker owns imported field identity:\n{err}");
+}
+
+#[test]
+fn untyped_cli_does_not_infer_a_single_imported_case_owner() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\
+         export function fee(method: PaymentMethod): number {\n\
+         \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--check", "payment.tt"]);
+    assert!(
+        ok,
+        "the typed checker owns the scrutinee's case domain:\n{err}"
+    );
+}
+
+#[test]
+fn untyped_cli_does_not_infer_a_generic_payload_owner() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), Cash }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("nested.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import { PaymentMethod } from \"./domain.tt\";\n\
+         export function brand(r: TResult<PaymentMethod, string>): string {\n\
+         \x20 return match (r) {\n\
+         \x20   Ok(value: Card(brnd)) => brnd,\n\
+         \x20   Ok(value) => \"other\",\n\
+         \x20   Err(error) => \"error\",\n\
+         \x20 };\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--check", "nested.tt"]);
+    assert!(
+        ok,
+        "generic substitution belongs to the typed checker:\n{err}"
+    );
+}
+
+#[test]
 fn cli_skips_unresolvable_imports_silently() {
     // A missing module is tsc's problem (TS2307); the match simply stays
     // unchecked, as before phase 2.

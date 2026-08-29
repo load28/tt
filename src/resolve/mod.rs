@@ -25,14 +25,13 @@
 use std::collections::HashMap;
 
 use crate::hir::{
-    self, Arena, DefId, FieldBinding, HirFile, NodeId, Pat, PatternId, PatternSiteId, SiteKind,
-    Span,
+    self, Arena, DefId, FieldBinding, HirFile, NodeId, Pat, PatternId, PatternSiteId, Span,
 };
 
 /// An imported declaration as the resolver receives it: the name it is
 /// known by in the importing file's scope (aliases applied), where it came
-/// from, and its variants — with payload fields when the collector had
-/// them ([`crate::VariantSymbol`]), tags only otherwise ([`crate::ExternVariant`]).
+/// from, and its variants. Legacy [`crate::ExternVariant`] inputs carry tags
+/// only; language-tooling [`crate::VariantSymbol`] inputs carry fields too.
 #[derive(Debug, Clone)]
 pub struct ExternDecl {
     /// The name in the importing file's scope.
@@ -58,7 +57,7 @@ impl From<&crate::ExternVariant> for ExternDecl {
             name: e.name.clone(),
             from: e.from.clone(),
             generics: String::new(),
-            variants: e.tags.iter().map(|t| (t.clone(), None)).collect(),
+            variants: e.tags.iter().map(|tag| (tag.clone(), None)).collect(),
         }
     }
 }
@@ -234,8 +233,8 @@ pub struct VariantDecl {
     /// The lowered syntax this declaration came from, for a local one —
     /// the bridge between the declaration world and the file's HIR.
     pub hir: Option<hir::VariantId>,
-    /// The payload fields; `None` for a unit case, and for imported
-    /// declarations that carried tags only.
+    /// The payload fields; `None` for a unit case or a legacy imported
+    /// declaration that carries tags only.
     pub fields: Option<Vec<FieldDecl>>,
 }
 
@@ -490,7 +489,6 @@ impl Resolver {
 
     fn resolve_site(&mut self, hir: &HirFile, site_id: PatternSiteId) {
         let site = &hir.sites[site_id];
-        let single_pattern = matches!(site.kind, SiteKind::IfLet | SiteKind::LetElse);
         let positions = site.subjects.len();
         let mut subjects: Vec<Option<DefId>> = Vec::with_capacity(positions);
         for position in 0..positions {
@@ -502,29 +500,20 @@ impl Resolver {
             }
             let subject = self.identify(&tags);
             // Resolve this position's constructor uses against the
-            // identified variant — or, for a statement site whose evidence is
-            // a **single** tag, under the strict one-edit licence (an
-            // or-pattern's several tags are match-grade evidence, so they
-            // go through `identify` like an arm list and get no licence).
-            match subject {
-                Some(variant_def) => {
-                    for arm in &site.arms {
-                        self.resolve_position(
-                            hir,
-                            site_id,
-                            arm.pattern,
-                            position,
-                            positions,
-                            variant_def,
-                        );
-                    }
+            // identified variant. A site with no matching case provides no
+            // declaration evidence: its subject may be a hand-written
+            // TypeScript union, so the typed checker owns that question.
+            if let Some(variant_def) = subject {
+                for arm in &site.arms {
+                    self.resolve_position(
+                        hir,
+                        site_id,
+                        arm.pattern,
+                        position,
+                        positions,
+                        variant_def,
+                    );
                 }
-                None if single_pattern && tags.len() == 1 => {
-                    for arm in &site.arms {
-                        self.report_near_miss(hir, site_id, arm.pattern);
-                    }
-                }
-                None => {}
             }
             subjects.push(subject);
         }
@@ -691,8 +680,8 @@ impl Resolver {
                     .collect::<Vec<_>>()
             })
         }) else {
-            // No field list to compare against (a unit case, or an import
-            // that carried tags only) — nothing to say.
+            // A unit case or a tags-only legacy import has no field list to
+            // compare against.
             return;
         };
         let variant_name = self
@@ -713,12 +702,13 @@ impl Resolver {
                     self.resolution
                         .uses
                         .insert(field_pat.node, Res::Field(field_ref));
-                    // A nested pattern resolves against the field's own
-                    // declared type, when that type names a variant this
-                    // file can see.
+                    // A nested pattern resolves only when the field's
+                    // declaration names its owner. A type parameter does not:
+                    // its instantiation belongs to TypeScript and an exact tag
+                    // elsewhere in scope is not proof of ownership.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
-                        && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                         && let Pat::Constructor { path, fields } = &hir.patterns[*inner]
+                        && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                     {
                         self.resolve_constructor(
                             hir,
@@ -748,45 +738,6 @@ impl Resolver {
                     }
                 }
             }
-        }
-    }
-
-    /// The single-pattern near-miss licence: one tag is thin evidence, so
-    /// an unidentified `if let`/let-else tag is reported only when exactly
-    /// one variant has a case a *single* edit away (transposition included).
-    fn report_near_miss(&mut self, hir: &HirFile, site: PatternSiteId, pattern: PatternId) {
-        let Pat::Constructor { path, .. } = &hir.patterns[pattern] else {
-            return;
-        };
-        let mut found: Option<(DefId, String)> = None;
-        for (id, def) in self.resolution.defs.iter() {
-            let DefKind::Variant(data) = &def.kind else {
-                continue;
-            };
-            if self.resolution.type_ns.get(&def.name) != Some(&id) {
-                continue;
-            }
-            let Some((suggestion, _)) =
-                nearest_within(&path.name, data.variants.iter().map(|v| v.name.as_str()), 1)
-            else {
-                continue;
-            };
-            if found.is_some() {
-                return; // ambiguous — an ambiguous suggestion is none
-            }
-            found = Some((id, suggestion));
-        }
-        if let Some((variant_def, suggestion)) = found {
-            self.resolution.uses.insert(path.node, Res::Unresolved);
-            self.resolution.unresolved.push(UnresolvedUse {
-                site,
-                node: path.node,
-                name: path.name.clone(),
-                kind: UseKind::Case,
-                against: variant_def,
-                tag: None,
-                suggestion,
-            });
         }
     }
 

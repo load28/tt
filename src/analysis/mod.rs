@@ -187,6 +187,10 @@ pub struct UnresolvedName {
     pub tag: Option<String>,
     /// The declared name it looks like a misspelling of.
     pub suggestion: String,
+    /// The `match` keyword this reportable error owns, when it was written in
+    /// a match pattern. `None` for `if let` and let-else sites, which have no
+    /// exhaustiveness or match-glue consequences to suppress.
+    pub match_owner: Option<usize>,
 }
 
 /// What kind of name an [`UnresolvedName`] is.
@@ -232,12 +236,6 @@ pub struct MatchAnalysis {
     /// [`crate::literal_matches`]). This is what sema reports on; there is
     /// no second implementation of the rule.
     pub coverage: Option<Coverage>,
-    /// Whether resolution failed for a name written in *this* match's
-    /// patterns ([`PatternAnalyses::unresolved`] holds the entries). The
-    /// reporter uses it as the recovery boundary: a match with a typo has
-    /// no exhaustiveness question worth asking, but its neighbour still
-    /// does — suppression is per match, not per file (TASK-120).
-    pub has_unresolved: bool,
 }
 
 /// What a match is over: the resolved variant and its constructors.
@@ -446,6 +444,17 @@ pub enum Origin {
 }
 
 impl PatternAnalyses {
+    /// Whether a reportable resolver error owns this match.
+    ///
+    /// The resolver-error list is the diagnostic source and the suppression
+    /// source. There is no copied boolean that can silence a checker result
+    /// after its corresponding cause was dropped.
+    pub(crate) fn match_has_resolution_error(&self, keyword_off: usize) -> bool {
+        self.unresolved
+            .iter()
+            .any(|error| error.match_owner == Some(keyword_off))
+    }
+
     /// The pattern binding whose bound-name span contains `offset` (end
     /// inclusive, matching how the language surface treats a chunk's end).
     ///
@@ -559,10 +568,9 @@ pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnaly
 /// of the rule.
 ///
 /// `externs` are the imported declarations the CLI collects for sema
-/// ([`crate::Options::extern_variants`]); they carry tags without field types,
-/// which is all coverage needs. Pattern bindings are therefore not analyzed
-/// and every arm comes back empty — [`pattern_analyses`] is the entry point
-/// for those.
+/// ([`crate::Options::extern_variants`]). The resolver still validates their
+/// case and field names; only binding-type analysis is skipped, so every arm
+/// comes back empty — [`pattern_analyses`] is the entry point for bindings.
 #[cfg(test)]
 pub(crate) fn coverage_analyses(program: &Program, externs: &[ExternVariant]) -> PatternAnalyses {
     coverage_semantics(program, externs).patterns
@@ -627,10 +635,9 @@ fn validate_semantic(file: &SemanticFile) {
 }
 
 /// Copies the resolver's answers into the analysis' vocabulary:
-/// [`PatternAnalyses::unresolved`], [`PatternAnalyses::resolved`], and each
-/// match's [`MatchAnalysis::has_unresolved`]. Name resolution has **one**
-/// implementation — [`crate::resolve`] — and this is where its answers
-/// enter the surface sema and the editor already consume.
+/// [`PatternAnalyses::unresolved`] and [`PatternAnalyses::resolved`]. Name
+/// resolution has **one** implementation — [`crate::resolve`] — and this is
+/// where its answers enter the surface sema and the editor already consume.
 fn attach_resolution(
     analyses: &mut PatternAnalyses,
     hir: &crate::hir::HirFile,
@@ -654,6 +661,12 @@ fn attach_resolution(
 
     for miss in &resolution.unresolved {
         let (start, end) = span_of(miss.node);
+        let site = &hir.sites[miss.site];
+        let match_owner = matches!(
+            site.kind,
+            crate::hir::SiteKind::Match | crate::hir::SiteKind::TupleMatch
+        )
+        .then(|| span_of(site.node).0);
         analyses.unresolved.push(UnresolvedName {
             kind: match miss.kind {
                 res::UseKind::Case => NameKind::Case,
@@ -666,6 +679,7 @@ fn attach_resolution(
             origin: variant_origin(miss.against),
             tag: miss.tag.clone(),
             suggestion: miss.suggestion.clone(),
+            match_owner,
         });
     }
     for (&node, answer) in &resolution.uses {
@@ -702,22 +716,6 @@ fn attach_resolution(
     // construct the resolver happened to reach first.
     analyses.unresolved.sort_by_key(|u| u.start);
     analyses.resolved.sort_by_key(|r| r.start);
-
-    // The recovery boundary: a match holding an unresolved name keeps its
-    // own coverage question suppressed. Sites and matches are joined by
-    // the construct's keyword offset — the head span's start on both sides.
-    let mut with_miss: Vec<usize> = resolution
-        .unresolved
-        .iter()
-        .filter_map(|miss| {
-            let site = &hir.sites[miss.site];
-            hir.source_map.node_span(site.node).map(|s| s.start)
-        })
-        .collect();
-    with_miss.sort_unstable();
-    for analysis in &mut analyses.matches {
-        analysis.has_unresolved = with_miss.binary_search(&analysis.keyword_off).is_ok();
-    }
 }
 
 /// How much of each match to analyze — bindings cost work no coverage
@@ -750,9 +748,7 @@ struct Entry {
     /// Where it was declared — carried into [`Coverage`] so a consumer can
     /// name the origin without a table of its own.
     origin: Origin,
-    /// The constructors, in declaration order. An imported declaration that
-    /// only carried tags ([`ExternVariant`], sema's input) has `fields: None`
-    /// throughout — enough for coverage, which is all that path asks.
+    /// The constructors, in declaration order, including payload fields.
     constructors: Vec<MatchConstructor>,
 }
 
@@ -1022,8 +1018,6 @@ fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> MatchAnalysis
         subjects: vec![subject.map(to_subject)],
         arms,
         coverage,
-        // Filled by `attach_resolution` — the resolver owns the answer.
-        has_unresolved: false,
     }
 }
 
@@ -1088,8 +1082,6 @@ fn analyze_tuple_match(expr: &TupleMatchExpr, table: &Table, depth: Depth) -> Ma
         subjects: subjects.into_iter().map(|s| s.map(to_subject)).collect(),
         arms,
         coverage: tuple_coverage_of(expr, table),
-        // Filled by `attach_resolution` — the resolver owns the answer.
-        has_unresolved: false,
     }
 }
 
@@ -2177,7 +2169,7 @@ mod tests {
     }
 
     #[test]
-    fn resolution_reports_a_misspelling_and_stays_quiet_otherwise() {
+    fn resolution_reports_owned_misspellings_and_stays_quiet_otherwise() {
         let typo = pattern_analyses(
             "variant E { Alpha(x: string), Beta }\nconst v = match (e) { Alhpa(x) => x, Beta => 0 };\n",
             &[],
@@ -2185,6 +2177,17 @@ mod tests {
         assert_eq!(typo.unresolved.len(), 1);
         assert_eq!(typo.unresolved[0].kind, NameKind::Case);
         assert_eq!(typo.unresolved[0].suggestion, "Alpha");
+        assert_eq!(
+            typo.unresolved[0].match_owner,
+            Some(typo.matches[0].keyword_off)
+        );
+        assert!(typo.match_has_resolution_error(typo.matches[0].keyword_off));
+
+        let unowned_if_let = pattern_analyses(
+            "variant E { Alpha(x: string), Beta }\nif let Alhpa(x) = e { use(x); }\n",
+            &[],
+        );
+        assert!(unowned_if_let.unresolved.is_empty());
 
         // A name that is nobody's misspelling is not an error: the pattern
         // may be over a hand-written tagged union.

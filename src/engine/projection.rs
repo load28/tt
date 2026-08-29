@@ -205,6 +205,7 @@ pub(crate) fn declaration_path_of(file: &ProjectedDocument) -> PathBuf {
 /// is dropped rather than asked about at an approximate position.
 pub(crate) fn assemble(
     files: &[Arc<ProjectedDocument>],
+    blocked: &[Arc<BlockedFile>],
     root: &Path,
     sources: &[PathBuf],
 ) -> (Query, Probes) {
@@ -453,6 +454,16 @@ pub(crate) fn assemble(
             });
         }
     }
+
+    // A source that failed tt projection still has to enter the candidate
+    // set. The configured TypeScript program is the authority for whether
+    // that path belongs through `files`/`include`/`exclude` or an import.
+    // The placeholder carries no probes and no user code; it exists only so
+    // the backend can return that membership decision in `projectModules`.
+    query.modules.extend(blocked.iter().map(|file| Module {
+        path: module_path_of(&file.source_path),
+        text: "export {};\n".to_string(),
+    }));
 
     (query, probes)
 }

@@ -499,6 +499,20 @@ pub(crate) struct TupleMatchExpr {
     pub arms: Vec<TupleArm>,
 }
 
+impl TupleMatchExpr {
+    /// The source head used by both diagnostics and generated-glue ownership:
+    /// `match` through the closing scrutinee parenthesis.
+    pub(crate) fn head_span(&self) -> Span {
+        Span {
+            start: self.keyword_off,
+            end: self
+                .scrutinees
+                .last()
+                .map_or(self.keyword_off, |(span, _)| span.end + 1),
+        }
+    }
+}
+
 /// One arm of a [`TupleMatchExpr`].
 #[derive(Debug)]
 pub(crate) struct TupleArm {

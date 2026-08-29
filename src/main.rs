@@ -864,6 +864,9 @@ fn typed_pass(
     // code failing the check — the tt diagnostics above are complete, the
     // typed layer is missing, and the exit code says "could not check".
     if let Some(error) = &checked.backend_error {
+        if error.kind == ttc::engine::BackendErrorKind::Internal {
+            panic!("{}", error.message);
+        }
         eprintln!("ttc: {error}");
         eprintln!("ttc: the TypeScript layer did not run — only tt-level diagnostics are shown");
         return Ok(TypedReport {

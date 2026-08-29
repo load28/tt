@@ -235,11 +235,7 @@ impl Lower {
     }
 
     fn lower_tuple_match(&mut self, expr: &ast::TupleMatchExpr) -> ExprId {
-        let head_end = expr
-            .scrutinees
-            .last()
-            .map_or(expr.keyword_off, |(span, _)| span.end + 1);
-        let head = Span::new(expr.keyword_off, head_end);
+        let head = Self::span(expr.head_span());
         let node = self.node(head, AstOrigin::TupleMatch);
         let subjects = expr
             .scrutinees

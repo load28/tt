@@ -744,10 +744,19 @@ fn typed_check(
                         .collect();
                     // `backendError`: the TypeScript layer could not run —
                     // the tt diagnostics above are still complete.
+                    let backend_error = checked.backend_error.as_ref().map(|error| {
+                        json!({
+                            "kind": match error.kind {
+                                ttc::engine::BackendErrorKind::Unavailable => "unavailable",
+                                ttc::engine::BackendErrorKind::Internal => "internal",
+                            },
+                            "message": error.message,
+                        })
+                    });
                     json!({
                         "blocked": false,
                         "diagnostics": diagnostics,
-                        "backendError": checked.backend_error,
+                        "backendError": backend_error,
                     })
                 }
             }

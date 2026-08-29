@@ -971,10 +971,33 @@ fn try_at_module_top_level_is_an_error() {
 
 #[test]
 fn try_cannot_be_used_in_expression_position() {
-    for src in [
-        "function f() { return try read(); }\n",
-        "function f() { const run = () => try read(); }\n",
-        "function f(c: boolean) { const x = c ? 0 : try read(); }\n",
+    for (src, misplaced) in [
+        ("function f() { return try read(); }\n", "try read()"),
+        (
+            "function f() { const run = () => try read(); }\n",
+            "try read()",
+        ),
+        (
+            "function f(c: boolean) { const x = c ? 0 : try read(); }\n",
+            "try read()",
+        ),
+        (
+            "function f(c: boolean) { const x = c ? try read() : fallback; }\n",
+            "try read()",
+        ),
+        (
+            "function f(c: boolean) { return wrap(try c ? read() : fallback(), 1); }\n",
+            "try c ? read() : fallback()",
+        ),
+        (
+            "function f() { return Result.Ok(Math.round(try total() * 1.1)); }\n",
+            "try total() * 1.1",
+        ),
+        ("function f() { return `v=${try read()}`; }\n", "try read()"),
+        (
+            "function f() { return Result.Ok({ amount: try total() }); }\n",
+            "try total()",
+        ),
     ] {
         let diagnostics = ttc::analyze(src, &Options::default());
         assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
@@ -988,7 +1011,7 @@ fn try_cannot_be_used_in_expression_position() {
         );
         let start = diagnostics[0].start.expect("placement start");
         let end = diagnostics[0].end.expect("placement end");
-        assert_eq!(&src[start..end], "try read()");
+        assert_eq!(&src[start..end], misplaced);
     }
 }
 
@@ -1787,7 +1810,10 @@ const area = match (Shape.Point) {
 fn token_extern() -> ttc::ExternVariant {
     ttc::ExternVariant {
         name: "Token".to_string(),
-        tags: vec!["Num".to_string(), "Ident".to_string(), "Eof".to_string()],
+        tags: ["Num", "Ident", "Eof"]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
         from: Some("./token.tt".to_string()),
     }
 }
@@ -1852,7 +1878,10 @@ fn extern_variant_shadows_builtin_of_same_name() {
     // two-case match that satisfies the built-in must now be an error.
     let externs = [ttc::ExternVariant {
         name: "Option".to_string(),
-        tags: vec!["Some".to_string(), "None".to_string(), "Maybe".to_string()],
+        tags: ["Some", "None", "Maybe"]
+            .into_iter()
+            .map(str::to_string)
+            .collect(),
         from: Some("./opt.tt".to_string()),
     }];
     let opts = Options {
@@ -1890,7 +1919,7 @@ fn exported_variants_returns_exported_tt_enums_only() {
     );
     assert_eq!(decls.len(), 2);
     assert_eq!(decls[0].name, "Token");
-    assert_eq!(decls[0].tags, vec!["Num".to_string(), "Eof".to_string()]);
+    assert_eq!(decls[0].tags, ["Num", "Eof"]);
     assert_eq!(decls[0].from, None);
     assert_eq!(decls[1].name, "Color");
 }
@@ -2692,7 +2721,7 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
     let e = err("const r = match (a, b) {\n  (A) => 1,\n  _ => 0,\n};\n");
     assert!(
         e.message
-            .contains("tuple pattern has 1 elements but the match has 2 scrutinees"),
+            .contains("tuple pattern has 1 element but the match has 2 scrutinees"),
         "{e}"
     );
     assert_eq!((e.line, e.col), (2, 3));
@@ -2700,7 +2729,7 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
     let e = err("const r = match (a) {\n  (A, B) => 1,\n  _ => 0,\n};\n");
     assert!(
         e.message
-            .contains("tuple pattern has 2 elements but the match has 1 scrutinees"),
+            .contains("tuple pattern has 2 elements but the match has 1 scrutinee"),
         "{e}"
     );
 }
@@ -3315,6 +3344,55 @@ fn result_block_without_a_trailing_expression_is_an_error() {
         e.message
     );
     assert_eq!((e.line, e.col), (1, 11));
+}
+
+#[test]
+fn result_block_value_semicolon_is_reported_at_the_punctuation() {
+    let src = "const a = result {\n  const x <- f();\n  { value: x };\n};\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultTailSemicolon);
+    let start = diagnostic.start.expect("semicolon start");
+    let end = diagnostic.end.expect("semicolon end");
+    assert_eq!(&src[start..end], ";");
+    assert_eq!(
+        diagnostic.message,
+        "`result` block must end with a value expression"
+    );
+    assert_eq!(diagnostic.suggestions.len(), 1);
+    assert!(diagnostic.suggestions[0].edit.is_none());
+    assert!(
+        diagnostic.suggestions[0]
+            .message
+            .contains("if this statement is the block's value")
+    );
+
+    let call_tail = "const a = result {\n  const x <- f();\n  log(x);\n};\n";
+    let diagnostics = ttc::analyze(call_tail, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        ttc::DiagnosticCode::ResultTailSemicolon
+    );
+    assert_eq!(diagnostics[0].suggestions.len(), 1);
+    assert!(diagnostics[0].suggestions[0].edit.is_none());
+
+    let labeled_tail = "const a = result {\n  const x <- f();\n  label: doWork();\n};\n";
+    let diagnostics = ttc::analyze(labeled_tail, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    let diagnostic = &diagnostics[0];
+    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultTailSemicolon);
+    assert_eq!(
+        &labeled_tail[diagnostic.start.unwrap()..diagnostic.end.unwrap()],
+        "label: doWork();"
+    );
+    assert!(diagnostic.suggestions.is_empty());
+
+    let statement_tail = "const a = result {\n  const x <- f();\n  return x;\n};\n";
+    let diagnostics = ttc::analyze(statement_tail, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::StrayResult);
 }
 
 #[test]
@@ -4170,20 +4248,19 @@ const a = match (s) { Circel(radius) => radius, Empty => 0 };
 }
 
 #[test]
-fn misspelled_case_in_let_else_and_if_let_is_reported() {
-    let e = err(r#"variant Shape { Circle(radius: number), Empty }
+fn single_pattern_spelling_without_a_subject_owner_waits_for_typescript() {
+    let out = ok(r#"variant Shape { Circle(radius: number), Empty }
 function f(): number {
   const Circel(radius) = s else { return 0; };
   return radius;
 }
 "#);
-    assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
+    assert!(out.contains("kind !== \"Circel\""), "{out}");
 
-    let e = err(r#"variant Shape { Circle(radius: number), Empty }
+    let out = ok(r#"variant Shape { Circle(radius: number), Empty }
 if let Circel(radius) = s { log(radius); }
 "#);
-    assert!(e.message.contains("has no case `Circel`"), "{}", e.message);
-    assert_eq!((e.line, e.col), (2, 8));
+    assert!(out.contains("kind === \"Circel\""), "{out}");
 }
 
 /// Applies one of a diagnostic's suggestions to `source` — what an

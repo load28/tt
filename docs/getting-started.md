@@ -62,6 +62,38 @@ Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
 an existing TypeScript build at that tree. Add `.tt-build/` and `.tt-types/`
 to `.gitignore`. Do not edit generated files.
 
+### Let TypeScript import `.tt` directly
+
+TypeScript 7.1+ can hold `.tt` and `.ttx` transforms virtually through the tt
+content mapper. Use this route when hand-written `.ts` or `.tsx` files import
+tt sources directly and you do not want a generated tree or sidecar files.
+
+Add `contentMappers` as a **top-level** tsconfig key. It is a sibling of
+`compilerOptions`, not a compiler option:
+
+```jsonc
+// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true
+  },
+  "contentMappers": [
+    { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
+  ],
+  "include": ["src"]
+}
+```
+
+Run TypeScript with permission to start the mapper process:
+
+```sh
+bunx tsc -p tsconfig.json --runExternalCode
+```
+
+Putting `contentMappers` inside `compilerOptions` produces `TS5023: Unknown
+compiler option 'contentMappers'` and leaves `.tt` imports unresolved.
+
 ## Manual bundler setup
 
 Install the direct-source plugin in addition to the compiler:

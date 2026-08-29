@@ -28,6 +28,41 @@
 
 use std::path::PathBuf;
 
+/// Why the TypeScript boundary could not answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FailureKind {
+    /// The required process or compatible toolchain is not available.
+    Unavailable,
+    /// The compiler boundary ran and broke its own protocol or execution
+    /// contract. This is a compiler failure, never a source diagnostic.
+    Internal,
+}
+
+/// A failure of the TypeScript boundary, classified before it reaches a
+/// consumer so a missing installation is never presented as a compiler bug
+/// and a backend crash is never presented as a missing installation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Failure {
+    pub kind: FailureKind,
+    pub message: String,
+}
+
+impl Failure {
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            kind: FailureKind::Unavailable,
+            message: message.into(),
+        }
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self {
+            kind: FailureKind::Internal,
+            message: message.into(),
+        }
+    }
+}
+
 /// One module of the project as TypeScript should see it: the ordinary
 /// TypeScript an `.tt` file lowers to, at the path that `.tt` file occupies
 /// with a `.ts` extension.
@@ -223,6 +258,10 @@ pub(crate) struct Declaration {
 /// The answers to one [`Query`].
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Answers {
+    /// Lowered modules that TypeScript admitted to the configured program.
+    /// `None` means the backend did not run; an empty program is different
+    /// from an unavailable answer.
+    pub project_modules: Option<Vec<PathBuf>>,
     pub diagnostics: Vec<Diagnostic>,
     pub literal_missing: Vec<LiteralMissing>,
     pub tag_missing: Vec<TagMissing>,
@@ -247,5 +286,5 @@ pub(crate) trait TypeScriptBackend {
         tsconfig: Option<&std::path::Path>,
         root: &std::path::Path,
         query: &Query,
-    ) -> Result<Answers, String>;
+    ) -> Result<Answers, Failure>;
 }

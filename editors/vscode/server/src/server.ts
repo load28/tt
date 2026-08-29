@@ -322,6 +322,7 @@ interface TypedDiagnostics {
   replacesTypes: boolean;
 }
 let warnedTypedCheckUnavailable = false;
+let warnedTypedCompilerFailure = false;
 
 /**
  * Adds the typed diagnostics that say something new.
@@ -383,16 +384,26 @@ async function typedDiagnosticsFor(
   );
 
   if (result.kind === "unavailable") {
-    // A project with no TypeScript toolchain is a normal state, not an
-    // error to put in front of the user: the text-level diagnostics keep
-    // working and only the typed layer is missing.
+    if (result.cause === "internal") {
+      if (!warnedTypedCompilerFailure) {
+        warnedTypedCompilerFailure = true;
+        connection.console.error(`tt: typed compiler failure: ${result.detail}`);
+        void connection.window.showErrorMessage(
+          "tt: typed checks failed inside the compiler. " +
+            "See the tt output channel for details and report this at " +
+            "https://github.com/load28/tt/issues.",
+        );
+      }
+      return null;
+    }
+    // A project with no TypeScript toolchain is a normal state: the
+    // text-level diagnostics keep working and only typed facts are absent.
     if (!warnedTypedCheckUnavailable) {
       warnedTypedCheckUnavailable = true;
       connection.console.info(
         `tt: typed checks unavailable (${result.detail}). ` +
-          "`val` mutations and typed exhaustiveness are reported by " +
-          "the typed pass, which needs a TypeScript install — set " +
-          "tt.typedChecks to false to stop trying.",
+          "`val` mutations and typed exhaustiveness are unavailable; " +
+          "set tt.typedChecks to false to stop trying.",
       );
     }
     return null;

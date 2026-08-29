@@ -188,10 +188,16 @@ async function main() {
       if (line === null) break;
       let answer;
       try {
+        if (process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST === "1") {
+          throw new Error("injected TypeScript backend contract failure");
+        }
         answer = handle(JSON.parse(line));
         opened = true;
       } catch (e) {
-        answer = { error: String((e && e.stack) || e) };
+        // The Rust boundary classifies this as an internal compiler error.
+        // Keep the protocol response actionable without leaking a Node
+        // implementation stack into the user's diagnostic stream.
+        answer = { error: e instanceof Error ? e.message : String(e) };
       }
       writeLine(JSON.stringify(answer));
     }
@@ -202,6 +208,7 @@ async function main() {
   /** One `ask`: refresh the served modules, then answer every question. */
   function handle(job) {
     const out = {
+      projectModules: [],
       diagnostics: [],
       literalMissing: [],
       tagMissing: [],
@@ -233,6 +240,17 @@ async function main() {
     if (!project) {
       throw new Error("no project for " + (open.tsconfig ?? paths[0] ?? "<nothing>"));
     }
+
+    // The candidate modules come from a filesystem scan so the layered
+    // filesystem can implement tsconfig globs and module resolution. The
+    // configured program is the authority on which candidates actually
+    // belong. Keep that distinction explicit: a file outside `include`
+    // may still join through an import, while an unrelated file must never
+    // receive a checker position query.
+    const projectModules = new Set(
+      paths.filter((module) => project.program.getSourceFile(module) !== undefined),
+    );
+    out.projectModules = [...projectModules];
 
     // The whole program, not just the lowered modules: a hand-written `.ts`
     // and an `.tt` are in one project, so an error in either is this run's to
@@ -282,7 +300,7 @@ async function main() {
     const typeChecks = [
       ...(job.literalChecks ?? []).map((check, index) => ({ check, index, tag: false })),
       ...(job.tagChecks ?? []).map((check, index) => ({ check, index, tag: true })),
-    ];
+    ].filter((entry) => projectModules.has(entry.check.module));
     const types = perModule(typeChecks, (module, positions) =>
       batched(
         "typesAtPositions",
@@ -365,7 +383,9 @@ async function main() {
     // Resolution: the primitive tt's `val` is built from. Which binding an
     // identifier names, and whether a method is a built-in, are both "what
     // symbol is this?" — asked here, interpreted by tt.
-    const symbolChecks = (job.symbolChecks ?? []).map((check, index) => ({ check, index }));
+    const symbolChecks = (job.symbolChecks ?? [])
+      .map((check, index) => ({ check, index }))
+      .filter((entry) => projectModules.has(entry.check.module));
     const symbols = perModule(symbolChecks, (module, positions) =>
       batched(
         "symbolsAtPositions",
@@ -398,7 +418,7 @@ async function main() {
         fail(5, "ttc host: the resolved TypeScript has no declaration emit API");
       }
       const emitted = project.program.getDeclarationEmit(
-        (job.modules ?? []).map((m) => m.path),
+        (job.modules ?? []).map((m) => m.path).filter((module) => projectModules.has(module)),
       );
       for (const [path, file] of emitted.outputFiles) {
         out.declarations.push({ path, text: file.text });

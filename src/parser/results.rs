@@ -43,6 +43,14 @@ pub(super) enum Attempt<'t> {
     /// The block carries a Result binding but does not parse as a whole —
     /// recorded for the semantic phase (it cannot pass through either).
     Malformed(Span),
+    /// The block has no final value after its last top-level statement.
+    /// `may_be_value` distinguishes an expression statement whose intent is
+    /// ambiguous from a structurally certain statement such as a label.
+    MissingValue {
+        span: Span,
+        recovery: Span,
+        may_be_value: bool,
+    },
     /// A binding that forgot its declaration keyword (`b <- f();`), over
     /// the complete span of the name. Only reported where the text cannot be
     /// TypeScript — see [`no_keyword_is_certain`].
@@ -86,6 +94,7 @@ pub(super) fn parse_result_block<'t>(
     // Where the statement run currently being scanned starts.
     let mut run_start = open + 1;
     let mut depth = 0usize;
+    let mut missing_value = None;
 
     for k in open + 1..close {
         let t = &cur.tokens[k];
@@ -110,7 +119,32 @@ pub(super) fn parse_result_block<'t>(
         if !boundary {
             continue;
         }
-        match scan_bind(&cur, run_start, k) {
+        let bind_run = scan_bind(&cur, run_start, k);
+        let run_starts_with_value = run_start < k
+            && match cur.tokens[run_start].kind {
+                TokenKind::Ident => {
+                    !super::tries::STMT_ONLY_WORDS.contains(&cur.text(&cur.tokens[run_start]))
+                }
+                _ => true,
+            };
+        let final_semicolon = k + 1 == close && matches!(t.kind, TokenKind::Punct(b';'));
+        let labeled_statement = run_start + 1 < k
+            && matches!(cur.tokens[run_start].kind, TokenKind::Ident)
+            && matches!(cur.tokens[run_start + 1].kind, TokenKind::Punct(b':'));
+        if final_semicolon && matches!(&bind_run, BindRun::NotBind) {
+            if labeled_statement {
+                missing_value = Some((
+                    Span {
+                        start: cur.tokens[run_start].span.start,
+                        end: t.span.end,
+                    },
+                    false,
+                ));
+            } else if run_starts_with_value {
+                missing_value = Some((t.span, true));
+            }
+        }
+        match bind_run {
             BindRun::NotBind => {} // ordinary statements — keep accumulating
             BindRun::NoKeyword { span } => missing.push(span),
             BindRun::Malformed => return (Attempt::Malformed(recovery), nested),
@@ -184,6 +218,16 @@ pub(super) fn parse_result_block<'t>(
         return (Attempt::MissingKeyword { span, recovery }, nested);
     }
     if run_start == close {
+        if let Some((span, may_be_value)) = missing_value {
+            return (
+                Attempt::MissingValue {
+                    span,
+                    recovery,
+                    may_be_value,
+                },
+                nested,
+            );
+        }
         return (Attempt::Malformed(recovery), nested); // nothing after the last `;`
     }
     let value_start = cur.tokens[run_start].span.start;
