@@ -1169,6 +1169,25 @@ fn a_static_block_does_not_capture_a_nested_function_try() {
 }
 
 #[test]
+fn result_try_crossing_an_isolated_match_arm_is_a_migration_diagnostic() {
+    let source = "const value = result {\n  const item <- read();\n  match (item) { Ok(value) => try next(value), Err(error) => error }\n};\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        ttc::DiagnosticCode::TryCrossesValueRegion
+    );
+    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
+    assert!(
+        diagnostics[0]
+            .suggestions
+            .iter()
+            .all(|suggestion| suggestion.edit.is_none()),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn placement_matrix_prerequisite_gate() {
     enum Expected {
         Accepted,

@@ -298,7 +298,7 @@
 | TASK-287 | P5: Close shipped claimer gaps | Complete | 2026-08-30 | `TASK-287: close shipped claimer gaps` | [TASK-287](./TASK-287-shipped-claimer-gaps.md) |
 | TASK-288 | P6: Preserve placement reasons | Complete | 2026-08-30 | `TASK-288: preserve placement reasons` | [TASK-288](./TASK-288-preserve-placement-reasons.md) |
 | TASK-289 | P-matrix: Prerequisite placement matrix gate | Complete | 2026-08-30 | `TASK-289: add placement matrix gate` | [TASK-289](./TASK-289-placement-matrix-gate.md) |
-| TASK-290 | M0: Freeze the one-release crossing migration | Pending | — | — | [TASK-290](./TASK-290-crossing-migration-diagnostic.md) |
+| TASK-290 | M0: Freeze the one-release crossing migration | Complete | 2026-08-30 | See git history | [TASK-290](./TASK-290-crossing-migration-diagnostic.md) |
 | TASK-291 | L0: Repair Result completion in both existing printers | Complete | 2026-08-30 | See git history | [TASK-291](./TASK-291-result-completion-printers.md) |
 | TASK-292 | L1: Add scope and completion identity | Pending | — | — | [TASK-292](./TASK-292-result-scope-identity.md) |
 | TASK-293 | L2: Cut over syntax and nearest-scope propagation | Pending | — | — | [TASK-293](./TASK-293-nearest-scope-cutover.md) |

@@ -63,6 +63,9 @@ pub enum DiagnosticCode {
     FlowFirstStepMethod,
     /// A `try` outside the top-level statement stream.
     TryPlacement,
+    /// A function-targeted `try` whose future nearest Result scope would be
+    /// separated by an isolated value region.
+    TryCrossesValueRegion,
     /// A let-else outside the top-level statement stream.
     LetElsePlacement,
     /// A let-else whose `else` block does not end in a diverging statement.
@@ -127,6 +130,7 @@ impl DiagnosticCode {
             DiagnosticCode::ResultNestedBinding => "result-nested-binding",
             DiagnosticCode::FlowFirstStepMethod => "flow-first-step-method",
             DiagnosticCode::TryPlacement => "try-placement",
+            DiagnosticCode::TryCrossesValueRegion => "try-crosses-value-region",
             DiagnosticCode::LetElsePlacement => "let-else-placement",
             DiagnosticCode::LetElseNotDiverging => "let-else-not-diverging",
             DiagnosticCode::IfLetPlacement => "if-let-placement",
@@ -170,6 +174,7 @@ impl DiagnosticCode {
         DiagnosticCode::ResultNestedBinding,
         DiagnosticCode::FlowFirstStepMethod,
         DiagnosticCode::TryPlacement,
+        DiagnosticCode::TryCrossesValueRegion,
         DiagnosticCode::LetElsePlacement,
         DiagnosticCode::LetElseNotDiverging,
         DiagnosticCode::IfLetPlacement,
@@ -350,6 +355,16 @@ loop headers, parameter defaults, and class field initializers.
 
 Move the propagation into a function-body statement when the surrounding
 expression cannot carry it."
+            }
+
+            DiagnosticCode::TryCrossesValueRegion => {
+                "\
+A `try` crosses an isolated value region inside a `result` block.
+
+The current compiler propagates this failure to the enclosing function, but
+the upcoming lexical Result scopes would make that target ambiguous. Extract
+the affected expression into a nested function only when that preserves its
+captures and evaluation order; otherwise handle the Result explicitly."
             }
 
             DiagnosticCode::LetElsePlacement => {
@@ -936,7 +951,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 34);
+        assert_eq!(DiagnosticCode::ALL.len(), 35);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();

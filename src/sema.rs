@@ -266,6 +266,10 @@ enum Place {
     Function,
     /// Inside an isolated tt value region.
     ValueRegion,
+    /// Inside an isolated value region nested in a `result` block. The
+    /// current function-targeted `try` would cross that region once Result
+    /// scope becomes lexical, so M0 reports its migration diagnostic here.
+    ResultValueRegion,
     /// Inside a `result` block, whose generated region owns its returns.
     ResultRegion,
 }
@@ -276,6 +280,14 @@ impl Place {
     /// `in_function`.
     fn inline(self, in_function: bool) -> Place {
         if in_function { Place::Function } else { self }
+    }
+
+    fn isolated(self) -> Place {
+        if matches!(self, Place::ResultRegion | Place::ResultValueRegion) {
+            Place::ResultValueRegion
+        } else {
+            Place::ValueRegion
+        }
     }
 }
 
@@ -369,8 +381,8 @@ impl Checker {
             match segment {
                 Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
                 Segment::Variant(decl) => self.check_variant(decl),
-                Segment::Match(expr) => self.check_match(expr),
-                Segment::TupleMatch(expr) => self.check_tuple_match(expr),
+                Segment::Match(expr) => self.check_match(expr, place),
+                Segment::TupleMatch(expr) => self.check_tuple_match(expr, place),
                 Segment::Try(stmt) => self.check_try(stmt, place),
                 Segment::TryExpr(expr) => self.check_try_expr(expr, place),
                 Segment::LetElse(stmt) => self.check_let_else(stmt, place),
@@ -424,16 +436,16 @@ impl Checker {
                     // Head and steps are expressions — `try` inside them is
                     // rejected for the same reason as inside a match.
                     if let Some(head) = &pipe.head {
-                        self.visit_program(head, Ctx::Expr, Place::ValueRegion);
+                        self.visit_program(head, Ctx::Expr, place.isolated());
                     }
                     for step in &pipe.steps {
-                        self.visit_program(&step.body, Ctx::Expr, Place::ValueRegion);
+                        self.visit_program(&step.body, Ctx::Expr, place.isolated());
                     }
                 }
                 Segment::Template(template) => {
                     for chunk in &template.chunks {
                         if let TemplateChunk::Interp(interp) = chunk {
-                            self.visit_program(interp, Ctx::Expr, Place::ValueRegion);
+                            self.visit_program(interp, Ctx::Expr, place.isolated());
                         }
                     }
                 }
@@ -470,7 +482,18 @@ impl Checker {
                 .help("move the propagation into an ordinary function, or handle the Result explicitly"),
             );
         }
-        if function_target.is_none() && crate::flow::in_static_block(&self.source, &self.tokens, at)
+        if place == Place::ResultValueRegion {
+            self.error(
+                TtError::span(
+                    stmt.span.start,
+                    stmt.span.end,
+                    "`try` crosses an isolated value region inside a `result` block — the next Result-scope rules would change its failure target".to_string(),
+                )
+                .code(DiagnosticCode::TryCrossesValueRegion)
+                .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
+            );
+        } else if function_target.is_none()
+            && crate::flow::in_static_block(&self.source, &self.tokens, at)
         {
             self.error(
                 TtError::span(
@@ -491,7 +514,17 @@ impl Checker {
         // Ordinary expression propagation is judged after the SWC host owner
         // and evaluation protocol are known. A result block is the one
         // surface-owned boundary: its `<-` propagation targets that region.
-        if place == Place::ResultRegion {
+        if place == Place::ResultValueRegion {
+            self.error(
+                TtError::span(
+                    expr.span.start,
+                    expr.span.end,
+                    "`try` crosses an isolated value region inside a `result` block — the next Result-scope rules would change its failure target".to_string(),
+                )
+                .code(DiagnosticCode::TryCrossesValueRegion)
+                .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
+            );
+        } else if place == Place::ResultRegion {
             self.error(
                 TtError::span(
                     expr.span.start,
@@ -734,7 +767,7 @@ impl Checker {
         }
     }
 
-    fn check_match(&mut self, expr: &MatchExpr) {
+    fn check_match(&mut self, expr: &MatchExpr, place: Place) {
         // Literal and tag patterns discriminate on different things
         // (`$tt_m` vs `$tt_m.kind`), so one match cannot hold both.
         let arm_kind = |arm: &Arm| match &arm.pattern {
@@ -889,21 +922,22 @@ impl Checker {
         // program and answers for every match at once (`report_coverage`).
 
         // children, in source order: scrutinee first, then guards and bodies
-        self.visit_program(&expr.scrutinee, Ctx::Expr, Place::ValueRegion);
+        let isolated = place.isolated();
+        self.visit_program(&expr.scrutinee, Ctx::Expr, isolated);
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {
-                self.visit_program(&guard.expr, Ctx::Expr, Place::ValueRegion);
+                self.visit_program(&guard.expr, Ctx::Expr, isolated);
             }
             // A block arm body is a statement context inside the value region.
             self.visit_program(
                 &arm.body,
                 if arm.block { Ctx::Stmt } else { Ctx::Expr },
-                Place::ValueRegion,
+                isolated,
             );
         }
     }
 
-    fn check_tuple_match(&mut self, expr: &TupleMatchExpr) {
+    fn check_tuple_match(&mut self, expr: &TupleMatchExpr, place: Place) {
         let arity = expr.scrutinees.len();
         for (idx, arm) in expr.arms.iter().enumerate() {
             match &arm.pattern {
@@ -1006,17 +1040,18 @@ impl Checker {
         }
 
         // children, in source order
+        let isolated = place.isolated();
         for (_, scrutinee) in &expr.scrutinees {
-            self.visit_program(scrutinee, Ctx::Expr, Place::ValueRegion);
+            self.visit_program(scrutinee, Ctx::Expr, isolated);
         }
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {
-                self.visit_program(&guard.expr, Ctx::Expr, Place::ValueRegion);
+                self.visit_program(&guard.expr, Ctx::Expr, isolated);
             }
             self.visit_program(
                 &arm.body,
                 if arm.block { Ctx::Stmt } else { Ctx::Expr },
-                Place::ValueRegion,
+                isolated,
             );
         }
     }

@@ -1176,10 +1176,12 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
             continue;
         };
         match diagnostic.code {
-            DiagnosticCode::TryPlacement => nodes.push(ast::RecoveryNode {
-                span: ast::Span { start, end },
-                kind: ast::RecoveryKind::Expression,
-            }),
+            DiagnosticCode::TryPlacement | DiagnosticCode::TryCrossesValueRegion => {
+                nodes.push(ast::RecoveryNode {
+                    span: ast::Span { start, end },
+                    kind: ast::RecoveryKind::Expression,
+                })
+            }
             DiagnosticCode::VariantInvalidFieldType => nodes.push(ast::RecoveryNode {
                 span: ast::Span { start, end },
                 kind: ast::RecoveryKind::Type,
