@@ -207,11 +207,13 @@ pub enum TtImportNames {
     None,
 }
 
-/// Extracts the exported tt variant declarations of a source file, without
-/// compiling it. Case payloads are retained so every pattern rule works across
-/// a module boundary exactly as it does for a local declaration. Non-exported
-/// variants and TypeScript enums are not included. The returned entries have
-/// [`ExternVariant::from`] set to `None`.
+/// Extracts the exported tt variant declarations of a source file as tag-only
+/// [`ExternVariant`] entries, without compiling it. Those tags support
+/// exhaustiveness and case-name checking across a module boundary. Rich field
+/// checking in the project engine uses the [`VariantSymbol`] declarations from
+/// [`variant_symbols_with_kind`] instead. Non-exported variants and TypeScript
+/// enums are not included. The returned entries have [`ExternVariant::from`]
+/// set to `None`.
 ///
 /// ```
 /// let decls = ttc::exported_variants(
