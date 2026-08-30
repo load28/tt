@@ -75,6 +75,10 @@ struct ProjectedSpan {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SyntaxCategory {
     Expression,
+    /// A `try` statement projected as an expression plus its terminator.
+    /// This stays valid in both ordinary statement streams and C-style
+    /// `for` initializer headers.
+    Propagation,
     Statement,
     Item,
 }
@@ -395,6 +399,8 @@ pub(crate) enum OwnerReach {
 pub(crate) enum EvaluationOwner {
     Module,
     FunctionBody,
+    Constructor,
+    Generator,
     ParameterInitializer,
     ClassInitializer,
     StaticBlock,
@@ -413,6 +419,10 @@ pub(crate) enum HostContinuation {
     Return,
     ArrowReturn,
     Initialize,
+    /// A declaration initializer in a C-style `for` header. Its propagation
+    /// prelude runs before the loop, while the header retains the payload
+    /// declaration.
+    ForInitialize,
     Discard,
     Compose,
 }
@@ -437,10 +447,17 @@ impl EvaluationContext {
         category: SyntaxCategory,
         parents: &[AstParentKind],
         host_owner_edge: usize,
+        function_target: Option<EvaluationOwner>,
     ) -> Self {
-        let (owner, owner_edge) = evaluation_owner(parents);
+        let (mut owner, owner_edge) = evaluation_owner(parents);
+        if let Some(function_target) = function_target {
+            owner = function_target;
+        }
         let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
-        if category != SyntaxCategory::Expression {
+        if !matches!(
+            category,
+            SyntaxCategory::Expression | SyntaxCategory::Propagation
+        ) {
             return Self {
                 frequency: frequency_within_owner(parents, owner_edge),
                 owner_reach,
@@ -621,6 +638,12 @@ fn value_role(parents: &[AstParentKind]) -> ValueRole {
 }
 
 fn host_continuation(parents: &[AstParentKind]) -> HostContinuation {
+    if parents
+        .iter()
+        .any(|parent| matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init)))
+    {
+        return HostContinuation::ForInitialize;
+    }
     let significant = parents
         .iter()
         .rev()
@@ -794,12 +817,16 @@ impl ProgramSyntax {
                 return Err(ProgramSyntaxError::MissingOverlay { id: entry.id });
             }
             match entry.category {
-                SyntaxCategory::Expression | SyntaxCategory::Statement | SyntaxCategory::Item => {}
+                SyntaxCategory::Expression
+                | SyntaxCategory::Propagation
+                | SyntaxCategory::Statement
+                | SyntaxCategory::Item => {}
             }
             match entry.context.continuation {
                 HostContinuation::Return
                 | HostContinuation::ArrowReturn
                 | HostContinuation::Initialize
+                | HostContinuation::ForInitialize
                 | HostContinuation::Discard
                 | HostContinuation::Compose => {}
             }
@@ -860,6 +887,7 @@ struct PendingOverlay {
     projected: ProjectedSpan,
     core_root: CoreRoot,
     marker: OverlayMarker,
+    synthetic_return: Option<ProjectedSpan>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -939,13 +967,13 @@ impl<'a> ProjectionBuilder<'a> {
         let id = TtNodeId(ordinal);
         let owner_start = ProjectedByte(self.code.len());
         match category {
-            SyntaxCategory::Expression => self.code.push('('),
+            SyntaxCategory::Expression | SyntaxCategory::Propagation => self.code.push('('),
             SyntaxCategory::Statement => self.code.push('{'),
             SyntaxCategory::Item => self.code.push_str("const "),
         }
         let start = ProjectedByte(self.code.len());
         let prefix = match category {
-            SyntaxCategory::Expression => "$tt_syntax_expr_",
+            SyntaxCategory::Expression | SyntaxCategory::Propagation => "$tt_syntax_expr_",
             SyntaxCategory::Statement => "$tt_syntax_stmt_",
             SyntaxCategory::Item => "$tt_syntax_item_",
         };
@@ -954,6 +982,7 @@ impl<'a> ProjectionBuilder<'a> {
         let end = ProjectedByte(self.code.len());
         match category {
             SyntaxCategory::Expression => self.code.push(')'),
+            SyntaxCategory::Propagation => self.code.push_str(");"),
             SyntaxCategory::Statement => self.code.push_str(";}"),
             SyntaxCategory::Item => self.code.push_str(" = 0;"),
         }
@@ -973,6 +1002,7 @@ impl<'a> ProjectionBuilder<'a> {
             projected: ProjectedSpan { start, end },
             core_root,
             marker: OverlayMarker::Identifier,
+            synthetic_return: None,
         });
         Ok(())
     }
@@ -1034,8 +1064,12 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_propagate(&mut self, propagate: &Propagate) -> Result<(), ProgramSyntaxError> {
+        // A declaration-form propagation can occur in a C-style `for`
+        // initializer. Project it as an expression so that header remains
+        // valid TypeScript; its typed continuation decides the eventual
+        // statement shape in target lowering.
         self.push_placeholder(
-            SyntaxCategory::Statement,
+            SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
             CoreRoot::Propagate(propagate.node),
         )
@@ -1072,7 +1106,105 @@ impl<'a> ProjectionBuilder<'a> {
             source.start = source.start.min(step_span.start);
             source.end = source.end.max(step_span.end);
         }
-        self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))
+        // SWC has no pipeline syntax, so the pipeline itself remains one
+        // expression placeholder.  A step can nevertheless contain a tt
+        // value whose real TypeScript owner is an arrow.  Project that step
+        // beside the placeholder in a valid comma expression so the parent
+        // collector sees the arrow boundary instead of assigning its `try`
+        // to the pipeline's enclosing declaration.
+        let shadow_steps: Vec<_> = apply
+            .steps
+            .iter()
+            .filter(|step| self.expr_contains_propagation(step.value))
+            .collect();
+        if shadow_steps.is_empty() {
+            return self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr));
+        }
+        let start = ProjectedByte(self.code.len());
+        self.code.push('(');
+        self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))?;
+        for step in shadow_steps {
+            self.code.push_str(", (");
+            self.emit_shadow_expr(step.value)?;
+            self.code.push(')');
+        }
+        self.code.push(')');
+        self.source_segments.push(ProjectionSourceSegment {
+            projected: ProjectedSpan {
+                start: ProjectedByte(start.0 + 1),
+                end: ProjectedByte(self.code.len() - 1),
+            },
+            source,
+            kind: ProjectionSegmentKind::Placeholder,
+        });
+        Ok(())
+    }
+
+    fn expr_contains_propagation(&self, expr: ExprId) -> bool {
+        match &self.core.exprs[expr.index()] {
+            Expr::Propagate(_) => true,
+            Expr::Sequence(body) => self.core.bodies[body.index()].statements.iter().any(|statement| {
+                matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))
+            }),
+            Expr::Apply(apply) => apply
+                .head
+                .is_some_and(|head| self.expr_contains_propagation(head))
+                || apply
+                    .steps
+                    .iter()
+                    .any(|step| self.expr_contains_propagation(step.value)),
+            Expr::Decision(decision) => decision.subjects.iter().any(|subject| {
+                self.expr_contains_propagation(subject.value)
+            }) || decision.arms.iter().any(|arm| {
+                arm.guard.is_some_and(|guard| self.expr_contains_propagation(guard))
+                    || matches!(arm.action, crate::core_ir::ArmAction::Yield { body, .. } | crate::core_ir::ArmAction::Execute(body) if self.core.bodies[body.index()].statements.iter().any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))))
+            }),
+            Expr::ResultRegion(region) => region.items.iter().any(|item| match item {
+                crate::core_ir::ResultRegionItem::Statements(body) => self.core.bodies[body.index()]
+                    .statements
+                    .iter()
+                    .any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))),
+                crate::core_ir::ResultRegionItem::Propagate(_) => true,
+            }) || self.expr_contains_propagation(region.value),
+            Expr::Opaque(_) | Expr::Template(_) => false,
+        }
+    }
+
+    fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
+        match &self.core.exprs[expr.index()] {
+            Expr::Opaque(node) => self.push_source(*node),
+            Expr::Propagate(propagate) => self.push_placeholder(
+                SyntaxCategory::Expression,
+                self.source_span(propagate.node)?,
+                CoreRoot::Expr(expr),
+            ),
+            Expr::Sequence(body) => self.emit_shadow_body(*body),
+            // A nested pipeline is opaque to SWC for the same reason as its
+            // parent. Its own projection retains the structural placeholder.
+            Expr::Apply(apply) => self.emit_apply(expr, apply),
+            Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Template(_) => self.emit_expr(expr),
+        }
+    }
+
+    fn emit_shadow_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
+        for statement in &self.core.bodies[body.index()].statements {
+            match statement {
+                Statement::Opaque(node) => self.push_source(*node)?,
+                Statement::Expr(expr) => self.emit_shadow_expr(*expr)?,
+                Statement::Propagate(propagate) => self.push_placeholder(
+                    SyntaxCategory::Propagation,
+                    self.source_span(propagate.owner)?,
+                    CoreRoot::Propagate(propagate.node),
+                )?,
+                Statement::Adt(_) | Statement::Import(_) | Statement::Decision(_) => {
+                    return Err(ProgramSyntaxError::InvalidSourceSpan {
+                        start: SourceByte(0),
+                        end: SourceByte(0),
+                    });
+                }
+            }
+        }
+        Ok(())
     }
 
     fn emit_result_region(
@@ -1093,6 +1225,7 @@ impl<'a> ProjectionBuilder<'a> {
             projected: ProjectedSpan { start, end: start },
             core_root: CoreRoot::Expr(expr),
             marker: OverlayMarker::CallExpression,
+            synthetic_return: None,
         });
         self.code.push('(');
         if region.is_async {
@@ -1105,7 +1238,10 @@ impl<'a> ProjectionBuilder<'a> {
                 crate::core_ir::ResultRegionItem::Propagate(_) => self.code.push(';'),
             }
         }
-        self.code.push_str("0;})()");
+        let synthetic_return_start = ProjectedByte(self.code.len());
+        self.code.push_str("return ");
+        self.emit_expr(region.value)?;
+        self.code.push_str(";})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
         self.source_segments.insert(
@@ -1117,6 +1253,10 @@ impl<'a> ProjectionBuilder<'a> {
             },
         );
         self.pending[pending_index].projected = projected;
+        self.pending[pending_index].synthetic_return = Some(ProjectedSpan {
+            start: synthetic_return_start,
+            end: ProjectedByte(self.code.len() - 4),
+        });
         Ok(())
     }
 
@@ -1138,6 +1278,7 @@ impl<'a> ProjectionBuilder<'a> {
             projected: ProjectedSpan { start, end: start },
             core_root: CoreRoot::Expr(expr),
             marker: OverlayMarker::DecisionCallExpression,
+            synthetic_return: None,
         });
         self.code.push('(');
         if decision.is_async {
@@ -1276,6 +1417,7 @@ struct ParentCollector {
     expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
     expected_calls: HashMap<ProjectedSpan, TtNodeId>,
     expected_exit_calls: HashSet<TtNodeId>,
+    synthetic_returns: HashSet<ProjectedSpan>,
     found: HashMap<TtNodeId, FoundOverlay>,
     duplicates: Vec<TtNodeId>,
     source_segments: Vec<ProjectionSourceSegment>,
@@ -1283,6 +1425,7 @@ struct ParentCollector {
     protocol_frames: Vec<ProjectedProtocolFrame>,
     occupied_names: HashSet<String>,
     function_depth: usize,
+    function_targets: Vec<Option<EvaluationOwner>>,
     /// How many enclosing statements consume an unlabeled `break`
     /// (loops and `switch`).
     break_capture_depth: usize,
@@ -1302,6 +1445,7 @@ struct FoundOverlay {
     host_owners: Vec<ProjectedHostOwner>,
     protocol_frames: Vec<ProjectedProtocolFrame>,
     exits: Vec<ProjectedHostExit>,
+    function_target: Option<EvaluationOwner>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1573,14 +1717,24 @@ impl ParentCollector {
             .collect();
         let expected_exit_calls = pending
             .iter()
-            .filter(|entry| entry.marker == OverlayMarker::DecisionCallExpression)
+            .filter(|entry| {
+                matches!(
+                    entry.marker,
+                    OverlayMarker::CallExpression | OverlayMarker::DecisionCallExpression
+                )
+            })
             .map(|entry| entry.id)
+            .collect();
+        let synthetic_returns = pending
+            .iter()
+            .filter_map(|entry| entry.synthetic_return)
             .collect();
         Self {
             source_start,
             expected_identifiers,
             expected_calls,
             expected_exit_calls,
+            synthetic_returns,
             found: HashMap::new(),
             duplicates: Vec::new(),
             source_segments: source_segments.to_vec(),
@@ -1588,6 +1742,7 @@ impl ParentCollector {
             protocol_frames: Vec::new(),
             occupied_names: HashSet::new(),
             function_depth: 0,
+            function_targets: Vec::new(),
             break_capture_depth: 0,
             exit_regions: Vec::new(),
         }
@@ -1603,6 +1758,7 @@ impl ParentCollector {
                     host_owners: self.host_owners.clone(),
                     protocol_frames: self.protocol_frames.clone(),
                     exits: Vec::new(),
+                    function_target: self.function_targets.iter().rev().flatten().copied().next(),
                 },
             )
             .is_some()
@@ -1667,6 +1823,7 @@ impl ParentCollector {
                     entry.category,
                     &found.parents,
                     projected_owner.edge,
+                    found.function_target,
                 ),
                 // A frame outside the host owner is not this owner's
                 // evaluation obligation: a statement (or a concise arrow
@@ -1981,6 +2138,7 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
+        self.function_targets.push(None);
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
@@ -1988,12 +2146,16 @@ impl VisitAstPath for ParentCollector {
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.host_owners.pop();
+        self.function_targets.pop();
         self.function_depth -= 1;
     }
 
     fn visit_function<'ast: 'r, 'r>(&mut self, node: &'ast Function, path: &mut AstNodePath<'r>) {
         self.function_depth += 1;
+        self.function_targets
+            .push(node.is_generator.then_some(EvaluationOwner::Generator));
         <Function as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.function_targets.pop();
         self.function_depth -= 1;
     }
 
@@ -2003,7 +2165,10 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
+        self.function_targets
+            .push(Some(EvaluationOwner::Constructor));
         <Constructor as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.function_targets.pop();
         self.function_depth -= 1;
     }
 
@@ -2012,12 +2177,14 @@ impl VisitAstPath for ParentCollector {
         node: &'ast ReturnStmt,
         path: &mut AstNodePath<'r>,
     ) {
-        if let Some((id, target_depth, region_break_depth)) = self.exit_regions.last().copied()
+        let statement = projected_span(node.span, self.source_start);
+        if !self.synthetic_returns.contains(&statement)
+            && let Some((id, target_depth, region_break_depth)) = self.exit_regions.last().copied()
             && target_depth == self.function_depth
             && let Some(found) = self.found.get_mut(&id)
         {
             found.exits.push(ProjectedHostExit {
-                statement: projected_span(node.span, self.source_start),
+                statement,
                 argument: node
                     .arg
                     .as_ref()
@@ -3089,12 +3256,12 @@ mod tests {
     }
 
     #[test]
-    fn a_try_declaration_gets_a_whole_statement_overlay() {
+    fn a_try_declaration_gets_a_whole_propagation_overlay() {
         let syntax = syntax(
             "function run(r: Result<number, string>) {\n  const n = try r;\n  return n;\n}\n",
         );
         assert!(syntax.overlay.iter().any(|entry| {
-            entry.category == SyntaxCategory::Statement
+            entry.category == SyntaxCategory::Propagation
                 && matches!(entry.core_root, CoreRoot::Propagate(_))
         }));
     }

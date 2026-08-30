@@ -31,11 +31,20 @@ use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 /// It is not an internal error and not codegen's to report — the phase that
 /// owns diagnostics turns it into a located one ([`crate::verify::in_source`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SourceNotTypeScript {
-    /// The syntax substrate's message.
-    pub(crate) message: String,
-    /// The source byte the parse stopped at.
-    pub(crate) source: usize,
+pub(crate) enum LoweringFailure {
+    /// The syntax substrate's message and source byte where parsing stopped.
+    SourceNotTypeScript { message: String, source: usize },
+    /// A host projection failure before Evaluation IR planning begins.
+    HostProjection {
+        error: crate::program_syntax::ProgramSyntaxError,
+        source: SourceSpan,
+    },
+    /// A fallible Evaluation IR construction or planning failure, located at
+    /// the first tt construct participating in the failed lowering.
+    Evaluation {
+        error: crate::evaluation_ir::EvaluationError,
+        source: SourceSpan,
+    },
 }
 
 /// Builds the host-lowering plan for a file, ahead of emission.
@@ -44,35 +53,54 @@ pub(crate) struct SourceNotTypeScript {
 /// so the fallible half — projecting the file to TypeScript, joining every tt
 /// value to its owner, and planning the rewrites — is this separate step, run
 /// by the phase that can report. Every failure but
-/// [`SourceNotTypeScript`] is a broken compiler invariant and fails the
-/// build immediately (`docs/design/program-lowering.md` §11).
+/// [`LoweringFailure`] is reported by the phase that owns diagnostics.
 pub(crate) fn lowering_plan(
     semantic: &SemanticFile,
     core: &CoreFile,
     source: &str,
     source_kind: SourceKind,
-) -> Result<LoweringPlan, SourceNotTypeScript> {
+) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() {
         return Ok(LoweringPlan::default());
     }
+    let primary_source = || {
+        semantic
+            .hir
+            .source_map
+            .first_node_span()
+            .map(SourceSpan::from)
+            .unwrap_or(SourceSpan {
+                start: 0,
+                end: source.len(),
+            })
+    };
     let syntax =
         match crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind) {
             Ok(syntax) => syntax,
             Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript {
                 message,
                 source,
-            }) => {
-                return Err(SourceNotTypeScript { message, source });
-            }
+            }) => return Err(LoweringFailure::SourceNotTypeScript { message, source }),
             Err(error) => {
-                crate::ice::bug!("TypeScript owner construction failed: {error:?}")
+                return Err(LoweringFailure::HostProjection {
+                    error,
+                    source: primary_source(),
+                });
             }
         };
-    let evaluation = crate::evaluation_ir::EvaluationFile::build(&syntax, core)
-        .unwrap_or_else(|error| crate::ice::bug!("Evaluation IR construction failed: {error:?}"));
+    let evaluation =
+        crate::evaluation_ir::EvaluationFile::build(&syntax, core).map_err(|error| {
+            LoweringFailure::Evaluation {
+                error,
+                source: primary_source(),
+            }
+        })?;
     let plan = evaluation
         .lowering_plan(core)
-        .unwrap_or_else(|error| crate::ice::bug!("owner lowering plan failed: {error:?}"));
+        .map_err(|error| LoweringFailure::Evaluation {
+            error,
+            source: evaluation.primary_source(),
+        })?;
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts
     // (`docs/design/program-lowering.md` §11).
@@ -126,6 +154,7 @@ pub(crate) fn emit_with_map<'a>(
         rewrite_imports,
         std_imports,
         owner_slot_rewrites: target.owner_slots,
+        for_initializer_propagations: target.for_initializer_propagations,
         compose_rewrites: target.composes,
         source_replacements: target.source_replacements,
         consumed_exprs: target.consumed_exprs,
@@ -450,6 +479,7 @@ fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpa
 
 struct TargetRewritePlan {
     owner_slots: Vec<OwnerSlotRewrite>,
+    for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     composes: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
     /// The source spans of values whose lowering moves them into a prelude
@@ -481,10 +511,18 @@ struct OwnerSlotRewrite {
     slot: String,
 }
 
+#[derive(Debug, Clone, Copy)]
+struct ForInitializerPropagationRewrite {
+    node: NodeId,
+    owner: SourceSpan,
+    source: SourceSpan,
+}
+
 #[derive(Debug, Clone)]
 struct ArrowReturnRewrite {
     expr: ExprId,
     slot: String,
+    parenthesized: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -527,10 +565,18 @@ struct LocalSourceEdit {
 
 impl TargetRewritePlan {
     fn build(lowering: &LoweringPlan) -> Self {
+        let for_initializer_propagations: Vec<_> = lowering
+            .for_initializer_propagations()
+            .map(|propagation| ForInitializerPropagationRewrite {
+                node: propagation.node,
+                owner: propagation.owner.span,
+                source: propagation.source,
+            })
+            .collect();
         let recovered_propagations: Vec<_> = lowering
             .unsupported_expression_propagations()
             .into_iter()
-            .map(|(expr, source, _)| (expr, source))
+            .map(|failure| (failure.expr, failure.source))
             .collect();
         let recovered: HashSet<_> = recovered_propagations
             .iter()
@@ -575,6 +621,7 @@ impl TargetRewritePlan {
                     .then(|| ArrowReturnRewrite {
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
+                        parenthesized: rewrite.owner.span != value.source,
                     })
             })
             .collect();
@@ -657,6 +704,11 @@ impl TargetRewritePlan {
             .filter(|value| hoisted.contains(&value.expr))
             .map(|value| value.source)
             .collect();
+        relocated_values.extend(
+            for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.source),
+        );
         relocated_values.extend(compose_operations().map(|operation| operation.parent));
         // The operator frame of a lowered conditional operation (its tokens
         // between the fragments the region re-emits) is claimed source.
@@ -716,6 +768,7 @@ impl TargetRewritePlan {
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
         Self {
             owner_slots,
+            for_initializer_propagations,
             composes,
             source_replacements,
             relocated_values,
@@ -740,6 +793,7 @@ struct Emitter<'a> {
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
     owner_slot_rewrites: Vec<OwnerSlotRewrite>,
+    for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     compose_rewrites: Vec<ComposeRewrite>,
     source_replacements: Vec<SourceReplacement>,
     consumed_exprs: HashSet<ExprId>,
@@ -916,6 +970,11 @@ impl<'a> Emitter<'a> {
             .iter()
             .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
             .peekable();
+        let mut propagation_insertions = self
+            .for_initializer_propagations
+            .iter()
+            .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
+            .peekable();
         let mut compose_insertions = self
             .compose_rewrites
             .iter()
@@ -938,6 +997,11 @@ impl<'a> Emitter<'a> {
             }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
                 rope.append(self.emit_owner_slot_rewrite(rewrite));
+            }
+            while let Some(rewrite) =
+                propagation_insertions.next_if(|rewrite| rewrite.owner.start == cursor)
+            {
+                rope.append(self.emit_for_initializer_propagation_prelude(rewrite));
             }
             while let Some(rewrite) =
                 compose_insertions.next_if(|rewrite| rewrite.owner.start == cursor)
@@ -970,6 +1034,9 @@ impl<'a> Emitter<'a> {
             let next_compose = compose_insertions
                 .peek()
                 .map_or(span.end, |rewrite| rewrite.owner.start);
+            let next_propagation = propagation_insertions
+                .peek()
+                .map_or(span.end, |rewrite| rewrite.owner.start);
             let next_compose_end = compose_endings
                 .peek()
                 .map_or(span.end, |rewrite| rewrite.owner.end);
@@ -986,6 +1053,7 @@ impl<'a> Emitter<'a> {
                 .unwrap_or(span.end);
             let next = next_insertion
                 .min(next_compose)
+                .min(next_propagation)
                 .min(next_compose_end)
                 .min(next_replacement)
                 .min(span.end);
@@ -1098,13 +1166,12 @@ impl<'a> Emitter<'a> {
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
                     let span = self.span(propagate.node);
-                    out.anchored(
-                        AnchorKind::Try,
-                        span.start,
-                        span.end,
-                        span.end,
-                        self.emit_propagate(propagate),
-                    );
+                    let emitted = if self.is_for_initializer_propagation(propagate.node) {
+                        self.emit_for_initializer_payload(propagate)
+                    } else {
+                        self.emit_propagate(propagate)
+                    };
+                    out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
@@ -1172,7 +1239,7 @@ impl<'a> Emitter<'a> {
                 out
             }
             Expr::Apply(apply) => self.emit_apply(apply),
-            Expr::ResultRegion(region) => self.emit_result_region(region),
+            Expr::ResultRegion(region) => self.emit_result_region(expr, region),
             Expr::Template(template) => self.emit_template(template),
         }
     }
@@ -1188,6 +1255,51 @@ impl<'a> Emitter<'a> {
         out.push_break(0);
         out.append(anchored);
         out.push_break(0);
+        Rope::scoped(out)
+    }
+
+    fn is_for_initializer_propagation(&self, node: NodeId) -> bool {
+        self.for_initializer_propagations
+            .iter()
+            .any(|rewrite| rewrite.node == node)
+    }
+
+    fn emit_for_initializer_propagation_prelude(
+        &self,
+        rewrite: &ForInitializerPropagationRewrite,
+    ) -> Rope<'a> {
+        let propagate = self
+            .core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .find_map(|statement| match statement {
+                Statement::Propagate(propagate) if propagate.node == rewrite.node => {
+                    Some(propagate)
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| {
+                crate::ice::bug!("for initializer propagation is missing from Core IR")
+            });
+        let temp = temp_name(propagate.temporary);
+        let mut out = self.emit_propagate_input(propagate.value, &temp);
+        out.push_break(0);
+        out.push_lit(format!(
+            "if ({temp}.{} !== \"{}\") return {temp};",
+            propagate.layout.discriminant_field, propagate.layout.success_tag
+        ));
+        Rope::scoped(out)
+    }
+
+    fn emit_for_initializer_payload(&self, propagate: &Propagate) -> Rope<'a> {
+        let temp = temp_name(propagate.temporary);
+        let mut out = Rope::new();
+        if let Some(binding) = propagate.binding {
+            out.push_lit(format!("{} ", binding_keyword(binding.mode)));
+            out.append(self.source_rope(binding.node));
+            out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
+        }
         Rope::scoped(out)
     }
 
@@ -1757,7 +1869,11 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("arrow return rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        out.push_lit("{");
+        if rewrite.parenthesized {
+            out.push_lit("(() => {");
+        } else {
+            out.push_lit("{");
+        }
         out.push_break(1);
         out.push_lit(format!("let {};", rewrite.slot));
         out.push_break(1);
@@ -1765,7 +1881,7 @@ impl<'a> Emitter<'a> {
         out.push_break(1);
         out.push_lit(format!("return {};", rewrite.slot));
         out.push_break(0);
-        out.push_lit("}");
+        out.push_lit(if rewrite.parenthesized { "})()" } else { "}" });
         Rope::scoped(out)
     }
 
@@ -1829,7 +1945,7 @@ impl<'a> Emitter<'a> {
             })
     }
 
-    fn emit_result_region(&self, region: &ResultRegion) -> Rope<'a> {
+    fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
         let mut out = Rope::new();
         self.used_expression_boundary.set(true);
         out.push_lit(if region.is_async {
@@ -1840,7 +1956,15 @@ impl<'a> Emitter<'a> {
         for item in &region.items {
             match item {
                 ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(self.emit_body(*body), 0));
+                    let exits = self
+                        .value_exits
+                        .get(&expr)
+                        .map(Vec::as_slice)
+                        .unwrap_or(&[]);
+                    out.append(guard_line_comment(
+                        self.emit_result_body_with_exits(*body, exits),
+                        0,
+                    ));
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -1868,8 +1992,42 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    /// Result-owned returns inside the expression-boundary printer complete
+    /// its lexical arrow. They must therefore wrap `Ok`, unlike ordinary
+    /// function returns and unlike the statement-host continuation below.
+    fn emit_result_body_with_exits(&self, body: hir::BodyId, exits: &[HostExit]) -> Rope<'a> {
+        let mut edits = Vec::new();
+        for exit in exits {
+            match exit.argument {
+                Some(argument) => {
+                    edits.push(LocalSourceEdit {
+                        span: SourceSpan {
+                            start: exit.statement.start,
+                            end: argument.start,
+                        },
+                        text: "return { kind: \"Ok\" as const, value: ".to_owned(),
+                    });
+                    edits.push(LocalSourceEdit {
+                        span: SourceSpan {
+                            start: argument.end,
+                            end: exit.statement.end,
+                        },
+                        text: " };".to_owned(),
+                    });
+                }
+                None => edits.push(LocalSourceEdit {
+                    span: exit.statement,
+                    text: "return { kind: \"Ok\" as const, value: undefined };".to_owned(),
+                }),
+            }
+        }
+        edits.sort_unstable_by_key(|edit| edit.span.start);
+        self.emit_statements_with_edits(&self.core.bodies[body.index()].statements, &edits)
+    }
+
     fn emit_result_region_continued(
         &self,
+        expr: ExprId,
         region: &ResultRegion,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
@@ -1877,10 +2035,19 @@ impl<'a> Emitter<'a> {
         // The block's own source follows, leading whitespace included, so
         // the opener does not break the line the region body starts on.
         out.push_lit(if continuation.assigns() { "do {" } else { "{" });
+        let success = continuation.wrap_result_ok();
+        let exits = self
+            .value_exits
+            .get(&expr)
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
         for item in &region.items {
             match item {
                 ResultRegionItem::Statements(body) => {
-                    out.append(guard_line_comment(self.emit_body(*body), 0));
+                    out.append(guard_line_comment(
+                        self.emit_body_with_exits(*body, exits, &success, None),
+                        0,
+                    ));
                 }
                 ResultRegionItem::Propagate(propagate) => {
                     let span = self.span(propagate.node);
@@ -1899,7 +2066,6 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        let success = continuation.wrap_result_ok();
         if let Some(structured) = self.emit_continued_expr(region.value, &success) {
             out.append(structured);
             if continuation.assigns() {
@@ -2319,7 +2485,7 @@ impl<'a> Emitter<'a> {
                 Some(out)
             }
             Expr::ResultRegion(region) => {
-                Some(self.emit_result_region_continued(region, continuation))
+                Some(self.emit_result_region_continued(expr, region, continuation))
             }
             Expr::Propagate(propagate) => {
                 Some(self.emit_expression_propagate(propagate, continuation))

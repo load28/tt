@@ -104,6 +104,8 @@ pub enum DiagnosticCode {
     /// The TypeScript written in the file does not parse, so there is no
     /// TypeScript owner model to lower tt values against.
     SourceNotTypeScript,
+    /// Host lowering could not produce an evaluation plan for a tt construct.
+    LoweringPlanFailed,
     /// A diagnostic no specific rule claims. Reporting sites should not
     /// produce this — it exists so an unclassified error still has a code.
     Other,
@@ -145,6 +147,7 @@ impl DiagnosticCode {
             DiagnosticCode::ValPass => "val-pass",
             DiagnosticCode::VerifyFailed => "verify-failed",
             DiagnosticCode::SourceNotTypeScript => "source-not-typescript",
+            DiagnosticCode::LoweringPlanFailed => "lowering-plan-failed",
             DiagnosticCode::Other => "other",
         }
     }
@@ -187,6 +190,7 @@ impl DiagnosticCode {
         DiagnosticCode::ValPass,
         DiagnosticCode::VerifyFailed,
         DiagnosticCode::SourceNotTypeScript,
+        DiagnosticCode::LoweringPlanFailed,
         DiagnosticCode::Other,
     ];
 
@@ -568,6 +572,15 @@ file with no tt construct in it is reported through `verify-failed`
 instead."
             }
 
+            DiagnosticCode::LoweringPlanFailed => {
+                "\
+tt recognized a construct, but its host-lowering plan could not be built.
+
+The diagnostic is reported at the tt construct instead of exposing an
+internal compiler failure. This code preserves the failure at every compiler
+entry point while the specific host rule is repaired."
+            }
+
             DiagnosticCode::Other => {
                 "\
 A diagnostic no specific rule claims.
@@ -923,7 +936,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 33);
+        assert_eq!(DiagnosticCode::ALL.len(), 34);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();

@@ -9,6 +9,7 @@ CONTRACTS:
 - Semantic pattern errors carry the parser AST's complete primary span, not a start offset whose width the editor guesses. A mixed-pattern error covers the first pattern of the other kind; tuple arity covers the complete parenthesized tuple pattern. `Arm` and `TupleArm` keep `pattern_span` as their stage contract, so future pattern diagnostics inherit the same source-range path.
 - TRAP: once `match`/`variant` is distinguishable from valid TS, malformed syntax is a located ``tt `<construct>` could not be parsed`` error. `if let`, `|>`, and claimed `result` blocks likewise error at their construct. Unclaimed lookalikes remain byte-exact TypeScript passthrough.
 - A file that CONTAINS a tt construct must be TypeScript around it: lowering models the file's TypeScript, so TS that does not parse inside a claimed construct (a match arm body, a `result` block) is a located ``the TypeScript here does not parse`` error (`source-not-typescript`) at the failing byte, and nothing is emitted (`--no-verify` does not skip it — it is not the output self-check). A file with NO tt construct keeps reporting through that self-check (``generated TypeScript failed to parse``).
+- A host-lowering plan that cannot yet represent a claimed tt construct is a located `lowering-plan-failed` diagnostic. Every compiler client reports this failure instead of exposing an internal compiler error.
 - Identifiers inside tt constructs: ASCII `[A-Za-z_$][A-Za-z0-9_$]*` only. TS reserved words (new, default, if, in, of, static, class, ...) can't be tags/fields/bindings — construct silently passes through.
 
 ## variant
@@ -127,7 +128,7 @@ const data = result {
 - Result only (no Option/Promise do-notation, no `<-` outside a result block). Bindings must be TOP-LEVEL statements of the block — `<-` inside an `if`/loop/function within the block is a located error (it cannot early-return the block); hoist it or `match`.
 - Block is an EXPRESSION: usable anywhere, incl. pipeline head. Statement-capable owners use a result slot and explicit failure/success edges; expression-only owners use the shared named boundary. `await` stays in the surrounding async owner or is awaited at that boundary.
 - Error types UNION automatically: bindings of `TResult<_, E1>` + `TResult<_, E2>` → block assignable to `TResult<T, E1 | E2>`. ttc infers NO types; tsc narrows each step.
-- `return` inside the block returns from the BLOCK. So `try`/let-else directly in the block's statements are FORBIDDEN (located error) — use `<-`; inside a function written in the block they are fine. `if let` is fine anywhere here.
+- `return x` inside the block completes the block with `Ok(x)`; bare `return;` completes it with `Ok(undefined)`. It never returns a raw value from the surrounding function. So `try`/let-else directly in the block's statements are FORBIDDEN (located error) — use `<-`; inside a function written in the block they are fine. `if let` is fine anywhere here.
 - Final expr already a Result → nested `TResult<TResult<...>>`; bind it with `<-` instead.
 
 ## @tt/std

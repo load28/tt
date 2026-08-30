@@ -108,10 +108,32 @@ pub(crate) struct EvaluationFile {
 #[derive(Debug, Default)]
 pub(crate) struct LoweringPlan {
     owners: Vec<HostRewrite>,
+    for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     expression_boundary_name: String,
-    unsupported_expression_propagations: Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)>,
+    unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
+}
+
+/// A propagation declaration in a C-style `for` initializer. Its evaluation
+/// and error exit are emitted before the loop; the header keeps its payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ForInitializerPropagation {
+    pub(crate) node: NodeId,
+    pub(crate) owner: HostOwner,
+    pub(crate) source: SourceSpan,
+}
+
+/// A value-form propagation whose host cannot preserve its function return.
+/// Keep the owner beside the capability reason so public diagnostics can name
+/// the actual TypeScript boundary instead of flattening every case into one
+/// generic expression error.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UnsupportedExpressionPropagation {
+    pub(crate) expr: ExprId,
+    pub(crate) source: SourceSpan,
+    pub(crate) owner: EvaluationOwner,
+    pub(crate) reason: ExpressionBoundaryReason,
 }
 
 #[derive(Debug)]
@@ -371,12 +393,18 @@ impl LoweringPlan {
         &self.expression_boundary_name
     }
 
+    pub(crate) fn for_initializer_propagations(
+        &self,
+    ) -> impl Iterator<Item = ForInitializerPropagation> + '_ {
+        self.for_initializer_propagations.iter().copied()
+    }
+
     /// Expression propagations whose host cannot carry the emitted early
     /// return. The source semantic layer consumes this typed placement fact;
     /// target emission never attempts an expression-boundary fallback for it.
     pub(crate) fn unsupported_expression_propagations(
         &self,
-    ) -> Vec<(ExprId, SourceSpan, ExpressionBoundaryReason)> {
+    ) -> Vec<UnsupportedExpressionPropagation> {
         self.unsupported_expression_propagations.clone()
     }
 }
@@ -424,9 +452,33 @@ pub(crate) enum EvaluationError {
         owner: HostOwner,
         value: SourceSpan,
     },
+    /// A Result expression used as a statement cannot preserve its failure
+    /// completion. Reject it before target source-preservation would see an
+    /// incomplete rewrite.
+    DiscardedResult {
+        source: SourceSpan,
+    },
+    /// A statement propagation in a loop header would be re-evaluated on
+    /// each iteration if hoisted to its statement owner.
+    RepeatedPropagation {
+        source: SourceSpan,
+    },
+    /// Only a declaration initializer can retain its successful payload in a
+    /// C-style `for` header. An assignment has no statement-safe rewrite.
+    UnsupportedForInitializer {
+        source: SourceSpan,
+    },
 }
 
 impl EvaluationFile {
+    pub(crate) fn primary_source(&self) -> SourceSpan {
+        self.tt_spans
+            .iter()
+            .copied()
+            .min_by_key(|span| span.start)
+            .expect("EvaluationFile has at least one tt source span")
+    }
+
     pub(crate) fn build(syntax: &ProgramSyntax, core: &CoreFile) -> Result<Self, EvaluationError> {
         let declared_owners: HashSet<HostOwner> =
             syntax.owners().map(|owner| owner.owner).collect();
@@ -484,9 +536,32 @@ impl EvaluationFile {
     pub(crate) fn lowering_plan(&self, core: &CoreFile) -> Result<LoweringPlan, EvaluationError> {
         let mut owners: HashMap<HostOwner, Vec<PendingPlannedValue>> = HashMap::new();
         for region in &self.regions {
+            let Some(CoreRoot::Propagate(_)) = region.root else {
+                continue;
+            };
+            let RegionPlacement::Host {
+                context, source, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            if context.owner_reach == OwnerReach::Repeated {
+                return Err(EvaluationError::RepeatedPropagation { source: *source });
+            }
+        }
+        for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
+            // A pipeline remains an expression when a nested value has
+            // crossed into a separate source-backed owner, such as a
+            // concise arrow step. Rewriting the outer Apply as statements
+            // would move that value's propagation target out of the arrow.
+            if matches!(core.exprs[expr.index()], Expr::Apply(_))
+                && self.has_separately_hosted_descendant(core, expr)
+            {
+                continue;
+            }
             let (owner, value, context, protocol, exits) = match &region.placement {
                 RegionPlacement::Host {
                     context:
@@ -635,6 +710,40 @@ impl EvaluationFile {
             .flat_map(|rewrite| &rewrite.values)
             .map(|value| (value.expr, value.capability))
             .collect();
+        for region in &self.regions {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                continue;
+            };
+            if !matches!(core.exprs[expr.index()], Expr::Propagate(_)) {
+                continue;
+            }
+            let RegionPlacement::Host {
+                context, source, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            if context.continuation == HostContinuation::ForInitialize {
+                return Err(EvaluationError::UnsupportedForInitializer { source: *source });
+            }
+        }
+        for region in &self.regions {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                continue;
+            };
+            if !matches!(core.exprs[expr.index()], Expr::ResultRegion(_)) {
+                continue;
+            }
+            let RegionPlacement::Host {
+                context, source, ..
+            } = &region.placement
+            else {
+                continue;
+            };
+            if context.continuation == HostContinuation::Discard {
+                return Err(EvaluationError::DiscardedResult { source: *source });
+            }
+        }
         let mut unsupported_expression_propagations = Vec::new();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
@@ -650,6 +759,15 @@ impl EvaluationFile {
             let RegionPlacement::Host { context, .. } = &host_region.placement else {
                 continue;
             };
+            if let Some(CoreRoot::Expr(host_expr)) = host_region.root
+                && matches!(core.exprs[host_expr.index()], Expr::ResultRegion(_))
+            {
+                // The current Result language rejects value-form `try` in
+                // semantic analysis. Its Result-owned diagnostic is the
+                // one public result; do not add a second host-capability
+                // error after the projection has supplied the inner host.
+                continue;
+            }
             let capability = match host_region.root {
                 Some(CoreRoot::Expr(host_expr)) => direct_capabilities
                     .get(&host_expr)
@@ -672,16 +790,113 @@ impl EvaluationFile {
             .ok_or(EvaluationError::MissingHost {
                 root: CoreRoot::Expr(expr),
             })?;
-            unsupported_expression_propagations.push((expr, source, reason));
+            unsupported_expression_propagations.push(UnsupportedExpressionPropagation {
+                expr,
+                source,
+                owner: context.owner,
+                reason,
+            });
         }
+        let for_initializer_propagations = self
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let CoreRoot::Propagate(node) = region.root? else {
+                    return None;
+                };
+                let RegionPlacement::Host {
+                    context,
+                    host_owner,
+                    source,
+                    ..
+                } = &region.placement
+                else {
+                    return None;
+                };
+                (context.continuation == HostContinuation::ForInitialize).then_some(
+                    ForInitializerPropagation {
+                        node,
+                        owner: *host_owner,
+                        source: *source,
+                    },
+                )
+            })
+            .collect();
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
+            for_initializer_propagations,
             slot_names,
             value_slots,
             expression_boundary_name,
             unsupported_expression_propagations,
         })
+    }
+
+    fn has_separately_hosted_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
+        self.expr_has_hosted_descendant(core, expr)
+    }
+
+    fn expr_has_hosted_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
+        let nested = |child| {
+            self.regions.iter().any(|region| {
+                region.root == Some(CoreRoot::Expr(child))
+                    && matches!(region.placement, RegionPlacement::Host { .. })
+            }) || self.expr_has_hosted_descendant(core, child)
+        };
+        match &core.exprs[expr.index()] {
+            Expr::Opaque(_) | Expr::Propagate(_) => false,
+            Expr::Sequence(body) => self.body_has_hosted_descendant(core, *body),
+            Expr::Decision(decision) => {
+                decision
+                    .subjects
+                    .iter()
+                    .any(|subject| nested(subject.value))
+                    || decision.arms.iter().any(|arm| {
+                        arm.guard.is_some_and(nested)
+                            || match arm.action {
+                                ArmAction::Yield { body, .. } | ArmAction::Execute(body) => {
+                                    self.body_has_hosted_descendant(core, body)
+                                }
+                                ArmAction::BindThrough(_) => false,
+                            }
+                    })
+            }
+            Expr::Apply(apply) => {
+                apply.head.is_some_and(nested) || apply.steps.iter().any(|step| nested(step.value))
+            }
+            Expr::ResultRegion(region) => {
+                region.items.iter().any(|item| match item {
+                    ResultRegionItem::Statements(body) => {
+                        self.body_has_hosted_descendant(core, *body)
+                    }
+                    ResultRegionItem::Propagate(_) => false,
+                }) || nested(region.value)
+            }
+            Expr::Template(template) => template.parts.iter().any(|part| match part {
+                crate::core_ir::TemplatePart::Raw(_) => false,
+                crate::core_ir::TemplatePart::Interpolation(expr) => nested(*expr),
+            }),
+        }
+    }
+
+    fn body_has_hosted_descendant(&self, core: &CoreFile, body: BodyId) -> bool {
+        core.bodies[body.index()]
+            .statements
+            .iter()
+            .any(|statement| match statement {
+                Statement::Expr(expr) => {
+                    self.regions.iter().any(|region| {
+                        region.root == Some(CoreRoot::Expr(*expr))
+                            && matches!(region.placement, RegionPlacement::Host { .. })
+                    }) || self.expr_has_hosted_descendant(core, *expr)
+                }
+                Statement::Opaque(_)
+                | Statement::Adt(_)
+                | Statement::Import(_)
+                | Statement::Propagate(_)
+                | Statement::Decision(_) => false,
+            })
     }
 
     /// Checks the plan's evaluation order and count contracts
@@ -1326,7 +1541,11 @@ fn target_capability(
     use ExpressionBoundaryReason as Reason;
     if matches!(
         context.owner,
-        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
+        EvaluationOwner::ParameterInitializer
+            | EvaluationOwner::ClassInitializer
+            | EvaluationOwner::StaticBlock
+            | EvaluationOwner::Constructor
+            | EvaluationOwner::Generator
     ) {
         return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
     }

@@ -1001,21 +1001,86 @@ fn tt_errors(
 fn try_target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
     plan.unsupported_expression_propagations()
         .into_iter()
-        .map(|(_expr, span, _reason)| {
+        .map(|failure| {
+            let (message, help) = try_placement_message(failure.owner, failure.reason);
             TtError::span(
-                span.start,
-                span.end,
-                "`try` cannot be used in this expression context — propagating its `Err` \
-                 would require moving an evaluation across its TypeScript control-flow boundary"
-                    .to_string(),
+                failure.source.start,
+                failure.source.end,
+                message.to_string(),
             )
             .code(DiagnosticCode::TryPlacement)
-            .help(
-                "move the propagation into the nearest function-body statement with \
-                 `const value = try <expression>;`",
-            )
+            .help(help)
         })
         .collect()
+}
+
+fn try_placement_message(
+    owner: program_syntax::EvaluationOwner,
+    reason: evaluation_ir::ExpressionBoundaryReason,
+) -> (&'static str, &'static str) {
+    use evaluation_ir::ExpressionBoundaryReason as Reason;
+    use program_syntax::EvaluationOwner;
+
+    let help = "move the propagation into the nearest function-body statement with \
+                `const value = try <expression>;`";
+    match (owner, reason) {
+        (EvaluationOwner::StaticBlock, _) => (
+            "`try` cannot be used in a class static block — it has no enclosing function \
+             failure edge for its `Err` propagation",
+            help,
+        ),
+        (_, Reason::RepeatedInOwner) => (
+            "`try` cannot be used in a repeated loop position — propagating its `Err` \
+             across this TypeScript control-flow boundary would run once per iteration",
+            help,
+        ),
+        (EvaluationOwner::ParameterInitializer, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in a parameter initializer — this TypeScript control-flow \
+             boundary has no statement position for its `Err` propagation",
+            help,
+        ),
+        (EvaluationOwner::ClassInitializer, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in a class field initializer — this TypeScript control-flow \
+             boundary has no statement position for its `Err` propagation",
+            help,
+        ),
+        (EvaluationOwner::Constructor, _) => (
+            "`try` cannot be used in a constructor — its `Err` propagation requires an \
+             ordinary function return",
+            help,
+        ),
+        (EvaluationOwner::Generator, _) => (
+            "`try` cannot be used in a generator — its `Err` propagation requires an \
+             ordinary function return",
+            help,
+        ),
+        (_, Reason::ConditionalInOwner) => (
+            "`try` cannot be used in a conditionally evaluated expression position — \
+             propagating its `Err` across this TypeScript control-flow boundary would \
+             evaluate it when the surrounding expression skips it",
+            help,
+        ),
+        (_, Reason::ConditionalOperationNotStructurable) => (
+            "`try` cannot be used in this conditional operation — its TypeScript control-flow \
+             boundary cannot be rebuilt without changing evaluation order",
+            help,
+        ),
+        (_, Reason::CaptureOverlapsValue) => (
+            "`try` cannot be used in this expression context — its TypeScript control-flow \
+             boundary requires overlapping source captures",
+            help,
+        ),
+        (_, Reason::ReferenceNotPreservable) => (
+            "`try` cannot be used in this expression context — its TypeScript control-flow \
+             boundary requires preserving a reference that statements cannot represent",
+            help,
+        ),
+        (_, Reason::ValueHasNoStatementForm) | (_, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in this expression context — propagating its `Err` \
+             would require moving an evaluation across its TypeScript control-flow boundary",
+            help,
+        ),
+    }
 }
 
 /// Checks `source` and returns **every** tt-level diagnostic, in source
@@ -1041,10 +1106,11 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
-    if let Ok(plan) = codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
-        errors.extend(try_target_errors(&plan));
-        errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+    match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+        Ok(plan) => errors.extend(try_target_errors(&plan)),
+        Err(failure) => errors.push(verify::in_source(source, &failure)),
     }
+    errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
     errors
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)

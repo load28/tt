@@ -81,6 +81,8 @@ pub(crate) fn check_all(
     analyses: &crate::analysis::PatternAnalyses,
 ) -> Vec<TtError> {
     let mut checker = Checker {
+        source: source.to_owned(),
+        tokens: crate::lexer::lex(source, 0, source.len()),
         verify,
         errors: Vec::new(),
         coverage_suppressed: Vec::new(),
@@ -159,6 +161,8 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
 }
 
 struct Checker {
+    source: String,
+    tokens: Vec<crate::lexer::Token>,
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,
@@ -250,8 +254,10 @@ enum Ctx {
 /// statement itself stands, so they inherit its place (upgraded to
 /// [`Place::Function`] when the statement sits inside a function written
 /// in its region). A match arm body, a `result` block's statements, and
-/// every isolated value region reset to [`Place::ValueRegion`] — an exit
-/// written there belongs to the construct value, never the user's function.
+/// every isolated value region reset to its owning place — match arms use
+/// [`Place::ValueRegion`], while `result` bodies use [`Place::ResultRegion`].
+/// An exit written there belongs to the construct value, never the user's
+/// function.
 #[derive(Clone, Copy, PartialEq)]
 enum Place {
     /// The module's top level (or an inline chain that bottoms out there).
@@ -444,7 +450,40 @@ impl Checker {
     /// `return` would exit the construct's own value region, or fall at the
     /// module's top level, where there is nothing to return from.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
-        self.check_try_placement(stmt.span, stmt.in_function, place);
+        let at = self
+            .tokens
+            .iter()
+            .position(|token| token.span.start >= stmt.span.start)
+            .unwrap_or(self.tokens.len());
+        let function_target = crate::flow::function_target_at(&self.source, &self.tokens, at);
+        if matches!(
+            function_target,
+            Some(crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator)
+        ) {
+            self.error(
+                TtError::span(
+                    stmt.span.start,
+                    stmt.span.end,
+                    "`try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return".to_string(),
+                )
+                .code(DiagnosticCode::TryPlacement)
+                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
+            );
+        }
+        if function_target.is_none() && crate::flow::in_static_block(&self.source, &self.tokens, at)
+        {
+            self.error(
+                TtError::span(
+                    stmt.span.start,
+                    stmt.span.end,
+                    "`try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation".to_string(),
+                )
+                .code(DiagnosticCode::TryPlacement)
+                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
+            );
+        } else {
+            self.check_try_placement(stmt.span, stmt.in_function, place);
+        }
         self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
     }
 
@@ -480,8 +519,9 @@ impl Checker {
                 )
             } else {
                 (
-                    "`try` cannot be used here — it compiles to a `return`, which would \
-                     exit this construct's own IIFE instead of the enclosing function",
+                    "`try` cannot be used here, in an isolated value region — it compiles to \
+                     a `return`, which would exit this construct's own IIFE instead of the \
+                     enclosing function",
                     "extract the logic into a function (a `try` inside a function written \
                      here is fine), or use a `<-` binding in a `result` block",
                 )
@@ -617,7 +657,7 @@ impl Checker {
     }
 
     /// A `result` block is an expression, so it is allowed anywhere; its
-    /// body is the construct's isolated value stream ([`Place::ValueRegion`] — a `try` or
+    /// body is the construct's isolated value stream ([`Place::ResultRegion`] — a `try` or
     /// let-else there would return from the *block*, not the enclosing
     /// function), and the bindings and the trailing value are expressions.
     fn check_result_block(&mut self, block: &ResultBlock) {

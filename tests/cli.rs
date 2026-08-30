@@ -827,6 +827,33 @@ fn the_server_resolves_tt_names_without_a_toolchain() {
     assert_eq!(answer["result"]["definition"]["range"]["start"]["line"], 0);
 }
 
+#[test]
+fn the_server_reports_one_result_value_try_placement_diagnostic() {
+    use std::io::Write;
+    let source = "const r = result { const x <- next(); (try next()) };\n";
+    let request = serde_json::json!({
+        "id": 1,
+        "method": "check",
+        "params": { "text": source, "filename": "input.tt" },
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    drop(child.stdin.take());
+    let out = child.wait_with_output().expect("server answers");
+    let answer: serde_json::Value =
+        serde_json::from_slice(String::from_utf8_lossy(&out.stdout).trim().as_bytes())
+            .expect("one JSON line");
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    assert_eq!(diagnostics.len(), 1, "{answer}");
+    assert_eq!(diagnostics[0]["code"], "try-placement");
+    assert_eq!(diagnostics[0]["col"], 40);
+}
+
 /* ------------------------------------------------------------------ */
 /* typed check without a backend (TASK-124)                            */
 /* ------------------------------------------------------------------ */

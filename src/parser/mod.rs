@@ -455,6 +455,33 @@ fn starts_statement(src: &str, tokens: &[Token], idx: usize, in_ternary: bool) -
     false
 }
 
+/// The update of a C-style `for` header follows its second top-level
+/// semicolon. Its `try` is an expression candidate, while the test position
+/// keeps statement-propagation ownership so Evaluation IR can report the
+/// repeated-evaluation reason.
+fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
+    let mut depth = 0usize;
+    let mut separators = 0usize;
+    for cursor in (0..idx).rev() {
+        match tokens[cursor].kind {
+            TokenKind::Punct(b')') => depth += 1,
+            TokenKind::Punct(b'(') => {
+                if depth == 0 {
+                    return separators >= 2
+                        && cursor.checked_sub(1).is_some_and(|before| {
+                            matches!(tokens[before].kind, TokenKind::Ident)
+                                && &src[tokens[before].span.start..tokens[before].span.end] == "for"
+                        });
+                }
+                depth -= 1;
+            }
+            TokenKind::Punct(b';') if depth == 0 => separators += 1,
+            _ => {}
+        }
+    }
+    false
+}
+
 /// A colon normally admits a following statement (labels, `case`, match
 /// arms), but a colon inside an object literal introduces a value expression.
 /// This recognizes the object-literal brace from the token that introduced it
@@ -508,6 +535,11 @@ fn follows_declaration_equals(src: &str, tokens: &[Token], idx: usize) -> bool {
         match tokens[at].kind {
             TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
             TokenKind::Punct(b'(' | b'[' | b'{') if depth > 0 => depth -= 1,
+            // This `=` belongs to a destructuring default, not the
+            // declaration initializer. Its `try` must therefore use the
+            // expression-placement path below rather than declaration
+            // recovery.
+            TokenKind::Punct(b'(' | b'[' | b'{') => return false,
             TokenKind::Punct(b';') if depth == 0 => return false,
             TokenKind::Ident
                 if depth == 0
@@ -522,6 +554,16 @@ fn follows_declaration_equals(src: &str, tokens: &[Token], idx: usize) -> bool {
         }
     }
     false
+}
+
+/// A spread operand begins with three adjacent dot tokens. The last dot is
+/// not member access, even though the generic property-name test sees it
+/// immediately before the operand keyword.
+fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
+    idx >= 3
+        && tokens[idx - 3..idx]
+            .iter()
+            .all(|token| matches!(token.kind, TokenKind::Punct(b'.')))
 }
 
 impl Parser<'_> {
@@ -729,9 +771,10 @@ impl Parser<'_> {
             // `try <expr>;` — never valid TypeScript in expression
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
-            if !dotted && word == "try" {
+            if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
                 let misplaced = (expression_root && i == 0)
                     || !starts_statement(self.src, tokens, i, expr.1)
+                    || in_for_update(self.src, tokens, i)
                     || follows_object_member_colon(self.src, tokens, i);
                 let parenthesized_declaration_operand =
                     follows_declaration_equals(self.src, tokens, i)

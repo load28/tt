@@ -197,15 +197,39 @@ fn byte_of(text: &str, line: usize, col: usize) -> usize {
 /// ([`crate::DiagnosticCode::blocks_projection`]).
 pub(crate) fn in_source(
     source: &str,
-    failure: &crate::codegen::SourceNotTypeScript,
+    failure: &crate::codegen::LoweringFailure,
 ) -> crate::error::TtError {
-    let at = failure.source.min(source.len());
-    let message = format!(
-        "the TypeScript here does not parse: {}. tt lowering models this file's TypeScript, \
-         so no output is emitted (`--no-verify` does not apply).",
-        failure.message,
-    );
-    crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
+    match failure {
+        crate::codegen::LoweringFailure::SourceNotTypeScript {
+            message,
+            source: at,
+        } => {
+            let at = (*at).min(source.len());
+            let message = format!(
+                "the TypeScript here does not parse: {message}. tt lowering models this file's TypeScript, \
+                 so no output is emitted (`--no-verify` does not apply).",
+            );
+            crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
+        }
+        crate::codegen::LoweringFailure::Evaluation {
+            error,
+            source: span,
+        } => crate::error::TtError::span(
+            span.start.min(source.len()),
+            span.end.min(source.len()),
+            format!("tt host lowering could not plan this construct: {error:?}"),
+        )
+        .code(crate::DiagnosticCode::LoweringPlanFailed),
+        crate::codegen::LoweringFailure::HostProjection {
+            error,
+            source: span,
+        } => crate::error::TtError::span(
+            span.start.min(source.len()),
+            span.end.min(source.len()),
+            format!("tt host lowering could not plan this construct: {error:?}"),
+        )
+        .code(crate::DiagnosticCode::LoweringPlanFailed),
+    }
 }
 
 fn unclaimed_candidate_at(

@@ -93,6 +93,15 @@ pub struct HirSourceMap {
 }
 
 impl HirSourceMap {
+    /// The earliest tt node span in source order, for a diagnostic emitted
+    /// before a later lowering phase can identify a narrower construct.
+    pub fn first_node_span(&self) -> Option<Span> {
+        self.node_spans
+            .values()
+            .copied()
+            .min_by_key(|span| span.start)
+    }
+
     /// The byte span a node was lowered from.
     pub fn node_span(&self, node: NodeId) -> Option<Span> {
         self.node_spans.get(&node).copied()

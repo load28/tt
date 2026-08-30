@@ -931,7 +931,8 @@ fn try_inside_match_arm_is_an_error() {
         "const x = match (r) {\n  Ok(value) => { const y = try f(value); return y; },\n  Err(error) => fallback(error),\n};\n",
     );
     assert!(
-        e.message.contains("`try` cannot be used here"),
+        e.message
+            .contains("`try` cannot be used here, in an isolated value region"),
         "{}",
         e.message
     );
@@ -1033,6 +1034,26 @@ fn try_turns_a_concise_arrow_into_a_propagating_block() {
 }
 
 #[test]
+fn parenthesized_concise_arrow_keeps_try_in_the_arrow() {
+    let parenthesized = ok("const f = () => (try next());\n");
+    assert!(parenthesized.contains("=> {"), "{parenthesized}");
+    assert!(
+        parenthesized.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{parenthesized}"
+    );
+}
+
+#[test]
+fn pipeline_concise_arrow_keeps_try_in_the_arrow() {
+    let pipeline = ok("const f = value |> (x => try next());\n");
+    assert!(pipeline.contains("=> {"), "{pipeline}");
+    assert!(
+        pipeline.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{pipeline}"
+    );
+}
+
+#[test]
 fn expression_try_reports_a_typescript_control_flow_boundary() {
     for src in [
         "function f() { while (try condition()) work(); }\n",
@@ -1049,6 +1070,223 @@ fn expression_try_reports_a_typescript_control_flow_boundary() {
             "{src}\n{:#?}",
             diagnostics[0]
         );
+    }
+}
+
+#[test]
+fn try_in_constructor_or_generator_is_a_placement_error() {
+    for src in [
+        "class C { constructor() { try read(); } }\n",
+        "class C { constructor() { const value = try read(); } }\n",
+        "function* values() { try read(); }\n",
+        "function* values() { yield try read(); }\n",
+        "async function* values() { try read(); }\n",
+        "async function* values() { yield try read(); }\n",
+    ] {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+    }
+}
+
+#[test]
+fn try_placement_claims_for_update_and_destructuring_edges() {
+    for src in [
+        "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
+        "function f() { const [value = try read()] = input; }\n",
+    ] {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{src}\n{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+        assert!(
+            !err(src).message.contains("did not parse as tt try"),
+            "{src}"
+        );
+    }
+}
+
+#[test]
+fn try_in_spread_operands_enters_the_evaluation_protocol() {
+    for src in [
+        "function f() { const value = { ...try read() }; }\n",
+        "function f() { const value = [ ...try read() ]; }\n",
+    ] {
+        let output = ok(src);
+        assert!(
+            output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+            "{output}"
+        );
+        assert!(output.contains("const value ="), "{output}");
+    }
+}
+
+#[test]
+fn typescript_members_and_properties_named_try_are_passthrough() {
+    let source = "const object = { try: 1 };\nobject.try();\n";
+    assert_eq!(ok(source), source);
+}
+
+#[test]
+fn try_placement_reports_the_owning_reason() {
+    let cases = [
+        (
+            "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
+            "repeated loop position",
+        ),
+        (
+            "function f(value = try read()) { return value; }\n",
+            "parameter initializer",
+        ),
+        (
+            "class C { static { const value = { item: try read() }; } }\n",
+            "class static block",
+        ),
+        ("class C { constructor() { try read(); } }\n", "constructor"),
+        (
+            "const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };\n",
+            "isolated value region",
+        ),
+    ];
+    for (source, reason) in cases {
+        let error = err(source);
+        assert!(error.message.contains(reason), "{source}\n{error:#?}");
+        assert_eq!(error.line, 1, "{source}\n{error:#?}");
+        assert_eq!(
+            error.col,
+            source.find("try").unwrap() + 1,
+            "{source}\n{error:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_static_block_does_not_capture_a_nested_function_try() {
+    let output = ok("class C { static { const run = () => { try read(); }; } }\n");
+    assert!(
+        output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{output}"
+    );
+}
+
+#[test]
+fn placement_matrix_prerequisite_gate() {
+    enum Expected {
+        Accepted,
+        Placement,
+        LoweringPlan,
+    }
+
+    let cases = [
+        (
+            "function f() { const value = try read(); use(value); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { consume(try read()); new Box(try read()); sink?.(try read()); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { const value = ready ? try read() : fallback(); return value; }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { for (let i = try count();;) { break; } }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { for (const value of try values()) { use(value); } switch (try tag()) { default: break; } }\n",
+            Expected::Accepted,
+        ),
+        (
+            "function f() { using resource = try acquire(); use(resource); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "async function f() { await using resource = try acquire(); use(resource); }\n",
+            Expected::Accepted,
+        ),
+        (
+            "const f = value => try read(value);\nconst g = value => (try read(value));\nconst h = value |> (item => try read(item));\n",
+            Expected::Accepted,
+        ),
+        (
+            "const value = result { const item <- read(); item };\nclass C { field = result { const item <- read(); item }; static { const value = result { const item <- read(); item }; } constructor() { const value = result { const item <- read(); item }; } }\nfunction* values() { const value = result { const item <- read(); item }; yield value; }\n",
+            Expected::Accepted,
+        ),
+        ("try read();\n", Expected::Placement),
+        (
+            "function f(value = try read()) { return value; }\n",
+            Expected::Placement,
+        ),
+        (
+            "class C { field = try read(); static { const value = { item: try read() }; } }\n",
+            Expected::Placement,
+        ),
+        (
+            "class C { constructor() { try read(); } }\nfunction* values() { yield try read(); }\nasync function* asyncValues() { yield try read(); }\n",
+            Expected::Placement,
+        ),
+        (
+            "function f() { while (try ready()) {} }\n",
+            Expected::Placement,
+        ),
+        (
+            "function f() { for (; try ready(); ) {} }\n",
+            Expected::LoweringPlan,
+        ),
+        (
+            "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
+            Expected::Placement,
+        ),
+        (
+            "function f() { switch (value) { case try read(): break; } const [item = try read()] = input; object?.[try read()]; }\n",
+            Expected::Placement,
+        ),
+        (
+            "const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };\n",
+            Expected::Placement,
+        ),
+    ];
+
+    for (source, expected) in cases {
+        let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+            .expect("every placement row must report without unwinding");
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::VerifyFailed),
+            "{source}\n{diagnostics:#?}"
+        );
+        match expected {
+            Expected::Accepted => {
+                assert!(diagnostics.is_empty(), "{source}\n{diagnostics:#?}");
+                let output = ok(source);
+                assert!(!output.is_empty(), "{source}");
+            }
+            Expected::Placement => {
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::TryPlacement),
+                    "{source}\n{diagnostics:#?}"
+                );
+                let try_at = source.find("try").expect("placement source contains try");
+                assert!(
+                    diagnostics
+                        .iter()
+                        .any(|diagnostic| diagnostic.start == Some(try_at)),
+                    "{source}\n{diagnostics:#?}"
+                );
+            }
+            Expected::LoweringPlan => {
+                assert!(
+                    diagnostics.iter().any(|diagnostic| {
+                        diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed
+                    }),
+                    "{source}\n{diagnostics:#?}"
+                );
+            }
+        }
     }
 }
 
@@ -1613,6 +1851,64 @@ fn no_verify_does_not_bypass_the_lowering_precondition() {
         "{}",
         e.message
     );
+}
+
+#[test]
+fn try_declaration_in_for_initializer_runs_before_the_loop() {
+    let output = ok("function f() { for (let i = try next();;) {} }\n");
+    let prelude = output.find("const $tt_t0 = next();").unwrap();
+    let loop_header = output.find("for (let i = $tt_t0.value;;)").unwrap();
+    assert!(prelude < loop_header, "{output}");
+    assert!(
+        output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        "{output}"
+    );
+}
+
+#[test]
+fn discarded_result_reports_a_located_lowering_diagnostic_without_unwinding() {
+    let source = "function f() { result { const x <- next(); x }; }\n";
+    let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+        .expect("discarded Result must not reach source-preservation ICE");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+        "{diagnostics:#?}"
+    );
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.start.is_some()),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn try_in_repeated_for_test_reports_a_located_lowering_diagnostic() {
+    let source = "function f() { for (; try next(); ) {} }\n";
+    let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+        .expect("repeated for-test propagation must not reach output verification");
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+        "{diagnostics:#?}"
+    );
+    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
+}
+
+#[test]
+fn try_assignment_in_for_initializer_reports_a_located_lowering_diagnostic() {
+    let source = "function f() { for (i = try next();;) {} }\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+        "{diagnostics:#?}"
+    );
+    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
 }
 
 #[test]
@@ -3318,6 +3614,40 @@ fn direct_return_result_region_uses_the_host_function_without_an_iife() {
 }
 
 #[test]
+fn statement_host_result_returns_complete_with_ok() {
+    let value = ok(
+        "function load() { return result {\n  const item <- read();\n  return item;\n  0\n}; }\n",
+    );
+    assert!(
+        value.contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break;"),
+        "{value}"
+    );
+    assert!(value.contains("return $tt_v0;"), "{value}");
+
+    let unit =
+        ok("function load() { return result {\n  const item <- read();\n  return;\n  0\n}; }\n");
+    assert!(
+        unit.contains("$tt_v0 = { kind: \"Ok\" as const, value: undefined }; break;"),
+        "{unit}"
+    );
+}
+
+#[test]
+fn expression_host_result_returns_complete_with_ok() {
+    let value = ok("const result = result {\n  const item <- read();\n  return item;\n  0\n};\n");
+    assert!(
+        value.contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break;"),
+        "{value}"
+    );
+
+    let unit = ok("const result = result {\n  const item <- read();\n  return;\n  0\n};\n");
+    assert!(
+        unit.contains("$tt_v0 = { kind: \"Ok\" as const, value: undefined }; break;"),
+        "{unit}"
+    );
+}
+
+#[test]
 fn result_region_in_a_match_arm_inherits_the_parent_slot() {
     let out = ok(
         "variant E { A, B }\nconst value = match (e) {\n  A => result { const x <- f(); x },\n  B => Result.Ok(0),\n};\n",
@@ -3364,6 +3694,30 @@ fn try_and_let_else_are_rejected_inside_a_result_block() {
         "{}",
         e.message
     );
+}
+
+#[test]
+fn result_value_try_has_one_located_placement_diagnostic_at_every_host() {
+    let cases = [
+        "function f() { return result { const x <- next(); (try next()) }; }\n",
+        "const r = result { const x <- next(); (try next()) };\n",
+    ];
+    for source in cases {
+        let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
+            .expect("Result value try must not unwind while host planning");
+        let placement: Vec<_> = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == ttc::DiagnosticCode::TryPlacement)
+            .collect();
+        assert_eq!(placement.len(), 1, "{diagnostics:#?}");
+        assert_eq!(placement[0].start, Some(source.find("try").unwrap()));
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+            "{diagnostics:#?}"
+        );
+    }
 }
 
 #[test]

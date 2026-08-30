@@ -9,4 +9,4 @@
 mod core;
 mod rope;
 
-pub(crate) use core::{SourceNotTypeScript, emit_with_map, lowering_plan};
+pub(crate) use core::{LoweringFailure, emit_with_map, lowering_plan};
