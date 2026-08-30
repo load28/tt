@@ -368,6 +368,14 @@ fn parse_type_mismatch(value: &serde_json::Value) -> Option<TypeMismatch> {
         expected: object.get("expected")?.as_str()?.to_string(),
         found: object.get("found")?.as_str()?.to_string(),
         differences,
+        declaration: object.get("declaration").and_then(|declaration| {
+            Some(RelatedInformation {
+                file: PathBuf::from(declaration["file"].as_str()?),
+                start: declaration["start"].as_u64()? as usize,
+                end: declaration["end"].as_u64()? as usize,
+                message: "symbol declaration".to_string(),
+            })
+        }),
     })
 }
 

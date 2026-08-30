@@ -506,12 +506,32 @@ function contextualMismatch(project, checker, diagnostic, isExpression) {
       }
       if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) continue;
       if (checker.isTypeAssignableTo(found, expected)) continue;
+      let declaration;
+      try {
+        const symbol = checker.getSymbolAtPosition(
+          sourceFile.fileName,
+          expression.getStart(sourceFile),
+        );
+        const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+        const node = handle?.resolve?.(project);
+        const file = node?.getSourceFile?.();
+        if (node && file && handle) {
+          declaration = {
+            file: file.fileName,
+            start: node.getStart(file),
+            end: node.getEnd(),
+          };
+        }
+      } catch {
+        declaration = undefined;
+      }
       return {
         start: expression.getStart(sourceFile),
         end: expression.getEnd(),
         expected: checker.typeToString(expected),
         found: checker.typeToString(found),
         differences: incompatibleLeaves(checker, found, expected),
+        ...(declaration ? { declaration } : {}),
       };
     }
   }

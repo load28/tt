@@ -1045,6 +1045,35 @@ pub(crate) fn report(
             });
             continue;
         };
+        if matches!(origin, DiagnosticOrigin::Exact { .. })
+            && diagnostic
+                .mismatch
+                .as_ref()
+                .and_then(|mismatch| mismatch.declaration.as_ref())
+                .and_then(|declaration| {
+                    files
+                        .iter()
+                        .find(|candidate| candidate.module_path == declaration.file)
+                        .map(|declaration_file| (declaration, declaration_file))
+                })
+                .is_some_and(|(declaration, declaration_file)| {
+                    let out = crate::typescript::mapper::from_utf16(
+                        &declaration_file.emit.code,
+                        declaration.start,
+                    );
+                    declaration_file.emit.anchors.iter().any(|anchor| {
+                        anchor.out <= out
+                            && out < anchor.end
+                            && structured_glue.contains(&(
+                                declaration_file.source_path.clone(),
+                                anchor.src,
+                                anchor.kind,
+                            ))
+                    })
+                })
+        {
+            continue;
+        }
         if let DiagnosticOrigin::Exact { start, end } = origin
             && resolution_spans
                 .get(&file.source_path)

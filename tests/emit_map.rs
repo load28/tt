@@ -236,6 +236,34 @@ const total = result {
     assert_eq!(&m.code[out..out + pattern.len()], pattern);
 }
 
+#[test]
+fn result_statement_match_and_template_hosts_keep_source_mappings() {
+    let src = r#"const events: string[] = [];
+const value = result {
+  const item = try read();
+  match (subject()) {
+    1 => { events.push("one"); },
+    _ => { events.push("other"); },
+  }
+  return item;
+};
+const text = `value=${result { const item = try read(); return item; }}`;
+"#;
+    let m = emit_mapped(src);
+    assert_mapping_invariants(src, &m);
+    assert_mapped_in(src, &m, "match (subject())", "subject()");
+    assert_mapped_in(src, &m, "events.push(\"one\")", "events.push(\"one\")");
+    assert_mapped_in(src, &m, "events.push(\"other\")", "events.push(\"other\")");
+    assert_mapped_in(src, &m, "const text = `value=", "const text = `value=");
+    assert!(
+        m.anchors
+            .iter()
+            .any(|anchor| anchor.kind == ttc::AnchorKind::Match),
+        "{:#?}",
+        m.anchors
+    );
+}
+
 /// The byte offset of `needle` inside the first occurrence of `context`.
 fn offset_in(src: &str, context: &str, needle: &str) -> usize {
     let ctx = src
@@ -383,7 +411,7 @@ fn every_construct_anchors_the_glue_it_writes() {
     // diagnostic about its glue is drawn over.
     assert_eq!(&src[anchor.src..anchor.src_end], "try readNum()");
     // ...and covers the glue the construct wrote.
-    assert!(m.code[anchor.out..anchor.end].contains("$tt_t0.kind !== \"Ok\""));
+    assert!(m.code[anchor.out..anchor.end].contains("\"value\" in $tt_t0"));
 }
 
 #[test]

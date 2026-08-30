@@ -310,11 +310,11 @@
 | TASK-299 | Close Result scope review gaps | Complete | 2026-08-30 | 2026-08-30 | [TASK-299](./TASK-299-close-result-review-gaps.md) |
 | TASK-300 | Refresh Result syntax across user surfaces | Complete | 2026-08-30 | 2026-08-30 | [TASK-300](./TASK-300-refresh-result-user-surfaces.md) |
 | TASK-301 | Add structural `is` patterns and remove match expression closures | Complete | 2026-08-30 | 2026-08-30 | [TASK-301](./TASK-301-is-pattern-match.md) |
-| TASK-302 | Use a collision-free label for Result exits | Pending | — | — | [TASK-302](./TASK-302-collision-free-result-exits.md) |
-| TASK-303 | Preserve statement-position match inside Result blocks | Pending | — | — | [TASK-303](./TASK-303-statement-match-preservation.md) |
-| TASK-304 | Repair expression-boundary and template-hosted Result | Pending | — | — | [TASK-304](./TASK-304-result-boundary-and-template.md) |
-| TASK-305 | Emit a type-clean Result discriminator | Pending | — | — | [TASK-305](./TASK-305-type-clean-result-discriminator.md) |
-| TASK-306 | Close the Result design and user-surface documentation | Pending | — | — | [TASK-306](./TASK-306-result-surface-closure.md) |
+| TASK-302 | Use a collision-free label for Result exits | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-302](./TASK-302-collision-free-result-exits.md) |
+| TASK-303 | Preserve statement-position match inside Result blocks | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-303](./TASK-303-statement-match-preservation.md) |
+| TASK-304 | Repair expression-boundary and template-hosted Result | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-304](./TASK-304-result-boundary-and-template.md) |
+| TASK-305 | Emit a type-clean Result discriminator | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-305](./TASK-305-type-clean-result-discriminator.md) |
+| TASK-306 | Close the Result design and user-surface documentation | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-306](./TASK-306-result-surface-closure.md) |
 
 ## 다음 태스크 번호
 

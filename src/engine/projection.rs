@@ -823,7 +823,7 @@ mod tests {
         let file = project("function f() {\n  const a = try plain();\n  return a;\n}\n");
         let diagnostic = ts_at(
             &file,
-            "$tt_t0.kind",
+            "\"value\" in $tt_t0",
             2339,
             "Property 'kind' does not exist on type 'number'.",
         );
@@ -849,7 +849,12 @@ mod tests {
     #[test]
     fn an_unrecognized_code_on_glue_is_not_guessed_at() {
         let file = project("function f() {\n  const a = try plain();\n  return a;\n}\n");
-        let diagnostic = ts_at(&file, "$tt_t0.kind", 2739, "Type is missing properties.");
+        let diagnostic = ts_at(
+            &file,
+            "\"value\" in $tt_t0",
+            2739,
+            "Type is missing properties.",
+        );
         assert!(translate_on_glue(&file, &diagnostic, &declarations(&file)).is_none());
     }
 

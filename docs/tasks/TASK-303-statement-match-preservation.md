@@ -1,9 +1,9 @@
 # TASK-303: Preserve statement-position match inside Result blocks
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-302: repair Result completion defects`
 
 ## Purpose
 
@@ -35,28 +35,29 @@ Every arm's side effects run in source order, every emitted slot is declared, an
 Record every decision this task makes, including any new public diagnostic code
 and any wire-compatibility choice, with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Consume the structured match plan in the Result statement stream
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Result-owned statement emission bypassed the ordinary host rewrite and printed only the match join slot.
+- **Alternatives considered**: Reparse emitted source, special-case the fixture shape, or reuse the Core/Evaluation IR plan.
+- **Decision and rationale**: Reuse the existing owner rewrite or value slot and emit the decision structurally. This preserves all arms and keeps source mapping attached to the original match.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Began reproducing statement-position match loss through the syntax, evaluation, and target layers.
+- 2026-08-30: Added structural statement emission, runtime order checks, and emit-map invariants for match and template hosts.
 
 ## Issues and resolutions
 
-None.
+- A completed match inside an incomplete TypeScript owner had no safe host plan; the editor projection now uses an isolated recovery IIFE only for that plan-less statement value.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Statement-position matches inside Result blocks retain dispatch, arms, effects,
+and source mappings. Incomplete editor owners also remain completion-capable.

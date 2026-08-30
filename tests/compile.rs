@@ -886,7 +886,7 @@ fn try_inside_a_function_inside_a_guard_is_allowed() {
         "const r = match (x) {\n  A(v) if run(() => { try g(); return true; }) => v,\n  _ => 0,\n};\n",
     );
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -1054,7 +1054,7 @@ fn try_decl_emits_early_return_and_bind() {
     let out = ok("function f(): X {\n  const n = try g();\n  return h(n);\n}\n");
     assert!(
         out.contains(
-            "const $tt_t0 = g(); if ($tt_t0.kind !== \"Ok\") return $tt_t0; const n = $tt_t0.value;"
+            "const $tt_t0 = g(); if (!(\"value\" in $tt_t0)) return $tt_t0; const n = $tt_t0.value;"
         ),
         "{out}"
     );
@@ -1064,7 +1064,7 @@ fn try_decl_emits_early_return_and_bind() {
 fn try_bare_statement_emits_early_return_only() {
     let out = ok("function f(): X {\n  try g();\n  return h();\n}\n");
     assert!(
-        out.contains("const $tt_t0 = g(); if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("const $tt_t0 = g(); if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
     assert!(!out.contains("$tt_t0.value"), "{out}");
@@ -1197,7 +1197,7 @@ fn try_is_a_value_in_deep_expression_positions() {
         "function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }\n",
     );
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -1226,7 +1226,7 @@ fn try_turns_a_concise_arrow_into_a_propagating_block() {
     let out = ok("const f = (): TResult<number, string> => Result.Ok(try read());\n");
     assert!(out.contains("=> {"), "{out}");
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -1236,7 +1236,7 @@ fn parenthesized_concise_arrow_keeps_try_in_the_arrow() {
     let parenthesized = ok("const f = () => (try next());\n");
     assert!(parenthesized.contains("=> {"), "{parenthesized}");
     assert!(
-        parenthesized.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        parenthesized.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{parenthesized}"
     );
 }
@@ -1246,7 +1246,7 @@ fn pipeline_concise_arrow_keeps_try_in_the_arrow() {
     let pipeline = ok("const f = value |> (x => try next());\n");
     assert!(pipeline.contains("=> {"), "{pipeline}");
     assert!(
-        pipeline.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        pipeline.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{pipeline}"
     );
 }
@@ -1311,7 +1311,7 @@ fn try_in_spread_operands_enters_the_evaluation_protocol() {
     ] {
         let output = ok(src);
         assert!(
-            output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+            output.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
             "{output}"
         );
         assert!(output.contains("const value ="), "{output}");
@@ -1361,7 +1361,7 @@ fn try_placement_reports_the_owning_reason() {
 fn a_static_block_does_not_capture_a_nested_function_try() {
     let output = ok("class C { static { const run = () => { try read(); }; } }\n");
     assert!(
-        output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        output.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{output}"
     );
 }
@@ -1513,7 +1513,7 @@ fn try_inside_a_function_inside_a_scrutinee_is_allowed() {
         "const x = match (run(() => { try g(); return h(); })) {\n  Ok(value) => value,\n  Err(error) => 0,\n};\n",
     );
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -1524,7 +1524,7 @@ fn try_inside_a_function_inside_an_arm_body_is_allowed() {
         "const x = match (r) {\n  Ok(value) => { const f = () => { try g(value); return 1; }; return f(); },\n  Err(error) => 0,\n};\n",
     );
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -1533,7 +1533,7 @@ fn try_inside_a_function_inside_an_arm_body_is_allowed() {
 fn try_inside_a_function_inside_a_template_interpolation_is_allowed() {
     let out = ok("const s = `${run(() => { try g(); return h(); })}`;\n");
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -1654,7 +1654,7 @@ fn inline_bodies_inherit_the_enclosing_functions_place() {
         "variant E { A(x: number), B }\nfunction f(e: E): Result<number, string> {\n  if let A(x) = e {\n    const n = try g(x);\n    return Result.Ok(n);\n  }\n  return Result.Ok(0);\n}\n",
     );
     assert!(
-        out.contains("if ($tt_t1.kind !== \"Ok\") return $tt_t1;"),
+        out.contains("if (!(\"value\" in $tt_t1)) return $tt_t1;"),
         "{out}"
     );
 
@@ -1705,7 +1705,7 @@ fn let_else_shares_try_temp_counter() {
     let out = ok(
         "function f(): X {\n  const n = try g();\n  const Some(v) = h(n) else { return fallback(); };\n  return wrap(v);\n}\n",
     );
-    assert!(out.contains("if ($tt_t0.kind !== \"Ok\")"), "{out}");
+    assert!(out.contains("if (!(\"value\" in $tt_t0))"), "{out}");
     assert!(
         out.contains("const $tt_t1 = h(n); if ($tt_t1.kind !== \"Some\""),
         "{out}"
@@ -2077,7 +2077,7 @@ fn try_declaration_in_for_initializer_runs_before_the_loop() {
     let loop_header = output.find("for (let i = $tt_t0.value;;)").unwrap();
     assert!(prelude < loop_header, "{output}");
     assert!(
-        output.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        output.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{output}"
     );
 }
@@ -3009,7 +3009,7 @@ fn bare_super_is_not_an_optional_receiver() {
 fn try_inside_a_function_inside_a_pipeline_step_is_allowed() {
     let out = ok("const a = x |> (n => { const b = try f(n); return b; });\n");
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") return $tt_t0;"),
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
         "{out}"
     );
 }
@@ -3696,11 +3696,11 @@ fn statement_bodied_result_returns_a_propagated_value() {
     let out = ok("const value = result { return try read(); };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") { $tt_v0 = $tt_t0; break; }"),
+        out.contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
         "{out}"
     );
     assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break;"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0;"),
         "{out}"
     );
 }
@@ -3710,15 +3710,79 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
     let out = ok("const value = result { const item = try read(); return item; };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") { $tt_v0 = $tt_t0; break; }"),
+        out.contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
         "{out}"
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
     assert!(out.contains("const $tt_result = item;"), "{out}");
     assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break;"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break $tt_v0;"),
         "{out}"
     );
+}
+
+#[test]
+fn result_exits_target_the_generated_boundary_through_breakable_statements() {
+    let source = r#"
+const fromFor = result { for (const item of items) { return try read(item); } return 0; };
+const fromWhile = result { while (ready()) { return try read(); } return 0; };
+const fromDo = result { do { return try read(); } while (ready()); return 0; };
+const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };
+"#;
+    let out = ok(source);
+    for slot in ["$tt_v0", "$tt_v1", "$tt_v2", "$tt_v3"] {
+        assert!(out.contains(&format!("{slot}: {{")), "{slot}\n{out}");
+        assert!(
+            out.matches(&format!("break {slot};")).count() >= 2,
+            "{slot}\n{out}"
+        );
+    }
+}
+
+#[test]
+fn result_exit_label_avoids_user_identifiers_and_labels() {
+    let out = ok(
+        "function run() { $tt_v0: while (ready()) { break $tt_v0; } const $tt_v1 = 0; const value = result { const item = try read(); return item; }; return value; }\n",
+    );
+    assert!(out.contains("$tt_v0_1: {"), "{out}");
+    assert!(out.contains("break $tt_v0_1;"), "{out}");
+}
+
+#[test]
+fn result_preserves_a_statement_position_match_dispatch() {
+    let out = ok(
+        "const value = result { const item = try read(); match (item) { 1 => useOne(), _ => useOther() }; return item; };\n",
+    );
+    assert!(out.contains("let $tt_v1;"), "{out}");
+    assert!(out.contains("switch ($tt_m)"), "{out}");
+    assert!(out.contains("useOne()"), "{out}");
+    assert!(out.contains("useOther()"), "{out}");
+}
+
+#[test]
+fn ordinary_result_success_returns_from_expression_boundaries() {
+    let out = ok(
+        r#"class Box { field = result { const value = try read(); return value; }; }
+function withDefault(value = result { const item = try read(); return item; }) { return value; }
+function* values() { yield result { const item = try read(); return item; }; }
+const text = `value=${result { const item = try read(); return item; }}`;
+"#,
+    );
+    assert!(out.contains("field = $tt_expr(() =>"), "{out}");
+    assert!(out.contains("return { kind: \"Ok\" as const"), "{out}");
+    assert!(out.contains("yield $tt_expr(() =>"), "{out}");
+    assert!(out.contains("const text = `value=${$tt_v"), "{out}");
+}
+
+#[test]
+fn propagation_uses_a_type_clean_structural_result_discriminator() {
+    let out =
+        ok("function run() { const value = try Result.Err(\"boom\"); return Result.Ok(value); }\n");
+    assert!(
+        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        "{out}"
+    );
+    assert!(!out.contains(".kind !== \"Ok\""), "{out}");
 }
 
 #[test]

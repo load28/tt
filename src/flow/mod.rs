@@ -177,13 +177,16 @@ pub(crate) fn program_diverges(src: &str, tokens: &[Token], program: &Program) -
 /// retain the original buffer and select only the tokens owned by the body.
 pub(crate) fn program_diverges_in_span(
     src: &str,
-    tokens: &[Token],
+    _tokens: &[Token],
     program: &Program,
     span: crate::ast::Span,
 ) -> bool {
-    let start = tokens.partition_point(|token| token.span.start < span.start);
-    let end = start + tokens[start..].partition_point(|token| token.span.end <= span.end);
-    program_diverges(src, &tokens[start..end], program)
+    // The enclosing token stream may represent a template literal or JSX
+    // host as one opaque token even though the parser recursively exposed a
+    // Result body inside it. Lex the owned body span so its `return` and
+    // control-flow statements are visible to the same structural analysis.
+    let body_tokens = crate::lexer::lex(src, span.start, span.end);
+    program_diverges(src, &body_tokens, program)
 }
 
 /// An abrupt completion that would leave a Result body instead of a

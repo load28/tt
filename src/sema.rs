@@ -434,10 +434,15 @@ impl Checker {
             .position(|token| token.span.start >= stmt.span.start)
             .unwrap_or(self.tokens.len());
         let function_target = crate::flow::function_target_at(&self.source, &self.tokens, at);
-        if matches!(
-            function_target,
-            Some(crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator)
-        ) {
+        if place != Place::ResultRegion
+            && matches!(
+                function_target,
+                Some(
+                    crate::flow::FunctionTarget::Constructor
+                        | crate::flow::FunctionTarget::Generator
+                )
+            )
+        {
             self.error(
                 TtError::span(
                     stmt.span.start,

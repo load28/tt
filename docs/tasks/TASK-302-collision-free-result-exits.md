@@ -1,9 +1,9 @@
 # TASK-302: Use a collision-free label for Result exits
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-302: repair Result completion defects`
 
 ## Purpose
 
@@ -35,28 +35,33 @@ No Result exit can be captured by a construct the user wrote inside the block; t
 Record every decision this task makes, including any new public diagnostic code
 and any wire-compatibility choice, with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Label the compiler-owned Result boundary
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Result completion currently uses an unlabeled `break`, which can
+  be captured by a user-authored breakable construct nested inside the region.
+- **Alternatives considered**: Reject breakable constructs, return from an
+  expression-boundary closure, or assign a generated label to the Result boundary.
+- **Decision and rationale**: Generate a collision-free label through the normal
+  emitter name allocator and target every Result completion at that label. This
+  preserves the language model and makes the intended control-flow edge explicit.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Began tracing Result completion exits and their continuation plumbing.
+- 2026-08-30: Routed success and failure completion through the generated value-slot label and pinned every breakable host at compile and runtime.
 
 ## Issues and resolutions
 
-None.
+- The first full gate exposed a clippy argument-count failure; grouped Result continuations and the exit label into one emission context.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Result completion now targets a collision-free generated label. Compile and
+runtime coverage proves that `for`, `while`, `do`, and `switch` cannot capture it.

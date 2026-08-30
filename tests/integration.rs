@@ -2927,6 +2927,174 @@ total(2, -1).then((r) => console.log(JSON.stringify(r)));
 }
 
 #[test]
+fn runtime_result_exits_cross_user_breakable_statements() {
+    require_toolchain!();
+    let lines = run(r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const events: string[] = [];
+const step = (ok: boolean, name: string): Res<number, string> =>
+  ok ? Res.Ok(name.length) : Res.Err(name);
+
+const fromFor = (ok: boolean) => result {
+  for (const name of ["for"]) { return try step(ok, name); }
+  events.push("for-tail");
+  return 99;
+};
+const fromWhile = (ok: boolean) => result {
+  while (true) { return try step(ok, "while"); }
+  events.push("while-tail");
+  return 99;
+};
+const fromDo = (ok: boolean) => result {
+  do { return try step(ok, "do"); } while (false);
+  events.push("do-tail");
+  return 99;
+};
+const fromSwitch = (ok: boolean) => result {
+  switch (ok) { default: return try step(ok, "switch"); }
+  events.push("switch-tail");
+  return 99;
+};
+
+for (const run of [fromFor, fromWhile, fromDo, fromSwitch]) {
+  console.log(JSON.stringify(run(true)), JSON.stringify(run(false)));
+}
+console.log(events.join(","));
+"#);
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"kind":"Ok","value":3} {"kind":"Err","error":"for"}"#,
+            r#"{"kind":"Ok","value":5} {"kind":"Err","error":"while"}"#,
+            r#"{"kind":"Ok","value":2} {"kind":"Err","error":"do"}"#,
+            r#"{"kind":"Ok","value":6} {"kind":"Err","error":"switch"}"#,
+            "",
+        ]
+    );
+}
+
+#[test]
+fn runtime_result_preserves_statement_match_effect_order() {
+    require_toolchain!();
+    let lines = run(r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const events: string[] = [];
+const read = (): Res<number, string> => Res.Ok(7);
+const subject = (tag: number) => { events.push("subject-" + tag); return tag; };
+
+const run = (tag: number) => result {
+  const value = try read();
+  match (subject(tag)) {
+    1 => { events.push("one"); },
+    _ => { events.push("other"); },
+  }
+  events.push("after");
+  return value;
+};
+
+console.log(JSON.stringify(run(1)), events.join(","));
+events.length = 0;
+console.log(JSON.stringify(run(2)), events.join(","));
+"#);
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"kind":"Ok","value":7} subject-1,one,after"#,
+            r#"{"kind":"Ok","value":7} subject-2,other,after"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_ordinary_result_success_preserves_expression_host_protocols() {
+    require_toolchain!();
+    let lines = run(r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const read = (value: number): Res<number, string> => Res.Ok(value);
+
+class FieldBox {
+  field = result { const value = try read(1); return value; };
+}
+class ConstructorBox {
+  outcome;
+  constructor() {
+    this.outcome = result { const value = try read(2); return value; };
+  }
+}
+function withDefault(value = result { const item = try read(3); return item; }) {
+  return value;
+}
+function* values() {
+  yield result { const item = try read(4); return item; };
+  yield "after";
+}
+const text = `value=${result { const item = try read(5); return item; }}`;
+
+console.log(JSON.stringify(new FieldBox().field));
+console.log(JSON.stringify(new ConstructorBox().outcome));
+console.log(JSON.stringify(withDefault()));
+console.log(Array.from(values()).map((value) => JSON.stringify(value)).join(","));
+console.log(text);
+"#);
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"kind":"Ok","value":1}"#,
+            r#"{"kind":"Ok","value":2}"#,
+            r#"{"kind":"Ok","value":3}"#,
+            r#"{"kind":"Ok","value":4},"after""#,
+            "value=[object Object]",
+        ]
+    );
+}
+
+#[test]
+fn strict_typescript_accepts_all_result_discriminator_shapes() {
+    require_toolchain!();
+    let lines = run(r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+type Alias<T, E> = Res<T, E>;
+
+const directErr = () => {
+  const value = try Res.Err("direct");
+  return Res.Ok(value);
+};
+const directOk = () => {
+  const value = try Res.Ok(1);
+  return Res.Ok(value + 1);
+};
+const widened = (input: Res<number, string>): Res<number, string> => {
+  const value = try input;
+  return Res.Ok(value + 1);
+};
+const aliased = (input: Alias<number, string>): Alias<number, string> => {
+  const value = try input;
+  return Res.Ok(value + 1);
+};
+function generic<T, E>(input: Res<T, E>): Res<T, E> {
+  const value = try input;
+  return Res.Ok(value);
+}
+
+console.log(JSON.stringify(directErr()));
+console.log(JSON.stringify(directOk()));
+console.log(JSON.stringify(widened(Res.Err("wide"))));
+console.log(JSON.stringify(aliased(Res.Ok(2))));
+console.log(JSON.stringify(generic(Res.Ok("generic"))));
+"#);
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"kind":"Err","error":"direct"}"#,
+            r#"{"kind":"Ok","value":2}"#,
+            r#"{"kind":"Err","error":"wide"}"#,
+            r#"{"kind":"Ok","value":3}"#,
+            r#"{"kind":"Ok","value":"generic"}"#,
+        ]
+    );
+}
+
+#[test]
 fn runtime_result_block_replaces_nested_combinator_callbacks() {
     require_toolchain!();
     // The motivating shape: three dependent steps that all stay in scope,
