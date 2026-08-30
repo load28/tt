@@ -1,0 +1,8 @@
+declare const error: unknown;
+
+export const message = match (error) {
+  is SyntaxError { message } if message.length > 0 => `syntax: ${message}`,
+  is RangeError | is TypeError => "bad value",
+  is Error { message: detail } => detail,
+  _ => String(error),
+};

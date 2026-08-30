@@ -369,37 +369,42 @@ let-else가 "불일치 시 반드시 이탈"이라면 `if let`은 이탈 의무�
 
 ---
 
-## 7. 제안 P5: `is` 패턴 — `unknown`과 클래스 계층 match
+## 7. P5: `is` patterns for `unknown` and class hierarchies
 
-### 7.1 문법과 의미
+### 7.1 Syntax and semantics
 
 ```tt
 const msg = match (err) {
-  is SyntaxError(message)  => `bad syntax: ${message}`,
+  is SyntaxError { message } => `bad syntax: ${message}`,
   is RangeError | is TypeError => "bad value",
-  is Error(message)        => message,
+  is Error { message }     => message,
   _                        => String(err),
 };
 ```
 
-패턴 앞의 `is` 키워드(문맥 키워드 — 태그 자리 뒤에 식별자가 또 오는 형태는
-현재 문법에 없음)가 instanceof 매치를 나타냅니다. 선언 순서대로 검사하므로
-서브클래스를 위에 씁니다. 클래스 계층은 열려 있어 소진성 검사가 원리상
-불가능하므로 **`_` 암 필수**입니다(ttc 구조 검사). `is`와 태그 패턴은 한
-match에서 혼용 불가.
+`is` is contextual within match-arm patterns. Its constructor is an identifier
+or dotted path and its runtime meaning is JavaScript `instanceof`. Arms run in
+source order. Because class hierarchies are open, every match containing `is`
+requires a final `_` arm. Literal and `is` arms may mix; tag and tuple patterns
+may not join that match. Type-only alternatives use `is A | is B`; alternatives
+cannot bind properties.
 
-### 7.2 방출
+### 7.2 Lowering
 
-if-체인 IIFE(가드 기계 재사용) + instanceof + 물질화:
+The match owner receives a result slot and an ordered conditional region. No
+IIFE or expression helper is emitted:
 
 ```ts
-if ($tt_m instanceof SyntaxError) { const { message } = $tt_m; return (`bad syntax: ${message}`); }
+if ($tt_m instanceof SyntaxError) { const { message } = $tt_m; $tt_v0 = `bad syntax: ${message}`; break; }
 ```
 
-instanceof는 tsc의 표준 내로잉이므로 구조 분해가 타입 트릭 없이 통과합니다.
-바인딩은 태그 패턴과 같은 이름 기준이며, 좁혀진 클래스의 프로퍼티명과
-일치해야 합니다(불일치는 tsc 책임 — G6의 값 자체가 `unknown`인 경우
-`instanceof`가 유일한 표준 좁히기 수단이라는 점이 이 제안의 존재 이유입니다).
+The `instanceof` branch lets TypeScript narrow the value before ordinary
+`const` destructuring. Property existence and types remain TypeScript's
+responsibility. Direct block-arm returns deliver the slot; nested-function
+returns remain JavaScript returns. Cross-arm `break` and `continue` are
+rejected. Host lowering owns conditional operations and repeated loop tests;
+contexts with no sound statement owner are diagnosed instead of hidden behind
+a closure.
 
 ---
 

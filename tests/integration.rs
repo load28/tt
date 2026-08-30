@@ -522,9 +522,8 @@ console.log(value, block, nested);
 }
 
 #[test]
-fn runtime_expression_boundaries_preserve_parameter_and_field_context() {
-    require_toolchain!();
-    let lines = run(r#"
+fn parameter_and_field_matches_require_a_statement_owner() {
+    let source = r#"
 variant E { A(value: number), B }
 function parameter(
   seed: number,
@@ -544,8 +543,35 @@ class Counter {
 }
 console.log(parameter.length, parameter(3));
 console.log(new Counter().value);
+"#;
+    assert!(compile(source, &Options::default()).is_err());
+}
+
+#[test]
+fn runtime_is_patterns_and_loop_test_regions_preserve_order_and_count() {
+    require_toolchain!();
+    let lines = run(r#"
+class Keep extends Error {}
+class Stop extends Error {}
+let probes = 0;
+let updates = 0;
+let bodies = 0;
+function probe(): Error {
+  probes += 1;
+  return probes <= 3 ? new Keep() : new Stop();
+}
+for (; match (probe()) { is Keep => true, _ => false }; updates += 1) {
+  bodies += 1;
+  if (bodies < 3) continue;
+}
+const message = match (new SyntaxError("bad")) {
+  is SyntaxError { message } if message.length > 0 => message,
+  is Error { message: detail } => detail,
+  _ => "unknown",
+};
+console.log(probes, updates, bodies, message);
 "#);
-    assert_eq!(lines, ["1 4", "5"]);
+    assert_eq!(lines, ["4 3 3 bad"]);
 }
 
 #[test]

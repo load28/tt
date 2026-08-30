@@ -309,7 +309,8 @@
 | TASK-298 | Remove pre-1.0 Result migration compatibility | Complete | 2026-08-30 | 2026-08-30 | [TASK-298](./TASK-298-remove-result-migration.md) |
 | TASK-299 | Close Result scope review gaps | Complete | 2026-08-30 | 2026-08-30 | [TASK-299](./TASK-299-close-result-review-gaps.md) |
 | TASK-300 | Refresh Result syntax across user surfaces | Complete | 2026-08-30 | 2026-08-30 | [TASK-300](./TASK-300-refresh-result-user-surfaces.md) |
+| TASK-301 | Add structural `is` patterns and remove match expression closures | Complete | 2026-08-30 | 2026-08-30 | [TASK-301](./TASK-301-is-pattern-match.md) |
 
 ## 다음 태스크 번호
 
-**TASK-301**
+**TASK-302**

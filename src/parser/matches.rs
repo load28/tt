@@ -11,8 +11,8 @@ use super::cursor::Cursor;
 use super::is_reserved;
 use super::literals::{at_literal, parse_literal_alternatives};
 use crate::ast::{
-    Arm, Binding, GuardExpr, MatchExpr, Pattern, RecoveryKind, RecoveryNode, Span, TagPattern,
-    TupleArm, TupleMatchExpr, TuplePattern,
+    Arm, Binding, GuardExpr, InstancePattern, MatchExpr, Pattern, RecoveryKind, RecoveryNode, Span,
+    TagPattern, TupleArm, TupleMatchExpr, TuplePattern,
 };
 use crate::lexer::{Token, TokenKind};
 
@@ -71,6 +71,9 @@ pub(super) fn parse_match<'t>(
         // the body is the expression, and it only needs parentheses around
         // it. Anything else gets the rule's form, which is advice.
         error = match (cur.peek(), body_open) {
+            (_, Some(open)) if has_instance_call_pattern(cur.parser.src, cur.tokens, open) => {
+                error.help("write property bindings with braces — `is Type { field }`")
+            }
             (Some(token), Some(open))
                 if matches!(token.kind, TokenKind::Ident)
                     && token.span.start < cur.tokens[open].span.start =>
@@ -103,6 +106,33 @@ pub(super) fn parse_match<'t>(
     } else {
         Claim::NotTt
     }
+}
+
+fn has_instance_call_pattern(src: &str, tokens: &[Token], body_open: usize) -> bool {
+    let mut index = body_open + 1;
+    while index + 2 < tokens.len() {
+        let token = &tokens[index];
+        if matches!(token.kind, TokenKind::Ident)
+            && &src[token.span.start..token.span.end] == "is"
+            && matches!(tokens[index + 1].kind, TokenKind::Ident)
+        {
+            let mut tail = index + 2;
+            while tail + 1 < tokens.len()
+                && matches!(tokens[tail].kind, TokenKind::Punct(b'.'))
+                && matches!(tokens[tail + 1].kind, TokenKind::Ident)
+            {
+                tail += 2;
+            }
+            return tokens
+                .get(tail)
+                .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'(')));
+        }
+        if matches!(token.kind, TokenKind::Arrow | TokenKind::Punct(b'}')) {
+            break;
+        }
+        index += 1;
+    }
+    false
 }
 
 /// Whether the braces opening at `open` hold **arms** rather than
@@ -290,6 +320,9 @@ fn parse_arms(mut cur: Cursor) -> Option<Vec<Arm>> {
                 Pattern::Wildcard
             }
             _ if at_literal(&cur) => Pattern::Literals(parse_literal_alternatives(&mut cur)?),
+            TokenKind::Ident if cur.text(first) == "is" => {
+                Pattern::Instances(parse_instance_alternatives(&mut cur)?)
+            }
             TokenKind::Ident => Pattern::Tags(parse_tag_alternatives(&mut cur)?),
             _ => return None,
         };
@@ -319,6 +352,68 @@ fn parse_arms(mut cur: Cursor) -> Option<Vec<Arm>> {
         cur.eat_punct(b',')?;
     }
     Some(arms)
+}
+
+/// Parses `is Type (| is Type)*`. A constructor is an identifier or dotted
+/// identifier path. Property bindings use braces and never contain nested
+/// patterns in this first class-pattern surface.
+fn parse_instance_alternatives(cur: &mut Cursor) -> Option<Vec<InstancePattern>> {
+    let mut alternatives = vec![parse_instance_pattern(cur)?];
+    while cur.at_punct(b'|') {
+        cur.bump();
+        let token = cur.peek()?;
+        if !matches!(token.kind, TokenKind::Ident) || cur.text(token) != "is" {
+            return None;
+        }
+        alternatives.push(parse_instance_pattern(cur)?);
+    }
+    Some(alternatives)
+}
+
+fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
+    let is_token = cur.peek()?;
+    if !matches!(is_token.kind, TokenKind::Ident) || cur.text(is_token) != "is" {
+        return None;
+    }
+    let is_off = is_token.span.start;
+    cur.bump();
+
+    let (first, first_span) = cur.eat_ident()?;
+    if is_reserved(first) {
+        return None;
+    }
+    let mut path = first.to_string();
+    let mut path_end = first_span.end;
+    while cur.at_punct(b'.') {
+        cur.bump();
+        let (part, part_span) = cur.eat_ident()?;
+        path.push('.');
+        path.push_str(part);
+        path_end = part_span.end;
+    }
+
+    let mut bindings = None;
+    let mut end = path_end;
+    if cur.at_punct(b'{') {
+        let open = cur.idx;
+        let close = cur.find_close()?;
+        bindings = Some(parse_bindings(
+            cur.sub(open + 1, close, cur.tokens[close].span.start),
+            false,
+        )?);
+        end = cur.tokens[close].span.end;
+        cur.idx = close + 1;
+    }
+    Some(InstancePattern {
+        path,
+        path_span: Span {
+            start: first_span.start,
+            end: path_end,
+        },
+        is_off,
+        end,
+        bindings,
+    })
 }
 
 /// Parses tuple arms: `(elem, elem, ...) (if guard)? => body` with an

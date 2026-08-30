@@ -79,7 +79,7 @@ const FEATURES_NONE: u64 = 0;
 /// a name; this table joins them. It is append-only: a code keeps its
 /// number for as long as the mapper exists, and a name this table does not
 /// know yet reports as `0` rather than shifting its neighbours.
-const CODE_NUMBERS: [&str; 42] = [
+const CODE_NUMBERS: [&str; 47] = [
     "stray-pipe",
     "malformed-pipeline-postfix",
     "invalid-optional-receiver",
@@ -124,6 +124,11 @@ const CODE_NUMBERS: [&str; 42] = [
     "result-yield-crossing",
     "result-label-crossing",
     "try-crosses-value-region",
+    "match-is-wildcard-required",
+    "match-is-empty-bindings",
+    "match-is-or-bindings",
+    "match-placement",
+    "match-control-crossing",
 ];
 
 /// Everything the mapper keeps between requests.

@@ -280,7 +280,7 @@
         "ko": "match"
       },
       "summary": {
-        "en": "Match tags, literals, tuples, guards, and nested payloads as an expression.",
+        "en": "Match tags, literals, classes, tuples, guards, and nested payloads as an expression.",
         "ko": "태그, 리터럴, 튜플, 가드, 중첩 페이로드를 표현식으로 매칭합니다."
       },
       "code": "const label = match (result) {\n  Ok(value: Some(value: user)) if user.active => user.name,\n  Ok(value: None()) => \"anonymous\",\n  Err(error) => error.message,\n  _ => \"inactive\",\n};",
@@ -289,7 +289,8 @@
           "Bindings use field names and may be aliased with field: name.",
           "Or-patterns, guards, nested patterns, and tuple product exhaustiveness.",
           "String, number, boolean, and bigint literal patterns, plus a final wildcard arm.",
-          "await stays in the surrounding async owner when statement lowering is possible; expression-only positions use an awaited async boundary."
+          "Class patterns use is Error, dotted constructor paths, and optional property bindings.",
+          "await stays in the surrounding async owner when the host has a sound statement region."
         ],
         "ko": [
           "필드 이름으로 바인딩하며 field: name 형태로 별칭을 줄 수 있습니다.",
@@ -301,8 +302,9 @@
       "limits": {
         "en": [
           "The scrutinee parentheses are mandatory and _ must be last.",
-          "Tag and literal patterns cannot be mixed; tuple elements cannot be literals.",
+          "Tag patterns cannot mix with literal or is patterns; tuple elements cannot use either value-pattern family.",
           "Guarded arms never cover a case; nested patterns do cover their payload space.",
+          "Every is match needs a final wildcard; empty bindings and bindings on is alternatives are rejected.",
           "Literal exhaustiveness needs --check-types and a finite literal union."
         ],
         "ko": [

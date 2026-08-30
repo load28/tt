@@ -183,6 +183,13 @@
           "match": "(?<![_$[:alnum:]])(true|false)(?![_$[:alnum:]])",
           "name": "constant.language.boolean.ts"
         },
+        {
+          "match": "(?<![_$[:alnum:]])(is)\\s+([$_[:alpha:]][$_[:alnum:]]*(?:\\s*\\.\\s*[$_[:alpha:]][$_[:alnum:]]*)*)",
+          "captures": {
+            "1": { "name": "keyword.operator.is-pattern.tt" },
+            "2": { "name": "entity.name.type.class.ts" }
+          }
+        },
         { "include": "#tt-tag-pattern" },
         { "include": "#string" },
         { "include": "#numeric-literal" }

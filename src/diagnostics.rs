@@ -87,7 +87,7 @@ pub enum DiagnosticCode {
     VariantInvalidFieldType,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
-    /// A match mixing tag patterns and literal patterns.
+    /// A match mixing tag patterns with literal or `is` patterns.
     MatchMixedPatterns,
     /// A wildcard `_` arm that is not the last arm.
     MatchWildcardNotLast,
@@ -95,6 +95,16 @@ pub enum DiagnosticCode {
     MatchOrLiteralKindMismatch,
     /// An arm repeating a tag or literal an earlier arm already covers.
     MatchDuplicateArm,
+    /// An `is` match has no final wildcard for its open class hierarchy.
+    MatchIsWildcardRequired,
+    /// An `is Type {}` pattern writes an empty property binding list.
+    MatchIsEmptyBindings,
+    /// An `is` or-pattern attempts to bind properties.
+    MatchIsOrBindings,
+    /// A match sits in a host context that cannot own its statement region.
+    MatchPlacement,
+    /// A `break` or `continue` would leave a match arm's completion region.
+    MatchControlCrossing,
     /// A nested pattern inside an or-pattern.
     MatchNestedInOrPattern,
     /// Or-pattern alternatives that do not bind the same names.
@@ -154,6 +164,11 @@ impl DiagnosticCode {
             DiagnosticCode::MatchWildcardNotLast => "match-wildcard-not-last",
             DiagnosticCode::MatchOrLiteralKindMismatch => "match-or-literal-kind-mismatch",
             DiagnosticCode::MatchDuplicateArm => "match-duplicate-arm",
+            DiagnosticCode::MatchIsWildcardRequired => "match-is-wildcard-required",
+            DiagnosticCode::MatchIsEmptyBindings => "match-is-empty-bindings",
+            DiagnosticCode::MatchIsOrBindings => "match-is-or-bindings",
+            DiagnosticCode::MatchPlacement => "match-placement",
+            DiagnosticCode::MatchControlCrossing => "match-control-crossing",
             DiagnosticCode::MatchNestedInOrPattern => "match-nested-in-or-pattern",
             DiagnosticCode::MatchOrBindingMismatch => "match-or-binding-mismatch",
             DiagnosticCode::MatchTupleArity => "match-tuple-arity",
@@ -202,6 +217,11 @@ impl DiagnosticCode {
         DiagnosticCode::MatchWildcardNotLast,
         DiagnosticCode::MatchOrLiteralKindMismatch,
         DiagnosticCode::MatchDuplicateArm,
+        DiagnosticCode::MatchIsWildcardRequired,
+        DiagnosticCode::MatchIsEmptyBindings,
+        DiagnosticCode::MatchIsOrBindings,
+        DiagnosticCode::MatchPlacement,
+        DiagnosticCode::MatchControlCrossing,
         DiagnosticCode::MatchNestedInOrPattern,
         DiagnosticCode::MatchOrBindingMismatch,
         DiagnosticCode::MatchTupleArity,
@@ -467,12 +487,12 @@ Two fields cannot both introduce one name; alias one of them with
 
             DiagnosticCode::MatchMixedPatterns => {
                 "\
-A `match` mixes tag patterns and literal patterns.
+A `match` mixes tag patterns with literal or `is` patterns.
 
-The two lower differently — a tag match switches on `.kind`, a literal
-match switches on the value itself — so one `match` has to be one or the
-other. `_` belongs to both. Split the arms into two matches, or match on a
-value the arms agree about."
+They inspect different representations: a tag match switches on `.kind`,
+while literal and `is` patterns inspect the value itself. One `match` must
+therefore use either the tag family or the value family. `_` belongs to both.
+Split the arms into two matches, or match on a value the arms agree about."
             }
 
             DiagnosticCode::MatchWildcardNotLast => {
@@ -501,6 +521,46 @@ The later arm can never run. Literals are compared by value, so `200` and
 `0xc8` are the same arm. Guarded arms may repeat a tag — the guard can
 fail — but an arm that repeats a tag an *unguarded* arm already took is
 still dead."
+            }
+
+            DiagnosticCode::MatchIsWildcardRequired => {
+                "\
+An `is` match has no final wildcard arm.
+
+JavaScript class hierarchies are open, so ttc cannot prove that a list of
+`instanceof` tests is exhaustive. Add a final `_` arm."
+            }
+
+            DiagnosticCode::MatchIsEmptyBindings => {
+                "\
+An `is` pattern writes an empty property binding list.
+
+`is Error {}` has the same runtime test as `is Error` but suggests that a
+value is materialized. Remove the braces."
+            }
+
+            DiagnosticCode::MatchIsOrBindings => {
+                "\
+An `is` or-pattern binds properties.
+
+ttc does not answer whether different JavaScript classes share a property.
+Use type-only alternatives (`is A | is B`) or split the alternatives into
+separate arms before binding properties."
+            }
+
+            DiagnosticCode::MatchPlacement => {
+                "\
+A `match` is used in a TypeScript host that cannot own its control flow.
+
+Expression matches lower to host-owned statements and a result slot. They
+never use an IIFE, an immediately invoked callback, or `$tt_expr`. Move the
+match to a function-body statement whose evaluation count and conditional
+reachability are explicit."
+            }
+            DiagnosticCode::MatchControlCrossing => {
+                r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.
+
+Each arm is an isolated completion region. Allowing a jump to an enclosing host construct would bypass the match result delivery and make the generated control-flow target depend on unrelated outer syntax."#
             }
 
             DiagnosticCode::MatchNestedInOrPattern => {
@@ -666,6 +726,7 @@ look up."
                 | DiagnosticCode::StrayResult
                 | DiagnosticCode::MalformedVariant
                 | DiagnosticCode::MalformedMatch
+                | DiagnosticCode::MatchControlCrossing
                 | DiagnosticCode::VariantInvalidFieldType
                 | DiagnosticCode::VerifyFailed
                 | DiagnosticCode::SourceNotTypeScript
@@ -984,7 +1045,7 @@ mod tests {
         // `as_str` and `explanation` are exhaustive matches, so the
         // compiler catches a new variant in both. `ALL` it cannot check:
         // this count is the prompt to list a new rule there too.
-        assert_eq!(DiagnosticCode::ALL.len(), 39);
+        assert_eq!(DiagnosticCode::ALL.len(), 44);
         let mut seen = std::collections::HashSet::new();
         for code in DiagnosticCode::ALL {
             let wire = code.as_str();

@@ -583,7 +583,7 @@ impl Resolver {
         variant_def: DefId,
     ) {
         match &hir.patterns[pattern] {
-            Pat::Wildcard | Pat::Literal(_) => {}
+            Pat::Wildcard | Pat::Literal(_) | Pat::Instance { .. } => {}
             Pat::Or(alts) => {
                 for &alt in alts {
                     self.resolve_position(hir, site, alt, position, positions, variant_def);
@@ -774,7 +774,7 @@ fn collect_position_tags<'h>(
     out: &mut Vec<&'h str>,
 ) {
     match &hir.patterns[pattern] {
-        Pat::Wildcard | Pat::Literal(_) => {}
+        Pat::Wildcard | Pat::Literal(_) | Pat::Instance { .. } => {}
         Pat::Or(alts) => {
             for &alt in alts {
                 collect_position_tags(hir, alt, position, positions, out);

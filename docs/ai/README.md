@@ -1,9 +1,10 @@
 # AI와 함께 tt 쓰기
 
 [`tt.md`](./tt.md)는 **AI 코딩 도구에게 tt을 가르치는 컨텍스트 문서**입니다.
-AI가 `.tt` 파일을 올바르게 읽고 쓰는 데 필요한 전부 — 일곱 구문, 통과 계약,
-흔한 실수, 빌드 설정 — 를 한 파일에 담았습니다. AI 도구 호환성을 위해
-영어로 작성되어 있고, 자기 완결적이라 이 저장소 밖에서도 그대로 동작합니다.
+This single guide contains everything an AI needs to read and write `.tt`
+correctly: the complete language surface, including literal and `is` match
+patterns, passthrough rules, common mistakes, and build setup. It is written in
+English and is self-contained, so it works outside this repository.
 사람이 읽는 문서가 아니므로 컨텍스트 비용을 줄이기 위해 최대한 압축된
 표기(짧은 규칙 나열)를 씁니다. 사람을 위한 시작 안내는 [README](../../README.ko.md)에 있습니다.
 
@@ -38,8 +39,9 @@ curl -o docs/tt-ai-guide.md \
 
 - **통과 계약**: 유효한 TS는 그대로 유효한 `.tt`이고, 어긋난 tt 구문은
   에러가 아니라 조용히 통과된다는 것 — AI가 가장 자주 빠지는 함정.
-- **각 구문의 규칙**: 필수 괄호·세미콜론, 이름 기준 바인딩, 리터럴
-  패턴 없음, 소진성 검사에서 가드/중첩 암이 커버로 인정되지 않는 것 등.
+- **Language rules**: required parentheses and semicolons, name-based
+  bindings, literal and `is` pattern families, and coverage behavior for
+  guarded and nested arms.
 - **`@tt/std` 치트시트**: `Option`/`Result`의 필드명(`value`/`error`)과
   콤비네이터, 파이프라인용 `*P` 변형.
 - **빌드 파이프라인**: `ttc` 명령, `tsconfig` 설정, 번들러(@openload28/unplugin-tt),

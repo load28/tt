@@ -953,7 +953,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             );
         }
     };
-    if let Some(first) = try_target_errors(&plan).into_iter().next() {
+    if let Some(first) = target_errors(&plan).into_iter().next() {
         return Err(
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
@@ -1037,6 +1037,69 @@ fn try_target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
             .help(help)
         })
         .collect()
+}
+
+fn match_target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
+    plan.unsupported_matches()
+        .into_iter()
+        .map(|failure| {
+            let (message, help) = match_placement_message(failure.owner, failure.reason);
+            TtError::span(
+                failure.source.start,
+                failure.source.end,
+                message.to_string(),
+            )
+            .code(DiagnosticCode::MatchPlacement)
+            .help(help)
+        })
+        .collect()
+}
+
+fn match_placement_message(
+    owner: program_syntax::EvaluationOwner,
+    reason: evaluation_ir::ExpressionBoundaryReason,
+) -> (&'static str, &'static str) {
+    use evaluation_ir::ExpressionBoundaryReason as Reason;
+    use program_syntax::EvaluationOwner;
+    let help =
+        "move the match into a function-body statement that can own its generated control flow";
+    match (owner, reason) {
+        (EvaluationOwner::ParameterInitializer, Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position",
+            help,
+        ),
+        (EvaluationOwner::ClassInitializer, Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be used in a class field initializer — this TypeScript boundary has no statement position",
+            help,
+        ),
+        (_, Reason::RepeatedInOwner) => (
+            "`match` cannot be lowered from this repeated loop position without changing how often it evaluates",
+            help,
+        ),
+        (_, Reason::ConditionalInOwner | Reason::ConditionalOperationNotStructurable) => (
+            "`match` cannot be lowered from this conditional expression position without evaluating a skipped branch",
+            help,
+        ),
+        (_, Reason::ReferenceNotPreservable) => (
+            "`match` cannot be lowered from this reference position while preserving its receiver and `this`",
+            help,
+        ),
+        (_, Reason::CaptureOverlapsValue) => (
+            "`match` cannot be lowered from this expression because its ordered source captures overlap",
+            help,
+        ),
+        (_, Reason::ValueHasNoStatementForm | Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be lowered in this TypeScript host because it has no sound statement region",
+            help,
+        ),
+    }
+}
+
+fn target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
+    let mut errors = try_target_errors(plan);
+    errors.extend(match_target_errors(plan));
+    errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+    errors
 }
 
 fn try_placement_message(
@@ -1131,9 +1194,11 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
-    match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
-        Ok(plan) => errors.extend(try_target_errors(&plan)),
-        Err(failure) => errors.push(verify::in_source(source, &failure)),
+    if !errors.iter().any(|error| error.code.blocks_projection()) {
+        match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+            Ok(plan) => errors.extend(target_errors(&plan)),
+            Err(failure) => errors.push(verify::in_source(source, &failure)),
+        }
     }
     suppress_discarded_result_fallthrough(&mut errors);
     errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
@@ -1221,12 +1286,12 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
             continue;
         };
         match diagnostic.code {
-            DiagnosticCode::TryPlacement | DiagnosticCode::TryCrossesValueRegion => {
-                nodes.push(ast::RecoveryNode {
-                    span: ast::Span { start, end },
-                    kind: ast::RecoveryKind::Expression,
-                })
-            }
+            DiagnosticCode::TryPlacement
+            | DiagnosticCode::TryCrossesValueRegion
+            | DiagnosticCode::MatchPlacement => nodes.push(ast::RecoveryNode {
+                span: ast::Span { start, end },
+                kind: ast::RecoveryKind::Expression,
+            }),
             DiagnosticCode::VariantInvalidFieldType => nodes.push(ast::RecoveryNode {
                 span: ast::Span { start, end },
                 kind: ast::RecoveryKind::Type,
@@ -1338,9 +1403,9 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
             };
         }
     };
-    let target_try_errors = try_target_errors(&plan);
-    if !target_try_errors.is_empty() {
-        errors.extend(target_try_errors);
+    let target_errors = target_errors(&plan);
+    if !target_errors.is_empty() {
+        errors.extend(target_errors);
         errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
         return CompileReport {
             emit: None,

@@ -987,7 +987,7 @@ fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> MatchAnalysis
         .iter()
         .flat_map(|a| match &a.pattern {
             Pattern::Tags(alts) => alts.iter().map(|t| t.tag.as_str()).collect::<Vec<_>>(),
-            Pattern::Wildcard | Pattern::Literals(_) => Vec::new(),
+            Pattern::Wildcard | Pattern::Literals(_) | Pattern::Instances(_) => Vec::new(),
         })
         .collect();
     let subject = table.resolve(&tags);
@@ -1739,7 +1739,7 @@ fn tuple_rows<'a>(elems: &'a [Pattern]) -> Option<Vec<Vec<Cell<'a>>>> {
     for elem in elems {
         let cells: Vec<Cell> = match elem {
             Pattern::Wildcard => vec![Cell::Wild],
-            Pattern::Literals(_) => return None,
+            Pattern::Literals(_) | Pattern::Instances(_) => return None,
             Pattern::Tags(alts) => alts.iter().map(Cell::Tag).collect(),
         };
         rows = rows

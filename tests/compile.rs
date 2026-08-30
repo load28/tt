@@ -292,23 +292,211 @@ fn nested_initializer_match_inherits_the_parent_assignment_continuation() {
 }
 
 #[test]
-fn expression_only_owners_use_one_named_boundary_without_an_iife() {
-    let out = ok("variant E { A(value: number), B }\n\
+fn expression_only_match_owners_are_rejected_without_a_closure_fallback() {
+    let source = "variant E { A(value: number), B }\n\
          function f(seed: number, value = match (E.A(seed)) { A(value) => value, B => 0 }) { return value; }\n\
-         class C { value = match (E.A(2)) { A(value) => value, B => 0 }; }\n");
-    assert!(!out.contains("((() =>"), "{out}");
-    assert!(!out.contains("(await (async () =>"), "{out}");
-    assert_eq!(out.matches("function $tt_expr<").count(), 1, "{out}");
-    assert_eq!(out.matches("$tt_expr(() => {").count(), 2, "{out}");
+         class C { value = match (E.A(2)) { A(value) => value, B => 0 }; }\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(diagnostics.len(), 2, "{diagnostics:#?}");
+    assert!(
+        diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.code == ttc::DiagnosticCode::MatchPlacement),
+        "{diagnostics:#?}"
+    );
+    assert!(
+        ttc::compile_report(source, &Options::default())
+            .emit
+            .is_none()
+    );
 }
 
 #[test]
-fn expression_boundary_names_share_the_generated_name_namespace() {
-    let out = ok(
-        "variant E { A, B }\nconst $tt_expr = 1;\nfunction f(value = match (E.A) { A => 1, B => 0 }) { return value; }\n",
+fn is_patterns_lower_to_host_owned_instanceof_control_flow() {
+    let out = ok("const msg = match (err) {\n\
+           is SyntaxError { message } if message.length > 0 => `syntax: ${message}`,\n\
+           is RangeError | is TypeError => \"bad value\",\n\
+           is Error { message: detail } => detail,\n\
+           _ => String(err),\n\
+         };\n");
+    assert!(!out.contains("(() =>"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(out.contains("$tt_m instanceof SyntaxError"), "{out}");
+    assert!(
+        out.contains("$tt_m instanceof RangeError || $tt_m instanceof TypeError"),
+        "{out}"
     );
-    assert!(out.contains("$tt_expr_1(() => {"), "{out}");
-    assert!(out.contains("function $tt_expr_1<T>"), "{out}");
+    assert!(out.contains("const { message } = $tt_m;"), "{out}");
+    assert!(out.contains("const { message: detail } = $tt_m;"), "{out}");
+    assert!(out.contains("const msg = $tt_v0;"), "{out}");
+}
+
+#[test]
+fn is_patterns_require_open_hierarchy_and_binding_rules() {
+    let src = "const a = match (x) { is Error { } => 1 };\n\
+        const b = match (x) { is A { value } | is B => value, _ => 0 };\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let codes: Vec<_> = diagnostics
+        .iter()
+        .map(|diagnostic| diagnostic.code)
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            ttc::DiagnosticCode::MatchIsWildcardRequired,
+            ttc::DiagnosticCode::MatchIsEmptyBindings,
+            ttc::DiagnosticCode::MatchIsOrBindings,
+        ],
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn is_call_syntax_points_to_property_pattern_braces() {
+    let diagnostics = ttc::analyze(
+        "const value = match (x) { is SyntaxError(message) => message, _ => \"\" };\n",
+        &Options::default(),
+    );
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::MalformedMatch);
+    assert!(
+        diagnostics[0]
+            .suggestions
+            .iter()
+            .any(|suggestion| suggestion.message.contains("is Type { field }")),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn is_constructor_identity_crosses_or_and_binding_wrappers() {
+    let src = "const value = match (x) {\n\
+        is ns.Error | is TypeError => 1,\n\
+        is ns.Error { message } => message,\n\
+        _ => 0,\n\
+    };\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::MatchDuplicateArm);
+}
+
+#[test]
+fn is_patterns_may_share_an_ordered_chain_with_literals() {
+    let out = ok(
+        "const value = match (x) { is Error => \"error\", \"ok\" => \"ok\", _ => \"other\" };\n",
+    );
+    assert!(out.contains("$tt_m instanceof Error"), "{out}");
+    assert!(out.contains("$tt_m === \"ok\""), "{out}");
+}
+
+#[test]
+fn one_shot_for_headers_hoist_match_control_flow_once() {
+    let for_of =
+        ok("for (const value of match (source) { is Array => source, _ => [] }) { use(value); }\n");
+    assert!(!for_of.contains("$tt_expr"), "{for_of}");
+    assert!(for_of.find("instanceof Array").unwrap() < for_of.find("for (").unwrap());
+    assert!(for_of.contains("for (const value of $tt_v0)"), "{for_of}");
+
+    let initializer = ok(
+        "for (let value = match (source) { is Number => 1, _ => 0 }; value < 2; value++) { use(value); }\n",
+    );
+    assert!(!initializer.contains("$tt_expr"), "{initializer}");
+    assert!(initializer.find("instanceof Number").unwrap() < initializer.find("for (").unwrap());
+    assert!(
+        initializer.contains("for (let value = $tt_v0;"),
+        "{initializer}"
+    );
+}
+
+#[test]
+fn repeated_loop_tests_own_the_match_region_per_iteration() {
+    let while_output = ok("while (match (next()) { is Error => false, _ => true }) { work(); }\n");
+    assert!(!while_output.contains("$tt_expr"), "{while_output}");
+    assert!(while_output.contains("while (true)"), "{while_output}");
+    assert!(
+        while_output.find("const $tt_m = next()").unwrap()
+            > while_output.find("while (true)").unwrap(),
+        "{while_output}"
+    );
+
+    let for_output =
+        ok("for (; match (next()) { is Error => false, _ => true }; tick()) { work(); }\n");
+    assert!(!for_output.contains("$tt_expr"), "{for_output}");
+    assert!(for_output.contains("for (; ; tick())"), "{for_output}");
+    assert!(
+        for_output.find("const $tt_m = next()").unwrap()
+            > for_output.find("for (; ; tick())").unwrap(),
+        "{for_output}"
+    );
+}
+
+#[test]
+fn loop_test_rewrites_compose_with_conditionals_nesting_and_initializers() {
+    let conditional = ok(
+        "declare const flag: boolean; declare function next(): unknown;\nwhile (flag && match (next()) { is Error => false, _ => true }) { work(); }\n",
+    );
+    assert!(
+        conditional.contains("if (!($tt_v2)) break;"),
+        "{conditional}"
+    );
+    assert!(!conditional.contains("$tt_expr"), "{conditional}");
+
+    let nested = ok(
+        "declare function a(): number; declare function b(): number;\nwhile (match (a()) { 1 => true, _ => false }) { while (match (b()) { 2 => true, _ => false }) { work(); } }\n",
+    );
+    assert_eq!(nested.matches("while (true)").count(), 2, "{nested}");
+
+    let logical = ok(
+        "declare function a(): number; declare function b(): number;\nwhile (match (a()) { 1 => true, _ => false } || match (b()) { 2 => true, _ => false }) { work(); }\n",
+    );
+    assert!(logical.contains("if (!($tt_v2)) break;"), "{logical}");
+    assert!(!logical.contains("|| ))"), "{logical}");
+
+    let both = ok(
+        "for (let a = match (1) { 1 => 1, _ => 0 }; match (a) { 1 => true, _ => false }; a++) { use(a); }\n",
+    );
+    assert!(!both.contains("$tt_expr"), "{both}");
+    assert!(both.contains("for (let a = $tt_v0; ; a++)"), "{both}");
+}
+
+#[test]
+fn match_arms_reject_only_control_transfers_that_cross_the_arm() {
+    let crossing = ttc::analyze(
+        "outer: for (;;) { const value = match (x) { is Error => { continue outer; }, _ => 0 }; }\n",
+        &Options::default(),
+    );
+    assert_eq!(crossing.len(), 1, "{crossing:#?}");
+    assert_eq!(crossing[0].code, ttc::DiagnosticCode::MatchControlCrossing);
+
+    let internal = ok(
+        "const value = match (x) { is Error => { while (ready()) { if (stop()) break; continue; } return 1; }, _ => 0 };\n",
+    );
+    assert!(internal.contains("while (ready())"), "{internal}");
+
+    let tuple = ttc::analyze(
+        "outer: for (;;) { const value = match (a, b) { (A, B) => { continue outer; }, _ => 0 }; }\n",
+        &Options::default(),
+    );
+    assert_eq!(tuple.len(), 1, "{tuple:#?}");
+    assert_eq!(tuple[0].code, ttc::DiagnosticCode::MatchControlCrossing);
+
+    let yielded = ttc::analyze(
+        "function* values() { return match (x) { is Error => { yield x; return 1; }, _ => 0 }; }\n",
+        &Options::default(),
+    );
+    assert_eq!(yielded.len(), 1, "{yielded:#?}");
+    assert_eq!(yielded[0].code, ttc::DiagnosticCode::MatchControlCrossing);
+}
+
+#[test]
+fn rejected_match_boundaries_do_not_emit_an_expression_helper() {
+    let source = "variant E { A, B }\nfunction f(value = match (E.A) { A => 1, B => 0 }) { return value; }\n";
+    let report = ttc::compile_report(source, &Options::default());
+    assert!(report.emit.is_none());
+    assert_eq!(
+        report.diagnostics[0].code,
+        ttc::DiagnosticCode::MatchPlacement
+    );
 }
 
 #[test]
@@ -904,6 +1092,16 @@ fn try_expression_may_contain_a_match() {
     );
     assert!(out.contains("const $tt_t0 = $tt_v0;"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
+
+    let nested = ok(
+        "function f(): X {\n  const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });\n  return x;\n}\n",
+    );
+    assert!(nested.contains("const $tt_v1 = (wrap);"), "{nested}");
+    assert!(
+        nested.contains("const $tt_t0 = $tt_v1($tt_v0);"),
+        "{nested}"
+    );
+    assert!(!nested.contains("$tt_expr"), "{nested}");
 }
 
 #[test]
@@ -1908,13 +2106,15 @@ fn try_in_repeated_for_test_reports_a_located_lowering_diagnostic() {
     let source = "function f() { for (; try next(); ) {} }\n";
     let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
         .expect("repeated for-test propagation must not reach output verification");
-    assert!(
-        diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+    let diagnostic = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed)
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
+    assert_eq!(
+        diagnostic.start,
+        Some(source.find("try").unwrap()),
         "{diagnostics:#?}"
     );
-    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
 }
 
 #[test]
@@ -5159,16 +5359,16 @@ fn malformed_match_blocks_codegen_even_beside_a_lowered_variant() {
 
 #[test]
 fn a_loop_header_value_is_not_hoisted_out_of_the_loop() {
-    // TASK-160: the value runs once per iteration; statements hoisted to
-    // the `while` owner would run it once. The expression boundary keeps
-    // it in place.
+    // The value runs once per iteration. The loop owns the region so it is
+    // neither hoisted before the loop nor hidden in an expression helper.
     let out = ok(
         "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
     );
-    let loop_at = out.find("while (").expect("loop");
+    let loop_at = out.find("while (true)").expect("loop");
     let lowering = out.find("switch").expect("lowering");
     assert!(loop_at < lowering, "{out}");
-    assert!(out.contains("while (id($tt_expr("), "{out}");
+    assert!(out.contains("if (!($tt_v1($tt_v0))) break;"), "{out}");
+    assert!(!out.contains("$tt_expr"), "{out}");
 }
 
 #[test]
@@ -5181,43 +5381,38 @@ fn a_loop_body_value_still_lowers_to_owner_statements() {
 
 #[test]
 fn a_capture_never_escapes_a_generated_conditional_region() {
-    // TASK-160 issue 15: promoting this owner to statements would declare
-    // the callee capture inside `if (flag)` while the host expression
-    // reads it outside; the boundary keeps evaluation in place.
-    let out = ok(
-        "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
-    );
-    assert!(out.contains("flag && id($tt_expr("), "{out}");
-    assert!(!out.contains("let $tt_v"), "{out}");
+    let source = "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n";
+    let out = ok(source);
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(out.contains("if ($tt_v2)"), "{out}");
+    assert!(out.contains("$tt_v3 = $tt_v1($tt_v0);"), "{out}");
 }
 
 #[test]
 fn a_capture_never_copies_a_sibling_tt_value() {
-    // TASK-160 issue 16: the second value's prior-argument span contains
-    // the first tt value; capturing it would copy tt source into the
-    // output. Both stay in place instead.
-    let out = ok(
-        "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
-    );
-    assert_eq!(out.matches("$tt_expr(() => {").count(), 2, "{out}");
-    assert!(out.contains("g(a && $tt_expr("), "{out}");
+    let source = "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n";
+    let out = ok(source);
+    assert!(!out.contains("$tt_expr"), "{out}");
+    assert!(out.contains("$tt_v5 = $tt_v0;"), "{out}");
+    assert!(out.contains("$tt_v3($tt_v5, $tt_v1)"), "{out}");
 }
 
 #[test]
 fn a_switch_case_test_value_stays_behind_its_case() {
-    let out =
-        ok("declare const n: number;\nswitch (n) { case match (n) { 1 => 1, _ => 0 }: break; }\n");
-    let switch_at = out.find("switch (n)").expect("switch");
-    let lowering = out.find("$tt_expr(").expect("boundary");
-    assert!(switch_at < lowering, "{out}");
+    let diagnostics = ttc::analyze(
+        "declare const n: number;\nswitch (n) { case match (n) { 1 => 1, _ => 0 }: break; }\n",
+        &Options::default(),
+    );
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::MatchPlacement);
 }
 
 #[test]
 fn a_destructuring_default_value_stays_inside_the_default() {
-    let out = ok(
+    let diagnostics = ttc::analyze(
         "declare const source: { value?: number };\nexport const { value = match (1) { 1 => 1, _ => 0 } } = source;\n",
+        &Options::default(),
     );
-    assert!(out.contains("value = $tt_expr("), "{out}");
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::MatchPlacement);
 }
 
 #[test]

@@ -352,6 +352,13 @@ impl Lower {
                     .collect();
                 self.or_of(lowered)
             }
+            ast::Pattern::Instances(alts) => {
+                let lowered: Vec<PatternId> = alts
+                    .iter()
+                    .map(|alt| self.lower_instance_pattern(alt))
+                    .collect();
+                self.or_of(lowered)
+            }
         }
     }
 
@@ -390,6 +397,24 @@ impl Lower {
                 fields,
             },
             Span::new(alt.tag_off, alt.end),
+        )
+    }
+
+    fn lower_instance_pattern(&mut self, alt: &ast::InstancePattern) -> PatternId {
+        let constructor = self.node(Self::span(alt.path_span), AstOrigin::Pattern);
+        let fields = alt.bindings.as_ref().map(|bindings| {
+            bindings
+                .iter()
+                .map(|binding| self.lower_field_pat(binding))
+                .collect()
+        });
+        self.alloc_pattern(
+            Pat::Instance {
+                constructor,
+                path: alt.path.clone(),
+                fields,
+            },
+            Span::new(alt.is_off, alt.end),
         )
     }
 

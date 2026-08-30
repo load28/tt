@@ -20,8 +20,8 @@
 
 use super::language::{Position, Range};
 use crate::ast::{
-    Binding, IfLetElse, Pattern, Program, ResultItem, Segment, TagPattern, TemplateChunk,
-    TuplePattern,
+    Binding, IfLetElse, InstancePattern, Pattern, Program, ResultItem, Segment, TagPattern,
+    TemplateChunk, TuplePattern,
 };
 use crate::lexer::{self, Token, TokenKind as Lex};
 use crate::typescript::mapper;
@@ -234,6 +234,18 @@ fn pattern(src: &str, p: &Pattern, out: &mut Vec<(usize, usize, SemanticTokenKin
                 tag_pattern(tag, out);
             }
         }
+        Pattern::Instances(instances) => {
+            for instance in instances {
+                instance_pattern(instance, out);
+            }
+        }
+    }
+}
+
+fn instance_pattern(instance: &InstancePattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
+    out.push((instance.is_off, 2, SemanticTokenKind::Keyword));
+    if let Some(list) = &instance.bindings {
+        bindings(list, out);
     }
 }
 

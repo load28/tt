@@ -115,6 +115,7 @@ pub(crate) struct LoweringPlan {
     expression_boundary_name: String,
     result_return_name: String,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
+    unsupported_matches: Vec<UnsupportedMatch>,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -132,6 +133,18 @@ pub(crate) struct ForInitializerPropagation {
 /// generic expression error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct UnsupportedExpressionPropagation {
+    pub(crate) expr: ExprId,
+    pub(crate) source: SourceSpan,
+    pub(crate) owner: EvaluationOwner,
+    pub(crate) reason: ExpressionBoundaryReason,
+}
+
+/// A match whose host cannot carry a statement region without changing
+/// JavaScript evaluation semantics. Match never falls back to an expression
+/// closure; the public boundary turns this typed refusal into a placement
+/// diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct UnsupportedMatch {
     pub(crate) expr: ExprId,
     pub(crate) source: SourceSpan,
     pub(crate) owner: EvaluationOwner,
@@ -166,6 +179,12 @@ pub(crate) struct PlannedConditionalOperation {
     pub(crate) condition: PlannedEvaluationInput,
     /// The tt values the operation consumes, in source order.
     pub(crate) values: Vec<ExprId>,
+    /// For a logical operation, the complete active branch and the
+    /// evaluation steps between each consumed value and that branch. This
+    /// lets the target rebuild `condition && wrapper(match ...)` as one
+    /// region instead of requiring the match to be the entire branch.
+    pub(crate) active_branch: Option<SourceSpan>,
+    pub(crate) active_steps: Vec<PlannedEvaluationStep>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
     pub(crate) outer: Vec<PlannedEvaluationStep>,
@@ -309,6 +328,7 @@ pub(crate) struct PlannedEvaluationStep {
     /// The whole-operation structure, carried from the protocol when the
     /// step is conditional ([`crate::program_syntax::ConditionalFacts`]).
     pub(crate) conditional: Option<ConditionalFacts>,
+    pub(crate) loop_test: Option<crate::program_syntax::LoopTestFacts>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -412,6 +432,10 @@ impl LoweringPlan {
         &self,
     ) -> Vec<UnsupportedExpressionPropagation> {
         self.unsupported_expression_propagations.clone()
+    }
+
+    pub(crate) fn unsupported_matches(&self) -> Vec<UnsupportedMatch> {
+        self.unsupported_matches.clone()
     }
 }
 
@@ -708,6 +732,39 @@ impl EvaluationFile {
                 &mut slot_names,
                 &mut occupied_names,
             )?;
+            // A later host value may consume an earlier conditional
+            // operation as one ordered input. Once that operation has a
+            // join slot, depend on the slot rather than trying to capture
+            // its original source (which contains tt syntax by definition).
+            let operation_slots: HashMap<_, _> = operations
+                .iter()
+                .map(|operation| (operation.parent, operation.result))
+                .collect();
+            for value in &mut values {
+                let mut changed = false;
+                for step in &mut value.schedule.steps {
+                    for input in &mut step.inputs {
+                        let PlannedEvaluationInput::Source { source, mode, .. } = *input else {
+                            continue;
+                        };
+                        let Some(slot) = operation_slots.get(&source).copied() else {
+                            continue;
+                        };
+                        *input = PlannedEvaluationInput::Slot { slot, mode };
+                        changed = true;
+                    }
+                }
+                if changed {
+                    value.capability = target_capability(
+                        core,
+                        &self.tt_spans,
+                        value.expr,
+                        value.source,
+                        &value.context,
+                        &value.schedule,
+                    );
+                }
+            }
             rewrites.push(HostRewrite {
                 owner,
                 values,
@@ -856,6 +913,24 @@ impl EvaluationFile {
                 )
             })
             .collect();
+        let unsupported_matches = rewrites
+            .iter()
+            .flat_map(|rewrite| &rewrite.values)
+            .filter_map(|value| {
+                let Expr::Decision(_) = &core.exprs[value.expr.index()] else {
+                    return None;
+                };
+                let TargetCapability::ExpressionBoundary(reason) = value.capability else {
+                    return None;
+                };
+                Some(UnsupportedMatch {
+                    expr: value.expr,
+                    source: value.source,
+                    owner: value.context.owner,
+                    reason,
+                })
+            })
+            .collect();
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let result_return_name = allocate_generated_name("$tt_result", &mut occupied_names)?;
         Ok(LoweringPlan {
@@ -866,6 +941,7 @@ impl EvaluationFile {
             expression_boundary_name,
             result_return_name,
             unsupported_expression_propagations,
+            unsupported_matches,
         })
     }
 
@@ -944,6 +1020,11 @@ impl EvaluationFile {
         use crate::ice::{InternalCompilerError, Invariant, LoweringStage};
         let stage = LoweringStage::EvaluationOrder;
         for rewrite in plan.owners() {
+            let operation_of: HashMap<_, _> = rewrite
+                .operations
+                .iter()
+                .flat_map(|operation| operation.values.iter().map(move |expr| (*expr, operation)))
+                .collect();
             let mut produced: HashSet<ValueSlotId> = HashSet::new();
             let mut last_start = None;
             // Capture spans in the order they reach the target. A span is
@@ -961,12 +1042,19 @@ impl EvaluationFile {
                 match value.context.owner_reach {
                     OwnerReach::Same => {}
                     OwnerReach::Repeated => {
-                        return Err(InternalCompilerError::new(
-                            stage,
-                            Invariant::RepetitionRegionLeft,
-                            subject,
-                        )
-                        .at(value.source));
+                        if !value
+                            .schedule
+                            .steps()
+                            .iter()
+                            .any(|step| step.operation == HostEvaluationOperation::LoopTest)
+                        {
+                            return Err(InternalCompilerError::new(
+                                stage,
+                                Invariant::RepetitionRegionLeft,
+                                subject,
+                            )
+                            .at(value.source));
+                        }
                     }
                     OwnerReach::UnmodeledConditional => {
                         return Err(InternalCompilerError::new(
@@ -1014,6 +1102,9 @@ impl EvaluationFile {
                             continue;
                         }
                         if conditional_after {
+                            if operation_of.contains_key(&value.expr) {
+                                continue;
+                            }
                             return Err(InternalCompilerError::new(
                                 stage,
                                 Invariant::ConditionalRegionLeft,
@@ -1022,7 +1113,10 @@ impl EvaluationFile {
                             .at(*source));
                         }
                         for span in &self.tt_spans {
-                            if overlaps(*source, *span) {
+                            if overlaps(*source, *span)
+                                && !(span.start <= value.source.start
+                                    && value.source.end <= span.end)
+                            {
                                 return Err(InternalCompilerError::new(
                                     stage,
                                     Invariant::EvaluationCountChanged,
@@ -1057,6 +1151,11 @@ impl EvaluationFile {
                 }
                 let ValueTarget::Slot(slot) = value.target;
                 produced.insert(slot);
+                if let Some(operation) = operation_of.get(&value.expr)
+                    && operation.values.first() == Some(&value.expr)
+                {
+                    produced.insert(operation.result);
+                }
             }
         }
         Ok(())
@@ -1231,6 +1330,7 @@ fn resolve_schedule(
                 parent: step.parent,
                 operation: step.operation,
                 conditional: step.conditional.clone(),
+                loop_test: step.loop_test,
                 inputs: step
                     .inputs
                     .iter()
@@ -1303,19 +1403,17 @@ fn overlaps(left: SourceSpan, right: SourceSpan) -> bool {
     left.start < right.end && right.start < left.end
 }
 
-/// The conditional step of a value's schedule, when the whole schedule has
-/// the one shape a conditional operation can own: the innermost step is the
-/// only conditional one, and everything outside it is unconditional.
-fn whole_operation_step(schedule: &EvaluationSchedule) -> Option<&PlannedEvaluationStep> {
+/// The sole conditional step of a value's schedule. Eager steps before it
+/// belong to the active branch; steps after it belong to the operation's
+/// outer host context.
+fn whole_operation_step(schedule: &EvaluationSchedule) -> Option<(usize, &PlannedEvaluationStep)> {
     let steps = schedule.steps();
-    let first = steps.first()?;
-    if !matches!(first.operation, HostEvaluationOperation::Conditional(_)) {
-        return None;
-    }
-    steps[1..]
+    let mut conditional = steps
         .iter()
-        .all(|step| !matches!(step.operation, HostEvaluationOperation::Conditional(_)))
-        .then_some(first)
+        .enumerate()
+        .filter(|(_, step)| matches!(step.operation, HostEvaluationOperation::Conditional(_)));
+    let found = conditional.next()?;
+    conditional.next().is_none().then_some(found)
 }
 
 /// Groups the owner's conditional-candidate values into whole conditional
@@ -1334,7 +1432,7 @@ fn plan_conditional_operations(
         if value.capability != TargetCapability::StatementRegion {
             continue;
         }
-        let Some(step) = whole_operation_step(&value.schedule) else {
+        let Some((_, step)) = whole_operation_step(&value.schedule) else {
             continue;
         };
         if !groups.contains_key(&step.parent) {
@@ -1378,13 +1476,20 @@ fn plan_one_operation(
 ) -> Result<Option<PlannedConditionalOperation>, EvaluationError> {
     let first = &values[members[0]];
     let first_steps = first.schedule.steps();
-    let step = &first_steps[0];
+    let Some((conditional_index, step)) = whole_operation_step(&first.schedule) else {
+        return Ok(None);
+    };
     // Every member shares the operation, so it must share the operation's
     // host context; a mismatch means the projection joined two different
     // operations to one span, and the group cannot be owned whole.
     if members.iter().any(|member| {
-        values[*member].schedule.steps().len() != first_steps.len()
-            || values[*member].schedule.steps()[1..] != first_steps[1..]
+        let Some((member_index, _)) = whole_operation_step(&values[*member].schedule) else {
+            return true;
+        };
+        member_index != conditional_index
+            || values[*member].schedule.steps().len() != first_steps.len()
+            || values[*member].schedule.steps()[conditional_index + 1..]
+                != first_steps[conditional_index + 1..]
     }) {
         return Ok(None);
     }
@@ -1415,6 +1520,9 @@ fn plan_one_operation(
         HostEvaluationOperation::Conditional(
             ConditionalBranch::Consequent | ConditionalBranch::Alternate,
         ) => {
+            if conditional_index != 0 {
+                return Ok(None);
+            }
             let mut consequent = None;
             let mut alternate = None;
             for member in members {
@@ -1463,6 +1571,9 @@ fn plan_one_operation(
             }
         }
         HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_)) => {
+            if conditional_index != 0 {
+                return Ok(None);
+            }
             // A member callee calls through its captured receiver
             // (`callee.call(receiver, ...)`), which cannot carry explicit
             // type arguments.
@@ -1545,13 +1656,22 @@ fn plan_one_operation(
         _ => return Ok(None),
     };
     let result = allocate_value_slot(next_slot, slot_names, occupied_names)?;
+    let active_branch = matches!(
+        &kind,
+        PlannedConditionalKind::LogicalAnd
+            | PlannedConditionalKind::LogicalOr
+            | PlannedConditionalKind::Nullish
+    )
+    .then_some(facts.branch);
     Ok(Some(PlannedConditionalOperation {
         parent,
         result,
         kind,
         condition,
         values: members.iter().map(|member| values[*member].expr).collect(),
-        outer: first_steps[1..].to_vec(),
+        active_branch,
+        active_steps: first_steps[..conditional_index].to_vec(),
+        outer: first_steps[conditional_index + 1..].to_vec(),
     }))
 }
 
@@ -1589,7 +1709,21 @@ fn target_capability(
     match context.owner_reach {
         OwnerReach::Same => {}
         OwnerReach::Repeated => {
-            return TargetCapability::ExpressionBoundary(Reason::RepeatedInOwner);
+            if !matches!(core.exprs[expr.index()], Expr::Decision(_)) {
+                return TargetCapability::ExpressionBoundary(Reason::RepeatedInOwner);
+            }
+            let loop_steps = schedule
+                .steps()
+                .iter()
+                .filter(|step| step.operation == HostEvaluationOperation::LoopTest)
+                .count();
+            if loop_steps != 1
+                || schedule.steps().last().is_none_or(|step| {
+                    step.operation != HostEvaluationOperation::LoopTest || step.loop_test.is_none()
+                })
+            {
+                return TargetCapability::ExpressionBoundary(Reason::RepeatedInOwner);
+            }
         }
         OwnerReach::UnmodeledConditional => {
             return TargetCapability::ExpressionBoundary(Reason::ConditionalInOwner);
@@ -1617,17 +1751,16 @@ fn target_capability(
         }
     }
     // A conditional step is lowerable only when the whole operation can be
-    // owned as one region: the innermost step is the only conditional one
-    // (an evaluation between the operation and the value would put its
-    // captures inside the region while their host uses stay outside), and
-    // the value is the operation's whole active branch. Anything else takes
-    // the boundary — never a promoted value under the original syntax.
+    // owned as one region. Exactly one conditional boundary is allowed;
+    // eager steps inside its active branch are kept there by the operation
+    // plan. Anything else takes the boundary — never a promoted value under
+    // the original syntax.
     let conditional_steps = steps
         .iter()
         .filter(|step| matches!(step.operation, HostEvaluationOperation::Conditional(_)))
         .count();
     if conditional_steps > 0 {
-        let Some(step) = whole_operation_step(schedule) else {
+        let Some((_, step)) = whole_operation_step(schedule) else {
             return TargetCapability::ExpressionBoundary(
                 Reason::ConditionalOperationNotStructurable,
             );
@@ -1653,10 +1786,13 @@ fn target_capability(
             if captured.contains(capture) {
                 continue;
             }
-            // The capture copies raw source bytes; a tt node or another
-            // capture inside them is lowered or relocated elsewhere.
-            if tt_spans.iter().any(|span| overlaps(*capture, *span))
-                || captured.iter().any(|span| overlaps(*capture, *span))
+            // The capture copies raw source bytes; a sibling tt node or
+            // another capture inside them is lowered or relocated elsewhere.
+            // An enclosing tt root is different: its structured lowering
+            // owns this schedule and composes the captured source into it.
+            if tt_spans.iter().any(|span| {
+                overlaps(*capture, *span) && !(span.start <= source.start && source.end <= span.end)
+            }) || captured.iter().any(|span| overlaps(*capture, *span))
             {
                 return TargetCapability::ExpressionBoundary(Reason::CaptureOverlapsValue);
             }
@@ -1813,10 +1949,10 @@ impl EvaluationBuilder<'_> {
                     force_nested,
                 )?;
                 if let Some(head) = apply.head {
-                    self.walk_nested_expr(head, region)?;
+                    self.walk_expr(head, Some(region))?;
                 }
                 for step in &apply.steps {
-                    self.walk_nested_expr(step.value, region)?;
+                    self.walk_expr(step.value, Some(region))?;
                 }
             }
             Expr::ResultRegion(result) => {
@@ -1968,6 +2104,7 @@ impl EvaluationBuilder<'_> {
         if let Some(parent) = parent
             && let Some(binding) = self.hosts.get(&root)
             && self.region_host_owner(parent) == Some(binding.owner)
+            && binding.protocol.steps().is_empty()
         {
             let source = self.hosts.remove(&root).map(|binding| binding.source);
             return Ok(RegionPlacement::Nested { parent, source });
@@ -2254,6 +2391,20 @@ mod tests {
     }
 
     #[test]
+    fn a_decision_nested_in_a_propagation_keeps_its_host_schedule() {
+        let (file, core) = evaluation(
+            "variant E { A(x: number), B }\nfunction f() { const a = try wrap(match (e) { A(x) => x, B => 0 }); }\n",
+        );
+        let plan = plan(&file, &core);
+        let values = plan
+            .owners()
+            .flat_map(|owner| &owner.values)
+            .collect::<Vec<_>>();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].capability, TargetCapability::StatementRegion);
+    }
+
+    #[test]
     fn a_result_binding_is_nested_under_the_result_region() {
         let (file, _core) = evaluation("const out = result { const x = try load(); return x; };\n");
         let result = file
@@ -2353,14 +2504,16 @@ mod tests {
     }
 
     #[test]
-    fn a_loop_header_value_may_not_become_owner_statements() {
+    fn a_while_test_value_becomes_a_repeated_owner_region() {
         let (file, core) = evaluation(
             "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
         );
         let plan = plan(&file, &core);
         assert_eq!(
             sole_value(&plan).capability,
-            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::RepeatedInOwner),
+            TargetCapability::StatementRegion,
+            "{:#?}",
+            sole_value(&plan).schedule,
         );
     }
 
@@ -2401,20 +2554,21 @@ mod tests {
     }
 
     #[test]
-    fn a_conditional_operation_with_an_inner_call_is_not_half_lowered() {
-        // The `id` call sits between the `&&` and the value, so the whole
-        // operation cannot be owned as one region; the boundary keeps the
-        // callee capture and its use together in place.
+    fn a_conditional_operation_owns_its_complete_active_branch() {
+        // The `id` call sits between the `&&` and the value. The operation
+        // owns that complete active branch so its captures stay inside the
+        // conditional region.
         let (file, core) = evaluation(
             "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
         );
         let plan = plan(&file, &core);
         assert_eq!(
             sole_value(&plan).capability,
-            TargetCapability::ExpressionBoundary(
-                ExpressionBoundaryReason::ConditionalOperationNotStructurable
-            ),
+            TargetCapability::StatementRegion,
         );
+        let operation = &plan.owners[0].operations[0];
+        assert!(operation.active_branch.is_some());
+        assert_eq!(operation.active_steps.len(), 1);
     }
 
     #[test]
@@ -2451,19 +2605,23 @@ mod tests {
     }
 
     #[test]
-    fn a_capture_may_not_copy_a_tt_value_it_overlaps() {
-        // The second value's prior-argument input contains the first tt
-        // value; capturing it would copy tt source into generated code.
+    fn a_later_value_depends_on_the_prior_conditional_operation_slot() {
+        // The second value's prior argument contains the first tt value.
+        // The complete conditional operation produces a slot, so the later
+        // schedule never copies tt source.
         let (file, core) = evaluation(
             "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
         );
         let plan = plan(&file, &core);
         let values: Vec<_> = plan.owners().flat_map(|owner| &owner.values).collect();
         assert_eq!(values.len(), 2, "{values:#?}");
-        assert_eq!(
-            values[1].capability,
-            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::CaptureOverlapsValue),
-        );
+        assert_eq!(values[1].capability, TargetCapability::StatementRegion,);
+        let operation = &plan.owners[0].operations[0];
+        assert!(values[1].schedule.steps().iter().any(|step| {
+            step.inputs.iter().any(|input| {
+                matches!(input, PlannedEvaluationInput::Slot { slot, .. } if *slot == operation.result)
+            })
+        }));
     }
 
     #[test]
@@ -2551,9 +2709,12 @@ mod tests {
             "declare function id(v: number): number;\nlet n = 0;\nwhile (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }\n",
         );
         let mut plan = file.lowering_plan(&core).expect("lowering plan");
-        // Break the decision the way a capability bug would: claim the loop
-        // header's value may become statements in the loop's own owner.
-        plan.owners[0].values[0].capability = TargetCapability::StatementRegion;
+        // Break the plan the way a protocol bug would: keep the statement
+        // capability but drop the loop operation that preserves repetition.
+        plan.owners[0].values[0]
+            .schedule
+            .steps
+            .retain(|step| step.operation != HostEvaluationOperation::LoopTest);
         let error = file.validate_order(&plan).expect_err("must be rejected");
         assert_eq!(error.invariant, crate::ice::Invariant::RepetitionRegionLeft);
         assert_eq!(error.stage, crate::ice::LoweringStage::EvaluationOrder);
@@ -2565,7 +2726,9 @@ mod tests {
             "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n",
         );
         let mut plan = file.lowering_plan(&core).expect("lowering plan");
-        plan.owners[0].values[0].capability = TargetCapability::StatementRegion;
+        // Break the plan by removing the operation that owns the active
+        // branch while leaving its value statement-capable.
+        plan.owners[0].operations.clear();
         let error = file.validate_order(&plan).expect_err("must be rejected");
         assert_eq!(
             error.invariant,
@@ -2579,8 +2742,23 @@ mod tests {
             "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n",
         );
         let mut plan = file.lowering_plan(&core).expect("lowering plan");
-        for value in &mut plan.owners[0].values {
-            value.capability = TargetCapability::StatementRegion;
+        // Break the dependency edge by turning the prior operation's slot
+        // back into a raw source capture containing tt syntax.
+        let operation = plan.owners[0].operations[0].clone();
+        for step in &mut plan.owners[0].values[1].schedule.steps {
+            for input in &mut step.inputs {
+                let PlannedEvaluationInput::Slot { slot, mode } = *input else {
+                    continue;
+                };
+                if slot == operation.result {
+                    *input = PlannedEvaluationInput::Source {
+                        source: operation.parent,
+                        mode,
+                        target: slot,
+                        receiver: None,
+                    };
+                }
+            }
         }
         let error = file.validate_order(&plan).expect_err("must be rejected");
         assert_eq!(
