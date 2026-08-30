@@ -200,6 +200,8 @@ pub(crate) enum PipeStepKind {
 pub(crate) struct ResultBlock {
     /// Byte offset of the `result` keyword, for error reporting.
     pub keyword_off: usize,
+    /// Complete half-open span from `result` through the closing `}`.
+    pub span: Span,
     /// Raw span of the block body, braces excluded (for `await` detection).
     pub body_span: Span,
     /// `try` nodes whose nearest lexical Result scope is this block.

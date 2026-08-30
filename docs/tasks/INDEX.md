@@ -316,7 +316,9 @@
 | TASK-305 | Emit a type-clean Result discriminator | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-305](./TASK-305-type-clean-result-discriminator.md) |
 | TASK-306 | Close the Result design and user-surface documentation | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-306](./TASK-306-result-surface-closure.md) |
 | TASK-307 | Close Result review follow-ups | Complete | 2026-08-30 | `TASK-307: close Result review follow-ups` | [TASK-307](./TASK-307-result-review-followups.md) |
+| TASK-308 | Add a practical CLI/editor diagnostic matrix | Complete | 2026-08-30 | `TASK-308: add practical diagnostic UI matrix` | [TASK-308](./TASK-308-practical-diagnostic-matrix.md) |
+| TASK-309 | Adopt compiler UI-test conventions for diagnostics | Complete | 2026-08-30 | `TASK-308: add practical diagnostic UI matrix` | [TASK-309](./TASK-309-diagnostic-ui-test-conventions.md) |
 
 ## 다음 태스크 번호
 
-**TASK-308**
+**TASK-310**

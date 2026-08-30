@@ -1406,19 +1406,24 @@ pub(crate) fn report(
     //    name is not, and anything unresolved is left alone.
     let symbols: HashMap<usize, &Resolution> =
         answers.resolutions.iter().map(|r| (r.index, r)).collect();
-    let val_symbols: HashSet<i64> = probes
-        .val_bindings
-        .iter()
-        .filter_map(|i| symbols.get(i).map(|r| r.id))
-        .collect();
+    let mut val_symbols = HashMap::new();
+    for binding in &probes.val_bindings {
+        let Some(symbol) = symbols.get(&binding.root) else {
+            continue;
+        };
+        val_symbols
+            .entry(symbol.id)
+            .and_modify(|entry| *entry = None)
+            .or_insert(Some(binding));
+    }
 
     for mutation in &probes.mutations {
         let Some(root) = symbols.get(&mutation.root) else {
             continue; // unresolved — never a verdict
         };
-        if !val_symbols.contains(&root.id) {
+        let Some(binding) = val_symbols.get(&root.id) else {
             continue; // not this binding, whatever it is called
-        }
+        };
         if let Some(method) = mutation.method {
             match symbols.get(&method) {
                 // Two halves make the verdict: the checker's — the
@@ -1454,14 +1459,40 @@ pub(crate) fn report(
                 mutation.name,
             ),
         };
+        let (suggestions, labels) = binding.map_or_else(
+            || (Vec::new(), Vec::new()),
+            |binding| {
+                let declaration = files
+                    .iter()
+                    .find(|candidate| candidate.source_path == binding.anchor.source_path);
+                let suggestions = vec![crate::Suggestion {
+                    message: "remove `val` if this binding is intended to be mutable".to_string(),
+                    edit: Some(crate::Edit {
+                        start: binding.anchor.offset,
+                        end: binding.modifier_end,
+                        replacement: String::new(),
+                    }),
+                }];
+                let labels = declaration.map_or_else(Vec::new, |declaration| {
+                    vec![DiagnosticLabel {
+                        path: (declaration.source_path != file.source_path)
+                            .then(|| declaration.source_path.clone()),
+                        position: crate::line_col(&declaration.source, binding.anchor.offset),
+                        end: crate::line_col(&declaration.source, binding.anchor.end),
+                        message: "the read-only binding is declared here".to_string(),
+                    }]
+                });
+                (suggestions, labels)
+            },
+        );
         out.push(Diagnostic {
             path: file.source_path.clone(),
             position: Some(crate::line_col(&file.source, mutation.anchor.offset)),
             end: Some(crate::line_col(&file.source, mutation.anchor.end)),
             message,
             code: Some(crate::DiagnosticCode::ValMutation.as_str().to_string()),
-            suggestions: Vec::new(),
-            labels: Vec::new(),
+            suggestions,
+            labels,
         });
     }
 
@@ -1498,7 +1529,7 @@ pub(crate) fn report(
         let Some(root) = symbols.get(&pass.root) else {
             continue;
         };
-        if !val_symbols.contains(&root.id) {
+        if !val_symbols.contains_key(&root.id) {
             continue;
         }
         let Some(callee) = symbols.get(&pass.callee_symbol) else {

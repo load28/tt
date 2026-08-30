@@ -61,6 +61,10 @@ pub(super) fn parse_result_block<'t>(
             byte_end,
             Box::new(ResultBlock {
                 keyword_off: kw_span.start,
+                span: Span {
+                    start: kw_span.start,
+                    end: byte_end,
+                },
                 body_span,
                 direct_try_spans,
                 items: vec![ResultItem::Stmts(body)],

@@ -609,10 +609,7 @@ impl Lower {
     }
 
     fn lower_result_block(&mut self, block: &ast::ResultBlock) -> ExprId {
-        let node = self.node(
-            Span::new(block.keyword_off, block.body_span.end),
-            AstOrigin::ResultBlock,
-        );
+        let node = self.node(Self::span(block.span), AstOrigin::ResultBlock);
         let items: Vec<ResultItem> = block
             .items
             .iter()

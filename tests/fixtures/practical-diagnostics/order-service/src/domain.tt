@@ -1,0 +1,5 @@
+export variant PaymentState {
+  Pending,
+  Paid(receiptId: string),
+  Failed(reason: string),
+}

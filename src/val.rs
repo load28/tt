@@ -347,6 +347,11 @@ struct ParamSig {
 pub struct ValBinding {
     /// The binding's name, for the message.
     pub name: String,
+    /// Byte offset of the `val` modifier that established the capability.
+    /// This is the declaration-side span a typed diagnostic labels and the
+    /// start of the edit that removes the capability when mutation is
+    /// intentional.
+    pub val_at: usize,
     /// Byte offset of the binding identifier. The identifier is copied
     /// verbatim into the output, so this maps through
     /// [`crate::EmitMapping`]s to the node the checker is asked about.
@@ -990,6 +995,7 @@ impl<'a> Checker<'a> {
                                     .map(|v| ValBinding {
                                         name: v.name.to_string(),
                                         ident: v.ident,
+                                        val_at: v.val_at.expect("filtered val binding"),
                                     }),
                             );
                         }
@@ -1123,6 +1129,7 @@ impl<'a> Checker<'a> {
                     .map(|v| ValBinding {
                         name: v.name.to_string(),
                         ident: v.ident,
+                        val_at: v.val_at.expect("filtered val binding"),
                     }),
             );
         }

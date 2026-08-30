@@ -1,0 +1,21 @@
+error[val-mutation]: cannot call mutating method `set` through val binding `cache` (the binding is declared with `val`, so every access path from it is read-only)
+ --> src/cache.tt:7:1
+  |
+6 | val const cache = new Map<string, number>();
+  | --- the read-only binding is declared here
+7 | cache.set("orders", 1);
+  | ^^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+  --> src/cache.tt:10:31
+   |
+10 |   const Some(name) = selected else {
+   |                               ^^^^
+   |
+   = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+error[ts2345]: type mismatch: expected `string`, found `42`
+  --> src/cache.tt:16:22
+   |
+16 | export const count = 42 |> format;
+   |                      ^^
