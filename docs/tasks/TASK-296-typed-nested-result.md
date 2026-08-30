@@ -1,9 +1,9 @@
 # TASK-296: Add typed nested-Result diagnostics
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: See git history
 
 ## Purpose
 
@@ -28,15 +28,27 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Query checker shape rather than parsing type display text
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: aliases, generics, and unions make a checker display string an
+  unsound source of Result identity.
+- **Alternatives considered**: recognize `TResult` text in Rust, or query the
+  TypeScript checker for a definite structural Result shape.
+- **Decision and rationale**: Ask the TypeScript backend whether the value is
+  structurally a two-member `Ok`/`Err` union with the corresponding payload
+  fields. The emitted return value is first named by a collision-free compiler
+  temporary, because a position on `Result.Ok(...)` identifies the constructor
+  rather than the call result. Rust owns the diagnostic and edit after the
+  checker returns that fact.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started and traced the existing projection-to-checker query
+  pipeline.
+- 2026-08-30: Added the batched Result-shape protocol, source/output marker,
+  and `result-return-nested` diagnostic with a `try ` insertion edit.
+- 2026-08-30: Verified the native server path for definite Result, union,
+  ordinary value, unknown, and generic value returns.
 
 ## Issues and resolutions
 
@@ -48,14 +60,12 @@ Test obligation from the plan: definite Result, union/non-Result/unknown/generic
 
 Green condition: only checker-proven nested Results diagnose, and ordinary TypeScript errors remain TypeScript's responsibility.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Ships to `main` alone: not stated in the plan.
-
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Only checker-proven Result values receive the nested-return diagnostic; union,
+unknown, generic, and ordinary values remain TypeScript-owned.

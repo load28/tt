@@ -46,22 +46,8 @@ pub(crate) struct Program {
     /// `if let` statement — same reporting story as [`Self::stray_pipes`]
     /// (an undotted `if` followed by `let` is never valid TypeScript).
     pub stray_if_lets: Vec<usize>,
-    /// Byte offsets of `result { ... }` blocks that hold a Result binding
-    /// (`const x <- ...;`) but could not be claimed — same reporting story
-    /// as [`Self::stray_pipes`]: a declaration keyword followed by `<-`
-    /// instead of `=` is never valid TypeScript, so the text cannot be
-    /// passed through either.
+    /// Byte offsets of `result { ... }` blocks that could not be claimed.
     pub stray_results: Vec<usize>,
-    /// Byte spans of names in `result` bindings written without a
-    /// declaration keyword (`b <- f();`), reported by the semantic phase.
-    pub result_missing_kw: Vec<Span>,
-    /// Byte spans of `result` bindings written **below** a block's top
-    /// level (inside an `if` body, a loop, a function written in the
-    /// block) — a binding exits the block's isolated value region, and only a
-    /// top-level statement can (`ttc help result`). Same
-    /// reporting story as [`Self::stray_pipes`]: the shape is never valid
-    /// TypeScript, so it cannot pass through either.
-    pub result_nested_binds: Vec<Span>,
 }
 
 /// A tt-shaped source region which the parser deliberately left verbatim.
@@ -207,34 +193,22 @@ pub(crate) enum PipeStepKind {
     Postfix { optional: bool },
 }
 
-/// A structurally parsed tt `result { ... }` computation block: a chain of
-/// `Result` bindings written as ordinary statements, with the block's last
-/// expression as its success value.
-///
-/// Contract safety rests on the bindings: the parser only claims a block
-/// that carries at least one `const|let|var <binding> <- <expr>;` at its
-/// top level, and a declaration keyword followed by `<-` (rather than `=`)
-/// cannot occur in valid TypeScript. Without that requirement `result`
-/// followed by a block would be ambiguous with an expression statement
-/// naming a variable `result` plus a block statement on the next line.
-///
-/// Lowers to a value-producing control-flow region. Each binding evaluates
-/// once and routes `Err` to the region continuation, while the trailing value
-/// routes `Ok(value)` to the same continuation. The target can therefore
-/// inline the region into a host statement without a generated function
-/// boundary while tsc still narrows every step on its own.
+/// A statement-bodied tt `result { ... }` computation block. Direct `try`
+/// expressions route `Err` to the region continuation and `return` supplies
+/// the `Ok` value. The parser claims only a block with a nearest direct `try`.
 #[derive(Debug)]
 pub(crate) struct ResultBlock {
     /// Byte offset of the `result` keyword, for error reporting.
     pub keyword_off: usize,
     /// Raw span of the block body, braces excluded (for `await` detection).
     pub body_span: Span,
-    /// The block's statements, in source order. Contains at least one
-    /// [`ResultItem::Bind`].
+    /// `try` nodes whose nearest lexical Result scope is this block.
+    pub direct_try_spans: Vec<Span>,
+    /// The block's statements, in source order.
     pub items: Vec<ResultItem>,
-    /// The trailing expression — the block's success value, recursively
-    /// parsed. Never empty.
-    pub value: Program,
+    /// Optional explicit success value. Statement-bodied Result syntax has
+    /// no legacy trailing expression.
+    pub value: Option<Program>,
 }
 
 /// One item of a [`ResultBlock`] body, in source order. Every byte of the
@@ -245,26 +219,6 @@ pub(crate) struct ResultBlock {
 pub(crate) enum ResultItem {
     /// A run of ordinary statements, recursively parsed.
     Stmts(Program),
-    /// A Result binding: `const|let|var <binding> <- <expr>;`.
-    Bind(ResultBind),
-}
-
-/// See [`ResultItem::Bind`].
-#[derive(Debug)]
-pub(crate) struct ResultBind {
-    /// The declaration keyword: `const`, `let`, or `var`.
-    pub kw: String,
-    /// Span of the verbatim text between the keyword and `<-` (identifier
-    /// or destructuring pattern, optionally type-annotated), trimmed of the
-    /// whitespace around it. Carried as a span, not a copy, so the emitted
-    /// declaration maps back to the name the user wrote.
-    pub binding_span: Span,
-    /// Raw span of the expression after `<-`, `;` excluded — with
-    /// [`Self::binding_span`] it bounds the binding a diagnostic belongs on
-    /// (`crate::EmitAnchor`).
-    pub expr_span: Span,
-    /// The expression after `<-`, recursively parsed.
-    pub expr: Program,
 }
 
 /// See [`Segment::TtImport`].

@@ -1169,6 +1169,25 @@ fn a_static_block_does_not_capture_a_nested_function_try() {
 }
 
 #[test]
+fn result_try_crossing_an_isolated_match_arm_is_a_placement_diagnostic() {
+    let source = "const value = result {\n  const item = try read();\n  match (item) { Ok(value) => try next(value), Err(error) => error }\n  return item;\n};\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        ttc::DiagnosticCode::TryCrossesValueRegion
+    );
+    assert_eq!(diagnostics[0].start, Some(source.rfind("try").unwrap()));
+    assert!(
+        diagnostics[0]
+            .suggestions
+            .iter()
+            .all(|suggestion| suggestion.edit.is_none()),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
 fn placement_matrix_prerequisite_gate() {
     enum Expected {
         Accepted,
@@ -1210,7 +1229,7 @@ fn placement_matrix_prerequisite_gate() {
             Expected::Accepted,
         ),
         (
-            "const value = result { const item <- read(); item };\nclass C { field = result { const item <- read(); item }; static { const value = result { const item <- read(); item }; } constructor() { const value = result { const item <- read(); item }; } }\nfunction* values() { const value = result { const item <- read(); item }; yield value; }\n",
+            "const value = result { const item = try read(); return item; };\n",
             Expected::Accepted,
         ),
         ("try read();\n", Expected::Placement),
@@ -1694,7 +1713,7 @@ fn let_else_divergence_stops_at_an_isolated_value_region() {
         "if let Ok(value) = r { log(value); } else { return 1; }",
         "if let Ok(value) = r { return value; } else { log(\"x\"); }",
         "const x = match (r) { Ok(value) => value, Err(error) => 0 }; log(x);",
-        "const y = result { const a <- find(); a }; log(y);",
+        "const y = result { const a = try find(); return a; }; log(y);",
         "try find();",
         "const Ok(value) = r else { return 1; }; log(value);",
     ] {
@@ -1779,7 +1798,7 @@ fn invalid_typescript_inside_a_claimed_construct_is_a_located_error() {
     // *be* TypeScript. When it is not, that is a fact about the input
     // reported at the byte the parse stopped on — not an internal error
     // out of emission.
-    let e = err("const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n");
+    let e = err("const r = result {\n  const a = try f();\n  const b = ;\n  return a;\n};\n");
     assert_eq!((e.line, e.col), (3, 13), "{}", e.message);
     assert!(
         e.message.contains("the TypeScript here does not parse"),
@@ -1842,7 +1861,7 @@ fn no_verify_does_not_bypass_the_lowering_precondition() {
         ..Options::default()
     };
     let e = compile(
-        "const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n",
+        "const r = result {\n  const a = try f();\n  const b = ;\n  return a;\n};\n",
         &opts,
     )
     .expect_err("expected a compile error");
@@ -1866,14 +1885,14 @@ fn try_declaration_in_for_initializer_runs_before_the_loop() {
 }
 
 #[test]
-fn discarded_result_reports_a_located_lowering_diagnostic_without_unwinding() {
-    let source = "function f() { result { const x <- next(); x }; }\n";
+fn discarded_result_reports_a_named_diagnostic_without_unwinding() {
+    let source = "function f() { result { const x = try next(); return x; }; }\n";
     let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
         .expect("discarded Result must not reach source-preservation ICE");
     assert!(
         diagnostics
             .iter()
-            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::ResultValueDiscarded),
         "{diagnostics:#?}"
     );
     assert!(
@@ -2438,7 +2457,7 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
         // A pipeline whose head is itself a lowering, so the steps get a
         // region rather than one inline call.
         "const r = match (e) { A(v) => v, B => 0 } |> pick |> .toString();",
-        "const r = result { const v <- ask(); v };",
+        "const r = result { const v = try ask(); return v; };",
         // These two lower inline; the rule still has to hold for them,
         // which here means staying inline at every indentation.
         "if let A(v) = e { use(v); }",
@@ -3473,469 +3492,183 @@ fn plain_if_statements_pass_through() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn result_block_emits_a_statement_region_without_an_iife() {
-    let out = ok(r#"
-const data = result {
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
-  { user, company }
-};
-"#);
-    assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("let $tt_v0;\ndo {"), "{out}");
+fn statement_bodied_result_returns_a_propagated_value() {
+    let out = ok("const value = result { return try read(); };\n");
+    assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        out.contains(
-            "const $tt_r0 = getUser(id); if ($tt_r0.kind !== \"Ok\") { $tt_v0 = $tt_r0; break; } \
-             const user = $tt_r0.value;"
-        ),
+        out.contains("if ($tt_t0.kind !== \"Ok\") { $tt_v0 = $tt_t0; break; }"),
         "{out}"
     );
     assert!(
-        out.contains(
-            "const $tt_r1 = getCompany(user.companyId); if ($tt_r1.kind !== \"Ok\") \
-             { $tt_v0 = $tt_r1; break; } const company = $tt_r1.value;"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: { user, company } };"),
-        "{out}"
-    );
-    assert!(out.contains("const data = $tt_v0;"), "{out}");
-}
-
-#[test]
-fn result_block_keeps_ordinary_statements_and_nested_constructs() {
-    let out = ok(r#"
-const data = result {
-  const user <- getUser(id);
-  // normalize before the next step
-  const name = user.name |> .trim() |> .toLowerCase();
-  const company <- getCompany(name);
-  { name, company }
-};
-"#);
-    assert!(out.contains("// normalize before the next step"), "{out}");
-    assert!(
-        out.contains("const name = user.name.trim().toLowerCase();"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break;"),
         "{out}"
     );
 }
 
 #[test]
-fn result_block_binding_may_be_let_var_annotated_or_destructured() {
-    let out = ok(r#"
-const a = result {
-  let n: number <- parse(raw);
-  var { x, y } <- point();
-  const [first] <- items();
-  n + x + y + first
-};
-"#);
-    assert!(out.contains("let n: number = $tt_r0.value;"), "{out}");
-    assert!(out.contains("var { x, y } = $tt_r1.value;"), "{out}");
-    assert!(out.contains("const [first] = $tt_r2.value;"), "{out}");
-}
-
-#[test]
-fn result_block_with_await_stays_in_the_async_arrow_body() {
-    let out = ok(r#"
-const data = async () => result {
-  const user <- await getUser(id);
-  user.name
-};
-"#);
-    assert!(!out.contains("(async () =>"), "{out}");
-    assert!(out.contains("const data = async () => {"), "{out}");
-    assert!(out.contains("const $tt_r0 = await getUser(id);"), "{out}");
-}
-
-#[test]
-fn result_blocks_nest_and_number_their_temporaries_uniquely() {
-    let out = ok(r#"
-const a = result {
-  const outer <- result {
-    const inner <- f();
-    inner + 1
-  };
-  outer
-};
-"#);
-    assert!(out.contains("$tt_r0"), "{out}");
-    assert!(out.contains("$tt_r1"), "{out}");
-    assert!(!out.contains("$tt_r2"), "{out}");
-}
-
-#[test]
-fn result_block_can_be_a_pipeline_head() {
-    let out = ok("const a = result {\n  const x <- f();\n  x\n} |> Result.mapP(double);\n");
-    assert!(!out.contains("(() =>"), "{out}");
+fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
+    let out = ok("const value = result { const item = try read(); return item; };\n");
+    assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        out.contains("$tt_v0 = Result.mapP(double)($tt_v0);"),
+        out.contains("if ($tt_t0.kind !== \"Ok\") { $tt_v0 = $tt_t0; break; }"),
         "{out}"
     );
-    assert!(out.contains("const a = $tt_v0;"), "{out}");
-}
-
-#[test]
-fn result_block_value_may_be_a_match_expression() {
-    let out = ok(r#"
-const a = result {
-  const r <- f();
-  match (r) {
-    Ok(value) => value,
-    Err(error) => error,
-  }
-};
-"#);
-    assert!(!out.contains("(() =>"), "{out}");
+    assert!(out.contains("const item = $tt_t0.value;"), "{out}");
+    assert!(out.contains("const $tt_result = item;"), "{out}");
     assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: value };"),
+        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break;"),
         "{out}"
     );
-    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
 }
 
 #[test]
-fn direct_return_result_region_uses_the_host_function_without_an_iife() {
+fn statement_bodied_result_requires_a_success_return() {
+    let error = err("const value = result { const item = try read(); use(item); };\n");
+    assert!(error.message.contains("without a success value"), "{error}");
+}
+
+#[test]
+fn statement_bodied_result_requires_success_on_every_reachable_path() {
+    let error = err(
+        "const value = result { const item = try read(); if (item) return item; log(item); };\n",
+    );
+    assert_eq!(
+        error.message,
+        "`result` can reach the end of its body without a success value"
+    );
+}
+
+#[test]
+fn statement_bodied_result_accepts_branch_complete_success() {
     let out = ok(
-        "function load() { return result {\n  const value <- fetchValue();\n  value + 1\n}; }\n",
+        "const value = result { const item = try read(); if (item) return item; else return 0; };\n",
     );
-    assert!(!out.contains("(() =>"), "{out}");
-    assert!(
-        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = $tt_r0; break; }"),
-        "{out}"
-    );
-    assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: value + 1"),
-        "{out}"
-    );
-    assert!(out.contains("return $tt_v0;"), "{out}");
+    assert!(out.contains("kind: \"Ok\" as const"), "{out}");
 }
 
 #[test]
-fn statement_host_result_returns_complete_with_ok() {
-    let value = ok(
-        "function load() { return result {\n  const item <- read();\n  return item;\n  0\n}; }\n",
+fn discarded_result_suppresses_the_redundant_missing_success_diagnostic() {
+    let diagnostics = ttc::analyze(
+        "result { const item = try read(); use(item); };\n",
+        &Options::default(),
     );
-    assert!(
-        value.contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break;"),
-        "{value}"
-    );
-    assert!(value.contains("return $tt_v0;"), "{value}");
-
-    let unit =
-        ok("function load() { return result {\n  const item <- read();\n  return;\n  0\n}; }\n");
-    assert!(
-        unit.contains("$tt_v0 = { kind: \"Ok\" as const, value: undefined }; break;"),
-        "{unit}"
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        ttc::DiagnosticCode::ResultValueDiscarded
     );
 }
 
 #[test]
-fn expression_host_result_returns_complete_with_ok() {
-    let value = ok("const result = result {\n  const item <- read();\n  return item;\n  0\n};\n");
-    assert!(
-        value.contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break;"),
-        "{value}"
-    );
-
-    let unit = ok("const result = result {\n  const item <- read();\n  return;\n  0\n};\n");
-    assert!(
-        unit.contains("$tt_v0 = { kind: \"Ok\" as const, value: undefined }; break;"),
-        "{unit}"
-    );
-}
-
-#[test]
-fn result_region_in_a_match_arm_inherits_the_parent_slot() {
-    let out = ok(
-        "variant E { A, B }\nconst value = match (e) {\n  A => result { const x <- f(); x },\n  B => Result.Ok(0),\n};\n",
-    );
-    assert!(!out.contains("(() =>"), "{out}");
-    assert!(
-        out.contains("if ($tt_r0.kind !== \"Ok\") { $tt_v0 = $tt_r0; break; }"),
-        "{out}"
-    );
-    assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: x"),
-        "{out}"
-    );
-}
-
-#[test]
-fn try_and_let_else_are_rejected_inside_a_result_block() {
-    let src = "const a = result {\n  const x <- f();\n  const y = try g();\n  x + y\n};\n";
-    let e = err(src);
-    assert!(
-        e.message.contains("`try` cannot be used here"),
-        "{}",
-        e.message
-    );
-    assert!(
-        advice(src).iter().any(|a| a.contains("`<-` binding")),
-        "{:?}",
-        advice(src)
-    );
-
-    let src =
-        "function f() { return result {\n  const x <- read();\n  Result.Ok(try read() + x)\n}; }\n";
-    let e = err(src);
-    assert!(
-        e.message.contains("directly inside a `result` block"),
-        "{e}"
-    );
-
-    let e = err(
-        "const a = result {\n  const x <- f();\n  const Some(v) = o else { return 0; };\n  v\n};\n",
-    );
-    assert!(
-        e.message.contains("let-else cannot be used here"),
-        "{}",
-        e.message
-    );
-}
-
-#[test]
-fn result_value_try_has_one_located_placement_diagnostic_at_every_host() {
+fn result_rejects_control_transfers_to_an_outer_region() {
     let cases = [
-        "function f() { return result { const x <- next(); (try next()) }; }\n",
-        "const r = result { const x <- next(); (try next()) };\n",
+        (
+            "function run() { while (ready()) { const value = result { const item = try read(); break; return item; }; } }\n",
+            ttc::DiagnosticCode::ResultBreakCrossing,
+            "break",
+        ),
+        (
+            "function run() { while (ready()) { const value = result { const item = try read(); continue; return item; }; } }\n",
+            ttc::DiagnosticCode::ResultContinueCrossing,
+            "continue",
+        ),
+        (
+            "function* run() { const value = result { const item = try read(); yield item; return item; }; }\n",
+            ttc::DiagnosticCode::ResultYieldCrossing,
+            "yield",
+        ),
+        (
+            "function* run() { const value = result { const item = try read(); const sent = yield item; return sent; }; }\n",
+            ttc::DiagnosticCode::ResultYieldCrossing,
+            "yield",
+        ),
+        (
+            "function run() { outer: while (ready()) { const value = result { const item = try read(); break outer; return item; }; } }\n",
+            ttc::DiagnosticCode::ResultLabelCrossing,
+            "break",
+        ),
     ];
-    for source in cases {
-        let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
-            .expect("Result value try must not unwind while host planning");
-        let placement: Vec<_> = diagnostics
-            .iter()
-            .filter(|diagnostic| diagnostic.code == ttc::DiagnosticCode::TryPlacement)
-            .collect();
-        assert_eq!(placement.len(), 1, "{diagnostics:#?}");
-        assert_eq!(placement[0].start, Some(source.find("try").unwrap()));
+    for (source, code, keyword) in cases {
+        let diagnostics = ttc::analyze(source, &Options::default());
         assert!(
-            !diagnostics
-                .iter()
-                .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
+            diagnostics.iter().any(|diagnostic| diagnostic.code == code),
             "{diagnostics:#?}"
         );
+        let diagnostic = diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == code)
+            .expect("named diagnostic");
+        assert_eq!(diagnostic.start, Some(source.find(keyword).unwrap()));
     }
 }
 
 #[test]
-fn if_let_is_allowed_inside_a_result_block() {
-    let out = ok(r#"
-const a = result {
-  const x <- f();
-  let label = "none";
-  if let Some(value) = o { label = value; }
-  { x, label }
-};
-"#);
-    assert!(out.contains("if ($tt_t1.kind === \"Some\")"), "{out}");
+fn result_keeps_control_transfers_owned_by_its_own_loop() {
+    let out = ok(
+        "const value = result { const item = try read(); while (item) { break; } return item; };\n",
+    );
+    assert!(out.contains("while (item) { break; }"), "{out}");
 }
 
 #[test]
-fn result_block_without_a_trailing_expression_is_an_error() {
-    let e = err("const a = result {\n  const x <- f();\n};\n");
-    assert!(
-        e.message
-            .contains("`result` block could not be parsed here"),
-        "{}",
-        e.message
+fn result_allows_let_else_when_each_else_path_completes_the_result() {
+    let out = ok(
+        "variant Item { Some(value: number), None }\nconst value = result { const item = try read(); let Some(found) = item else { return 0; }; return found; };\n",
     );
-    assert_eq!((e.line, e.col), (1, 11));
+    assert!(out.contains("const $tt_result = 0;"), "{out}");
+    assert!(out.contains("const $tt_result = found;"), "{out}");
 }
 
 #[test]
-fn result_block_value_semicolon_is_reported_at_the_punctuation() {
-    let src = "const a = result {\n  const x <- f();\n  { value: x };\n};\n";
-    let diagnostics = ttc::analyze(src, &Options::default());
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
-    let diagnostic = &diagnostics[0];
-    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultTailSemicolon);
-    let start = diagnostic.start.expect("semicolon start");
-    let end = diagnostic.end.expect("semicolon end");
-    assert_eq!(&src[start..end], ";");
-    assert_eq!(
-        diagnostic.message,
-        "`result` block must end with a value expression"
+fn result_wraps_inline_if_let_returns_as_success() {
+    let out = ok(
+        "variant Item { Some(value: number), None }\nconst value = result { const item = try read(); if let Some(found) = item { return found; } else { return 0; } };\n",
     );
-    assert_eq!(diagnostic.suggestions.len(), 1);
-    assert!(diagnostic.suggestions[0].edit.is_none());
-    assert!(
-        diagnostic.suggestions[0]
-            .message
-            .contains("if this statement is the block's value")
-    );
+    assert!(out.contains("const $tt_result = found;"), "{out}");
+    assert!(out.contains("const $tt_result = 0;"), "{out}");
+}
 
-    let call_tail = "const a = result {\n  const x <- f();\n  log(x);\n};\n";
-    let diagnostics = ttc::analyze(call_tail, &Options::default());
+#[test]
+fn discarded_statement_bodied_result_is_a_named_diagnostic() {
+    let error = err("result { const item = try read(); return item; };\n");
+    assert!(error.message.contains("would be discarded"), "{error}");
+}
+
+#[test]
+fn result_return_expression_propagates_to_the_result_scope() {
+    let out = ok("const value = result { return Math.round(try total() * 1.1); };\n");
+    assert!(out.contains("const $tt_t0 = total();"), "{out}");
+    assert!(out.contains("Math.round($tt_t0.value * 1.1)"), "{out}");
+    assert!(out.contains("kind: \"Ok\" as const"), "{out}");
+}
+
+#[test]
+fn nested_function_try_inside_a_result_preserves_its_own_function_boundary() {
+    let out = ok(
+        "const value = result { const inner = () => { return try step(); }; return try inner(); };\n",
+    );
+    assert!(out.contains("const inner = () =>"), "{out}");
+    assert!(out.contains("return $tt_t0;"), "{out}");
+}
+
+#[test]
+fn result_tail_is_an_ordinary_semicolon_terminated_statement() {
+    let diagnostics = ttc::analyze(
+        "const value = result { const item = try read(); log(item); };\n",
+        &Options::default(),
+    );
     assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
     assert_eq!(
         diagnostics[0].code,
-        ttc::DiagnosticCode::ResultTailSemicolon
-    );
-    assert_eq!(diagnostics[0].suggestions.len(), 1);
-    assert!(diagnostics[0].suggestions[0].edit.is_none());
-
-    let labeled_tail = "const a = result {\n  const x <- f();\n  label: doWork();\n};\n";
-    let diagnostics = ttc::analyze(labeled_tail, &Options::default());
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
-    let diagnostic = &diagnostics[0];
-    assert_eq!(diagnostic.code, ttc::DiagnosticCode::ResultTailSemicolon);
-    assert_eq!(
-        &labeled_tail[diagnostic.start.unwrap()..diagnostic.end.unwrap()],
-        "label: doWork();"
-    );
-    assert!(diagnostic.suggestions.is_empty());
-
-    let statement_tail = "const a = result {\n  const x <- f();\n  return x;\n};\n";
-    let diagnostics = ttc::analyze(statement_tail, &Options::default());
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
-    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::StrayResult);
-}
-
-#[test]
-fn a_binding_without_a_declaration_keyword_is_a_located_error() {
-    // The block is claimed by its other binding, so the file is not
-    // TypeScript and ttc can say where the mistake is — instead of
-    // emitting the comparison `b < -readNum()` and saying nothing.
-    let e = err("const a = result {\n  const x <- f();\n  y <- g();\n  x + y\n};\n");
-    assert!(
-        e.message
-            .contains("`result` binding is missing its declaration keyword"),
-        "{}",
-        e.message
-    );
-    assert_eq!((e.line, e.col), (3, 3));
-
-    // No binding is claimed at all, but `result {` in expression position
-    // is not TypeScript either — so this is reported here rather than by
-    // the output self-check, at generated-code coordinates.
-    let e = err("const a = result {\n  y <- g();\n  y\n};\n");
-    assert!(
-        e.message
-            .contains("`result` binding is missing its declaration keyword"),
-        "{}",
-        e.message
-    );
-    assert_eq!((e.line, e.col), (2, 3));
-}
-
-#[test]
-fn a_binding_below_the_blocks_top_level_is_a_located_error() {
-    // A binding compiles to an early return of the block's IIFE; nested
-    // in an `if` body it is not lowered at all, and before this check the
-    // raw `<-` leaked into the output and died in the verify backstop.
-    let e = err("const a = result {\n  const x <- f();\n  if (c) { const y <- g(); }\n  x\n};\n");
-    assert!(
-        e.message
-            .contains("`<-` binding must be a top-level statement"),
-        "{}",
-        e.message
-    );
-    assert_eq!((e.line, e.col), (3, 12));
-
-    // Inside a function written in the block the `return` would exit the
-    // function, not the block — same error.
-    let e = err(
-        "const a = result {\n  const x <- f();\n  const h = () => { const y <- g(); return y; };\n  x\n};\n",
-    );
-    assert!(
-        e.message
-            .contains("`<-` binding must be a top-level statement"),
-        "{}",
-        e.message
-    );
-
-    // A block that is a candidate only (no top-level binding) still
-    // reports — the shape is never TypeScript, claimed or not.
-    let e = err("const a = result {\n  if (c) { const y <- g(); }\n  x\n};\n");
-    assert!(
-        e.message
-            .contains("`<-` binding must be a top-level statement"),
-        "{}",
-        e.message
+        ttc::DiagnosticCode::ResultNoSuccessValue
     );
 }
 
 #[test]
-fn a_nested_generic_look_alike_still_passes_through() {
-    // `let x: Foo<-1>;` leaves an unopened `>` after the `<-`, so it is a
-    // generic type argument — at any depth, not just the block's top
-    // level (the passthrough contract).
-    let out = ok(
-        "declare const result: number;\nfunction f() {\n  result\n  {\n    { let x: Foo<-1>; }\n  }\n}\n",
-    );
-    assert!(out.contains("let x: Foo<-1>;"), "{out}");
-}
-
-#[test]
-fn a_nested_result_block_answers_for_its_own_runs() {
-    // The outer scan skips the inner `result { … }` region — its binding
-    // is the inner block's own top-level statement, not a nested mistake.
-    let out = ok(
-        "const a = result {\n  const x <- f();\n  const b = result {\n    const c <- g();\n    c\n  };\n  x\n};\n",
-    );
-    assert_eq!(out.matches("(() => {").count(), 0, "{out}");
-    assert!(out.contains("let $tt_v0;\ndo {"), "{out}");
-    assert!(out.contains("  let $tt_v1;\n  do {"), "{out}");
-}
-
-#[test]
-fn result_binding_without_a_semicolon_is_an_error() {
-    // The binding is tt syntax whether or not the `;` is there, so this is
-    // a located tt error rather than a failed output self-check.
-    let e = err("const a = result {\n  const x <- f()\n  x\n};\n");
-    assert!(
-        e.message
-            .contains("`result` block could not be parsed here"),
-        "{}",
-        e.message
-    );
-
-    let e = err("const a = result {\n  const x <- f()\n  const y <- g();\n  y\n};\n");
-    assert!(
-        e.message
-            .contains("`result` block could not be parsed here"),
-        "{}",
-        e.message
-    );
-}
-
-#[test]
-fn result_binding_without_an_expression_is_an_error() {
-    let e = err("const a = result {\n  const x <- ;\n  x\n};\n");
-    assert!(
-        e.message
-            .contains("`result` block could not be parsed here"),
-        "{}",
-        e.message
-    );
-    let e = err("const a = result {\n  const <- f();\n  x\n};\n");
-    assert!(
-        e.message
-            .contains("`result` block could not be parsed here"),
-        "{}",
-        e.message
-    );
-}
-
-#[test]
-fn result_block_is_an_expression_in_every_nested_position() {
-    // Its own braces are skipped whole by the `try`/let-else/`if let`
-    // expression scanners, so a block can sit inside them too.
-    let out = ok(r#"
-const s = `${result { const x <- f(); x }}`;
-const t = g(result { const y <- h(); y + 1 }, 2);
-function outer() {
-  const w = try result { const q <- m(); q };
-  return w;
-}
-"#);
-    assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("const s = `${$tt_v0}`;"), "{out}");
-    assert!(out.contains("const t = $tt_v2($tt_v1, 2);"), "{out}");
-    assert!(out.contains("const w = $tt_t2.value;"), "{out}");
+fn generic_look_alike_with_adjacent_operators_passes_through() {
+    let source =
+        "declare const result: number;\nfunction f() {\n  result\n  { let x: Foo<-1>; }\n}\n";
+    assert_eq!(ok(source), source);
 }
 
 /* ------------------------------------------------------------------ */

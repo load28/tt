@@ -231,6 +231,11 @@ fn recoverable_codegen_errors_do_not_create_tsc_errors() {
 
 /// Compile tt source, emit JS with tsc, execute with node, return stdout lines.
 fn run(src: &str) -> Vec<String> {
+    run_with_tsc_flags(src, &[])
+}
+
+/// Run one program with extra TypeScript flags needed by a language feature.
+fn run_with_tsc_flags(src: &str, extra_flags: &[&str]) -> Vec<String> {
     let code =
         compile(&as_module(src), &options_with_runtime("./runtime.js")).expect("tt compile failed");
     let dir = tmpdir();
@@ -244,6 +249,7 @@ fn run(src: &str) -> Vec<String> {
         .arg("--outDir")
         .arg(&dir)
         .args(TSC_FLAGS)
+        .args(extra_flags)
         .output()
         .expect("failed to run tsc");
     assert!(
@@ -1541,9 +1547,9 @@ fn std_result_block_output_pipes_into_and_then_p() {
     let (ok, out) = typecheck_with_std(&format!(
         r#"{ERROR_UNION_PRELUDE}
 const user = result {{
-  const config <- loadConfig();
-  const loaded <- loadToken(config);
-  loaded
+  const config = try loadConfig();
+  const loaded = try loadToken(config);
+  return loaded;
 }};
 
 const profile = user |> Result.andThenP(fetchProfile);
@@ -2697,9 +2703,9 @@ fn result_block_unions_the_error_types_of_its_bindings() {
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number): Res<string, UserError | CompanyError> => result {{
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
-  user.name + "@" + company.name
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
+  return user.name + "@" + company.name;
 }};
 "#
     ));
@@ -2714,9 +2720,9 @@ fn result_block_missing_an_error_type_is_a_type_error() {
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number): Res<string, UserError> => result {{
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
-  user.name + "@" + company.name
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
+  return user.name + "@" + company.name;
 }};
 "#
     ));
@@ -2731,10 +2737,10 @@ fn result_block_bindings_are_narrowed_success_values() {
     let (ok, out) = typecheck(&format!(
         r#"{RESULT_PRELUDE}
 const view = (id: number) => result {{
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
   const label: string = user.name.toUpperCase() + company.name;
-  {{ user, company, label }}
+  return {{ user, company, label }};
 }};
 const check = (id: number): string => match (view(id)) {{
   Ok(value) => value.label,
@@ -2761,10 +2767,10 @@ const step = (name: string, ok: boolean): Res<string, string> => {
 };
 
 const chain = (secondOk: boolean) => result {
-  const a <- step("a", true);
-  const b <- step("b", secondOk);
-  const c <- step("c", true);
-  a + b + c
+  const a = try step("a", true);
+  const b = try step("b", secondOk);
+  const c = try step("c", true);
+  return a + b + c;
 };
 
 console.log(JSON.stringify(chain(true)), steps.join(","));
@@ -2781,6 +2787,93 @@ console.log(JSON.stringify(chain(false)), steps.join(","));
 }
 
 #[test]
+fn runtime_using_disposes_when_try_propagates_err() {
+    require_toolchain!();
+    let lines = run_with_tsc_flags(
+        r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+
+const events: string[] = [];
+const fail = (): Res<number, string> => Res.Err("boom");
+
+const sync = () => {
+  using resource = {
+    [Symbol.dispose]() { events.push("sync-dispose"); },
+  };
+  const value = try fail();
+  return Res.Ok(value);
+};
+
+const asyncRun = async () => {
+  await using resource = {
+    async [Symbol.asyncDispose]() { events.push("async-dispose"); },
+  };
+  const value = try fail();
+  return Res.Ok(value);
+};
+
+console.log(JSON.stringify(sync()), events.join(","));
+events.length = 0;
+asyncRun().then((value) => console.log(JSON.stringify(value), events.join(",")));
+"#,
+        &["--lib", "es2022,dom,esnext.disposable"],
+    );
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"kind":"Err","error":"boom"} sync-dispose"#,
+            r#"{"kind":"Err","error":"boom"} async-dispose"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_nested_results_preserve_constructor_and_generator_protocols() {
+    require_toolchain!();
+    for source in [
+        "class C { constructor() { try fail(); } }\n",
+        "function* values() { yield try fail(); }\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{source}\n{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+    }
+
+    let lines = run(r#"
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const fail = (): Res<number, string> => Res.Err("boom");
+
+class C {
+  outcome;
+  constructor() {
+    this.outcome = result { return try fail(); };
+  }
+}
+
+function* values() {
+  yield result { return try fail(); };
+  yield "after";
+}
+
+const instance = new C();
+console.log(instance instanceof C, JSON.stringify(instance.outcome));
+const iterator = values();
+console.log(JSON.stringify(iterator.next()));
+console.log(JSON.stringify(iterator.next()));
+console.log(Array.from(values()).map((value) => JSON.stringify(value)).join(","));
+"#);
+    assert_eq!(
+        lines,
+        vec![
+            r#"true {"kind":"Err","error":"boom"}"#,
+            r#"{"value":{"kind":"Err","error":"boom"},"done":false}"#,
+            r#"{"value":"after","done":false}"#,
+            r#"{"kind":"Err","error":"boom"},"after""#,
+        ]
+    );
+}
+
+#[test]
 fn runtime_result_block_with_await_resolves_to_a_result() {
     require_toolchain!();
     let lines = run(r#"
@@ -2790,9 +2883,9 @@ const fetchNum = async (n: number): Promise<Res<number, string>> =>
   n > 0 ? Res.Ok(n) : Res.Err("not positive");
 
 const total = async (a: number, b: number) => result {
-  const x <- await fetchNum(a);
-  const y <- await fetchNum(b);
-  x + y
+  const x = try await fetchNum(a);
+  const y = try await fetchNum(b);
+  return x + y;
 };
 
 total(2, 3).then((r) => console.log(JSON.stringify(r)));
@@ -2828,11 +2921,11 @@ const getPermission = (u: User, c: Company): TResult<string, string> =>
   Result.Ok(u.name.trim() + "@" + c.name);
 
 const view = (id: number) => result {
-  const user <- getUser(id);
-  const company <- getCompany(user.companyId);
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
   const normalized = user.name |> .trim() |> .toLowerCase();
-  const permission <- getPermission(user, company);
-  { user, company, permission, normalized }
+  const permission = try getPermission(user, company);
+  return { user, company, permission, normalized };
 };
 
 console.log(JSON.stringify(view(1)));

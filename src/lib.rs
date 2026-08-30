@@ -374,10 +374,10 @@ fn program_uses_pipeline(program: &ast::Program) -> bool {
             ast::TemplateChunk::Interp(body) => program_uses_pipeline(body),
         }),
         ast::Segment::ResultBlock(block) => {
-            block.items.iter().any(|item| match item {
-                ast::ResultItem::Stmts(body) => program_uses_pipeline(body),
-                ast::ResultItem::Bind(bind) => program_uses_pipeline(&bind.expr),
-            }) || program_uses_pipeline(&block.value)
+            block.items.iter().any(|item| {
+                let ast::ResultItem::Stmts(body) = item;
+                program_uses_pipeline(body)
+            }) || block.value.as_ref().is_some_and(program_uses_pipeline)
         }
         ast::Segment::Verbatim(_)
         | ast::Segment::Variant(_)
@@ -533,6 +533,18 @@ pub struct ScrutineeTemp {
     pub out: usize,
 }
 
+/// A value explicitly returned from a `result` block, in both source and
+/// emitted TypeScript coordinates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ResultReturnTemp {
+    /// Byte range of the returned value in the source.
+    pub src: usize,
+    /// End byte offset of the returned value in the source.
+    pub src_end: usize,
+    /// Byte offset of that value in the emitted TypeScript.
+    pub out: usize,
+}
+
 /// Which tt construct a stretch of compiler-written glue belongs to.
 ///
 /// The kind is half of what turns a TypeScript diagnostic on that glue into
@@ -548,8 +560,8 @@ pub enum AnchorKind {
     LetElse,
     /// An `if let` statement's test and destructuring.
     IfLet,
-    /// One `<-` binding of a `result` block.
-    ResultBind,
+    /// A `result` block's generated completion region.
+    Result,
     /// A pipeline's apply helper (`$tt_ap`) or composition helper
     /// (`$tt_fl`).
     Pipe,
@@ -634,6 +646,8 @@ pub struct MappedEmit {
     /// The glue each construct wrote, innermost first — the origin of a
     /// diagnostic that lands where no mapping reaches.
     pub anchors: Vec<EmitAnchor>,
+    /// Explicit Result return values in source and emitted coordinates.
+    pub(crate) result_return_temps: Vec<ResultReturnTemp>,
 }
 
 impl MappedEmit {
@@ -721,6 +735,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         scrutinee_temps: flat.scrutinee_temps,
         payload_temps: flat.payload_temps,
         anchors: flat.anchors,
+        result_return_temps: flat.result_return_temps,
     }
 }
 
@@ -909,10 +924,19 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
     let semantics = analysis::coverage_semantics(&program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
-    if let Some(first) = tt_errors(source, &program, &tokens, options, &semantics)
-        .into_iter()
-        .next()
+    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
+    if errors
+        .iter()
+        .any(|error| error.code == DiagnosticCode::ResultNoSuccessValue)
     {
+        if let Err(failure) = codegen::lowering_plan(&semantics, &core, source, options.source_kind)
+        {
+            errors.push(verify::in_source(source, &failure));
+        }
+        suppress_discarded_result_fallthrough(&mut errors);
+    }
+    errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+    if let Some(first) = errors.into_iter().next() {
         return Err(
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
@@ -969,6 +993,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         scrutinee_temps: flat.scrutinee_temps,
         payload_temps: flat.payload_temps,
         anchors: flat.anchors,
+        result_return_temps: flat.result_return_temps,
     })
 }
 
@@ -1110,11 +1135,31 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
         Ok(plan) => errors.extend(try_target_errors(&plan)),
         Err(failure) => errors.push(verify::in_source(source, &failure)),
     }
+    suppress_discarded_result_fallthrough(&mut errors);
     errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
     errors
         .into_iter()
         .map(diagnostics::Diagnostic::from_tt)
         .collect()
+}
+
+/// A discarded Result makes its value-use error primary. Reporting the
+/// nested block's fallthrough as well would ask for a return from an
+/// expression the user must first stop discarding.
+fn suppress_discarded_result_fallthrough(errors: &mut Vec<TtError>) {
+    let discarded: Vec<_> = errors
+        .iter()
+        .filter(|error| error.code == DiagnosticCode::ResultValueDiscarded)
+        .filter_map(|error| error.offset.zip(error.end))
+        .collect();
+    errors.retain(|error| {
+        error.code != DiagnosticCode::ResultNoSuccessValue
+            || !error.offset.zip(error.end).is_some_and(|(start, end)| {
+                discarded
+                    .iter()
+                    .any(|(outer_start, outer_end)| *outer_start <= start && end <= *outer_end)
+            })
+    });
 }
 
 /// A full compilation's answer: everything found, and the emission when one
@@ -1176,10 +1221,12 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
             continue;
         };
         match diagnostic.code {
-            DiagnosticCode::TryPlacement => nodes.push(ast::RecoveryNode {
-                span: ast::Span { start, end },
-                kind: ast::RecoveryKind::Expression,
-            }),
+            DiagnosticCode::TryPlacement | DiagnosticCode::TryCrossesValueRegion => {
+                nodes.push(ast::RecoveryNode {
+                    span: ast::Span { start, end },
+                    kind: ast::RecoveryKind::Expression,
+                })
+            }
             DiagnosticCode::VariantInvalidFieldType => nodes.push(ast::RecoveryNode {
                 span: ast::Span { start, end },
                 kind: ast::RecoveryKind::Type,
@@ -1318,6 +1365,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         scrutinee_temps: flat.scrutinee_temps,
         payload_temps: flat.payload_temps,
         anchors: flat.anchors,
+        result_return_temps: flat.result_return_temps,
     });
     if options.verify
         && let Some(flat) = &emit

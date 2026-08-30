@@ -228,8 +228,9 @@ pub(crate) fn translate(
         (AnchorKind::Try, 2339 | 2551 | 2571) => {
             "`try` needs a `Result` — this expression is not one".to_string()
         }
-        (AnchorKind::ResultBind, 2339 | 2551 | 2571) => {
-            "`<-` needs a `Result` — this expression is not one".to_string()
+        (AnchorKind::Result, 2339 | 2551 | 2571) => {
+            "the `try` in this `result` block needs a `Result` — this expression is not one"
+                .to_string()
         }
         // The propagated `Err` reaching a return type that cannot hold it.
         (AnchorKind::Try, 2322 | 2345) => "the `Err` this `try` propagates does not fit the \
@@ -279,7 +280,7 @@ pub(crate) fn translate(
 /// the class identifies the single tt-level explanation they share.
 pub(crate) fn translation_class(kind: AnchorKind, code: u32) -> Option<&'static str> {
     match (kind, code) {
-        (AnchorKind::Try | AnchorKind::ResultBind, 2339 | 2551 | 2571) => Some("not-result"),
+        (AnchorKind::Try | AnchorKind::Result, 2339 | 2551 | 2571) => Some("not-result"),
         (AnchorKind::Try, 2322 | 2345) => Some("try-error-type"),
         (AnchorKind::LetElse | AnchorKind::IfLet | AnchorKind::Match, 2339 | 2571) => {
             Some("missing-discriminant")
@@ -919,6 +920,40 @@ pub(crate) fn report(
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
                 suggestions: d.suggestions.clone(),
+                labels: Vec::new(),
+            });
+        }
+    }
+
+    if !tt_only {
+        for shape in &answers.result_shapes {
+            let Some(anchor) = probes.result_returns.get(shape.index) else {
+                continue;
+            };
+            let Some(file) = files
+                .iter()
+                .find(|file| file.source_path == anchor.source_path)
+            else {
+                continue;
+            };
+            out.push(Diagnostic {
+                path: anchor.source_path.clone(),
+                position: Some(crate::line_col(&file.source, anchor.offset)),
+                end: Some(crate::line_col(&file.source, anchor.end)),
+                message: "`return` here would wrap an already-Result value".to_string(),
+                code: Some(
+                    crate::DiagnosticCode::ResultReturnNested
+                        .as_str()
+                        .to_string(),
+                ),
+                suggestions: vec![crate::Suggestion {
+                    message: "propagate this Result instead".to_string(),
+                    edit: Some(crate::Edit {
+                        start: anchor.offset,
+                        end: anchor.offset,
+                        replacement: "try ".to_string(),
+                    }),
+                }],
                 labels: Vec::new(),
             });
         }

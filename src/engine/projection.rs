@@ -14,7 +14,9 @@ use std::sync::Arc;
 use super::snapshot::BlockedFile;
 #[cfg(test)]
 use crate::CompileError;
-use crate::typescript::backend::{LiteralQuery, Module, Query, SymbolQuery, TagQuery};
+use crate::typescript::backend::{
+    LiteralQuery, Module, Query, ResultShapeQuery, SymbolQuery, TagQuery,
+};
 use crate::typescript::mapper;
 use crate::{LiteralMatch, MappedEmit, Options, TagMatch, ValProbes};
 
@@ -236,6 +238,18 @@ pub(crate) fn assemble(
             path: file.module_path.clone(),
             text: file.emit.code.clone(),
         });
+
+        for result_return in &file.emit.result_return_temps {
+            query.result_shapes.push(ResultShapeQuery {
+                module: file.module_path.clone(),
+                position: mapper::to_utf16(&file.emit.code, result_return.out),
+            });
+            probes.result_returns.push(SourceAnchor {
+                source_path: file.source_path.clone(),
+                offset: result_return.src,
+                end: result_return.src_end,
+            });
+        }
 
         for probe in &file.literal_probes {
             if file
@@ -570,6 +584,9 @@ pub(crate) struct Probes {
     /// The declarations a pass's callee may resolve to, project-wide.
     pub functions: Vec<FnAnchor>,
     pub passes: Vec<PassAnchor>,
+    /// Explicit successful Result-return values, aligned with
+    /// [`Query::result_shapes`].
+    pub result_returns: Vec<SourceAnchor>,
 }
 
 /// A payload column asked about: where it was written, and which

@@ -122,7 +122,11 @@ impl Lowering<'_> {
                 value: stmt.expr,
                 temporary: self.temp(stmt.node, false),
                 binding: stmt.binding,
-                exit: ExitTarget::EnclosingFunction,
+                exit: stmt
+                    .result_target
+                    .map_or(ExitTarget::EnclosingFunction, |target| {
+                        ExitTarget::ResultRegion(ResultRegionId(target))
+                    }),
                 layout: RESULT_LAYOUT,
             })),
             hir::Stmt::LetElse(stmt) => {
@@ -182,13 +186,19 @@ impl Lowering<'_> {
                 decision.kind = match_kind(&decision);
                 Expr::Decision(decision)
             }
-            hir::Expr::Try { node, value } => Expr::Propagate(Propagate {
+            hir::Expr::Try {
+                node,
+                value,
+                result_target,
+            } => Expr::Propagate(Propagate {
                 node: *node,
                 owner: *node,
                 value: *value,
                 temporary: self.temp(*node, false),
                 binding: None,
-                exit: ExitTarget::EnclosingFunction,
+                exit: result_target.map_or(ExitTarget::EnclosingFunction, |target| {
+                    ExitTarget::ResultRegion(ResultRegionId(target))
+                }),
                 layout: RESULT_LAYOUT,
             }),
             hir::Expr::Pipe { node, head, steps } => Expr::Apply(Apply {
@@ -208,29 +218,22 @@ impl Lowering<'_> {
                     })
                     .collect(),
             }),
-            hir::Expr::ResultBlock { node, items, value } => Expr::ResultRegion(ResultRegion {
-                node: *node,
+            hir::Expr::ResultBlock {
+                node: region_node,
+                items,
+                value,
+            } => Expr::ResultRegion(ResultRegion {
+                id: ResultRegionId(*region_node),
+                node: *region_node,
                 items: items
                     .iter()
-                    .map(|item| match item {
-                        hir::ResultItem::Stmts(body) => ResultRegionItem::Statements(*body),
-                        hir::ResultItem::Bind {
-                            node,
-                            binding,
-                            expr,
-                        } => ResultRegionItem::Propagate(Propagate {
-                            node: *node,
-                            owner: *node,
-                            value: *expr,
-                            temporary: self.temp(*node, true),
-                            binding: Some(*binding),
-                            exit: ExitTarget::Region,
-                            layout: RESULT_LAYOUT,
-                        }),
+                    .map(|item| {
+                        let hir::ResultItem::Stmts(body) = item;
+                        ResultRegionItem::Statements(*body)
                     })
                     .collect(),
                 value: *value,
-                is_async: self.node_contains_await(*node),
+                is_async: self.node_contains_await(*region_node),
             }),
             hir::Expr::Template { node, chunks } => Expr::Template(Template {
                 node: *node,
@@ -433,13 +436,7 @@ fn temp_ordinals(semantic: &SemanticFile) -> HashMap<NodeId, u32> {
     for (_, expr) in semantic.hir.exprs.iter() {
         match expr {
             hir::Expr::Try { node, .. } => nodes.push(*node),
-            hir::Expr::ResultBlock { items, .. } => {
-                for item in items {
-                    if let hir::ResultItem::Bind { node, .. } = item {
-                        nodes.push(*node);
-                    }
-                }
-            }
+            hir::Expr::ResultBlock { .. } => {}
             hir::Expr::OpaqueTs(_)
             | hir::Expr::Seq { .. }
             | hir::Expr::Match { .. }
@@ -598,16 +595,18 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
             }
             Expr::ResultRegion(region) => {
                 validate_node(region.node, semantic);
+                assert_eq!(
+                    region.id.0, region.node,
+                    "Result region identity follows its node"
+                );
                 let _is_async = region.is_async;
                 for item in &region.items {
-                    match item {
-                        ResultRegionItem::Statements(body) => validate_body(*body, file),
-                        ResultRegionItem::Propagate(propagate) => {
-                            validate_propagate(propagate, file, semantic)
-                        }
-                    }
+                    let ResultRegionItem::Statements(body) = item;
+                    validate_body(*body, file);
                 }
-                validate_expr(region.value, file);
+                if let Some(value) = region.value {
+                    validate_expr(value, file);
+                }
             }
             Expr::Template(template) => {
                 validate_node(template.node, semantic);
@@ -780,7 +779,8 @@ fn validate_propagate(propagate: &Propagate, file: &CoreFile, semantic: &Semanti
         validate_binding_mode(binding.mode);
     }
     match propagate.exit {
-        ExitTarget::EnclosingFunction | ExitTarget::Region => {}
+        ExitTarget::EnclosingFunction => {}
+        ExitTarget::ResultRegion(_) => {}
     }
     assert!(
         !propagate.layout.success_tag.is_empty()

@@ -298,15 +298,17 @@
 | TASK-287 | P5: Close shipped claimer gaps | Complete | 2026-08-30 | `TASK-287: close shipped claimer gaps` | [TASK-287](./TASK-287-shipped-claimer-gaps.md) |
 | TASK-288 | P6: Preserve placement reasons | Complete | 2026-08-30 | `TASK-288: preserve placement reasons` | [TASK-288](./TASK-288-preserve-placement-reasons.md) |
 | TASK-289 | P-matrix: Prerequisite placement matrix gate | Complete | 2026-08-30 | `TASK-289: add placement matrix gate` | [TASK-289](./TASK-289-placement-matrix-gate.md) |
-| TASK-290 | M0: Freeze the one-release crossing migration | Pending | — | — | [TASK-290](./TASK-290-crossing-migration-diagnostic.md) |
+| TASK-290 | M0: Freeze the one-release crossing migration | Complete | 2026-08-30 | See git history | [TASK-290](./TASK-290-crossing-migration-diagnostic.md) |
 | TASK-291 | L0: Repair Result completion in both existing printers | Complete | 2026-08-30 | See git history | [TASK-291](./TASK-291-result-completion-printers.md) |
-| TASK-292 | L1: Add scope and completion identity | Pending | — | — | [TASK-292](./TASK-292-result-scope-identity.md) |
-| TASK-293 | L2: Cut over syntax and nearest-scope propagation | Pending | — | — | [TASK-293](./TASK-293-nearest-scope-cutover.md) |
-| TASK-294 | L3: Add control-flow and use diagnostics | Pending | — | — | [TASK-294](./TASK-294-result-flow-diagnostics.md) |
-| TASK-295 | L4: Remove `<-` and the old tail surface | Pending | — | — | [TASK-295](./TASK-295-remove-result-bind.md) |
-| TASK-296 | L5: Add typed nested-Result diagnostics | Pending | — | — | [TASK-296](./TASK-296-typed-nested-result.md) |
-| TASK-297 | L6: Complete public documentation and release gates | Pending | — | — | [TASK-297](./TASK-297-try-result-docs-and-gates.md) |
+| TASK-292 | L1: Add scope and completion identity | Complete | 2026-08-30 | See git history | [TASK-292](./TASK-292-result-scope-identity.md) |
+| TASK-293 | L2: Cut over syntax and nearest-scope propagation | Complete | 2026-08-30 | See git history | [TASK-293](./TASK-293-nearest-scope-cutover.md) |
+| TASK-294 | L3: Add control-flow and use diagnostics | Complete | 2026-08-30 | See git history | [TASK-294](./TASK-294-result-flow-diagnostics.md) |
+| TASK-295 | L4: Remove `<-` and the old tail surface | Complete | 2026-08-30 | See git history | [TASK-295](./TASK-295-remove-result-bind.md) |
+| TASK-296 | L5: Add typed nested-Result diagnostics | Complete | 2026-08-30 | See git history | [TASK-296](./TASK-296-typed-nested-result.md) |
+| TASK-297 | L6: Complete public documentation and release gates | Complete | 2026-08-30 | See git history | [TASK-297](./TASK-297-try-result-docs-and-gates.md) |
+| TASK-298 | Remove pre-1.0 Result migration compatibility | Complete | 2026-08-30 | 2026-08-30 | [TASK-298](./TASK-298-remove-result-migration.md) |
+| TASK-299 | Close Result scope review gaps | Complete | 2026-08-30 | 2026-08-30 | [TASK-299](./TASK-299-close-result-review-gaps.md) |
 
 ## 다음 태스크 번호
 
-**TASK-298**
+**TASK-300**

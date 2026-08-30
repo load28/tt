@@ -79,7 +79,7 @@ const FEATURES_NONE: u64 = 0;
 /// a name; this table joins them. It is append-only: a code keeps its
 /// number for as long as the mapper exists, and a name this table does not
 /// know yet reports as `0` rather than shifting its neighbours.
-const CODE_NUMBERS: [&str; 34] = [
+const CODE_NUMBERS: [&str; 42] = [
     "stray-pipe",
     "malformed-pipeline-postfix",
     "invalid-optional-receiver",
@@ -87,6 +87,7 @@ const CODE_NUMBERS: [&str; 34] = [
     "stray-result",
     "malformed-variant",
     "malformed-match",
+    // Retired codes remain reserved so every following wire number stays stable.
     "result-missing-keyword",
     "result-nested-binding",
     "flow-first-step-method",
@@ -112,8 +113,17 @@ const CODE_NUMBERS: [&str; 34] = [
     "verify-failed",
     "source-not-typescript",
     "other",
+    // Retired code; keep its published slot.
     "result-tail-semicolon",
     "lowering-plan-failed",
+    "result-no-success-value",
+    "result-value-discarded",
+    "result-return-nested",
+    "result-break-crossing",
+    "result-continue-crossing",
+    "result-yield-crossing",
+    "result-label-crossing",
+    "try-crosses-value-region",
 ];
 
 /// Everything the mapper keeps between requests.
@@ -660,6 +670,18 @@ mod tests {
     fn code_numbers_are_stable_and_start_at_one() {
         assert_eq!(code_number("stray-pipe"), 1);
         assert_eq!(code_number("match-not-exhaustive"), 27);
+        assert_eq!(code_number("result-tail-semicolon"), 33);
+        assert_eq!(code_number("lowering-plan-failed"), 34);
+        assert_eq!(code_number("result-no-success-value"), 35);
+        assert_eq!(code_number("try-crosses-value-region"), 42);
+        for code in ttc::DiagnosticCode::ALL {
+            assert_ne!(
+                code_number(code.as_str()),
+                0,
+                "active diagnostic {} has no mapper wire number",
+                code.as_str()
+            );
+        }
         assert_eq!(code_number("never-heard-of-it"), 0);
     }
 

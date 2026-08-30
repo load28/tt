@@ -1,7 +1,0 @@
-error[result-tail-semicolon]: `result` block must end with a value expression
- --> input.tt:6:15
-  |
-6 |     { amount };
-  |               ^
-  |
-  = help: if this statement is the block's value, remove its trailing `;`

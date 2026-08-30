@@ -948,12 +948,12 @@ fn walk(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyse
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => walk(stmts, table, depth, out),
-                        ResultItem::Bind(bind) => walk(&bind.expr, table, depth, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    walk(stmts, table, depth, out);
                 }
-                walk(&block.value, table, depth, out);
+                if let Some(value) = &block.value {
+                    walk(value, table, depth, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {
@@ -1556,12 +1556,12 @@ fn collect_matches<'a>(
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => collect_matches(stmts, out, tuples),
-                        ResultItem::Bind(bind) => collect_matches(&bind.expr, out, tuples),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    collect_matches(stmts, out, tuples);
                 }
-                collect_matches(&block.value, out, tuples);
+                if let Some(value) = &block.value {
+                    collect_matches(value, out, tuples);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {

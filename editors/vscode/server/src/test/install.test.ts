@@ -65,7 +65,10 @@ function binaryPath() {
 module.exports = { binaryPath };
 `,
   );
-  return binary;
+  // Node's `require.resolve` returns the real path. macOS exposes its temp
+  // directory through both `/var` and `/private/var`, so mirror the package
+  // contract instead of comparing the spelling supplied by `mkdtempSync`.
+  return withBinary ? fs.realpathSync(binary) : binary;
 }
 
 test("a project's installed package provides the compiler", () => {

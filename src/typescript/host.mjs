@@ -25,12 +25,14 @@
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
  *            symbolChecks: [{ module, start }],
+ *            resultShapeChecks: [{ module, start }],
  *            emitDeclarations: boolean }
  *       →  { diagnostics: [{ file, start, end, code, message, mismatch? }],
  *            literalMissing: [{ index, missing }],
  *            tagMissing: [{ index, missing }],
  *            tagMembers: [{ index, tags }],
  *            symbols: [{ index, id, name, builtin }],
+ *            resultShapes: [{ index }],
  *            declarations: [{ path, text }] }
  *
  * An `ask` may also answer `{ error: "..." }`, which fails that request
@@ -214,6 +216,7 @@ async function main() {
       tagMissing: [],
       tagMembers: [],
       symbols: [],
+      resultShapes: [],
       declarations: [],
     };
     const changes = serve(files, dirs, job.modules ?? []);
@@ -379,6 +382,21 @@ async function main() {
         out.tagMembers.push({ index: work.index, tags });
       }
     }
+
+    const resultChecks = (job.resultShapeChecks ?? [])
+      .map((check, index) => ({ check, index }))
+      .filter((entry) => projectModules.has(entry.check.module));
+    const resultTypes = perModule(resultChecks, (module, positions) =>
+      batched(
+        "resultTypesAtPositions",
+        () => checker.getTypeAtPosition(module, positions),
+        () => positions.map((p) => checker.getTypeAtPosition(module, p)),
+      ));
+    resultChecks.forEach((entry, at) => {
+      if (isDefiniteResult(resultTypes[at], constituentsOf, kindSymbolOf, checker)) {
+        out.resultShapes.push({ index: entry.index });
+      }
+    });
 
     // Resolution: the primitive tt's `val` is built from. Which binding an
     // identifier names, and whether a method is a built-in, are both "what
@@ -703,6 +721,26 @@ function tagKindSymbols(type, constituentsOf, kindSymbolOf) {
     symbols.push(kind);
   }
   return symbols;
+}
+
+function isDefiniteResult(type, constituentsOf, kindSymbolOf, checker) {
+  if (!type) return false;
+  const constituents = constituentsOf(type);
+  if (constituents.length !== 2) return false;
+  const tags = new Set();
+  for (const constituent of constituents) {
+    const kind = kindSymbolOf(constituent);
+    if (!kind) return false;
+    const tag = literalValue(checker.getTypeOfSymbol(kind));
+    if (tag !== "Ok" && tag !== "Err") return false;
+    const payload = checker.getPropertyOfType(
+      constituent,
+      tag === "Ok" ? "value" : "error",
+    );
+    if (!payload) return false;
+    tags.add(tag);
+  }
+  return tags.size === 2;
 }
 
 /**

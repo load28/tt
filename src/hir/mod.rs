@@ -176,8 +176,6 @@ pub enum AstOrigin {
     PipeStep,
     /// A `result` block.
     ResultBlock,
-    /// One `<-` binding of a `result` block.
-    ResultBind,
     /// A template literal.
     Template,
     /// A pattern piece (constructor, literal, wildcard, or-group, tuple).
@@ -322,6 +320,9 @@ pub struct TryStmt {
     pub binding: Option<BindingText>,
     /// The propagated expression.
     pub expr: ExprId,
+    /// The nearest lexical Result block, when this propagation completes it
+    /// instead of its enclosing function.
+    pub result_target: Option<NodeId>,
 }
 
 /// A source binding copied into generated TypeScript, with its declaration
@@ -414,6 +415,9 @@ pub enum Expr {
         node: NodeId,
         /// The Result-valued operand.
         value: ExprId,
+        /// The nearest lexical Result block when this propagation completes
+        /// that block instead of its enclosing function.
+        result_target: Option<NodeId>,
     },
     /// A pipeline (`head |> step |> ...`), or a `flow` composition when
     /// `head` is `None`.
@@ -425,16 +429,15 @@ pub enum Expr {
         /// The steps, in source order. Never empty.
         steps: Vec<PipeStep>,
     },
-    /// A `result { ... }` computation block. Each `<-` binding evaluates
-    /// once and early-returns the `Err` — the same single-evaluation
-    /// meaning as [`Stmt::Try`].
+    /// A `result { ... }` computation block. Direct `try` statements
+    /// evaluate once and route an `Err` to the block's completion.
     ResultBlock {
         /// Span = `result` through the block body.
         node: NodeId,
         /// The body's items, in source order.
         items: Vec<ResultItem>,
-        /// The trailing expression — the block's success value.
-        value: ExprId,
+        /// Optional legacy trailing expression.
+        value: Option<ExprId>,
     },
     /// A template literal; only the interpolations are lowered.
     Template {
@@ -483,15 +486,6 @@ pub enum TemplatePart {
 pub enum ResultItem {
     /// A run of ordinary statements.
     Stmts(BodyId),
-    /// A `const|let|var <binding> <- <expr>;` binding.
-    Bind {
-        /// Span = the binding through its expression.
-        node: NodeId,
-        /// The binding text's node (span = the user's binding bytes).
-        binding: BindingText,
-        /// The expression after `<-`.
-        expr: ExprId,
-    },
 }
 
 /// The construct-neutral pattern site: every pattern-carrying syntax —

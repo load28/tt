@@ -1,9 +1,9 @@
 # TASK-297: Complete public documentation and release gates
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: See git history
 
 ## Purpose
 
@@ -28,15 +28,21 @@ Record every decision this task makes. Naming a new public diagnostic code, a
 wire-compatibility choice, or a seam that the design leaves open is a decision
 and belongs here with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Describe only the committed statement-bodied Result surface
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: the language guide still described the removed `<-` binding
+  and semicolon-free Result tail.
+- **Alternatives considered**: retain a parallel legacy section, or replace
+  the guide's Result section with the new claim, propagation, completion, and
+  migration rules.
+- **Decision and rationale**: replace the old surface in place so one guide
+  presents one Result syntax.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Started the public-language and release-gate audit.
+- 2026-08-30: Normalized the VS Code package-install test's temporary-path
+  expectation to Node's real-path package resolution on macOS.
 
 ## Issues and resolutions
 
@@ -48,14 +54,12 @@ Test obligation from the plan: documentation examples compile or diagnose as sho
 
 Green condition: the full gate passes from a clean worktree and the published docs describe no removed rule.
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Ships to `main` alone: not stated in the plan.
-
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+The language guide, overview, design status, fixtures, and release gate now
+describe and verify the statement-bodied Result surface.
