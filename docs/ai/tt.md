@@ -74,6 +74,7 @@ return Result.Ok(Math.round(try total() * 1.1));
 ```
 - Statement forms (`const value = try read();` and `try validate();`) require a trailing `;`. The value form works inside a larger expression and needs no semicolon of its own.
 - Result only (Ok unwraps `.value`; Err exits the nearest Result scope: the innermost `result` block, otherwise the enclosing function). Option unsupported → `Option.okOr(o, err)` first.
+- Propagation uses the structural Result ABI: a value is successful exactly when `"value" in result` is true, and `try` unwraps that field. A hand-written Result must therefore expose `value` on every success and omit it from every failure; a `{ kind: "Ok" }` object without `value` propagates as a failure.
 - A function-targeted `try` requires its enclosing function return type to be Result compatible with the expression's Err type; no auto conversion.
 - UNANNOTATED fn: tsc infers the union of the return paths, so several `try`s with different Err types give `TOk<T> | TErr<E1> | TErr<E2>` = `TResult<T, E1 | E2>`. ttc never collects/unions error types — leave inference to tsc.
 - The value form binds tightly to the following primary expression, including calls and member/index access: `try total() * 1.1` means `(try total()) * 1.1`. Parenthesize to propagate an arbitrary expression as one operand: `try (flag ? left() : right())`.

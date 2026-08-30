@@ -3757,6 +3757,7 @@ fn result_preserves_a_statement_position_match_dispatch() {
     assert!(out.contains("switch ($tt_m)"), "{out}");
     assert!(out.contains("useOne()"), "{out}");
     assert!(out.contains("useOther()"), "{out}");
+    assert!(!out.contains("$tt_recovery"), "{out}");
 }
 
 #[test]
