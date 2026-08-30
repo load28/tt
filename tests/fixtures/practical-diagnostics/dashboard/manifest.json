@@ -1,0 +1,31 @@
+{
+  "entry": "src/dashboard.ttx",
+  "diagnostics": [
+    {
+      "code": "match-not-exhaustive",
+      "text": "match (state)",
+      "line": 12,
+      "message": "match is not exhaustive: missing \"Failed\"",
+      "help": ["add the missing arms", "or add a final `_` arm"],
+      "cliHelp": [
+        "add the missing arms: `Failed(message) => undefined,`",
+        "or add a final `_` arm: `_ => undefined,`"
+      ],
+      "labels": []
+    },
+    {
+      "code": "ts2322",
+      "text": "count",
+      "line": 17,
+      "message": "type mismatch: expected `number`, found `string`",
+      "help": [],
+      "labels": [
+        {
+          "text": "count",
+          "line": 4,
+          "message": "The expected type comes from property 'count' which is declared here on type '{ count: number; children?: unknown; }'"
+        }
+      ]
+    }
+  ]
+}

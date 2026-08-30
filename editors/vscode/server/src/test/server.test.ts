@@ -830,3 +830,180 @@ test(
     }
   },
 );
+
+/* ------------------------------------------------------------------ */
+/* practical diagnostic matrix (TASK-308)                              */
+/* ------------------------------------------------------------------ */
+
+interface PracticalManifest {
+  entry: string;
+  diagnostics: Array<{
+    code: string;
+    text: string;
+    line: number;
+    message: string;
+    help: string[];
+    fix?: { title: string; text: string; replacement: string; fixed: string };
+    labels: Array<{ text: string; line: number; message: string }>;
+  }>;
+}
+
+const PRACTICAL_REPO_ROOT = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "..",
+);
+const PRACTICAL_FIXTURES = path.join(
+  PRACTICAL_REPO_ROOT,
+  "tests",
+  "fixtures",
+  "practical-diagnostics",
+);
+
+function stripPracticalAnnotations(source: string): string {
+  return source
+    .split("\n")
+    .map((line) => {
+      const marker = line.indexOf("//~");
+      return marker < 0 ? line : line.slice(0, marker).trimEnd();
+    })
+    .join("\n");
+}
+
+function applyTextEdit(source: string, edit: any): string {
+  const lines = source.split("\n");
+  const at = (position: { line: number; character: number }) =>
+    lines.slice(0, position.line).reduce((n, line) => n + line.length + 1, 0) +
+    position.character;
+  return (
+    source.slice(0, at(edit.range.start)) +
+    edit.newText +
+    source.slice(at(edit.range.end))
+  );
+}
+
+for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
+  const fixture = path.join(PRACTICAL_FIXTURES, caseName);
+  if (!fs.statSync(fixture).isDirectory()) continue;
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(fixture, "manifest.json"), "utf8"),
+  ) as PracticalManifest;
+
+  test(
+    `the editor reports every practical diagnostic in ${caseName}`,
+    { skip: skipTyped, timeout },
+    async () => {
+      const project = caseDir(`tt-practical-${caseName}-`);
+      fs.cpSync(fixture, project, {
+        recursive: true,
+        filter: (source) => path.basename(source) !== "node_modules",
+      });
+      const file = path.join(project, manifest.entry);
+      const source = stripPracticalAnnotations(fs.readFileSync(file, "utf8"));
+      fs.writeFileSync(file, source);
+      const uri = pathToFileURL(file).toString();
+      const client = connect();
+      try {
+        await client.request("initialize", {
+          processId: process.pid,
+          rootUri: pathToFileURL(PRACTICAL_REPO_ROOT).toString(),
+          workspaceFolders: [
+            {
+              uri: pathToFileURL(PRACTICAL_REPO_ROOT).toString(),
+              name: "tt",
+            },
+          ],
+          capabilities: {},
+        });
+        client.notify("initialized", {});
+        client.notify("textDocument/didOpen", {
+          textDocument: {
+            uri,
+            languageId: file.endsWith(".ttx") ? "ttx" : "tt",
+            version: 1,
+            text: source,
+          },
+        });
+
+        const published = await client.waitFor(
+          "textDocument/publishDiagnostics",
+          (params) => params.uri === uri && params.diagnostics.length > 0,
+        );
+        const expectedCodes = manifest.diagnostics.map(({ code }) => code);
+        const actualCodes = published.diagnostics.map((diagnostic: any) =>
+          String(diagnostic.code),
+        );
+        assert.deepEqual(actualCodes, expectedCodes, JSON.stringify(published));
+
+        for (const expected of manifest.diagnostics) {
+          const diagnostic = published.diagnostics.find(
+            (candidate: any) => String(candidate.code) === expected.code,
+          );
+          assert.ok(diagnostic, `missing ${expected.code}`);
+          assert.equal(
+            diagnostic.range.start.line + 1,
+            expected.line,
+            JSON.stringify(diagnostic),
+          );
+          assert.equal(covered(source, diagnostic.range), expected.text);
+          assert.equal(diagnostic.message, expected.message);
+          assert.deepEqual(
+            (diagnostic.data?.suggestions ?? []).map(
+              (suggestion: any) => suggestion.message,
+            ),
+            expected.help,
+          );
+          const related = diagnostic.relatedInformation ?? [];
+          assert.deepEqual(
+            related.map((label: any) => ({
+              text: covered(source, label.location.range),
+              line: label.location.range.start.line + 1,
+              message: label.message,
+            })),
+            expected.labels,
+          );
+          if (expected.fix !== undefined) {
+            const response = await client.request("textDocument/codeAction", {
+              textDocument: { uri },
+              range: diagnostic.range,
+              context: { diagnostics: [diagnostic] },
+            });
+            const action = (response.result ?? []).find(
+              (candidate: any) => candidate.title === expected.fix?.title,
+            );
+            assert.ok(action, JSON.stringify(response.result));
+            const [edit] = action.edit.changes[uri];
+            assert.equal(covered(source, edit.range), expected.fix.text);
+            assert.equal(edit.newText, expected.fix.replacement);
+            const fixed = applyTextEdit(source, edit);
+            assert.equal(
+              fixed,
+              fs.readFileSync(path.join(project, expected.fix.fixed), "utf8"),
+            );
+            const remainingCodes = manifest.diagnostics
+              .filter(({ code }) => code !== expected.code)
+              .map(({ code }) => code);
+            const republished = client.waitFor(
+              "textDocument/publishDiagnostics",
+              (params) =>
+                params.uri === uri &&
+                params.diagnostics.map((item: any) => String(item.code)).join() ===
+                  remainingCodes.join(),
+            );
+            client.notify("textDocument/didChange", {
+              textDocument: { uri, version: 2 },
+              contentChanges: [{ text: fixed }],
+            });
+            await republished;
+          }
+        }
+      } finally {
+        client.stop();
+        fs.rmSync(project, { recursive: true, force: true });
+      }
+    },
+  );
+}

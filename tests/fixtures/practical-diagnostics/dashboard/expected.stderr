@@ -1,0 +1,16 @@
+error[match-not-exhaustive]: match is not exhaustive: missing "Failed"
+  --> src/dashboard.ttx:12:15
+   |
+12 | const label = match (state) {
+   |               ^^^^^^^^^^^^^
+   |
+   = help: add the missing arms: `Failed(message) => undefined,`
+   = help: or add a final `_` arm: `_ => undefined,`
+error[ts2322]: type mismatch: expected `number`, found `string`
+  --> src/dashboard.ttx:17:39
+   |
+ 4 |       badge: { count: number; children?: unknown };
+   |                ----- The expected type comes from property 'count' which is declared here on type '{ count: number; children?: unknown; }'
+... |
+17 | export const Dashboard = () => <badge count="many">{label}</badge>;
+   |                                       ^^^^^

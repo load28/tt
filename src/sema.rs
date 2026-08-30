@@ -672,8 +672,8 @@ impl Checker {
             if !self.result_body_completes(block) {
                 self.error(
                     TtError::span(
-                        block.keyword_off,
-                        block.body_span.end,
+                        block.span.start,
+                        block.span.end,
                         "`result` can reach the end of its body without a success value"
                             .to_string(),
                     )

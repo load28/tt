@@ -518,6 +518,21 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
       typedResult.replacesTypes,
     );
   }
+  // The layers finish independently and typed diagnostics are merged last,
+  // but the user reads and fixes one file from top to bottom. Restore the
+  // compiler's source-order contract after the final merge so the Problems
+  // panel agrees with the CLI regardless of which layer authored a rule.
+  diagnostics.sort((left, right) => {
+    const start =
+      left.range.start.line - right.range.start.line ||
+      left.range.start.character - right.range.start.character;
+    if (start !== 0) return start;
+    const end =
+      left.range.end.line - right.range.end.line ||
+      left.range.end.character - right.range.end.character;
+    if (end !== 0) return end;
+    return String(left.code ?? "").localeCompare(String(right.code ?? ""));
+  });
   void connection.sendDiagnostics({
     uri: doc.uri,
     version: doc.version,

@@ -338,7 +338,15 @@ pub(crate) fn assemble(
                 module: file.module_path.clone(),
                 position,
             });
-            probes.val_bindings.push(query.symbols.len() - 1);
+            probes.val_bindings.push(ValBindingAnchor {
+                root: query.symbols.len() - 1,
+                anchor: SourceAnchor {
+                    source_path: file.source_path.clone(),
+                    offset: binding.val_at,
+                    end: binding.val_at + "val".len(),
+                },
+                modifier_end: crate::val::modifier_end(&file.source, binding.val_at + "val".len()),
+            });
         }
         for mutation in &val.mutations {
             // A method call outside tt's mutator policy can never be
@@ -578,8 +586,8 @@ pub(crate) struct Probes {
     /// them after [`Probes::tags`]: which file, and which
     /// `(constructor, field)` column the answer names the alphabet of.
     pub payloads: Vec<PayloadAnchor>,
-    /// Indices into [`Query::symbols`] for every `val` binding's identifier.
-    pub val_bindings: Vec<usize>,
+    /// Every `val` binding's symbol question and declaration-side source span.
+    pub val_bindings: Vec<ValBindingAnchor>,
     pub mutations: Vec<MutationAnchor>,
     /// The declarations a pass's callee may resolve to, project-wide.
     pub functions: Vec<FnAnchor>,
@@ -587,6 +595,18 @@ pub(crate) struct Probes {
     /// Explicit successful Result-return values, aligned with
     /// [`Query::result_shapes`].
     pub result_returns: Vec<SourceAnchor>,
+}
+
+/// One `val` declaration, paired with the symbol question for its binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ValBindingAnchor {
+    /// Index into [`Query::symbols`] for the binding identifier.
+    pub root: usize,
+    /// The `val` keyword itself, used as a rustc-style secondary label.
+    pub anchor: SourceAnchor,
+    /// End of the keyword and following horizontal whitespace, so removing
+    /// the modifier leaves a clean TypeScript declaration.
+    pub modifier_end: usize,
 }
 
 /// A payload column asked about: where it was written, and which

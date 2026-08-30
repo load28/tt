@@ -1,0 +1,20 @@
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+import { PaymentState } from "./domain.tt";
+
+declare const state: PaymentState;
+declare function charge(): TResult<string, string>;
+
+export function receipt(): TResult<string, string> {
+  const chargeId = try charge();
+  const receiptId = match (state) {
+    Paid(receipt: id) => id, //~ ERROR[unknown-field] has no field `receipt`
+    _ => null,
+  };
+  const label = match (state) { //~ ERROR[match-not-exhaustive] match is not exhaustive
+    Pending => "pending",
+    Paid(receiptId) => receiptId,
+  };
+  const attempts: number = "three"; //~ ERROR[ts2322] type mismatch
+  return Result.Ok(`${chargeId}:${receiptId}:${label}:${attempts}`);
+}
