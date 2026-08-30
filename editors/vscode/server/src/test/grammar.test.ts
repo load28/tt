@@ -107,10 +107,10 @@ function assertScope(lines: Token[][], line: number, text: string, scope: string
 // 하이라이팅이 깨졌던 실제 리포트를 그대로 옮긴 픽스처.
 const REPORTED = `export function endpoint(store: Record<string, string>): Result<string, ConfigError> {
   return result {
-    const host <- get(store, "host");
-    const portText <- get(store, "port");
-    const port <- toPort(portText);
-    \`https://\${host}:\${port}\`
+    const host = try get(store, "host");
+    const portText = try get(store, "port");
+    const port = try toPort(portText);
+    return \`https://\${host}:\${port}\`;
   };
 }
 
@@ -128,14 +128,13 @@ function widen(val box: { width: number; height: number }): number {
 test("tt constructs inside a function body get tt scopes (reported regression)", async () => {
   const lines = await tokenize("source.tt", REPORTED);
 
-  // result 블록: 키워드, 바인딩, `<-` 전부 함수 본문 안에서.
+  // result 블록: 키워드와 가장 가까운 try가 함수 본문 안에서 유지된다.
   assertScope(lines, 2, "result", "keyword.control.result.tt");
   assertScope(lines, 3, "const", "storage.type.ts");
-  assertScope(lines, 3, "host", "variable.other.readwrite.ts");
-  assertScope(lines, 3, "<-", "keyword.operator.result-bind.tt");
+  assertScope(lines, 3, "host", "variable.other.constant.ts");
+  assertScope(lines, 3, "try", "keyword.control.trycatch.ts");
   assertScope(lines, 3, "get", "entity.name.function.ts");
-  assertScope(lines, 3, "host", "variable.other.readwrite.ts");
-  // 블록의 마지막 값 식(템플릿)은 문자열로 남는다 — 객체 키가 아니라.
+  // 명시적인 return의 템플릿은 문자열로 남는다 — 객체 키가 아니라.
   assertScope(lines, 6, "https://", "string.template.ts");
 
   // result 블록이 객체 리터럴로 오해석되면 뒤 코드가 연쇄 오염된다 —
@@ -181,9 +180,9 @@ const NESTED = `function demo(items: Item[]) {
   for (val const item of items) { log(item.id); }
   try { work(); } catch (val error: unknown) { log(error); }
   const r = result {
-    const n: number <- toPort(raw);
-    const { x, y } <- point();
-    n + x + y
+    const n: number = try toPort(raw);
+    const { x, y } = try point();
+    return n + x + y;
   };
   return r;
 }
@@ -238,13 +237,13 @@ test("every tt construct works in nested contexts", async () => {
   assertScope(lines, 23, "error", "variable.parameter.ts");
   assertScope(lines, 23, "unknown", "support.type.primitive.ts");
 
-  // result — 타입 주석 바인딩과 구조 분해 바인딩.
+  // result — 타입 주석·구조 분해 선언 안의 try.
   assertScope(lines, 24, "result", "keyword.control.result.tt");
-  assertScope(lines, 25, "n", "variable.other.readwrite.ts");
+  assertScope(lines, 25, "n", "variable.other.constant.ts");
   assertScope(lines, 25, "number", "support.type.primitive.ts");
-  assertScope(lines, 25, "<-", "keyword.operator.result-bind.tt");
-  assertScope(lines, 26, "x", "variable.other.readwrite.ts");
-  assertScope(lines, 26, "<-", "keyword.operator.result-bind.tt");
+  assertScope(lines, 25, "try", "keyword.control.trycatch.ts");
+  assertScope(lines, 26, "x", "variable.other.constant.ts");
+  assertScope(lines, 26, "try", "keyword.control.trycatch.ts");
 });
 
 test("an optional postfix pipeline keeps TypeScript optional-chain scopes", async () => {

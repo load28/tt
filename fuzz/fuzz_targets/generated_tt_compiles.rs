@@ -131,7 +131,7 @@ impl Program {
 
         let indent = if self.in_result { "    " } else { "  " };
         if self.in_result {
-            out.push_str("  const value = result {\n    const first <- fallible(n);\n");
+            out.push_str("  const value = result {\n    const first = try fallible(n);\n");
         }
         out.push_str(indent);
         out.push_str(if self.in_result {
@@ -164,7 +164,9 @@ impl Program {
         out.push_str("};\n");
 
         if self.in_result {
-            out.push_str("    first + chosen\n  };\n  return value.kind === \"Ok\" ? 0 : 1;\n");
+            out.push_str(
+                "    return first + chosen;\n  };\n  return value.kind === \"Ok\" ? 0 : 1;\n",
+            );
         } else {
             out.push_str("  return chosen + (f.kind === \"Yes\" ? 1 : 0);\n");
         }

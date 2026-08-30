@@ -6544,71 +6544,7 @@
       },
       "patterns": [
         {
-          "include": "#tt-result-binding"
-        },
-        {
           "include": "#statements"
-        }
-      ]
-    },
-    "tt-result-binding": {
-      "patterns": [
-        {
-          "match": "(?<![_$[:alnum:]])(const|let|var)\\s+([$_[:alpha:]][$_[:alnum:]]*)\\s*(<-)",
-          "captures": {
-            "1": {
-              "name": "storage.type.ts"
-            },
-            "2": {
-              "name": "variable.other.readwrite.ts"
-            },
-            "3": {
-              "name": "keyword.operator.result-bind.tt"
-            }
-          }
-        },
-        {
-          "begin": "(?<![_$[:alnum:]])(const|let|var)(?![_$[:alnum:]])(?=[^;=]*(?<![_$[:alnum:]])<-)",
-          "beginCaptures": {
-            "1": {
-              "name": "storage.type.ts"
-            }
-          },
-          "end": "<-",
-          "endCaptures": {
-            "0": {
-              "name": "keyword.operator.result-bind.tt"
-            }
-          },
-          "patterns": [
-            {
-              "include": "#comment"
-            },
-            {
-              "begin": ":",
-              "beginCaptures": {
-                "0": {
-                  "name": "keyword.operator.type.annotation.ts"
-                }
-              },
-              "end": "(?=<-)",
-              "patterns": [
-                {
-                  "include": "#type"
-                }
-              ]
-            },
-            {
-              "include": "#object-binding-pattern"
-            },
-            {
-              "include": "#array-binding-pattern"
-            },
-            {
-              "match": "[$_[:alpha:]][$_[:alnum:]]*",
-              "name": "variable.other.readwrite.ts"
-            }
-          ]
         }
       ]
     },

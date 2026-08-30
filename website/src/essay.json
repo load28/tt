@@ -356,7 +356,7 @@
       {
         "kind": "code",
         "label": "example.tt",
-        "html": "<span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> loadProfile</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">id</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> string</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> TResult</span><span style=\"color:#E6EDF3\">&#x3C;</span><span style=\"color:#FFA657\">Profile</span><span style=\"color:#E6EDF3\">, </span><span style=\"color:#FFA657\">DbError</span><span style=\"color:#FF7B72\"> |</span><span style=\"color:#FFA657\"> HttpError</span><span style=\"color:#E6EDF3\">> </span><span style=\"color:#FF7B72\">=></span><br><span style=\"color:#FF7B72\">  result</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#E6EDF3\"> user </span><span style=\"color:#FF7B72\">&#x3C;-</span><span style=\"color:#D2A8FF\"> findUser</span><span style=\"color:#E6EDF3\">(id);</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#E6EDF3\"> company </span><span style=\"color:#FF7B72\">&#x3C;-</span><span style=\"color:#D2A8FF\"> fetchCompany</span><span style=\"color:#E6EDF3\">(user.companyId);</span><br><span style=\"color:#E6EDF3\">    { user, company }</span><br><span style=\"color:#E6EDF3\">  };</span>"
+        "html": "<span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> loadProfile</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">id</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> string</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> TResult</span><span style=\"color:#E6EDF3\">&#x3C;</span><span style=\"color:#FFA657\">Profile</span><span style=\"color:#E6EDF3\">, </span><span style=\"color:#FFA657\">DbError</span><span style=\"color:#FF7B72\"> |</span><span style=\"color:#FFA657\"> HttpError</span><span style=\"color:#E6EDF3\">> </span><span style=\"color:#FF7B72\">=></span><br><span style=\"color:#FF7B72\">  result</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#79C0FF\"> user</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#FF7B72\"> try</span><span style=\"color:#D2A8FF\"> findUser</span><span style=\"color:#E6EDF3\">(id);</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#79C0FF\"> company</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#FF7B72\"> try</span><span style=\"color:#D2A8FF\"> fetchCompany</span><span style=\"color:#E6EDF3\">(user.companyId);</span><br><span style=\"color:#FF7B72\">    return</span><span style=\"color:#E6EDF3\"> { user, company };</span><br><span style=\"color:#E6EDF3\">  };</span>"
       },
       {
         "kind": "paragraph",
@@ -367,11 +367,19 @@
           },
           {
             "kind": "code",
-            "text": "<-"
+            "text": "try"
           },
           {
             "kind": "text",
-            "text": " unwraps a success and short-circuits a failure, and the error types union themselves as you go. It reads like the happy path because it is the happy path, but the failures are in the signature rather than in a comment or a "
+            "text": " unwraps a success and short-circuits a failure to the nearest Result scope. Here that scope is the "
+          },
+          {
+            "kind": "code",
+            "text": "result"
+          },
+          {
+            "kind": "text",
+            "text": " block, so the enclosing function keeps running and the error types union themselves as you go. It reads like the happy path because it is the happy path, but the failures are in the signature rather than in a comment or a "
           },
           {
             "kind": "code",
@@ -903,7 +911,7 @@
       {
         "kind": "code",
         "label": "example.tt",
-        "html": "<span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> loadProfile</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">id</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> string</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> TResult</span><span style=\"color:#E6EDF3\">&#x3C;</span><span style=\"color:#FFA657\">Profile</span><span style=\"color:#E6EDF3\">, </span><span style=\"color:#FFA657\">DbError</span><span style=\"color:#FF7B72\"> |</span><span style=\"color:#FFA657\"> HttpError</span><span style=\"color:#E6EDF3\">> </span><span style=\"color:#FF7B72\">=></span><br><span style=\"color:#FF7B72\">  result</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#E6EDF3\"> user </span><span style=\"color:#FF7B72\">&#x3C;-</span><span style=\"color:#D2A8FF\"> findUser</span><span style=\"color:#E6EDF3\">(id);</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#E6EDF3\"> company </span><span style=\"color:#FF7B72\">&#x3C;-</span><span style=\"color:#D2A8FF\"> fetchCompany</span><span style=\"color:#E6EDF3\">(user.companyId);</span><br><span style=\"color:#E6EDF3\">    { user, company }</span><br><span style=\"color:#E6EDF3\">  };</span>"
+        "html": "<span style=\"color:#FF7B72\">const</span><span style=\"color:#D2A8FF\"> loadProfile</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#E6EDF3\"> (</span><span style=\"color:#FFA657\">id</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#79C0FF\"> string</span><span style=\"color:#E6EDF3\">)</span><span style=\"color:#FF7B72\">:</span><span style=\"color:#FFA657\"> TResult</span><span style=\"color:#E6EDF3\">&#x3C;</span><span style=\"color:#FFA657\">Profile</span><span style=\"color:#E6EDF3\">, </span><span style=\"color:#FFA657\">DbError</span><span style=\"color:#FF7B72\"> |</span><span style=\"color:#FFA657\"> HttpError</span><span style=\"color:#E6EDF3\">> </span><span style=\"color:#FF7B72\">=></span><br><span style=\"color:#FF7B72\">  result</span><span style=\"color:#E6EDF3\"> {</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#79C0FF\"> user</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#FF7B72\"> try</span><span style=\"color:#D2A8FF\"> findUser</span><span style=\"color:#E6EDF3\">(id);</span><br><span style=\"color:#FF7B72\">    const</span><span style=\"color:#79C0FF\"> company</span><span style=\"color:#FF7B72\"> =</span><span style=\"color:#FF7B72\"> try</span><span style=\"color:#D2A8FF\"> fetchCompany</span><span style=\"color:#E6EDF3\">(user.companyId);</span><br><span style=\"color:#FF7B72\">    return</span><span style=\"color:#E6EDF3\"> { user, company };</span><br><span style=\"color:#E6EDF3\">  };</span>"
       },
       {
         "kind": "paragraph",
@@ -914,11 +922,19 @@
           },
           {
             "kind": "code",
-            "text": "<-"
+            "text": "try"
           },
           {
             "kind": "text",
-            "text": "는 성공 값을 꺼내고, 실패하면 그 실패를 즉시 반환합니다. 연산을 이어 갈수록 오류 타입은 자동으로 유니언으로 합쳐집니다. 성공 경로처럼 읽히는 이유는 실제로 성공 경로이기 때문입니다. 실패 가능성은 주석이나 호출 스택 몇 단계 위의 "
+            "text": "는 성공 값을 꺼내고, 실패하면 가장 가까운 Result 스코프를 그 실패로 끝냅니다. 여기서는 "
+          },
+          {
+            "kind": "code",
+            "text": "result"
+          },
+          {
+            "kind": "text",
+            "text": " 블록이 그 스코프이므로 바깥 함수는 계속 실행됩니다. 연산을 이어 갈수록 오류 타입은 자동으로 유니언으로 합쳐집니다. 성공 경로처럼 읽히는 이유는 실제로 성공 경로이기 때문입니다. 실패 가능성은 주석이나 호출 스택 몇 단계 위의 "
           },
           {
             "kind": "code",

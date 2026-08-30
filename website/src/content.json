@@ -330,11 +330,13 @@
       "works": {
         "en": [
           "Value binding and propagate-only statements.",
+          "Value-form try works inside larger expressions, including return try f().",
           "Different error paths infer as a union when the function is unannotated.",
           "try await works for asynchronous Result-producing expressions."
         ],
         "ko": [
           "값 바인딩과 전파만 하는 문장을 지원합니다.",
+          "값 형태의 try는 return try f()를 포함한 더 큰 표현식 안에서 사용할 수 있습니다.",
           "반환 타입이 없으면 서로 다른 오류 경로를 유니언으로 추론합니다.",
           "비동기 Result 식에는 try await를 사용할 수 있습니다."
         ]
@@ -342,13 +344,13 @@
       "limits": {
         "en": [
           "Result only; convert Option with Option.okOr first.",
-          "Statement position inside a function only, with a trailing semicolon.",
-          "return try f(), module-level try, and direct use inside match or result blocks are rejected."
+          "try needs a legal nearest Result scope: an ordinary function or a claimed result block.",
+          "Module scope, constructors, generators, static blocks, repeated loop positions, and crossings from isolated value regions to an outer result block are rejected."
         ],
         "ko": [
           "Result만 지원하며 Option은 먼저 Option.okOr로 변환해야 합니다.",
-          "함수 내부 문장 위치에서만 쓸 수 있고 세미콜론이 필수입니다.",
-          "return try f(), 모듈 최상위 try, match나 result 블록의 직접 사용은 허용하지 않습니다."
+          "try에는 일반 함수나 인식된 result 블록처럼 적법한 가장 가까운 Result 스코프가 필요합니다.",
+          "모듈 스코프, 생성자, 제너레이터, 정적 블록, 반복되는 루프 위치, 고립 값 영역에서 바깥 result 블록으로의 교차는 허용하지 않습니다."
         ]
       }
     },
@@ -523,29 +525,29 @@
         "en": "Flatten a sequence of Result-producing operations without nested callbacks.",
         "ko": "Result 연산의 연속을 중첩 콜백 없이 평탄하게 작성합니다."
       },
-      "code": "const view = result {\n  const user <- getUser(id);\n  const company <- getCompany(user.companyId);\n  { user, company }\n};",
+      "code": "const view = result {\n  const user = try getUser(id);\n  const company = try getCompany(user.companyId);\n  return { user, company };\n};",
       "works": {
         "en": [
-          "Each <- unwraps Ok and returns Err from the block.",
+          "Each direct try unwraps Ok and completes the block with Err on failure.",
           "Bindings stay in scope for later statements.",
-          "Different error types combine as a union; await stays in the surrounding async owner or is awaited at an expression-only boundary."
+          "An explicit return completes the block with Ok; different error types combine as a union."
         ],
         "ko": [
-          "각 <-는 Ok를 풀고 Err이면 블록을 반환합니다.",
+          "각 직접 try는 Ok 값을 풀고 실패하면 블록을 Err로 끝냅니다.",
           "바인딩은 이후 문장 전체에서 유지됩니다.",
-          "서로 다른 오류 타입은 유니언이 되며 await는 바깥 async 문맥이나 표현식 전용 awaited 경계에서 실행됩니다."
+          "명시적인 return은 블록을 Ok로 끝내며 서로 다른 오류 타입은 유니언으로 합쳐집니다."
         ]
       },
       "limits": {
         "en": [
-          "The block is claimed only when it contains at least one <- binding.",
-          "Bindings need semicolons; the final value expression must not have one.",
-          "Bindings must be top-level statements; try and let-else cannot directly return from the block."
+          "The block is claimed only when it contains a tt try whose nearest lexical Result scope is that block.",
+          "The body is a statement list; every reachable success path needs return value; or return;.",
+          "Returning an existing Result nests it inside Ok; write return try value; to propagate its Err instead."
         ],
         "ko": [
-          "<- 바인딩이 하나 이상 있을 때만 result 블록으로 인식합니다.",
-          "바인딩에는 세미콜론이 필요하지만 마지막 값 식에는 쓰면 안 됩니다.",
-          "바인딩은 최상위 문장이어야 하며 try와 let-else가 블록을 직접 반환할 수 없습니다."
+          "가장 가까운 어휘적 Result 스코프가 해당 블록인 tt try가 있을 때만 result 블록으로 인식합니다.",
+          "본문은 문장 목록이며 도달 가능한 모든 성공 경로에 return 값; 또는 return;이 필요합니다.",
+          "기존 Result를 반환하면 Ok 안에 중첩되므로 Err를 전파하려면 return try 값;을 사용합니다."
         ]
       }
     },
