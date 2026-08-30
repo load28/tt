@@ -564,6 +564,31 @@ pub(crate) enum Pattern {
     /// and tag patterns never mix in one match (the emitted discriminant
     /// differs: `$tt_m` vs `$tt_m.kind`) — that is a semantic check.
     Literals(Vec<LiteralPattern>),
+    /// One or more `is` class alternatives: `is Error`,
+    /// `is ns.Error { message }`, or `is RangeError | is TypeError`.
+    /// Class alternatives deliberately carry property bindings only on a
+    /// single alternative; semantic analysis rejects bindings on an
+    /// or-pattern because ttc does not answer intersection-property
+    /// questions.
+    Instances(Vec<InstancePattern>),
+}
+
+/// One `instanceof` alternative in an [`Pattern::Instances`] arm.
+#[derive(Debug)]
+pub(crate) struct InstancePattern {
+    /// Canonical dotted constructor path, used for structural duplicate
+    /// identity (`ns . Error` and `ns.Error` are one constructor).
+    pub path: String,
+    /// Source span of the constructor path, excluding the contextual `is`.
+    pub path_span: Span,
+    /// Byte offset of the contextual `is` keyword.
+    pub is_off: usize,
+    /// Byte just past this alternative, including a property pattern.
+    pub end: usize,
+    /// `None` when no braces were written; `Some` when `{ ... }` was
+    /// written. An empty list is retained so sema can issue the dedicated
+    /// "remove the braces" diagnostic.
+    pub bindings: Option<Vec<Binding>>,
 }
 
 /// One literal alternative inside a pattern.

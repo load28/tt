@@ -353,6 +353,34 @@ impl Lowering<'_> {
                     .collect(),
             ),
             Pat::Literal(_) => PatternPlan::Test(Test::Literal { place, pattern }),
+            Pat::Instance {
+                constructor,
+                fields,
+                ..
+            } => {
+                let mut parts = vec![PatternPlan::Test(Test::InstanceOf {
+                    place: place.clone(),
+                    constructor: *constructor,
+                })];
+                for field in fields.as_deref().unwrap_or_default() {
+                    let access = FieldAccess::Recovery {
+                        node: field.node,
+                        name: field.name.clone(),
+                    };
+                    let mut field_place = place.clone();
+                    field_place.fields.push(access);
+                    let FieldBinding::Named { alias } = &field.binding else {
+                        crate::ice::bug!("class property pattern contains a nested pattern")
+                    };
+                    let binding = alias.as_ref().map_or(field.node, |(_, node)| *node);
+                    parts.push(PatternPlan::Bind(Bind {
+                        source: field_place,
+                        source_field: None,
+                        binding,
+                    }));
+                }
+                PatternPlan::AllOf(parts)
+            }
             Pat::Constructor { path, fields } => {
                 let constructor = match self.semantic.resolution.uses.get(&path.node) {
                     Some(Res::Variant(reference)) => Constructor::Resolved {
@@ -478,7 +506,7 @@ fn pattern_has_literal(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
         Pat::Or(parts) | Pat::Tuple(parts) => {
             parts.iter().any(|part| pattern_has_literal(hir, *part))
         }
-        Pat::Wildcard | Pat::Constructor { .. } => false,
+        Pat::Wildcard | Pat::Constructor { .. } | Pat::Instance { .. } => false,
     }
 }
 
@@ -498,10 +526,9 @@ fn match_kind(decision: &Decision) -> DecisionKind {
     });
     let switch = decision.subjects.len() == 1
         && decision.arms.iter().all(|arm| arm.guard.is_none())
-        && decision
-            .arms
-            .iter()
-            .all(|arm| !pattern_has_nested_test(&arm.pattern));
+        && decision.arms.iter().all(|arm| {
+            !pattern_has_nested_test(&arm.pattern) && !pattern_has_instance_test(&arm.pattern)
+        });
     let dispatch = if !switch {
         MatchDispatch::Conditional
     } else if decision
@@ -525,7 +552,9 @@ fn pattern_has_literal_test(plan: &PatternPlan) -> bool {
         PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
             parts.iter().any(pattern_has_literal_test)
         }
-        PatternPlan::Any | PatternPlan::Bind(_) | PatternPlan::Test(Test::Variant { .. }) => false,
+        PatternPlan::Any
+        | PatternPlan::Bind(_)
+        | PatternPlan::Test(Test::Variant { .. } | Test::InstanceOf { .. }) => false,
     }
 }
 
@@ -535,7 +564,21 @@ fn pattern_has_nested_test(plan: &PatternPlan) -> bool {
         PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
             parts.iter().any(pattern_has_nested_test)
         }
-        PatternPlan::Any | PatternPlan::Bind(_) | PatternPlan::Test(Test::Literal { .. }) => false,
+        PatternPlan::Any
+        | PatternPlan::Bind(_)
+        | PatternPlan::Test(Test::Literal { .. } | Test::InstanceOf { .. }) => false,
+    }
+}
+
+fn pattern_has_instance_test(plan: &PatternPlan) -> bool {
+    match plan {
+        PatternPlan::Test(Test::InstanceOf { .. }) => true,
+        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+            parts.iter().any(pattern_has_instance_test)
+        }
+        PatternPlan::Any
+        | PatternPlan::Bind(_)
+        | PatternPlan::Test(Test::Variant { .. } | Test::Literal { .. }) => false,
     }
 }
 
@@ -746,6 +789,10 @@ fn validate_test(test: &Test, semantic: &SemanticFile) {
                 pattern.index() < semantic.hir.patterns.len(),
                 "Core IR literal pattern is invalid"
             );
+        }
+        Test::InstanceOf { place, constructor } => {
+            validate_place(place, semantic);
+            validate_node(*constructor, semantic);
         }
     }
 }

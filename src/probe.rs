@@ -423,6 +423,7 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
                 }
                 kind = Kind::Tag;
             }
+            Pattern::Instances(_) => return,
             Pattern::Wildcard => {}
         }
     }

@@ -801,28 +801,34 @@ impl Checker {
     }
 
     fn check_match(&mut self, expr: &MatchExpr, place: Place) {
-        // Literal and tag patterns discriminate on different things
-        // (`$tt_m` vs `$tt_m.kind`), so one match cannot hold both.
-        let arm_kind = |arm: &Arm| match &arm.pattern {
-            Pattern::Wildcard => None,
-            Pattern::Tags(_) => Some("tag"),
-            Pattern::Literals(_) => Some("literal"),
-        };
-        if let Some(first) = expr.arms.iter().find_map(arm_kind)
+        // Class tests and literals both compare the subject value and may
+        // share one ordered conditional chain. Variant tags discriminate on
+        // `.kind` and therefore cannot mix with either family.
+        let has_tag = expr
+            .arms
+            .iter()
+            .any(|arm| matches!(arm.pattern, Pattern::Tags(_)));
+        let has_value_pattern = expr
+            .arms
+            .iter()
+            .any(|arm| matches!(arm.pattern, Pattern::Literals(_) | Pattern::Instances(_)));
+        if has_tag
+            && has_value_pattern
             && let Some(other) = expr
                 .arms
                 .iter()
-                .find(|a| arm_kind(a).is_some_and(|k| k != first))
+                .find(|arm| matches!(arm.pattern, Pattern::Literals(_) | Pattern::Instances(_)))
         {
+            let mixed = if matches!(other.pattern, Pattern::Literals(_)) {
+                "match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)"
+            } else {
+                "match: cannot mix tag patterns and `is` patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)"
+            };
             self.error(
                 TtError::span(
                     other.pattern_span.start,
                     other.pattern_span.end,
-                    format!(
-                        "match: cannot mix tag patterns and literal patterns in the same \
-                         match (this match starts with {first} patterns) — the two compare \
-                         different things (`$tt_m.kind` vs `$tt_m`)"
-                    ),
+                    mixed.to_string(),
                 )
                 .code(DiagnosticCode::MatchMixedPatterns)
                 .help("split them into two matches")
@@ -831,6 +837,33 @@ impl Checker {
             // A mixed match has no one discriminant, so its coverage answer
             // is not worth asking — report the cause, not its effects.
             self.coverage_suppressed.push(expr.keyword_off);
+        }
+
+        let has_instances = expr
+            .arms
+            .iter()
+            .any(|arm| matches!(arm.pattern, Pattern::Instances(_)));
+        if has_instances {
+            // Class hierarchies are open; wildcard presence is the complete
+            // exhaustiveness rule and the variant/literal coverage engines
+            // must not infer anything else for this site.
+            self.coverage_suppressed.push(expr.keyword_off);
+            if !expr
+                .arms
+                .iter()
+                .any(|arm| matches!(arm.pattern, Pattern::Wildcard))
+            {
+                self.error(
+                    TtError::span(
+                        expr.keyword_off,
+                        expr.keyword_off + "match".len(),
+                        "match: an `is` match requires a final wildcard arm `_`".to_string(),
+                    )
+                    .code(DiagnosticCode::MatchIsWildcardRequired)
+                    .help("add `_ => <fallback>` as the last arm")
+                    .owner(expr.keyword_off, expr.body_close + 1),
+                );
+            }
         }
 
         // Tags covered by an unguarded arm. Any later arm repeating one of
@@ -948,6 +981,77 @@ impl Checker {
                         covered.append(&mut arm_tags);
                     }
                 }
+                Pattern::Instances(alts) => {
+                    if alts.len() > 1
+                        && let Some(bound) = alts.iter().find(|alt| alt.bindings.is_some())
+                    {
+                        self.error(
+                            TtError::span(
+                                bound.is_off,
+                                bound.end,
+                                "match: an `is` or-pattern cannot bind properties".to_string(),
+                            )
+                            .code(DiagnosticCode::MatchIsOrBindings)
+                            .help("use type-only alternatives or split them into separate arms"),
+                        );
+                    }
+                    let mut arm_paths: Vec<&str> = Vec::new();
+                    for alt in alts {
+                        if alt.bindings.as_ref().is_some_and(Vec::is_empty) {
+                            self.error(
+                                TtError::span(
+                                    alt.is_off,
+                                    alt.end,
+                                    format!(
+                                        "match: `is {} {{ }}` has an empty property pattern",
+                                        alt.path
+                                    ),
+                                )
+                                .code(DiagnosticCode::MatchIsEmptyBindings)
+                                .help("remove the braces"),
+                            );
+                        }
+                        if let Some(bindings) = &alt.bindings {
+                            let mut names: Vec<&str> = Vec::new();
+                            for binding in bindings {
+                                let name = binding.alias.as_deref().unwrap_or(&binding.name);
+                                if names.contains(&name) {
+                                    self.error(
+                                        TtError::span(
+                                            binding.name_span.start,
+                                            binding.name_span.end,
+                                            format!(
+                                                "match: binding `{name}` is used more than once in this pattern"
+                                            ),
+                                        )
+                                        .code(DiagnosticCode::PatternDuplicateBinding)
+                                        .help("rename one of them with `field: alias`"),
+                                    );
+                                } else {
+                                    names.push(name);
+                                }
+                            }
+                        }
+                        if covered.contains(&alt.path.as_str())
+                            || arm_paths.contains(&alt.path.as_str())
+                        {
+                            self.error(
+                                TtError::span(
+                                    alt.path_span.start,
+                                    alt.path_span.end,
+                                    format!("match: duplicate arm `is {}`", alt.path),
+                                )
+                                .code(DiagnosticCode::MatchDuplicateArm),
+                            );
+                        } else {
+                            arm_paths.push(&alt.path);
+                        }
+                    }
+                    // Constructor identity is structural and independent of
+                    // guards: the RFC deliberately rejects two arms naming
+                    // the same path even when their guards differ.
+                    covered.extend(arm_paths);
+                }
             }
         }
 
@@ -960,6 +1064,33 @@ impl Checker {
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {
                 self.visit_program(&guard.expr, Ctx::Expr, isolated);
+            }
+            if arm.block {
+                for control in crate::flow::outward_controls_in_span(
+                    &self.source,
+                    &self.tokens,
+                    &arm.body,
+                    arm.body_span,
+                ) {
+                    let (span, message, help) = match control {
+                        crate::flow::OutwardControl::Break { span, .. } => (
+                            span,
+                            "`break` cannot leave a match arm",
+                            "break only a loop or switch written inside this arm",
+                        ),
+                        crate::flow::OutwardControl::Continue { span, .. } => (
+                            span,
+                            "`continue` cannot leave a match arm",
+                            "continue only a loop written inside this arm",
+                        ),
+                        crate::flow::OutwardControl::Yield(_) => continue,
+                    };
+                    self.error(
+                        TtError::span(span.start, span.end, message.to_string())
+                            .code(DiagnosticCode::MatchControlCrossing)
+                            .help(help),
+                    );
+                }
             }
             // A block arm body is a statement context inside the value region.
             self.visit_program(

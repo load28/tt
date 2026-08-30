@@ -210,6 +210,10 @@ pub(crate) enum Test {
         place: Place,
         pattern: crate::hir::PatternId,
     },
+    /// JavaScript class identity test. The constructor is copied from its
+    /// source node so namespaces and local bindings retain ordinary
+    /// TypeScript name resolution.
+    InstanceOf { place: Place, constructor: NodeId },
 }
 
 #[derive(Debug, Clone)]
@@ -480,7 +484,7 @@ mod tests {
                     PatternPlan::Test(Test::Variant { constructor, .. }) => {
                         matches!(constructor, Constructor::Resolved { .. })
                     }
-                    PatternPlan::Test(Test::Literal { .. }) => true,
+                    PatternPlan::Test(Test::Literal { .. } | Test::InstanceOf { .. }) => true,
                     PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
                         parts.iter().all(resolved)
                     }

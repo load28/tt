@@ -132,6 +132,24 @@ pub(crate) struct HostEvaluationStep {
     /// [`HostEvaluationOperation::Conditional`] — everything lowering needs
     /// to restructure the *whole* operation rather than just its inputs.
     pub(crate) conditional: Option<ConditionalFacts>,
+    /// The complete loop boundary when this step owns a repeated condition.
+    /// Target lowering uses these spans to move the condition's statement
+    /// region inside the loop without changing its evaluation count.
+    pub(crate) loop_test: Option<LoopTestFacts>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LoopTestFacts {
+    pub(crate) kind: LoopTestKind,
+    pub(crate) test: SourceSpan,
+    pub(crate) body: SourceSpan,
+    pub(crate) update: Option<SourceSpan>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LoopTestKind {
+    While,
+    For,
 }
 
 /// The complete syntactic structure of one conditional operation, read off
@@ -288,6 +306,7 @@ pub(crate) enum HostEvaluationOperation {
     Conditional(ConditionalBranch),
     Reference(ReferencePosition),
     Suspend(SuspensionKind),
+    LoopTest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1582,6 +1601,13 @@ enum ProjectedProtocolFrame {
         kind: SuspensionKind,
         value: Option<ProjectedSpan>,
     },
+    LoopTest {
+        parent: ProjectedSpan,
+        kind: LoopTestKind,
+        test: ProjectedSpan,
+        body: ProjectedSpan,
+        update: Option<ProjectedSpan>,
+    },
 }
 
 impl ProjectedProtocolFrame {
@@ -1597,7 +1623,8 @@ impl ProjectedProtocolFrame {
             | ProjectedProtocolFrame::TaggedTemplate { parent, .. }
             | ProjectedProtocolFrame::Template { parent, .. }
             | ProjectedProtocolFrame::Jsx { parent, .. }
-            | ProjectedProtocolFrame::Suspend { parent, .. } => *parent,
+            | ProjectedProtocolFrame::Suspend { parent, .. }
+            | ProjectedProtocolFrame::LoopTest { parent, .. } => *parent,
         }
     }
 }
@@ -1902,10 +1929,15 @@ impl ParentCollector {
                 protocol: evaluation_protocol(
                     &self.source_segments,
                     entry.projected,
+                    entry.source,
                     &found
                         .protocol_frames
                         .iter()
-                        .filter(|frame| projected_contains(projected_owner.span, frame.parent()))
+                        .filter(|frame| {
+                            projected_contains(projected_owner.span, frame.parent())
+                                && (!matches!(frame, ProjectedProtocolFrame::LoopTest { .. })
+                                    || entry.marker == OverlayMarker::DecisionCallExpression)
+                        })
                         .cloned()
                         .collect::<Vec<_>>(),
                 )?,
@@ -2135,9 +2167,24 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.break_capture_depth += 1;
+        if let Some(test) = &node.test {
+            self.protocol_frames.push(ProjectedProtocolFrame::LoopTest {
+                parent: projected_span(node.span, self.source_start),
+                kind: LoopTestKind::For,
+                test: projected_span(test.span(), self.source_start),
+                body: projected_span(node.body.span(), self.source_start),
+                update: node
+                    .update
+                    .as_ref()
+                    .map(|update| projected_span(update.span(), self.source_start)),
+            });
+        }
         <swc_ecma_ast::ForStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
             node, self, path,
         );
+        if node.test.is_some() {
+            self.protocol_frames.pop();
+        }
         self.break_capture_depth -= 1;
     }
 
@@ -2171,9 +2218,17 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.break_capture_depth += 1;
+        self.protocol_frames.push(ProjectedProtocolFrame::LoopTest {
+            parent: projected_span(node.span, self.source_start),
+            kind: LoopTestKind::While,
+            test: projected_span(node.test.span(), self.source_start),
+            body: projected_span(node.body.span(), self.source_start),
+            update: None,
+        });
         <swc_ecma_ast::WhileStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(
             node, self, path,
         );
+        self.protocol_frames.pop();
         self.break_capture_depth -= 1;
     }
 
@@ -2464,12 +2519,13 @@ impl VisitAstPath for ParentCollector {
 fn evaluation_protocol(
     segments: &[ProjectionSourceSegment],
     value: ProjectedSpan,
+    source_value: SourceSpan,
     frames: &[ProjectedProtocolFrame],
 ) -> Result<HostEvaluationProtocol, ProgramSyntaxError> {
     let steps = frames
         .iter()
         .rev()
-        .map(|frame| protocol_step(segments, value, frame))
+        .map(|frame| protocol_step(segments, value, source_value, frame))
         .collect::<Result<Vec<_>, ProgramSyntaxError>>()?
         .into_iter()
         .flatten()
@@ -2488,9 +2544,16 @@ struct ProjectedConditionalFacts {
 fn protocol_step(
     segments: &[ProjectionSourceSegment],
     value: ProjectedSpan,
+    source_value: SourceSpan,
     frame: &ProjectedProtocolFrame,
 ) -> Result<Option<HostEvaluationStep>, ProgramSyntaxError> {
     let mut conditional: Option<ProjectedConditionalFacts> = None;
+    let mut loop_test: Option<(
+        LoopTestKind,
+        ProjectedSpan,
+        ProjectedSpan,
+        Option<ProjectedSpan>,
+    )> = None;
     let (parent, operation, inputs) = match frame {
         ProjectedProtocolFrame::Ordered {
             parent,
@@ -2803,9 +2866,23 @@ fn protocol_step(
         } if projected_contains(*argument, value) => {
             (*parent, HostEvaluationOperation::Suspend(*kind), Vec::new())
         }
+        ProjectedProtocolFrame::LoopTest {
+            parent,
+            kind,
+            test,
+            body,
+            update,
+        } if projected_contains(*test, value) => {
+            loop_test = Some((*kind, *test, *body, *update));
+            (*parent, HostEvaluationOperation::LoopTest, Vec::new())
+        }
         _ => return Ok(None),
     };
-    let parent = map_evaluation_span(segments, parent)?;
+    let parent = if operation == HostEvaluationOperation::LoopTest {
+        source_value
+    } else {
+        map_evaluation_span(segments, parent)?
+    };
     let inputs = inputs
         .into_iter()
         .map(|(source, mode, receiver, effects)| {
@@ -2851,11 +2928,28 @@ fn protocol_step(
             })
         })
         .transpose()?;
+    let loop_test = loop_test
+        .map(|(kind, test, body, update)| {
+            Ok(LoopTestFacts {
+                kind,
+                test: if test == value {
+                    source_value
+                } else {
+                    map_structural_span(segments, test)?
+                },
+                body: map_structural_span(segments, body)?,
+                update: update
+                    .map(|span| map_structural_span(segments, span))
+                    .transpose()?,
+            })
+        })
+        .transpose()?;
     Ok(Some(HostEvaluationStep {
         parent,
         operation,
         inputs,
         conditional,
+        loop_test,
     }))
 }
 
@@ -2869,6 +2963,35 @@ fn map_evaluation_span(
             end: projected.end.0,
         },
     )
+}
+
+fn map_structural_span(
+    segments: &[ProjectionSourceSegment],
+    projected: ProjectedSpan,
+) -> Result<SourceSpan, ProgramSyntaxError> {
+    if let Some(span) = source_span_for_projection(segments, projected) {
+        return Ok(span);
+    }
+    let start = segments
+        .iter()
+        .find(|segment| {
+            projected.start <= segment.projected.start && segment.projected.start < projected.end
+        })
+        .map(|segment| segment.source.start);
+    let end = segments
+        .iter()
+        .rev()
+        .find(|segment| {
+            projected.start < segment.projected.end && segment.projected.end <= projected.end
+        })
+        .map(|segment| segment.source.end);
+    match start.zip(end) {
+        Some((start, end)) if start <= end => Ok(SourceSpan { start, end }),
+        _ => Err(ProgramSyntaxError::UnmappedEvaluationSpan {
+            start: projected.start.0,
+            end: projected.end.0,
+        }),
+    }
 }
 
 fn projected_contains(container: ProjectedSpan, value: ProjectedSpan) -> bool {
@@ -3291,6 +3414,20 @@ mod tests {
             .expect("match overlay")
             .context;
         assert_eq!(context.frequency, EvaluationFrequency::Repeated);
+    }
+
+    #[test]
+    fn a_while_test_records_its_repeated_owner_protocol() {
+        let syntax = syntax("variant E { A, B }\nwhile (match (e) { A => true, B => false }) {}\n");
+        let entry = syntax
+            .overlay
+            .iter()
+            .find(|entry| entry.category == SyntaxCategory::Expression)
+            .expect("match overlay");
+        assert_eq!(entry.context.owner_reach, OwnerReach::Repeated);
+        assert!(entry.protocol.steps().iter().any(|step| {
+            step.operation == HostEvaluationOperation::LoopTest && step.loop_test.is_some()
+        }));
     }
 
     #[test]

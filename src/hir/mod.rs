@@ -577,6 +577,17 @@ pub enum Pat {
         /// The destructured fields; `None` when no parens were written.
         fields: Option<Vec<FieldPat>>,
     },
+    /// `is Type` / `is Type { field }` — a JavaScript `instanceof`
+    /// constructor path plus optional property materialization. The path is
+    /// intentionally not resolved as a tt variant constructor.
+    Instance {
+        /// Span of the dotted constructor path as written.
+        constructor: NodeId,
+        /// Canonical dotted path used for structural duplicate identity.
+        path: String,
+        /// Property bindings; `None` when no braces were written.
+        fields: Option<Vec<FieldPat>>,
+    },
     /// `"north"`, `200`, `true`, `1n`.
     Literal(LitValue),
 }
