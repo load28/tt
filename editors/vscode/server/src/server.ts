@@ -769,7 +769,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "Rust의 `?`에 해당. `Err`면 둘러싼 함수에서 즉시 return합니다. 세미콜론 필수.",
+        "Rust의 `?`에 해당합니다. `Ok` 값을 풀고 `Err`이면 가장 가까운 Result 스코프(`result` 블록 또는 일반 함수)를 끝냅니다. 이 completion은 세미콜론이 필요한 문장 형태를 삽입합니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "try ${1:expression};",
@@ -793,10 +793,10 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`Result` 연산을 평탄하게 잇습니다. `const x <- 식;`은 `Ok` 값을 묶고 `Err`를 블록 밖으로 전파하며, 마지막 값 식(세미콜론 없이)이 `Ok`로 감싸집니다.",
+        "`Result` 연산을 평탄하게 잇습니다. `const x = try 식;`은 `Ok` 값을 묶고 실패하면 블록을 `Err`로 끝냅니다. 명시적인 `return 값;`은 `Ok`로 감싸집니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
-    insertText: "result {\n\tconst ${1:value} <- ${2:expression};\n\t$0\n}",
+    insertText: "result {\n\tconst ${1:value} = try ${2:expression};\n\treturn ${1:value};\n}",
   },
   {
     label: "let-else",
