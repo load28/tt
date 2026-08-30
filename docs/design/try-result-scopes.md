@@ -1,9 +1,11 @@
 # Design: one `try`, `result` as a nested Result scope
 
-- **Status**: Implemented on the Result-scope branch. The language model and
-  implementation order below remain the acceptance contract.
-- **Baseline**: `33acccc` (`TASK-280: lower try through expression evaluation`,
-  PR #87). Every claim in this document was checked against that tree.
+- **Status**: Implemented on `main`. The language model below is the shipped
+  contract; the implementation order is retained as historical rationale.
+- **Baseline**: `a308c64` (PR #88) introduced the shipped Result-scope model.
+  TASK-302 through TASK-305 repair its completion labels, statement-match
+  preservation, expression boundaries, template ownership, and TypeScript-clean
+  discrimination without changing that language model.
 - **Audience**: An implementing agent. This document is the full brief. Do not
   reconstruct the model from chat history; this file is the source.
 - **Provenance**: Recorded by TASK-281. Two three-agent deliberations reviewed
@@ -21,7 +23,7 @@ should keep running.
 
 ## 2. Why this exists
 
-Today tt has two spellings for the same operation:
+Before PR #88, tt had two spellings for the same operation:
 
 | Surface | Unwraps `Ok` | On `Err` |
 |---|---|---|
@@ -29,37 +31,40 @@ Today tt has two spellings for the same operation:
 | `const x <- expr;` inside `result { }` | yes | the **`result` block** becomes that `Err` |
 
 `result` was not invented because a second operator was needed. It exists
-because the **exit target** is different. `try` currently always leaves the
+because the **exit target** is different. At that baseline, `try` always left the
 function, so the function's return type must be `Result`. Nested
 `Result.andThen` chains need a local `Result` scope that does *not* force
 the outer function to return `Result`. That local scope is the `result`
 block.
 
-The current design then forbids `try` inside `result` (it would `return`
+The old design then forbade `try` inside `result` (it would `return`
 from the block's lowering, which users read as "leave the function") and
 invents `<-` plus a Rust-style last expression with no semicolon. Those two
 spellings are what feel unlike TypeScript.
 
-This proposal keeps two scopes and uses **one operator**.
+The shipped design keeps two scopes and uses **one operator**.
 
-## 3. Current baseline: `33acccc`
+## 3. Shipped and repaired implementation baseline
 
-`33acccc` is the only implementation baseline. It contains TASK-280's expression-position `try`, prefix-primary operand grammar, HIR `Expr::Try`, Core `Propagate`, and host-evaluation lowering in function scope. Statement and expression forms both target `ExitTarget::EnclosingFunction`; neither has nearest-`result` identity yet (`src/ast.rs:429-440`, `src/hir/mod.rs:402-408`, `src/core_ir/lower.rs:185-193`, `src/core_ir/mod.rs:292-306`).
+`a308c64` ships statement-bodied Result blocks, nearest lexical Result scope,
+Result-owned success completion, and `<-` removal. Both statement and expression
+`try` lower through Core `Propagate`; direct Result-body propagation targets a
+stable `ResultRegionId`, while function propagation targets
+`ExitTarget::EnclosingFunction`.
 
-The current `result` form still uses top-level `<-` bindings and a semicolon-free tail expression. Direct `try` in a result body is rejected with help to use `<-` (`src/sema.rs:451-466`, `docs/ai/tt.md:65-77`). Those are current rules to migrate, not the proposed final language.
+TASK-302 through TASK-305 close defects found after that shipment:
 
-The baseline also contains defects that must be repaired independently before Result-scope language work begins:
-
-| Defect | Dual-binary attribution | Required disposition |
+| Repair | Implemented contract |
 |---|---|---|
-| C-style `for` declaration-init/test projection ICE; discarded-Result source-preservation ICE | Pre-existing on `b3934cd` and `33acccc` | Located diagnostic or valid TypeScript; never unwind |
-| Expression-boundary `result` containing value-form `try`; pipeline concise-arrow invalid emit | Regressions introduced by #87 | Located diagnostic or valid TypeScript; never invalid emit |
-| Constructor and generator propagation | Statement form pre-existing; expression reach widened by #87 | Reject both forms at the `try` span |
-| Lowering-plan failures escaping public consumers | Failure mode pre-existing; `analyze` path exposed by current lowering integration | Return located diagnostics to every client |
+| Result completion exits | Every success and failure targets a collision-free generated Result label, so user loops and `switch` statements cannot capture it |
+| Statement-position `match` | The complete dispatch, source evaluation, arm effects, join-slot declaration, and mappings are preserved inside Result bodies |
+| Expression and template hosts | Ordinary Result success returns through an explicit expression-boundary continuation; template-hosted bodies retain their success ownership |
+| Result discrimination | Core IR represents one structural success-field operation, emitted as TypeScript-clean narrowing for direct, widened, aliased, and generic Results |
 
-The attribution is established by running identical inputs through binaries built from `b3934cd` and `33acccc`; it is not inferred from source history. These repairs are the independent prerequisites P0–P6 in §9.
+These are compiler repairs, not changes to success, failure, placement, or
+return semantics.
 
-## 4. Proposed language
+## 4. Implemented language
 
 ### 4.1 `try` — one operation, expression
 
@@ -130,7 +135,7 @@ const data = await (async () => {
 })();
 ```
 
-Proposed tt:
+tt:
 
 ```tt
 const data = result {
@@ -402,9 +407,11 @@ The shape accepted on `33acccc` in which a value-producing isolated region conta
 - TypeScript backend projection returns only checker facts. tt constructs `result-return-nested` and its suggestion.
 - CLI, server, mapper, and Engine expose the same located diagnostics and never use an unwind or empty answer as recovery.
 
-## 9. Implementation order
+## 9. Historical implementation order
 
-Use the ordered, green plan below. Begin from `33acccc`; do not re-integrate TASK-280 or recreate old slice 1. Independent shipped-code prerequisites land first, and language slices follow without reopening placement or ownership decisions.
+The ordered plan below records how the shipped model was derived from
+`33acccc`. It is retained for rationale and is not a description of unfinished
+work in the current tree.
 
 Every item is a green commit with its tests. P0–P6 are independent shipped-code tasks, each with its own `docs/tasks/TASK-NNN-*.md` record against `33acccc`; each may merge to `main` alone and remains valuable if this proposal is abandoned. No language slice begins until all prerequisites are Complete on `main` or have been cherry-picked onto the implementation branch and the P-matrix gate below is green.
 
@@ -475,8 +482,15 @@ Do not reopen these unless the language contract is shown to break.
 11. Constructor-, generator-, async-generator-, and static-block-owned function propagation is rejected; nested ResultRegions remain Legal.
 12. Result completion has one semantic representation and two host-selected printers; ResultRegion call registration and `region.value` projection are both required.
 
-## 12. Current tree vs this proposal
+## 12. Current tree
 
-`33acccc` already ships TASK-280 as PR #87: expression `try`, prefix-primary parsing, function-targeted Core propagation, and host-evaluation lowering are the baseline. Preserve that valid surface while repairing the independent defects in §9. The tree does not yet implement ResultRegion identity, Result-targeted propagation, statement-bodied Result syntax, Result-owned completion capture, `<-` removal, crossing/must-use diagnostics, or typed nested-Result detection.
+The tree implements ResultRegion identity, Result-targeted propagation,
+statement-bodied Result syntax, Result-owned completion capture, `<-` removal,
+crossing and must-use diagnostics, and typed nested-Result detection. TASK-302
+through TASK-305 additionally guarantee collision-free completion exits,
+statement-match preservation, ordinary success at expression boundaries,
+template completion ownership, and strict-TypeScript-clean Result narrowing.
 
-The historical TASK-280 gate has been spent. At the syntax cutover, retract both the current sema help and the user guide rule directing inner Result propagation to `<-` (`src/sema.rs:451-466`, `docs/ai/tt.md:65-77`). A passing historical `cargo test` is necessary but insufficient because it caught none of the prerequisite crash, invalid-emit, public-client, constructor, or generator failures; the §9 obligations are required gates.
+The historical implementation sequence in §9 remains useful for explaining the
+layer boundaries, but the executable tests and current task records are the
+verification source for the implemented tree.

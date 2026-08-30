@@ -830,9 +830,10 @@ fn validate_propagate(propagate: &Propagate, file: &CoreFile, semantic: &Semanti
         ExitTarget::ResultRegion(_) => {}
     }
     assert!(
-        !propagate.layout.success_tag.is_empty()
-            && !propagate.layout.discriminant_field.is_empty()
-            && !propagate.layout.payload_field.is_empty(),
+        matches!(
+            propagate.layout.discriminator,
+            ResultDiscriminator::SuccessFieldPresent(field) if !field.is_empty()
+        ) && !propagate.layout.payload_field.is_empty(),
         "Core IR Result layout is empty"
     );
 }

@@ -1,9 +1,9 @@
 # TASK-304: Repair expression-boundary and template-hosted Result
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-302: repair Result completion defects`
 
 ## Purpose
 
@@ -35,28 +35,29 @@ No accepted host aborts the compiler; an unsupported shape receives a located st
 Record every decision this task makes, including any new public diagnostic code
 and any wire-compatibility choice, with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Model lexical return as an explicit continuation
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Expression-boundary Result success was routed through assignment-only code, while template lexing hid nested Result returns from flow analysis.
+- **Alternatives considered**: Add host-specific branches, force assignment slots, or represent return as a continuation destination.
+- **Decision and rationale**: Add an explicit return destination and lex the owned Result body span independently. The same continuation now covers class fields, defaults, generators, templates, and async boundaries.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Began pinning expression-boundary ICEs and template success ownership with minimal accepted inputs.
+- 2026-08-30: Added compile, runtime, and mapping coverage for every affected host protocol.
 
 ## Issues and resolutions
 
-None.
+- Template literals arrived as opaque outer lexer tokens; flow analysis now lexes the Result-owned body span directly.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+Ordinary Result success now completes every accepted expression boundary, and
+template-hosted Result bodies retain their success ownership.

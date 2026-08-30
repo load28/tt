@@ -1,9 +1,9 @@
 # TASK-306: Close the Result design and user-surface documentation
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-302: repair Result completion defects`
 
 ## Purpose
 
@@ -35,28 +35,29 @@ No shipped surface describes pre-repair behaviour, and no defect repair is hidde
 Record every decision this task makes, including any new public diagnostic code
 and any wire-compatibility choice, with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Document the repaired implementation as shipped behavior
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: The design and language guide still described the pre-repair baseline and proposal state.
+- **Alternatives considered**: Preserve historical wording, add a second repair note, or update the existing sources of truth.
+- **Decision and rationale**: Keep history explicitly historical and make the current design and language guide describe the repaired implementation.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Began auditing the Result design baseline and every user-facing Result example against the repaired compiler.
+- 2026-08-30: Updated the design and language guide, refreshed fixtures, and ran the complete repository gate including extension coverage.
 
 ## Issues and resolutions
 
-None.
+- The extension gate initially selected a stale local release compiler; rebuilding the branch release exposed and verified the plan-less editor recovery path.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+The design record, language guide, fixtures, typed surfaces, and editor path now
+describe and verify the same repaired Result behavior.

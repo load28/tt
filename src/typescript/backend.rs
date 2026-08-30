@@ -197,6 +197,11 @@ pub(crate) struct TypeMismatch {
     /// Minimal incompatible leaves found by descending through unions and
     /// matching generic aliases. Empty means no safe reduction was found.
     pub differences: Vec<TypeDifference>,
+    /// The declaration of the symbol used as the mismatched expression,
+    /// when the checker resolved one. This lets the reporter connect a
+    /// later diagnostic to the lowering that introduced the value without
+    /// guessing from identifier text or source proximity.
+    pub declaration: Option<RelatedInformation>,
 }
 
 /// The smallest expected/found pair the checker can prove incompatible.

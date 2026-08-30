@@ -318,14 +318,17 @@ pub(crate) struct ResultRegionId(pub(crate) NodeId);
 /// than rediscovered by each backend emission site.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ResultLayout {
-    pub success_tag: &'static str,
-    pub discriminant_field: &'static str,
+    pub discriminator: ResultDiscriminator,
     pub payload_field: &'static str,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResultDiscriminator {
+    SuccessFieldPresent(&'static str),
+}
+
 pub(crate) const RESULT_LAYOUT: ResultLayout = ResultLayout {
-    success_tag: "Ok",
-    discriminant_field: "kind",
+    discriminator: ResultDiscriminator::SuccessFieldPresent("value"),
     payload_field: "value",
 };
 

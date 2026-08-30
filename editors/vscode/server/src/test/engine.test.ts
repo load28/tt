@@ -268,9 +268,11 @@ test(
     ].join("\n");
     engine.openDocument(COMPILER, tt, source);
     const diagnostics = await engine.tsDiagnostics(COMPILER, tt);
-    const error = diagnostics.find((d) => d.code === 2339);
+    const error = diagnostics.find(
+      (diagnostic) => sliceOf(source, diagnostic.range) === "try value",
+    );
     assert.ok(error, JSON.stringify(diagnostics));
-    assert.equal(sliceOf(source, error!.range), "try value");
+    assert.match(error!.message, /does not fit the enclosing function's return type/);
     engine.closeDocument(COMPILER, tt);
   },
 );

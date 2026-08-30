@@ -1,9 +1,9 @@
 # TASK-305: Emit a type-clean Result discriminator
 
-- **Status**: Pending
-- **Started**: —
-- **Completed**: —
-- **Commit**: —
+- **Status**: Complete
+- **Started**: 2026-08-30
+- **Completed**: 2026-08-30
+- **Commit**: `TASK-302: repair Result completion defects`
 
 ## Purpose
 
@@ -35,28 +35,30 @@ Every documented propagation shape emits TypeScript that is clean under strict t
 Record every decision this task makes, including any new public diagnostic code
 and any wire-compatibility choice, with its alternatives.
 
-### Decision 1: <one-line summary>
+### Decision 1: Discriminate Result by success-field presence
 
-- **Context**:
-- **Alternatives considered**:
-- **Decision and rationale**:
+- **Context**: Literal `kind` comparison is impossible for statically single-case inputs and produces TS2367.
+- **Alternatives considered**: Widen emitted values with assertions, special-case constructors, or use the structural Result ABI.
+- **Decision and rationale**: Core IR records success-field presence as the discriminator and every propagation emits the same `in` operation. No source spelling or TypeScript assertion is required.
 
 ## Work log
 
-- YYYY-MM-DD: ...
+- 2026-08-30: Began reproducing strict TypeScript discriminator failures across direct, widened, aliased, and generic Result values.
+- 2026-08-30: Added strict TypeScript coverage and connected downstream checker consequences through TypeScript symbol-declaration identity.
+- 2026-08-30: Updated the editor regression to assert the semantic try diagnostic instead of the obsolete `.kind` property-error code.
 
 ## Issues and resolutions
 
-None.
+- Structural narrowing correctly yields `unknown` on an unreachable direct-Err success edge; typed reporting now uses checker symbol identity to suppress only consequences of the already-reported try mismatch.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
 
 ## Result
 
-Summarize the changed files and the outcome, then set this record and the index
-row to `Complete`.
+All direct, widened, aliased, and generic Result shapes use one type-clean
+structural discriminator while typed diagnostics preserve one causal error.

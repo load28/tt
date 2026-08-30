@@ -1708,7 +1708,7 @@ mod tests {
             doc.code
         );
         assert_eq!(doc.recovered.len(), 1);
-        assert!(doc.code.contains("$tt_t0.kind"), "{}", doc.code);
+        assert!(doc.code.contains("\"value\" in $tt_t0"), "{}", doc.code);
         assert!(doc.code.contains("const broken = 0"), "{}", doc.code);
     }
 

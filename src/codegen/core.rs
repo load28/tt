@@ -1010,6 +1010,7 @@ struct ValueContinuation<'name> {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ValueDestination<'name> {
     Expression,
+    Return,
     Assign(&'name str),
 }
 
@@ -1032,6 +1033,12 @@ struct ArmEmissionContext<'context, 'name> {
     chain_exit_label: Option<&'context str>,
 }
 
+struct ResultEmissionContext<'context, 'name> {
+    failure: &'context ValueContinuation<'name>,
+    success: &'context ValueContinuation<'name>,
+    exit_label: Option<&'context str>,
+}
+
 impl<'name> ValueContinuation<'name> {
     fn expression() -> Self {
         Self {
@@ -1043,6 +1050,13 @@ impl<'name> ValueContinuation<'name> {
     fn assign(target: &'name str) -> Self {
         Self {
             destination: ValueDestination::Assign(target),
+            wrappers: Vec::new(),
+        }
+    }
+
+    fn returning() -> Self {
+        Self {
+            destination: ValueDestination::Return,
             wrappers: Vec::new(),
         }
     }
@@ -1068,7 +1082,7 @@ impl<'name> ValueContinuation<'name> {
 
     fn assignment_target(&self) -> Option<&str> {
         match self.destination {
-            ValueDestination::Expression => None,
+            ValueDestination::Expression | ValueDestination::Return => None,
             ValueDestination::Assign(target) => Some(target),
         }
     }
@@ -1076,10 +1090,13 @@ impl<'name> ValueContinuation<'name> {
     /// The text an early exit's `return ` becomes. `grouped` says whether
     /// the value it returns has to keep its parentheses ([`push_grouped`]).
     fn assignment_prefix(&self, grouped: bool) -> String {
-        let target = self
-            .assignment_target()
-            .unwrap_or_else(|| crate::ice::bug!("expression continuation cannot rewrite an exit"));
-        let mut prefix = format!("{target} = ");
+        let mut prefix = match self.destination {
+            ValueDestination::Return => "return ".to_owned(),
+            ValueDestination::Assign(target) => format!("{target} = "),
+            ValueDestination::Expression => {
+                crate::ice::bug!("inline expression continuation cannot rewrite an exit")
+            }
+        };
         for wrapper in &self.wrappers {
             match wrapper {
                 ValueWrapper::ResultOk => {
@@ -1125,6 +1142,14 @@ fn push_region_break(out: &mut Rope<'_>, label: Option<&str>) {
     match label {
         Some(label) => out.push_lit(format!(" break {label};")),
         None => out.push_lit(" break;"),
+    }
+}
+
+fn result_failure_test(temp: &str, layout: ResultLayout) -> String {
+    match layout.discriminator {
+        ResultDiscriminator::SuccessFieldPresent(field) => {
+            format!("!(\"{field}\" in {temp})")
+        }
     }
 }
 
@@ -1498,10 +1523,64 @@ impl<'a> Emitter<'a> {
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
+                Statement::Expr(expr)
+                    if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
+                        && !self
+                            .owner_slot_rewrites
+                            .iter()
+                            .any(|rewrite| rewrite.expr == *expr)
+                        && !self.value_slots.contains_key(expr) =>
+                {
+                    self.emit_statement_expr(*expr, &mut out);
+                }
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
             }
         }
         out
+    }
+
+    fn emit_statement_expr(&self, expr: ExprId, out: &mut Rope<'a>) {
+        // A tt value that is itself an expression statement has no opaque
+        // source owner around it where `source_range_rope` could insert the
+        // planned statement region. Consume that plan here before the inline
+        // occurrence is replaced by its join slot.
+        if matches!(self.core.exprs[expr.index()], Expr::Decision(_)) {
+            if let Some(rewrite) = self
+                .owner_slot_rewrites
+                .iter()
+                .find(|rewrite| rewrite.expr == expr)
+            {
+                out.append(self.emit_owner_slot_rewrite(rewrite));
+                out.append(self.emit_expr(expr));
+                return;
+            }
+            if let Some(slot) = self.value_slots.get(&expr) {
+                out.push_lit(format!("let {slot};"));
+                out.push_break(0);
+                out.append(
+                    self.emit_continued_expr(expr, &ValueContinuation::assign(slot))
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("statement match has no structured emission")
+                        }),
+                );
+                return;
+            }
+            // An incomplete editor buffer can leave the surrounding
+            // TypeScript owner unparsable even though the tt match itself is
+            // complete. There is then no safe source owner to rewrite and no
+            // planned slot. Keep the structurally parsed match available to
+            // the language service through the existing expression boundary.
+            out.push_lit("(() => { let $tt_recovery; ");
+            out.append(
+                self.emit_continued_expr(expr, &ValueContinuation::assign("$tt_recovery"))
+                    .unwrap_or_else(|| {
+                        crate::ice::bug!("statement match has no expression-boundary emission")
+                    }),
+            );
+            out.push_lit(" return $tt_recovery; })()");
+            return;
+        }
+        out.append(self.emit_expr(expr));
     }
 
     fn emit_sequence_continued(
@@ -1640,8 +1719,8 @@ impl<'a> Emitter<'a> {
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(
-            "if ({temp}.{} !== \"{}\") return {temp};",
-            propagate.layout.discriminant_field, propagate.layout.success_tag
+            "if ({}) return {temp};",
+            result_failure_test(&temp, propagate.layout)
         ));
         Rope::scoped(out)
     }
@@ -2410,8 +2489,8 @@ impl<'a> Emitter<'a> {
         let temp = temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_lit(format!(
-            " if ({temp}.{} !== \"{}\") return {temp};",
-            propagate.layout.discriminant_field, propagate.layout.success_tag
+            " if ({}) return {temp};",
+            result_failure_test(&temp, propagate.layout)
         ));
         if let Some(binding) = propagate.binding {
             out.push_lit(format!(" {} ", binding_keyword(binding.mode)));
@@ -2479,10 +2558,10 @@ impl<'a> Emitter<'a> {
                 .get(&expr)
                 .map(Vec::as_slice)
                 .unwrap_or(&[]);
-            let failure = ValueContinuation::expression();
+            let failure = ValueContinuation::returning();
             let success = failure.wrap_result_ok();
             out.append(guard_line_comment(
-                self.emit_result_body_with_exits(*body, exits, &failure, &success),
+                self.emit_result_body_with_exits(*body, exits, &failure, &success, None),
                 0,
             ));
         }
@@ -2508,7 +2587,10 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         failure: &ValueContinuation<'_>,
         success: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
     ) -> Rope<'a> {
+        let leave =
+            exit_label.map_or_else(|| "break;".to_owned(), |label| format!("break {label};"));
         let mut edits = Vec::new();
         let mut propagating_returns = Vec::new();
         for exit in exits {
@@ -2544,7 +2626,11 @@ impl<'a> Emitter<'a> {
                             success.assignment_prefix(false),
                             self.result_return_name,
                             success.assignment_suffix(false),
-                            if success.assigns() { " break;" } else { "" }
+                            if success.assigns() {
+                                format!(" {leave}")
+                            } else {
+                                String::new()
+                            }
                         ),
                         result_return_mark: None,
                     });
@@ -2556,7 +2642,8 @@ impl<'a> Emitter<'a> {
                         success.assignment_suffix(false),
                     );
                     if success.assigns() {
-                        text.push_str(" break;");
+                        text.push(' ');
+                        text.push_str(&leave);
                     }
                     text.push_str(" }");
                     edits.push(LocalSourceEdit {
@@ -2568,13 +2655,17 @@ impl<'a> Emitter<'a> {
             }
         }
         edits.sort_unstable_by_key(|edit| edit.span.start);
+        let context = ResultEmissionContext {
+            failure,
+            success,
+            exit_label,
+        };
         self.emit_result_statements_with_exits(
             &self.core.bodies[body.index()].statements,
             exits,
             &edits,
             &propagating_returns,
-            failure,
-            success,
+            &context,
         )
     }
 
@@ -2628,8 +2719,7 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         edits: &[LocalSourceEdit],
         propagating_returns: &[(SourceSpan, SourceSpan, ExprId, &Propagate)],
-        failure: &ValueContinuation<'_>,
-        success: &ValueContinuation<'_>,
+        context: &ResultEmissionContext<'_, '_>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
         for statement in statements {
@@ -2661,7 +2751,11 @@ impl<'a> Emitter<'a> {
                         .iter()
                         .find(|(_, _, candidate, _)| candidate == expr)
                     {
-                        let mut replacement = self.emit_region_propagate(propagate, failure);
+                        let mut replacement = self.emit_region_propagate(
+                            propagate,
+                            context.failure,
+                            context.exit_label,
+                        );
                         let temp = temp_name(propagate.temporary);
                         let mut payload = Rope::new();
                         let try_span = self.span(propagate.node);
@@ -2676,7 +2770,12 @@ impl<'a> Emitter<'a> {
                             payload
                                 .push_src(&self.source[try_span.end..argument.end], try_span.end);
                         }
-                        replacement.append(self.emit_value_delivery(payload, None, success));
+                        replacement.append(self.emit_value_delivery_with_exit(
+                            payload,
+                            None,
+                            context.success,
+                            context.exit_label,
+                        ));
                         out.anchored(
                             AnchorKind::Try,
                             return_span.start,
@@ -2685,7 +2784,7 @@ impl<'a> Emitter<'a> {
                             replacement,
                         );
                     } else {
-                        out.append(self.emit_expr(*expr));
+                        self.emit_statement_expr(*expr, &mut out);
                     }
                 }
                 Statement::Adt(adt) => {
@@ -2702,15 +2801,20 @@ impl<'a> Emitter<'a> {
                 Statement::Propagate(propagate) => {
                     let span = self.span(propagate.node);
                     let emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
-                        self.emit_region_propagate(propagate, failure)
+                        self.emit_region_propagate(propagate, context.failure, context.exit_label)
                     } else {
                         self.emit_propagate(propagate)
                     };
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
-                Statement::Decision(decision) => {
-                    self.emit_result_statement_decision(decision, exits, failure, success, &mut out)
-                }
+                Statement::Decision(decision) => self.emit_result_statement_decision(
+                    decision,
+                    exits,
+                    context.failure,
+                    context.success,
+                    context.exit_label,
+                    &mut out,
+                ),
             }
         }
         out
@@ -2722,17 +2826,25 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         failure: &ValueContinuation<'_>,
         success: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
         out: &mut Rope<'a>,
     ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
             DecisionKind::LetElse { binding_mode, .. } => (
                 AnchorKind::LetElse,
-                self.emit_result_let_else(decision, *binding_mode, exits, failure, success),
+                self.emit_result_let_else(
+                    decision,
+                    *binding_mode,
+                    exits,
+                    failure,
+                    success,
+                    exit_label,
+                ),
             ),
             DecisionKind::IfLet => (
                 AnchorKind::IfLet,
-                self.emit_result_if_let(decision, exits, failure, success),
+                self.emit_result_if_let(decision, exits, failure, success, exit_label),
             ),
             DecisionKind::Match { .. } => {
                 crate::ice::bug!("expression decision in statement position")
@@ -2748,6 +2860,7 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         failure: &ValueContinuation<'_>,
         success: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
         let temp = temp_name(subject.temporary);
@@ -2780,7 +2893,7 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("let-else has no else body")
         };
         let body = self
-            .emit_result_body_with_exits(body, exits, failure, success)
+            .emit_result_body_with_exits(body, exits, failure, success, exit_label)
             .trim();
         let newline = if body.last_line_has_line_comment() {
             "\n"
@@ -2800,6 +2913,7 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         failure: &ValueContinuation<'_>,
         success: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
         let temp = temp_name(subject.temporary);
@@ -2816,7 +2930,7 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("if-let has no then body")
         };
         out.append(guard_line_comment(
-            self.emit_result_body_with_exits(body, exits, failure, success)
+            self.emit_result_body_with_exits(body, exits, failure, success, exit_label)
                 .trim(),
             0,
         ));
@@ -2825,7 +2939,7 @@ impl<'a> Emitter<'a> {
             MissAction::Execute(body) => {
                 out.push_lit(" else { ");
                 out.append(guard_line_comment(
-                    self.emit_result_body_with_exits(*body, exits, failure, success)
+                    self.emit_result_body_with_exits(*body, exits, failure, success, exit_label)
                         .trim(),
                     0,
                 ));
@@ -2833,7 +2947,7 @@ impl<'a> Emitter<'a> {
             }
             MissAction::Decision(inner) => {
                 out.push_lit(" else ");
-                out.append(self.emit_result_if_let(inner, exits, failure, success));
+                out.append(self.emit_result_if_let(inner, exits, failure, success, exit_label));
             }
             MissAction::Nothing => {}
             MissAction::ThrowUnexpected(_) => {
@@ -2853,7 +2967,12 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         // The block's own source follows, leading whitespace included, so
         // the opener does not break the line the region body starts on.
-        out.push_lit(if continuation.assigns() { "do {" } else { "{" });
+        let exit_label = continuation.assignment_target();
+        if let Some(label) = exit_label {
+            out.push_lit(format!("{label}: {{"));
+        } else {
+            out.push_lit("{");
+        }
         let success = continuation.wrap_result_ok();
         let exits = self
             .value_exits
@@ -2863,7 +2982,7 @@ impl<'a> Emitter<'a> {
         for item in &region.items {
             let ResultRegionItem::Statements(body) = item;
             out.append(guard_line_comment(
-                self.emit_result_body_with_exits(*body, exits, continuation, &success),
+                self.emit_result_body_with_exits(*body, exits, continuation, &success, exit_label),
                 0,
             ));
         }
@@ -2871,24 +2990,21 @@ impl<'a> Emitter<'a> {
             if let Some(structured) = self.emit_continued_expr(value, &success) {
                 out.append(structured);
                 if continuation.assigns() {
-                    out.push_lit(" break;");
+                    push_region_break(&mut out, exit_label);
                 }
             } else {
-                out.append(self.emit_value_delivery(
+                out.append(self.emit_value_delivery_with_exit(
                     guard_line_comment(self.emit_expr(value).trim(), 0),
                     None,
                     &success,
+                    exit_label,
                 ));
             }
         }
         if region.value.is_some() {
             out.push_break(0);
         }
-        out.push_lit(if continuation.assigns() {
-            "} while (false);"
-        } else {
-            "}"
-        });
+        out.push_lit("}");
         let (binding_start, binding_end) = self.result_bind_anchor(region);
         let mut anchored = Rope::new();
         anchored.anchored(
@@ -2905,16 +3021,17 @@ impl<'a> Emitter<'a> {
         &self,
         propagate: &Propagate,
         continuation: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
     ) -> Rope<'a> {
         let temp = temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_lit(format!(
-            " if ({temp}.{} !== \"{}\") {{ ",
-            propagate.layout.discriminant_field, propagate.layout.success_tag
+            " if ({}) {{ ",
+            result_failure_test(&temp, propagate.layout)
         ));
         let mut value = Rope::new();
         value.push_lit(temp.clone());
-        out.append(self.emit_value_delivery(value, None, continuation));
+        out.append(self.emit_value_delivery_with_exit(value, None, continuation, exit_label));
         out.push_lit(" }");
         if let Some(binding) = propagate.binding {
             out.push_lit(format!(" {} ", binding_keyword(binding.mode)));
@@ -3325,8 +3442,8 @@ impl<'a> Emitter<'a> {
         let temp = temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_lit(format!(
-            " if ({temp}.{} !== \"{}\") return {temp};",
-            propagate.layout.discriminant_field, propagate.layout.success_tag
+            " if ({}) return {temp};",
+            result_failure_test(&temp, propagate.layout)
         ));
         let grouped = false;
         out.push_lit(continuation.assignment_prefix(grouped));
@@ -3765,7 +3882,7 @@ impl<'a> Emitter<'a> {
         let grouped = needs_grouping(&value);
         let mut out = Rope::new();
         match continuation.destination {
-            ValueDestination::Expression => out.push_lit("return "),
+            ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
             ValueDestination::Assign(target) => out.push_lit(format!("{target} = ")),
         }
         if grouped {
