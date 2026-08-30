@@ -315,7 +315,8 @@
 | TASK-304 | Repair expression-boundary and template-hosted Result | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-304](./TASK-304-result-boundary-and-template.md) |
 | TASK-305 | Emit a type-clean Result discriminator | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-305](./TASK-305-type-clean-result-discriminator.md) |
 | TASK-306 | Close the Result design and user-surface documentation | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-306](./TASK-306-result-surface-closure.md) |
+| TASK-307 | Close Result review follow-ups | Complete | 2026-08-30 | `TASK-307: close Result review follow-ups` | [TASK-307](./TASK-307-result-review-followups.md) |
 
 ## 다음 태스크 번호
 
-**TASK-307**
+**TASK-308**
