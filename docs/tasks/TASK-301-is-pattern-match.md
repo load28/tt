@@ -3,7 +3,7 @@
 - **Status**: Complete
 - **Started**: 2026-08-30
 - **Completed**: 2026-08-30
-- **Commit**: —
+- **Commit**: See git history.
 
 ## Purpose
 
@@ -80,6 +80,17 @@ immediately invoked callback, or a runtime expression helper.
   mapper, syntax, and invariant regression coverage.
 - 2026-08-30: Updated the language and design documentation and completed the
   Rust local CI gate.
+- 2026-08-30: Reopened the task after PR review reproduced combined loop and
+  conditional ownership failures, missing snapshot and documentation
+  contracts, and incomplete local validation.
+- 2026-08-30: Unified compose and loop rewrite selection, replacement
+  registration, and nested-loop closure ordering; added full-output fixtures
+  for class patterns, loop ownership, and placement diagnostics.
+- 2026-08-30: Extended projection metadata and decision-subject lowering so
+  matches nested in propagation calls, let-else subjects, returns, and
+  optional postfix pipeline tails retain structural statement owners.
+- 2026-08-30: Updated user-facing language surfaces and passed the complete
+  repository CI gate plus the prerendered website production build.
 
 ## Issues and resolutions
 
@@ -123,12 +134,45 @@ immediately invoked callback, or a runtime expression helper.
   the arm boundary and keeps transfers targeting loops or switches declared
   inside the arm.
 
+### Issue 5: Combined loop and conditional rewrites are not compositional
+
+- **Symptom**: Conditional loop tests can ICE, nested loop tests can lose a
+  closing brace, loop-side conditional operations can leave an expression
+  hole, and a `for` initializer plus test can fall back to `$tt_expr`.
+- **Cause**: Target rewrite selection and replacement registration are split
+  across owner-wide `all` filters and duplicated compose/loop pipelines.
+- **Resolution**: Select eligible values per owner, feed compose and loop
+  actions through one replacement pipeline, scope replacements while emitting
+  nested regions, and close loop bodies in source order. Combined conditional,
+  nested, disjunctive, and initializer/test cases now share the same model.
+
+### Issue 6: Enclosing tt placeholders hid nested match owners
+
+- **Symptom**: `try wrap(match ...)`, a match used as a let-else subject or
+  returned from its else body, and an optional postfix pipeline argument could
+  reach expression emission without a structural rewrite.
+- **Cause**: Whole-propagation, statement-decision, and pipeline placeholders
+  hid the nested TypeScript evaluation path from the parent collector.
+- **Resolution**: Added projection-only shadow paths with explicitly excluded
+  synthetic protocol frames, retained real host schedules, and taught subject
+  and pipeline member lowering to consume those typed paths without an IIFE.
+
+### Issue 7: Website prerender could not bind inside the sandbox
+
+- **Symptom**: Both Vite bundles completed, but prerender failed with
+  `listen EPERM ::1`.
+- **Cause**: The sandbox denied the preview server's loopback listener.
+- **Resolution**: Reran the production build with permission for its local
+  listener; all 37 pages prerendered successfully.
+
 ## Verification
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
-- [x] `./scripts/ci rust`
+- [x] `UPDATE_EXPECT=1 cargo test --test snapshot`
+- [x] `./scripts/ci`
+- [x] `bun run build` in `website/`
 
 Changed files:
 
@@ -139,13 +183,14 @@ Changed files:
   `src/content_mapper.rs`, `src/engine/tokens.rs`, `src/probe.rs`, and
   `editors/vscode/syntaxes/`.
 - Contracts and records: `tests/compile.rs`, `tests/integration.rs`,
-  `docs/ai/tt.md`, `docs/design/type-inference-gaps.md`, this record, and
-  `docs/tasks/INDEX.md`.
+  `tests/fixtures/emit/`, `tests/fixtures/diagnostic/`, `README.md`,
+  `CHANGELOG.md`, `docs/ai/`, `docs/design/type-inference-gaps.md`,
+  `website/src/content.json`, this record, and `docs/tasks/INDEX.md`.
 
 ## Result
 
-`is` patterns are first-class class/value patterns, and every accepted
-expression match lowers through explicit host-owned statements without an
-IIFE, callback, or `$tt_expr` helper. Rejected hosts receive source-owned
-diagnostics, while conditional and loop protocols preserve reachability,
-order, references, and evaluation count.
+Structural `is` patterns and closure-free match lowering now share one typed
+owner protocol across ordinary expressions, conditional operations, repeated
+loop tests, propagation inputs, decision subjects, and pipeline tails. Hosts
+without a sound statement region receive a source diagnostic instead of an
+expression closure.

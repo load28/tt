@@ -178,6 +178,7 @@ pub(crate) fn emit_with_map<'a>(
         expression_boundary_name: target.expression_boundary_name,
         result_return_name: target.result_return_name,
         conditional_region_depth: Cell::new(0),
+        loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
         used_flow: Cell::new(false),
@@ -636,9 +637,8 @@ impl TargetRewritePlan {
         // that fits each host continuation.
         let owner_slots: Vec<_> = lowering
             .owners()
-            .filter(|rewrite| rewrite.values.len() == 1)
-            .filter_map(|rewrite| {
-                let value = &rewrite.values[0];
+            .flat_map(|rewrite| rewrite.values.iter().map(move |value| (rewrite, value)))
+            .filter_map(|(rewrite, value)| {
                 let ValueTarget::Slot(slot) = value.target;
                 (!recovered.contains(&value.expr)
                     && matches!(
@@ -677,16 +677,29 @@ impl TargetRewritePlan {
         let loop_tests: Vec<_> = lowering
             .owners()
             .filter_map(|rewrite| {
-                let facts = rewrite.values.first()?.schedule.steps().last()?.loop_test?;
-                let can_rewrite = !rewrite.values.is_empty()
-                    && rewrite.values.iter().all(|value| {
+                let first = rewrite.values.iter().find(|value| {
+                    value
+                        .schedule
+                        .steps()
+                        .last()
+                        .is_some_and(|step| step.loop_test.is_some())
+                })?;
+                let facts = first.schedule.steps().last()?.loop_test?;
+                let values: Vec<_> = rewrite
+                    .values
+                    .iter()
+                    .filter(|value| {
+                        value.schedule.steps().last().is_some_and(|step| {
+                            step.operation == HostEvaluationOperation::LoopTest
+                                && step.loop_test == Some(facts)
+                        })
+                    })
+                    .collect();
+                let can_rewrite = !values.is_empty()
+                    && values.iter().all(|value| {
                         !recovered.contains(&value.expr)
                             && value.context.continuation == HostContinuation::Compose
                             && value.capability == TargetCapability::StatementRegion
-                            && value.schedule.steps().last().is_some_and(|step| {
-                                step.operation == HostEvaluationOperation::LoopTest
-                                    && step.loop_test == Some(facts)
-                            })
                     });
                 can_rewrite.then(|| {
                     let operation_of: HashMap<ExprId, usize> = rewrite
@@ -698,9 +711,8 @@ impl TargetRewritePlan {
                         })
                         .collect();
                     let mut emitted_operations = HashSet::new();
-                    let actions = rewrite
-                        .values
-                        .iter()
+                    let actions = values
+                        .into_iter()
                         .filter_map(|value| match operation_of.get(&value.expr) {
                             Some(index) => emitted_operations.insert(*index).then(|| {
                                 let mut operation = rewrite.operations[*index].clone();
@@ -739,8 +751,8 @@ impl TargetRewritePlan {
                         test: facts.test,
                         body: facts.body,
                         update: facts.update,
-                        first_expr: rewrite.values[0].expr,
-                        first_source: rewrite.values[0].source,
+                        first_expr: first.expr,
+                        first_source: first.source,
                         actions,
                     }
                 })
@@ -749,16 +761,22 @@ impl TargetRewritePlan {
         let composes: Vec<_> = lowering
             .owners()
             .filter_map(|rewrite| {
-                let can_compose = !rewrite.values.is_empty()
-                    && rewrite.values.iter().all(|value| {
-                        !recovered.contains(&value.expr)
-                            && value.context.continuation == HostContinuation::Compose
-                            && value.capability == TargetCapability::StatementRegion
+                let values: Vec<_> = rewrite
+                    .values
+                    .iter()
+                    .filter(|value| {
+                        value.context.continuation == HostContinuation::Compose
                             && !value
                                 .schedule
                                 .steps()
                                 .iter()
                                 .any(|step| step.operation == HostEvaluationOperation::LoopTest)
+                    })
+                    .collect();
+                let can_compose = !values.is_empty()
+                    && values.iter().all(|value| {
+                        !recovered.contains(&value.expr)
+                            && value.capability == TargetCapability::StatementRegion
                     });
                 can_compose.then(|| {
                     // A value consumed by a conditional operation is emitted
@@ -773,9 +791,8 @@ impl TargetRewritePlan {
                         })
                         .collect();
                     let mut emitted_operations = HashSet::new();
-                    let actions = rewrite
-                        .values
-                        .iter()
+                    let actions = values
+                        .into_iter()
                         .filter_map(|value| match operation_of.get(&value.expr) {
                             Some(index) => emitted_operations.insert(*index).then(|| {
                                 ComposeAction::Operation(rewrite.operations[*index].clone())
@@ -830,6 +847,8 @@ impl TargetRewritePlan {
                 })
             })
         };
+        let all_values = || compose_values().chain(loop_values());
+        let all_operations = || compose_operations().chain(loop_operations());
         // owner-slot and compose rewrites hoist the value's control flow
         // to a prelude before the owner; arrow-return rewrites restructure
         // the value in place, so they relocate nothing. A conditional
@@ -853,11 +872,11 @@ impl TargetRewritePlan {
                 .iter()
                 .map(|rewrite| rewrite.source),
         );
-        relocated_values.extend(compose_operations().map(|operation| operation.parent));
+        relocated_values.extend(all_operations().map(|operation| operation.parent));
         relocated_values.extend(loop_tests.iter().filter_map(|rewrite| rewrite.update));
         // The operator frame of a lowered conditional operation (its tokens
         // between the fragments the region re-emits) is claimed source.
-        let rewritten_operations: Vec<SourceSpan> = compose_operations()
+        let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
             .chain(loop_tests.iter().flat_map(|rewrite| {
                 let prefix = (rewrite.kind == LoopTestKind::While).then_some(SourceSpan {
@@ -870,7 +889,7 @@ impl TargetRewritePlan {
                 }))
             }))
             .collect();
-        let operation_replacements: Vec<SourceReplacement> = compose_operations()
+        let operation_replacements: Vec<SourceReplacement> = all_operations()
             .map(|operation| {
                 let primary = operation
                     .values
@@ -884,10 +903,10 @@ impl TargetRewritePlan {
                 }
             })
             .collect();
-        let source_replacements = compose_values()
+        let source_replacements = all_values()
             .flat_map(|value| &value.steps)
             .chain(
-                compose_operations()
+                all_operations()
                     .flat_map(|operation| operation.active_steps.iter().chain(&operation.outer)),
             )
             .flat_map(|step| &step.inputs)
@@ -900,25 +919,6 @@ impl TargetRewritePlan {
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
             })
             .chain(operation_replacements)
-            .chain(
-                loop_values()
-                    .flat_map(|value| &value.steps)
-                    .chain(loop_operations().flat_map(|operation| {
-                        operation.active_steps.iter().chain(&operation.outer)
-                    }))
-                    .flat_map(|step| &step.inputs)
-                    .filter_map(|input| match input {
-                        PlannedEvaluationInput::Source { source, target, .. } => {
-                            Some(SourceReplacement {
-                                source: *source,
-                                slot: lowering.slot_name(*target).to_owned(),
-                                anchor: None,
-                            })
-                        }
-                        PlannedEvaluationInput::Slot { .. }
-                        | PlannedEvaluationInput::Stable { .. } => None,
-                    }),
-            )
             .collect();
         let consumed_exprs: HashSet<ExprId> = compose_operations()
             .flat_map(|operation| operation.values.iter().copied())
@@ -992,6 +992,10 @@ struct Emitter<'a> {
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.
     conditional_region_depth: Cell<u32>,
+    /// Loop-test actions emit their tt values before the rebuilt source test.
+    /// Host replacements apply only to that source test, not while the
+    /// actions recursively emit their own source fragments.
+    loop_region_depth: Cell<u32>,
     used_expression_boundary: Cell<bool>,
     used_pipe: Cell<bool>,
     used_flow: Cell<bool>,
@@ -1207,11 +1211,13 @@ impl<'a> Emitter<'a> {
                     && rewrite.owner.end <= span.end
             })
             .peekable();
-        let mut loop_endings = self
+        let mut loop_endings: Vec<_> = self
             .loop_test_rewrites
             .iter()
             .filter(|rewrite| span.start < rewrite.body.end && rewrite.body.end <= span.end)
-            .peekable();
+            .collect();
+        loop_endings.sort_unstable_by_key(|rewrite| rewrite.body.end);
+        let mut loop_endings = loop_endings.into_iter().peekable();
         let mut cursor = span.start;
         while cursor < span.end {
             while let Some(_rewrite) = loop_endings.next_if(|rewrite| rewrite.body.end == cursor) {
@@ -1252,6 +1258,22 @@ impl<'a> Emitter<'a> {
             {
                 rope.append(self.emit_loop_test_prefix(rewrite));
             }
+            if self.loop_region_depth.get() == 0
+                && let Some(operation) = self
+                    .loop_test_rewrites
+                    .iter()
+                    .flat_map(|rewrite| &rewrite.actions)
+                    .filter_map(|action| match action {
+                        ComposeAction::Operation(operation) => Some(operation),
+                        ComposeAction::Value(_) => None,
+                    })
+                    .find(|operation| {
+                        operation.parent.start < cursor && cursor < operation.parent.end
+                    })
+            {
+                cursor = operation.parent.end.min(span.end);
+                continue;
+            }
             if let Some(rewrite) = self
                 .loop_test_rewrites
                 .iter()
@@ -1265,9 +1287,14 @@ impl<'a> Emitter<'a> {
             }
             let in_region = self.conditional_region_depth.get() > 0;
             if let Some(replacement) = self.source_replacements.iter().find(|replacement| {
-                (replacement.anchor.is_none() || !in_region)
-                    && replacement.source.start <= cursor
-                    && cursor < replacement.source.end
+                if replacement.anchor.is_some() {
+                    !in_region
+                        && self.loop_region_depth.get() == 0
+                        && replacement.source.start <= cursor
+                        && cursor < replacement.source.end
+                } else {
+                    replacement.source.start <= cursor && cursor < replacement.source.end
+                }
             }) {
                 if cursor == replacement.source.start {
                     match replacement.anchor {
@@ -1454,6 +1481,14 @@ impl<'a> Emitter<'a> {
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
+                    let owner = self.span(propagate.owner);
+                    if let Some(rewrite) = self
+                        .compose_rewrites
+                        .iter()
+                        .find(|rewrite| rewrite.owner == SourceSpan::from(owner))
+                    {
+                        out.append(self.emit_compose_rewrite(rewrite));
+                    }
                     let span = self.span(propagate.node);
                     let emitted = if self.is_for_initializer_propagation(propagate.node) {
                         self.emit_for_initializer_payload(propagate)
@@ -1498,16 +1533,27 @@ impl<'a> Emitter<'a> {
         }
         if let Some(slot) = self.slot_exprs.get(&expr) {
             let (kind, start, end, extent) = self.value_anchor(expr);
-            let mut generated = Rope::new();
-            generated.push_lit(slot.clone());
             let mut out = Rope::new();
+            let mut rendered_slot = slot.as_str();
             if let Some(rewrite) = self.loop_test_rewrites.iter().find(|rewrite| {
-                rewrite.kind == LoopTestKind::For
-                    && rewrite.first_expr == expr
-                    && rewrite.first_source.start == rewrite.test.start
+                rewrite.first_expr == expr && rewrite.first_source.start == rewrite.test.start
             }) {
-                out.append(self.emit_loop_test_prefix(rewrite));
+                if rewrite.kind == LoopTestKind::For {
+                    out.append(self.emit_loop_test_prefix(rewrite));
+                }
+                if let Some(operation) = rewrite.actions.iter().find_map(|action| match action {
+                    ComposeAction::Operation(operation)
+                        if operation.parent.start == rewrite.first_source.start =>
+                    {
+                        Some(operation)
+                    }
+                    ComposeAction::Operation(_) | ComposeAction::Value(_) => None,
+                }) {
+                    rendered_slot = self.value_slot_name(operation.result);
+                }
             }
+            let mut generated = Rope::new();
+            generated.push_lit(rendered_slot.to_owned());
             out.anchored(kind, start, end, extent, generated);
             return out;
         }
@@ -1676,6 +1722,7 @@ impl<'a> Emitter<'a> {
             out.push_lit(format!("let {slot};"));
             out.push_break(1);
         }
+        self.loop_region_depth.set(self.loop_region_depth.get() + 1);
         let mut captured = HashSet::new();
         for action in &rewrite.actions {
             let lowered = match action {
@@ -1700,6 +1747,7 @@ impl<'a> Emitter<'a> {
             };
             out.append(Rope::indented(1, lowered));
         }
+        self.loop_region_depth.set(self.loop_region_depth.get() - 1);
         out.push_break(1);
         out.push_lit("if (!(");
         Rope::scoped(out)
@@ -2024,12 +2072,15 @@ impl<'a> Emitter<'a> {
                             source.start,
                         );
                     }
-                    self.push_planned_receiver(receiver, true, out);
-                    if receiver_source.end < source.end {
-                        out.push_src(
-                            &self.source[receiver_source.end..source.end],
-                            receiver_source.end,
-                        );
+                    if !self.push_pipeline_member_reference(*source, receiver_source, receiver, out)
+                    {
+                        self.push_planned_receiver(receiver, true, out);
+                        if receiver_source.end < source.end {
+                            out.push_src(
+                                &self.source[receiver_source.end..source.end],
+                                receiver_source.end,
+                            );
+                        }
                     }
                     out.push_lit(");");
                     out.push_break(0);
@@ -2082,6 +2133,49 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
+    }
+
+    fn push_pipeline_member_reference(
+        &self,
+        source: SourceSpan,
+        receiver_source: SourceSpan,
+        receiver: &PlannedReceiver,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let suffix = self.core.exprs.iter().find_map(|expr| {
+            let Expr::Apply(apply) = expr else {
+                return None;
+            };
+            let head = apply.head?;
+            let Expr::Opaque(head_node) = &self.core.exprs[head.index()] else {
+                return None;
+            };
+            if SourceSpan::from(self.span(*head_node)) != receiver_source {
+                return None;
+            }
+            apply.steps.iter().find_map(|step| {
+                let ApplyMode::Postfix { optional: true } = step.mode else {
+                    return None;
+                };
+                let step_span = SourceSpan::from(self.span(step.node));
+                (source.start == receiver_source.start
+                    && step_span.start < source.end
+                    && source.end <= step_span.end)
+                    .then_some(SourceSpan {
+                        // Keep optional property access so a null receiver
+                        // never reaches the member lookup. The explicit
+                        // branch below controls argument evaluation.
+                        start: step_span.start,
+                        end: source.end,
+                    })
+            })
+        });
+        let Some(suffix) = suffix else {
+            return false;
+        };
+        self.push_planned_receiver(receiver, true, out);
+        out.push_src(&self.source[suffix.start..suffix.end], suffix.start);
+        true
     }
 
     /// The join slot name of a tt value, from the plan.
@@ -2658,10 +2752,8 @@ impl<'a> Emitter<'a> {
         let subject = &decision.subjects[0];
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
-        let mut out = Rope::new();
-        out.push_lit(format!("const {temp} = "));
-        push_grouped(&mut out, self.emit_expr(subject.value).trim());
-        out.push_lit("; if (");
+        let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
+        out.push_lit(" if (");
         let DecisionKind::LetElse {
             direct_variants, ..
         } = &decision.kind
@@ -2713,9 +2805,9 @@ impl<'a> Emitter<'a> {
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = Rope::new();
-        out.push_lit(format!("{{ const {temp} = "));
-        push_grouped(&mut out, self.emit_expr(subject.value).trim());
-        out.push_lit("; if (");
+        out.push_lit("{ ");
+        out.append(self.emit_subject_initialization(subject, &temp, decision.head));
+        out.push_lit(" if (");
         out.append(self.emit_condition(&arm.pattern, decision));
         out.push_lit(") { ");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
@@ -3030,14 +3122,40 @@ impl<'a> Emitter<'a> {
         out.anchored(kind, span.start, span.end, span.end, inner);
     }
 
+    fn emit_subject_initialization(
+        &self,
+        subject: &crate::core_ir::Subject,
+        temp: &str,
+        mark: NodeId,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        if self.core.has_statement_form(subject.value)
+            && self.can_inline_continued_expr(subject.value)
+        {
+            out.push_lit("let ");
+            out.push_mark(self.span(mark).start);
+            out.push_lit(format!("{temp};"));
+            out.push_lit(" ");
+            out.append(
+                self.emit_continued_expr(subject.value, &ValueContinuation::assign(temp))
+                    .unwrap_or_else(|| crate::ice::bug!("decision subject was not emitted")),
+            );
+        } else {
+            out.push_lit("const ");
+            out.push_mark(self.span(mark).start);
+            out.push_lit(format!("{temp} = "));
+            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            out.push_lit(";");
+        }
+        out
+    }
+
     fn emit_let_else(&self, decision: &Decision, mode: BindingMode) -> Rope<'a> {
         let subject = &decision.subjects[0];
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
-        let mut out = Rope::new();
-        out.push_lit(format!("const {temp} = "));
-        push_grouped(&mut out, self.emit_expr(subject.value).trim());
-        out.push_lit("; if (");
+        let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
+        out.push_lit(" if (");
         let DecisionKind::LetElse {
             direct_variants, ..
         } = &decision.kind
@@ -3081,9 +3199,9 @@ impl<'a> Emitter<'a> {
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = Rope::new();
-        out.push_lit(format!("{{ const {temp} = "));
-        push_grouped(&mut out, self.emit_expr(subject.value).trim());
-        out.push_lit("; if (");
+        out.push_lit("{ ");
+        out.append(self.emit_subject_initialization(subject, &temp, decision.head));
+        out.push_lit(" if (");
         out.append(self.emit_condition(&arm.pattern, decision));
         out.push_lit(") { ");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
@@ -3138,22 +3256,16 @@ impl<'a> Emitter<'a> {
             out.push_lit(format!("{label}: "));
         }
         if continuation.is_expression() {
-            self.used_expression_boundary.set(true);
-            out.push_lit(if decision.is_async {
-                format!("(await {}(async () => {{", self.expression_boundary_name)
-            } else {
-                format!("{}(() => {{", self.expression_boundary_name)
-            });
-        } else {
-            out.push_lit("{");
+            crate::ice::bug!("match reached expression emission without a host rewrite")
         }
+        out.push_lit("{");
         for subject in &decision.subjects {
             out.push_break(1);
-            out.push_lit("const ");
-            out.push_mark(self.span(decision.head).start);
-            out.push_lit(format!("{} = ", temp_name(subject.temporary)));
-            push_grouped(&mut out, self.emit_expr(subject.value).trim());
-            out.push_lit(";");
+            out.append(self.emit_subject_initialization(
+                subject,
+                &temp_name(subject.temporary),
+                decision.head,
+            ));
         }
         out.append(Rope::indented(
             1,
@@ -3167,11 +3279,7 @@ impl<'a> Emitter<'a> {
             },
         ));
         out.push_break(0);
-        out.push_lit(if continuation.is_expression() {
-            if decision.is_async { "}))" } else { "})" }
-        } else {
-            "}"
-        });
+        out.push_lit("}");
         Rope::scoped(out)
     }
 

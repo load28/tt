@@ -397,8 +397,9 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
         return;
     };
 
-    // Literal and tag patterns never mix in one match, so at most one of
-    // these fires.
+    // Tag patterns never mix with the value-pattern family. An `is` arm
+    // suppresses typed coverage for the whole open hierarchy before this
+    // point, so exactly one of the literal or tag probes can fire here.
     let mut literals = Vec::new();
     let mut tags = Vec::new();
     let mut kind = Kind::None;

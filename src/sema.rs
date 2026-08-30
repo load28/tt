@@ -869,9 +869,12 @@ impl Checker {
         // Tags covered by an unguarded arm. Any later arm repeating one of
         // these is unreachable (duplicate); a guarded arm covers nothing, so
         // guarded arms may repeat each other's tags.
-        let mut covered: Vec<&str> = Vec::new();
+        let mut covered_tags: Vec<&str> = Vec::new();
         // The same, for literal patterns.
         let mut covered_literals: Vec<&LiteralValue> = Vec::new();
+        // Constructor identity is syntax-level and remains covered even when
+        // its arm has a guard, as required by the `is` pattern contract.
+        let mut covered_instances: Vec<&str> = Vec::new();
         for (idx, arm) in expr.arms.iter().enumerate() {
             match &arm.pattern {
                 Pattern::Wildcard => {
@@ -947,7 +950,7 @@ impl Checker {
                     let first_set = binding_set(&alts[0].bindings);
                     let mut arm_tags: Vec<&str> = Vec::new();
                     for alt in alts {
-                        if covered.contains(&alt.tag.as_str())
+                        if covered_tags.contains(&alt.tag.as_str())
                             || arm_tags.contains(&alt.tag.as_str())
                         {
                             self.error(
@@ -978,7 +981,7 @@ impl Checker {
                     // A nested pattern may mismatch, so — like a guard —
                     // the arm identifies the variant declaration but covers nothing.
                     if arm.guard.is_none() && !alts.iter().any(has_nested) {
-                        covered.append(&mut arm_tags);
+                        covered_tags.append(&mut arm_tags);
                     }
                 }
                 Pattern::Instances(alts) => {
@@ -1032,7 +1035,7 @@ impl Checker {
                                 }
                             }
                         }
-                        if covered.contains(&alt.path.as_str())
+                        if covered_instances.contains(&alt.path.as_str())
                             || arm_paths.contains(&alt.path.as_str())
                         {
                             self.error(
@@ -1050,7 +1053,7 @@ impl Checker {
                     // Constructor identity is structural and independent of
                     // guards: the RFC deliberately rejects two arms naming
                     // the same path even when their guards differ.
-                    covered.extend(arm_paths);
+                    covered_instances.extend(arm_paths);
                 }
             }
         }
@@ -1066,37 +1069,42 @@ impl Checker {
                 self.visit_program(&guard.expr, Ctx::Expr, isolated);
             }
             if arm.block {
-                for control in crate::flow::outward_controls_in_span(
-                    &self.source,
-                    &self.tokens,
-                    &arm.body,
-                    arm.body_span,
-                ) {
-                    let (span, message, help) = match control {
-                        crate::flow::OutwardControl::Break { span, .. } => (
-                            span,
-                            "`break` cannot leave a match arm",
-                            "break only a loop or switch written inside this arm",
-                        ),
-                        crate::flow::OutwardControl::Continue { span, .. } => (
-                            span,
-                            "`continue` cannot leave a match arm",
-                            "continue only a loop written inside this arm",
-                        ),
-                        crate::flow::OutwardControl::Yield(_) => continue,
-                    };
-                    self.error(
-                        TtError::span(span.start, span.end, message.to_string())
-                            .code(DiagnosticCode::MatchControlCrossing)
-                            .help(help),
-                    );
-                }
+                self.check_match_arm_controls(&arm.body, arm.body_span);
             }
             // A block arm body is a statement context inside the value region.
             self.visit_program(
                 &arm.body,
                 if arm.block { Ctx::Stmt } else { Ctx::Expr },
                 isolated,
+            );
+        }
+    }
+
+    fn check_match_arm_controls(&mut self, body: &Program, body_span: Span) {
+        for control in
+            crate::flow::outward_controls_in_span(&self.source, &self.tokens, body, body_span)
+        {
+            let (span, message, help) = match control {
+                crate::flow::OutwardControl::Break { span, .. } => (
+                    span,
+                    "`break` cannot leave a match arm",
+                    "break only a loop or switch written inside this arm",
+                ),
+                crate::flow::OutwardControl::Continue { span, .. } => (
+                    span,
+                    "`continue` cannot leave a match arm",
+                    "continue only a loop written inside this arm",
+                ),
+                crate::flow::OutwardControl::Yield(span) => (
+                    span,
+                    "`yield` cannot cross a match arm boundary",
+                    "yield outside the match, or yield inside a generator written in this arm",
+                ),
+            };
+            self.error(
+                TtError::span(span.start, span.end, message.to_string())
+                    .code(DiagnosticCode::MatchControlCrossing)
+                    .help(help),
             );
         }
     }
@@ -1211,6 +1219,9 @@ impl Checker {
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {
                 self.visit_program(&guard.expr, Ctx::Expr, isolated);
+            }
+            if arm.block {
+                self.check_match_arm_controls(&arm.body, arm.body_span);
             }
             self.visit_program(
                 &arm.body,

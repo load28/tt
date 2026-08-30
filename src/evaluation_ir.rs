@@ -1113,7 +1113,10 @@ impl EvaluationFile {
                             .at(*source));
                         }
                         for span in &self.tt_spans {
-                            if overlaps(*source, *span) {
+                            if overlaps(*source, *span)
+                                && !(span.start <= value.source.start
+                                    && value.source.end <= span.end)
+                            {
                                 return Err(InternalCompilerError::new(
                                     stage,
                                     Invariant::EvaluationCountChanged,
@@ -1783,10 +1786,13 @@ fn target_capability(
             if captured.contains(capture) {
                 continue;
             }
-            // The capture copies raw source bytes; a tt node or another
-            // capture inside them is lowered or relocated elsewhere.
-            if tt_spans.iter().any(|span| overlaps(*capture, *span))
-                || captured.iter().any(|span| overlaps(*capture, *span))
+            // The capture copies raw source bytes; a sibling tt node or
+            // another capture inside them is lowered or relocated elsewhere.
+            // An enclosing tt root is different: its structured lowering
+            // owns this schedule and composes the captured source into it.
+            if tt_spans.iter().any(|span| {
+                overlaps(*capture, *span) && !(span.start <= source.start && source.end <= span.end)
+            }) || captured.iter().any(|span| overlaps(*capture, *span))
             {
                 return TargetCapability::ExpressionBoundary(Reason::CaptureOverlapsValue);
             }
@@ -1943,10 +1949,10 @@ impl EvaluationBuilder<'_> {
                     force_nested,
                 )?;
                 if let Some(head) = apply.head {
-                    self.walk_nested_expr(head, region)?;
+                    self.walk_expr(head, Some(region))?;
                 }
                 for step in &apply.steps {
-                    self.walk_nested_expr(step.value, region)?;
+                    self.walk_expr(step.value, Some(region))?;
                 }
             }
             Expr::ResultRegion(result) => {
@@ -2098,6 +2104,7 @@ impl EvaluationBuilder<'_> {
         if let Some(parent) = parent
             && let Some(binding) = self.hosts.get(&root)
             && self.region_host_owner(parent) == Some(binding.owner)
+            && binding.protocol.steps().is_empty()
         {
             let source = self.hosts.remove(&root).map(|binding| binding.source);
             return Ok(RegionPlacement::Nested { parent, source });
@@ -2381,6 +2388,20 @@ mod tests {
                 crate::program_syntax::EagerPosition::CallArgument(0)
             )
         )));
+    }
+
+    #[test]
+    fn a_decision_nested_in_a_propagation_keeps_its_host_schedule() {
+        let (file, core) = evaluation(
+            "variant E { A(x: number), B }\nfunction f() { const a = try wrap(match (e) { A(x) => x, B => 0 }); }\n",
+        );
+        let plan = plan(&file, &core);
+        let values = plan
+            .owners()
+            .flat_map(|owner| &owner.values)
+            .collect::<Vec<_>>();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].capability, TargetCapability::StatementRegion);
     }
 
     #[test]

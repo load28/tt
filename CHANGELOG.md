@@ -8,6 +8,12 @@
 
 ### Added
 
+- **Class patterns and closure-free expression matches** (TASK-301). `match`
+  accepts ordered `is Type`, dotted constructor paths, property bindings, and
+  type-only alternatives. Accepted expression matches lower through explicit
+  host-owned statements without IIFEs or `$tt_expr`; loop tests and
+  short-circuit operations preserve their native evaluation contracts.
+
 - **파이프라인에 JavaScript 방식 optional postfix step을 추가한다** (TASK-250).
   `value |> ?.name`, `?.[key]`, `?.(args)`와 이어지는 member·index·call tail을
   지원한다. optional step은 해당 tail만 단락 평가하며 다음 `|>` step은

@@ -558,7 +558,7 @@ match to a function-body statement whose evaluation count and conditional
 reachability are explicit."
             }
             DiagnosticCode::MatchControlCrossing => {
-                r#"A `break` or `continue` in a match arm may target only a loop or switch written inside that arm.
+                r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.
 
 Each arm is an isolated completion region. Allowing a jump to an enclosing host construct would bypass the match result delivery and make the generated control-flow target depend on unrelated outer syntax."#
             }

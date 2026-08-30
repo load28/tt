@@ -431,6 +431,35 @@ fn repeated_loop_tests_own_the_match_region_per_iteration() {
 }
 
 #[test]
+fn loop_test_rewrites_compose_with_conditionals_nesting_and_initializers() {
+    let conditional = ok(
+        "declare const flag: boolean; declare function next(): unknown;\nwhile (flag && match (next()) { is Error => false, _ => true }) { work(); }\n",
+    );
+    assert!(
+        conditional.contains("if (!($tt_v2)) break;"),
+        "{conditional}"
+    );
+    assert!(!conditional.contains("$tt_expr"), "{conditional}");
+
+    let nested = ok(
+        "declare function a(): number; declare function b(): number;\nwhile (match (a()) { 1 => true, _ => false }) { while (match (b()) { 2 => true, _ => false }) { work(); } }\n",
+    );
+    assert_eq!(nested.matches("while (true)").count(), 2, "{nested}");
+
+    let logical = ok(
+        "declare function a(): number; declare function b(): number;\nwhile (match (a()) { 1 => true, _ => false } || match (b()) { 2 => true, _ => false }) { work(); }\n",
+    );
+    assert!(logical.contains("if (!($tt_v2)) break;"), "{logical}");
+    assert!(!logical.contains("|| ))"), "{logical}");
+
+    let both = ok(
+        "for (let a = match (1) { 1 => 1, _ => 0 }; match (a) { 1 => true, _ => false }; a++) { use(a); }\n",
+    );
+    assert!(!both.contains("$tt_expr"), "{both}");
+    assert!(both.contains("for (let a = $tt_v0; ; a++)"), "{both}");
+}
+
+#[test]
 fn match_arms_reject_only_control_transfers_that_cross_the_arm() {
     let crossing = ttc::analyze(
         "outer: for (;;) { const value = match (x) { is Error => { continue outer; }, _ => 0 }; }\n",
@@ -443,6 +472,20 @@ fn match_arms_reject_only_control_transfers_that_cross_the_arm() {
         "const value = match (x) { is Error => { while (ready()) { if (stop()) break; continue; } return 1; }, _ => 0 };\n",
     );
     assert!(internal.contains("while (ready())"), "{internal}");
+
+    let tuple = ttc::analyze(
+        "outer: for (;;) { const value = match (a, b) { (A, B) => { continue outer; }, _ => 0 }; }\n",
+        &Options::default(),
+    );
+    assert_eq!(tuple.len(), 1, "{tuple:#?}");
+    assert_eq!(tuple[0].code, ttc::DiagnosticCode::MatchControlCrossing);
+
+    let yielded = ttc::analyze(
+        "function* values() { return match (x) { is Error => { yield x; return 1; }, _ => 0 }; }\n",
+        &Options::default(),
+    );
+    assert_eq!(yielded.len(), 1, "{yielded:#?}");
+    assert_eq!(yielded[0].code, ttc::DiagnosticCode::MatchControlCrossing);
 }
 
 #[test]
@@ -1049,6 +1092,16 @@ fn try_expression_may_contain_a_match() {
     );
     assert!(out.contains("const $tt_t0 = $tt_v0;"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
+
+    let nested = ok(
+        "function f(): X {\n  const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });\n  return x;\n}\n",
+    );
+    assert!(nested.contains("const $tt_v1 = (wrap);"), "{nested}");
+    assert!(
+        nested.contains("const $tt_t0 = $tt_v1($tt_v0);"),
+        "{nested}"
+    );
+    assert!(!nested.contains("$tt_expr"), "{nested}");
 }
 
 #[test]
