@@ -671,8 +671,9 @@ mod tests {
         assert_eq!(code_number("stray-pipe"), 1);
         assert_eq!(code_number("match-not-exhaustive"), 27);
         assert_eq!(code_number("result-tail-semicolon"), 33);
-        assert_eq!(code_number("result-no-success-value"), 34);
-        assert_eq!(code_number("lowering-plan-failed"), 42);
+        assert_eq!(code_number("lowering-plan-failed"), 34);
+        assert_eq!(code_number("result-no-success-value"), 35);
+        assert_eq!(code_number("try-crosses-value-region"), 42);
         for code in ttc::DiagnosticCode::ALL {
             assert_ne!(
                 code_number(code.as_str()),

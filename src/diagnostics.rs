@@ -330,13 +330,14 @@ first:
                 "\
 A `try` was written where its propagation could not go anywhere.
 
-`try` compiles to an early `return` from the enclosing function, so it is
-a value only where the TypeScript host can preserve that return and the
+`try` compiles to an early exit of the nearest Result scope: the innermost
+`result` block, or the enclosing function when no such block is open. It is
+a value only where the TypeScript host can preserve that exit and the
 original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
 loop headers, parameter defaults, and class field initializers.
 
-Move the propagation into a function-body statement when the surrounding
+Move the propagation into the nearest Result scope when the surrounding
 expression cannot carry it."
             }
 

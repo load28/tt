@@ -323,8 +323,8 @@
         "ko": "try"
       },
       "summary": {
-        "en": "Unwrap Ok or return Err from the enclosing function.",
-        "ko": "Ok 값을 풀고 Err이면 현재 함수를 즉시 반환합니다."
+        "en": "Unwrap Ok or return Err from the nearest Result scope.",
+        "ko": "Ok 값을 풀고 Err이면 가장 가까운 Result 스코프를 끝냅니다."
       },
       "code": "import type { TResult } from \"@tt/std\";\nimport * as Result from \"@tt/std/result\";\n\nfunction load(id: string): TResult<User, LoadError> {\n  const raw = try read(id);\n  const user = try decode(raw);\n  return Result.Ok(user);\n}",
       "works": {
