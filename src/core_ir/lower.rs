@@ -26,10 +26,20 @@ pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile 
         .iter()
         .map(|(_, expr)| cx.lower_expr(expr))
         .collect();
+    let sequence_nodes = semantic
+        .hir
+        .exprs
+        .iter()
+        .filter_map(|(_, expr)| match expr {
+            hir::Expr::Seq { node, body } => Some((*body, *node)),
+            _ => None,
+        })
+        .collect();
     let file = CoreFile {
         root: semantic.hir.root,
         bodies,
         exprs,
+        sequence_nodes,
         temporary_count: u32::try_from(cx.temp_ordinals.len())
             .unwrap_or_else(|_| crate::ice::bug!("Core IR temporary overflow")),
     };
@@ -221,6 +231,7 @@ impl Lowering<'_> {
             hir::Expr::ResultBlock {
                 node: region_node,
                 items,
+                completes,
                 value,
             } => Expr::ResultRegion(ResultRegion {
                 id: ResultRegionId(*region_node),
@@ -232,6 +243,7 @@ impl Lowering<'_> {
                         ResultRegionItem::Statements(*body)
                     })
                     .collect(),
+                completes: *completes,
                 value: *value,
                 is_async: self.node_contains_await(*region_node),
             }),

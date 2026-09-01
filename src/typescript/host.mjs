@@ -25,7 +25,7 @@
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
  *            symbolChecks: [{ module, start }],
- *            resultShapeChecks: [{ module, start }],
+ *            resultShapeChecks: [{ module, start, end }],
  *            emitDeclarations: boolean }
  *       →  { diagnostics: [{ file, start, end, code, message, mismatch? }],
  *            literalMissing: [{ index, missing }],
@@ -386,14 +386,22 @@ async function main() {
     const resultChecks = (job.resultShapeChecks ?? [])
       .map((check, index) => ({ check, index }))
       .filter((entry) => projectModules.has(entry.check.module));
-    const resultTypes = perModule(resultChecks, (module, positions) =>
-      batched(
-        "resultTypesAtPositions",
-        () => checker.getTypeAtPosition(module, positions),
-        () => positions.map((p) => checker.getTypeAtPosition(module, p)),
-      ));
+    const resultTypes = resultChecks.map((entry) => {
+      const sourceFile = project.program.getSourceFile(entry.check.module);
+      if (!sourceFile) return null;
+      const expression = smallestExpressionCovering(
+        sourceFile,
+        entry.check.start,
+        entry.check.end,
+        isExpression,
+      );
+      return expression ? checker.getTypeAtLocation(expression) : null;
+    });
     resultChecks.forEach((entry, at) => {
-      if (isDefiniteResult(resultTypes[at], constituentsOf, kindSymbolOf, checker)) {
+      if (
+        resultTypes[at] &&
+        isDefiniteResult(resultTypes[at], constituentsOf, kindSymbolOf, checker)
+      ) {
         out.resultShapes.push({ index: entry.index });
       }
     });
@@ -536,6 +544,18 @@ function contextualMismatch(project, checker, diagnostic, isExpression) {
     }
   }
   return null;
+}
+
+/** The innermost expression whose source range contains the emitted value. */
+function smallestExpressionCovering(sourceFile, start, end, isExpression) {
+  let found = null;
+  const visit = (node) => {
+    if (node.getStart(sourceFile) > start || node.end < end) return;
+    if (isExpression(node)) found = node;
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return found;
 }
 
 /** The union constituents of a type, or the type itself as one constituent. */

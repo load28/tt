@@ -319,7 +319,8 @@
 | TASK-308 | Add a practical CLI/editor diagnostic matrix | Complete | 2026-08-30 | `TASK-308: add practical diagnostic UI matrix` | [TASK-308](./TASK-308-practical-diagnostic-matrix.md) |
 | TASK-309 | Adopt compiler UI-test conventions for diagnostics | Complete | 2026-08-30 | `TASK-308: add practical diagnostic UI matrix` | [TASK-309](./TASK-309-diagnostic-ui-test-conventions.md) |
 | TASK-310 | Expand generated control flow into readable TypeScript | Complete | 2026-09-01 | `TASK-310: expand generated control flow readability` | [TASK-310](./TASK-310-readable-generated-control-flow.md) |
+| TASK-311 | Repair reported value-region composition defects | Complete | 2026-09-01 | `TASK-311: repair value-region composition` | [TASK-311](./TASK-311-value-region-composition.md) |
 
 ## 다음 태스크 번호
 
-**TASK-311**
+**TASK-312**

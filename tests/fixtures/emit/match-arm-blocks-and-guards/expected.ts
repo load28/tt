@@ -8,7 +8,7 @@ const Reading = {
 declare const reading: Reading;
 
 export function describe(r: Reading): string {
-  let $tt_v0;
+  let $tt_v0: string;
   {
     const $tt_m = r;
     do {

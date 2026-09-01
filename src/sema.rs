@@ -64,6 +64,7 @@ use crate::diagnostics::{
 };
 use crate::error::TtError;
 use crate::verify;
+use std::collections::HashMap;
 
 /// Checks a whole program and returns **every** tt-level violation, in
 /// source order. `verify` enables swc validation of field types; `externs`
@@ -78,14 +79,30 @@ pub(crate) fn check_all(
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
-    analyses: &crate::analysis::PatternAnalyses,
+    semantic: &crate::analysis::SemanticFile,
 ) -> Vec<TtError> {
+    let result_completions = semantic
+        .hir
+        .exprs
+        .iter()
+        .filter_map(|(_, expr)| {
+            let crate::hir::Expr::ResultBlock {
+                node, completes, ..
+            } = expr
+            else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            Some((span.start, *completes))
+        })
+        .collect();
     let mut checker = Checker {
         source: source.to_owned(),
         tokens: crate::lexer::lex(source, 0, source.len()),
         verify,
         errors: Vec::new(),
         coverage_suppressed: Vec::new(),
+        result_completions,
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -94,11 +111,11 @@ pub(crate) fn check_all(
     // accumulation the suppression is per match
     // ([`PatternAnalyses::match_has_resolution_error`]), not per file: match
     // B's coverage is not match A's typo's business.
-    checker.errors.extend(resolution_errors(analyses));
+    checker.errors.extend(resolution_errors(&semantic.patterns));
     if !defer_to_checker {
         report_coverage(
             source,
-            analyses,
+            &semantic.patterns,
             &checker.coverage_suppressed,
             &mut checker.errors,
         );
@@ -171,6 +188,10 @@ struct Checker {
     /// stacked on a cause, so [`report_coverage`] skips them — the same
     /// per-match recovery boundary resolution failures use.
     coverage_suppressed: Vec<usize>,
+    /// Result completion is a HIR flow fact. Index it by the AST node's
+    /// stable source start so this AST diagnostic walk consumes the same
+    /// answer codegen will lower instead of running a second CFG query.
+    result_completions: HashMap<usize, bool>,
 }
 
 /// The (field, bound name) pairs a tag alternative destructures, sorted so
@@ -669,7 +690,12 @@ impl Checker {
             self.visit_program(value, Ctx::Expr, Place::ResultValueRegion);
         } else {
             self.check_result_outward_controls(block);
-            if !self.result_body_completes(block) {
+            let completes = self
+                .result_completions
+                .get(&block.span.start)
+                .copied()
+                .unwrap_or_else(|| crate::ice::bug!("Result block has no HIR flow fact"));
+            if !completes {
                 self.error(
                     TtError::span(
                         block.span.start,
@@ -736,13 +762,6 @@ impl Checker {
                     .help(help),
             );
         }
-    }
-
-    fn result_body_completes(&self, block: &ResultBlock) -> bool {
-        let Some(ResultItem::Stmts(body)) = block.items.first() else {
-            return false;
-        };
-        crate::flow::program_diverges_in_span(&self.source, &self.tokens, body, block.body_span)
     }
 
     fn check_variant(&mut self, decl: &VariantDecl) {

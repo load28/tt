@@ -280,16 +280,19 @@ fn parse_match_complete<'t>(
 
 /// Splits the scrutinee token range `(open..close)` at top-level commas
 /// into `(from, to)` token ranges. `None` means an empty part; one part is
-/// retained for tuple-arity recovery. `<`/`>` count as brackets so a generic call's type
-/// arguments don't split (a comparison next to a top-level comma is not a
-/// meaningful tuple scrutinee — tags are matched by `kind`).
+/// retained for tuple-arity recovery. A structurally closed generic argument
+/// list counts as a bracket; comparison operators remain ordinary expression
+/// tokens and therefore do not hide the tuple comma.
 fn split_scrutinees(cur: &Cursor, open: usize, close: usize) -> Option<Vec<(usize, usize)>> {
     let mut parts = Vec::new();
     let mut depth = 0usize;
     let mut from = open + 1;
     for k in open + 1..close {
         match cur.tokens[k].kind {
-            TokenKind::Punct(b'(' | b'[' | b'{' | b'<') => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b'<') if generic_angle_close(cur.tokens, k, close).is_some() => {
+                depth += 1
+            }
             TokenKind::Punct(b')' | b']' | b'}' | b'>') => depth = depth.saturating_sub(1),
             TokenKind::Punct(b',') if depth == 0 => {
                 if k == from {
@@ -306,6 +309,43 @@ fn split_scrutinees(cur: &Cursor, open: usize, close: usize) -> Option<Vec<(usiz
     }
     parts.push((from, close));
     Some(parts)
+}
+
+fn generic_angle_close(tokens: &[Token], open: usize, limit: usize) -> Option<usize> {
+    // Only a closing angle followed by a postfix continuation proves this is
+    // a type-argument list. A comma after `f<A>` remains the same ambiguous
+    // comparison boundary TypeScript assigns it; an invocation such as
+    // `f<A>(x)` is structurally closed and stays one tuple subject.
+    if open == 0
+        || !matches!(
+            tokens[open - 1].kind,
+            TokenKind::Ident | TokenKind::Punct(b')' | b']' | b'>')
+        )
+    {
+        return None;
+    }
+    let mut depth = 1usize;
+    for index in open + 1..limit {
+        match tokens[index].kind {
+            TokenKind::Punct(b'<') => depth += 1,
+            TokenKind::Punct(b'>') => {
+                depth -= 1;
+                if depth == 0 {
+                    return matches!(
+                        tokens.get(index + 1).map(|token| &token.kind),
+                        Some(
+                            TokenKind::Punct(b'(' | b'[' | b'.' | b'?' | b'!' | b'>')
+                                | TokenKind::OptChain
+                        )
+                    )
+                    .then_some(index);
+                }
+            }
+            TokenKind::Punct(b';' | b'{' | b'}') => return None,
+            _ => {}
+        }
+    }
+    None
 }
 
 fn parse_arms(mut cur: Cursor) -> Option<Vec<Arm>> {

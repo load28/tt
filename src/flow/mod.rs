@@ -177,7 +177,6 @@ pub(crate) fn program_diverges(src: &str, tokens: &[Token], program: &Program) -
 /// retain the original buffer and select only the tokens owned by the body.
 pub(crate) fn program_diverges_in_span(
     src: &str,
-    _tokens: &[Token],
     program: &Program,
     span: crate::ast::Span,
 ) -> bool {
@@ -1555,6 +1554,7 @@ fn function_body_brace(src: &str, tokens: &[Token], k: usize) -> bool {
                             return false;
                         }
                     }
+                    TokenKind::Arrow if depth == 0 => return false,
                     TokenKind::Str | TokenKind::Arrow => {}
                     TokenKind::Punct(b'.' | b'|' | b'&') => {}
                     TokenKind::Punct(c) if c.is_ascii_digit() => {}

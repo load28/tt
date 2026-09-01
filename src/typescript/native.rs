@@ -222,7 +222,7 @@ fn job_json(query: &Query) -> serde_json::Value {
             .map(|v| json!({ "module": v.module, "start": v.position }))
             .collect::<Vec<_>>(),
         "resultShapeChecks": query.result_shapes.iter()
-            .map(|v| json!({ "module": v.module, "start": v.position }))
+            .map(|v| json!({ "module": v.module, "start": v.start, "end": v.end }))
             .collect::<Vec<_>>(),
         "emitDeclarations": query.emit_declarations,
     })

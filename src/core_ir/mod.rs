@@ -19,10 +19,16 @@ pub(crate) struct CoreFile {
     pub root: BodyId,
     pub bodies: Vec<Body>,
     pub exprs: Vec<Expr>,
+    /// Full source extent node for expression programs whose Core body
+    /// stores only their tt segments.
+    pub sequence_nodes: std::collections::HashMap<BodyId, NodeId>,
     pub temporary_count: u32,
 }
 
 impl CoreFile {
+    pub(crate) fn sequence_node(&self, body: BodyId) -> Option<NodeId> {
+        self.sequence_nodes.get(&body).copied()
+    }
     /// Whether this file contains a Core primitive that needs a TypeScript
     /// execution owner. Source-only import edits do not require host lowering.
     pub(crate) fn requires_host_lowering(&self) -> bool {
@@ -70,7 +76,11 @@ impl CoreFile {
                             && self.has_statement_form(step.value)
                     })
             }),
-            Expr::Opaque(_) | Expr::Template(_) => false,
+            Expr::Template(template) => template.parts.iter().any(|part| match part {
+                TemplatePart::Raw(_) => false,
+                TemplatePart::Interpolation(expr) => self.has_statement_form(*expr),
+            }),
+            Expr::Opaque(_) => false,
         }
     }
 
@@ -357,6 +367,7 @@ pub(crate) struct ResultRegion {
     pub id: ResultRegionId,
     pub node: NodeId,
     pub items: Vec<ResultRegionItem>,
+    pub completes: bool,
     pub value: Option<ExprId>,
     pub is_async: bool,
 }
@@ -384,7 +395,7 @@ mod tests {
 
     fn lower(source: &str) -> CoreFile {
         let program = crate::parser::parse(source);
-        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         lower_semantic(&semantic, source)
     }
 

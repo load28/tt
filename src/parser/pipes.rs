@@ -89,6 +89,7 @@ pub(super) fn parse_pipeline(
         while let Some(t) = tokens.get(k) {
             match &t.kind {
                 TokenKind::PipeOp if depth == 0 => break,
+                TokenKind::JsxRaw if depth == 0 => break,
                 TokenKind::Punct(b';' | b',') if depth == 0 => break,
                 TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
                 TokenKind::Punct(b'?' | b':') if depth == 0 => return None,
@@ -242,6 +243,7 @@ fn malformed_pipeline_end(tokens: &[Token], mut k: usize) -> (usize, usize) {
         .map_or(0, |token| token.span.end);
     while let Some(token) = tokens.get(k) {
         match token.kind {
+            TokenKind::JsxRaw if depth == 0 => break,
             TokenKind::Punct(b';' | b',') if depth == 0 => break,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
             TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,

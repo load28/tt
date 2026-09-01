@@ -15,11 +15,12 @@ use crate::ast;
 /// root body of opaque statements.
 pub fn lower_source(file: FileId, source: &str) -> HirFile {
     let program = crate::parser::parse(source);
-    lower_program(file, &program)
+    lower_program(file, source, &program)
 }
 
-pub(crate) fn lower_program(file: FileId, program: &ast::Program) -> HirFile {
+pub(crate) fn lower_program(file: FileId, source: &str, program: &ast::Program) -> HirFile {
     let mut ctx = Lower {
+        source,
         hir: HirFile {
             file,
             items: Vec::new(),
@@ -40,12 +41,13 @@ pub(crate) fn lower_program(file: FileId, program: &ast::Program) -> HirFile {
     ctx.hir
 }
 
-struct Lower {
+struct Lower<'source> {
+    source: &'source str,
     hir: HirFile,
     next_node: u32,
 }
 
-impl Lower {
+impl Lower<'_> {
     fn node(&mut self, span: Span, origin: AstOrigin) -> NodeId {
         let id = NodeId(self.next_node);
         self.next_node += 1;
@@ -610,6 +612,11 @@ impl Lower {
 
     fn lower_result_block(&mut self, block: &ast::ResultBlock) -> ExprId {
         let node = self.node(Self::span(block.span), AstOrigin::ResultBlock);
+        let [ast::ResultItem::Stmts(statement_body)] = block.items.as_slice() else {
+            crate::ice::bug!("statement Result block does not own exactly one statement stream")
+        };
+        let completes =
+            crate::flow::program_diverges_in_span(self.source, statement_body, block.body_span);
         let items: Vec<ResultItem> = block
             .items
             .iter()
@@ -664,9 +671,12 @@ impl Lower {
             .value
             .as_ref()
             .map(|value| self.lower_expr_program(value, Self::span(block.body_span)));
-        self.hir
-            .exprs
-            .alloc(Expr::ResultBlock { node, items, value })
+        self.hir.exprs.alloc(Expr::ResultBlock {
+            node,
+            items,
+            completes,
+            value,
+        })
     }
 }
 
