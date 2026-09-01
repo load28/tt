@@ -157,6 +157,90 @@ fn run(dir: &Path, args: &[&str]) -> std::process::Output {
         .expect("ttc runs")
 }
 
+#[test]
+fn mixed_source_fixture_covers_every_directed_edge_and_typechecks() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let fixture = root.join("tests/fixtures/mixed-source-matrix/src");
+    let modules = [
+        ("plain.ts", "./plain"),
+        ("plain-jsx.tsx", "./plain-jsx"),
+        ("language.tt", "./language.tt"),
+        ("language-jsx.ttx", "./language-jsx.ttx"),
+    ];
+    let mut edges = 0;
+    for (file, own_specifier) in modules {
+        let source = fs::read_to_string(fixture.join(file)).expect("matrix fixture source");
+        for (_, specifier) in modules {
+            if specifier == own_specifier {
+                continue;
+            }
+            assert!(
+                source.contains(&format!("from \"{specifier}\"")),
+                "{file} is missing its directed edge to {specifier}"
+            );
+            edges += 1;
+        }
+    }
+    assert_eq!(edges, 12);
+    let tt_source = fs::read_to_string(fixture.join("language.tt")).expect("tt fixture source");
+    assert!(
+        tt_source.contains("FromTtx(value) => readTtx(value)"),
+        ".tt must consume the imported .ttx payload, not only its type"
+    );
+
+    require_tsgo!();
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args([
+            "--check-types",
+            "--project",
+            "tests/fixtures/mixed-source-matrix/tsconfig.json",
+            "tests/fixtures/mixed-source-matrix/src",
+        ])
+        .current_dir(root)
+        .output()
+        .expect("ttc runs");
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    require_emit!();
+    let dir = project(&[
+        (
+            "src/plain.ts",
+            include_str!("fixtures/mixed-source-matrix/src/plain.ts"),
+        ),
+        (
+            "src/plain-jsx.tsx",
+            include_str!("fixtures/mixed-source-matrix/src/plain-jsx.tsx"),
+        ),
+        (
+            "src/language.tt",
+            include_str!("fixtures/mixed-source-matrix/src/language.tt"),
+        ),
+        (
+            "src/language-jsx.ttx",
+            include_str!("fixtures/mixed-source-matrix/src/language-jsx.ttx"),
+        ),
+    ]);
+    let out_dir = dir.join("out");
+    let out = run(&dir, &["--types", "src", "-o", out_dir.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    for declaration in ["language.tt.d.ts", "language-jsx.ttx.d.ts"] {
+        assert!(
+            out_dir.join(declaration).is_file(),
+            "missing mixed-source sidecar {declaration}"
+        );
+    }
+}
+
 /// Runs `ttc --check-types src` in `dir`, returning its diagnostics.
 /// The one rendered diagnostic containing `needle`.
 ///

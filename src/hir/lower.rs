@@ -448,7 +448,7 @@ impl Lower<'_> {
             node: self.node(Self::span(*span), AstOrigin::BindingText),
             mode: Self::binding_mode(keyword),
         });
-        let expr = self.lower_expr_program(&stmt.expr, Self::span(stmt.span));
+        let expr = self.lower_expr_program(&stmt.expr, Self::span(stmt.expr_span));
         TryStmt {
             node,
             owner,
@@ -460,7 +460,7 @@ impl Lower<'_> {
 
     fn lower_try_expr(&mut self, expr: &ast::TryExpr) -> ExprId {
         let node = self.node(Self::span(expr.span), AstOrigin::Try);
-        let value = self.lower_expr_program(&expr.expr, Self::span(expr.span));
+        let value = self.lower_expr_program(&expr.expr, Self::span(expr.expr_span));
         self.hir.exprs.alloc(Expr::Try {
             node,
             value,

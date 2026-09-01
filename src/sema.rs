@@ -484,7 +484,8 @@ impl Checker {
                 .code(DiagnosticCode::TryCrossesValueRegion)
                 .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
             );
-        } else if function_target.is_none()
+        } else if place != Place::ResultRegion
+            && function_target.is_none()
             && crate::flow::in_static_block(&self.source, &self.tokens, at)
         {
             self.error(

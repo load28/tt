@@ -123,6 +123,7 @@ fn ttx_output_typechecks_as_tsx() {
     let source = r#"declare global {
   namespace JSX { interface IntrinsicElements { main: {}; b: {}; } }
 }
+
 variant State { Ready(value: string), Empty }
 export const render = (state: State) => <main>{match (state) {
   Ready(value) => <b>{value}</b>,
@@ -153,6 +154,73 @@ export const render = (state: State) => <main>{match (state) {
         "{}\n---compiled---\n{code}",
         tsc_report(&out)
     );
+}
+
+#[test]
+fn mixed_source_fixture_emits_one_type_clean_typescript_tree() {
+    if !have("tsc") {
+        return;
+    }
+    let dir = tmpdir();
+    write_std(&dir);
+    let std_imports = ttc::StdImports {
+        types: Some("./tt/index.js"),
+        option: Some("./tt/option.js"),
+        result: Some("./tt/result.js"),
+        runtime: Some("./tt/runtime.js"),
+    };
+    let files = [
+        (
+            "plain.ts",
+            include_str!("fixtures/mixed-source-matrix/src/plain.ts"),
+            SourceKind::TypeScript,
+        ),
+        (
+            "plain-jsx.tsx",
+            include_str!("fixtures/mixed-source-matrix/src/plain-jsx.tsx"),
+            SourceKind::Tsx,
+        ),
+        (
+            "language.ts",
+            include_str!("fixtures/mixed-source-matrix/src/language.tt"),
+            SourceKind::TypeScript,
+        ),
+        (
+            "language-jsx.tsx",
+            include_str!("fixtures/mixed-source-matrix/src/language-jsx.ttx"),
+            SourceKind::Tsx,
+        ),
+    ];
+    let mut emitted = Vec::new();
+    for (name, source, source_kind) in files {
+        let output = compile(
+            source,
+            &Options {
+                source_kind,
+                std_imports,
+                ..Options::default()
+            },
+        )
+        .unwrap_or_else(|error| panic!("{name} failed to compile: {error:#?}"));
+        let path = dir.join(name);
+        fs::write(&path, output).unwrap();
+        emitted.push(path);
+    }
+    let out = Command::new("tsc")
+        .args(&emitted)
+        .args([
+            dir.join("tt/index.ts"),
+            dir.join("tt/option.ts"),
+            dir.join("tt/result.ts"),
+            dir.join("tt/runtime.ts"),
+        ])
+        .arg("--noEmit")
+        .arg("--jsx")
+        .arg("preserve")
+        .args(TSC_FLAGS)
+        .output()
+        .expect("failed to run tsc");
+    assert!(out.status.success(), "{}", tsc_report(&out));
 }
 
 /// Type-check code emitted despite recoverable tt diagnostics.

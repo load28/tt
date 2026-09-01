@@ -362,6 +362,8 @@ pub(crate) struct TryStmt {
     /// diagnostic about the propagation belongs on — Rust underlines the
     /// `?`, not the whole `let` statement (`crate::EmitAnchor`).
     pub span: Span,
+    /// Exact operand range after `try`, excluding the keyword.
+    pub expr_span: Span,
     /// `Some((decl_keyword, binding_span))` for the declaration form, where
     /// `binding_span` covers the (trimmed) bytes between the keyword and
     /// `=` — an identifier or destructuring pattern, optionally
@@ -391,6 +393,8 @@ pub(crate) struct TryStmt {
 pub(crate) struct TryExpr {
     /// The propagation itself, from `try` through its operand.
     pub span: Span,
+    /// Exact operand range after `try`, excluding the keyword.
+    pub expr_span: Span,
     /// The operand after `try`, recursively parsed.
     pub expr: Program,
 }

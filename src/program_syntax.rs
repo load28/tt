@@ -40,6 +40,7 @@ use crate::core_ir::{
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
+use crate::lexer::Token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Stable identity assigned to an TT node in the projected syntax overlay.
@@ -484,7 +485,14 @@ impl EvaluationContext {
         function_return_awaited: bool,
     ) -> Self {
         let (mut owner, owner_edge) = evaluation_owner(parents);
-        if let Some(function_target) = function_target {
+        // The AST path owns local positions such as parameters and class
+        // initializers. Function-target metadata only refines a function
+        // body into the return contracts that differ from an ordinary
+        // function; an ordinary nested function still acts as a lexical
+        // barrier against an outer generator or constructor.
+        if owner == EvaluationOwner::FunctionBody
+            && let Some(function_target) = function_target
+        {
             owner = function_target;
         }
         let owner_reach = owner_reach(&parents[host_owner_edge.min(parents.len())..]);
@@ -956,6 +964,7 @@ struct ProjectionBuilder<'a> {
     pending: Vec<PendingOverlay>,
     source_segments: Vec<ProjectionSourceSegment>,
     projection_only_protocol_parents: Vec<ProjectedSpan>,
+    tokens: Vec<Token>,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -968,6 +977,7 @@ impl<'a> ProjectionBuilder<'a> {
             pending: Vec::new(),
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
+            tokens: crate::lexer::lex(source, 0, source.len()),
         }
     }
 
@@ -1125,11 +1135,21 @@ impl<'a> ProjectionBuilder<'a> {
         if self.expr_contains_decision(propagate.value) {
             return self.emit_propagate_with_shadow(propagate);
         }
+        self.preserve_concise_arrow_statement_boundary(self.source_span(propagate.owner)?.start);
         self.push_placeholder(
             SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
             CoreRoot::Propagate(propagate.node),
         )
+    }
+
+    fn preserve_concise_arrow_statement_boundary(&mut self, source_start: usize) {
+        let at = self
+            .tokens
+            .partition_point(|token| token.span.start < source_start);
+        if crate::flow::concise_arrow_boundary_before(self.source, &self.tokens, at) {
+            self.code.push(';');
+        }
     }
 
     /// Keep the propagation as the statement's primary overlay while also
@@ -1322,8 +1342,12 @@ impl<'a> ProjectionBuilder<'a> {
         });
         self.source_segments.push(ProjectionSourceSegment {
             projected: ProjectedSpan {
-                start: ProjectedByte(start.0 + 1),
-                end: ProjectedByte(self.code.len() - 1),
+                // The comma-expression shadow is the projection of the
+                // complete pipeline value. Include its grouping parens so
+                // a host edge whose operand retains those parens (notably
+                // an assignment RHS) maps to the pipeline's source span.
+                start,
+                end: ProjectedByte(self.code.len()),
             },
             source,
             kind: ProjectionSegmentKind::Placeholder,
@@ -1782,7 +1806,7 @@ struct ParentCollector {
     protocol_frames: Vec<ProjectedProtocolFrame>,
     occupied_names: HashSet<String>,
     function_depth: usize,
-    function_targets: Vec<Option<EvaluationOwner>>,
+    function_targets: Vec<EvaluationOwner>,
     contextual_types: Vec<Option<ProjectedSpan>>,
     function_return_types: Vec<Option<ProjectedSpan>>,
     function_return_async: Vec<bool>,
@@ -2142,7 +2166,7 @@ impl ParentCollector {
                     host_owners: self.host_owners.clone(),
                     protocol_frames: self.protocol_frames.clone(),
                     exits: Vec::new(),
-                    function_target: self.function_targets.iter().rev().flatten().copied().next(),
+                    function_target: self.function_targets.last().copied(),
                     contextual_type: self.contextual_types.last().copied().flatten(),
                     function_return_type: self.function_return_types.last().copied().flatten(),
                     function_return_awaited: self
@@ -2168,6 +2192,10 @@ impl ParentCollector {
         let mut owner_ids: HashMap<ProjectedHostOwner, HostOwnerId> = HashMap::new();
         let mut owners: Vec<HostOwnerSyntax> = Vec::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
+        let overlay_spans: Vec<_> = pending
+            .iter()
+            .map(|entry| (entry.id, entry.projected))
+            .collect();
         for entry in pending {
             let found = self
                 .found
@@ -2205,6 +2233,15 @@ impl ParentCollector {
                 owner_id
             };
             owners[owner_id.0 as usize].roots.push(entry.id);
+            let enclosing_overlay = overlay_spans
+                .iter()
+                .filter(|(id, span)| {
+                    *id != entry.id
+                        && span.start <= entry.projected.start
+                        && entry.projected.end <= span.end
+                })
+                .min_by_key(|(_, span)| span.end.0 - span.start.0)
+                .map(|(_, span)| *span);
             overlay.push(OverlayEntry {
                 id: entry.id,
                 category: entry.category,
@@ -2242,6 +2279,14 @@ impl ParentCollector {
                                 && !self
                                     .projection_only_protocol_parents
                                     .contains(&frame.parent())
+                                // A source operation outside an enclosing TT
+                                // value belongs to that value's protocol. If
+                                // the nested value inherited it as well, both
+                                // lowering schedules would own and emit the
+                                // same source range.
+                                && !enclosing_overlay.is_some_and(|ancestor| {
+                                    projected_contains(frame.parent(), ancestor)
+                                })
                                 && (!matches!(frame, ProjectedProtocolFrame::LoopTest { .. })
                                     || entry.marker == OverlayMarker::DecisionCallExpression)
                         })
@@ -2595,7 +2640,7 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
-        self.function_targets.push(None);
+        self.function_targets.push(EvaluationOwner::FunctionBody);
         self.contextual_types.push(None);
         self.function_return_types.push(
             node.return_type
@@ -2619,8 +2664,11 @@ impl VisitAstPath for ParentCollector {
 
     fn visit_function<'ast: 'r, 'r>(&mut self, node: &'ast Function, path: &mut AstNodePath<'r>) {
         self.function_depth += 1;
-        self.function_targets
-            .push(node.is_generator.then_some(EvaluationOwner::Generator));
+        self.function_targets.push(if node.is_generator {
+            EvaluationOwner::Generator
+        } else {
+            EvaluationOwner::FunctionBody
+        });
         self.contextual_types.push(None);
         self.function_return_types.push(
             node.return_type
@@ -2642,8 +2690,7 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
-        self.function_targets
-            .push(Some(EvaluationOwner::Constructor));
+        self.function_targets.push(EvaluationOwner::Constructor);
         self.contextual_types.push(None);
         self.function_return_types.push(None);
         self.function_return_async.push(false);
@@ -3493,12 +3540,17 @@ fn source_span_for_projection(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeSet;
 
     fn syntax(source: &str) -> ProgramSyntax {
+        syntax_kind(source, crate::SourceKind::TypeScript)
+    }
+
+    fn syntax_kind(source: &str, source_kind: crate::SourceKind) -> ProgramSyntax {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
-        ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
+        ProgramSyntax::build(&semantic, &core, source, source_kind)
             .expect("projection should parse")
     }
 
@@ -3644,6 +3696,35 @@ mod tests {
             entry.parents
         );
         assert!(entry.protocol.steps().is_empty(), "{:?}", entry.protocol);
+    }
+
+    #[test]
+    fn semicolon_free_concise_arrow_ends_before_the_next_try_statement() {
+        let source = "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\n\
+            declare const flag: boolean; declare function load(): R<number>;\n\
+            function* probe() {\n\
+              const choose = () => flag ? 1 : 2\n\
+              try load();\n\
+              yield choose();\n\
+            }\n";
+        let syntax = syntax(source);
+        let entry = syntax
+            .overlay
+            .iter()
+            .find(|entry| matches!(entry.core_root, CoreRoot::Propagate(_)))
+            .unwrap_or_else(|| {
+                panic!(
+                    "try overlay\nprojection:\n{}\noverlay: {:#?}",
+                    syntax.projection, syntax.overlay
+                )
+            });
+        assert_eq!(
+            entry.context.owner,
+            EvaluationOwner::Generator,
+            "projection:\n{}\nparents: {:#?}",
+            syntax.projection,
+            entry.parents
+        );
     }
 
     #[test]
@@ -3850,6 +3931,355 @@ mod tests {
                 .overlay
                 .iter()
                 .any(|entry| entry.category == SyntaxCategory::Expression)
+        );
+    }
+
+    #[test]
+    fn mixed_syntax_matrix_covers_every_host_protocol_class() {
+        fn operation_name(operation: HostEvaluationOperation) -> &'static str {
+            match operation {
+                HostEvaluationOperation::Eager(position) => match position {
+                    EagerPosition::BinaryLeft => "eager-binary-left",
+                    EagerPosition::BinaryRight => "eager-binary-right",
+                    EagerPosition::ArrayElement(_) => "eager-array-element",
+                    EagerPosition::ObjectEvaluation(_) => "eager-object-evaluation",
+                    EagerPosition::AssignmentRight => "eager-assignment-right",
+                    EagerPosition::SequenceElement(_) => "eager-sequence-element",
+                    EagerPosition::UnaryOperand => "eager-unary-operand",
+                    EagerPosition::CallArgument(_) => "eager-call-argument",
+                    EagerPosition::ConstructArgument(_) => "eager-construct-argument",
+                    EagerPosition::TemplateInterpolation(_) => "eager-template-interpolation",
+                    EagerPosition::JsxExpression(_) => "eager-jsx-expression",
+                },
+                HostEvaluationOperation::Conditional(branch) => match branch {
+                    ConditionalBranch::LogicalAndRight => "conditional-and-right",
+                    ConditionalBranch::LogicalOrRight => "conditional-or-right",
+                    ConditionalBranch::NullishRight => "conditional-nullish-right",
+                    ConditionalBranch::Consequent => "conditional-consequent",
+                    ConditionalBranch::Alternate => "conditional-alternate",
+                    ConditionalBranch::OptionalCallArgument(_) => {
+                        "conditional-optional-call-argument"
+                    }
+                },
+                HostEvaluationOperation::Reference(position) => match position {
+                    ReferencePosition::CallCallee => "reference-call-callee",
+                    ReferencePosition::OptionalCallCallee => "reference-optional-call-callee",
+                    ReferencePosition::MemberObject => "reference-member-object",
+                    ReferencePosition::MemberProperty => "reference-member-property",
+                    ReferencePosition::ConstructorCallee => "reference-constructor-callee",
+                    ReferencePosition::TaggedTemplateTag => "reference-tagged-template-tag",
+                },
+                HostEvaluationOperation::Suspend(kind) => match kind {
+                    SuspensionKind::Await => "suspend-await",
+                    SuspensionKind::Yield => "suspend-yield",
+                    SuspensionKind::YieldDelegate => "suspend-yield-delegate",
+                },
+                HostEvaluationOperation::LoopTest => "loop-test",
+            }
+        }
+
+        fn owner_name(owner: EvaluationOwner) -> &'static str {
+            match owner {
+                EvaluationOwner::Module => "module",
+                EvaluationOwner::FunctionBody => "function",
+                EvaluationOwner::Constructor => "constructor",
+                EvaluationOwner::Generator => "generator",
+                EvaluationOwner::ParameterInitializer => "parameter",
+                EvaluationOwner::ClassInitializer => "class-field",
+                EvaluationOwner::StaticBlock => "static-block",
+            }
+        }
+
+        fn continuation_name(continuation: HostContinuation) -> &'static str {
+            match continuation {
+                HostContinuation::Return => "return",
+                HostContinuation::ArrowReturn => "arrow-return",
+                HostContinuation::Initialize => "initialize",
+                HostContinuation::ForInitialize => "for-initialize",
+                HostContinuation::Discard => "discard",
+                HostContinuation::Compose => "compose",
+            }
+        }
+
+        fn reach_name(reach: OwnerReach) -> &'static str {
+            match reach {
+                OwnerReach::Same => "same",
+                OwnerReach::Repeated => "repeated",
+                OwnerReach::UnmodeledConditional => "unmodeled-conditional",
+            }
+        }
+
+        let expression = "match (e) { A => 1, _ => 0 }";
+        let cases = [
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ({expression}) + right();"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = left() + {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = [before(), {expression}];"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = {{ a: before(), b: {expression} }};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("target = {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = (before(), {expression});"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = !({expression});"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("call(before(), {expression});"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("new Box(before(), {expression});"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = `${{before()}}${{{expression}}}`;"),
+            ),
+            (
+                crate::SourceKind::Tsx,
+                format!("const x = <main data-x={{{expression}}}>{{{expression}}}</main>;"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ready && {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ready || {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ready ?? {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ready ? {expression} : 0;"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ready ? 0 : {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("fn?.(before(), {expression});"),
+            ),
+            (crate::SourceKind::TypeScript, format!("({expression})();")),
+            (
+                crate::SourceKind::TypeScript,
+                format!("({expression})?.();"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ({expression}).value;"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = object[{expression}];"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = new ({expression})();"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = ({expression})`text`;"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("async function f() {{ return await {expression}; }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("function* f() {{ yield {expression}; }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("function* f() {{ yield* {expression}; }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("while ({expression}) {{ break; }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("function f() {{ return {expression}; }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const f = () => {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("const x = {expression};"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("for (let x = {expression};;) {{ break; }}"),
+            ),
+            (crate::SourceKind::TypeScript, format!("{expression};")),
+            (
+                crate::SourceKind::TypeScript,
+                format!("class C {{ constructor() {{ use({expression}); }} }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("function* f() {{ use({expression}); }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("function f(x = {expression}) {{}}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("class C {{ x = {expression}; }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("class C {{ static {{ use({expression}); }} }}"),
+            ),
+            (
+                crate::SourceKind::TypeScript,
+                format!("switch (value) {{ case {expression}: break; }}"),
+            ),
+        ];
+
+        let mut operations = BTreeSet::new();
+        let mut owners = BTreeSet::new();
+        let mut continuations = BTreeSet::new();
+        let mut reaches = BTreeSet::new();
+        for (kind, source) in cases {
+            let syntax = syntax_kind(&source, kind);
+            for entry in syntax.overlay.iter().filter(|entry| {
+                entry.category == SyntaxCategory::Expression
+                    && matches!(entry.core_root, CoreRoot::Expr(_))
+            }) {
+                owners.insert(owner_name(entry.context.owner));
+                continuations.insert(continuation_name(entry.context.continuation));
+                reaches.insert(reach_name(entry.context.owner_reach));
+                operations.extend(
+                    entry
+                        .protocol
+                        .steps()
+                        .iter()
+                        .map(|step| operation_name(step.operation)),
+                );
+            }
+        }
+
+        assert_eq!(
+            operations,
+            BTreeSet::from([
+                "conditional-alternate",
+                "conditional-and-right",
+                "conditional-consequent",
+                "conditional-nullish-right",
+                "conditional-optional-call-argument",
+                "conditional-or-right",
+                "eager-array-element",
+                "eager-assignment-right",
+                "eager-binary-left",
+                "eager-binary-right",
+                "eager-call-argument",
+                "eager-construct-argument",
+                "eager-jsx-expression",
+                "eager-object-evaluation",
+                "eager-sequence-element",
+                "eager-template-interpolation",
+                "eager-unary-operand",
+                "loop-test",
+                "reference-call-callee",
+                "reference-constructor-callee",
+                "reference-member-object",
+                "reference-member-property",
+                "reference-optional-call-callee",
+                "reference-tagged-template-tag",
+                "suspend-await",
+                "suspend-yield",
+                "suspend-yield-delegate",
+            ])
+        );
+        assert_eq!(
+            owners,
+            BTreeSet::from([
+                "class-field",
+                "constructor",
+                "function",
+                "generator",
+                "module",
+                "parameter",
+                "static-block",
+            ])
+        );
+        assert_eq!(
+            continuations,
+            BTreeSet::from([
+                "arrow-return",
+                "compose",
+                "discard",
+                "for-initialize",
+                "initialize",
+                "return",
+            ])
+        );
+        assert_eq!(
+            reaches,
+            BTreeSet::from(["repeated", "same", "unmodeled-conditional"])
+        );
+    }
+
+    #[test]
+    fn an_enclosing_tt_value_owns_the_outer_jsx_protocol_once() {
+        let source = "import type { TResult } from \"@tt/std\";\ndeclare const outcome: TResult<string, string>;\nconst view = <aside>{match (result {\n  const value = try outcome;\n  return value;\n}) {\n  Ok(value) => <b>{value}</b>,\n  Err(error) => <code>{error}</code>,\n}}</aside>;\n";
+        let syntax = syntax_kind(source, crate::SourceKind::Tsx);
+        let expression_protocols: Vec<_> = syntax
+            .overlay
+            .iter()
+            .filter(|entry| entry.category == SyntaxCategory::Expression)
+            .map(|entry| entry.protocol.steps())
+            .collect();
+        assert_eq!(expression_protocols.len(), 2, "{:#?}", syntax.overlay);
+        assert!(expression_protocols[0].iter().any(|step| {
+            step.operation == HostEvaluationOperation::Eager(EagerPosition::JsxExpression(0))
+        }));
+        assert!(expression_protocols[1].is_empty(), "{:#?}", syntax.overlay);
+    }
+
+    #[test]
+    fn pipeline_head_and_match_share_structural_host_facts() {
+        let source = "declare const flag: boolean, ready: boolean;\nfunction probe() { const x = ready && ((match (flag) { true => 1, false => 2 }) |> ((value) => value)); }\n";
+        let parsed = syntax(source);
+        assert_eq!(parsed.overlay.len(), 2, "{:#?}", parsed.overlay);
+        assert_eq!(parsed.overlay[0].host_owner, parsed.overlay[1].host_owner);
+        assert_eq!(parsed.overlay[0].protocol, parsed.overlay[1].protocol);
+        assert!(
+            parsed.overlay[0].source.start <= parsed.overlay[1].source.start
+                && parsed.overlay[1].source.end <= parsed.overlay[0].source.end
+        );
+
+        let arrow_source = "declare const flag: boolean;\nconst probe = () => (match (flag) { true => 1, false => 2 }) |> ((value) => value);\n";
+        let arrow = syntax(arrow_source);
+        assert_eq!(arrow.overlay.len(), 2, "{:#?}", arrow.overlay);
+        assert!(
+            arrow
+                .overlay
+                .iter()
+                .all(|entry| entry.host_owner.kind == HostOwnerKind::ArrowExpression)
         );
     }
 
