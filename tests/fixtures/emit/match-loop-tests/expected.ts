@@ -6,8 +6,14 @@ while (true) {
   {
     const $tt_m = next();
     switch ($tt_m) {
-      case 1: { $tt_v0 = true; break; }
-      default: { $tt_v0 = false; break; }
+      case 1: {
+        $tt_v0 = true;
+        break;
+      }
+      default: {
+        $tt_v0 = false;
+        break;
+      }
     }
   }
   if (!($tt_v0)) break; {
@@ -18,8 +24,14 @@ let $tt_v1;
 {
   const $tt_m = next();
   switch ($tt_m) {
-    case 1: { $tt_v1 = 1; break; }
-    default: { $tt_v1 = 0; break; }
+    case 1: {
+      $tt_v1 = 1;
+      break;
+    }
+    default: {
+      $tt_v1 = 0;
+      break;
+    }
   }
 }
 for (let value = $tt_v1;
@@ -28,8 +40,14 @@ for (let value = $tt_v1;
        {
          const $tt_m = next();
          switch ($tt_m) {
-           case 2: { $tt_v2 = true; break; }
-           default: { $tt_v2 = false; break; }
+           case 2: {
+             $tt_v2 = true;
+             break;
+           }
+           default: {
+             $tt_v2 = false;
+             break;
+           }
          }
        }
        if (!($tt_v2)) break; {

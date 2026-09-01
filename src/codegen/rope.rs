@@ -699,6 +699,10 @@ impl<'a> Rope<'a> {
         Rope::default()
     }
 
+    pub(crate) fn is_empty(&self) -> bool {
+        self.pieces.is_empty()
+    }
+
     pub(crate) fn push_lit(&mut self, text: impl Into<Cow<'a, str>>) {
         let text = text.into();
         if !text.is_empty() {
