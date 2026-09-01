@@ -6,6 +6,10 @@ fn ok(src: &str) -> String {
     compile(src, &Options::default()).expect("compile failed")
 }
 
+fn compact(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn err(src: &str) -> ttc::CompileError {
     compile(src, &Options::default()).expect_err("expected a compile error")
 }
@@ -244,12 +248,13 @@ const area = match (shape) {
 };
 "#);
     assert!(out.contains("switch ($tt_m.kind)"));
-    assert!(out.contains(
+    let compact = compact(&out);
+    assert!(compact.contains(
         "case \"Circle\": { const { radius } = $tt_m; $tt_v0 = 3.14 * radius * radius; break; }"
     ));
-    assert!(out.contains("case \"Point\": { $tt_v0 = 0; break; }"));
+    assert!(compact.contains("case \"Point\": { $tt_v0 = 0; break; }"));
     // The output is plain TypeScript: a runtime guard, no type-level tricks.
-    assert!(out.contains(
+    assert!(compact.contains(
         "default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }"
     ));
     assert!(!out.contains("never"));
@@ -258,7 +263,7 @@ const area = match (shape) {
 #[test]
 fn match_wildcard_becomes_default() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };");
-    assert!(out.contains("default: { $tt_v0 = 0; break; }"));
+    assert!(compact(&out).contains("default: { $tt_v0 = 0; break; }"));
     assert!(!out.contains("never"));
 }
 
@@ -590,7 +595,7 @@ const r = match (m) {
 };
 "#);
     assert!(out.contains("const { x: px, y: py } = $tt_m;"));
-    assert!(out.contains("break; }"));
+    assert!(compact(&out).contains("break; }"));
 }
 
 #[test]
@@ -615,7 +620,7 @@ const action = match (key) {
 };
 "#);
     assert!(
-        out.contains("case \"Escape\": case \"Tab\": { $tt_v0 = \"cancel\"; break; }"),
+        compact(&out).contains("case \"Escape\": case \"Tab\": { $tt_v0 = \"cancel\"; break; }"),
         "{out}"
     );
 }
@@ -624,7 +629,8 @@ const action = match (key) {
 fn or_pattern_with_identical_bindings_shares_destructuring() {
     let out = ok("const r = match (x) { A(v) | B(v) => v, _ => 0 };");
     assert!(
-        out.contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
+        compact(&out)
+            .contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
         "{out}"
     );
 }
@@ -633,7 +639,7 @@ fn or_pattern_with_identical_bindings_shares_destructuring() {
 fn or_pattern_binding_order_is_insensitive() {
     let out = ok("const r = match (p) { A(x, y) | B(y, x) => x + y, _ => 0 };");
     assert!(
-        out.contains("case \"A\": case \"B\": { const { x, y } = $tt_m;"),
+        compact(&out).contains("case \"A\": case \"B\": { const { x, y } = $tt_m;"),
         "{out}"
     );
 }
@@ -763,13 +769,13 @@ const grade = match (s) {
 "#);
     assert!(!out.contains("switch ("), "{out}");
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if (points >= 90) { $tt_v0 = \"A\"; break; } }"
         ),
         "{out}"
     );
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0 = \"F\"; break; }"
         ),
         "{out}"
@@ -828,7 +834,7 @@ fn fully_guarded_match_is_not_exhaustive() {
 fn guard_with_or_pattern_emits_combined_condition() {
     let out = ok("const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };");
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if (v > 0) { $tt_v0 = v; break; } }"
         ),
         "{out}"
@@ -849,7 +855,7 @@ fn await_in_guard_makes_match_async() {
     );
     assert!(!out.contains("async () =>"), "{out}");
     assert!(
-        out.contains("if (await allowed(u)) { $tt_v0 = 1; break; }"),
+        compact(&out).contains("if (await allowed(u)) { $tt_v0 = 1; break; }"),
         "{out}"
     );
     assert!(out.contains("return $tt_v0;"), "{out}");
@@ -886,7 +892,7 @@ fn try_inside_a_function_inside_a_guard_is_allowed() {
         "const r = match (x) {\n  A(v) if run(() => { try g(); return true; }) => v,\n  _ => 0,\n};\n",
     );
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -1053,8 +1059,8 @@ const f = (d: Dir) => match (d) { North => 1 };
 fn try_decl_emits_early_return_and_bind() {
     let out = ok("function f(): X {\n  const n = try g();\n  return h(n);\n}\n");
     assert!(
-        out.contains(
-            "const $tt_t0 = g(); if (!(\"value\" in $tt_t0)) return $tt_t0; const n = $tt_t0.value;"
+        compact(&out).contains(
+            "const $tt_t0 = g(); if (!(\"value\" in $tt_t0)) { return $tt_t0; } const n = $tt_t0.value;"
         ),
         "{out}"
     );
@@ -1064,7 +1070,8 @@ fn try_decl_emits_early_return_and_bind() {
 fn try_bare_statement_emits_early_return_only() {
     let out = ok("function f(): X {\n  try g();\n  return h();\n}\n");
     assert!(
-        out.contains("const $tt_t0 = g(); if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out)
+            .contains("const $tt_t0 = g(); if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
     assert!(!out.contains("$tt_t0.value"), "{out}");
@@ -1197,7 +1204,7 @@ fn try_is_a_value_in_deep_expression_positions() {
         "function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }\n",
     );
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -1226,7 +1233,7 @@ fn try_turns_a_concise_arrow_into_a_propagating_block() {
     let out = ok("const f = (): TResult<number, string> => Result.Ok(try read());\n");
     assert!(out.contains("=> {"), "{out}");
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -1236,7 +1243,7 @@ fn parenthesized_concise_arrow_keeps_try_in_the_arrow() {
     let parenthesized = ok("const f = () => (try next());\n");
     assert!(parenthesized.contains("=> {"), "{parenthesized}");
     assert!(
-        parenthesized.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&parenthesized).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{parenthesized}"
     );
 }
@@ -1246,7 +1253,7 @@ fn pipeline_concise_arrow_keeps_try_in_the_arrow() {
     let pipeline = ok("const f = value |> (x => try next());\n");
     assert!(pipeline.contains("=> {"), "{pipeline}");
     assert!(
-        pipeline.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&pipeline).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{pipeline}"
     );
 }
@@ -1311,7 +1318,7 @@ fn try_in_spread_operands_enters_the_evaluation_protocol() {
     ] {
         let output = ok(src);
         assert!(
-            output.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+            compact(&output).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
             "{output}"
         );
         assert!(output.contains("const value ="), "{output}");
@@ -1361,7 +1368,7 @@ fn try_placement_reports_the_owning_reason() {
 fn a_static_block_does_not_capture_a_nested_function_try() {
     let output = ok("class C { static { const run = () => { try read(); }; } }\n");
     assert!(
-        output.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&output).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{output}"
     );
 }
@@ -1513,7 +1520,7 @@ fn try_inside_a_function_inside_a_scrutinee_is_allowed() {
         "const x = match (run(() => { try g(); return h(); })) {\n  Ok(value) => value,\n  Err(error) => 0,\n};\n",
     );
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -1524,7 +1531,7 @@ fn try_inside_a_function_inside_an_arm_body_is_allowed() {
         "const x = match (r) {\n  Ok(value) => { const f = () => { try g(value); return 1; }; return f(); },\n  Err(error) => 0,\n};\n",
     );
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -1533,7 +1540,7 @@ fn try_inside_a_function_inside_an_arm_body_is_allowed() {
 fn try_inside_a_function_inside_a_template_interpolation_is_allowed() {
     let out = ok("const s = `${run(() => { try g(); return h(); })}`;\n");
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -1548,7 +1555,7 @@ fn let_else_emits_guard_and_bind() {
         "function f(): number {\n  const Some(value) = find() else { return 0; };\n  return value;\n}\n",
     );
     assert!(
-        out.contains(
+        compact(&out).contains(
             "const $tt_t0 = find(); if ($tt_t0.kind !== \"Some\") { return 0; } const { value } = $tt_t0;"
         ),
         "{out}"
@@ -1568,7 +1575,7 @@ fn let_else_empty_bindings_checks_only() {
     let out =
         ok("function f(): number {\n  const Ok() = check() else { return -1; };\n  return 1;\n}\n");
     assert!(
-        out.contains("if ($tt_t0.kind !== \"Ok\") { return -1; }"),
+        compact(&out).contains("if ($tt_t0.kind !== \"Ok\") { return -1; }"),
         "{out}"
     );
     assert!(!out.contains("} = $tt_t0;"), "{out}");
@@ -1584,7 +1591,7 @@ fn let_else_or_pattern_shares_one_destructuring() {
         "variant E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A(x) | B(x) = e else { return 0; };\n  return x;\n}\n",
     );
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if ($tt_t0.kind !== \"A\" && $tt_t0.kind !== \"B\") { return 0; } const { x } = $tt_t0;"
         ),
         "{out}"
@@ -1599,7 +1606,7 @@ fn let_else_or_pattern_with_a_bare_alternative_checks_only() {
         "variant E { A(x: number), B(x: number), C }\nfunction f(e: E): number {\n  const A() | C = e else { return 0; };\n  return 1;\n}\n",
     );
     assert!(
-        out.contains("if ($tt_t0.kind !== \"A\" && $tt_t0.kind !== \"C\") { return 0; }"),
+        compact(&out).contains("if ($tt_t0.kind !== \"A\" && $tt_t0.kind !== \"C\") { return 0; }"),
         "{out}"
     );
     assert!(!out.contains("} = $tt_t0;"), "{out}");
@@ -1626,7 +1633,9 @@ fn if_let_or_pattern_condition_is_a_disjunction() {
         "variant E { A(x: number), B(x: number), C }\nfunction g(e: E): number {\n  if let A(x) | B(x) = e {\n    return x;\n  }\n  return -1;\n}\n",
     );
     assert!(
-        out.contains("if ($tt_t0.kind === \"A\" || $tt_t0.kind === \"B\") { const { x } = $tt_t0;"),
+        compact(&out).contains(
+            "if ($tt_t0.kind === \"A\" || $tt_t0.kind === \"B\") { const { x } = $tt_t0;"
+        ),
         "{out}"
     );
 }
@@ -1654,7 +1663,7 @@ fn inline_bodies_inherit_the_enclosing_functions_place() {
         "variant E { A(x: number), B }\nfunction f(e: E): Result<number, string> {\n  if let A(x) = e {\n    const n = try g(x);\n    return Result.Ok(n);\n  }\n  return Result.Ok(0);\n}\n",
     );
     assert!(
-        out.contains("if (!(\"value\" in $tt_t1)) return $tt_t1;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t1)) { return $tt_t1; }"),
         "{out}"
     );
 
@@ -1707,7 +1716,7 @@ fn let_else_shares_try_temp_counter() {
     );
     assert!(out.contains("if (!(\"value\" in $tt_t0))"), "{out}");
     assert!(
-        out.contains("const $tt_t1 = h(n); if ($tt_t1.kind !== \"Some\""),
+        compact(&out).contains("const $tt_t1 = h(n); if ($tt_t1.kind !== \"Some\""),
         "{out}"
     );
 }
@@ -1740,7 +1749,7 @@ fn let_else_diverges_when_the_return_value_is_an_object_literal() {
         "function f(): number {\n  const Some(v) = find() else { return { kind: \"Err\", error: \"no\" }; };\n  return v;\n}\n",
     );
     assert!(
-        out.contains("{ return { kind: \"Err\", error: \"no\" }; }"),
+        compact(&out).contains("{ return { kind: \"Err\", error: \"no\" }; }"),
         "{out}"
     );
     // Same with a statement in front of it, and with a tt construct as
@@ -2077,7 +2086,7 @@ fn try_declaration_in_for_initializer_runs_before_the_loop() {
     let loop_header = output.find("for (let i = $tt_t0.value;;)").unwrap();
     assert!(prelude < loop_header, "{output}");
     assert!(
-        output.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&output).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{output}"
     );
 }
@@ -2597,7 +2606,7 @@ fn a_lowering_is_laid_out_from_the_line_it_replaces() {
     assert!(out.contains("\n      const $tt_m = e;"), "{out}");
     assert!(out.contains("\n      switch ($tt_m.kind) {\n"), "{out}");
     assert!(
-        out.contains("\n        case \"A\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
+        compact(&out).contains("case \"A\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
         "{out}"
     );
     assert!(out.contains("\n    }\n    const r = $tt_v0;"), "{out}");
@@ -2734,9 +2743,33 @@ fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
     let out = ok(
         "variant E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
     );
-    assert!(out.contains("$tt_v0 = v + 1; break;"), "{out}");
-    assert!(out.contains("$tt_v0 = 0; break;"), "{out}");
-    assert!(out.contains("$tt_v1 = (v, v + 1); break;"), "{out}");
+    let compact = compact(&out);
+    assert!(compact.contains("$tt_v0 = v + 1; break;"), "{out}");
+    assert!(compact.contains("$tt_v0 = 0; break;"), "{out}");
+    assert!(compact.contains("$tt_v1 = (v, v + 1); break;"), "{out}");
+}
+
+#[test]
+fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
+    let out = ok(
+        "variant E { A(v: number), B }\nfunction f(e: E): Result<number, string> {\n  const value = try read();\n  const matched = match (e) { A(v) => v, B => 0 };\n  return Result.Ok(value + matched);\n}\n",
+    );
+    for compressed in ["; if (", "; const ", "; break"] {
+        assert!(
+            !out.lines().any(|line| line.contains(compressed)),
+            "generated statements share a line through {compressed:?}:\n{out}"
+        );
+    }
+    assert!(
+        out.contains(
+            "case \"A\": {\n        const { v } = $tt_m;\n        $tt_v0 = v;\n        break;\n      }"
+        ),
+        "{out}"
+    );
+    assert!(
+        out.contains("if (!(\"value\" in $tt_t0)) {\n    return $tt_t0;\n  }"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -2823,7 +2856,10 @@ fn pipeline_inside_match_scrutinee_arm_and_template() {
         "variant E { A(v: number), B }\nconst r = match (x |> norm) {\n  A(v) => v |> double,\n  B => 0,\n};\nconst t = `n=${x |> f}`;\n",
     );
     assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
-    assert!(out.contains("$tt_v0 = $tt_ap(v, double); break;"), "{out}");
+    assert!(
+        compact(&out).contains("$tt_v0 = $tt_ap(v, double); break;"),
+        "{out}"
+    );
     assert!(out.contains("`n=${$tt_ap(x, f)}`"), "{out}");
 }
 
@@ -3009,7 +3045,7 @@ fn bare_super_is_not_an_optional_receiver() {
 fn try_inside_a_function_inside_a_pipeline_step_is_allowed() {
     let out = ok("const a = x |> (n => { const b = try f(n); return b; });\n");
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
 }
@@ -3133,13 +3169,13 @@ const step = match (dir, speed) {
     assert!(out.contains("const $tt_m0 = dir;"), "{out}");
     assert!(out.contains("const $tt_m1 = speed;"), "{out}");
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0 = 2; break; }"
         ),
         "{out}"
     );
     assert!(
-        out.contains("if ($tt_m0.kind === \"South\") { $tt_v0 = -1; break; }"),
+        compact(&out).contains("if ($tt_m0.kind === \"South\") { $tt_v0 = -1; break; }"),
         "{out}"
     );
     assert!(out.contains("JSON.stringify([$tt_m0, $tt_m1])"), "{out}");
@@ -3154,7 +3190,7 @@ const r = match (a, b) {
 };
 "#);
     assert!(
-        out.contains(
+        compact(&out).contains(
             "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0 = x + y; break; }"
         ),
         "{out}"
@@ -3207,7 +3243,7 @@ const step = match (d, s) {
 "#);
     assert!(out.contains("$tt_m0"), "{out}");
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0 = 1; break; }"
         ),
         "{out}"
@@ -3241,7 +3277,7 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("$tt_v0 = 0; break;"), "{out}");
+    assert!(compact(&out).contains("$tt_v0 = 0; break;"), "{out}");
 
     let e = err("const r = match (a, b) {\n  _ => 0,\n  (A, B) => 1,\n};\n");
     assert!(e.message.contains("must be the last arm"), "{}", e.message);
@@ -3400,11 +3436,11 @@ const n = match (r) {
 };
 "#);
     assert!(
-        out.contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0 = v; break; }"),
+        compact(&out).contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0 = v; break; }"),
         "{out}"
     );
     assert!(
-        out.contains(
+        compact(&out).contains(
             "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0 = 0; break; }"
         ),
         "{out}"
@@ -3437,7 +3473,7 @@ const n = match (r) {
 };
 "#);
     assert!(
-        out.contains(
+        compact(&out).contains(
             "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0 = left + value; break; }"
         ),
         "{out}"
@@ -3526,7 +3562,8 @@ const n = match (a, b) {
         "{out}"
     );
     assert!(
-        out.contains("const { value: x } = $tt_m0.value; const { value: y } = $tt_m1.value;"),
+        compact(&out)
+            .contains("const { value: x } = $tt_m0.value; const { value: y } = $tt_m1.value;"),
         "{out}"
     );
 }
@@ -3539,7 +3576,10 @@ const n = match (r) {
   _ => 0,
 };
 "#);
-    assert!(out.contains("if (v > 0) { $tt_v0 = v; break; }"), "{out}");
+    assert!(
+        compact(&out).contains("if (v > 0) { $tt_v0 = v; break; }"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -3564,7 +3604,7 @@ fn if_let_emits_a_self_contained_block() {
     let out =
         ok("function f() {\n  if let Some(value: user) = find() {\n    greet(user);\n  }\n}\n");
     assert!(
-        out.contains("{ const $tt_t0 = find(); if ($tt_t0.kind === \"Some\") { const { value: user } = $tt_t0; greet(user); } }"),
+        compact(&out).contains("{ const $tt_t0 = find(); if ($tt_t0.kind === \"Some\") { const { value: user } = $tt_t0; greet(user); } }"),
         "{out}"
     );
 }
@@ -3583,17 +3623,17 @@ function f() {
 }
 "#);
     assert!(
-        out.contains("} else { const $tt_t1 = b(); if ($tt_t1.kind === \"Ok\""),
+        compact(&out).contains("} else { const $tt_t1 = b(); if ($tt_t1.kind === \"Ok\""),
         "{out}"
     );
-    assert!(out.contains("else { fallback(); } } }"), "{out}");
+    assert!(compact(&out).contains("else { fallback(); } } }"), "{out}");
 }
 
 #[test]
 fn if_let_takes_nested_patterns() {
     let out = ok("function f(r: Res) {\n  if let Ok(value: Some(value: v)) = r { use(v); }\n}\n");
     assert!(
-        out.contains("if ($tt_t0.kind === \"Ok\" && $tt_t0.value.kind === \"Some\") { const { value: v } = $tt_t0.value; use(v); }"),
+        compact(&out).contains("if ($tt_t0.kind === \"Ok\" && $tt_t0.value.kind === \"Some\") { const { value: v } = $tt_t0.value; use(v); }"),
         "{out}"
     );
 }
@@ -3696,11 +3736,12 @@ fn statement_bodied_result_returns_a_propagated_value() {
     let out = ok("const value = result { return try read(); };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
         "{out}"
     );
     assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0;"),
+        compact(&out)
+            .contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0;"),
         "{out}"
     );
 }
@@ -3710,13 +3751,14 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
     let out = ok("const value = result { const item = try read(); return item; };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
         "{out}"
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
     assert!(out.contains("const $tt_result = item;"), "{out}");
     assert!(
-        out.contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break $tt_v0;"),
+        compact(&out)
+            .contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break $tt_v0;"),
         "{out}"
     );
 }
@@ -3780,7 +3822,7 @@ fn propagation_uses_a_type_clean_structural_result_discriminator() {
     let out =
         ok("function run() { const value = try Result.Err(\"boom\"); return Result.Ok(value); }\n");
     assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) return $tt_t0;"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
         "{out}"
     );
     assert!(!out.contains(".kind !== \"Ok\""), "{out}");
@@ -3952,9 +3994,10 @@ const label = match (dir) {
     assert!(out.contains("const $tt_m = dir;"));
     assert!(out.contains("switch ($tt_m) {"));
     assert!(!out.contains("$tt_m.kind"));
-    assert!(out.contains(r#"case "north": { $tt_v0 = "N"; break; }"#));
-    assert!(out.contains(r#"case "south": { $tt_v0 = "S"; break; }"#));
-    assert!(out.contains(r#"default: { $tt_v0 = "?"; break; }"#));
+    let compact = compact(&out);
+    assert!(compact.contains(r#"case "north": { $tt_v0 = "N"; break; }"#));
+    assert!(compact.contains(r#"case "south": { $tt_v0 = "S"; break; }"#));
+    assert!(compact.contains(r#"default: { $tt_v0 = "?"; break; }"#));
 }
 
 #[test]
@@ -3968,17 +4011,19 @@ const message = match (status) {
 };
 "#);
     assert!(out.contains("switch ($tt_m) {"));
-    assert!(out.contains(r#"case 200: { $tt_v0 = "ok"; break; }"#));
-    assert!(out.contains(r#"case 404: { $tt_v0 = "not found"; break; }"#));
-    assert!(out.contains(r#"case 500: { $tt_v0 = "error"; break; }"#));
+    let compact = compact(&out);
+    assert!(compact.contains(r#"case 200: { $tt_v0 = "ok"; break; }"#));
+    assert!(compact.contains(r#"case 404: { $tt_v0 = "not found"; break; }"#));
+    assert!(compact.contains(r#"case 500: { $tt_v0 = "error"; break; }"#));
 }
 
 #[test]
 fn literal_boolean_match_emits_true_and_false_cases() {
     let out = ok("const v = match (flag) { true => 1, false => 0 };");
     assert!(out.contains("switch ($tt_m) {"));
-    assert!(out.contains("case true: { $tt_v0 = 1; break; }"));
-    assert!(out.contains("case false: { $tt_v0 = 0; break; }"));
+    let compact = compact(&out);
+    assert!(compact.contains("case true: { $tt_v0 = 1; break; }"));
+    assert!(compact.contains("case false: { $tt_v0 = 0; break; }"));
 }
 
 #[test]
@@ -3990,8 +4035,9 @@ const kind = match (code) {
   _ => "unknown",
 };
 "#);
-    assert!(out.contains(r#"case 200: case 201: case 204: { $tt_v0 = "success"; break; }"#));
-    assert!(out.contains(r#"case 400: case 404: { $tt_v0 = "client error"; break; }"#));
+    let compact = compact(&out);
+    assert!(compact.contains(r#"case 200: case 201: case 204: { $tt_v0 = "success"; break; }"#));
+    assert!(compact.contains(r#"case 400: case 404: { $tt_v0 = "client error"; break; }"#));
     // one body per arm, never duplicated per alternative
     assert_eq!(out.matches(r#"$tt_v0 = "success""#).count(), 1);
 }
@@ -4008,7 +4054,7 @@ fn literal_match_keeps_the_number_spelling_of_the_source() {
 #[test]
 fn literal_match_without_a_wildcard_gets_a_runtime_guard() {
     let out = ok(r#"const label = match (dir) { "a" => 1, "b" => 2 };"#);
-    assert!(out.contains(
+    assert!(compact(&out).contains(
         r#"default: { throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m)); }"#
     ));
 }
@@ -4027,7 +4073,10 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
     // The `switch` the region already generates is the nearest `break`
     // target, so the rewritten `return` leaves through it and the region
     // needs no label of its own (TASK-160 §6).
-    assert!(out.contains(r#"case "a": { $tt_v0 = 1; break; }"#), "{out}");
+    assert!(
+        compact(&out).contains(r#"case "a": { $tt_v0 = 1; break; }"#),
+        "{out}"
+    );
     assert!(!out.contains("$tt_y_"), "{out}");
 }
 
@@ -4057,8 +4106,9 @@ fn a_conditional_match_uses_one_exit_target() {
 fn literal_match_with_a_guard_becomes_an_if_chain() {
     let out = ok("const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };");
     assert!(!out.contains("switch ("));
-    assert!(out.contains("if ($tt_m === 200) { if (ok) { $tt_v0 = 1; break; } }"));
-    assert!(out.contains("if ($tt_m === 200) { $tt_v0 = 2; break; }"));
+    let compact = compact(&out);
+    assert!(compact.contains("if ($tt_m === 200) { if (ok) { $tt_v0 = 1; break; } }"));
+    assert!(compact.contains("if ($tt_m === 200) { $tt_v0 = 2; break; }"));
 }
 
 #[test]
@@ -5316,7 +5366,7 @@ fn duplicate_nested_binding_is_renamed_across_destructuring_statements() {
         .expect("duplicate bindings are recoverable")
         .code;
     assert!(
-        code.contains(
+        compact(&code).contains(
             "const { error: value } = $tt_m; const { value: $tt_discard0 } = $tt_m.value;"
         ),
         "{code}"
@@ -5341,7 +5391,8 @@ fn duplicate_tuple_binding_is_renamed_across_tuple_elements() {
         .expect("duplicate bindings are recoverable")
         .code;
     assert!(
-        code.contains("const { value: x } = $tt_m0; const { value: $tt_discard0 } = $tt_m1;"),
+        compact(&code)
+            .contains("const { value: x } = $tt_m0; const { value: $tt_discard0 } = $tt_m1;"),
         "{code}"
     );
 }
