@@ -61,10 +61,21 @@ new structural class has a representative. Valid TypeScript and TSX outside tt
 constructs remain covered independently by the byte-for-byte differential
 corpus in `tests/corpus.rs`.
 
+The executable cross-product uses forty canonical host surfaces: the thirty-
+nine enum-derived protocol classes plus the distinct JSX child replacement
+role beside the JSX attribute role. Each of the forty hosts crosses all forty-
+two standalone and directed-nesting value cases, for 1,680 canonical cells.
+Twenty-eight self-delimiting value cases also cross nine unparenthesized host
+spellings. Those 252 syntax-boundary cells prove that grouping is not hiding a
+claim or precedence defect. Parentheses remain in a canonical cell only when
+they are required to keep a low-precedence value, such as a pipeline, in the
+host operand represented by that cell. The complete matrix contains 1,932
+cells.
+
 ## Green condition
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a
-specific tt diagnostic. No cell may panic, silently pass an owned tt token
+specific tt diagnostic code. No cell may panic, silently pass an owned tt token
 through, report `verify-failed`, or depend on parentheses that do not change the
 host grammar's structural class.

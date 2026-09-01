@@ -117,6 +117,7 @@ pub(crate) struct LoweringPlan {
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
     nested_values: HashSet<ExprId>,
+    structurally_owned_children: HashSet<ExprId>,
     nested_relocations: Vec<SourceSpan>,
     expression_boundary_name: String,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
@@ -428,6 +429,10 @@ impl LoweringPlan {
         self.nested_values.iter().copied()
     }
 
+    pub(crate) fn structurally_owned_children(&self) -> impl Iterator<Item = ExprId> + '_ {
+        self.structurally_owned_children.iter().copied()
+    }
+
     pub(crate) fn nested_relocations(&self) -> impl Iterator<Item = SourceSpan> + '_ {
         self.nested_relocations.iter().copied()
     }
@@ -661,6 +666,7 @@ impl EvaluationFile {
             // own statement form and must be planned with it.
             if matches!(core.exprs[expr.index()], Expr::Apply(_))
                 && self.has_differently_hosted_descendant(core, expr, owner)
+                && !self.has_owned_nested_statement_descendant(core, expr)
             {
                 continue;
             }
@@ -695,6 +701,7 @@ impl EvaluationFile {
         let mut slot_names = Vec::new();
         let mut value_slots = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
+        let mut structurally_owned_children = HashSet::new();
         for (owner, values) in owners {
             let assigned = values
                 .into_iter()
@@ -769,6 +776,7 @@ impl EvaluationFile {
                 })
                 .map(|child| child.expr)
                 .collect();
+            structurally_owned_children.extend(owned_children.iter().copied());
             values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
                 &mut values,
@@ -996,6 +1004,7 @@ impl EvaluationFile {
                 continue;
             }
             let mut host_region = region;
+            let mut covered_by_parent_propagation = false;
             // A value-form propagation emitted directly by a decision arm
             // cannot use the enclosing function's failure edge: the arm is
             // an isolated value region even when SWC identifies the nested
@@ -1003,6 +1012,11 @@ impl EvaluationFile {
             let crossed_value_region = isolated_arm_values.contains(&expr);
             while let RegionPlacement::Nested { parent, .. } = host_region.placement {
                 host_region = &self.regions[parent.0 as usize];
+                covered_by_parent_propagation |= host_region.root.is_some_and(|root| {
+                    matches!(root, CoreRoot::Propagate(_))
+                        || matches!(root, CoreRoot::Expr(parent_expr)
+                            if matches!(core.exprs[parent_expr.index()], Expr::Propagate(_)))
+                });
             }
             let RegionPlacement::Host { context, .. } = &host_region.placement else {
                 continue;
@@ -1037,10 +1051,15 @@ impl EvaluationFile {
                 RegionPlacement::Host { source, .. } => Some(*source),
                 RegionPlacement::Nested { source, .. } => *source,
                 RegionPlacement::SourceEdit => None,
-            }
-            .ok_or(EvaluationError::MissingHost {
-                root: CoreRoot::Expr(expr),
-            })?;
+            };
+            let Some(source) = source else {
+                if covered_by_parent_propagation {
+                    continue;
+                }
+                return Err(EvaluationError::MissingHost {
+                    root: CoreRoot::Expr(expr),
+                });
+            };
             unsupported_expression_propagations.push(UnsupportedExpressionPropagation {
                 expr,
                 source,
@@ -1130,12 +1149,15 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(host_expr)) = ancestor.root else {
                 return None;
             };
-            let TargetCapability::ExpressionBoundary(reason) = direct_capabilities
-                .get(&host_expr)
-                .copied()
-                .unwrap_or(TargetCapability::StatementRegion)
-            else {
-                return None;
+            let reason = match direct_capabilities.get(&host_expr).copied() {
+                Some(TargetCapability::ExpressionBoundary(reason)) => reason,
+                Some(TargetCapability::StatementRegion) => return None,
+                None => match context.owner {
+                    EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer => {
+                        ExpressionBoundaryReason::OwnerTakesNoStatements
+                    }
+                    _ => ExpressionBoundaryReason::ValueHasNoStatementForm,
+                },
             };
             Some(UnsupportedMatch {
                 expr,
@@ -1164,6 +1186,7 @@ impl EvaluationFile {
                     CoreRoot::Adt(_) | CoreRoot::Decision(_) | CoreRoot::Propagate(_) => None,
                 })
                 .collect(),
+            structurally_owned_children,
             nested_relocations: self
                 .regions
                 .iter()
@@ -1208,6 +1231,41 @@ impl EvaluationFile {
         owner: HostOwner,
     ) -> bool {
         self.expr_has_differently_hosted_descendant(core, expr, owner)
+    }
+
+    /// Whether `expr` structurally owns a nested value that needs statement
+    /// lowering before the surrounding source expression can be evaluated.
+    ///
+    /// Region ancestry is the ownership boundary. A value below another
+    /// `Host` region belongs to that host (for example a concise-arrow body)
+    /// and must not make the outer Apply consume its rewrite. A value reached
+    /// only through `Nested` regions belongs to the Apply and requires its
+    /// statement form even when a sibling value belongs to another host.
+    fn has_owned_nested_statement_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
+        let Some(ancestor) = self.regions.iter().position(|region| {
+            region.root == Some(CoreRoot::Expr(expr))
+                && matches!(region.placement, RegionPlacement::Host { .. })
+        }) else {
+            return false;
+        };
+        self.regions.iter().enumerate().any(|(index, region)| {
+            let Some(CoreRoot::Expr(child)) = region.root else {
+                return false;
+            };
+            child != expr
+                && core.has_statement_form(child)
+                && self.region_descends_from(index, ancestor)
+        })
+    }
+
+    fn region_descends_from(&self, mut region: usize, ancestor: usize) -> bool {
+        while let RegionPlacement::Nested { parent, .. } = self.regions[region].placement {
+            region = parent.0 as usize;
+            if region == ancestor {
+                return true;
+            }
+        }
+        false
     }
 
     fn expr_has_differently_hosted_descendant(

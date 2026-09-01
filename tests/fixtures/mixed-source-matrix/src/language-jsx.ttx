@@ -13,6 +13,16 @@ export variant TtxNode {
 
 declare const outcome: TResult<string, string>;
 
+export function readTtx(node: TtxNode): string {
+  return match (node) {
+    Empty => "ttx:empty",
+    Text(value) => `ttx:${value}`,
+    FromTs(value) => `ttx:ts:${value.value}`,
+    FromTsx(value) => `ttx:tsx:${value.label}`,
+    FromTt(value) => `ttx:tt:${read(value)}`,
+  };
+}
+
 export const TtxView = ({ node }: { readonly node: TtxNode }) => {
   val const identity = { kind: node.kind };
   const Text(value: title) = node else {

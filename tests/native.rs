@@ -182,6 +182,11 @@ fn mixed_source_fixture_covers_every_directed_edge_and_typechecks() {
         }
     }
     assert_eq!(edges, 12);
+    let tt_source = fs::read_to_string(fixture.join("language.tt")).expect("tt fixture source");
+    assert!(
+        tt_source.contains("FromTtx(value) => readTtx(value)"),
+        ".tt must consume the imported .ttx payload, not only its type"
+    );
 
     require_tsgo!();
     let out = Command::new(env!("CARGO_BIN_EXE_ttc"))

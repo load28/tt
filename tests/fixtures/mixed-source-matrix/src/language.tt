@@ -2,7 +2,7 @@ import type { TResult } from "@tt/std";
 import * as Result from "@tt/std/result";
 import type { TsNode } from "./plain";
 import type { TsxNode } from "./plain-jsx";
-import type { TtxNode } from "./language-jsx.ttx";
+import { readTtx, type TtxNode } from "./language-jsx.ttx";
 
 export variant TtNode {
   Count(value: number),
@@ -24,7 +24,7 @@ export function read(val node: TtNode): string {
     Count(value) => value |> double |> .toFixed(0),
     FromTs(value) => `ts:${value.value}`,
     FromTsx(value) => `tsx:${value.label}`,
-    FromTtx => "ttx",
+    FromTtx(value) => readTtx(value),
   };
 }
 

@@ -173,6 +173,7 @@ pub(crate) fn emit_with_map<'a>(
         value_exits: target.value_exits,
         nested_schedules: target.nested_schedules,
         nested_values: target.nested_values,
+        structurally_nested_values: target.structurally_nested_values,
         recovered_propagations: target
             .recovered_propagations
             .into_iter()
@@ -645,6 +646,9 @@ struct TargetRewritePlan {
     value_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
     nested_values: HashSet<ExprId>,
+    /// Every value whose Evaluation IR placement is structurally nested,
+    /// before target-specific slot-substitution filtering.
+    structurally_nested_values: HashSet<ExprId>,
     expression_boundary_name: String,
 }
 
@@ -1202,9 +1206,20 @@ impl TargetRewritePlan {
             .filter(|value| value.capability == TargetCapability::StatementRegion)
             .map(|value| value.source)
             .collect();
-        let nested_values = lowering
+        let structurally_nested_values: HashSet<_> = lowering
             .nested_values()
+            .chain(lowering.structurally_owned_children())
+            .collect();
+        let nested_values = structurally_nested_values
+            .iter()
+            .copied()
             .filter(|expr| {
+                // ResultRegion is an isolated expression boundary. Its own
+                // emitter delivers the result through that boundary, so
+                // replacing it with an enclosing statement slot would skip
+                // the Result continuation and transfer ownership to the
+                // outer value. Other structured values have no such private
+                // boundary and may use the outer statement region's slot.
                 if matches!(core.exprs[expr.index()], Expr::ResultRegion(_)) {
                     return false;
                 }
@@ -1235,6 +1250,7 @@ impl TargetRewritePlan {
             value_exits,
             nested_schedules,
             nested_values,
+            structurally_nested_values,
             expression_boundary_name,
         }
     }
@@ -1260,6 +1276,7 @@ struct Emitter<'a> {
     value_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
     nested_values: HashSet<ExprId>,
+    structurally_nested_values: HashSet<ExprId>,
     recovered_propagations: HashSet<ExprId>,
     expression_boundary_name: String,
     /// How many conditional-operation regions are being emitted right now.
@@ -3017,6 +3034,24 @@ impl<'a> Emitter<'a> {
         })
     }
 
+    /// The slot of a structured value owned by the active structural parent.
+    /// A sequence may wrap that value in grouping source. A value hosted by a
+    /// nested function also has a slot, but is deliberately absent from
+    /// `nested_values`; its own host rewrite must consume that slot instead.
+    fn nested_structured_value_slot(&self, expr: ExprId) -> Option<&String> {
+        if self.structurally_nested_values.contains(&expr)
+            && !matches!(self.core.exprs[expr.index()], Expr::ResultRegion(_))
+        {
+            return self.structured_value_slot(expr);
+        }
+        let Expr::Sequence(body) = &self.core.exprs[expr.index()] else {
+            return None;
+        };
+        self.core
+            .body_value_expr(*body)
+            .and_then(|value| self.nested_structured_value_slot(value))
+    }
+
     fn value_anchor(&self, expr: ExprId) -> (AnchorKind, usize, usize, usize) {
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {
@@ -4307,7 +4342,7 @@ impl<'a> Emitter<'a> {
             inner.push_lit(format!("let {accumulator};"));
         }
         inner.push_break(1);
-        if self.core.has_statement_form(head) {
+        if self.nested_structured_value_slot(head).is_some() {
             inner.append(Rope::indented(
                 1,
                 self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
@@ -4324,10 +4359,10 @@ impl<'a> Emitter<'a> {
         let mut produced = self.span(apply.node);
         for step in &apply.steps {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
-            let step_value = if self.core.has_statement_form(step.value) && !conditionally_reached {
-                let slot = self
-                    .structured_value_slot(step.value)
-                    .unwrap_or_else(|| crate::ice::bug!("structured apply step has no value slot"));
+            let step_value = if let Some(slot) = self
+                .nested_structured_value_slot(step.value)
+                .filter(|_| !conditionally_reached)
+            {
                 inner.push_break(1);
                 inner.push_lit(format!("let {slot};"));
                 inner.push_break(1);

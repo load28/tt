@@ -416,6 +416,9 @@ fn recovery_statement_span(tokens: &[Token], start_idx: usize, range_end: usize)
 }
 
 fn starts_statement(src: &str, tokens: &[Token], idx: usize, in_ternary: bool) -> bool {
+    if crate::flow::concise_arrow_boundary_before(src, tokens, idx) {
+        return true;
+    }
     if in_ternary {
         return false;
     }
@@ -957,6 +960,18 @@ impl Parser<'_> {
             }
             TokenKind::Punct(b';' | b',') => *expr = (i + 1, false),
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {
+                *expr = (i + 1, false);
+            }
+            TokenKind::Punct(b'*')
+                if i.checked_sub(1)
+                    .and_then(|previous| tokens.get(previous))
+                    .is_some_and(|previous| {
+                        matches!(previous.kind, TokenKind::Ident)
+                            && &self.src[previous.span.start..previous.span.end] == "yield"
+                    }) =>
+            {
+                // `yield*` is one prefix host operator. The delegated value,
+                // not the `*`, starts a pipeline head.
                 *expr = (i + 1, false);
             }
             TokenKind::Punct(b':') => *expr = (i + 1, expr.1),

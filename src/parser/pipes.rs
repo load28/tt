@@ -79,6 +79,10 @@ pub(super) fn parse_pipeline(
         start: tokens[head_idx].span.start,
         end: tokens[pipe_idx - 1].span.end,
     };
+    let case_test = head_idx.checked_sub(1).is_some_and(|before| {
+        matches!(tokens[before].kind, TokenKind::Ident)
+            && &parser.src[tokens[before].span.start..tokens[before].span.end] == "case"
+    });
 
     let mut steps: Vec<PipeStep> = Vec::new();
     let mut k = pipe_idx;
@@ -92,6 +96,7 @@ pub(super) fn parse_pipeline(
                 TokenKind::JsxRaw if depth == 0 => break,
                 TokenKind::Punct(b';' | b',') if depth == 0 => break,
                 TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
+                TokenKind::Punct(b':') if depth == 0 && case_test => break,
                 TokenKind::Punct(b'?' | b':') if depth == 0 => return None,
                 TokenKind::Arrow if depth == 0 => return None,
                 TokenKind::Punct(b'=') if depth == 0 && is_assignment_eq(parser.bytes, t.span) => {

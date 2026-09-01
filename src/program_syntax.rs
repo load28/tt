@@ -40,6 +40,7 @@ use crate::core_ir::{
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
+use crate::lexer::Token;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Stable identity assigned to an TT node in the projected syntax overlay.
@@ -963,6 +964,7 @@ struct ProjectionBuilder<'a> {
     pending: Vec<PendingOverlay>,
     source_segments: Vec<ProjectionSourceSegment>,
     projection_only_protocol_parents: Vec<ProjectedSpan>,
+    tokens: Vec<Token>,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -975,6 +977,7 @@ impl<'a> ProjectionBuilder<'a> {
             pending: Vec::new(),
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
+            tokens: crate::lexer::lex(source, 0, source.len()),
         }
     }
 
@@ -1132,11 +1135,21 @@ impl<'a> ProjectionBuilder<'a> {
         if self.expr_contains_decision(propagate.value) {
             return self.emit_propagate_with_shadow(propagate);
         }
+        self.preserve_concise_arrow_statement_boundary(self.source_span(propagate.owner)?.start);
         self.push_placeholder(
             SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
             CoreRoot::Propagate(propagate.node),
         )
+    }
+
+    fn preserve_concise_arrow_statement_boundary(&mut self, source_start: usize) {
+        let at = self
+            .tokens
+            .partition_point(|token| token.span.start < source_start);
+        if crate::flow::concise_arrow_boundary_before(self.source, &self.tokens, at) {
+            self.code.push(';');
+        }
     }
 
     /// Keep the propagation as the statement's primary overlay while also
@@ -3683,6 +3696,35 @@ mod tests {
             entry.parents
         );
         assert!(entry.protocol.steps().is_empty(), "{:?}", entry.protocol);
+    }
+
+    #[test]
+    fn semicolon_free_concise_arrow_ends_before_the_next_try_statement() {
+        let source = "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\n\
+            declare const flag: boolean; declare function load(): R<number>;\n\
+            function* probe() {\n\
+              const choose = () => flag ? 1 : 2\n\
+              try load();\n\
+              yield choose();\n\
+            }\n";
+        let syntax = syntax(source);
+        let entry = syntax
+            .overlay
+            .iter()
+            .find(|entry| matches!(entry.core_root, CoreRoot::Propagate(_)))
+            .unwrap_or_else(|| {
+                panic!(
+                    "try overlay\nprojection:\n{}\noverlay: {:#?}",
+                    syntax.projection, syntax.overlay
+                )
+            });
+        assert_eq!(
+            entry.context.owner,
+            EvaluationOwner::Generator,
+            "projection:\n{}\nparents: {:#?}",
+            syntax.projection,
+            entry.parents
+        );
     }
 
     #[test]

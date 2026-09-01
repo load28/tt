@@ -1,6 +1,6 @@
 //! Emitted-code and error-reporting tests for the tt → TypeScript transform.
 
-use ttc::{Options, SourceKind, compile};
+use ttc::{DiagnosticCode, Options, SourceKind, compile};
 
 fn ok(src: &str) -> String {
     compile(src, &Options::default()).expect("compile failed")
@@ -212,6 +212,7 @@ fn every_value_region_crosses_every_host_protocol_class() {
         expression: String,
         capability: Capability,
         reject_when_discarded: bool,
+        ungrouped_safe: bool,
     }
 
     struct HostCase {
@@ -230,36 +231,42 @@ fn every_value_region_crosses_every_host_protocol_class() {
             expression: "match (flag) { true => 1, false => 2 }".into(),
             capability: Capability::Statements,
             reject_when_discarded: false,
+            ungrouped_safe: true,
         },
         ValueCase {
             name: "tuple-match".into(),
             expression: "match (flag, flag) { (_, _) => 1 }".into(),
             capability: Capability::Statements,
             reject_when_discarded: false,
+            ungrouped_safe: true,
         },
         ValueCase {
             name: "pipeline".into(),
             expression: "1 |> ((value: number) => value + 1)".into(),
             capability: Capability::Expression,
             reject_when_discarded: false,
+            ungrouped_safe: false,
         },
         ValueCase {
             name: "result".into(),
             expression: "result { const value = try load(); return value; }".into(),
             capability: Capability::Isolated,
             reject_when_discarded: true,
+            ungrouped_safe: true,
         },
         ValueCase {
             name: "try".into(),
             expression: "try load()".into(),
             capability: Capability::Propagation,
             reject_when_discarded: false,
+            ungrouped_safe: true,
         },
         ValueCase {
             name: "flow".into(),
             expression: "flow |> ((value: number) => value + 1)".into(),
             capability: Capability::Expression,
             reject_when_discarded: false,
+            ungrouped_safe: false,
         },
     ];
     let inner_values = [
@@ -344,6 +351,7 @@ fn every_value_region_crosses_every_host_protocol_class() {
                 expression: outer.replace("{inner}", inner),
                 capability,
                 reject_when_discarded: outer_name == "result",
+                ungrouped_safe: matches!(outer_name, "match" | "tuple-match" | "result" | "try"),
             });
         }
     }
@@ -432,7 +440,7 @@ fn every_value_region_crosses_every_host_protocol_class() {
         HostCase {
             name: "eager-template-interpolation",
             source_kind: SourceKind::TypeScript,
-            source: "function probe() { const x = `${before()}${({expr})}`; }",
+            source: "function probe() { const x = `${before()}${{expr}}`; }",
             owner_takes_statements: true,
             propagation_boundary: true,
             repeated: false,
@@ -442,6 +450,15 @@ fn every_value_region_crosses_every_host_protocol_class() {
             name: "eager-jsx-expression",
             source_kind: SourceKind::Tsx,
             source: "function probe() { const x = <main data-x={{expr}} />; }",
+            owner_takes_statements: true,
+            propagation_boundary: true,
+            repeated: false,
+            unmodeled_conditional: false,
+        },
+        HostCase {
+            name: "eager-jsx-child",
+            source_kind: SourceKind::Tsx,
+            source: "function probe() { const x = <main>{{expr}}</main>; }",
             owner_takes_statements: true,
             propagation_boundary: true,
             repeated: false,
@@ -567,7 +584,7 @@ fn every_value_region_crosses_every_host_protocol_class() {
         HostCase {
             name: "suspend-yield",
             source_kind: SourceKind::TypeScript,
-            source: "function* probe() { yield ({expr}); }",
+            source: "function* probe() { yield {expr}; }",
             owner_takes_statements: true,
             propagation_boundary: false,
             repeated: false,
@@ -576,7 +593,7 @@ fn every_value_region_crosses_every_host_protocol_class() {
         HostCase {
             name: "suspend-yield-delegate",
             source_kind: SourceKind::TypeScript,
-            source: "function* probe() { yield* ({expr}); }",
+            source: "function* probe() { yield* {expr}; }",
             owner_takes_statements: true,
             propagation_boundary: false,
             repeated: false,
@@ -693,7 +710,7 @@ fn every_value_region_crosses_every_host_protocol_class() {
         HostCase {
             name: "reach-unmodeled-conditional",
             source_kind: SourceKind::TypeScript,
-            source: "function probe() { switch (value) { case ({expr}): break; } }",
+            source: "function probe() { switch (value) { case {expr}: break; } }",
             owner_takes_statements: true,
             propagation_boundary: true,
             repeated: false,
@@ -706,90 +723,185 @@ fn every_value_region_crosses_every_host_protocol_class() {
         declare function load(): R<number>; declare function before(): number; declare function left(): number; declare function right(): number; declare function use(...values: any[]): any;\n\
         declare class Box { constructor(...values: any[]); }\n";
     let mut cells = 0;
+    let mut ungrouped_cells = 0;
     for value in &values {
         for host in &hosts {
-            let source = format!(
-                "{prelude}{}",
-                host.source.replace("{expr}", &value.expression)
-            );
-            let expected_to_compile =
-                if value.reject_when_discarded && host.name == "continuation-discard" {
-                    false
-                } else {
-                    match value.capability {
-                        Capability::Expression | Capability::Isolated => true,
-                        Capability::Statements => {
-                            host.owner_takes_statements && !host.unmodeled_conditional
-                        }
-                        Capability::Propagation => {
-                            host.owner_takes_statements
-                                && host.propagation_boundary
-                                && !host.repeated
-                                && !host.unmodeled_conditional
-                        }
-                        Capability::StructuredPropagation => {
-                            host.owner_takes_statements
-                                && host.propagation_boundary
-                                && !host.unmodeled_conditional
-                        }
+            let ungrouped = if value.ungrouped_safe {
+                match host.name {
+                    "eager-binary-left" => Some("function probe() { const x = {expr} + right(); }"),
+                    "eager-binary-right" => Some("function probe() { const x = left() + {expr}; }"),
+                    "eager-unary-operand" => Some("function probe() { const x = !{expr}; }"),
+                    "conditional-and-right" => {
+                        Some("function probe() { const x = ready && {expr}; }")
                     }
-                };
-            let result = std::panic::catch_unwind(|| {
-                compile(
-                    &source,
-                    &Options {
-                        source_kind: host.source_kind,
-                        ..Options::default()
-                    },
-                )
-            })
-            .unwrap_or_else(|payload| {
-                panic!(
-                    "{} in {} unwound:\n{source}\n{payload:?}",
-                    value.name, host.name
-                )
-            });
-            match (expected_to_compile, result) {
-                (true, Ok(output)) => assert!(!output.is_empty()),
-                (false, Err(error)) => {
-                    assert!(
-                        !error
-                            .message
-                            .contains("generated TypeScript failed to parse"),
-                        "{source}\n{error}"
-                    );
+                    "conditional-or-right" => {
+                        Some("function probe() { const x = ready || {expr}; }")
+                    }
+                    "conditional-nullish-right" => {
+                        Some("function probe() { const x = maybe ?? {expr}; }")
+                    }
+                    "conditional-consequent" => {
+                        Some("function probe() { const x = ready ? {expr} : 0; }")
+                    }
+                    "conditional-alternate" => {
+                        Some("function probe() { const x = ready ? 0 : {expr}; }")
+                    }
+                    "suspend-await" => Some("async function probe() { return await {expr}; }"),
+                    _ => None,
                 }
-                (true, Err(error)) => {
-                    let unchecked = compile(
+            } else {
+                None
+            };
+            for (surface, template) in [("canonical", Some(host.source)), ("ungrouped", ungrouped)]
+                .into_iter()
+                .filter_map(|(surface, template)| template.map(|template| (surface, template)))
+            {
+                let cell_host = format!("{}:{surface}", host.name);
+                let source = format!("{prelude}{}", template.replace("{expr}", &value.expression));
+                let expected_diagnostic =
+                    if value.reject_when_discarded && host.name == "continuation-discard" {
+                        Some(DiagnosticCode::ResultValueDiscarded)
+                    } else {
+                        match value.capability {
+                            Capability::Expression | Capability::Isolated => None,
+                            Capability::Statements => (!host.owner_takes_statements
+                                || host.unmodeled_conditional)
+                                .then_some(DiagnosticCode::MatchPlacement),
+                            Capability::Propagation => (!host.owner_takes_statements
+                                || !host.propagation_boundary
+                                || host.repeated
+                                || host.unmodeled_conditional)
+                                .then_some(DiagnosticCode::TryPlacement),
+                            Capability::StructuredPropagation => {
+                                if !host.owner_takes_statements || host.unmodeled_conditional {
+                                    Some(DiagnosticCode::MatchPlacement)
+                                } else if !host.propagation_boundary {
+                                    Some(DiagnosticCode::TryPlacement)
+                                } else {
+                                    None
+                                }
+                            }
+                        }
+                    };
+                let expected_to_compile = expected_diagnostic.is_none();
+                let result = std::panic::catch_unwind(|| {
+                    compile(
                         &source,
                         &Options {
                             source_kind: host.source_kind,
-                            verify: false,
                             ..Options::default()
                         },
-                    );
-                    match unchecked {
-                        Ok(unchecked) => panic!(
-                            "{} in {} should compile:\n{source}\n{error:#?}\n--- unchecked ---\n{unchecked}",
-                            value.name, host.name
-                        ),
-                        Err(unchecked_error) => panic!(
-                            "{} in {} should compile:\n{source}\n{error:#?}\n--- unchecked error ---\n{unchecked_error:#?}",
-                            value.name, host.name
-                        ),
+                    )
+                })
+                .unwrap_or_else(|payload| {
+                    panic!(
+                        "{} in {} unwound:\n{source}\n{payload:?}",
+                        value.name, cell_host
+                    )
+                });
+                match (expected_to_compile, result) {
+                    (true, Ok(output)) => assert!(!output.is_empty()),
+                    (false, Err(error)) => {
+                        assert!(
+                            !error
+                                .message
+                                .contains("generated TypeScript failed to parse"),
+                            "{source}\n{error}"
+                        );
+                        let diagnostics = ttc::analyze(
+                            &source,
+                            &Options {
+                                source_kind: host.source_kind,
+                                ..Options::default()
+                            },
+                        );
+                        assert_eq!(
+                            diagnostics.first().map(|diagnostic| diagnostic.code),
+                            expected_diagnostic,
+                            "{} in {} returned the wrong diagnostic:\n{source}\n{diagnostics:#?}",
+                            value.name,
+                            cell_host
+                        );
                     }
+                    (true, Err(error)) => {
+                        let unchecked = compile(
+                            &source,
+                            &Options {
+                                source_kind: host.source_kind,
+                                verify: false,
+                                ..Options::default()
+                            },
+                        );
+                        match unchecked {
+                            Ok(unchecked) => panic!(
+                                "{} in {} should compile:\n{source}\n{error:#?}\n--- unchecked ---\n{unchecked}",
+                                value.name, cell_host
+                            ),
+                            Err(unchecked_error) => panic!(
+                                "{} in {} should compile:\n{source}\n{error:#?}\n--- unchecked error ---\n{unchecked_error:#?}",
+                                value.name, cell_host
+                            ),
+                        }
+                    }
+                    (false, Ok(output)) => panic!(
+                        "{} in {} should report a placement diagnostic:\n{source}\n{output}",
+                        value.name, cell_host
+                    ),
                 }
-                (false, Ok(output)) => panic!(
-                    "{} in {} should report a placement diagnostic:\n{source}\n{output}",
-                    value.name, host.name
-                ),
+                cells += 1;
+                ungrouped_cells += usize::from(surface == "ungrouped");
             }
-            cells += 1;
         }
     }
     assert_eq!(values.len(), 42);
-    assert_eq!(hosts.len(), 39);
-    assert_eq!(cells, 1_638);
+    assert_eq!(hosts.len(), 40);
+    assert_eq!(ungrouped_cells, 252);
+    assert_eq!(cells, 1_932);
+}
+
+#[test]
+fn apply_partitions_structured_children_by_their_function_host() {
+    let source = "declare const flag: boolean;\n\
+        function probe() {\n\
+          const value = (match (flag) { true => 1, false => 2 })\n\
+            |> ((input: number) => match (flag) { true => input, false => 0 });\n\
+          return value;\n\
+        }\n";
+    let output = ok(source);
+    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+
+    let parameter = "declare const flag: boolean;\n\
+        function probe(\n\
+          value = (match (flag) { true => 1, false => 2 })\n\
+            |> ((input: number) => match (flag) { true => input, false => 0 })\n\
+        ) { return value; }\n";
+    let diagnostics = ttc::analyze(parameter, &Options::default());
+    assert_eq!(
+        diagnostics.first().map(|diagnostic| diagnostic.code),
+        Some(ttc::DiagnosticCode::MatchPlacement),
+        "{diagnostics:#?}"
+    );
+}
+
+#[test]
+fn semicolon_free_arrow_does_not_own_the_following_try() {
+    let source = "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\n\
+        declare const flag: boolean; declare function load(): R<number>;\n\
+        function* probe() {\n\
+          const choose = () => flag ? 1 : 2\n\
+          try load();\n\
+          yield choose();\n\
+        }\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(
+        diagnostics.first().map(|diagnostic| diagnostic.code),
+        Some(DiagnosticCode::TryPlacement),
+        "{diagnostics:#?}"
+    );
+    assert!(
+        diagnostics[0].message.contains("constructor or generator"),
+        "{diagnostics:#?}"
+    );
 }
 
 #[test]

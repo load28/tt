@@ -105,6 +105,23 @@ resulting matrices, and repair every discovered defect in its responsible layer.
 - 2026-09-02: Passed the complete Rust suite, local CI, unabridged TypeScript
   corpus, and every script in the Downloads demo with a release compiler built
   from the final source.
+- 2026-09-02: Reopened the task after PR review identified grouping, diagnostic
+  oracle, nested-slot documentation, mixed-host fallback, concise-arrow
+  boundary, and mixed-source payload questions.
+- 2026-09-02: Reproduced the mixed-host Apply fallback as an internal compiler
+  error and the semicolon-free arrow boundary as the wrong propagation owner.
+- 2026-09-02: Made structural ownership explicit for same-host children while
+  preserving nested-function host barriers, and shared one concise-arrow ASI
+  boundary between flow, parsing, and TypeScript projection.
+- 2026-09-02: Expanded the matrix to 1,932 cells with JSX child and safe
+  unparenthesized surfaces, then pinned the exact diagnostic code of every
+  rejected cell.
+- 2026-09-02: The expanded oracle exposed and fixed unparenthesized `yield*`
+  pipeline parsing and hidden nested-propagation `MissingHost` failures.
+- 2026-09-02: Added runtime payload consumption from `.tt` to `.ttx` and
+  documented why isolated Result regions never use an outer nested slot.
+- 2026-09-02: Passed the complete local CI gate and the unabridged TypeScript
+  corpus after the review fixes, then audited the final diff.
 
 ## Issues and resolutions
 
@@ -254,12 +271,73 @@ resulting matrices, and repair every discovered defect in its responsible layer.
   entry, make source insertion idempotent, and leave the inline occurrence to
   consume only its assigned slot.
 
+### Issue 15: A mixed-host Apply lost its same-host structured child
+
+- **Symptom**: A pipeline with a `match` head and another `match` inside a
+  concise-arrow step reached expression emission without a host rewrite.
+- **Cause**: Any differently hosted descendant made the planner skip the whole
+  Apply, even when another child belonged to the Apply's own host.
+- **Resolution**: Partition descendants by region ancestry. The Apply owns
+  same-host structured children, while nested-function children retain their
+  independent owner rewrite. Lowering records the children it structurally
+  adopts so code generation does not infer ownership from Core shape.
+
+### Issue 16: A semicolon-free concise arrow absorbed the next propagation
+
+- **Symptom**: A generator `try` after a semicolon-free concise arrow reported
+  a conditional-operation placement reason instead of generator placement.
+- **Cause**: Token target lookup, parser statement recognition, and the SWC
+  projection did not share the arrow's automatic-semicolon boundary. The
+  generated parenthesized placeholder reattached to the preceding expression.
+- **Resolution**: Define the concise-arrow boundary once in flow syntax, use it
+  to claim the following `try` as a statement, and preserve the boundary with
+  a projection-only separator before its placeholder.
+
+### Issue 17: Ungrouped `yield*` included the delegate marker in a pipeline head
+
+- **Symptom**: `yield* value |> step` emitted `yield$tt_ap(* value, step)`.
+- **Cause**: Expression-head tracking treated the `*` as the first byte of the
+  delegated operand.
+- **Resolution**: Classify `yield*` as one prefix host operator and start the
+  pipeline head after its delegate marker. A case-test colon now terminates a
+  pipeline structurally instead of being mistaken for an ungrouped ternary.
+
+### Issue 18: Hidden nested propagation produced an internal planning error
+
+- **Symptom**: Rejected `try (try value)` cells returned
+  `lowering-plan-failed` instead of their placement diagnostic.
+- **Cause**: The outer propagation projection intentionally hid the inner
+  overlay, leaving the child without a separate host source span.
+- **Resolution**: Treat the nearest parent propagation as the diagnostic owner
+  of a hidden child. The parent reports the public placement error and the
+  child no longer manufactures a missing-host invariant failure.
+
+### Issue 19: The matrix accepted any non-verification error
+
+- **Symptom**: A rejected cell passed when it returned `lowering-plan-failed`
+  instead of `try-placement` or `match-placement`.
+- **Cause**: The oracle checked only that compilation returned an error whose
+  message was not generated-TypeScript verification.
+- **Resolution**: Derive the expected public rule from the specification-side
+  capability and host facts, then assert the first diagnostic code for every
+  rejected cell. Add canonical JSX child coverage and 252 safe unparenthesized
+  surfaces alongside the 1,680 canonical cells.
+
+### Issue 20: The `.tt` to `.ttx` edge consumed only a type
+
+- **Symptom**: The directed import existed, but the `.tt` match discarded the
+  imported `.ttx` payload.
+- **Cause**: The fixture proved module resolution and type availability without
+  using a value exported by the `.ttx` module.
+- **Resolution**: Export `readTtx` from `.ttx`, import it as a value in `.tt`,
+  and pass the matched payload through it.
+
 ## Verification
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
-- [x] `cargo test --test compile` — 393 passed, including 1,638 generated
+- [x] `cargo test --test compile` — 395 passed, including 1,932 generated
   value-region/host-protocol cells
 - [x] `cargo test --test native` — 63 passed
 - [x] Mixed-source directed imports, typed project, declaration sidecars, and
@@ -275,7 +353,8 @@ resulting matrices, and repair every discovered defect in its responsible layer.
 - Compiler model: `src/ast.rs`, `src/hir/lower.rs`, `src/evaluation_ir.rs`,
   `src/program_syntax.rs`, `src/flow/mod.rs`, `src/sema.rs`, and
   `src/codegen/core.rs`
-- Parser: `src/parser/mod.rs` and `src/parser/tries.rs`
+- Parser: `src/parser/mod.rs`, `src/parser/pipes.rs`, and
+  `src/parser/tries.rs`
 - Executable contracts: `tests/compile.rs`, `tests/integration.rs`,
   `tests/native.rs`, and `tests/fixtures/mixed-source-matrix/`
 - Design and tracking: `docs/design/mixed-source-composition-matrix.md`,
@@ -285,7 +364,7 @@ resulting matrices, and repair every discovered defect in its responsible layer.
 
 The repository now proves all finite compiler-owned composition axes: every tt
 surface, all directed value-region pairs, every host protocol class, and every
-directed import edge among `.ts`, `.tsx`, `.tt`, and `.ttx`. The 1,638-cell
+directed import edge among `.ts`, `.tsx`, `.tt`, and `.ttx`. The 1,932-cell
 cross-product and exhaustive enum/surface classifiers prevent a new structural
 class from entering without an executable representative. The mixed fixture,
 typed paths, full corpus, local CI, and locally linked Downloads demo all pass.
