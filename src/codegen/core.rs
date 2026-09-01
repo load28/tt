@@ -1145,6 +1145,14 @@ fn push_region_break(out: &mut Rope<'_>, label: Option<&str>) {
     }
 }
 
+fn push_control_break(out: &mut Rope<'_>, depth: u16, label: Option<&str>) {
+    out.push_break(depth);
+    match label {
+        Some(label) => out.push_lit(format!("break {label};")),
+        None => out.push_lit("break;"),
+    }
+}
+
 fn result_failure_test(temp: &str, layout: ResultLayout) -> String {
     match layout.discriminator {
         ResultDiscriminator::SuccessFieldPresent(field) => {
@@ -1436,6 +1444,7 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         continuation: &ValueContinuation<'_>,
         label: Option<&str>,
+        generated_indent: &str,
     ) -> Rope<'a> {
         // Without a label the region's own dispatch is the nearest `break`
         // target already ([`HostExit::captured_break`]).
@@ -1458,7 +1467,11 @@ impl<'a> Emitter<'a> {
                         },
                         text: format!(
                             "{}{}",
-                            if starts_own_line { "  " } else { "" },
+                            if starts_own_line {
+                                generated_indent
+                            } else {
+                                ""
+                            },
                             continuation.assignment_prefix(grouped)
                         ),
                         result_return_mark: None,
@@ -1470,8 +1483,8 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                "{};\n{line_indent}  {leave}",
-                                continuation.assignment_suffix(grouped)
+                                "{};\n{line_indent}{generated_indent}{leave}",
+                                continuation.assignment_suffix(grouped),
                             )
                         } else {
                             format!("{}; {leave}", continuation.assignment_suffix(grouped))
@@ -1483,7 +1496,7 @@ impl<'a> Emitter<'a> {
                     span: exit.statement,
                     text: if starts_own_line {
                         format!(
-                            "  {}undefined{};\n{line_indent}  {leave}",
+                            "{generated_indent}{}undefined{};\n{line_indent}{generated_indent}{leave}",
                             continuation.assignment_prefix(false),
                             continuation.assignment_suffix(false)
                         )
@@ -3090,11 +3103,7 @@ impl<'a> Emitter<'a> {
             if let Some(structured) = self.emit_continued_expr(value, &success) {
                 out.append(Rope::indented(1, structured));
                 if continuation.assigns() {
-                    out.push_break(1);
-                    match exit_label {
-                        Some(label) => out.push_lit(format!("break {label};")),
-                        None => out.push_lit("break;"),
-                    }
+                    push_control_break(&mut out, 1, exit_label);
                 }
             } else {
                 out.append(Rope::indented(
@@ -3784,11 +3793,7 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
             out.push_lit("default: {");
             out.push_break(2);
-            out.push_lit(if literal {
-                "throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));"
-            } else {
-                "throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"
-            });
+            out.push_lit(self.unexpected_throw(decision));
             out.push_break(1);
             out.push_lit("}");
         }
@@ -3910,7 +3915,12 @@ impl<'a> Emitter<'a> {
         let body = if structured_body.is_some() {
             Rope::new()
         } else if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
-            let body = self.emit_body_with_exits(body, exits, continuation, exit_label);
+            // Switch arms are indented as a generated case body after their
+            // source is spliced in. Conditional chains retain the authored
+            // source column, so their rewritten exits must not add that unit.
+            let generated_indent = if chain { "" } else { "  " };
+            let body =
+                self.emit_body_with_exits(body, exits, continuation, exit_label, generated_indent);
             if block_layout {
                 body.trim_end()
             } else {
@@ -3930,11 +3940,7 @@ impl<'a> Emitter<'a> {
                 if let Some(structured) = structured_body {
                     action.append(structured);
                     if continuation.assigns() {
-                        action.push_break(action_depth);
-                        match chain_exit_label {
-                            Some(label) => action.push_lit(format!("break {label};")),
-                            None => action.push_lit("break;"),
-                        }
+                        push_control_break(&mut action, action_depth, chain_exit_label);
                     }
                 } else {
                     let close = body.last_line_has_line_comment().then_some(action_depth);
@@ -3965,11 +3971,7 @@ impl<'a> Emitter<'a> {
                                 .expect("an assigning continuation names its target")
                         ));
                     }
-                    action.push_break(action_depth + 1);
-                    match chain_exit_label {
-                        Some(label) => action.push_lit(format!("break {label};")),
-                        None => action.push_lit("break;"),
-                    }
+                    push_control_break(&mut action, action_depth + 1, chain_exit_label);
                 }
                 action.push_break(action_depth);
                 action.push_lit("}");
@@ -4062,11 +4064,7 @@ impl<'a> Emitter<'a> {
         out.push_lit(";");
         if continuation.assigns() {
             if let Some(depth) = exit_depth {
-                out.push_break(depth);
-                match break_label {
-                    Some(label) => out.push_lit(format!("break {label};")),
-                    None => out.push_lit("break;"),
-                }
+                push_control_break(&mut out, depth, break_label);
             } else {
                 push_region_break(&mut out, break_label);
             }

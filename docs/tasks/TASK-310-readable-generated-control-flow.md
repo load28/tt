@@ -3,7 +3,7 @@
 - **Status**: Complete
 - **Started**: 2026-09-01
 - **Completed**: 2026-09-01
-- **Commit**: —
+- **Commit**: `TASK-310: expand generated control flow readability`
 
 ## Purpose
 
@@ -52,6 +52,16 @@ into a stable readable layout without reformatting source-backed TypeScript.
   focused readability test. Existing semantic assertions compact whitespace
   when they only need to verify generated structure or ordering.
 
+### Decision 4: Align rewritten exits with their authored block body
+
+- **Context**: Conditional match lowering keeps authored block bytes at their
+  source column while generated wrapper braces use the lowering depth.
+- **Alternatives considered**: Reindent authored source, align rewritten exits
+  with generated braces, or align rewritten exits with authored statements.
+- **Decision and rationale**: Preserve authored bytes and align rewritten value
+  delivery and breaks with the authored statements. Switch arms retain their
+  generated offset because their complete case body is indented by codegen.
+
 ## Work log
 
 - 2026-09-01: Ran `./scripts/doctor`, reviewed TASK-198 and all emit snapshots,
@@ -65,6 +75,9 @@ into a stable readable layout without reformatting source-backed TypeScript.
   exists.
 - 2026-09-01: Added a focused one-generated-statement-per-line regression test,
   updated full emit snapshots, and ran the complete local CI gate.
+- 2026-09-01: Addressed PR review by aligning conditional block-arm exits with
+  authored statements, covering multi-line arms, let-else, and Result layout,
+  and consolidating repeated switch-miss and depth-aware break emission.
 
 ## Issues and resolutions
 
@@ -77,14 +90,14 @@ into a stable readable layout without reformatting source-backed TypeScript.
 - **Resolution**: Added a structural `Rope::is_empty` query and used it before
   appending binding groups.
 
-### Issue 2: Rewritten block returns no longer aligned with authored statements
+### Issue 2: Block-arm indentation depended on its dispatch form
 
-- **Symptom**: A block arm's rewritten assignment and break started two columns
-  left of the surrounding authored body.
-- **Cause**: String-backed return edits retained source indentation but did not
-  account for the generated arm block's extra nesting level.
-- **Resolution**: Offset multi-line rewritten exits by the arm level while
-  retaining compact edits for authored one-line blocks.
+- **Symptom**: One fixed indentation offset aligned switch arms but moved
+  conditional-arm assignments and breaks right of authored statements.
+- **Cause**: Switch cases indent the complete spliced body, while conditional
+  chains preserve the authored body's absolute source column.
+- **Resolution**: Select the generated exit offset from the dispatch form and
+  lock both forms with focused layout tests and full-output snapshots.
 
 ## Verification
 
@@ -93,6 +106,7 @@ into a stable readable layout without reformatting source-backed TypeScript.
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
 - [x] `./scripts/ci` — agents, rust, npm, native, and extension passed
+- [x] Review follow-up `./scripts/ci rust` — format, clippy, all Rust tests, snapshots, and doctests passed
 
 ## Result
 

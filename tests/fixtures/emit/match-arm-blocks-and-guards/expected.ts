@@ -23,8 +23,8 @@ export function describe(r: Reading): string {
         const { n } = $tt_m;
         {
       const label = n.toFixed(1);
-        $tt_v0 = `value ${label}`;
-        break;
+      $tt_v0 = `value ${label}`;
+      break;
         }
       }
       if ($tt_m.kind === "Missing") {

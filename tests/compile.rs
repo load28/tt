@@ -2752,7 +2752,7 @@ fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
 #[test]
 fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
     let out = ok(
-        "variant E { A(v: number), B }\nfunction f(e: E): Result<number, string> {\n  const value = try read();\n  const matched = match (e) { A(v) => v, B => 0 };\n  return Result.Ok(value + matched);\n}\n",
+        "variant E { A(v: number), B }\nfunction f(e: E): Result<number, string> {\n  const value = try read();\n  const matched = match (e) { A(v) => v, B => 0 };\n  return Result.Ok(value + matched);\n}\nfunction block(e: E): number {\n  return match (e) {\n    A(v) if v > 0 => {\n      const doubled = v * 2;\n      return doubled;\n    },\n    _ => 0,\n  };\n}\nfunction bind(e: E): number {\n  const A(v) = e else {\n    return 0;\n  };\n  return v;\n}\nconst computed = result {\n  return try read();\n};\n",
     );
     for compressed in ["; if (", "; const ", "; break"] {
         assert!(
@@ -2768,6 +2768,24 @@ fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
     );
     assert!(
         out.contains("if (!(\"value\" in $tt_t0)) {\n    return $tt_t0;\n  }"),
+        "{out}"
+    );
+    // Source-backed block contents keep their authored column. Rewritten
+    // exits follow that column instead of the generated wrapper brace.
+    assert!(
+        out.contains(
+            "          {\n      const doubled = v * 2;\n      $tt_v1 = doubled;\n      break;\n          }"
+        ),
+        "{out}"
+    );
+    assert!(
+        out.contains("if ($tt_t1.kind !== \"A\") {\n    return 0;\n  }"),
+        "{out}"
+    );
+    assert!(
+        out.contains(
+            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2 = $tt_t2;\n    break $tt_v2;\n  }\n  $tt_v2 = { kind: \"Ok\" as const, value: $tt_t2.value };\n  break $tt_v2;"
+        ),
         "{out}"
     );
 }
