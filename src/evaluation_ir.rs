@@ -10,12 +10,12 @@ use crate::core_ir::{
     Statement,
 };
 use crate::hir::ids::Idx;
-use crate::hir::{BodyId, ExprId, NodeId};
+use crate::hir::{ArmBodyKind, BodyId, ExprId, NodeId};
 use crate::ice::LoweringSubject;
 use crate::program_syntax::{
-    ConditionalBranch, ConditionalFacts, CoreRoot, EvaluationContext, EvaluationInputMode,
-    EvaluationOwner, HostContinuation, HostEvaluationOperation, HostEvaluationProtocol, HostExit,
-    HostOwner, OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
+    ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,
+    EvaluationInputMode, EvaluationOwner, HostContinuation, HostEvaluationOperation,
+    HostEvaluationProtocol, HostExit, HostOwner, OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
 };
 
 /// A failure of one of the lowering validators, already carrying the stage,
@@ -54,6 +54,8 @@ enum RegionPlacement {
     Nested {
         parent: RegionId,
         source: Option<SourceSpan>,
+        exits: Vec<HostExit>,
+        protocol: HostEvaluationProtocol,
     },
     SourceEdit,
 }
@@ -112,6 +114,10 @@ pub(crate) struct LoweringPlan {
     for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
     value_slots: HashMap<ExprId, ValueSlotId>,
+    nested_exits: HashMap<ExprId, Vec<HostExit>>,
+    nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    nested_values: HashSet<ExprId>,
+    nested_relocations: Vec<SourceSpan>,
     expression_boundary_name: String,
     result_return_name: String,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
@@ -403,6 +409,28 @@ impl LoweringPlan {
         self.value_slots
             .iter()
             .map(|(expr, slot)| (*expr, self.slot_name(*slot)))
+    }
+
+    pub(crate) fn nested_value_exits(&self) -> impl Iterator<Item = (ExprId, &[HostExit])> {
+        self.nested_exits
+            .iter()
+            .map(|(expr, exits)| (*expr, exits.as_slice()))
+    }
+
+    pub(crate) fn nested_value_schedules(
+        &self,
+    ) -> impl Iterator<Item = (ExprId, &EvaluationSchedule)> {
+        self.nested_schedules
+            .iter()
+            .map(|(expr, schedule)| (*expr, schedule))
+    }
+
+    pub(crate) fn nested_values(&self) -> impl Iterator<Item = ExprId> + '_ {
+        self.nested_values.iter().copied()
+    }
+
+    pub(crate) fn nested_relocations(&self) -> impl Iterator<Item = SourceSpan> + '_ {
+        self.nested_relocations.iter().copied()
     }
 
     pub(crate) fn slots(&self) -> impl Iterator<Item = (ValueSlotId, &str)> {
@@ -781,7 +809,8 @@ impl EvaluationFile {
                     exit: ExitTarget::ResultRegion(_),
                     ..
                 })
-            ) {
+            ) && matches!(&region.placement, RegionPlacement::Nested { protocol, .. } if protocol.steps().is_empty())
+            {
                 continue;
             }
             if region.result.is_none() || value_slots.contains_key(&expr) {
@@ -789,6 +818,51 @@ impl EvaluationFile {
             }
             let slot = allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names)?;
             value_slots.insert(expr, slot);
+        }
+        let nested_sources: HashMap<_, _> = self
+            .regions
+            .iter()
+            .filter_map(|region| {
+                let Some(CoreRoot::Expr(expr)) = region.root else {
+                    return None;
+                };
+                let RegionPlacement::Nested {
+                    source: Some(source),
+                    ..
+                } = region.placement
+                else {
+                    return None;
+                };
+                value_slots.get(&expr).map(|slot| (source, *slot))
+            })
+            .collect();
+        let mut nested_source_slots = HashMap::new();
+        let mut nested_schedules = HashMap::new();
+        for region in &self.regions {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                continue;
+            };
+            if !matches!(
+                core.exprs[expr.index()],
+                Expr::ResultRegion(_) | Expr::Propagate(_)
+            ) {
+                continue;
+            }
+            let RegionPlacement::Nested { protocol, .. } = &region.placement else {
+                continue;
+            };
+            if protocol.steps().is_empty() {
+                continue;
+            }
+            let schedule = resolve_schedule(
+                protocol.clone(),
+                &nested_sources,
+                &mut nested_source_slots,
+                &mut next_slot,
+                &mut slot_names,
+                &mut occupied_names,
+            )?;
+            nested_schedules.insert(expr, schedule);
         }
         let direct_capabilities: HashMap<_, _> = rewrites
             .iter()
@@ -844,6 +918,29 @@ impl EvaluationFile {
                 continue;
             }
             let mut host_region = region;
+            // A value-form propagation emitted directly by a decision arm
+            // cannot use the enclosing function's failure edge: the arm is
+            // an isolated value region even when SWC identifies the nested
+            // `return` statement as its own host owner.
+            let crossed_value_region = core.exprs.iter().any(|candidate| {
+                let Expr::Decision(decision) = candidate else {
+                    return false;
+                };
+                decision.arms.iter().any(|arm| match arm.action {
+                    ArmAction::Yield {
+                        body,
+                        kind: ArmBodyKind::Block { .. },
+                    }
+                    | ArmAction::Execute(body) => core.bodies[body.index()].statements.iter().any(
+                        |statement| matches!(statement, Statement::Expr(value) if *value == expr),
+                    ),
+                    ArmAction::Yield {
+                        kind: ArmBodyKind::Expression,
+                        ..
+                    } => false,
+                    ArmAction::BindThrough(_) => false,
+                })
+            });
             while let RegionPlacement::Nested { parent, .. } = host_region.placement {
                 host_region = &self.regions[parent.0 as usize];
             }
@@ -866,10 +963,13 @@ impl EvaluationFile {
                     .unwrap_or(TargetCapability::StatementRegion),
                 _ => TargetCapability::StatementRegion,
             };
-            let reason = match (context.owner, capability) {
-                (EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => continue,
-                (_, TargetCapability::ExpressionBoundary(reason)) => reason,
-                (_, TargetCapability::StatementRegion) => {
+            let reason = match (crossed_value_region, context.owner, capability) {
+                (true, _, _) => ExpressionBoundaryReason::OwnerTakesNoStatements,
+                (false, EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => {
+                    continue;
+                }
+                (false, _, TargetCapability::ExpressionBoundary(reason)) => reason,
+                (false, _, TargetCapability::StatementRegion) => {
                     ExpressionBoundaryReason::OwnerTakesNoStatements
                 }
             };
@@ -938,6 +1038,51 @@ impl EvaluationFile {
             for_initializer_propagations,
             slot_names,
             value_slots,
+            nested_schedules,
+            nested_values: self
+                .regions
+                .iter()
+                .filter_map(|region| {
+                    matches!(region.placement, RegionPlacement::Nested { .. })
+                        .then_some(region.root)
+                        .flatten()
+                })
+                .filter_map(|root| match root {
+                    CoreRoot::Expr(expr) => Some(expr),
+                    CoreRoot::Adt(_) | CoreRoot::Decision(_) | CoreRoot::Propagate(_) => None,
+                })
+                .collect(),
+            nested_relocations: self
+                .regions
+                .iter()
+                .filter_map(|region| match &region.placement {
+                    RegionPlacement::Nested {
+                        source, protocol, ..
+                    } => Some((*source, protocol)),
+                    RegionPlacement::Host { .. } | RegionPlacement::SourceEdit => None,
+                })
+                .flat_map(|(source, protocol)| {
+                    source
+                        .into_iter()
+                        .chain(protocol.steps().iter().flat_map(|step| {
+                            std::iter::once(step.parent)
+                                .chain(step.inputs.iter().map(|input| input.source))
+                        }))
+                })
+                .collect(),
+            nested_exits: self
+                .regions
+                .iter()
+                .filter_map(|region| {
+                    let Some(CoreRoot::Expr(expr)) = region.root else {
+                        return None;
+                    };
+                    let RegionPlacement::Nested { exits, .. } = &region.placement else {
+                        return None;
+                    };
+                    (!exits.is_empty()).then(|| (expr, exits.clone()))
+                })
+                .collect(),
             expression_boundary_name,
             result_return_name,
             unsupported_expression_propagations,
@@ -1341,8 +1486,10 @@ fn resolve_schedule(
                                 // is left in place — its only role here was
                                 // order preservation, and evaluating it is
                                 // unobservable.
-                                if input.mode == EvaluationInputMode::Value
-                                    && input.effects.is_inert()
+                                if matches!(
+                                    input.mode,
+                                    EvaluationInputMode::Value | EvaluationInputMode::JsxChildValue
+                                ) && input.effects.is_inert()
                                 {
                                     return Ok(PlannedEvaluationInput::Stable {
                                         source: input.source,
@@ -1695,11 +1842,7 @@ fn target_capability(
     use ExpressionBoundaryReason as Reason;
     if matches!(
         context.owner,
-        EvaluationOwner::ParameterInitializer
-            | EvaluationOwner::ClassInitializer
-            | EvaluationOwner::StaticBlock
-            | EvaluationOwner::Constructor
-            | EvaluationOwner::Generator
+        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
     ) {
         return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
     }
@@ -2076,8 +2219,19 @@ impl EvaluationBuilder<'_> {
     ) -> Result<RegionId, EvaluationError> {
         let placement = if force_nested {
             let parent = parent.ok_or(EvaluationError::MissingHost { root })?;
-            let source = self.hosts.remove(&root).map(|binding| binding.source);
-            RegionPlacement::Nested { parent, source }
+            let binding = self.hosts.remove(&root);
+            let source = binding.as_ref().map(|binding| binding.source);
+            let exits = binding
+                .as_ref()
+                .map_or_else(Vec::new, |binding| binding.exits.clone());
+            let protocol =
+                binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
+            RegionPlacement::Nested {
+                parent,
+                source,
+                exits,
+                protocol,
+            }
         } else {
             self.placement(root, parent)?
         };
@@ -2104,10 +2258,30 @@ impl EvaluationBuilder<'_> {
         if let Some(parent) = parent
             && let Some(binding) = self.hosts.get(&root)
             && self.region_host_owner(parent) == Some(binding.owner)
-            && binding.protocol.steps().is_empty()
+            && (binding.protocol.steps().is_empty()
+                || matches!(root, CoreRoot::Expr(expr)
+                    if matches!(self.core.exprs[expr.index()],
+                        Expr::ResultRegion(_) | Expr::Propagate(_)))
+                || matches!(root, CoreRoot::Expr(expr)
+                if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
+                    && binding.protocol.steps().iter().all(|step| matches!(
+                        step.operation,
+                        HostEvaluationOperation::Eager(EagerPosition::TemplateInterpolation(_))
+                    ))))
         {
-            let source = self.hosts.remove(&root).map(|binding| binding.source);
-            return Ok(RegionPlacement::Nested { parent, source });
+            let binding = self.hosts.remove(&root);
+            let source = binding.as_ref().map(|binding| binding.source);
+            let exits = binding
+                .as_ref()
+                .map_or_else(Vec::new, |binding| binding.exits.clone());
+            let protocol =
+                binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
+            return Ok(RegionPlacement::Nested {
+                parent,
+                source,
+                exits,
+                protocol,
+            });
         }
         if let Some(binding) = self.hosts.remove(&root) {
             Ok(RegionPlacement::Host {
@@ -2122,6 +2296,8 @@ impl EvaluationBuilder<'_> {
             Ok(RegionPlacement::Nested {
                 parent,
                 source: None,
+                exits: Vec::new(),
+                protocol: HostEvaluationProtocol::default(),
             })
         } else {
             Err(EvaluationError::MissingHost { root })
@@ -2422,7 +2598,22 @@ mod tests {
             RegionPlacement::Nested {
                 parent: result.id,
                 source: Some(SourceSpan { start: 21, end: 42 }),
+                exits: Vec::new(),
+                protocol: HostEvaluationProtocol::default(),
             }
+        );
+    }
+
+    #[test]
+    fn a_result_nested_in_a_pipeline_owns_its_returns() {
+        let (file, core) = evaluation(
+            "declare const g: () => unknown; declare const unwrap: (x: unknown) => number;\nconst f = () => { const n = result { const value = try g(); return value; } |> unwrap; return n; };\n",
+        );
+        let plan = plan(&file, &core);
+        assert!(
+            plan.nested_value_exits()
+                .any(|(_, exits)| !exits.is_empty()),
+            "{file:#?}"
         );
     }
 

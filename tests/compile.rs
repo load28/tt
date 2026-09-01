@@ -35,6 +35,222 @@ fn ok_tsx(src: &str) -> String {
     .expect("ttx compile failed")
 }
 
+/* ------------------------------------------------------------------ */
+/* TASK-311 reported composition regressions                           */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn statement_position_match_is_a_supported_owner() {
+    let output = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         const f = (x: number) => { match (R.Ok(x)) {\n\
+           Ok(value) => { console.log(value); },\n\
+           Err(error) => { console.log(error); },\n\
+         }; };\n");
+    assert!(output.contains("switch ($tt_m.kind)"), "{output}");
+    assert!(output.contains("console.log(value)"), "{output}");
+}
+
+#[test]
+fn jsx_child_match_preserves_preceding_siblings_as_expressions() {
+    let output = ok_tsx(
+        r#"variant Maybe { Some(value: string), None }
+declare const value: Maybe;
+const view = <main><h1>title</h1><form>form</form>{match (value) {
+  Some(value) => <p>{value}</p>, None => null,
+}}</main>;
+"#,
+    );
+    assert!(output.contains("<h1>title</h1>"), "{output}");
+    assert!(output.contains("<form>form</form>"), "{output}");
+    assert!(!output.contains(">$tt_v"), "{output}");
+}
+
+#[test]
+fn result_region_composes_with_nested_match_once() {
+    let output = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         declare const g: () => R;\n\
+         const f = (): R => result {\n\
+           const n = try g();\n\
+           const doubled = match (n) { 0 => 0, _ => n * 2 };\n\
+           return doubled;\n\
+         };\n");
+    assert_eq!(output.matches("switch (").count(), 1, "{output}");
+    assert!(!output.contains("= let "), "{output}");
+}
+
+#[test]
+fn generated_value_slots_preserve_authored_contextual_types() {
+    let result = ok(
+        "type TResult<T, E> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: E };\n\
+         declare const g: () => TResult<number, string>;\n\
+         const f = (): TResult<readonly number[], string> => result {\n\
+           const n = try g(); if (n === 0) return []; return [n];\n\
+         };\n",
+    );
+    assert!(
+        result.contains("let $tt_v0: TResult<readonly number[], string>;"),
+        "{result}"
+    );
+    assert!(!result.contains("const $tt_result = []"), "{result}");
+
+    let matched = ok("type Toggle = \"on\" | \"off\";\n\
+         const flip = (value: Toggle): Toggle => match (value) {\n\
+           \"on\" => \"off\", \"off\" => \"on\",\n\
+         };\n");
+    assert!(matched.contains("let $tt_v0: Toggle;"), "{matched}");
+}
+
+#[test]
+fn match_arm_single_statement_if_keeps_synthetic_exit_conditional() {
+    let output = ok("variant V { A(n: number), B }\n\
+         const f = (v: V): number => match (v) {\n\
+           A(n) => { if (n === 0) return 100; return n; },\n\
+           B => -1,\n\
+         };\n");
+    assert!(
+        compact(&output).contains("if (n === 0) { $tt_v0 = 100; break; }"),
+        "{output}"
+    );
+}
+
+#[test]
+fn result_region_composes_embedded_try_and_pipeline_try() {
+    let embedded = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         declare const g: () => R;\n\
+         const f = (): R => result { return Math.round(try g() * 1.1); };\n");
+    assert!(embedded.contains("Math.round("), "{embedded}");
+    assert!(!embedded.contains("try g"), "{embedded}");
+
+    let pipeline = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         declare const g: () => R; declare const step: (x: R) => R;\n\
+         const f = (): R => result { const v = try (g() |> step); return v; };\n");
+    assert!(!pipeline.contains("try ("), "{pipeline}");
+}
+
+#[test]
+fn result_region_pipeline_head_completes_before_the_pipeline_step() {
+    let output = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         declare const g: () => R; declare const unwrap: (x: R) => number;\n\
+         const f = (): number => { const n = result {\n\
+           const value = try g(); return value * 2;\n\
+         } |> unwrap; return n; };\n");
+    let completion = output.find("kind: \"Ok\"").expect("result completion");
+    let pipeline = output.find("unwrap(").expect("pipeline step");
+    assert!(completion < pipeline, "{output}");
+    assert!(!output[..pipeline].contains("return value * 2"), "{output}");
+}
+
+#[test]
+fn async_concise_arrow_claims_a_result_region() {
+    let output = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         declare const g: () => R;\n\
+         const f = async (): Promise<R> => result { const x = try g(); return x + 1; };\n");
+    assert!(
+        output.contains("const f = async (): Promise<R> => {"),
+        "{output}"
+    );
+    assert!(!output.contains("=> result"), "{output}");
+}
+
+#[test]
+fn jsx_expression_pipeline_rewrites_only_the_container_expression() {
+    let child = ok_tsx(
+        "declare const raw: string; declare const up: (x: string) => string;\n\
+         const child = <p>{raw |> up}</p>;\n",
+    );
+    assert!(child.contains("<p>{$tt_ap(raw, up)}</p>"), "{child}");
+
+    let attribute = ok_tsx(
+        "declare const raw: string; declare const up: (x: string) => string;\n\
+         const child = <P value={raw |> up} />;\n",
+    );
+    assert!(attribute.contains("value={$tt_ap(raw, up)}"), "{attribute}");
+}
+
+#[test]
+fn generator_statement_owner_accepts_match_initializers() {
+    let output = ok("function* f(code: number): Generator<string> {\n\
+           const line = match (code) { 200 => \"ok\", _ => \"err\" };\n\
+           yield line;\n\
+         }\n");
+    assert!(output.contains("const line = $tt_v0;"), "{output}");
+}
+
+#[test]
+fn match_arm_return_try_reports_placement_instead_of_panicking() {
+    let diagnostics = ttc::analyze(
+        "variant R { Ok(value: number), Err(error: string) }\n\
+         declare const g: () => R;\n\
+         const f = (b: boolean): R => match (b) {\n\
+           true => { return try g(); }, false => R.Ok(0),\n\
+         };\n",
+        &Options::default(),
+    );
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
+}
+
+#[test]
+fn nested_match_subject_uses_collision_free_slots() {
+    let output = ok("variant V { A, B }\n\
+         declare const v: V;\n\
+         const n = match (match (v) { A => V.B, B => V.A }) { A => 1, B => 2 };\n");
+    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+    assert!(
+        !output.contains(
+            "const $tt_m = v;\n  switch ($tt_m.kind) {\n    case \"A\": {\n      $tt_m ="
+        ),
+        "{output}"
+    );
+}
+
+#[test]
+fn tuple_match_accepts_comparison_expression_subjects() {
+    let output = ok("variant V { A, B }\n\
+         declare const a: number; declare const b: number; declare const v: V;\n\
+         const n = match (a < b, v) { (_, A) => 1, _ => 0 };\n");
+    assert!(output.contains("a < b"), "{output}");
+}
+
+#[test]
+fn expression_arms_compose_nested_tt_value_regions() {
+    let template = ok("variant V { A(n: number), B }\n\
+         declare const v: V; declare const w: V;\n\
+         const text = match (v) { A(n) => `${match (w) { A(m) => m, B => n }}`, B => \"\" };\n");
+    assert_eq!(template.matches("switch (").count(), 2, "{template}");
+
+    let result = ok(
+        "variant V { A(n: number), B } variant R { Ok(value: number), Err(error: string) }\n\
+         declare const v: V; declare const g: () => R; declare const unwrap: (r: R) => number;\n\
+         const n = match (v) { A(n) => unwrap(result { const x = try g(); return n + x; }), B => -1 };\n",
+    );
+    assert!(result.contains("kind: \"Ok\""), "{result}");
+}
+
+#[test]
+fn duplicate_variant_cases_do_not_duplicate_the_semantic_alphabet() {
+    let diagnostics = ttc::analyze(
+        "variant State { Ready, Wait, Wait }\nconst f = (s: State) => match (s) { Ready => 1 };\n",
+        &Options::default(),
+    );
+    let missing = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == ttc::DiagnosticCode::MatchNotExhaustive)
+        .expect("the match remains non-exhaustive");
+    assert!(missing.message.contains("missing \"Wait\""), "{missing:?}");
+    assert!(
+        !missing.message.contains("\"Wait\", \"Wait\""),
+        "{missing:?}"
+    );
+    let replacement = missing.suggestions[0]
+        .edit
+        .as_ref()
+        .expect("the missing-arm suggestion has an edit")
+        .replacement
+        .as_str();
+    assert_eq!(replacement.matches("Wait =>").count(), 1, "{missing:?}");
+}
+
 #[test]
 fn ttx_lowers_constructs_in_jsx_children_and_attributes() {
     let source = r#"variant State { Ready(value: string), Empty }
@@ -3773,10 +3989,8 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
         "{out}"
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
-    assert!(out.contains("const $tt_result = item;"), "{out}");
     assert!(
-        compact(&out)
-            .contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break $tt_v0;"),
+        compact(&out).contains("const $tt_result = item; $tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break $tt_v0;"),
         "{out}"
     );
 }
@@ -3831,8 +4045,9 @@ const text = `value=${result { const item = try read(); return item; }}`;
     );
     assert!(out.contains("field = $tt_expr(() =>"), "{out}");
     assert!(out.contains("return { kind: \"Ok\" as const"), "{out}");
-    assert!(out.contains("yield $tt_expr(() =>"), "{out}");
+    assert!(out.contains("yield $tt_v"), "{out}");
     assert!(out.contains("const text = `value=${$tt_v"), "{out}");
+    assert!(!out.contains("value: undefined"), "{out}");
 }
 
 #[test]
@@ -3940,8 +4155,8 @@ fn result_allows_let_else_when_each_else_path_completes_the_result() {
     let out = ok(
         "variant Item { Some(value: number), None }\nconst value = result { const item = try read(); let Some(found) = item else { return 0; }; return found; };\n",
     );
-    assert!(out.contains("const $tt_result = 0;"), "{out}");
-    assert!(out.contains("const $tt_result = found;"), "{out}");
+    assert!(out.contains("const $tt_result = 0"), "{out}");
+    assert!(out.contains("const $tt_result = found"), "{out}");
 }
 
 #[test]
@@ -3949,8 +4164,8 @@ fn result_wraps_inline_if_let_returns_as_success() {
     let out = ok(
         "variant Item { Some(value: number), None }\nconst value = result { const item = try read(); if let Some(found) = item { return found; } else { return 0; } };\n",
     );
-    assert!(out.contains("const $tt_result = found;"), "{out}");
-    assert!(out.contains("const $tt_result = 0;"), "{out}");
+    assert!(out.contains("const $tt_result = found"), "{out}");
+    assert!(out.contains("const $tt_result = 0"), "{out}");
 }
 
 #[test]

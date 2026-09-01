@@ -25,8 +25,9 @@ use swc_common::{FileName, SourceMap, Spanned};
 use swc_ecma_ast::{
     ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, CallExpr, CondExpr, Constructor,
     Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild, JSXExpr,
-    JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall, Prop,
-    PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, UnaryExpr, YieldExpr,
+    JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall, Pat,
+    Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, UnaryExpr,
+    VarDeclarator, YieldExpr,
 };
 use swc_ecma_parser::lexer::Lexer;
 use swc_ecma_parser::{Parser, Syntax, TsSyntax};
@@ -107,6 +108,10 @@ pub(crate) struct HostExit {
     /// reason a value region needs a label: everywhere else the region's
     /// own dispatch is already the nearest `break` target.
     pub(crate) captured_break: bool,
+    /// Whether replacing this one statement with assignment-plus-exit
+    /// statements requires a block to remain one statement for its parent
+    /// (`if (cond) return value`, loop bodies, and labeled statements).
+    pub(crate) requires_block: bool,
 }
 
 /// Ordered JavaScript evaluation obligations between one TT value and its
@@ -193,6 +198,7 @@ pub(crate) struct HostEvaluationInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EvaluationInputMode {
     Value,
+    JsxChildValue,
     DirectReference,
     MemberReference,
 }
@@ -456,6 +462,12 @@ pub(crate) struct EvaluationContext {
     pub(crate) owner: EvaluationOwner,
     pub(crate) value_role: ValueRole,
     pub(crate) continuation: HostContinuation,
+    /// Authored TypeScript annotation that contextually types this value,
+    /// including its leading colon.
+    pub(crate) contextual_type: Option<SourceSpan>,
+    /// Async functions contextually type their returned expression with the
+    /// awaited form of the authored Promise return type.
+    pub(crate) contextual_type_awaited: bool,
 }
 
 impl EvaluationContext {
@@ -467,6 +479,9 @@ impl EvaluationContext {
         parents: &[AstParentKind],
         host_owner_edge: usize,
         function_target: Option<EvaluationOwner>,
+        contextual_type: Option<SourceSpan>,
+        function_return_type: Option<SourceSpan>,
+        function_return_awaited: bool,
     ) -> Self {
         let (mut owner, owner_edge) = evaluation_owner(parents);
         if let Some(function_target) = function_target {
@@ -483,6 +498,8 @@ impl EvaluationContext {
                 owner,
                 value_role: ValueRole::None,
                 continuation: HostContinuation::Discard,
+                contextual_type,
+                contextual_type_awaited: false,
             };
         }
 
@@ -490,12 +507,25 @@ impl EvaluationContext {
         let value_role = value_role(local_path);
         let frequency = frequency_within_owner(parents, owner_edge);
         let continuation = host_continuation(local_path);
+        let uses_function_return = matches!(
+            continuation,
+            HostContinuation::Return | HostContinuation::ArrowReturn
+        );
+        let contextual_type = if uses_function_return {
+            function_return_type
+        } else {
+            contextual_type
+        };
         Self {
             frequency,
             owner_reach,
             owner,
             value_role,
             continuation,
+            contextual_type,
+            contextual_type_awaited: uses_function_return
+                && function_return_type.is_some()
+                && function_return_awaited,
         }
     }
 }
@@ -1143,6 +1173,10 @@ impl<'a> ProjectionBuilder<'a> {
             start: ProjectedByte(owner_start.0 + 1),
             end: ProjectedByte(owner_end.0 - 1),
         });
+        self.projection_only_protocol_parents.push(ProjectedSpan {
+            start: owner_start,
+            end: owner_end,
+        });
         self.source_segments.push(ProjectionSourceSegment {
             projected: ProjectedSpan {
                 start: ProjectedByte(owner_start.0 + 1),
@@ -1247,12 +1281,20 @@ impl<'a> ProjectionBuilder<'a> {
                     || self.expr_contains_decision(step.1.value)
             })
             .collect();
-        if shadow_steps.is_empty() {
+        let shadow_head = apply.head.filter(|head| {
+            self.expr_contains_propagation(*head) || self.expr_contains_decision(*head)
+        });
+        if shadow_head.is_none() && shadow_steps.is_empty() {
             return self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr));
         }
         let start = ProjectedByte(self.code.len());
         self.code.push('(');
         self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))?;
+        if let Some(head) = shadow_head {
+            self.code.push_str(", (");
+            self.emit_shadow_expr(head)?;
+            self.code.push(')');
+        }
         for (index, step) in shadow_steps {
             self.code.push_str(", (");
             if let Some(head) = apply.head
@@ -1274,6 +1316,10 @@ impl<'a> ProjectionBuilder<'a> {
             start: ProjectedByte(start.0 + 1),
             end: ProjectedByte(self.code.len() - 1),
         });
+        self.projection_only_protocol_parents.push(ProjectedSpan {
+            start,
+            end: ProjectedByte(self.code.len()),
+        });
         self.source_segments.push(ProjectionSourceSegment {
             projected: ProjectedSpan {
                 start: ProjectedByte(start.0 + 1),
@@ -1288,9 +1334,7 @@ impl<'a> ProjectionBuilder<'a> {
     fn expr_contains_propagation(&self, expr: ExprId) -> bool {
         match &self.core.exprs[expr.index()] {
             Expr::Propagate(_) => true,
-            Expr::Sequence(body) => self.core.bodies[body.index()].statements.iter().any(|statement| {
-                matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))
-            }),
+            Expr::Sequence(body) => self.body_contains_propagation(*body),
             Expr::Apply(apply) => apply
                 .head
                 .is_some_and(|head| self.expr_contains_propagation(head))
@@ -1305,13 +1349,36 @@ impl<'a> ProjectionBuilder<'a> {
                     || matches!(arm.action, crate::core_ir::ArmAction::Yield { body, .. } | crate::core_ir::ArmAction::Execute(body) if self.core.bodies[body.index()].statements.iter().any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))))
             }),
             Expr::ResultRegion(region) => region.items.iter().any(|item| match item {
-                crate::core_ir::ResultRegionItem::Statements(body) => self.core.bodies[body.index()]
-                    .statements
-                    .iter()
-                    .any(|statement| matches!(statement, Statement::Expr(expr) if self.expr_contains_propagation(*expr))),
+                crate::core_ir::ResultRegionItem::Statements(body) => {
+                    self.body_contains_propagation(*body)
+                }
             }) || region.value.is_some_and(|value| self.expr_contains_propagation(value)),
             Expr::Opaque(_) | Expr::Template(_) => false,
         }
+    }
+
+    fn body_contains_propagation(&self, body: BodyId) -> bool {
+        self.core.bodies[body.index()]
+            .statements
+            .iter()
+            .any(|statement| match statement {
+                Statement::Propagate(_) => true,
+                Statement::Expr(expr) => self.expr_contains_propagation(*expr),
+                Statement::Decision(decision) => {
+                    decision
+                        .subjects
+                        .iter()
+                        .any(|subject| self.expr_contains_propagation(subject.value))
+                        || decision.arms.iter().any(|arm| match arm.action {
+                            crate::core_ir::ArmAction::Yield { body, .. }
+                            | crate::core_ir::ArmAction::Execute(body) => {
+                                self.body_contains_propagation(body)
+                            }
+                            crate::core_ir::ArmAction::BindThrough(_) => false,
+                        })
+                }
+                Statement::Opaque(_) | Statement::Adt(_) | Statement::Import(_) => false,
+            })
     }
 
     fn expr_contains_decision(&self, expr: ExprId) -> bool {
@@ -1716,6 +1783,9 @@ struct ParentCollector {
     occupied_names: HashSet<String>,
     function_depth: usize,
     function_targets: Vec<Option<EvaluationOwner>>,
+    contextual_types: Vec<Option<ProjectedSpan>>,
+    function_return_types: Vec<Option<ProjectedSpan>>,
+    function_return_async: Vec<bool>,
     /// How many enclosing statements consume an unlabeled `break`
     /// (loops and `switch`).
     break_capture_depth: usize,
@@ -1736,6 +1806,9 @@ struct FoundOverlay {
     protocol_frames: Vec<ProjectedProtocolFrame>,
     exits: Vec<ProjectedHostExit>,
     function_target: Option<EvaluationOwner>,
+    contextual_type: Option<ProjectedSpan>,
+    function_return_type: Option<ProjectedSpan>,
+    function_return_awaited: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1743,6 +1816,7 @@ struct ProjectedHostExit {
     statement: ProjectedSpan,
     argument: Option<ProjectedSpan>,
     captured_break: bool,
+    requires_block: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1796,7 +1870,7 @@ enum ProjectedProtocolFrame {
     },
     Jsx {
         parent: ProjectedSpan,
-        expressions: Vec<(ProjectedSpan, Effects)>,
+        expressions: Vec<(ProjectedSpan, Effects, bool)>,
     },
     Suspend {
         parent: ProjectedSpan,
@@ -1935,57 +2009,61 @@ fn jsx_expression_span(expression: &JSXExpr, source_start: u32) -> Option<Projec
     }
 }
 
-fn jsx_evaluation_positions(node: &JSXElement, source_start: u32) -> Vec<ProjectedSpan> {
+fn jsx_evaluation_positions(node: &JSXElement, source_start: u32) -> Vec<(ProjectedSpan, bool)> {
     let attributes = node
         .opening
         .attrs
         .iter()
         .filter_map(|attribute| match attribute {
             JSXAttrOrSpread::SpreadElement(spread) => {
-                Some(projected_span(spread.expr.span(), source_start))
+                Some((projected_span(spread.expr.span(), source_start), false))
             }
             JSXAttrOrSpread::JSXAttr(attribute) => match attribute.value.as_ref()? {
                 JSXAttrValue::JSXExprContainer(container) => {
-                    jsx_expression_span(&container.expr, source_start)
+                    jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
                 }
                 JSXAttrValue::JSXElement(element) => {
-                    Some(projected_span(element.span, source_start))
+                    Some((projected_span(element.span, source_start), false))
                 }
                 JSXAttrValue::JSXFragment(fragment) => {
-                    Some(projected_span(fragment.span, source_start))
+                    Some((projected_span(fragment.span, source_start), false))
                 }
                 JSXAttrValue::Str(_) => None,
             },
         });
     let children = node.children.iter().filter_map(|child| match child {
         JSXElementChild::JSXExprContainer(container) => {
-            jsx_expression_span(&container.expr, source_start)
+            jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
         }
         JSXElementChild::JSXSpreadChild(spread) => {
-            Some(projected_span(spread.expr.span(), source_start))
+            Some((projected_span(spread.expr.span(), source_start), false))
         }
-        JSXElementChild::JSXElement(element) => Some(projected_span(element.span, source_start)),
-        JSXElementChild::JSXFragment(fragment) => Some(projected_span(fragment.span, source_start)),
+        JSXElementChild::JSXElement(element) => {
+            Some((projected_span(element.span, source_start), true))
+        }
+        JSXElementChild::JSXFragment(fragment) => {
+            Some((projected_span(fragment.span, source_start), true))
+        }
         JSXElementChild::JSXText(_) => None,
     });
     attributes.chain(children).collect()
 }
 
-fn jsx_fragment_positions(node: &JSXFragment, source_start: u32) -> Vec<ProjectedSpan> {
+fn jsx_fragment_positions(node: &JSXFragment, source_start: u32) -> Vec<(ProjectedSpan, bool)> {
     node.children
         .iter()
         .filter_map(|child| match child {
             JSXElementChild::JSXExprContainer(container) => {
-                jsx_expression_span(&container.expr, source_start)
+                jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
             }
             JSXElementChild::JSXSpreadChild(spread) => {
-                Some(projected_span(spread.expr.span(), source_start))
+                Some((projected_span(spread.expr.span(), source_start), false))
             }
             JSXElementChild::JSXElement(element) => {
-                Some(projected_span(element.span, source_start))
+                Some((projected_span(element.span, source_start), true))
             }
             JSXElementChild::JSXFragment(fragment) => {
-                Some(projected_span(fragment.span, source_start))
+                Some((projected_span(fragment.span, source_start), true))
             }
             JSXElementChild::JSXText(_) => None,
         })
@@ -2046,6 +2124,9 @@ impl ParentCollector {
             occupied_names: HashSet::new(),
             function_depth: 0,
             function_targets: Vec::new(),
+            contextual_types: Vec::new(),
+            function_return_types: Vec::new(),
+            function_return_async: Vec::new(),
             break_capture_depth: 0,
             exit_regions: Vec::new(),
         }
@@ -2062,6 +2143,13 @@ impl ParentCollector {
                     protocol_frames: self.protocol_frames.clone(),
                     exits: Vec::new(),
                     function_target: self.function_targets.iter().rev().flatten().copied().next(),
+                    contextual_type: self.contextual_types.last().copied().flatten(),
+                    function_return_type: self.function_return_types.last().copied().flatten(),
+                    function_return_awaited: self
+                        .function_return_async
+                        .last()
+                        .copied()
+                        .unwrap_or(false),
                 },
             )
             .is_some()
@@ -2127,6 +2215,15 @@ impl ParentCollector {
                     &found.parents,
                     projected_owner.edge,
                     found.function_target,
+                    found
+                        .contextual_type
+                        .map(|span| map_evaluation_span(&self.source_segments, span))
+                        .transpose()?,
+                    found
+                        .function_return_type
+                        .map(|span| map_evaluation_span(&self.source_segments, span))
+                        .transpose()?,
+                    found.function_return_awaited,
                 ),
                 // A frame outside the host owner is not this owner's
                 // evaluation obligation: a statement (or a concise arrow
@@ -2163,10 +2260,11 @@ impl ParentCollector {
                             argument: exit
                                 .argument
                                 .map(|argument| {
-                                    map_evaluation_span(&self.source_segments, argument)
+                                    map_structural_span(&self.source_segments, argument)
                                 })
                                 .transpose()?,
                             captured_break: exit.captured_break,
+                            requires_block: exit.requires_block,
                         })
                     })
                     .collect::<Result<Vec<_>, ProgramSyntaxError>>()?,
@@ -2181,6 +2279,31 @@ impl ParentCollector {
 }
 
 impl VisitAstPath for ParentCollector {
+    fn visit_var_declarator<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast VarDeclarator,
+        path: &mut AstNodePath<'r>,
+    ) {
+        let annotation = match &node.name {
+            Pat::Ident(pattern) => pattern.type_ann.as_deref(),
+            Pat::Array(pattern) => pattern.type_ann.as_deref(),
+            Pat::Object(pattern) => pattern.type_ann.as_deref(),
+            Pat::Rest(pattern) => pattern.type_ann.as_deref(),
+            Pat::Assign(pattern) => match pattern.left.as_ref() {
+                Pat::Ident(pattern) => pattern.type_ann.as_deref(),
+                Pat::Array(pattern) => pattern.type_ann.as_deref(),
+                Pat::Object(pattern) => pattern.type_ann.as_deref(),
+                Pat::Rest(pattern) => pattern.type_ann.as_deref(),
+                Pat::Assign(_) | Pat::Invalid(_) | Pat::Expr(_) => None,
+            },
+            Pat::Invalid(_) | Pat::Expr(_) => None,
+        }
+        .map(|annotation| projected_span(annotation.span, self.source_start));
+        self.contextual_types.push(annotation);
+        <VarDeclarator as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.contextual_types.pop();
+    }
+
     fn visit_module_item<'ast: 'r, 'r>(
         &mut self,
         item: &'ast ModuleItem,
@@ -2473,6 +2596,13 @@ impl VisitAstPath for ParentCollector {
     ) {
         self.function_depth += 1;
         self.function_targets.push(None);
+        self.contextual_types.push(None);
+        self.function_return_types.push(
+            node.return_type
+                .as_deref()
+                .map(|annotation| projected_span(annotation.span, self.source_start)),
+        );
+        self.function_return_async.push(node.is_async);
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
@@ -2480,6 +2610,9 @@ impl VisitAstPath for ParentCollector {
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.host_owners.pop();
+        self.function_return_types.pop();
+        self.function_return_async.pop();
+        self.contextual_types.pop();
         self.function_targets.pop();
         self.function_depth -= 1;
     }
@@ -2488,7 +2621,17 @@ impl VisitAstPath for ParentCollector {
         self.function_depth += 1;
         self.function_targets
             .push(node.is_generator.then_some(EvaluationOwner::Generator));
+        self.contextual_types.push(None);
+        self.function_return_types.push(
+            node.return_type
+                .as_deref()
+                .map(|annotation| projected_span(annotation.span, self.source_start)),
+        );
+        self.function_return_async.push(node.is_async);
         <Function as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.function_return_types.pop();
+        self.function_return_async.pop();
+        self.contextual_types.pop();
         self.function_targets.pop();
         self.function_depth -= 1;
     }
@@ -2501,7 +2644,13 @@ impl VisitAstPath for ParentCollector {
         self.function_depth += 1;
         self.function_targets
             .push(Some(EvaluationOwner::Constructor));
+        self.contextual_types.push(None);
+        self.function_return_types.push(None);
+        self.function_return_async.push(false);
         <Constructor as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        self.function_return_types.pop();
+        self.function_return_async.pop();
+        self.contextual_types.pop();
         self.function_targets.pop();
         self.function_depth -= 1;
     }
@@ -2524,6 +2673,27 @@ impl VisitAstPath for ParentCollector {
                     .as_ref()
                     .map(|argument| projected_span(argument.span(), self.source_start)),
                 captured_break: self.break_capture_depth > region_break_depth,
+                requires_block: path
+                    .kinds()
+                    .iter()
+                    .rev()
+                    .find(|parent| {
+                        !matches!(parent, AstParentKind::Stmt(fields::StmtField::Return))
+                    })
+                    .is_some_and(|parent| {
+                        matches!(
+                            parent,
+                            AstParentKind::IfStmt(
+                                fields::IfStmtField::Cons | fields::IfStmtField::Alt
+                            ) | AstParentKind::ForStmt(fields::ForStmtField::Body)
+                                | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
+                                | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
+                                | AstParentKind::WhileStmt(fields::WhileStmtField::Body)
+                                | AstParentKind::DoWhileStmt(fields::DoWhileStmtField::Body)
+                                | AstParentKind::LabeledStmt(fields::LabeledStmtField::Body)
+                                | AstParentKind::WithStmt(fields::WithStmtField::Body)
+                        )
+                    }),
             });
         }
         <ReturnStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -2653,7 +2823,7 @@ impl VisitAstPath for ParentCollector {
             parent: projected_span(node.span, self.source_start),
             expressions: jsx_evaluation_positions(node, self.source_start)
                 .into_iter()
-                .map(|span| (span, Effects::ANY))
+                .map(|(span, child)| (span, Effects::ANY, child))
                 .collect(),
         });
         <JSXElement as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -2669,7 +2839,7 @@ impl VisitAstPath for ParentCollector {
             parent: projected_span(node.span, self.source_start),
             expressions: jsx_fragment_positions(node, self.source_start)
                 .into_iter()
-                .map(|span| (span, Effects::ANY))
+                .map(|(span, child)| (span, Effects::ANY, child))
                 .collect(),
         });
         <JSXFragment as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
@@ -3050,7 +3220,7 @@ fn protocol_step(
         } => {
             let Some(position) = expressions
                 .iter()
-                .position(|(span, _)| projected_contains(*span, value))
+                .position(|(span, _, _)| projected_contains(*span, value))
             else {
                 return Ok(None);
             };
@@ -3059,8 +3229,17 @@ fn protocol_step(
             let inputs = expressions[..position]
                 .iter()
                 .copied()
-                .map(|(expression, effects)| {
-                    (expression, EvaluationInputMode::Value, None, effects)
+                .map(|(expression, effects, child)| {
+                    (
+                        expression,
+                        if child {
+                            EvaluationInputMode::JsxChildValue
+                        } else {
+                            EvaluationInputMode::Value
+                        },
+                        None,
+                        effects,
+                    )
                 })
                 .collect();
             (
@@ -3105,7 +3284,10 @@ fn protocol_step(
                     })
                     .transpose()?,
                 effects: Effects {
-                    requires_reference: mode != EvaluationInputMode::Value,
+                    requires_reference: matches!(
+                        mode,
+                        EvaluationInputMode::DirectReference | EvaluationInputMode::MemberReference
+                    ),
                     ..effects
                 },
             })

@@ -4,16 +4,16 @@
 //! only through HIR nodes and the source map. Every tt surface reaches this
 //! module through a shared Core primitive.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
 use super::rope::{Flat, Rope, SourcePreservation};
 use crate::analysis::SemanticFile;
 use crate::core_ir::*;
 use crate::evaluation_ir::{
-    LoweringPlan, PlannedBranch, PlannedConditionalKind, PlannedConditionalOperation,
-    PlannedEvaluationInput, PlannedEvaluationStep, PlannedOperand, PlannedReceiver,
-    TargetCapability, ValueTarget,
+    EvaluationSchedule, LoweringPlan, PlannedBranch, PlannedConditionalKind,
+    PlannedConditionalOperation, PlannedEvaluationInput, PlannedEvaluationStep, PlannedOperand,
+    PlannedReceiver, TargetCapability, ValueTarget,
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
@@ -122,7 +122,7 @@ pub(crate) fn emit_with_map<'a>(
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
-    let target = TargetRewritePlan::build(lowering_plan);
+    let target = TargetRewritePlan::build(semantic, core, lowering_plan);
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
@@ -147,6 +147,7 @@ pub(crate) fn emit_with_map<'a>(
         .filter(|(expr, _)| matches!(core.exprs[expr.index()], Expr::ResultRegion(_)))
         .flat_map(|(_, exits)| exits.iter().filter_map(|exit| exit.argument))
         .collect();
+    relocated.extend(result_return_args.iter().copied());
     let target_recovered_propagations: Vec<_> = target
         .recovered_propagations
         .iter()
@@ -170,6 +171,8 @@ pub(crate) fn emit_with_map<'a>(
         value_slots: target.value_slots,
         scheduled_slots: target.scheduled_slots,
         value_exits: target.value_exits,
+        nested_schedules: target.nested_schedules,
+        nested_values: target.nested_values,
         recovered_propagations: target
             .recovered_propagations
             .into_iter()
@@ -178,6 +181,9 @@ pub(crate) fn emit_with_map<'a>(
         expression_boundary_name: target.expression_boundary_name,
         result_return_name: target.result_return_name,
         conditional_region_depth: Cell::new(0),
+        active_structured_exprs: RefCell::new(Vec::new()),
+        active_scheduled_exprs: RefCell::new(Vec::new()),
+        emitted_owner_rewrites: RefCell::new(HashSet::new()),
         loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
@@ -511,6 +517,49 @@ fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Vec<SourceSpa
     out
 }
 
+fn structured_expr_span(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    expr: ExprId,
+) -> Option<SourceSpan> {
+    let node_span = |node| {
+        semantic
+            .hir
+            .source_map
+            .node_span(node)
+            .map(SourceSpan::from)
+    };
+    match &core.exprs[expr.index()] {
+        Expr::Opaque(node) => node_span(*node),
+        Expr::Decision(decision) => node_span(decision.extent),
+        Expr::Propagate(propagate) => node_span(propagate.node),
+        Expr::ResultRegion(region) => node_span(region.node),
+        Expr::Template(template) => node_span(template.node),
+        Expr::Apply(apply) => {
+            let mut span = node_span(apply.node)?;
+            for step in &apply.steps {
+                let step = node_span(step.node)?;
+                span.start = span.start.min(step.start);
+                span.end = span.end.max(step.end);
+            }
+            Some(span)
+        }
+        Expr::Sequence(body) => core.bodies[body.index()]
+            .statements
+            .iter()
+            .find_map(|statement| match statement {
+                Statement::Expr(value) if core.has_statement_form(*value) => {
+                    structured_expr_span(semantic, core, *value)
+                }
+                _ => None,
+            })
+            .or_else(|| {
+                core.body_value_expr(*body)
+                    .and_then(|value| structured_expr_span(semantic, core, value))
+            }),
+    }
+}
+
 struct TargetRewritePlan {
     owner_slots: Vec<OwnerSlotRewrite>,
     for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
@@ -536,6 +585,8 @@ struct TargetRewritePlan {
     value_slots: HashMap<ExprId, String>,
     scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     value_exits: HashMap<ExprId, Vec<HostExit>>,
+    nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    nested_values: HashSet<ExprId>,
     expression_boundary_name: String,
     result_return_name: String,
 }
@@ -543,8 +594,12 @@ struct TargetRewritePlan {
 #[derive(Debug, Clone)]
 struct OwnerSlotRewrite {
     owner: SourceSpan,
+    source: SourceSpan,
     expr: ExprId,
     slot: String,
+    continuation: HostContinuation,
+    contextual_type: Option<SourceSpan>,
+    contextual_type_awaited: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -559,6 +614,8 @@ struct ArrowReturnRewrite {
     expr: ExprId,
     slot: String,
     parenthesized: bool,
+    contextual_type: Option<SourceSpan>,
+    contextual_type_awaited: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -599,11 +656,14 @@ struct ComposeValue {
 struct SourceReplacement {
     source: SourceSpan,
     slot: String,
+    jsx_child: bool,
     /// The tt value whose construct anchor the replacement's generated
     /// name carries — a conditional operation's result stands for the whole
     /// operation, so diagnostics on it belong to its primary tt value.
     anchor: Option<ExprId>,
 }
+
+type NestedSourceReplacement = (SourceSpan, String, Option<(AnchorKind, usize)>);
 
 #[derive(Debug, Clone)]
 struct LocalSourceEdit {
@@ -613,7 +673,7 @@ struct LocalSourceEdit {
 }
 
 impl TargetRewritePlan {
-    fn build(lowering: &LoweringPlan) -> Self {
+    fn build(semantic: &SemanticFile, core: &CoreFile, lowering: &LoweringPlan) -> Self {
         let for_initializer_propagations: Vec<_> = lowering
             .for_initializer_propagations()
             .map(|propagation| ForInitializerPropagationRewrite {
@@ -652,8 +712,13 @@ impl TargetRewritePlan {
                     && value.capability == TargetCapability::StatementRegion)
                     .then(|| OwnerSlotRewrite {
                         owner: rewrite.owner.span,
+                        source: structured_expr_span(semantic, core, value.expr)
+                            .unwrap_or(value.source),
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
+                        continuation: value.context.continuation,
+                        contextual_type: value.context.contextual_type,
+                        contextual_type_awaited: value.context.contextual_type_awaited,
                     })
             })
             .collect();
@@ -671,6 +736,8 @@ impl TargetRewritePlan {
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
                         parenthesized: rewrite.owner.span != value.source,
+                        contextual_type: value.context.contextual_type,
+                        contextual_type_awaited: value.context.contextual_type_awaited,
                     })
             })
             .collect();
@@ -872,8 +939,30 @@ impl TargetRewritePlan {
                 .iter()
                 .map(|rewrite| rewrite.source),
         );
+        relocated_values.extend(lowering.nested_relocations());
+        relocated_values.extend(
+            lowering
+                .nested_values()
+                .filter_map(|expr| structured_expr_span(semantic, core, expr)),
+        );
+        relocated_values.extend(
+            lowering
+                .nested_value_exits()
+                .flat_map(|(_, exits)| exits.iter().filter_map(|exit| exit.argument)),
+        );
         relocated_values.extend(all_operations().map(|operation| operation.parent));
         relocated_values.extend(loop_tests.iter().filter_map(|rewrite| rewrite.update));
+        relocated_values.extend(lowering.nested_value_schedules().flat_map(|(_, schedule)| {
+            schedule.steps().iter().flat_map(|step| {
+                std::iter::once(step.parent).chain(step.inputs.iter().filter_map(
+                    |input| match input {
+                        PlannedEvaluationInput::Source { source, .. }
+                        | PlannedEvaluationInput::Stable { source } => Some(*source),
+                        PlannedEvaluationInput::Slot { .. } => None,
+                    },
+                ))
+            })
+        }));
         // The operator frame of a lowered conditional operation (its tokens
         // between the fragments the region re-emits) is claimed source.
         let rewritten_operations: Vec<SourceSpan> = all_operations()
@@ -899,6 +988,7 @@ impl TargetRewritePlan {
                 SourceReplacement {
                     source: operation.parent,
                     slot: lowering.slot_name(operation.result).to_owned(),
+                    jsx_child: false,
                     anchor: Some(primary),
                 }
             })
@@ -911,13 +1001,25 @@ impl TargetRewritePlan {
             )
             .flat_map(|step| &step.inputs)
             .filter_map(|input| match input {
-                PlannedEvaluationInput::Source { source, target, .. } => Some(SourceReplacement {
+                PlannedEvaluationInput::Source {
+                    source,
+                    target,
+                    mode,
+                    ..
+                } => Some(SourceReplacement {
                     source: *source,
                     slot: lowering.slot_name(*target).to_owned(),
+                    jsx_child: *mode == EvaluationInputMode::JsxChildValue,
                     anchor: None,
                 }),
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
             })
+            .chain(owner_slots.iter().map(|rewrite| SourceReplacement {
+                source: rewrite.source,
+                slot: rewrite.slot.clone(),
+                jsx_child: false,
+                anchor: Some(rewrite.expr),
+            }))
             .chain(operation_replacements)
             .collect();
         let consumed_exprs: HashSet<ExprId> = compose_operations()
@@ -943,7 +1045,17 @@ impl TargetRewritePlan {
             .flat_map(|owner| &owner.values)
             .filter(|value| !value.exits.is_empty())
             .map(|value| (value.expr, value.exits.clone()))
+            .chain(
+                lowering
+                    .nested_value_exits()
+                    .map(|(expr, exits)| (expr, exits.to_vec())),
+            )
             .collect();
+        let nested_schedules = lowering
+            .nested_value_schedules()
+            .map(|(expr, schedule)| (expr, schedule.clone()))
+            .collect();
+        let nested_values = lowering.nested_values().collect();
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
         let result_return_name = lowering.result_return_name().to_owned();
         Self {
@@ -961,6 +1073,8 @@ impl TargetRewritePlan {
             value_slots,
             scheduled_slots,
             value_exits,
+            nested_schedules,
+            nested_values,
             expression_boundary_name,
             result_return_name,
         }
@@ -985,6 +1099,8 @@ struct Emitter<'a> {
     value_slots: HashMap<ExprId, String>,
     scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     value_exits: HashMap<ExprId, Vec<HostExit>>,
+    nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    nested_values: HashSet<ExprId>,
     recovered_propagations: HashSet<ExprId>,
     expression_boundary_name: String,
     result_return_name: String,
@@ -992,6 +1108,15 @@ struct Emitter<'a> {
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.
     conditional_region_depth: Cell<u32>,
+    /// Structured owner-slot emission reads the value's authored children.
+    /// Suppress only that value's own replacement; nested structured values
+    /// must still replace their host occurrences compositionally.
+    active_structured_exprs: RefCell<Vec<ExprId>>,
+    active_scheduled_exprs: RefCell<Vec<ExprId>>,
+    /// Owner preludes can be reached either through an opaque source prefix
+    /// or through the Core expression entry. Record which path emitted the
+    /// prelude so the other path contributes only the join-slot occurrence.
+    emitted_owner_rewrites: RefCell<HashSet<ExprId>>,
     /// Loop-test actions emit their tt values before the rebuilt source test.
     /// Host replacements apply only to that source test, not while the
     /// actions recursively emit their own source fragments.
@@ -1162,6 +1287,10 @@ fn result_failure_test(temp: &str, layout: ResultLayout) -> String {
 }
 
 impl<'a> Emitter<'a> {
+    fn exits_for_expr(&self, expr: ExprId) -> Vec<HostExit> {
+        self.value_exits.get(&expr).cloned().unwrap_or_default()
+    }
+
     fn result_return_rewrite_spans(&self) -> Vec<SourceSpan> {
         self.core
             .exprs
@@ -1261,6 +1390,9 @@ impl<'a> Emitter<'a> {
                 rope.append(self.emit_compose_suffix(rewrite));
             }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
+                self.emitted_owner_rewrites
+                    .borrow_mut()
+                    .insert(rewrite.expr);
                 rope.append(self.emit_owner_slot_rewrite(rewrite));
             }
             while let Some(rewrite) =
@@ -1318,11 +1450,13 @@ impl<'a> Emitter<'a> {
                 cursor = rewrite.body.start.min(span.end);
                 continue;
             }
-            let in_region = self.conditional_region_depth.get() > 0;
             if let Some(replacement) = self.source_replacements.iter().find(|replacement| {
                 if replacement.anchor.is_some() {
-                    !in_region
+                    self.conditional_region_depth.get() == 0
                         && self.loop_region_depth.get() == 0
+                        && !replacement.anchor.is_some_and(|expr| {
+                            self.active_structured_exprs.borrow().contains(&expr)
+                        })
                         && replacement.source.start <= cursor
                         && cursor < replacement.source.end
                 } else {
@@ -1330,6 +1464,9 @@ impl<'a> Emitter<'a> {
                 }
             }) {
                 if cursor == replacement.source.start {
+                    if replacement.jsx_child {
+                        rope.push_lit("{");
+                    }
                     match replacement.anchor {
                         Some(expr) => {
                             let (kind, start, end, extent) = self.value_anchor(expr);
@@ -1338,6 +1475,9 @@ impl<'a> Emitter<'a> {
                             rope.anchored(kind, start, end, extent, name);
                         }
                         None => rope.push_lit(replacement.slot.clone()),
+                    }
+                    if replacement.jsx_child {
+                        rope.push_lit("}");
                     }
                 }
                 cursor = replacement.source.end.min(span.end);
@@ -1374,7 +1514,12 @@ impl<'a> Emitter<'a> {
                 .source_replacements
                 .iter()
                 .filter(|replacement| {
-                    (replacement.anchor.is_none() || !in_region)
+                    (replacement.anchor.is_none()
+                        || (self.conditional_region_depth.get() == 0
+                            && self.loop_region_depth.get() == 0
+                            && !replacement.anchor.is_some_and(|expr| {
+                                self.active_structured_exprs.borrow().contains(&expr)
+                            })))
                         && cursor < replacement.source.start
                         && replacement.source.start < span.end
                 })
@@ -1466,12 +1611,13 @@ impl<'a> Emitter<'a> {
                             end: argument.start,
                         },
                         text: format!(
-                            "{}{}",
+                            "{}{}{}",
                             if starts_own_line {
                                 generated_indent
                             } else {
                                 ""
                             },
+                            if exit.requires_block { "{ " } else { "" },
                             continuation.assignment_prefix(grouped)
                         ),
                         result_return_mark: None,
@@ -1487,7 +1633,11 @@ impl<'a> Emitter<'a> {
                                 continuation.assignment_suffix(grouped),
                             )
                         } else {
-                            format!("{}; {leave}", continuation.assignment_suffix(grouped))
+                            format!(
+                                "{}; {leave}{}",
+                                continuation.assignment_suffix(grouped),
+                                if exit.requires_block { " }" } else { "" }
+                            )
                         },
                         result_return_mark: None,
                     });
@@ -1502,9 +1652,11 @@ impl<'a> Emitter<'a> {
                         )
                     } else {
                         format!(
-                            "{}undefined{}; {leave}",
+                            "{}{}undefined{}; {leave}{}",
+                            if exit.requires_block { "{ " } else { "" },
                             continuation.assignment_prefix(false),
-                            continuation.assignment_suffix(false)
+                            continuation.assignment_suffix(false),
+                            if exit.requires_block { " }" } else { "" }
                         )
                     },
                     result_return_mark: None,
@@ -1562,11 +1714,14 @@ impl<'a> Emitter<'a> {
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
                 Statement::Expr(expr)
                     if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
-                        && !self
+                        && (self.owner_slot_rewrites.iter().any(|rewrite| {
+                            rewrite.expr == *expr
+                                && rewrite.continuation == HostContinuation::Discard
+                        }) || (!self
                             .owner_slot_rewrites
                             .iter()
                             .any(|rewrite| rewrite.expr == *expr)
-                        && !self.value_slots.contains_key(expr) =>
+                            && !self.value_slots.contains_key(expr))) =>
                 {
                     self.emit_statement_expr(*expr, &mut out);
                 }
@@ -1587,8 +1742,12 @@ impl<'a> Emitter<'a> {
                 .iter()
                 .find(|rewrite| rewrite.expr == expr)
             {
-                out.append(self.emit_owner_slot_rewrite(rewrite));
-                out.append(self.emit_expr(expr));
+                if self.emitted_owner_rewrites.borrow().contains(&expr) {
+                    out.append(self.emit_expr(expr));
+                } else {
+                    self.emitted_owner_rewrites.borrow_mut().insert(expr);
+                    out.append(self.emit_owner_slot_rewrite(rewrite));
+                }
                 return;
             }
             if let Some(slot) = self.value_slots.get(&expr) {
@@ -1626,11 +1785,60 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
         let statements = &self.core.bodies[body.index()].statements;
-        let (value_index, value) = crate::core_ir::sequence_value(statements)?;
-        let mut out = self.emit_statements(&statements[..value_index]);
-        out.append(self.emit_continued_expr(value, continuation)?);
-        out.append(self.emit_statements(&statements[value_index + 1..]));
-        Some(out)
+        if let Some((value_index, value)) = crate::core_ir::sequence_value(statements)
+            && statements
+                .iter()
+                .enumerate()
+                .filter(|(index, _)| *index != value_index)
+                .all(|(_, statement)| match statement {
+                    Statement::Opaque(node) => {
+                        let span = self.span(*node);
+                        self.source[span.start..span.end].trim().is_empty()
+                    }
+                    _ => false,
+                })
+        {
+            let mut out = self.emit_statements(&statements[..value_index]);
+            out.append(self.emit_continued_expr(value, continuation)?);
+            out.append(self.emit_statements(&statements[value_index + 1..]));
+            return Some(out);
+        }
+
+        let nested: Vec<_> = statements
+            .iter()
+            .filter_map(|statement| match statement {
+                Statement::Expr(inner)
+                    if self.core.has_statement_form(*inner)
+                        && !self.slot_exprs.contains_key(inner) =>
+                {
+                    self.structured_value_slot(*inner)
+                        .map(|slot| (*inner, slot.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        if nested.is_empty() {
+            return None;
+        }
+        let nested_exprs: Vec<_> = nested.iter().map(|(inner, _)| *inner).collect();
+        let mut out = Rope::new();
+        for (inner, slot) in nested {
+            out.push_lit(format!("let {slot};"));
+            out.push_break(0);
+            out.append(self.emit_continued_expr(inner, &ValueContinuation::assign(&slot))?);
+            out.push_break(0);
+        }
+        let sequence_node = self
+            .core
+            .sequence_node(body)
+            .unwrap_or_else(|| crate::ice::bug!("embedded sequence has no source extent"));
+        let span = SourceSpan::from(self.span(sequence_node));
+        out.append(self.emit_value_delivery(
+            self.source_range_with_value_slots(span, &nested_exprs),
+            None,
+            continuation,
+        ));
+        Some(Rope::scoped(out))
     }
 
     fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
@@ -1670,6 +1878,20 @@ impl<'a> Emitter<'a> {
             }
             let mut generated = Rope::new();
             generated.push_lit(rendered_slot.to_owned());
+            out.anchored(kind, start, end, extent, generated);
+            return out;
+        }
+        if self.nested_values.contains(&expr)
+            && matches!(
+                self.core.exprs[expr.index()],
+                Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Propagate(_)
+            )
+            && let Some(slot) = self.value_slots.get(&expr)
+        {
+            let (kind, start, end, extent) = self.value_anchor(expr);
+            let mut generated = Rope::new();
+            generated.push_lit(slot.clone());
+            let mut out = Rope::new();
             out.anchored(kind, start, end, extent, generated);
             return out;
         }
@@ -1715,17 +1937,44 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_owner_slot_rewrite(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
+        self.active_structured_exprs.borrow_mut().push(rewrite.expr);
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
             .unwrap_or_else(|| {
                 crate::ice::bug!("initializer rewrite is not structurally emit-able")
             });
+        let popped = self.active_structured_exprs.borrow_mut().pop();
+        debug_assert_eq!(popped, Some(rewrite.expr));
         let mut out = Rope::new();
-        out.push_lit(format!("let {};", rewrite.slot));
+        out.push_lit(format!("let {}", rewrite.slot));
+        self.push_contextual_type(
+            &mut out,
+            rewrite.contextual_type,
+            rewrite.contextual_type_awaited,
+        );
+        out.push_lit(";");
         out.push_break(0);
         out.append(anchored);
         out.push_break(0);
         Rope::scoped(out)
+    }
+
+    fn push_contextual_type(
+        &self,
+        out: &mut Rope<'a>,
+        annotation: Option<SourceSpan>,
+        awaited: bool,
+    ) {
+        let Some(annotation) = annotation else {
+            return;
+        };
+        let authored = &self.source[annotation.start..annotation.end];
+        if awaited {
+            let ty = authored.strip_prefix(':').unwrap_or(authored);
+            out.push_lit(format!(": Awaited<{ty}>"));
+        } else {
+            out.push_lit(authored.to_owned());
+        }
     }
 
     fn is_for_initializer_propagation(&self, node: NodeId) -> bool {
@@ -2131,6 +2380,51 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    fn source_range_with_nested_schedule(
+        &self,
+        span: SourceSpan,
+        expr: ExprId,
+        schedule: &EvaluationSchedule,
+    ) -> Rope<'a> {
+        let (kind, start, head_end, extent) = self.value_anchor(expr);
+        let mut replacements: Vec<NestedSourceReplacement> = vec![(
+            SourceSpan { start, end: extent },
+            self.value_name_of(expr).to_owned(),
+            Some((kind, head_end)),
+        )];
+        for step in schedule.steps() {
+            for input in &step.inputs {
+                if let PlannedEvaluationInput::Source { source, target, .. } = input {
+                    replacements.push((*source, self.value_slot_name(*target).to_owned(), None));
+                }
+            }
+        }
+        replacements.retain(|(source, _, _)| span.start <= source.start && source.end <= span.end);
+        replacements.sort_unstable_by_key(|(source, _, _)| source.start);
+        let mut out = Rope::new();
+        let mut cursor = span.start;
+        for (source, slot, anchor) in replacements {
+            if source.start < cursor {
+                continue;
+            }
+            if cursor < source.start {
+                out.append(self.source_range_rope(hir::Span::new(cursor, source.start)));
+            }
+            if let Some((kind, head_end)) = anchor {
+                let mut rendered = Rope::new();
+                rendered.push_lit(slot);
+                out.anchored(kind, source.start, head_end, source.end, rendered);
+            } else {
+                out.push_lit(slot);
+            }
+            cursor = source.end;
+        }
+        if cursor < span.end {
+            out.append(self.source_range_rope(hir::Span::new(cursor, span.end)));
+        }
+        out
+    }
+
     /// One rebuilt argument of an optional call.
     fn push_operand(&self, operand: &PlannedOperand, out: &mut Rope<'a>) {
         match operand {
@@ -2490,9 +2784,17 @@ impl<'a> Emitter<'a> {
                 );
                 (AnchorKind::Pipe, start, end, end)
             }
-            Expr::Opaque(_) | Expr::Template(_) => {
-                crate::ice::bug!("unstructured expression owns a join slot")
-            }
+            Expr::Template(template) => template
+                .parts
+                .iter()
+                .find_map(|part| match part {
+                    TemplatePart::Interpolation(inner) if self.core.has_statement_form(*inner) => {
+                        Some(self.value_anchor(*inner))
+                    }
+                    TemplatePart::Raw(_) | TemplatePart::Interpolation(_) => None,
+                })
+                .unwrap_or_else(|| crate::ice::bug!("unstructured template owns a join slot")),
+            Expr::Opaque(_) => crate::ice::bug!("unstructured expression owns a join slot"),
         }
     }
 
@@ -2514,7 +2816,13 @@ impl<'a> Emitter<'a> {
             out.push_lit("{");
         }
         out.push_break(1);
-        out.push_lit(format!("let {};", rewrite.slot));
+        out.push_lit(format!("let {}", rewrite.slot));
+        self.push_contextual_type(
+            &mut out,
+            rewrite.contextual_type,
+            rewrite.contextual_type_awaited,
+        );
+        out.push_lit(";");
         out.push_break(1);
         out.append(Rope::indented(1, anchored));
         out.push_break(1);
@@ -2601,31 +2909,29 @@ impl<'a> Emitter<'a> {
         out.push_break(1);
         for item in &region.items {
             let ResultRegionItem::Statements(body) = item;
-            let exits = self
-                .value_exits
-                .get(&expr)
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
+            let exits = self.exits_for_expr(expr);
             let failure = ValueContinuation::returning();
             let success = failure.wrap_result_ok();
             out.append(Rope::indented(
                 1,
-                self.emit_result_body_with_exits(*body, exits, &failure, &success, None)
+                self.emit_result_body_with_exits(*body, &exits, &failure, &success, None)
                     .trim(),
             ));
             out.push_break(1);
         }
-        out.push_lit("return { kind: \"Ok\" as const, value: ");
-        if let Some(value) = region.value {
-            push_grouped(
-                &mut out,
-                guard_line_comment(self.emit_expr(value).trim(), 0),
-            );
-        } else {
-            out.push_lit("undefined");
+        if region.value.is_some() || !region.completes {
+            out.push_lit("return { kind: \"Ok\" as const, value: ");
+            if let Some(value) = region.value {
+                push_grouped(
+                    &mut out,
+                    guard_line_comment(self.emit_expr(value).trim(), 0),
+                );
+            } else {
+                out.push_lit("undefined");
+            }
+            out.push_lit(" };");
+            out.push_break(0);
         }
-        out.push_lit(" };");
-        out.push_break(0);
         out.push_lit(if region.is_async { "}))" } else { "})" });
         Rope::scoped(out)
     }
@@ -2666,15 +2972,35 @@ impl<'a> Emitter<'a> {
             }
             match exit.argument {
                 Some(argument) => {
+                    let contextual_value = success
+                        .assignment_target()
+                        .filter(|target| {
+                            self.owner_slot_rewrites.iter().any(|rewrite| {
+                                rewrite.slot.as_str() == *target
+                                    && rewrite.contextual_type.is_some()
+                            }) || self.arrow_return_rewrites.iter().any(|rewrite| {
+                                rewrite.slot.as_str() == *target
+                                    && rewrite.contextual_type.is_some()
+                            })
+                        })
+                        .map_or_else(String::new, |target| {
+                            format!(": Extract<typeof {target}, {{ kind: \"Ok\" }}>[\"value\"]")
+                        });
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
                             end: argument.start,
                         },
                         text: if starts_own_line {
-                            format!("{{\n{inner_indent}const {} = ", self.result_return_name)
+                            format!(
+                                "{{\n{inner_indent}const {}{} = ",
+                                self.result_return_name, contextual_value
+                            )
                         } else {
-                            format!("{{ const {} = ", self.result_return_name)
+                            format!(
+                                "{{ const {}{} = ",
+                                self.result_return_name, contextual_value
+                            )
                         },
                         result_return_mark: Some(argument),
                     });
@@ -2944,7 +3270,7 @@ impl<'a> Emitter<'a> {
                 self.emit_result_if_let(decision, exits, failure, success, exit_label),
             ),
             DecisionKind::Match { .. } => {
-                crate::ice::bug!("expression decision in statement position")
+                crate::ice::bug!("expression decision in a result statement body")
             }
         };
         out.anchored(kind, span.start, span.end, span.end, inner);
@@ -3085,16 +3411,12 @@ impl<'a> Emitter<'a> {
         }
         out.push_break(1);
         let success = continuation.wrap_result_ok();
-        let exits = self
-            .value_exits
-            .get(&expr)
-            .map(Vec::as_slice)
-            .unwrap_or(&[]);
+        let exits = self.exits_for_expr(expr);
         for item in &region.items {
             let ResultRegionItem::Statements(body) = item;
             out.append(Rope::indented(
                 1,
-                self.emit_result_body_with_exits(*body, exits, continuation, &success, exit_label)
+                self.emit_result_body_with_exits(*body, &exits, continuation, &success, exit_label)
                     .trim(),
             ));
         }
@@ -3355,7 +3677,7 @@ impl<'a> Emitter<'a> {
             ),
             DecisionKind::IfLet => (AnchorKind::IfLet, self.emit_if_let(decision)),
             DecisionKind::Match { .. } => {
-                crate::ice::bug!("expression decision in statement position")
+                crate::ice::bug!("expression decision in a statement body")
             }
         };
         out.anchored(kind, span.start, span.end, span.end, inner);
@@ -3542,6 +3864,39 @@ impl<'a> Emitter<'a> {
         if !self.core.has_statement_form(expr) {
             return None;
         }
+        if let Some(schedule) = self.nested_schedules.get(&expr)
+            && !schedule.steps().is_empty()
+            && !self.active_scheduled_exprs.borrow().contains(&expr)
+        {
+            let slot = self
+                .value_slots
+                .get(&expr)
+                .unwrap_or_else(|| crate::ice::bug!("scheduled nested value has no slot"));
+            self.active_scheduled_exprs.borrow_mut().push(expr);
+            let mut action = self.emit_continued_expr(expr, &ValueContinuation::assign(slot))?;
+            let popped = self.active_scheduled_exprs.borrow_mut().pop();
+            debug_assert_eq!(popped, Some(expr));
+            let mut captured = HashSet::new();
+            for step in schedule.steps() {
+                action = self.emit_scheduled_step(step, action, &mut captured);
+            }
+            let parent = schedule
+                .steps()
+                .last()
+                .map(|step| step.parent)
+                .unwrap_or_else(|| crate::ice::bug!("nested schedule lost its parent"));
+            let mut out = Rope::new();
+            out.push_lit(format!("let {slot};"));
+            out.push_break(0);
+            out.append(action);
+            out.push_break(0);
+            out.append(self.emit_value_delivery(
+                self.source_range_with_nested_schedule(parent, expr, schedule),
+                None,
+                continuation,
+            ));
+            return Some(Rope::scoped(out));
+        }
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {
                 let head = self.span(decision.head);
@@ -3564,7 +3919,31 @@ impl<'a> Emitter<'a> {
             }
             Expr::Sequence(body) => self.emit_sequence_continued(*body, continuation),
             Expr::Apply(apply) => self.emit_apply_continued(expr, apply, continuation),
-            Expr::Opaque(_) | Expr::Template(_) => None,
+            Expr::Template(template) => {
+                let mut out = Rope::new();
+                for part in &template.parts {
+                    let TemplatePart::Interpolation(inner) = part else {
+                        continue;
+                    };
+                    if !self.core.has_statement_form(*inner) {
+                        continue;
+                    }
+                    let slot = self
+                        .structured_value_slot(*inner)
+                        .unwrap_or_else(|| crate::ice::bug!("nested template value has no slot"));
+                    out.push_lit(format!("let {slot};"));
+                    out.push_break(0);
+                    out.append(self.emit_continued_expr(*inner, &ValueContinuation::assign(slot))?);
+                    out.push_break(0);
+                }
+                out.append(self.emit_value_delivery(
+                    self.emit_template(template),
+                    None,
+                    continuation,
+                ));
+                Some(Rope::scoped(out))
+            }
+            Expr::Opaque(_) => None,
         }
     }
 

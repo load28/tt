@@ -786,23 +786,31 @@ impl Table {
                         DeclOrigin::Imported { from } => Origin::Imported { from: from.clone() },
                         DeclOrigin::Builtin => Origin::Builtin,
                     },
-                    constructors: data
-                        .variants
-                        .iter()
-                        .map(|variant| MatchConstructor {
-                            tag: variant.name.clone(),
-                            fields: variant.fields.as_ref().map(|fields| {
-                                fields
-                                    .iter()
-                                    .map(|field| PayloadField {
-                                        name: field.name.clone(),
-                                        optional: field.optional,
-                                        ty: field.ty_text.clone(),
-                                    })
-                                    .collect()
-                            }),
-                        })
-                        .collect(),
+                    constructors: {
+                        // A duplicate declaration is diagnosed by sema, but a
+                        // variant's semantic alphabet still contains each
+                        // constructor exactly once. Keeping that invariant here
+                        // prevents every downstream consumer (coverage,
+                        // completion, and suggested arms) from duplicating it.
+                        let mut seen = std::collections::HashSet::new();
+                        data.variants
+                            .iter()
+                            .filter(|variant| seen.insert(variant.name.as_str()))
+                            .map(|variant| MatchConstructor {
+                                tag: variant.name.clone(),
+                                fields: variant.fields.as_ref().map(|fields| {
+                                    fields
+                                        .iter()
+                                        .map(|field| PayloadField {
+                                            name: field.name.clone(),
+                                            optional: field.optional,
+                                            ty: field.ty_text.clone(),
+                                        })
+                                        .collect()
+                                }),
+                            })
+                            .collect()
+                    },
                 })
             })
             .collect();

@@ -373,8 +373,42 @@ fn a_type_error_inside_glue_reports_at_the_construct() {
     let (ok, text) = check(&tsc, project.path());
     assert!(!ok);
     assert!(
-        text.contains("wrong.tt(4,3): error TS2322"),
+        text.contains("wrong.tt(4,10): error TS2322"),
         "expected the checker's error mapped to the match, got:\n{text}"
+    );
+}
+
+#[test]
+fn generated_slots_preserve_contextual_literal_types_for_the_checker() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/context.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\n\
+         type Toggle = \"on\" | \"off\";\n\
+         declare const next: () => TResult<number, string>;\n\
+         export const flip = (value: Toggle): Toggle => match (value) {\n\
+         \x20 \"on\" => \"off\", \"off\" => \"on\",\n\
+         };\n\
+         export const values = (): TResult<readonly number[], string> => result {\n\
+         \x20 const value = try next();\n\
+         \x20 if (value === 0) return [];\n\
+         \x20 return [value];\n\
+         };\n\
+         void Result.Ok;\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { flip, values } from \"./context.tt\";\nvoid flip;\nvoid values;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(
+        ok,
+        "expected contextual literals to type-check, got:\n{text}"
     );
 }
 

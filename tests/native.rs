@@ -1300,21 +1300,24 @@ fn typed_diagnostic_ranges_follow_source_ownership_not_mapping_accidents() {
                 .is_some_and(|m| m.contains("found `RangeError`"))
         })
         .unwrap_or_else(|| panic!("missing match mismatch: {answer}"));
-    assert_eq!(source_slice(source, match_mismatch), "match (input)");
+    // The generated slot now carries the authored return annotation, so
+    // TypeScript can point at the exact arm value that violates it instead
+    // of discovering the mismatch only when the completed match is returned.
+    assert_eq!(
+        source_slice(source, match_mismatch),
+        "Result.Err(RangeError.TooLarge(value))"
+    );
 
     let result_mismatch = diagnostics
         .iter()
         .find(|d| {
             d["message"]
                 .as_str()
-                .is_some_and(|m| m.contains("expected `TResult<number, InputError>`"))
+                .is_some_and(|m| m.contains("required type: `TResult<number, InputError>`"))
                 && d["line"].as_u64().is_some_and(|line| line > 10)
         })
         .unwrap_or_else(|| panic!("missing result mismatch: {answer}"));
-    assert!(
-        source_slice(source, result_mismatch).contains("const n = try test();"),
-        "{answer}"
-    );
+    assert_eq!(source_slice(source, result_mismatch), "try test()");
 
     assert!(
         diagnostics
@@ -1516,8 +1519,8 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
         "the malformed construct remains visible, with its fix: {out}"
     );
     assert!(
-        out.contains("type mismatch: expected `TResult<number, string>`")
-            && out.contains("Err<number>"),
+        out.contains("type mismatch: expected `string`, found `number`")
+            && out.contains("required type: `TResult<number, string>`"),
         "the independent bindNonResult type error survives recovery: {out}"
     );
 }

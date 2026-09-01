@@ -35,7 +35,7 @@ pub(super) fn parse_try_stmt<'t>(
     if !is_expr_start(first) {
         return Claim::NotTt;
     }
-    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur) else {
+    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur, false) else {
         return Claim::Unclaimed(UnclaimedTtCandidate {
             kind: UnclaimedTtKind::Try,
             keyword: kw_span,
@@ -219,7 +219,7 @@ pub(super) fn parse_try_decl<'t>(
         _ => return None,
     };
 
-    let (cur, byte_end, expr_span, expr_tokens) = parse_try_tail(cur)?;
+    let (cur, byte_end, expr_span, expr_tokens) = parse_try_tail(cur, true)?;
     let expr = cur
         .parser
         .parse_expression_tokens(expr_tokens, expr_span.start, expr_span.end);
@@ -251,9 +251,14 @@ pub(super) fn parse_try_decl<'t>(
 /// Parses `<expr>;` with the cursor just past a `try` keyword. Returns the
 /// advanced cursor, the byte just past the `;`, and the expression's span
 /// and tokens.
-fn parse_try_tail<'t>(mut cur: Cursor<'t>) -> Option<(Cursor<'t>, usize, Span, &'t [Token])> {
+fn parse_try_tail<'t>(
+    mut cur: Cursor<'t>,
+    allow_parenthesized: bool,
+) -> Option<(Cursor<'t>, usize, Span, &'t [Token])> {
     let first = cur.peek()?;
-    if !is_expr_start(first) {
+    if !is_expr_start(first)
+        && !(allow_parenthesized && matches!(first.kind, TokenKind::Punct(b'(')))
+    {
         return None; // includes `try {` blocks and member-signature shapes
     }
     let (semi_idx, semi_byte) = stmt_expr_end(&cur)?;

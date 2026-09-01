@@ -669,7 +669,7 @@ impl Checker {
             self.visit_program(value, Ctx::Expr, Place::ResultValueRegion);
         } else {
             self.check_result_outward_controls(block);
-            if !self.result_body_completes(block) {
+            if !block.completes {
                 self.error(
                     TtError::span(
                         block.span.start,
@@ -736,13 +736,6 @@ impl Checker {
                     .help(help),
             );
         }
-    }
-
-    fn result_body_completes(&self, block: &ResultBlock) -> bool {
-        let Some(ResultItem::Stmts(body)) = block.items.first() else {
-            return false;
-        };
-        crate::flow::program_diverges_in_span(&self.source, &self.tokens, body, block.body_span)
     }
 
     fn check_variant(&mut self, decl: &VariantDecl) {

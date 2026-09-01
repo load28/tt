@@ -208,6 +208,9 @@ pub(crate) struct ResultBlock {
     pub direct_try_spans: Vec<Span>,
     /// The block's statements, in source order.
     pub items: Vec<ResultItem>,
+    /// Whether every reachable path in the statement body completes the
+    /// Result region through `return`, propagation, or another divergence.
+    pub completes: bool,
     /// Optional explicit success value. Statement-bodied Result syntax has
     /// no legacy trailing expression.
     pub value: Option<Program>,

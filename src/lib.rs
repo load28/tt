@@ -1102,6 +1102,23 @@ fn target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
     errors
 }
 
+fn nonredundant_target_errors(
+    plan: &evaluation_ir::LoweringPlan,
+    existing: &[TtError],
+) -> Vec<TtError> {
+    target_errors(plan)
+        .into_iter()
+        .filter(|target| {
+            !(target.code == DiagnosticCode::TryPlacement
+                && existing.iter().any(|prior| {
+                    prior.code == DiagnosticCode::TryCrossesValueRegion
+                        && prior.offset == target.offset
+                        && prior.end == target.end
+                }))
+        })
+        .collect()
+}
+
 fn try_placement_message(
     owner: program_syntax::EvaluationOwner,
     reason: evaluation_ir::ExpressionBoundaryReason,
@@ -1196,7 +1213,7 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if !errors.iter().any(|error| error.code.blocks_projection()) {
         match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
-            Ok(plan) => errors.extend(target_errors(&plan)),
+            Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
             Err(failure) => errors.push(verify::in_source(source, &failure)),
         }
     }
@@ -1403,7 +1420,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
             };
         }
     };
-    let target_errors = target_errors(&plan);
+    let target_errors = nonredundant_target_errors(&plan, &errors);
     if !target_errors.is_empty() {
         errors.extend(target_errors);
         errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));

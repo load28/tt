@@ -242,7 +242,13 @@ pub(crate) fn assemble(
         for result_return in &file.emit.result_return_temps {
             query.result_shapes.push(ResultShapeQuery {
                 module: file.module_path.clone(),
-                position: mapper::to_utf16(&file.emit.code, result_return.out),
+                // A mark sits immediately before the returned expression.
+                // Probe one code unit into it so the checker selects the
+                // expression token instead of the generated `value:` key.
+                position: mapper::to_utf16(
+                    &file.emit.code,
+                    (result_return.out + 1).min(file.emit.code.len()),
+                ),
             });
             probes.result_returns.push(SourceAnchor {
                 source_path: file.source_path.clone(),

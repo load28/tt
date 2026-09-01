@@ -54,6 +54,8 @@ pub(super) fn parse_result_block<'t>(
     }
 
     let byte_end = cur.tokens[close].span.end;
+    let completes =
+        crate::flow::program_diverges_in_span(cur.parser.src, cur.tokens, &body, body_span);
     cur.idx = close + 1;
     (
         Attempt::Claimed(
@@ -68,6 +70,7 @@ pub(super) fn parse_result_block<'t>(
                 body_span,
                 direct_try_spans,
                 items: vec![ResultItem::Stmts(body)],
+                completes,
                 value: None,
             }),
         ),

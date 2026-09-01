@@ -936,6 +936,7 @@ impl Parser<'_> {
         stack: &mut Vec<(usize, bool)>,
     ) {
         match tok.kind {
+            TokenKind::JsxRaw => *expr = (i + 1, false),
             TokenKind::Punct(b'(' | b'[' | b'{') => {
                 stack.push(*expr);
                 *expr = (i + 1, false);
@@ -1033,5 +1034,18 @@ mod tests {
         let program = parse("const value = `x=${1 |> }`;\n");
         let recoveries = projection_recoveries(&program);
         assert_eq!(recoveries.len(), 1, "{recoveries:#?}");
+    }
+
+    #[test]
+    fn async_concise_arrow_claims_result() {
+        let program =
+            parse("const f = async (): Promise<R> => result { const x = try g(); return x; };\n");
+        assert!(
+            program
+                .segments
+                .iter()
+                .any(|segment| matches!(segment, Segment::ResultBlock(_))),
+            "{program:#?}"
+        );
     }
 }

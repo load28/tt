@@ -436,6 +436,8 @@ pub enum Expr {
         node: NodeId,
         /// The body's items, in source order.
         items: Vec<ResultItem>,
+        /// Whether the statement body completes the Result on every path.
+        completes: bool,
         /// Optional legacy trailing expression.
         value: Option<ExprId>,
     },

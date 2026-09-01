@@ -664,9 +664,12 @@ impl Lower {
             .value
             .as_ref()
             .map(|value| self.lower_expr_program(value, Self::span(block.body_span)));
-        self.hir
-            .exprs
-            .alloc(Expr::ResultBlock { node, items, value })
+        self.hir.exprs.alloc(Expr::ResultBlock {
+            node,
+            items,
+            completes: block.completes,
+            value,
+        })
     }
 }
 
