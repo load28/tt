@@ -619,15 +619,6 @@ impl EvaluationFile {
             ) {
                 continue;
             }
-            // A pipeline remains an expression when a nested value has
-            // crossed into a separate source-backed owner, such as a
-            // concise arrow step. Rewriting the outer Apply as statements
-            // would move that value's propagation target out of the arrow.
-            if matches!(core.exprs[expr.index()], Expr::Apply(_))
-                && self.has_separately_hosted_descendant(core, expr)
-            {
-                continue;
-            }
             let (owner, value, context, protocol, exits) = match &region.placement {
                 RegionPlacement::Host {
                     context:
@@ -663,6 +654,16 @@ impl EvaluationFile {
                 ),
                 RegionPlacement::Nested { .. } | RegionPlacement::SourceEdit => continue,
             };
+            // A pipeline remains an expression only when a nested value has
+            // crossed into a different source-backed owner, such as a
+            // concise arrow step. A hosted value in the same owner (for
+            // example a match in the pipeline head) is part of the Apply's
+            // own statement form and must be planned with it.
+            if matches!(core.exprs[expr.index()], Expr::Apply(_))
+                && self.has_differently_hosted_descendant(core, expr, owner)
+            {
+                continue;
+            }
             if region.result.is_none() {
                 continue;
             }
@@ -748,6 +749,27 @@ impl EvaluationFile {
                 })
                 .collect::<Result<Vec<_>, EvaluationError>>()?;
             let mut values = values;
+            // A statement-capable outer Core value owns same-host tt values
+            // lexically nested inside it. Its structural emitter evaluates
+            // those children at their exact position and writes their
+            // already allocated slots; planning the children again as
+            // sibling owner actions would either run them twice or consume
+            // authored syntax that still contains the outer construct.
+            let owned_children: HashSet<_> = values
+                .iter()
+                .filter(|child| {
+                    values.iter().any(|outer| {
+                        outer.expr != child.expr
+                            && outer.capability == TargetCapability::StatementRegion
+                            && outer.source.start <= child.source.start
+                            && child.source.end <= outer.source.end
+                            && (outer.source.start < child.source.start
+                                || child.source.end < outer.source.end)
+                    })
+                })
+                .map(|child| child.expr)
+                .collect();
+            values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
                 &mut values,
                 &self.tt_spans,
@@ -833,6 +855,10 @@ impl EvaluationFile {
             .collect();
         let mut nested_source_slots = HashMap::new();
         let mut nested_schedules = HashMap::new();
+        let planned_sources: HashMap<_, _> = rewrites
+            .iter()
+            .flat_map(|owner| owner.values.iter().map(|value| (value.expr, value.source)))
+            .collect();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
@@ -843,14 +869,40 @@ impl EvaluationFile {
             ) {
                 continue;
             }
-            let RegionPlacement::Nested { protocol, .. } = &region.placement else {
+            let RegionPlacement::Nested {
+                parent, protocol, ..
+            } = &region.placement
+            else {
                 continue;
             };
-            if protocol.steps().is_empty() {
+            let mut ancestor = &self.regions[parent.0 as usize];
+            let planned_boundary = loop {
+                if let Some(CoreRoot::Expr(parent_expr)) = ancestor.root
+                    && let Some(source) = planned_sources.get(&parent_expr)
+                {
+                    break Some(*source);
+                }
+                let RegionPlacement::Nested { parent, .. } = ancestor.placement else {
+                    break None;
+                };
+                ancestor = &self.regions[parent.0 as usize];
+            };
+            let step_count = planned_boundary.map_or(protocol.steps().len(), |boundary| {
+                protocol
+                    .steps()
+                    .iter()
+                    .take_while(|step| {
+                        boundary.start <= step.parent.start
+                            && step.parent.end <= boundary.end
+                            && step.parent != boundary
+                    })
+                    .count()
+            });
+            if step_count == 0 {
                 continue;
             }
-            let schedule = resolve_schedule(
-                protocol.clone(),
+            let schedule = resolve_schedule_steps(
+                &protocol.steps()[..step_count],
                 &nested_sources,
                 &mut nested_source_slots,
                 &mut next_slot,
@@ -1021,7 +1073,7 @@ impl EvaluationFile {
                 )
             })
             .collect();
-        let unsupported_matches = rewrites
+        let mut unsupported_matches: Vec<_> = rewrites
             .iter()
             .flat_map(|rewrite| &rewrite.values)
             .filter_map(|value| {
@@ -1039,6 +1091,59 @@ impl EvaluationFile {
                 })
             })
             .collect();
+        // A statement-form match can be nested inside an expression-form
+        // outer value. The outer value's host capability governs the whole
+        // region: if that host has no statement position, the nested match
+        // must report the same placement diagnostic instead of surviving as
+        // an unassigned nested slot in expression emission. A Result region
+        // is an isolated statement boundary and owns its nested matches.
+        unsupported_matches.extend(self.regions.iter().filter_map(|region| {
+            let Some(CoreRoot::Expr(expr)) = region.root else {
+                return None;
+            };
+            if !matches!(core.exprs[expr.index()], Expr::Decision(_)) {
+                return None;
+            }
+            let RegionPlacement::Nested {
+                parent,
+                source: Some(source),
+                ..
+            } = region.placement
+            else {
+                return None;
+            };
+            let mut ancestor = &self.regions[parent.0 as usize];
+            loop {
+                if let Some(CoreRoot::Expr(parent_expr)) = ancestor.root
+                    && matches!(core.exprs[parent_expr.index()], Expr::ResultRegion(_))
+                {
+                    return None;
+                }
+                let RegionPlacement::Nested { parent, .. } = ancestor.placement else {
+                    break;
+                };
+                ancestor = &self.regions[parent.0 as usize];
+            }
+            let RegionPlacement::Host { context, .. } = &ancestor.placement else {
+                return None;
+            };
+            let Some(CoreRoot::Expr(host_expr)) = ancestor.root else {
+                return None;
+            };
+            let TargetCapability::ExpressionBoundary(reason) = direct_capabilities
+                .get(&host_expr)
+                .copied()
+                .unwrap_or(TargetCapability::StatementRegion)
+            else {
+                return None;
+            };
+            Some(UnsupportedMatch {
+                expr,
+                source,
+                owner: context.owner,
+                reason,
+            })
+        }));
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
@@ -1096,20 +1201,33 @@ impl EvaluationFile {
         })
     }
 
-    fn has_separately_hosted_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
-        self.expr_has_hosted_descendant(core, expr)
+    fn has_differently_hosted_descendant(
+        &self,
+        core: &CoreFile,
+        expr: ExprId,
+        owner: HostOwner,
+    ) -> bool {
+        self.expr_has_differently_hosted_descendant(core, expr, owner)
     }
 
-    fn expr_has_hosted_descendant(&self, core: &CoreFile, expr: ExprId) -> bool {
+    fn expr_has_differently_hosted_descendant(
+        &self,
+        core: &CoreFile,
+        expr: ExprId,
+        owner: HostOwner,
+    ) -> bool {
         let nested = |child| {
             self.regions.iter().any(|region| {
                 region.root == Some(CoreRoot::Expr(child))
-                    && matches!(region.placement, RegionPlacement::Host { .. })
-            }) || self.expr_has_hosted_descendant(core, child)
+                    && matches!(
+                        region.placement,
+                        RegionPlacement::Host { host_owner, .. } if host_owner != owner
+                    )
+            }) || self.expr_has_differently_hosted_descendant(core, child, owner)
         };
         match &core.exprs[expr.index()] {
             Expr::Opaque(_) | Expr::Propagate(_) => false,
-            Expr::Sequence(body) => self.body_has_hosted_descendant(core, *body),
+            Expr::Sequence(body) => self.body_has_differently_hosted_descendant(core, *body, owner),
             Expr::Decision(decision) => {
                 decision
                     .subjects
@@ -1119,7 +1237,7 @@ impl EvaluationFile {
                         arm.guard.is_some_and(nested)
                             || match arm.action {
                                 ArmAction::Yield { body, .. } | ArmAction::Execute(body) => {
-                                    self.body_has_hosted_descendant(core, body)
+                                    self.body_has_differently_hosted_descendant(core, body, owner)
                                 }
                                 ArmAction::BindThrough(_) => false,
                             }
@@ -1131,7 +1249,7 @@ impl EvaluationFile {
             Expr::ResultRegion(region) => {
                 region.items.iter().any(|item| {
                     let ResultRegionItem::Statements(body) = item;
-                    self.body_has_hosted_descendant(core, *body)
+                    self.body_has_differently_hosted_descendant(core, *body, owner)
                 }) || region.value.is_some_and(nested)
             }
             Expr::Template(template) => template.parts.iter().any(|part| match part {
@@ -1141,7 +1259,12 @@ impl EvaluationFile {
         }
     }
 
-    fn body_has_hosted_descendant(&self, core: &CoreFile, body: BodyId) -> bool {
+    fn body_has_differently_hosted_descendant(
+        &self,
+        core: &CoreFile,
+        body: BodyId,
+        owner: HostOwner,
+    ) -> bool {
         core.bodies[body.index()]
             .statements
             .iter()
@@ -1149,8 +1272,11 @@ impl EvaluationFile {
                 Statement::Expr(expr) => {
                     self.regions.iter().any(|region| {
                         region.root == Some(CoreRoot::Expr(*expr))
-                            && matches!(region.placement, RegionPlacement::Host { .. })
-                    }) || self.expr_has_hosted_descendant(core, *expr)
+                            && matches!(
+                                region.placement,
+                                RegionPlacement::Host { host_owner, .. } if host_owner != owner
+                            )
+                    }) || self.expr_has_differently_hosted_descendant(core, *expr, owner)
                 }
                 Statement::Opaque(_)
                 | Statement::Adt(_)
@@ -1473,8 +1599,25 @@ fn resolve_schedule(
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
 ) -> Result<EvaluationSchedule, EvaluationError> {
-    let steps = protocol
-        .steps()
+    resolve_schedule_steps(
+        protocol.steps(),
+        slots,
+        source_slots,
+        next_slot,
+        slot_names,
+        occupied_names,
+    )
+}
+
+fn resolve_schedule_steps(
+    protocol_steps: &[crate::program_syntax::HostEvaluationStep],
+    slots: &HashMap<SourceSpan, ValueSlotId>,
+    source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
+    next_slot: &mut u32,
+    slot_names: &mut Vec<String>,
+    occupied_names: &mut HashSet<String>,
+) -> Result<EvaluationSchedule, EvaluationError> {
+    let steps = protocol_steps
         .iter()
         .map(|step| {
             Ok(PlannedEvaluationStep {
@@ -2261,19 +2404,36 @@ impl EvaluationBuilder<'_> {
         root: CoreRoot,
         parent: Option<RegionId>,
     ) -> Result<RegionPlacement, EvaluationError> {
+        let nested_in_owned_exit = parent.is_some_and(|parent| {
+            let Some(binding) = self.hosts.get(&root) else {
+                return false;
+            };
+            match &self.regions[parent.0 as usize].placement {
+                RegionPlacement::Host { exits, .. } | RegionPlacement::Nested { exits, .. } => {
+                    exits.iter().any(|exit| {
+                        exit.argument.is_some_and(|argument| {
+                            argument.start <= binding.source.start
+                                && binding.source.end <= argument.end
+                        })
+                    })
+                }
+                RegionPlacement::SourceEdit => false,
+            }
+        });
         if let Some(parent) = parent
             && let Some(binding) = self.hosts.get(&root)
-            && self.region_host_owner(parent) == Some(binding.owner)
-            && (binding.protocol.steps().is_empty()
-                || matches!(root, CoreRoot::Expr(expr)
-                    if matches!(self.core.exprs[expr.index()],
-                        Expr::ResultRegion(_) | Expr::Propagate(_)))
-                || matches!(root, CoreRoot::Expr(expr)
-                if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
-                    && binding.protocol.steps().iter().all(|step| matches!(
-                        step.operation,
-                        HostEvaluationOperation::Eager(EagerPosition::TemplateInterpolation(_))
-                    ))))
+            && (nested_in_owned_exit
+                || (self.region_host_owner(parent) == Some(binding.owner)
+                    && (binding.protocol.steps().is_empty()
+                        || matches!(root, CoreRoot::Expr(expr)
+                            if matches!(self.core.exprs[expr.index()],
+                                Expr::ResultRegion(_) | Expr::Propagate(_)))
+                        || matches!(root, CoreRoot::Expr(expr)
+                        if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
+                            && binding.protocol.steps().iter().all(|step| matches!(
+                                step.operation,
+                                HostEvaluationOperation::Eager(EagerPosition::TemplateInterpolation(_))
+                            ))))))
         {
             let binding = self.hosts.remove(&root);
             let source = binding.as_ref().map(|binding| binding.source);
@@ -2436,11 +2596,15 @@ mod tests {
     use super::*;
 
     fn evaluation(source: &str) -> (EvaluationFile, CoreFile) {
+        evaluation_kind(source, crate::SourceKind::TypeScript)
+    }
+
+    fn evaluation_kind(source: &str, source_kind: crate::SourceKind) -> (EvaluationFile, CoreFile) {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
-        let syntax = ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
-            .expect("program syntax");
+        let syntax =
+            ProgramSyntax::build(&semantic, &core, source, source_kind).expect("program syntax");
         let file = EvaluationFile::build(&syntax, &core).expect("evaluation ir");
         (file, core)
     }
@@ -2539,6 +2703,22 @@ mod tests {
                     && value.schedule.steps().is_empty()
             }),
             "{values:#?}"
+        );
+    }
+
+    #[test]
+    fn expression_only_and_statement_values_keep_independent_capabilities() {
+        let (file, core) = evaluation_kind(
+            "variant E { A(value: string), B }\nconst view = (node: E) => { if let A(value) = node { return <section data-kind={match (node) { A => \"a\", B => \"b\" }}>{value |> .trim()}</section>; } else { return null; } };\n",
+            crate::SourceKind::Tsx,
+        );
+        let plan = plan(&file, &core);
+        let values = &plan.owners().next().expect("JSX return owner").values;
+        assert_eq!(values.len(), 2, "{values:#?}");
+        assert_eq!(values[0].capability, TargetCapability::StatementRegion);
+        assert_eq!(
+            values[1].capability,
+            TargetCapability::ExpressionBoundary(ExpressionBoundaryReason::ValueHasNoStatementForm)
         );
     }
 

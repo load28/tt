@@ -1,0 +1,70 @@
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+import type { TsNode } from "./plain";
+import type { TsxNode } from "./plain-jsx";
+import type { TtxNode } from "./language-jsx.ttx";
+
+export variant TtNode {
+  Count(value: number),
+  FromTs(value: TsNode),
+  FromTsx(value: TsxNode),
+  FromTtx(value: TtxNode)
+}
+
+variant Flag { On, Off }
+
+const double = (value: number): number => value * 2;
+
+export const numberText = flow
+  |> double
+  |> .toFixed(1);
+
+export function read(val node: TtNode): string {
+  return match (node) {
+    Count(value) => value |> double |> .toFixed(0),
+    FromTs(value) => `ts:${value.value}`,
+    FromTsx(value) => `tsx:${value.label}`,
+    FromTtx => "ttx",
+  };
+}
+
+export function requireCount(node: TtNode): number {
+  const Count(value) = node else {
+    return 0;
+  };
+  if let Count(value: again) = node {
+    return value + again;
+  } else {
+    return value;
+  }
+}
+
+export const tupleValue = (node: TtNode, flag: Flag): number => match (node, flag) {
+  (Count(value), On) => value,
+  (Count(value), Off) => -value,
+  (_, _) => 0,
+};
+
+export const literalValue = (code: 200 | 404): string => match (code) {
+  200 => "ok",
+  404 => "missing",
+};
+
+export const errorText = (error: unknown): string => match (error) {
+  is Error { message } => message,
+  _ => "unknown",
+};
+
+export function parseCount(text: string): TResult<TtNode, string> {
+  return result {
+    const value = try Result.fromThrowable(() => Number(text))
+      |> Result.mapErrP(() => "parse failed");
+    if (Number.isNaN(value)) {
+      try Result.Err("not a number");
+    }
+    return { kind: "Count", value } satisfies TtNode;
+  };
+}
+
+val const stable = { node: { kind: "Count", value: 1 } as TtNode };
+export const stableText = read(stable.node);

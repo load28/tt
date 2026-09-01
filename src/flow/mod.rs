@@ -1418,17 +1418,65 @@ pub(crate) enum FunctionTarget {
 
 /// Returns the innermost user function enclosing `at`.
 pub(crate) fn function_target_at(src: &str, tokens: &[Token], at: usize) -> Option<FunctionTarget> {
-    let mut stack: Vec<Option<FunctionTarget>> = Vec::new();
+    let mut stack: Vec<Option<(usize, FunctionTarget)>> = Vec::new();
     for (index, token) in tokens.iter().enumerate().take(at) {
         match token.kind {
-            TokenKind::Punct(b'{') => stack.push(function_target_brace(src, tokens, index)),
+            TokenKind::Punct(b'{') => {
+                stack.push(function_target_brace(src, tokens, index).map(|target| (index, target)))
+            }
             TokenKind::Punct(b'}') => {
                 stack.pop();
             }
             _ => {}
         }
     }
-    stack.into_iter().rev().flatten().next()
+    let braced = stack.into_iter().rev().flatten().next();
+    let concise_arrow = tokens
+        .iter()
+        .enumerate()
+        .take(at)
+        .filter(|(_, token)| matches!(token.kind, TokenKind::Arrow))
+        .filter(|(arrow, _)| concise_arrow_end(tokens, arrow + 1) > at)
+        .map(|(arrow, _)| (arrow, FunctionTarget::Ordinary))
+        .next_back();
+    match (braced, concise_arrow) {
+        (Some(braced), Some(arrow)) => Some(if braced.0 > arrow.0 {
+            braced.1
+        } else {
+            arrow.1
+        }),
+        (Some((_, target)), None) | (None, Some((_, target))) => Some(target),
+        (None, None) => None,
+    }
+}
+
+/// Token index just past a concise arrow body, or the body start for a
+/// braced arrow. Balanced groups are one expression atom; a top-level
+/// comma, semicolon, or enclosing closer ends the body.
+fn concise_arrow_end(tokens: &[Token], from: usize) -> usize {
+    if matches!(
+        tokens.get(from).map(|token| &token.kind),
+        Some(TokenKind::Punct(b'{'))
+    ) {
+        return from;
+    }
+    let mut index = from;
+    let mut depth = 0usize;
+    while index < tokens.len() {
+        match tokens[index].kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => {
+                if depth == 0 {
+                    return index;
+                }
+                depth -= 1;
+            }
+            TokenKind::Punct(b',' | b';') if depth == 0 => return index,
+            _ => {}
+        }
+        index += 1;
+    }
+    tokens.len()
 }
 
 fn function_target_brace(src: &str, tokens: &[Token], brace: usize) -> Option<FunctionTarget> {
@@ -1763,6 +1811,23 @@ pub(crate) fn brace_opens_statement(src: &str, tokens: &[Token], last: usize, k:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concise_arrow_is_the_innermost_function_target() {
+        let source = "function* outer() { const step = (_: unknown) => (try load()); }";
+        let tokens = crate::lexer::lex(source, 0, source.len());
+        let at = tokens
+            .iter()
+            .position(|token| {
+                matches!(token.kind, TokenKind::Ident)
+                    && &source[token.span.start..token.span.end] == "try"
+            })
+            .expect("try token");
+        assert_eq!(
+            function_target_at(source, &tokens, at),
+            Some(FunctionTarget::Ordinary)
+        );
+    }
 
     /// Answers the divergence question the way the compiler asks it: the
     /// region is parsed first, so tt's own constructs reach the graph.

@@ -1,0 +1,57 @@
+import type { TResult } from "@tt/std";
+import type { TsNode } from "./plain";
+import { TsxBadge, type TsxNode } from "./plain-jsx";
+import { read, type TtNode } from "./language.tt";
+
+export variant TtxNode {
+  Empty,
+  Text(value: string),
+  FromTs(value: TsNode),
+  FromTsx(value: TsxNode),
+  FromTt(value: TtNode)
+}
+
+declare const outcome: TResult<string, string>;
+
+export const TtxView = ({ node }: { readonly node: TtxNode }) => {
+  val const identity = { kind: node.kind };
+  const Text(value: title) = node else {
+    return <section data-kind={identity.kind}>linked</section>;
+  };
+
+  if let Text(value: text) = node {
+    return (
+      <section data-kind={match (node) {
+        Empty => "empty",
+        Text => "text",
+        FromTs => "ts",
+        FromTsx => "tsx",
+        FromTt => "tt",
+      }}>
+        <strong>{title |> .trim()}</strong>
+        <span>{text}</span>
+      </section>
+    );
+  } else {
+    return <section>{title}</section>;
+  }
+};
+
+export const LinkedView = ({ node }: { readonly node: TtxNode }) => (
+  <aside>
+    {match (node) {
+      Empty => null,
+      Text(value) => <strong>{value}</strong>,
+      FromTs(value) => <code>{value.value}</code>,
+      FromTsx(value) => <TsxBadge node={value} />,
+      FromTt(value) => <span>{read(value)}</span>,
+    }}
+    {match (result {
+      const value = try outcome;
+      return value |> .toUpperCase();
+    }) {
+      Ok(value) => <strong>{value}</strong>,
+      Err(error) => <code>{error}</code>,
+    }}
+  </aside>
+);

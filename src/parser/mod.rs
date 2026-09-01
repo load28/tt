@@ -745,7 +745,10 @@ impl Parser<'_> {
                 continue;
             }
 
-            if !dotted && word == "match" {
+            // A spread's third dot is punctuation in the host grammar, not
+            // member access. Keep the same structural distinction used for
+            // `try` so every spread-capable host can own a match operand.
+            if (!dotted || follows_spread_operator(tokens, i)) && word == "match" {
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
@@ -1001,7 +1004,76 @@ impl Parser<'_> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use super::*;
+
+    #[test]
+    fn the_surface_fixture_covers_every_ast_segment_kind() {
+        fn segment_name(segment: &Segment) -> &'static str {
+            match segment {
+                Segment::Verbatim(_) => "verbatim",
+                Segment::Variant(_) => "variant",
+                Segment::Match(_) => "match",
+                Segment::TupleMatch(_) => "tuple-match",
+                Segment::Try(_) => "try-statement",
+                Segment::TryExpr(_) => "try-expression",
+                Segment::LetElse(_) => "let-else",
+                Segment::IfLet(_) => "if-let",
+                Segment::TtImport(_) => "tt-import",
+                Segment::ValModifier(_) => "val",
+                Segment::Template(_) => "template",
+                Segment::Pipe(pipe) if pipe.head.is_some() => "pipeline",
+                Segment::Pipe(_) => "flow",
+                Segment::ResultBlock(_) => "result",
+            }
+        }
+
+        let source = r#"import type { Other } from "./other.tt";
+variant E { A(value: number), B }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare const node: E;
+declare function load(): R<number>;
+val const stable = 1;
+function probe() {
+  const direct = try load();
+  const nested = [try load()];
+  const A(value) = node else { return 0; };
+  if let A(value: again) = node { use(again); } else { use(value); }
+  const single = match (node) { A(value) => value, B => 0 };
+  const tuple = match (node, node) { (A(value), _) => value, (_, _) => 0 };
+  const piped = 1 |> ((value: number) => value + 1);
+  const composed = flow |> ((value: number) => value + 1);
+  const computed = result { const value = try load(); return value; };
+  return `${match (node) { A => "a", B => "b" }}:${direct}:${nested}:${stable}:${piped}:${composed}:${computed}`;
+}
+"#;
+        let program = parse(source);
+        assert!(program.malformed.is_empty(), "{:#?}", program.malformed);
+        let mut found = BTreeSet::new();
+        visit_programs(&program, &mut |program| {
+            found.extend(program.segments.iter().map(segment_name));
+        });
+        assert_eq!(
+            found,
+            BTreeSet::from([
+                "flow",
+                "if-let",
+                "let-else",
+                "match",
+                "pipeline",
+                "result",
+                "template",
+                "tt-import",
+                "try-expression",
+                "try-statement",
+                "tuple-match",
+                "val",
+                "variant",
+                "verbatim",
+            ])
+        );
+    }
 
     #[test]
     fn an_incomplete_try_keeps_a_structural_rollback_fact() {

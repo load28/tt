@@ -122,7 +122,7 @@ pub(crate) fn emit_with_map<'a>(
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
-    let target = TargetRewritePlan::build(semantic, core, lowering_plan);
+    let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
@@ -559,6 +559,65 @@ fn structured_expr_span(
     }
 }
 
+fn structured_grouping_frames(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    expr: ExprId,
+) -> Vec<SourceSpan> {
+    fn walk(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        source: &str,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        match &core.exprs[expr.index()] {
+            Expr::Sequence(body) => {
+                for statement in &core.bodies[body.index()].statements {
+                    match statement {
+                        Statement::Opaque(node) => {
+                            let Some(span) = semantic.hir.source_map.node_span(*node) else {
+                                continue;
+                            };
+                            let text = &source[span.start..span.end];
+                            if text
+                                .bytes()
+                                .filter(|byte| !byte.is_ascii_whitespace())
+                                .all(|byte| matches!(byte, b'(' | b')'))
+                            {
+                                out.push(SourceSpan::from(span));
+                            }
+                        }
+                        Statement::Expr(inner) => walk(semantic, core, source, *inner, out),
+                        Statement::Adt(_)
+                        | Statement::Import(_)
+                        | Statement::Propagate(_)
+                        | Statement::Decision(_) => {}
+                    }
+                }
+            }
+            Expr::Apply(apply) => {
+                if let Some(head) = apply.head {
+                    walk(semantic, core, source, head, out);
+                }
+                for step in &apply.steps {
+                    walk(semantic, core, source, step.value, out);
+                }
+            }
+            Expr::Decision(_)
+            | Expr::Propagate(_)
+            | Expr::ResultRegion(_)
+            | Expr::Template(_)
+            | Expr::Opaque(_) => {}
+        }
+    }
+
+    let mut out = Vec::new();
+    walk(semantic, core, source, expr, &mut out);
+    out
+}
+
 struct TargetRewritePlan {
     owner_slots: Vec<OwnerSlotRewrite>,
     for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
@@ -609,6 +668,7 @@ struct ForInitializerPropagationRewrite {
 
 #[derive(Debug, Clone)]
 struct ArrowReturnRewrite {
+    source: SourceSpan,
     expr: ExprId,
     slot: String,
     parenthesized: bool,
@@ -646,6 +706,7 @@ enum ComposeAction {
 #[derive(Debug, Clone)]
 struct ComposeValue {
     expr: ExprId,
+    source: SourceSpan,
     slot: String,
     steps: Vec<PlannedEvaluationStep>,
 }
@@ -677,7 +738,12 @@ enum ResultReturnBoundary {
 }
 
 impl TargetRewritePlan {
-    fn build(semantic: &SemanticFile, core: &CoreFile, lowering: &LoweringPlan) -> Self {
+    fn build(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        source: &str,
+        lowering: &LoweringPlan,
+    ) -> Self {
         let for_initializer_propagations: Vec<_> = lowering
             .for_initializer_propagations()
             .map(|propagation| ForInitializerPropagationRewrite {
@@ -737,6 +803,7 @@ impl TargetRewritePlan {
                     && value.schedule.steps().is_empty()
                     && value.capability == TargetCapability::StatementRegion)
                     .then(|| ArrowReturnRewrite {
+                        source: value.source,
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
                         parenthesized: rewrite.owner.span != value.source,
@@ -810,6 +877,7 @@ impl TargetRewritePlan {
                                 }
                                 Some(ComposeAction::Value(ComposeValue {
                                     expr: value.expr,
+                                    source: value.source,
                                     slot: lowering.slot_name(slot).to_owned(),
                                     steps,
                                 }))
@@ -842,14 +910,11 @@ impl TargetRewritePlan {
                                 .steps()
                                 .iter()
                                 .any(|step| step.operation == HostEvaluationOperation::LoopTest)
+                            && !recovered.contains(&value.expr)
+                            && value.capability == TargetCapability::StatementRegion
                     })
                     .collect();
-                let can_compose = !values.is_empty()
-                    && values.iter().all(|value| {
-                        !recovered.contains(&value.expr)
-                            && value.capability == TargetCapability::StatementRegion
-                    });
-                can_compose.then(|| {
+                (!values.is_empty()).then(|| {
                     // A value consumed by a conditional operation is emitted
                     // by that operation's region, at the position of the
                     // operation's first value.
@@ -872,6 +937,7 @@ impl TargetRewritePlan {
                                 let ValueTarget::Slot(slot) = value.target;
                                 Some(ComposeAction::Value(ComposeValue {
                                     expr: value.expr,
+                                    source: value.source,
                                     slot: lowering.slot_name(slot).to_owned(),
                                     steps: value.schedule.steps().to_vec(),
                                 }))
@@ -969,6 +1035,66 @@ impl TargetRewritePlan {
         }));
         // The operator frame of a lowered conditional operation (its tokens
         // between the fragments the region re-emits) is claimed source.
+        let arrow_return_frames = arrow_returns.iter().flat_map(|rewrite| {
+            let structured =
+                structured_expr_span(semantic, core, rewrite.expr).unwrap_or(rewrite.source);
+            [
+                (rewrite.source.start < structured.start).then_some(SourceSpan {
+                    start: rewrite.source.start,
+                    end: structured.start,
+                }),
+                (structured.end < rewrite.source.end).then_some(SourceSpan {
+                    start: structured.end,
+                    end: rewrite.source.end,
+                }),
+            ]
+            .into_iter()
+            .flatten()
+        });
+        let compose_arrow_frames = composes
+            .iter()
+            .filter(|rewrite| rewrite.owner_kind == HostOwnerKind::ArrowExpression)
+            .flat_map(|rewrite| {
+                let mut spans = rewrite.actions.iter().filter_map(|action| {
+                    let expr = match action {
+                        ComposeAction::Value(value) => value.expr,
+                        ComposeAction::Operation(operation) => *operation.values.first()?,
+                    };
+                    structured_expr_span(semantic, core, expr)
+                });
+                let Some(first) = spans.next() else {
+                    return [None, None];
+                };
+                let (start, end) = spans.fold((first.start, first.end), |(start, end), span| {
+                    (start.min(span.start), end.max(span.end))
+                });
+                [
+                    (rewrite.owner.start < start).then_some(SourceSpan {
+                        start: rewrite.owner.start,
+                        end: start,
+                    }),
+                    (end < rewrite.owner.end).then_some(SourceSpan {
+                        start: end,
+                        end: rewrite.owner.end,
+                    }),
+                ]
+            })
+            .flatten();
+        let structured_grouping_frames = arrow_returns
+            .iter()
+            .map(|rewrite| rewrite.expr)
+            .chain(
+                composes
+                    .iter()
+                    .filter(|rewrite| rewrite.actions.len() == 1)
+                    .filter_map(|rewrite| {
+                        let ComposeAction::Value(value) = &rewrite.actions[0] else {
+                            return None;
+                        };
+                        (rewrite.owner.start == value.source.start).then_some(value.expr)
+                    }),
+            )
+            .flat_map(|expr| structured_grouping_frames(semantic, core, source, expr));
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
             .chain(loop_tests.iter().flat_map(|rewrite| {
@@ -981,6 +1107,12 @@ impl TargetRewritePlan {
                     end: rewrite.body.start,
                 }))
             }))
+            // Concise-arrow rewrites emit host grouping as block/IIFE
+            // delimiters. Claim only frames outside their Core values;
+            // source between and inside values remains exactly preserved.
+            .chain(arrow_return_frames)
+            .chain(compose_arrow_frames)
+            .chain(structured_grouping_frames)
             .collect();
         let operation_replacements: Vec<SourceReplacement> = all_operations()
             .map(|operation| {
@@ -1059,7 +1191,32 @@ impl TargetRewritePlan {
             .nested_value_schedules()
             .map(|(expr, schedule)| (expr, schedule.clone()))
             .collect();
-        let nested_values = lowering.nested_values().collect();
+        // A nested value uses its allocated slot only when a
+        // statement-capable outer value structurally emits it. If the host
+        // owner admits expressions only (for example a parameter default),
+        // the nested construct must retain its ordinary expression-boundary
+        // emission instead of referring to an unassigned join slot.
+        let statement_value_spans: Vec<_> = lowering
+            .owners()
+            .flat_map(|owner| &owner.values)
+            .filter(|value| value.capability == TargetCapability::StatementRegion)
+            .map(|value| value.source)
+            .collect();
+        let nested_values = lowering
+            .nested_values()
+            .filter(|expr| {
+                if matches!(core.exprs[expr.index()], Expr::ResultRegion(_)) {
+                    return false;
+                }
+                structured_expr_span(semantic, core, *expr).is_some_and(|nested| {
+                    statement_value_spans.iter().any(|outer| {
+                        outer.start <= nested.start
+                            && nested.end <= outer.end
+                            && (outer.start < nested.start || nested.end < outer.end)
+                    })
+                })
+            })
+            .collect();
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
         Self {
             owner_slots,
@@ -1413,7 +1570,19 @@ impl<'a> Emitter<'a> {
         let mut compose_insertions = self
             .compose_rewrites
             .iter()
-            .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
+            .filter(|rewrite| {
+                span.start <= rewrite.owner.start
+                    && rewrite.owner.start < span.end
+                    && !rewrite.actions.iter().any(|action| match action {
+                        ComposeAction::Value(value) => {
+                            self.active_structured_exprs.contains(value.expr)
+                        }
+                        ComposeAction::Operation(operation) => operation
+                            .values
+                            .iter()
+                            .any(|expr| self.active_structured_exprs.contains(*expr)),
+                    })
+            })
             .peekable();
         let mut compose_endings = self
             .compose_rewrites
@@ -1422,6 +1591,15 @@ impl<'a> Emitter<'a> {
                 rewrite.owner_kind == HostOwnerKind::ArrowExpression
                     && span.start < rewrite.owner.end
                     && rewrite.owner.end <= span.end
+                    && !rewrite.actions.iter().any(|action| match action {
+                        ComposeAction::Value(value) => {
+                            self.active_structured_exprs.contains(value.expr)
+                        }
+                        ComposeAction::Operation(operation) => operation
+                            .values
+                            .iter()
+                            .any(|expr| self.active_structured_exprs.contains(*expr)),
+                    })
             })
             .peekable();
         let mut loop_endings: Vec<_> = self
@@ -1441,8 +1619,10 @@ impl<'a> Emitter<'a> {
                 rope.append(self.emit_compose_suffix(rewrite));
             }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
-                self.emitted_owner_rewrites.mark(rewrite.expr);
-                rope.append(self.emit_owner_slot_rewrite(rewrite));
+                if !self.emitted_owner_rewrites.contains(rewrite.expr) {
+                    self.emitted_owner_rewrites.mark(rewrite.expr);
+                    rope.append(self.emit_owner_slot_rewrite(rewrite));
+                }
             }
             while let Some(rewrite) =
                 propagation_insertions.next_if(|rewrite| rewrite.owner.start == cursor)
@@ -1762,15 +1942,14 @@ impl<'a> Emitter<'a> {
                 }
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
                 Statement::Expr(expr)
-                    if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
-                        && (self.owner_slot_rewrites.iter().any(|rewrite| {
-                            rewrite.expr == *expr
-                                && rewrite.continuation == HostContinuation::Discard
-                        }) || (!self
+                    if self.owner_slot_rewrites.iter().any(|rewrite| {
+                        rewrite.expr == *expr && rewrite.continuation == HostContinuation::Discard
+                    }) || (matches!(self.core.exprs[expr.index()], Expr::Decision(_))
+                        && !self
                             .owner_slot_rewrites
                             .iter()
                             .any(|rewrite| rewrite.expr == *expr)
-                            && !self.value_slots.contains_key(expr))) =>
+                        && !self.value_slots.contains_key(expr)) =>
                 {
                     self.emit_statement_expr(*expr, &mut out);
                 }
@@ -1785,20 +1964,22 @@ impl<'a> Emitter<'a> {
         // source owner around it where `source_range_rope` could insert the
         // planned statement region. Consume that plan here before the inline
         // occurrence is replaced by its join slot.
-        if matches!(self.core.exprs[expr.index()], Expr::Decision(_)) {
-            if let Some(rewrite) = self
-                .owner_slot_rewrites
-                .iter()
-                .find(|rewrite| rewrite.expr == expr)
-            {
-                if self.emitted_owner_rewrites.contains(expr) {
-                    out.append(self.emit_expr(expr));
-                } else {
-                    self.emitted_owner_rewrites.mark(expr);
-                    out.append(self.emit_owner_slot_rewrite(rewrite));
-                }
-                return;
+        if let Some(rewrite) = self.owner_slot_rewrites.iter().find(|rewrite| {
+            rewrite.expr == expr && rewrite.continuation == HostContinuation::Discard
+        }) {
+            if self.emitted_owner_rewrites.contains(expr) {
+                out.append(self.emit_expr(expr));
+            } else {
+                self.emitted_owner_rewrites.mark(expr);
+                out.append(self.emit_owner_slot_rewrite(rewrite));
             }
+            return;
+        }
+        if self.emitted_owner_rewrites.contains(expr) {
+            out.append(self.emit_expr(expr));
+            return;
+        }
+        if matches!(self.core.exprs[expr.index()], Expr::Decision(_)) {
             if let Some(slot) = self.value_slots.get(&expr) {
                 out.push_lit(format!("let {slot};"));
                 out.push_break(0);
@@ -1872,8 +2053,13 @@ impl<'a> Emitter<'a> {
         let nested_exprs: Vec<_> = nested.iter().map(|(inner, _)| *inner).collect();
         let mut out = Rope::new();
         for (inner, slot) in nested {
-            out.push_lit(format!("let {slot};"));
-            out.push_break(0);
+            if self.emitted_owner_rewrites.contains(inner) {
+                continue;
+            }
+            if !continuation.is_unwrapped_assignment_to(&slot) {
+                out.push_lit(format!("let {slot};"));
+                out.push_break(0);
+            }
             out.append(self.emit_continued_expr(inner, &ValueContinuation::assign(&slot))?);
             out.push_break(0);
         }
@@ -1882,9 +2068,8 @@ impl<'a> Emitter<'a> {
             .sequence_node(body)
             .unwrap_or_else(|| crate::ice::bug!("embedded sequence has no source extent"));
         let span = SourceSpan::from(self.span(sequence_node));
-        out.append(self.emit_value_delivery(
+        out.append(self.emit_value_delivery_without_region_exit(
             self.source_range_with_value_slots(span, &nested_exprs),
-            None,
             continuation,
         ));
         Some(Rope::scoped(out))
@@ -1896,6 +2081,37 @@ impl<'a> Emitter<'a> {
         // operation span and prints nothing.
         if self.consumed_exprs.contains(&expr) {
             return Rope::new();
+        }
+        // An opaque TypeScript owner consumes compose rewrites through
+        // `source_range_rope`. When the owner is itself one structured Core
+        // value, emission reaches that value directly and there is no opaque
+        // frame to insert the prelude. Consume the same owner plan here and
+        // reconstruct only the host frame outside the value.
+        if !self.active_structured_exprs.contains(expr)
+            && let Some((rewrite, value)) = self.compose_rewrites.iter().find_map(|rewrite| {
+                if rewrite.actions.len() != 1 {
+                    return None;
+                }
+                let ComposeAction::Value(value) = &rewrite.actions[0] else {
+                    return None;
+                };
+                (value.expr == expr && rewrite.owner.start == value.source.start)
+                    .then_some((rewrite, value))
+            })
+        {
+            let _active = self.active_structured_exprs.enter(expr);
+            let mut out = self.emit_compose_rewrite(rewrite);
+            out.push_lit(value.slot.clone());
+            match rewrite.owner_kind {
+                HostOwnerKind::ArrowExpression => {
+                    out.append(self.emit_compose_suffix(rewrite));
+                }
+                // The Core body retains a trailing statement/module frame
+                // (normally the authored semicolon) outside the direct
+                // expression and emits it after this value.
+                HostOwnerKind::Statement | HostOwnerKind::ModuleItem => {}
+            }
+            return out;
         }
         if let Some(rewrite) = self
             .arrow_return_rewrites
@@ -2904,16 +3120,19 @@ impl<'a> Emitter<'a> {
 
     fn emit_propagate_input(&self, value: ExprId, temp: &str) -> Rope<'a> {
         let mut out = Rope::new();
-        if self.core.has_statement_form(value) && self.can_inline_continued_expr(value) {
-            let slot = self
-                .structured_value_slot(value)
-                .unwrap_or_else(|| crate::ice::bug!("structured propagation value has no slot"));
+        let structured = self
+            .core
+            .has_statement_form(value)
+            .then(|| self.structured_value_slot(value))
+            .flatten()
+            .and_then(|slot| {
+                self.emit_continued_expr(value, &ValueContinuation::assign(slot))
+                    .map(|continued| (slot, continued))
+            });
+        if let Some((slot, continued)) = structured {
             out.push_lit(format!("let {slot};"));
             out.push_break(0);
-            out.append(
-                self.emit_continued_expr(value, &ValueContinuation::assign(slot))
-                    .unwrap_or_else(|| crate::ice::bug!("propagation value was not emitted")),
-            );
+            out.append(continued);
             out.push_break(0);
             out.push_lit(format!("const {temp} = {slot};"));
         } else {
@@ -2922,27 +3141,6 @@ impl<'a> Emitter<'a> {
             out.push_lit(";");
         }
         out
-    }
-
-    fn can_inline_continued_expr(&self, expr: ExprId) -> bool {
-        let Expr::Sequence(body) = &self.core.exprs[expr.index()] else {
-            return true;
-        };
-        let statements = &self.core.bodies[body.index()].statements;
-        let Some((value_index, _)) = crate::core_ir::sequence_value(statements) else {
-            return false;
-        };
-        statements
-            .iter()
-            .enumerate()
-            .filter(|(index, _)| *index != value_index)
-            .all(|(_, statement)| match statement {
-                Statement::Opaque(node) => {
-                    let span = self.span(*node);
-                    self.source[span.start..span.end].trim().is_empty()
-                }
-                _ => false,
-            })
     }
 
     fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
@@ -3002,6 +3200,7 @@ impl<'a> Emitter<'a> {
             exit_label.map_or_else(|| "break;".to_owned(), |label| format!("break {label};"));
         let mut edits = Vec::new();
         let mut propagating_returns = Vec::new();
+        let mut structured_returns = Vec::new();
         for exit in exits {
             let line_start = self.source[..exit.statement.start]
                 .rfind('\n')
@@ -3019,6 +3218,13 @@ impl<'a> Emitter<'a> {
                     expr,
                     propagate,
                 ));
+                continue;
+            }
+            if let Some((argument, expr)) = exit.argument.and_then(|argument| {
+                self.result_return_structured_expr(body, argument)
+                    .map(|expr| (argument, expr))
+            }) {
+                structured_returns.push((exit.statement, argument, expr));
                 continue;
             }
             match exit.argument {
@@ -3114,8 +3320,24 @@ impl<'a> Emitter<'a> {
             exits,
             &edits,
             &propagating_returns,
+            &structured_returns,
             &context,
         )
+    }
+
+    fn result_return_structured_expr(
+        &self,
+        body: hir::BodyId,
+        argument: SourceSpan,
+    ) -> Option<ExprId> {
+        self.core.bodies[body.index()]
+            .statements
+            .iter()
+            .filter_map(|statement| match statement {
+                Statement::Expr(expr) if self.core.has_statement_form(*expr) => Some(*expr),
+                _ => None,
+            })
+            .find(|expr| structured_expr_span(self.semantic, self.core, *expr) == Some(argument))
     }
 
     /// Finds a `return try value;` whose `try` belongs directly to this
@@ -3168,6 +3390,7 @@ impl<'a> Emitter<'a> {
         exits: &[HostExit],
         edits: &[LocalSourceEdit],
         propagating_returns: &[(SourceSpan, SourceSpan, ExprId, &Propagate)],
+        structured_returns: &[(SourceSpan, SourceSpan, ExprId)],
         context: &ResultEmissionContext<'_, '_>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
@@ -3191,12 +3414,42 @@ impl<'a> Emitter<'a> {
                             result_return_mark: None,
                         },
                     ));
+                    opaque_edits.extend(structured_returns.iter().map(|(return_span, _, _)| {
+                        LocalSourceEdit {
+                            span: SourceSpan {
+                                start: return_span.start.max(self.span(*node).start),
+                                end: return_span.end.min(self.span(*node).end),
+                            },
+                            text: String::new(),
+                            result_return_mark: None,
+                        }
+                    }));
                     opaque_edits.retain(|edit| edit.span.start < edit.span.end);
                     opaque_edits.sort_unstable_by_key(|edit| edit.span.start);
                     out.append(self.source_rope_with_edits(*node, &opaque_edits));
                 }
                 Statement::Expr(expr) => {
-                    if let Some((return_span, argument, _, propagate)) = propagating_returns
+                    if let Some((return_span, _, _)) = structured_returns
+                        .iter()
+                        .find(|(_, _, candidate)| candidate == expr)
+                    {
+                        let mut replacement = self
+                            .emit_continued_expr(*expr, context.success)
+                            .unwrap_or_else(|| {
+                                crate::ice::bug!("structured result return was not emitted")
+                            });
+                        if context.success.assigns() {
+                            push_control_break(&mut replacement, 0, context.exit_label);
+                        }
+                        let (kind, start, head_end, extent) = self.value_anchor(*expr);
+                        out.anchored(
+                            kind,
+                            return_span.start.min(start),
+                            head_end,
+                            return_span.end.max(extent),
+                            replacement,
+                        );
+                    } else if let Some((return_span, argument, _, propagate)) = propagating_returns
                         .iter()
                         .find(|(_, _, candidate, _)| candidate == expr)
                     {
@@ -3431,7 +3684,12 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         // The block's own source follows, leading whitespace included, so
         // the opener does not break the line the region body starts on.
-        let exit_label = continuation.assignment_target();
+        let assignment_target = continuation.assignment_target();
+        let distinct_label = assignment_target.and_then(|target| {
+            let slot = self.structured_value_slot(expr)?;
+            (slot != target).then(|| exit_label(slot))
+        });
+        let exit_label = distinct_label.as_deref().or(assignment_target);
         if let Some(label) = exit_label {
             out.push_lit(format!("{label}: {{"));
         } else {
@@ -3718,17 +3976,17 @@ impl<'a> Emitter<'a> {
         mark: NodeId,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        if self.core.has_statement_form(subject.value)
-            && self.can_inline_continued_expr(subject.value)
-        {
+        let continued = self
+            .core
+            .has_statement_form(subject.value)
+            .then(|| self.emit_continued_expr(subject.value, &ValueContinuation::assign(temp)))
+            .flatten();
+        if let Some(continued) = continued {
             out.push_lit("let ");
             out.push_mark(self.span(mark).start);
             out.push_lit(format!("{temp};"));
             out.push_lit(" ");
-            out.append(
-                self.emit_continued_expr(subject.value, &ValueContinuation::assign(temp))
-                    .unwrap_or_else(|| crate::ice::bug!("decision subject was not emitted")),
-            );
+            out.append(continued);
         } else {
             out.push_lit("const ");
             out.push_mark(self.span(mark).start);
@@ -3891,6 +4149,18 @@ impl<'a> Emitter<'a> {
     ) -> Option<Rope<'a>> {
         if !self.core.has_statement_form(expr) {
             return None;
+        }
+        // Structural parents may consume a child's owner rewrite directly
+        // (for example a Result body's declaration initializer). Mark that
+        // plan at the common entry point so a later source-range walk only
+        // emits the child's inline slot and never schedules its statement
+        // region a second time.
+        if self
+            .owner_slot_rewrites
+            .iter()
+            .any(|rewrite| rewrite.expr == expr)
+        {
+            self.emitted_owner_rewrites.mark(expr);
         }
         if let Some(schedule) = self.nested_schedules.get(&expr)
             && !schedule.steps().is_empty()
@@ -4427,7 +4697,15 @@ impl<'a> Emitter<'a> {
         close: Option<u16>,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
-        self.emit_value_delivery_with_exit(body, close, continuation, None, None)
+        self.emit_value_delivery_control(body, close, continuation, None, None, true)
+    }
+
+    fn emit_value_delivery_without_region_exit(
+        &self,
+        body: Rope<'a>,
+        continuation: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
+        self.emit_value_delivery_control(body, None, continuation, None, None, false)
     }
 
     fn emit_value_delivery_with_exit(
@@ -4437,6 +4715,18 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
         break_label: Option<&str>,
         exit_depth: Option<u16>,
+    ) -> Rope<'a> {
+        self.emit_value_delivery_control(body, close, continuation, break_label, exit_depth, true)
+    }
+
+    fn emit_value_delivery_control(
+        &self,
+        body: Rope<'a>,
+        close: Option<u16>,
+        continuation: &ValueContinuation<'_>,
+        break_label: Option<&str>,
+        exit_depth: Option<u16>,
+        exit_after_assignment: bool,
     ) -> Rope<'a> {
         let mut value = body;
         for wrapper in continuation.wrappers.iter().rev() {
@@ -4467,7 +4757,7 @@ impl<'a> Emitter<'a> {
             out.push_lit(")");
         }
         out.push_lit(";");
-        if continuation.assigns() {
+        if continuation.assigns() && exit_after_assignment {
             if let Some(depth) = exit_depth {
                 push_control_break(&mut out, depth, break_label);
             } else {

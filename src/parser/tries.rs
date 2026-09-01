@@ -32,10 +32,11 @@ pub(super) fn parse_try_stmt<'t>(
     let Some(first) = cur.peek() else {
         return Claim::NotTt;
     };
-    if !is_expr_start(first) {
+    let parenthesized = matches!(first.kind, TokenKind::Punct(b'('));
+    if !is_expr_start(first) && !parenthesized {
         return Claim::NotTt;
     }
-    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur, false) else {
+    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur, parenthesized) else {
         return Claim::Unclaimed(UnclaimedTtCandidate {
             kind: UnclaimedTtKind::Try,
             keyword: kw_span,
@@ -45,6 +46,19 @@ pub(super) fn parse_try_stmt<'t>(
     let expr = cur
         .parser
         .parse_expression_tokens(expr_tokens, expr_span.start, expr_span.end);
+    // `try(x);` is a valid member signature in classes and interfaces, so
+    // a merely parenthesized tail cannot establish tt ownership. A fully
+    // recognized tt construct inside the parentheses does: valid
+    // TypeScript cannot contain that construct, and the outer propagation
+    // can therefore own the complete operand structurally.
+    if parenthesized
+        && expr
+            .segments
+            .iter()
+            .all(|segment| matches!(segment, crate::ast::Segment::Verbatim(_)))
+    {
+        return Claim::NotTt;
+    }
     Claim::Parsed((
         cur,
         byte_end,
@@ -58,6 +72,7 @@ pub(super) fn parse_try_stmt<'t>(
                 start: kw_span.start,
                 end: expr_span.end,
             },
+            expr_span,
             decl: None,
             expr,
             // Filled by the caller, which knows the statement's token
@@ -127,6 +142,7 @@ pub(super) fn parse_try_expr(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, T
                 start: kw_span.start,
                 end,
             },
+            expr_span,
             expr,
         },
     ))
@@ -238,6 +254,7 @@ pub(super) fn parse_try_decl<'t>(
                 start: try_off,
                 end: expr_span.end,
             },
+            expr_span,
             decl: Some((
                 cur.parser.src[kw_span.start..kw_span.end].to_string(),
                 binding_span,
