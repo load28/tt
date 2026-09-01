@@ -119,7 +119,6 @@ pub(crate) struct LoweringPlan {
     nested_values: HashSet<ExprId>,
     nested_relocations: Vec<SourceSpan>,
     expression_boundary_name: String,
-    result_return_name: String,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
 }
@@ -441,10 +440,6 @@ impl LoweringPlan {
 
     pub(crate) fn expression_boundary_name(&self) -> &str {
         &self.expression_boundary_name
-    }
-
-    pub(crate) fn result_return_name(&self) -> &str {
-        &self.result_return_name
     }
 
     pub(crate) fn for_initializer_propagations(
@@ -907,6 +902,37 @@ impl EvaluationFile {
             }
         }
         let mut unsupported_expression_propagations = Vec::new();
+        // Core arm bodies are flat arena entries, so build their ownership
+        // index once. Propagation placement then answers by ExprId instead of
+        // rescanning every decision and arm for every value region.
+        let isolated_arm_values: HashSet<_> = core
+            .exprs
+            .iter()
+            .filter_map(|candidate| {
+                let Expr::Decision(decision) = candidate else {
+                    return None;
+                };
+                Some(decision)
+            })
+            .flat_map(|decision| &decision.arms)
+            .filter_map(|arm| match arm.action {
+                ArmAction::Yield {
+                    body,
+                    kind: ArmBodyKind::Block { .. },
+                }
+                | ArmAction::Execute(body) => Some(body),
+                ArmAction::Yield {
+                    kind: ArmBodyKind::Expression,
+                    ..
+                }
+                | ArmAction::BindThrough(_) => None,
+            })
+            .flat_map(|body| &core.bodies[body.index()].statements)
+            .filter_map(|statement| match statement {
+                Statement::Expr(value) => Some(*value),
+                _ => None,
+            })
+            .collect();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
@@ -922,25 +948,7 @@ impl EvaluationFile {
             // cannot use the enclosing function's failure edge: the arm is
             // an isolated value region even when SWC identifies the nested
             // `return` statement as its own host owner.
-            let crossed_value_region = core.exprs.iter().any(|candidate| {
-                let Expr::Decision(decision) = candidate else {
-                    return false;
-                };
-                decision.arms.iter().any(|arm| match arm.action {
-                    ArmAction::Yield {
-                        body,
-                        kind: ArmBodyKind::Block { .. },
-                    }
-                    | ArmAction::Execute(body) => core.bodies[body.index()].statements.iter().any(
-                        |statement| matches!(statement, Statement::Expr(value) if *value == expr),
-                    ),
-                    ArmAction::Yield {
-                        kind: ArmBodyKind::Expression,
-                        ..
-                    } => false,
-                    ArmAction::BindThrough(_) => false,
-                })
-            });
+            let crossed_value_region = isolated_arm_values.contains(&expr);
             while let RegionPlacement::Nested { parent, .. } = host_region.placement {
                 host_region = &self.regions[parent.0 as usize];
             }
@@ -1032,7 +1040,6 @@ impl EvaluationFile {
             })
             .collect();
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
-        let result_return_name = allocate_generated_name("$tt_result", &mut occupied_names)?;
         Ok(LoweringPlan {
             owners: rewrites,
             for_initializer_propagations,
@@ -1084,7 +1091,6 @@ impl EvaluationFile {
                 })
                 .collect(),
             expression_boundary_name,
-            result_return_name,
             unsupported_expression_propagations,
             unsupported_matches,
         })
@@ -2431,7 +2437,7 @@ mod tests {
 
     fn evaluation(source: &str) -> (EvaluationFile, CoreFile) {
         let program = crate::parser::parse(source);
-        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
         let syntax = ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
             .expect("program syntax");

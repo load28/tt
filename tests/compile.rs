@@ -208,8 +208,11 @@ fn nested_match_subject_uses_collision_free_slots() {
 fn tuple_match_accepts_comparison_expression_subjects() {
     let output = ok("variant V { A, B }\n\
          declare const a: number; declare const b: number; declare const v: V;\n\
-         const n = match (a < b, v) { (_, A) => 1, _ => 0 };\n");
+         declare const id: <T>(value: T) => T;\n\
+         const n = match (a < b, v) { (_, A) => 1, _ => 0 };\n\
+         const m = match (id<number>(0), v) { (_, A) => 1, _ => 0 };\n");
     assert!(output.contains("a < b"), "{output}");
+    assert!(output.contains("id<number>(0)"), "{output}");
 }
 
 #[test]
@@ -3990,7 +3993,7 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
     assert!(
-        compact(&out).contains("const $tt_result = item; $tt_v0 = { kind: \"Ok\" as const, value: $tt_result }; break $tt_v0;"),
+        compact(&out).contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break $tt_v0;"),
         "{out}"
     );
 }
@@ -4038,6 +4041,7 @@ fn result_preserves_a_statement_position_match_dispatch() {
 fn ordinary_result_success_returns_from_expression_boundaries() {
     let out = ok(
         r#"class Box { field = result { const value = try read(); return value; }; }
+class SwitchBox { field = result { const value = try read(); switch (value) { case 0: return 0; default: return value; } }; }
 function withDefault(value = result { const item = try read(); return item; }) { return value; }
 function* values() { yield result { const item = try read(); return item; }; }
 const text = `value=${result { const item = try read(); return item; }}`;
@@ -4155,8 +4159,8 @@ fn result_allows_let_else_when_each_else_path_completes_the_result() {
     let out = ok(
         "variant Item { Some(value: number), None }\nconst value = result { const item = try read(); let Some(found) = item else { return 0; }; return found; };\n",
     );
-    assert!(out.contains("const $tt_result = 0"), "{out}");
-    assert!(out.contains("const $tt_result = found"), "{out}");
+    assert!(out.contains("value: 0"), "{out}");
+    assert!(out.contains("value: found"), "{out}");
 }
 
 #[test]
@@ -4164,8 +4168,8 @@ fn result_wraps_inline_if_let_returns_as_success() {
     let out = ok(
         "variant Item { Some(value: number), None }\nconst value = result { const item = try read(); if let Some(found) = item { return found; } else { return 0; } };\n",
     );
-    assert!(out.contains("const $tt_result = found"), "{out}");
-    assert!(out.contains("const $tt_result = 0"), "{out}");
+    assert!(out.contains("value: found"), "{out}");
+    assert!(out.contains("value: 0"), "{out}");
 }
 
 #[test]

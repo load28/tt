@@ -179,11 +179,10 @@ pub(crate) fn emit_with_map<'a>(
             .map(|(expr, _)| expr)
             .collect(),
         expression_boundary_name: target.expression_boundary_name,
-        result_return_name: target.result_return_name,
         conditional_region_depth: Cell::new(0),
-        active_structured_exprs: RefCell::new(Vec::new()),
-        active_scheduled_exprs: RefCell::new(Vec::new()),
-        emitted_owner_rewrites: RefCell::new(HashSet::new()),
+        active_structured_exprs: ActiveExprStack::default(),
+        active_scheduled_exprs: ActiveExprStack::default(),
+        emitted_owner_rewrites: EmittedOwnerRewrites::default(),
         loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
@@ -588,7 +587,6 @@ struct TargetRewritePlan {
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
     nested_values: HashSet<ExprId>,
     expression_boundary_name: String,
-    result_return_name: String,
 }
 
 #[derive(Debug, Clone)]
@@ -669,7 +667,13 @@ type NestedSourceReplacement = (SourceSpan, String, Option<(AnchorKind, usize)>)
 struct LocalSourceEdit {
     span: SourceSpan,
     text: String,
-    result_return_mark: Option<SourceSpan>,
+    result_return_mark: Option<(SourceSpan, ResultReturnBoundary)>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ResultReturnBoundary {
+    Start,
+    End,
 }
 
 impl TargetRewritePlan {
@@ -1057,7 +1061,6 @@ impl TargetRewritePlan {
             .collect();
         let nested_values = lowering.nested_values().collect();
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
-        let result_return_name = lowering.result_return_name().to_owned();
         Self {
             owner_slots,
             for_initializer_propagations,
@@ -1076,7 +1079,6 @@ impl TargetRewritePlan {
             nested_schedules,
             nested_values,
             expression_boundary_name,
-            result_return_name,
         }
     }
 }
@@ -1103,7 +1105,6 @@ struct Emitter<'a> {
     nested_values: HashSet<ExprId>,
     recovered_propagations: HashSet<ExprId>,
     expression_boundary_name: String,
-    result_return_name: String,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.
@@ -1111,12 +1112,12 @@ struct Emitter<'a> {
     /// Structured owner-slot emission reads the value's authored children.
     /// Suppress only that value's own replacement; nested structured values
     /// must still replace their host occurrences compositionally.
-    active_structured_exprs: RefCell<Vec<ExprId>>,
-    active_scheduled_exprs: RefCell<Vec<ExprId>>,
+    active_structured_exprs: ActiveExprStack,
+    active_scheduled_exprs: ActiveExprStack,
     /// Owner preludes can be reached either through an opaque source prefix
     /// or through the Core expression entry. Record which path emitted the
     /// prelude so the other path contributes only the join-slot occurrence.
-    emitted_owner_rewrites: RefCell<HashSet<ExprId>>,
+    emitted_owner_rewrites: EmittedOwnerRewrites,
     /// Loop-test actions emit their tt values before the rebuilt source test.
     /// Host replacements apply only to that source test, not while the
     /// actions recursively emit their own source fragments.
@@ -1124,6 +1125,56 @@ struct Emitter<'a> {
     used_expression_boundary: Cell<bool>,
     used_pipe: Cell<bool>,
     used_flow: Cell<bool>,
+}
+
+/// A recursion stack whose guard never holds a `RefCell` borrow while target
+/// emission calls back into itself. This state belongs to the emitter rather
+/// than a single Core walk because opaque source scanning and structured
+/// expression emission can enter one another in either direction.
+#[derive(Default)]
+struct ActiveExprStack {
+    exprs: RefCell<Vec<ExprId>>,
+}
+
+impl ActiveExprStack {
+    fn contains(&self, expr: ExprId) -> bool {
+        self.exprs.borrow().contains(&expr)
+    }
+
+    fn enter(&self, expr: ExprId) -> ActiveExprGuard<'_> {
+        self.exprs.borrow_mut().push(expr);
+        ActiveExprGuard { stack: self, expr }
+    }
+}
+
+struct ActiveExprGuard<'stack> {
+    stack: &'stack ActiveExprStack,
+    expr: ExprId,
+}
+
+impl Drop for ActiveExprGuard<'_> {
+    fn drop(&mut self) {
+        let popped = self.stack.exprs.borrow_mut().pop();
+        debug_assert_eq!(popped, Some(self.expr));
+    }
+}
+
+/// The source scanner and Core walker share owner emission. Marking is one
+/// atomic operation so neither path can retain a mutable borrow across the
+/// recursive emission it triggers.
+#[derive(Default)]
+struct EmittedOwnerRewrites {
+    exprs: RefCell<HashSet<ExprId>>,
+}
+
+impl EmittedOwnerRewrites {
+    fn contains(&self, expr: ExprId) -> bool {
+        self.exprs.borrow().contains(&expr)
+    }
+
+    fn mark(&self, expr: ExprId) {
+        self.exprs.borrow_mut().insert(expr);
+    }
 }
 
 #[derive(Clone)]
@@ -1390,9 +1441,7 @@ impl<'a> Emitter<'a> {
                 rope.append(self.emit_compose_suffix(rewrite));
             }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
-                self.emitted_owner_rewrites
-                    .borrow_mut()
-                    .insert(rewrite.expr);
+                self.emitted_owner_rewrites.mark(rewrite.expr);
                 rope.append(self.emit_owner_slot_rewrite(rewrite));
             }
             while let Some(rewrite) =
@@ -1454,9 +1503,9 @@ impl<'a> Emitter<'a> {
                 if replacement.anchor.is_some() {
                     self.conditional_region_depth.get() == 0
                         && self.loop_region_depth.get() == 0
-                        && !replacement.anchor.is_some_and(|expr| {
-                            self.active_structured_exprs.borrow().contains(&expr)
-                        })
+                        && !replacement
+                            .anchor
+                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
                         && replacement.source.start <= cursor
                         && cursor < replacement.source.end
                 } else {
@@ -1517,9 +1566,9 @@ impl<'a> Emitter<'a> {
                     (replacement.anchor.is_none()
                         || (self.conditional_region_depth.get() == 0
                             && self.loop_region_depth.get() == 0
-                            && !replacement.anchor.is_some_and(|expr| {
-                                self.active_structured_exprs.borrow().contains(&expr)
-                            })))
+                            && !replacement
+                                .anchor
+                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))))
                         && cursor < replacement.source.start
                         && replacement.source.start < span.end
                 })
@@ -1558,18 +1607,18 @@ impl<'a> Emitter<'a> {
             if cursor < edit.span.start {
                 out.append(self.source_range_rope(hir::Span::new(cursor, edit.span.start)));
             }
-            if let Some(mark) = edit.result_return_mark {
-                let marker_offset = edit
-                    .text
-                    .find(&self.result_return_name)
-                    .unwrap_or_else(|| crate::ice::bug!("Result return edit lost its temporary"));
-                let name_end = marker_offset + self.result_return_name.len();
-                out.push_lit(edit.text[..marker_offset].to_owned());
-                out.push_result_return_mark(mark.start);
-                out.push_lit(edit.text[marker_offset..name_end].to_owned());
-                out.push_lit(edit.text[name_end..].to_owned());
-            } else {
-                out.push_lit(edit.text.clone());
+            match edit.result_return_mark {
+                Some((mark, ResultReturnBoundary::Start)) => {
+                    // The prefix ends immediately before the authored value.
+                    out.push_lit(edit.text.clone());
+                    out.push_result_return_start(mark.start);
+                }
+                Some((mark, ResultReturnBoundary::End)) => {
+                    // The suffix begins immediately after the authored value.
+                    out.push_result_return_end(mark.start);
+                    out.push_lit(edit.text.clone());
+                }
+                None => out.push_lit(edit.text.clone()),
             }
             cursor = edit.span.end;
         }
@@ -1742,10 +1791,10 @@ impl<'a> Emitter<'a> {
                 .iter()
                 .find(|rewrite| rewrite.expr == expr)
             {
-                if self.emitted_owner_rewrites.borrow().contains(&expr) {
+                if self.emitted_owner_rewrites.contains(expr) {
                     out.append(self.emit_expr(expr));
                 } else {
-                    self.emitted_owner_rewrites.borrow_mut().insert(expr);
+                    self.emitted_owner_rewrites.mark(expr);
                     out.append(self.emit_owner_slot_rewrite(rewrite));
                 }
                 return;
@@ -1937,14 +1986,12 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_owner_slot_rewrite(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
-        self.active_structured_exprs.borrow_mut().push(rewrite.expr);
+        let _active = self.active_structured_exprs.enter(rewrite.expr);
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
             .unwrap_or_else(|| {
                 crate::ice::bug!("initializer rewrite is not structurally emit-able")
             });
-        let popped = self.active_structured_exprs.borrow_mut().pop();
-        debug_assert_eq!(popped, Some(rewrite.expr));
         let mut out = Rope::new();
         out.push_lit(format!("let {}", rewrite.slot));
         self.push_contextual_type(
@@ -2919,6 +2966,10 @@ impl<'a> Emitter<'a> {
             ));
             out.push_break(1);
         }
+        // HIR computes `completes` with the conservative flow graph and sema
+        // consumes that same stored fact when it rejects a fall-through
+        // statement Result. Omitting the fallback is therefore sound: this
+        // branch can disappear only when every reachable path already exits.
         if region.value.is_some() || !region.completes {
             out.push_lit("return { kind: \"Ok\" as const, value: ");
             if let Some(value) = region.value {
@@ -2972,37 +3023,18 @@ impl<'a> Emitter<'a> {
             }
             match exit.argument {
                 Some(argument) => {
-                    let contextual_value = success
-                        .assignment_target()
-                        .filter(|target| {
-                            self.owner_slot_rewrites.iter().any(|rewrite| {
-                                rewrite.slot.as_str() == *target
-                                    && rewrite.contextual_type.is_some()
-                            }) || self.arrow_return_rewrites.iter().any(|rewrite| {
-                                rewrite.slot.as_str() == *target
-                                    && rewrite.contextual_type.is_some()
-                            })
-                        })
-                        .map_or_else(String::new, |target| {
-                            format!(": Extract<typeof {target}, {{ kind: \"Ok\" }}>[\"value\"]")
-                        });
+                    let grouped = grouping_required(&self.source[argument.start..argument.end]);
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
                             end: argument.start,
                         },
                         text: if starts_own_line {
-                            format!(
-                                "{{\n{inner_indent}const {}{} = ",
-                                self.result_return_name, contextual_value
-                            )
+                            format!("{{\n{inner_indent}{}", success.assignment_prefix(grouped))
                         } else {
-                            format!(
-                                "{{ const {}{} = ",
-                                self.result_return_name, contextual_value
-                            )
+                            format!("{{ {}", success.assignment_prefix(grouped))
                         },
-                        result_return_mark: Some(argument),
+                        result_return_mark: Some((argument, ResultReturnBoundary::Start)),
                     });
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
@@ -3011,10 +3043,8 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                ";\n{inner_indent}{}{}{};{}\n{line_indent}}}",
-                                success.assignment_prefix(false),
-                                self.result_return_name,
-                                success.assignment_suffix(false),
+                                "{};{}\n{line_indent}}}",
+                                success.assignment_suffix(grouped),
                                 if success.assigns() {
                                     format!("\n{inner_indent}{leave}")
                                 } else {
@@ -3023,10 +3053,8 @@ impl<'a> Emitter<'a> {
                             )
                         } else {
                             format!(
-                                "; {}{}{};{} }}",
-                                success.assignment_prefix(false),
-                                self.result_return_name,
-                                success.assignment_suffix(false),
+                                "{};{} }}",
+                                success.assignment_suffix(grouped),
                                 if success.assigns() {
                                     format!(" {leave}")
                                 } else {
@@ -3034,7 +3062,7 @@ impl<'a> Emitter<'a> {
                                 }
                             )
                         },
-                        result_return_mark: None,
+                        result_return_mark: Some((argument, ResultReturnBoundary::End)),
                     });
                 }
                 None => {
@@ -3866,16 +3894,14 @@ impl<'a> Emitter<'a> {
         }
         if let Some(schedule) = self.nested_schedules.get(&expr)
             && !schedule.steps().is_empty()
-            && !self.active_scheduled_exprs.borrow().contains(&expr)
+            && !self.active_scheduled_exprs.contains(expr)
         {
             let slot = self
                 .value_slots
                 .get(&expr)
                 .unwrap_or_else(|| crate::ice::bug!("scheduled nested value has no slot"));
-            self.active_scheduled_exprs.borrow_mut().push(expr);
+            let _active = self.active_scheduled_exprs.enter(expr);
             let mut action = self.emit_continued_expr(expr, &ValueContinuation::assign(slot))?;
-            let popped = self.active_scheduled_exprs.borrow_mut().pop();
-            debug_assert_eq!(popped, Some(expr));
             let mut captured = HashSet::new();
             for step in schedule.steps() {
                 action = self.emit_scheduled_step(step, action, &mut captured);

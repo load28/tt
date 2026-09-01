@@ -126,7 +126,8 @@ pub(crate) struct SymbolQuery {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResultShapeQuery {
     pub module: PathBuf,
-    pub position: usize,
+    pub start: usize,
+    pub end: usize,
 }
 
 /// Everything asked of one project graph, in one round trip.

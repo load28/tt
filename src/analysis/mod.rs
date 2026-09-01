@@ -560,7 +560,7 @@ impl PatternAnalyses {
 pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnalyses {
     let program = crate::parser::parse(source);
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
-    semantics_over(&program, &decls, Depth::Full).patterns
+    semantics_over(source, &program, &decls, Depth::Full).patterns
 }
 
 /// The coverage-only analysis of an already-parsed program — sema's input,
@@ -572,15 +572,23 @@ pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnaly
 /// case and field names; only binding-type analysis is skipped, so every arm
 /// comes back empty — [`pattern_analyses`] is the entry point for bindings.
 #[cfg(test)]
-pub(crate) fn coverage_analyses(program: &Program, externs: &[ExternVariant]) -> PatternAnalyses {
-    coverage_semantics(program, externs).patterns
+pub(crate) fn coverage_analyses(
+    source: &str,
+    program: &Program,
+    externs: &[ExternVariant],
+) -> PatternAnalyses {
+    coverage_semantics(source, program, externs).patterns
 }
 
 /// Builds the semantic file used by sema and lowering in the ordinary
 /// compiler pipeline.
-pub(crate) fn coverage_semantics(program: &Program, externs: &[ExternVariant]) -> SemanticFile {
+pub(crate) fn coverage_semantics(
+    source: &str,
+    program: &Program,
+    externs: &[ExternVariant],
+) -> SemanticFile {
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
-    semantics_over(program, &decls, Depth::CoverageOnly)
+    semantics_over(source, program, &decls, Depth::CoverageOnly)
 }
 
 /// The one pipeline both entry points run: lower, resolve, build the
@@ -588,11 +596,12 @@ pub(crate) fn coverage_semantics(program: &Program, externs: &[ExternVariant]) -
 /// the rules — local later-wins, imports shadowed by locals, built-ins by
 /// both), analyze, then attach the resolver's name answers.
 fn semantics_over(
+    source: &str,
     program: &Program,
     externs: &[crate::resolve::ExternDecl],
     depth: Depth,
 ) -> SemanticFile {
-    let mut hir = crate::hir::lower_program(crate::hir::FileId(0), program);
+    let mut hir = crate::hir::lower_program(crate::hir::FileId(0), source, program);
     let resolution = crate::resolve::resolve_file(&mut hir, externs);
     let table = Table::from_resolution(&resolution);
     let mut analyses = analyze(program, &table, depth);
@@ -792,10 +801,10 @@ impl Table {
                         // constructor exactly once. Keeping that invariant here
                         // prevents every downstream consumer (coverage,
                         // completion, and suggested arms) from duplicating it.
-                        let mut seen = std::collections::HashSet::new();
+                        let mut seen = std::collections::HashSet::<String>::new();
                         data.variants
                             .iter()
-                            .filter(|variant| seen.insert(variant.name.as_str()))
+                            .filter(|variant| seen.insert(variant.name.clone()))
                             .map(|variant| MatchConstructor {
                                 tag: variant.name.clone(),
                                 fields: variant.fields.as_ref().map(|fields| {
@@ -1380,7 +1389,7 @@ pub(crate) fn checked_coverage(
 ) -> Vec<(usize, Coverage)> {
     let program = crate::parser::parse(source);
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
-    let mut hir = crate::hir::lower_program(crate::hir::FileId(0), &program);
+    let mut hir = crate::hir::lower_program(crate::hir::FileId(0), source, &program);
     let resolution = crate::resolve::resolve_file(&mut hir, &decls);
     let table = Table::from_resolution(&resolution);
     let mut found = Vec::new();
@@ -2058,7 +2067,7 @@ mod tests {
             from: Some("./token.tt".to_string()),
         }];
         let program = crate::parser::parse(src);
-        let analyses = coverage_analyses(&program, &externs);
+        let analyses = coverage_analyses(src, &program, &externs);
         let coverage = analyses.matches[0].coverage.as_ref().unwrap();
         assert_eq!(coverage.missing_tags(), ["Punct"]);
         assert_eq!(

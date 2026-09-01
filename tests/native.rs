@@ -1339,6 +1339,8 @@ variant Res<T, E> { Ok(value: T), Err(error: E) }
 declare function read(): Res<number, string>;
 
 const definite = result { const value = try read(); return Res.Ok(value); };
+const 값: Res<number, string> = Res.Ok(1);
+const definiteUnicode = result { const value = try read(); return 값; };
 const union = result { const value = try read(); const candidate: Res<number, string> | number = value; return candidate; };
 const nonResult = result { const value = try read(); return String(value); };
 const unknown = result { const value = try read(); const candidate: unknown = value; return candidate; };
@@ -1351,8 +1353,9 @@ function generic<T>(candidate: T) { return result { const value = try read(); re
         .iter()
         .filter(|diagnostic| diagnostic["code"] == "result-return-nested")
         .collect();
-    assert_eq!(nested.len(), 1, "{answer}");
+    assert_eq!(nested.len(), 2, "{answer}");
     assert_eq!(source_slice(source, nested[0]), "Res.Ok(value)");
+    assert_eq!(source_slice(source, nested[1]), "값");
     let edit = &nested[0]["suggestions"][0]["edit"];
     assert_eq!(edit["replacement"], "try ");
 }

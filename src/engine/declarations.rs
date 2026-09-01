@@ -108,7 +108,7 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
             .iter()
             .map(Into::into)
             .collect();
-    let mut hir = hir::lower_program(hir::FileId(0), &program);
+    let mut hir = hir::lower_program(hir::FileId(0), source, &program);
     let resolution = resolve::resolve_file(&mut hir, &externs);
 
     let mut variants = Vec::new();

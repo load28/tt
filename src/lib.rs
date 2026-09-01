@@ -543,6 +543,8 @@ pub struct ResultReturnTemp {
     pub src_end: usize,
     /// Byte offset of that value in the emitted TypeScript.
     pub out: usize,
+    /// End byte offset of that value in the emitted TypeScript.
+    pub out_end: usize,
 }
 
 /// Which tt construct a stretch of compiler-written glue belongs to.
@@ -713,7 +715,7 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 /// [`emit_mapped`] under an explicit TypeScript surface kind.
 pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
     let program = parser::parse_with_kind(source, source_kind);
-    let semantics = analysis::coverage_semantics(&program, &[]);
+    let semantics = analysis::coverage_semantics(source, &program, &[]);
     let core = core_ir::lower_semantic(&semantics, source);
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
@@ -922,7 +924,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     // the first error in source order — and skips emission when the checks
     // already failed.
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(&program, options.extern_variants);
+    let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if errors
@@ -1012,7 +1014,7 @@ fn tt_errors(
         program,
         options.verify,
         options.defer_to_checker,
-        &semantics.patterns,
+        semantics,
     );
     if !options.defer_to_checker {
         errors.extend(val::check_all(source, tokens));
@@ -1110,6 +1112,7 @@ fn nonredundant_target_errors(
         .into_iter()
         .filter(|target| {
             !(target.code == DiagnosticCode::TryPlacement
+                && target.offset.is_some()
                 && existing.iter().any(|prior| {
                     prior.code == DiagnosticCode::TryCrossesValueRegion
                         && prior.offset == target.offset
@@ -1208,7 +1211,7 @@ fn try_placement_message(
 /// ```
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(&program, options.extern_variants);
+    let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if !errors.iter().any(|error| error.code.blocks_projection()) {
@@ -1392,7 +1395,7 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
 /// still-emitting form of [`compile_mapped`]. See [`CompileReport`].
 pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(&program, options.extern_variants);
+    let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source);
     let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if errors.iter().any(|e| e.code.blocks_projection()) {
@@ -1476,5 +1479,21 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
             .into_iter()
             .map(diagnostics::Diagnostic::from_tt)
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod mapped_result_tests {
+    use super::*;
+
+    #[test]
+    fn result_shape_probe_names_the_copied_return_expression() {
+        let source = "variant R { Ok(value: number), Err(error: string) }\n\
+             const value = result { const n = try read(); return R.Ok(n); };\n";
+        let emit = compile_mapped(source, &Options::default()).expect("compile");
+        assert_eq!(emit.result_return_temps.len(), 1, "{}", emit.code);
+        let probe = emit.result_return_temps[0];
+        assert_eq!(&emit.code[probe.out..probe.out_end], "R.Ok(n)");
+        assert_eq!(&source[probe.src..probe.src_end], "R.Ok(n)");
     }
 }

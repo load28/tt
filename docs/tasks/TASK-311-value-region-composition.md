@@ -3,7 +3,7 @@
 - **Status**: Complete
 - **Started**: 2026-09-01
 - **Completed**: 2026-09-01
-- **Commit**: `TASK-311: repair value-region composition`
+- **Commit**: `TASK-311: repair value-region composition`, `TASK-311: address value-region review`
 
 ## Purpose
 
@@ -52,15 +52,17 @@ fallbacks or diagnostic suppression.
 
 ### Decision 3: Preserve Result success typing and checker probes together
 
-- **Context**: Removing an untyped Result temporary fixes empty-literal
-  inference but would remove the checker probe that detects an already-Result
-  success value.
-- **Alternatives considered**: Drop the probe, special-case empty literals, or
-  type the success temporary from the authored Result context.
-- **Decision and rationale**: A contextually typed Result slot exposes its
-  success type through `Extract<typeof slot, { kind: "Ok" }>["value"]`. The
-  temporary retains its probe marker, so contextual literals and the existing
-  nested-Result diagnostic both remain checker-proven.
+- **Context**: An untyped Result temporary interrupts contextual inference, but
+  the checker still needs the exact returned expression to diagnose an
+  already-Result success value.
+- **Alternatives considered**: Type the temporary with a derived `Extract`
+  annotation, probe one token inside it, or bracket the authored expression in
+  the emitted tree.
+- **Decision and rationale**: Emit the authored value directly inside the
+  contextually typed `Ok` object and bracket its emitted range with paired rope
+  marks. The TypeScript host resolves the smallest expression node covering
+  that range. This preserves contextual typing without generated type operators
+  and makes the probe independent of token spelling and UTF-8 width.
 
 ### Decision 4: Keep syntax boundaries structural
 
@@ -93,6 +95,18 @@ fallbacks or diagnostic suppression.
   alphabet so coverage messages and suggested arms contain each case once.
 - 2026-09-01: Passed the complete repository gate across agent contracts, Rust,
   npm packages, native TypeScript integration, and the VS Code extension.
+- 2026-09-01: Reopened the task for PR review follow-ups covering UTF-8 probe
+  coordinates, flow-analysis layering, ownership indexing, and typed slot
+  identity.
+- 2026-09-01: Replaced position-based Result probes with emitted expression
+  ranges and removed the generated Result success temporary and its derived
+  type annotation.
+- 2026-09-01: Moved Result completion from AST/parser state to a single HIR
+  flow fact consumed by sema and codegen.
+- 2026-09-01: Replaced repeated arm scans and raw recursive `RefCell` stacks
+  with a precomputed ExprId ownership index and guard-backed emitter state.
+- 2026-09-01: Passed the complete repository gate again after the review
+  follow-ups, including the native TypeScript host and VS Code extension.
 
 ## Issues and resolutions
 
@@ -125,8 +139,10 @@ fallbacks or diagnostic suppression.
 - **Cause**: Unannotated generated bindings interrupted TypeScript contextual
   typing, and expression boundaries always emitted a fallback success return.
 - **Resolution**: Authored annotations flow to owner slots, async returns use
-  `Awaited<...>`, Result success temporaries derive the success member type, and
-  Core flow completeness suppresses unreachable fallbacks.
+  `Awaited<...>`, and Result success values are emitted directly into the
+  contextual `Ok` object. HIR computes one conservative completion fact for
+  both sema and codegen, so unreachable fallbacks are omitted without a second
+  flow answer.
 
 ### Issue 4: Token boundaries conflated host constructs
 
@@ -148,6 +164,18 @@ fallbacks or diagnostic suppression.
   at the project root and passes the real TypeScript integration test without
   `paths`. Semantic alphabets now keep the first constructor of each name once.
 
+### Issue 6: Review exposed implicit coordinates and repeated ownership work
+
+- **Symptom**: A Result return beginning with a multi-byte identifier could
+  move a byte-based checker probe outside the expression; propagation
+  validation also rescanned every decision arm for every region.
+- **Cause**: Result shape queries named one interior token position rather than
+  an expression node, while isolated-arm ownership had no ExprId index.
+- **Resolution**: Rope marks now bracket the emitted expression and the
+  TypeScript host resolves its AST node by range. Evaluation IR builds the arm
+  ownership set once, and recursive emitter state uses scoped guards that hold
+  no borrow during recursive calls.
+
 ## Verification
 
 - [x] `cargo fmt --check`
@@ -163,9 +191,11 @@ fallbacks or diagnostic suppression.
 - `src/analysis/mod.rs`
 - `src/ast.rs`
 - `src/codegen/core.rs`
+- `src/codegen/rope.rs`
 - `src/core_ir/lower.rs`
 - `src/core_ir/mod.rs`
 - `src/engine/projection.rs`
+- `src/engine/declarations.rs`
 - `src/evaluation_ir.rs`
 - `src/flow/mod.rs`
 - `src/hir/lower.rs`
@@ -178,16 +208,20 @@ fallbacks or diagnostic suppression.
 - `src/parser/tries.rs`
 - `src/program_syntax.rs`
 - `src/sema.rs`
+- `src/typescript/backend.rs`
+- `src/typescript/host.mjs`
+- `src/typescript/native.rs`
 - `tests/compile.rs`
 - `tests/content_mapper.rs`
 - `tests/fixtures/emit/match-arm-blocks-and-guards/expected.ts`
+- `tests/fixtures/emit/try-and-result/expected.ts`
 - `tests/native.rs`
 - `docs/tasks/INDEX.md`
 - `docs/tasks/TASK-311-value-region-composition.md`
 
 ## Result
 
-All reported compiler defects have structural regression coverage and pass the
-complete local CI gate. The content-mapper standard-library issue was already
-resolved on the updated `main`; its no-`paths` contract remains covered by the
-real TypeScript 7.1 integration suite.
+All reported defects and PR review findings are covered by structural compiler
+or backend contracts and pass the complete local CI gate. Result success values
+now retain contextual typing without generated type operators, and checker
+queries identify exact emitted expression nodes across UTF-8 input.

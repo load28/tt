@@ -312,6 +312,10 @@ fn split_scrutinees(cur: &Cursor, open: usize, close: usize) -> Option<Vec<(usiz
 }
 
 fn generic_angle_close(tokens: &[Token], open: usize, limit: usize) -> Option<usize> {
+    // Only a closing angle followed by a postfix continuation proves this is
+    // a type-argument list. A comma after `f<A>` remains the same ambiguous
+    // comparison boundary TypeScript assigns it; an invocation such as
+    // `f<A>(x)` is structurally closed and stays one tuple subject.
     if open == 0
         || !matches!(
             tokens[open - 1].kind,

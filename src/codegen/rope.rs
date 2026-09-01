@@ -17,7 +17,7 @@ use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubjec
 use crate::program_syntax::SourceSpan;
 use crate::{AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp, ScrutineeTemp};
 
-/// What a [`Piece::Mark`] marks — the two things codegen writes that a
+/// What a [`Piece::Mark`] marks — the values codegen writes that a
 /// type checker can be *asked about*, each paired with the source
 /// construct it stands for.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -26,8 +26,10 @@ pub(crate) enum MarkKind {
     Scrutinee,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
-    /// A value explicitly returned from a `result` block.
-    ResultReturn,
+    /// Start of a value explicitly returned from a `result` block.
+    ResultReturnStart,
+    /// End of the same returned value.
+    ResultReturnEnd,
 }
 
 enum Piece<'a> {
@@ -539,12 +541,26 @@ impl<'a> TargetFile<'a> {
                 }),
                 TargetPiece::Mark {
                     src,
-                    kind: MarkKind::ResultReturn,
+                    kind: MarkKind::ResultReturnStart,
                 } => result_returns.push(ResultReturnTemp {
                     src: *src,
                     src_end: *src,
                     out: out.len(),
+                    out_end: out.len(),
                 }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::ResultReturnEnd,
+                } => {
+                    let mark = result_returns
+                        .iter_mut()
+                        .rev()
+                        .find(|mark| mark.src == *src && mark.out_end == mark.out)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("Result return end has no matching start")
+                        });
+                    mark.out_end = out.len();
+                }
                 TargetPiece::ScopeOpen => scopes.push(line_indent(&out).to_owned()),
                 TargetPiece::ScopeClose => {
                     scopes.pop();
@@ -579,6 +595,9 @@ impl<'a> TargetFile<'a> {
                     out.push_str(text);
                 }
             }
+        }
+        if result_returns.iter().any(|mark| mark.out == mark.out_end) {
+            crate::ice::bug!("Result return start has no matching end")
         }
         marks.sort_by_key(|mark| mark.out);
         payloads.sort_by_key(|mark| mark.out);
@@ -778,10 +797,18 @@ impl<'a> Rope<'a> {
 
     /// Notes that the next copied source byte begins an explicit Result
     /// return value, so a checker query can use its emitted position.
-    pub(crate) fn push_result_return_mark(&mut self, src: usize) {
+    pub(crate) fn push_result_return_start(&mut self, src: usize) {
         self.pieces.push(Piece::Mark {
             src,
-            kind: MarkKind::ResultReturn,
+            kind: MarkKind::ResultReturnStart,
+        });
+    }
+
+    /// Closes the emitted range opened by [`Rope::push_result_return_start`].
+    pub(crate) fn push_result_return_end(&mut self, src: usize) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::ResultReturnEnd,
         });
     }
 

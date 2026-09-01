@@ -242,13 +242,12 @@ pub(crate) fn assemble(
         for result_return in &file.emit.result_return_temps {
             query.result_shapes.push(ResultShapeQuery {
                 module: file.module_path.clone(),
-                // A mark sits immediately before the returned expression.
-                // Probe one code unit into it so the checker selects the
-                // expression token instead of the generated `value:` key.
-                position: mapper::to_utf16(
-                    &file.emit.code,
-                    (result_return.out + 1).min(file.emit.code.len()),
-                ),
+                // Codegen brackets the emitted expression. The backend asks
+                // for the smallest expression node covering this exact range,
+                // so member calls and non-ASCII identifiers are classified as
+                // values rather than by an arbitrary token position.
+                start: mapper::to_utf16(&file.emit.code, result_return.out),
+                end: mapper::to_utf16(&file.emit.code, result_return.out_end),
             });
             probes.result_returns.push(SourceAnchor {
                 source_path: file.source_path.clone(),

@@ -177,7 +177,6 @@ pub(crate) fn program_diverges(src: &str, tokens: &[Token], program: &Program) -
 /// retain the original buffer and select only the tokens owned by the body.
 pub(crate) fn program_diverges_in_span(
     src: &str,
-    _tokens: &[Token],
     program: &Program,
     span: crate::ast::Span,
 ) -> bool {

@@ -3496,7 +3496,7 @@ mod tests {
 
     fn syntax(source: &str) -> ProgramSyntax {
         let program = crate::parser::parse(source);
-        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
         ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
             .expect("projection should parse")
@@ -3504,7 +3504,7 @@ mod tests {
 
     fn build_error(source: &str) -> ProgramSyntaxError {
         let program = crate::parser::parse(source);
-        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
         ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
             .expect_err("projection should not parse")
@@ -3549,7 +3549,7 @@ mod tests {
         // invariant.
         let source = "const value = match (s) { A(v) => v, _ => 0 };\n";
         let program = crate::parser::parse(source);
-        let semantic = crate::analysis::coverage_semantics(&program, &[]);
+        let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
         let core = crate::core_ir::lower_semantic(&semantic, source);
         let projection = ProjectionBuilder::new(&semantic, &core, source)
             .build()
