@@ -1,8 +1,11 @@
 import type { TResult } from "@tt/std";
 import * as Result from "@tt/std/result";
+import type { SameTt } from "./same-tt.tt";
 import type { TsNode } from "./plain";
 import type { TsxNode } from "./plain-jsx";
 import { readTtx, type TtxNode } from "./language-jsx.ttx";
+
+export type TtEdges = readonly [SameTt, TsNode, TsxNode, TtxNode];
 
 export variant TtNode {
   Count(value: number),

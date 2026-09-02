@@ -14,6 +14,7 @@ pub(super) struct Emitter<'a> {
     pub(super) semantic: &'a SemanticFile,
     pub(super) core: &'a CoreFile,
     pub(super) source: &'a str,
+    pub(super) source_kind: SourceKind,
     pub(super) direct_apply_inputs: HashSet<ExprId>,
     pub(super) rewrite_imports: ImportRewrite,
     pub(super) std_imports: StdImports<'a>,

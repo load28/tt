@@ -163,6 +163,7 @@ pub(crate) fn emit_with_map<'a>(
         semantic,
         core,
         source,
+        source_kind,
         direct_apply_inputs,
         rewrite_imports,
         std_imports,

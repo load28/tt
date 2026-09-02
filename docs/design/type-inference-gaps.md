@@ -3,7 +3,7 @@
 TypeScript의 타입 추론이 Rust에 미치지 못하는 지점들을 tsc 실측으로
 분류하고, 그중 tt이 — `match`처럼 런타임 코드를 방출하는 구문을 포함해 —
 메울 수 있는 것들을 기능으로 제안합니다. 이 문서는 제안이며 규범이 아닙니다.
-채택된 항목은 구현 태스크에서 [`docs/reference/`](../reference/)로 옮깁니다.
+채택된 항목은 구현 태스크에서 [`docs/ai/`](../ai/)로 옮깁니다.
 
 실측 환경: tsc 6.0.2, `--strict --noEmit --target es2022`.
 
@@ -153,7 +153,7 @@ Rust에는 대응 문제가 없습니다(리터럴이 아니라 enum을 쓰므�
 ## 3. 제안 P1: 튜플 match — 다중 스크루티니와 곱집합 소진성
 
 > **상태: 구현됨** (TASK-044) — 규범은
-> [`language.md` §3.7](../reference/language.md#37-튜플-match--다중-스크루티니).
+> [`tt.md` match](../ai/tt.md#match).
 > 방출은 중첩 switch 대신 if-체인으로 확정 (§3.4와 다름 — 구현 태스크 결정 2).
 
 다섯 제안 중 가장 큽니다. **곱집합 소진성은 TS가 어떤 타입 트릭으로도
@@ -229,7 +229,7 @@ const step = ((() => {
 ## 4. 제안 P2: 중첩 패턴 — `Ok(value: Some(v))`
 
 > **상태: 구현됨** (TASK-045) — 규범은
-> [`language.md` §3.2/§3.6](../reference/language.md#32-의미). 유닛 케이스
+> [`tt.md` match](../ai/tt.md#match). 유닛 케이스
 > 중첩은 별칭과의 문법 충돌 때문에 괄호 필수(`value: None()`)로 확정.
 
 ### 4.1 문법
@@ -269,7 +269,7 @@ G4에서 봤듯 이 조건 체인 형태는 tsc가 완전하게 좁히므로 타
 > **갱신**: 아래 v1 규칙은 더 이상 구현이 아니다. TASK-103이 소진성을
 > usefulness 알고리즘으로 바꾸면서 중첩 패턴은 **안쪽까지 검사되고**, 빠진 값은
 > 패턴으로 지목된다(`missing "Ok(value: None)"`). 규범은
-> [`language.md` §3.6](../reference/language.md#36-소진성-검사).
+> [`tt.md` match](../ai/tt.md#match).
 
 중첩 패턴이 달린 암은 **가드 암과 동일하게 케이스를 커버하지 못합니다**
 (내부 태그가 다를 수 있으므로). 위 예시가 검사를 통과하려면
@@ -328,7 +328,7 @@ switch ($tt_m) { case "ArrowUp": { return (-1); } ... default: { return (NaN); }
 ## 6. 제안 P4: `if let` — 조건부 스코프의 값 추출
 
 > **상태: 구현됨** (TASK-046) — 규범은
-> [`language.md` §6.5](../reference/language.md#65-if-let-문--조건부-값-추출).
+> [`tt.md` if let](../ai/tt.md#if-let).
 > 제안과 달리 중첩 패턴도 지원하고, 표현식 위치 금지는 sema의 문맥 구분
 > (Top/Stmt/Expr)으로 강제한다.
 

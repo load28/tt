@@ -4,8 +4,8 @@
 (구현된 구조는 [`compiler-architecture.md`](./compiler-architecture.md)).
 TASK-019에서 작성했다. **세 단계 모두 구현되었다** — 1단계는 TASK-020,
 2단계는 TASK-022, 3단계는 TASK-023 (규범 서술:
-[`language.md` §9](../reference/language.md#9-모듈-tt-import-지정자-재작성),
-[`cli.md` "심볼 출력"](../reference/cli.md#심볼-출력---symbols)).
+[`tt.md` Modules](../ai/tt.md#modules),
+[`tt.md` Workflow](../ai/tt.md#workflow)).
 
 ttc는 지금 **파일 하나를 파일 하나로** 바꾼다. `compile(source, &Options) ->
 Result<String, CompileError>`라는 시그니처가 그 사실을 그대로 드러낸다. 이
@@ -19,7 +19,7 @@ Result<String, CompileError>`라는 시그니처가 그 사실을 그대로 드�
 | 증상 | 지금 동작 |
 |------|-----------|
 | `.tt`끼리 import할 수 없다 | 소스에 `from "./error.tt"`이라 쓰면 방출된 `.ts`에 그대로 남는다. tsc는 `TS2307: Cannot find module './error.tt'`로 거부한다. |
-| 소진성 검사가 파일 단위다 | 다른 파일에서 import한 variant에 대한 `match`는 검사 없이 런타임 가드만 남는다 ([language.md §3.6](../reference/language.md#36-소진성-검사)). |
+| 소진성 검사가 파일 단위다 | 다른 파일에서 import한 variant에 대한 `match`는 검사 없이 런타임 가드만 남는다 ([`tt.md` match](../ai/tt.md#match)). |
 | 정의로 이동이 파일 단위다 | 언어 서버의 `analysis.parseEnums(src, masked)`는 문서 하나만 받는다. import 문을 해석하는 코드가 없다. |
 
 원인은 **import 문이 통과 영역**이라는 것이다. ttc는 지정자를 읽지도, 고치지도
@@ -160,5 +160,5 @@ is not exhaustive: ...`. 선언 파일의 행:열까지 담으려면 수집 API�
 ## 참고
 
 - 현재 구조: [`compiler-architecture.md`](./compiler-architecture.md)
-- 소진성 검사 규칙: [`language.md §3.6`](../reference/language.md#36-소진성-검사)
+- 소진성 검사 규칙: [`tt.md` match](../ai/tt.md#match)
 - 언어 서버: [`editors/vscode/README.md`](../../editors/vscode/README.md)

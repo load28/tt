@@ -220,7 +220,9 @@ impl<'a> Emitter<'a> {
                         push_control_break(&mut action, action_depth, chain_exit_label);
                     }
                 } else {
-                    let close = body.last_line_has_line_comment().then_some(action_depth);
+                    let close = body
+                        .last_line_has_line_comment(self.source_kind)
+                        .then_some(action_depth);
                     action.append(self.emit_value_delivery_with_exit(
                         body,
                         close,
@@ -274,7 +276,7 @@ impl<'a> Emitter<'a> {
         }
         if let Some(guard) = arm.guard {
             let guard = self.emit_expr(guard).trim();
-            let guarded = guard.last_line_has_line_comment();
+            let guarded = guard.last_line_has_line_comment(self.source_kind);
             out.push_lit("if (");
             out.append(guard);
             if guarded {

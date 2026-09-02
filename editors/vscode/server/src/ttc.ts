@@ -93,6 +93,27 @@ const CANDIDATE_PATHS = [
   path.join("target", "debug", "ttc.exe"),
 ];
 
+/** The newest compiler build in a development workspace. `cargo build` and
+ * `cargo build --release` are both legitimate; fixed profile precedence can
+ * select an older protocol whenever both artifacts happen to exist. */
+function workspaceCompiler(root: string): string {
+  let selected = "";
+  let selectedMtime = -Infinity;
+  for (const rel of CANDIDATE_PATHS) {
+    const candidate = path.join(root, rel);
+    try {
+      const mtime = fs.statSync(candidate).mtimeMs;
+      if (mtime > selectedMtime) {
+        selected = candidate;
+        selectedMtime = mtime;
+      }
+    } catch {
+      // Missing and unreadable candidates do not participate.
+    }
+  }
+  return selected;
+}
+
 /**
  * Resolve the compiler to run:
  *
@@ -115,14 +136,8 @@ export function findCompiler(
 ): string {
   if (configuredPath.trim() !== "") return configuredPath.trim();
   for (const root of workspaceRoots) {
-    for (const rel of CANDIDATE_PATHS) {
-      const candidate = path.join(root, rel);
-      try {
-        if (fs.existsSync(candidate)) return candidate;
-      } catch {
-        // ignore and keep looking
-      }
-    }
+    const built = workspaceCompiler(root);
+    if (built !== "") return built;
   }
   const installed = packageCompiler(workspaceRoots);
   if (installed !== "") return installed;

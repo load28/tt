@@ -45,6 +45,15 @@ interface Client {
 function connect(): Client {
   const child: ChildProcess = spawn(process.execPath, [SERVER, "--stdio"], {
     stdio: ["pipe", "pipe", "ignore"],
+    // The LSP case lives in a temporary project, while the test contract is
+    // against the compiler built from this checkout. Cover both supported
+    // development routes: a linked package consumes TTC_BINARY, and the
+    // final PATH fallback finds the same executable when no package exists.
+    env: {
+      ...process.env,
+      TTC_BINARY: COMPILER,
+      PATH: `${path.dirname(COMPILER)}${path.delimiter}${process.env.PATH ?? ""}`,
+    },
   });
   const pending = new Map<number, (body: any) => void>();
   interface Waiter {
@@ -520,6 +529,66 @@ test("pattern positions complete cases and fields", { skip, timeout }, async () 
     assert.ok(
       conditional.labels.includes("Circle"),
       `missing Circle in: ${conditional.labels}`,
+    );
+  } finally {
+    stop();
+  }
+});
+
+test("references, rename, signature help, and document symbols cross the LSP adapter", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Point }",
+    "function format(value: string, width?: number): string {",
+    '  return value.padStart(width ?? 0, " ");',
+    "}",
+    'const label = "tt";',
+    "export const output = format(label, 4);",
+    "void label;",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(source, "const lab"),
+      context: { includeDeclaration: true },
+    });
+    assert.equal(references.result.length, 3, JSON.stringify(references.result));
+    assert.ok(
+      references.result.every(
+        (location: any) =>
+          location.uri === uri && covered(source, location.range) === "label",
+      ),
+      JSON.stringify(references.result),
+    );
+
+    const rename = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, "const lab"),
+      newName: "title",
+    });
+    assert.equal(rename.result.changes[uri].length, 3);
+    assert.ok(
+      rename.result.changes[uri].every((edit: any) => edit.newText === "title"),
+      JSON.stringify(rename.result),
+    );
+
+    const signature = await client.request("textDocument/signatureHelp", {
+      textDocument: { uri },
+      position: positionOf(source, "output = format("),
+      context: { triggerKind: 1, isRetrigger: false },
+    });
+    assert.match(signature.result.signatures[0].label, /format/);
+    assert.equal(signature.result.activeParameter, 0);
+
+    const symbols = await client.request("textDocument/documentSymbol", {
+      textDocument: { uri },
+    });
+    const shape = symbols.result.find((symbol: any) => symbol.name === "Shape");
+    assert.ok(shape, JSON.stringify(symbols.result));
+    assert.deepEqual(
+      shape.children.map((symbol: any) => symbol.name),
+      ["Circle", "Point"],
     );
   } finally {
     stop();

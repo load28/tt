@@ -6,6 +6,8 @@ export interface Options {
   compiler?: string;
   /** Run ttc's output self-check (default: true). */
   verify?: boolean;
+  /** Return source maps to the bundler (default: true). */
+  sourcemap?: boolean;
 }
 
 export declare const unpluginFactory: UnpluginFactory<Options | undefined>;

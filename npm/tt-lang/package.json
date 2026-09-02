@@ -7,6 +7,9 @@
     "ttc": "bin/ttc.js"
   },
   "main": "index.js",
+  "scripts": {
+    "prepublishOnly": "node assert-publishable.js"
+  },
   "typescript": {
     "contentMapper": {
       "exec": ["node", "bin/ttc.js", "--content-mapper"]

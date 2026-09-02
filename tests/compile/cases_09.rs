@@ -1,4 +1,37 @@
 #[test]
+fn malformed_pipeline_tail_never_reaches_codegen_as_owned_source() {
+    let source = "\u{6}|>'\u{b}";
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let result = std::panic::catch_unwind(|| {
+            compile(
+                source,
+                &Options {
+                    source_kind,
+                    ..Options::default()
+                },
+            )
+        });
+        assert!(result.is_ok(), "{source_kind:?} panicked");
+    }
+}
+
+#[test]
+fn pipeline_values_containing_double_slashes_do_not_become_comments() {
+    for source in [r#""//" |> String"#, r#"`//` |> String"#, r#"/\/\// |> String"#] {
+        for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+            compile(
+                source,
+                &Options {
+                    source_kind,
+                    ..Options::default()
+                },
+            )
+            .unwrap_or_else(|error| panic!("{source_kind:?} rejected {source:?}: {error}"));
+        }
+    }
+}
+
+#[test]
 fn a_witness_names_the_value_that_is_missing() {
     let e = err(r#"variant Inner { Yes(n: number), No }
 variant Outer { Wrap(inner: Inner), Bare }

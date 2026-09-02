@@ -13,6 +13,7 @@
 #   agents      the agent entrypoint contract (CLAUDE.md, doctor)
 #   rust        cargo fmt --check, clippy -D warnings, cargo test
 #   npm         the npm release tooling and project initializer tests
+#   website     the typed and statically rendered public site
 #   native      the type checking modes against TypeScript 7
 #   extension   the VS Code extension build and its server tests
 #
@@ -37,7 +38,7 @@ set -u
 TT_ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 LOG_DIR="$TT_ROOT/.tt-dev"
 
-ALL_STAGES="agents rust npm native extension"
+ALL_STAGES="agents rust npm website native extension"
 # Runnable, but only when asked for by name (see the header).
 EXTRA_STAGES="coverage bench"
 SELECTED=""
@@ -218,6 +219,7 @@ stage_rust() {
   run cargo fmt --check || return 1
   run cargo clippy --all-targets -- -D warnings || return 1
   run cargo test || return 1
+  run cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked || return 1
 }
 
 stage_npm() {
@@ -228,9 +230,20 @@ stage_npm() {
   # Unquoted on purpose: the shell expands the globs, as it does in CI.
   run node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs || return 1
   run cargo build || return 1
+  run env TTC_BINARY="$TT_ROOT/target/debug/ttc" npm --prefix integrations/unplugin test || return 1
   run env TTC_BINARY="$TT_ROOT/target/debug/ttc" npm --prefix packages/create-tt run test:e2e || return 1
   run npm --prefix tools/deliberation-bot test || return 1
   run npm --prefix tools/deliberation-bot run check || return 1
+}
+
+stage_website() {
+  have bun || {
+    fail "bun is not on PATH; the website gate requires Bun"
+    return 1
+  }
+  (cd "$TT_ROOT/website" && run bun install --frozen-lockfile) || return 1
+  (cd "$TT_ROOT/website" && run bun run typecheck) || return 1
+  (cd "$TT_ROOT/website" && run env SITE_BASE_PATH=/tt/ bun run build) || return 1
 }
 
 # The reason this stage exists is to actually drive TypeScript 7, so a
@@ -262,7 +275,7 @@ stage_extension() {
   run cargo build || return 1
 
   (cd "$TT_ROOT/editors/vscode" && npm_install_if_stale) || return 1
-  (cd "$TT_ROOT/editors/vscode" && run npx tsc -b) || return 1
+  (cd "$TT_ROOT/editors/vscode" && run npm run compile) || return 1
 
   mkdir -p "$LOG_DIR"
   log="$LOG_DIR/extension.log"

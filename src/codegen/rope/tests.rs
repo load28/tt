@@ -80,6 +80,42 @@ fn target_rejects_a_break_with_no_layout_scope() {
 }
 
 #[test]
+fn trailing_line_comment_detection_uses_lexical_context() {
+    let rope = |text| {
+        let mut rope = Rope::new();
+        rope.push_src(text, 0);
+        rope
+    };
+    assert!(rope("value // note").last_line_has_line_comment(SourceKind::TypeScript));
+    assert!(!rope("value /").last_line_has_line_comment(SourceKind::TypeScript));
+    assert!(!rope("\"//\"").last_line_has_line_comment(SourceKind::TypeScript));
+    assert!(!rope("`//`").last_line_has_line_comment(SourceKind::TypeScript));
+    assert!(!rope(r"/\/\//").last_line_has_line_comment(SourceKind::TypeScript));
+    assert!(!rope("<div>//</div>").last_line_has_line_comment(SourceKind::Tsx));
+
+    let mut split = Rope::new();
+    split.push_src("value /", 0);
+    split.push_lit("/ note");
+    assert!(split.last_line_has_line_comment(SourceKind::TypeScript));
+}
+
+#[test]
+fn source_in_a_top_level_construct_is_an_insertion_boundary() {
+    let source = "`value`";
+    let mut inner = Rope::new();
+    inner.push_src(source, 0);
+    let mut rope = Rope::new();
+    rope.anchored(AnchorKind::Pipe, 0, source.len(), source.len(), inner);
+
+    rope.insert_lit_at_source(0, "import { helper } from \"runtime\";\n");
+
+    assert_eq!(
+        rope.resolved_text().as_deref(),
+        Some("import { helper } from \"runtime\";\n`value`")
+    );
+}
+
+#[test]
 fn target_rejects_unbalanced_anchor_structure() {
     let rope = Rope {
         pieces: vec![Piece::Close],
@@ -158,11 +194,11 @@ fn preservation_rejects_a_dropped_pass_through_byte() {
 }
 
 #[test]
-fn preservation_allows_dropped_whitespace_only() {
-    let source = "a  b";
+fn preservation_allows_dropped_unicode_whitespace_only() {
+    let source = "a\u{b}\u{2003}b";
     let mut rope = Rope::new();
     rope.push_src(&source[..1], 0);
-    rope.push_src(&source[3..], 3);
+    rope.push_src(&source[5..], 5);
     let target = preserved(source, rope);
     assert_eq!(
         target.validate_source_preservation(&owned_whole(source)),

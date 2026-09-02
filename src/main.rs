@@ -93,7 +93,8 @@ Options:
   -v, --version         show version
 
 Tooling options (bundler plugins, editors):
-  -p, --print           print compiled output to stdout instead of writing
+  -p, --print           print exactly one compiled source to stdout instead
+                        of writing (--source-map supports off or inline)
   --emit-std <module>   print one support module: types, option, result, runtime
   --no-banner           omit the \"generated\" banner comment
   --no-verify           skip swc validation of types and generated output

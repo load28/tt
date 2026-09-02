@@ -90,13 +90,38 @@ jobs:
           TTC_REQUIRE_TSGO: "1"
         run: cargo test
 
+      - name: Check the standalone fuzz targets
+        run: cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
+
       - name: Test npm release tooling and project initializer
         run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
+
+      - name: Test bundler adapters against ttc
+        env:
+          TTC_BINARY: ${{ github.workspace }}/target/debug/ttc
+        run: npm --prefix integrations/unplugin test
 
       - name: Build-test a freshly generated project
         env:
           TTC_BINARY: ${{ github.workspace }}/target/debug/ttc
         run: npm --prefix packages/create-tt run test:e2e
+
+      - name: Test deliberation tooling
+        run: |
+          npm --prefix tools/deliberation-bot test
+          npm --prefix tools/deliberation-bot run check
+
+      - name: Install website dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
+
+      - name: Type-check and build the website
+        working-directory: website
+        env:
+          SITE_BASE_PATH: /tt/
+        run: |
+          bun run typecheck
+          bun run build
 
       # A skipped suite is green in every other way, so the suite itself
       # has to go red: `TTC_REQUIRE_TSGO` turns "no toolchain found" from a
@@ -254,7 +279,7 @@ jobs:
         working-directory: editors/vscode
         run: |
           npm ci
-          npx tsc -b
+          npm run compile
 
       - name: Test — the extension against a compiler that can emit
         working-directory: editors/vscode

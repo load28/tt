@@ -1,7 +1,10 @@
 import type { TResult } from "@tt/std";
+import type { SameTtx } from "./same-ttx.ttx";
 import type { TsNode } from "./plain";
 import { TsxBadge, type TsxNode } from "./plain-jsx";
 import { read, type TtNode } from "./language.tt";
+
+export type TtxEdges = readonly [SameTtx, TsNode, TsxNode, TtNode];
 
 export variant TtxNode {
   Empty,

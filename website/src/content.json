@@ -744,12 +744,10 @@
       "limits": {
         "en": [
           "Never edit generated .ts/.tsx or .tt-types output.",
-          "During development, typed modes require the source-built tsgo toolchain configured above.",
           "The compiler refuses in-place overwrites of input trees."
         ],
         "ko": [
           "생성된 .ts/.tsx와 .tt-types 출력은 수정하면 안 됩니다.",
-          "현재 개발 단계에서 typed 모드는 위에서 설정한 소스 빌드 tsgo 도구 체인이 필요합니다.",
           "컴파일러는 입력 트리를 제자리에서 덮어쓰지 않습니다."
         ]
       }

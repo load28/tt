@@ -42,6 +42,10 @@ jobs:
         working-directory: website
         run: bun install --frozen-lockfile
 
+      - name: Type-check website
+        working-directory: website
+        run: bun run typecheck
+
       - name: Build static website
         working-directory: website
         env:

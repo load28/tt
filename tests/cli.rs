@@ -202,6 +202,120 @@ fn jobs_rejects_zero_and_garbage() {
 }
 
 #[test]
+fn modes_reject_options_they_would_otherwise_ignore() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    let cases = [
+        (
+            vec!["--content-mapper", "--project", "tsconfig.json"],
+            "--content-mapper does not combine with --project",
+        ),
+        (
+            vec!["--server", "--jobs", "2"],
+            "--server does not combine with --jobs",
+        ),
+        (
+            vec!["--emit-std", "types", "--source-map", "off"],
+            "--emit-std does not combine with --source-map",
+        ),
+        (
+            vec!["--symbols", "--no-banner", path],
+            "--symbols does not combine with --no-banner",
+        ),
+        (
+            vec!["--emit-map", "--jobs", "2", path],
+            "--emit-map does not combine with --jobs",
+        ),
+        (
+            vec!["--sidecar", "declarations", "--no-verify", path],
+            "--sidecar does not combine with --no-verify",
+        ),
+        (
+            vec!["--check-types", "--rewrite-imports", "off", path],
+            "--check-types does not combine with --rewrite-imports",
+        ),
+        (
+            vec!["--types", "--jobs", "2", path],
+            "--types does not combine with --jobs",
+        ),
+        (
+            vec!["--project", "tsconfig.json", path],
+            "build mode does not combine with --project",
+        ),
+        (
+            vec!["--symbols", "--emit-map", path],
+            "--symbols does not combine with --emit-map",
+        ),
+    ];
+
+    for (args, message) in cases {
+        let out = ttc(&args);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(!out.status.success(), "{args:?} should fail");
+        assert_eq!(stderr.trim(), format!("ttc: {message}"));
+        assert!(out.stdout.is_empty(), "{args:?} polluted stdout");
+    }
+}
+
+#[test]
+fn check_rejects_output_options_instead_of_silently_changing_or_ignoring_them() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (option, value) in [
+        ("--print", None),
+        ("--out-dir", Some("out")),
+        ("--source-map", Some("inline")),
+        ("--rewrite-imports", Some("off")),
+        ("--no-banner", None),
+    ] {
+        let mut args = vec!["--check", option];
+        if let Some(value) = value {
+            args.push(value);
+        }
+        args.push(path);
+        let out = ttc(&args);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(!out.status.success(), "{args:?} should fail");
+        assert_eq!(
+            stderr.trim(),
+            format!("ttc: --check does not combine with {option}")
+        );
+        assert!(out.stdout.is_empty(), "{args:?} polluted stdout");
+    }
+}
+
+#[test]
+fn print_requires_one_self_contained_stdout_document() {
+    let dir = tmpdir();
+    let first = dir.join("first.tt");
+    let second = dir.join("second.tt");
+    fs::write(&first, "export const first = 1;\n").unwrap();
+    fs::write(&second, "export const second = 2;\n").unwrap();
+
+    let external_map = ttc(&["--print", "--source-map", "file", first.to_str().unwrap()]);
+    assert!(!external_map.status.success());
+    assert!(external_map.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(external_map.stderr).unwrap().trim(),
+        "ttc: --print requires --source-map off or inline; file maps require written output"
+    );
+
+    let multiple = ttc(&["--print", first.to_str().unwrap(), second.to_str().unwrap()]);
+    assert!(!multiple.status.success());
+    assert!(multiple.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(multiple.stderr).unwrap().trim(),
+        "ttc: --print requires exactly one source file"
+    );
+}
+
+#[test]
 fn help_lists_every_topic() {
     let out = ttc(&["help"]);
     assert!(out.status.success());

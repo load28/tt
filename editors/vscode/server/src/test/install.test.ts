@@ -117,6 +117,25 @@ test("a compiler built in the workspace still wins over the install", () => {
   assert.equal(findCompiler("", [workspace]), built);
 });
 
+test("the newest workspace build wins when both Cargo profiles exist", () => {
+  const workspace = scratch("tt-install-profiles-");
+  const release = path.join(workspace, "target", "release", EXE);
+  const debug = path.join(workspace, "target", "debug", EXE);
+  fs.mkdirSync(path.dirname(release), { recursive: true });
+  fs.mkdirSync(path.dirname(debug), { recursive: true });
+  fs.writeFileSync(release, "");
+  fs.writeFileSync(debug, "");
+
+  const old = new Date("2026-01-01T00:00:00Z");
+  const recent = new Date("2026-01-02T00:00:00Z");
+  fs.utimesSync(release, old, old);
+  fs.utimesSync(debug, recent, recent);
+  assert.equal(findCompiler("", [workspace]), debug);
+
+  fs.utimesSync(release, new Date("2026-01-03T00:00:00Z"), new Date("2026-01-03T00:00:00Z"));
+  assert.equal(findCompiler("", [workspace]), release);
+});
+
 test("the configured path wins over everything", () => {
   const workspace = scratch("tt-install-configured-");
   install(workspace);

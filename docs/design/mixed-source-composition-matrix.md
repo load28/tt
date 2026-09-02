@@ -8,14 +8,14 @@ uses to make a different parsing, ownership, evaluation, or module decision.
 ## Source-kind matrix
 
 The four source kinds form a directed import graph. The mixed-source fixture
-contains every non-self edge, for twelve edges total:
+contains every edge, including same-kind imports, for sixteen edges total:
 
 | Importer | Imported source kinds |
 | --- | --- |
-| `.ts` | `.tsx`, `.tt`, `.ttx` |
-| `.tsx` | `.ts`, `.tt`, `.ttx` |
-| `.tt` | `.ts`, `.tsx`, `.ttx` |
-| `.ttx` | `.ts`, `.tsx`, `.tt` |
+| `.ts` | `.ts`, `.tsx`, `.tt`, `.ttx` |
+| `.tsx` | `.ts`, `.tsx`, `.tt`, `.ttx` |
+| `.tt` | `.ts`, `.tsx`, `.tt`, `.ttx` |
+| `.ttx` | `.ts`, `.tsx`, `.tt`, `.ttx` |
 
 `.ts` and `.tsx` remain byte-preserved TypeScript inputs except for the
 documented relative `.tt`/`.ttx` specifier rewrite. `.tt` emits `.ts`; `.ttx`

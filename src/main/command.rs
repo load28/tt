@@ -2,6 +2,68 @@
 
 use super::*;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CliOption {
+    Print,
+    Watch,
+    Check,
+    CheckTypes,
+    Types,
+    TtOnly,
+    Server,
+    ContentMapper,
+    Overlay,
+    Project,
+    Symbols,
+    EmitMap,
+    NoBanner,
+    NoVerify,
+    EmitStd,
+    Sidecar,
+    Jobs,
+    OutDir,
+    Node,
+    SourceMap,
+    RewriteImports,
+}
+
+impl CliOption {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Print => "--print",
+            Self::Watch => "--watch",
+            Self::Check => "--check",
+            Self::CheckTypes => "--check-types",
+            Self::Types => "--types",
+            Self::TtOnly => "--tt-only",
+            Self::Server => "--server",
+            Self::ContentMapper => "--content-mapper",
+            Self::Overlay => "--overlay",
+            Self::Project => "--project",
+            Self::Symbols => "--symbols",
+            Self::EmitMap => "--emit-map",
+            Self::NoBanner => "--no-banner",
+            Self::NoVerify => "--no-verify",
+            Self::EmitStd => "--emit-std",
+            Self::Sidecar => "--sidecar",
+            Self::Jobs => "--jobs",
+            Self::OutDir => "--out-dir",
+            Self::Node => "--node",
+            Self::SourceMap => "--source-map",
+            Self::RewriteImports => "--rewrite-imports",
+        }
+    }
+}
+
+fn reject_options(mode: &str, seen: &[CliOption], allowed: &[CliOption]) -> Option<ExitCode> {
+    let option = seen
+        .iter()
+        .copied()
+        .find(|option| !allowed.contains(option))?;
+    eprintln!("ttc: {mode} does not combine with {}", option.label());
+    Some(ExitCode::FAILURE)
+}
+
 pub(super) fn entry() -> ExitCode {
     // Every panic from here on is reported as what it is — a bug in this
     // compiler — rather than as a Rust backtrace the reader has to
@@ -60,6 +122,7 @@ pub(super) fn run() -> ExitCode {
     let mut rewrite_imports = ImportRewrite::default();
     let mut source_map = SourceMapMode::default();
     let mut jobs_limit: Option<usize> = None;
+    let mut seen = Vec::new();
 
     let mut it = argv.iter();
     while let Some(a) = it.next() {
@@ -72,40 +135,92 @@ pub(super) fn run() -> ExitCode {
                 println!("{VERSION}");
                 return ExitCode::SUCCESS;
             }
-            "-p" | "--print" => print = true,
-            "-w" | "--watch" => watch = true,
-            "--check" => check = true,
-            "--check-types" => check_types = true,
+            "-p" | "--print" => {
+                seen.push(CliOption::Print);
+                print = true;
+            }
+            "-w" | "--watch" => {
+                seen.push(CliOption::Watch);
+                watch = true;
+            }
+            "--check" => {
+                seen.push(CliOption::Check);
+                check = true;
+            }
+            "--check-types" => {
+                seen.push(CliOption::CheckTypes);
+                check_types = true;
+            }
             "--types" => {
+                seen.push(CliOption::Types);
                 check_types = true;
                 types = true;
             }
-            "--tt-only" => tt_only = true,
-            "--server" => server = true,
-            "--content-mapper" => content_mapper = true,
+            "--tt-only" => {
+                seen.push(CliOption::TtOnly);
+                tt_only = true;
+            }
+            "--server" => {
+                seen.push(CliOption::Server);
+                server = true;
+            }
+            "--content-mapper" => {
+                seen.push(CliOption::ContentMapper);
+                content_mapper = true;
+            }
             "--overlay" => match it.next() {
-                Some(path) => overlay_path = Some(PathBuf::from(path)),
+                Some(path) => {
+                    seen.push(CliOption::Overlay);
+                    overlay_path = Some(PathBuf::from(path));
+                }
                 None => {
                     eprintln!("ttc: --overlay requires the path the buffer belongs to");
                     return ExitCode::FAILURE;
                 }
             },
             "--project" => match it.next() {
-                Some(path) => project = Some(PathBuf::from(path)),
+                Some(path) => {
+                    seen.push(CliOption::Project);
+                    project = Some(PathBuf::from(path));
+                }
                 None => {
                     eprintln!("ttc: --project requires a path to a tsconfig.json");
                     return ExitCode::FAILURE;
                 }
             },
-            "--symbols" => symbols = true,
-            "--emit-map" => emit_map = true,
-            "--no-banner" => banner = false,
-            "--no-verify" => verify = false,
+            "--symbols" => {
+                seen.push(CliOption::Symbols);
+                symbols = true;
+            }
+            "--emit-map" => {
+                seen.push(CliOption::EmitMap);
+                emit_map = true;
+            }
+            "--no-banner" => {
+                seen.push(CliOption::NoBanner);
+                banner = false;
+            }
+            "--no-verify" => {
+                seen.push(CliOption::NoVerify);
+                verify = false;
+            }
             "--emit-std" => match it.next().map(String::as_str) {
-                Some("types") => emit_std = Some(StdModule::Types),
-                Some("option") => emit_std = Some(StdModule::Option),
-                Some("result") => emit_std = Some(StdModule::Result),
-                Some("runtime") => emit_std = Some(StdModule::Runtime),
+                Some("types") => {
+                    seen.push(CliOption::EmitStd);
+                    emit_std = Some(StdModule::Types);
+                }
+                Some("option") => {
+                    seen.push(CliOption::EmitStd);
+                    emit_std = Some(StdModule::Option);
+                }
+                Some("result") => {
+                    seen.push(CliOption::EmitStd);
+                    emit_std = Some(StdModule::Result);
+                }
+                Some("runtime") => {
+                    seen.push(CliOption::EmitStd);
+                    emit_std = Some(StdModule::Runtime);
+                }
                 Some(other) => {
                     eprintln!(
                         "ttc: --emit-std expects types, option, result, or runtime (got {other})"
@@ -120,14 +235,20 @@ pub(super) fn run() -> ExitCode {
                 }
             },
             "--sidecar" => match it.next() {
-                Some(dir) => sidecar_dir = Some(PathBuf::from(dir)),
+                Some(dir) => {
+                    seen.push(CliOption::Sidecar);
+                    sidecar_dir = Some(PathBuf::from(dir));
+                }
                 None => {
                     eprintln!("ttc: --sidecar requires a directory of tsc-emitted .d.ts files");
                     return ExitCode::FAILURE;
                 }
             },
             "-j" | "--jobs" => match it.next().map(|n| n.parse::<usize>()) {
-                Some(Ok(n)) if n >= 1 => jobs_limit = Some(n),
+                Some(Ok(n)) if n >= 1 => {
+                    seen.push(CliOption::Jobs);
+                    jobs_limit = Some(n);
+                }
                 Some(_) => {
                     eprintln!("ttc: --jobs expects a positive number of parallel compiles");
                     return ExitCode::FAILURE;
@@ -138,23 +259,38 @@ pub(super) fn run() -> ExitCode {
                 }
             },
             "-o" | "--out-dir" => match it.next() {
-                Some(dir) => out_dir = Some(PathBuf::from(dir)),
+                Some(dir) => {
+                    seen.push(CliOption::OutDir);
+                    out_dir = Some(PathBuf::from(dir));
+                }
                 None => {
                     eprintln!("ttc: --out-dir requires a value");
                     return ExitCode::FAILURE;
                 }
             },
             "--node" => match it.next() {
-                Some(path) => node = Some(PathBuf::from(path)),
+                Some(path) => {
+                    seen.push(CliOption::Node);
+                    node = Some(PathBuf::from(path));
+                }
                 None => {
                     eprintln!("ttc: --node requires a path to the node binary");
                     return ExitCode::FAILURE;
                 }
             },
             "--source-map" => match it.next().map(String::as_str) {
-                Some("off") => source_map = SourceMapMode::Off,
-                Some("file") => source_map = SourceMapMode::File,
-                Some("inline") => source_map = SourceMapMode::Inline,
+                Some("off") => {
+                    seen.push(CliOption::SourceMap);
+                    source_map = SourceMapMode::Off;
+                }
+                Some("file") => {
+                    seen.push(CliOption::SourceMap);
+                    source_map = SourceMapMode::File;
+                }
+                Some("inline") => {
+                    seen.push(CliOption::SourceMap);
+                    source_map = SourceMapMode::Inline;
+                }
                 Some(other) => {
                     eprintln!("ttc: --source-map expects off, file, or inline (got {other})");
                     return ExitCode::FAILURE;
@@ -165,9 +301,18 @@ pub(super) fn run() -> ExitCode {
                 }
             },
             "--rewrite-imports" => match it.next().map(String::as_str) {
-                Some("js") => rewrite_imports = ImportRewrite::Js,
-                Some("ts") => rewrite_imports = ImportRewrite::Ts,
-                Some("off") => rewrite_imports = ImportRewrite::Off,
+                Some("js") => {
+                    seen.push(CliOption::RewriteImports);
+                    rewrite_imports = ImportRewrite::Js;
+                }
+                Some("ts") => {
+                    seen.push(CliOption::RewriteImports);
+                    rewrite_imports = ImportRewrite::Ts;
+                }
+                Some("off") => {
+                    seen.push(CliOption::RewriteImports);
+                    rewrite_imports = ImportRewrite::Off;
+                }
                 Some(other) => {
                     eprintln!("ttc: --rewrite-imports expects js, ts, or off (got {other})");
                     return ExitCode::FAILURE;
@@ -188,20 +333,12 @@ pub(super) fn run() -> ExitCode {
     // A TypeScript content mapper process — spawned by TypeScript itself,
     // never combined with anything: stdin and stdout are the protocol.
     if content_mapper {
-        if server
-            || !inputs.is_empty()
-            || emit_std.is_some()
-            || print
-            || watch
-            || check
-            || check_types
-            || symbols
-            || emit_map
-            || sidecar_dir.is_some()
-            || overlay_path.is_some()
-        {
-            eprintln!("ttc: --content-mapper takes no inputs and combines with no other mode");
+        if !inputs.is_empty() {
+            eprintln!("ttc: --content-mapper takes no inputs");
             return ExitCode::FAILURE;
+        }
+        if let Some(code) = reject_options("--content-mapper", &seen, &[CliOption::ContentMapper]) {
+            return code;
         }
         return content_mapper::run();
     }
@@ -209,19 +346,13 @@ pub(super) fn run() -> ExitCode {
     // The engine behind a pipe — a session for tools that ask often. It
     // reads requests from stdin, so it combines with nothing else.
     if server {
-        if !inputs.is_empty()
-            || emit_std.is_some()
-            || print
-            || watch
-            || check
-            || check_types
-            || symbols
-            || emit_map
-            || sidecar_dir.is_some()
-            || overlay_path.is_some()
-        {
-            eprintln!("ttc: --server takes no inputs and combines with no other mode");
+        if !inputs.is_empty() {
+            eprintln!("ttc: --server takes no inputs");
             return ExitCode::FAILURE;
+        }
+        if let Some(code) = reject_options("--server", &seen, &[CliOption::Server, CliOption::Node])
+        {
+            return code;
         }
         return server::run(node);
     }
@@ -233,6 +364,13 @@ pub(super) fn run() -> ExitCode {
         if !inputs.is_empty() {
             eprintln!("ttc: --emit-std takes no inputs (the build materializes support modules)");
             return ExitCode::FAILURE;
+        }
+        if let Some(code) = reject_options(
+            "--emit-std",
+            &seen,
+            &[CliOption::EmitStd, CliOption::NoBanner],
+        ) {
+            return code;
         }
         let mut code = module.source().to_string();
         if banner {
@@ -249,6 +387,88 @@ pub(super) fn run() -> ExitCode {
 
     if !check_types && (overlay_path.is_some() || tt_only) {
         eprintln!("ttc: --overlay and --tt-only require --check-types");
+        return ExitCode::FAILURE;
+    }
+    if types && (overlay_path.is_some() || tt_only) {
+        eprintln!("ttc: --overlay and --tt-only work with --check-types, not --types");
+        return ExitCode::FAILURE;
+    }
+
+    let allowed = if types {
+        &[
+            CliOption::Types,
+            CliOption::Watch,
+            CliOption::Project,
+            CliOption::Node,
+            CliOption::OutDir,
+        ][..]
+    } else if check_types {
+        &[
+            CliOption::CheckTypes,
+            CliOption::Watch,
+            CliOption::Overlay,
+            CliOption::TtOnly,
+            CliOption::Project,
+            CliOption::Node,
+        ][..]
+    } else if symbols {
+        &[CliOption::Symbols][..]
+    } else if emit_map {
+        &[CliOption::EmitMap][..]
+    } else if sidecar_dir.is_some() {
+        &[CliOption::Sidecar, CliOption::OutDir][..]
+    } else if check {
+        &[
+            CliOption::Watch,
+            CliOption::Check,
+            CliOption::NoVerify,
+            CliOption::Jobs,
+        ][..]
+    } else if print {
+        &[
+            CliOption::Print,
+            CliOption::Watch,
+            CliOption::NoBanner,
+            CliOption::NoVerify,
+            CliOption::Jobs,
+            CliOption::SourceMap,
+            CliOption::RewriteImports,
+        ][..]
+    } else {
+        &[
+            CliOption::Watch,
+            CliOption::NoBanner,
+            CliOption::NoVerify,
+            CliOption::Jobs,
+            CliOption::OutDir,
+            CliOption::SourceMap,
+            CliOption::RewriteImports,
+        ][..]
+    };
+    let mode = if types {
+        "--types"
+    } else if check_types {
+        "--check-types"
+    } else if symbols {
+        "--symbols"
+    } else if emit_map {
+        "--emit-map"
+    } else if sidecar_dir.is_some() {
+        "--sidecar"
+    } else if check {
+        "--check"
+    } else if print {
+        "--print"
+    } else {
+        "build mode"
+    };
+    if let Some(code) = reject_options(mode, &seen, allowed) {
+        return code;
+    }
+    if print && source_map == SourceMapMode::File {
+        eprintln!(
+            "ttc: --print requires --source-map off or inline; file maps require written output"
+        );
         return ExitCode::FAILURE;
     }
 
@@ -276,10 +496,6 @@ pub(super) fn run() -> ExitCode {
         // rather than producing files: unsaved text must not reach a written
         // sidecar, and a mode that writes is not one that hides half of what
         // it found.
-        if types && (overlay_path.is_some() || tt_only) {
-            eprintln!("ttc: --overlay and --tt-only work with --check-types, not --types");
-            return ExitCode::FAILURE;
-        }
         let mut overlay = std::collections::HashMap::new();
         if let Some(path) = &overlay_path {
             // The buffer's text arrives on stdin, keyed by the path the file
@@ -328,6 +544,10 @@ pub(super) fn run() -> ExitCode {
 
     if jobs.is_empty() {
         eprintln!("ttc: no sources found");
+        return ExitCode::FAILURE;
+    }
+    if print && jobs.len() != 1 {
+        eprintln!("ttc: --print requires exactly one source file");
         return ExitCode::FAILURE;
     }
 

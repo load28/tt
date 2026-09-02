@@ -1,3 +1,4 @@
+import type { SameTs } from "./same";
 import type { TsxNode } from "./plain-jsx";
 import type { TtNode } from "./language.tt";
 import type { TtxNode } from "./language-jsx.ttx";
@@ -7,6 +8,6 @@ export interface TsNode {
   readonly value: number;
 }
 
-export type TsEdges = readonly [TsxNode, TtNode, TtxNode];
+export type TsEdges = readonly [SameTs, TsxNode, TtNode, TtxNode];
 
 export const tsNode = (value: number): TsNode => ({ source: "ts", value });

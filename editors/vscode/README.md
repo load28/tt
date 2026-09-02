@@ -137,8 +137,8 @@ code --install-extension tt-language-<version>.vsix   # 릴리스의 VSIX
 진단에는 `ttc` 바이너리가 필요합니다. 탐색 순서:
 
 1. `tt.compilerPath` 설정
-2. 워크스페이스의 `target/release/ttc` → `target/debug/ttc` (TT 저장소 자체를
-   열어 컴파일러를 개발하는 경우)
+2. The most recently built workspace compiler from `target/release/ttc` and
+   `target/debug/ttc` (when the TT repository itself is open)
 3. **프로젝트가 설치한 `@openload28/tt-lang`의 ttc** — 어느 바이너리인지는 그
    패키지 자신이 답하므로(`binaryPath()`), 게시본 설치·`file:` 개발 설치·
    `TTC_BINARY` 지정이 모두 같은 경로로 해석됩니다 (`server/src/install.ts`)

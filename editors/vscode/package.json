@@ -153,7 +153,8 @@
     }
   },
   "scripts": {
-    "compile": "tsc -b",
+    "clean": "node scripts/clean.mjs",
+    "compile": "npm run clean && tsc -b",
     "watch": "tsc -b -w",
     "postinstall": "cd client && npm install && cd ../server && npm install",
     "test": "npm run compile && node --test \"server/out/test/*.test.js\"",
