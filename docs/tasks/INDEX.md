@@ -325,7 +325,8 @@
 | TASK-314 | Split the TypeScript codegen core into responsibility modules | Complete | 2026-09-02 | 2026-09-02 | [TASK-314](./TASK-314-split-codegen-core.md) |
 | TASK-315 | Split every oversized Rust source and test file | Complete | 2026-09-02 | 2026-09-02 | [TASK-315](./TASK-315-split-oversized-rust-files.md) |
 | TASK-316 | Unify setup on the TypeScript content mapper | Complete | 2026-09-02 | 2026-09-02 | [TASK-316](./TASK-316-unify-content-mapper-setup.md) |
+| TASK-317 | Build-test generated create-tt projects | Complete | 2026-09-02 | 2026-09-02 | [TASK-317](./TASK-317-create-tt-build-gate.md) |
 
 ## 다음 태스크 번호
 
-**TASK-317**
+**TASK-318**
