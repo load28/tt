@@ -43,7 +43,8 @@ bun run tt:check
 ```
 
 See the [installation guide](./docs/getting-started.md) for automatic and
-bundler-specific manual setup.
+bundler-specific manual setup. `create-tt` configures the TypeScript 7.1 content
+mapper, so `.ts` and `.tsx` can import `.tt` and `.ttx` without sidecar files.
 
 ### VS Code extension
 

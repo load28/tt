@@ -104,7 +104,7 @@
       "code": "bunx @openload28/create-tt@next my-app\ncd my-app\nbun run dev",
       "works": {
         "en": [
-          "New projects use Vite, TypeScript, and Bun.",
+          "New projects use Vite, TypeScript, Bun, and the TypeScript 7.1 content mapper.",
           "Existing projects support Vite, Rollup, Rolldown, webpack, Rspack, esbuild, and Farm.",
           "Manual installs use the next channel for the latest Nightly.",
           "Prebuilt compilers support Linux x64/arm64, macOS x64/arm64, and Windows x64."
@@ -123,7 +123,7 @@
             "ko": "새 프로젝트"
           },
           "body": {
-            "en": "Create a ready-to-run Vite and TypeScript project.",
+            "en": "Create a ready-to-run Vite and TypeScript project. The generated TypeScript config resolves .tt and .ttx imports through the content mapper without sidecars.",
             "ko": "바로 실행할 수 있는 Vite와 TypeScript 프로젝트를 만듭니다."
           },
           "code": "bunx @openload28/create-tt@next my-app\ncd my-app\nbun run dev"
@@ -172,10 +172,10 @@
             "ko": "컴파일러 수동 설치"
           },
           "body": {
-            "en": "Install the compiler and the supported TypeScript version, then compile or check the source tree.",
+            "en": "Install the compiler and supported TypeScript version, declare the content mapper at the top level of tsconfig.json, and run TypeScript with external-code permission.",
             "ko": "컴파일러와 지원하는 TypeScript 버전을 설치한 뒤 소스 트리를 컴파일하거나 검사합니다."
           },
-          "code": "bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1\nbunx ttc -o .tt-build src\nbunx ttc --check-types src"
+          "code": "bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1\n\n// tsconfig.json\n{\n  \"contentMappers\": [\n    { \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }\n  ]\n}\n\nbunx tsc -p tsconfig.json --runExternalCode"
         },
         {
           "title": {
@@ -726,18 +726,18 @@
         "en": "Compile, check, type-check, and watch complete source trees.",
         "ko": "전체 소스 트리를 컴파일하고 검사하며 타입 검사·감시합니다."
       },
-      "code": "npx ttc --check src\nnpx ttc --check-types src\nnpx ttc --types -w src\nnpx ttc -o build src\nnpx ttc help match",
+      "code": "npx ttc --check src\nnpx ttc --check-types src\nnpx tsc -p tsconfig.json --runExternalCode\nnpx ttc -o build src\nnpx ttc help match",
       "works": {
         "en": [
           "--check runs tt-level checks without TypeScript.",
           "--check-types adds TypeScript-backed checks at .tt and .ttx source positions.",
-          "--types writes declaration sidecars; -w watches files and importers.",
+          "The TypeScript CLI loads .tt and .ttx through the configured content mapper.",
           "Directories preserve the source tree and pass handwritten .ts and .tsx through."
         ],
         "ko": [
           "--check는 TypeScript 없이 tt 수준 검사만 실행합니다.",
           "--check-types는 .tt·.ttx 원본 위치에 TypeScript 기반 검사를 추가합니다.",
-          "--types는 선언 사이드카를 쓰며 -w는 파일과 import 사용처를 감시합니다.",
+          "The TypeScript CLI loads .tt and .ttx through the configured content mapper.",
           "디렉터리 구조를 유지하고 직접 작성한 .ts와 .tsx는 그대로 통과시킵니다."
         ]
       },

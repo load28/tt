@@ -324,7 +324,8 @@
 | TASK-313 | Resolve language services through linked TypeScript packages | Complete | 2026-09-02 | 2026-09-02 | [TASK-313](./TASK-313-linked-typescript-toolchain.md) |
 | TASK-314 | Split the TypeScript codegen core into responsibility modules | Complete | 2026-09-02 | 2026-09-02 | [TASK-314](./TASK-314-split-codegen-core.md) |
 | TASK-315 | Split every oversized Rust source and test file | Complete | 2026-09-02 | 2026-09-02 | [TASK-315](./TASK-315-split-oversized-rust-files.md) |
+| TASK-316 | Unify setup on the TypeScript content mapper | Complete | 2026-09-02 | 2026-09-02 | [TASK-316](./TASK-316-unify-content-mapper-setup.md) |
 
 ## 다음 태스크 번호
 
-**TASK-316**
+**TASK-317**
