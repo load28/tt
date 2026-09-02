@@ -33,11 +33,17 @@ test('creates a complete Vite project without installing', async () => {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   assert.equal(result.bundler, 'vite')
   assert.equal(result.packageManager, 'bun')
-  assert.equal(manifest.scripts.check, 'ttc --check-types src')
+  assert.equal(manifest.scripts.check, 'tsc -p tsconfig.json --runExternalCode')
+  assert.equal(manifest.scripts.build, 'tsc -p tsconfig.json --runExternalCode && vite build')
   assert.equal(manifest.devDependencies['@openload28/unplugin-tt'], expectedDependencyChannel)
   assert.equal(manifest.devDependencies.typescript, scaffoldedTypeScript)
   assert.match(await readFile(join(root, 'vite.config.ts'), 'utf8'), /@openload28\/unplugin-tt\/vite/)
   assert.equal(await readFile(join(root, 'src/main.ts'), 'utf8'), "import './app.tt'\n")
+  const config = JSON.parse(await readFile(join(root, 'tsconfig.json'), 'utf8'))
+  assert.deepEqual(config.contentMappers, [
+    { package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] },
+  ])
+  assert.equal(await readFile(join(root, '.gitignore'), 'utf8'), 'node_modules/\ndist/\n')
   const appSource = await readFile(join(root, 'src/app.tt'), 'utf8')
   assert.match(appSource, /variant Greeting/)
   assert.match(appSource, /match \(greeting\)/)
@@ -67,18 +73,27 @@ test('initializes Vite through a wrapper and preserves the user config', async (
   }, null, 4))
   const original = "export default { plugins: ['user-plugin'] }\n"
   await writeFile(join(root, 'vite.config.ts'), original)
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }, null, 4))
 
   await initializeExisting({ directory: root, bundler: 'auto' })
 
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   assert.equal(await readFile(join(root, 'vite.config.ts'), 'utf8'), original)
   assert.equal(manifest.scripts.dev, 'vite')
+  assert.equal(manifest.scripts['tt:check'], 'tsc -p tsconfig.tt.json --runExternalCode')
   assert.match(manifest.scripts['tt:build'], /tt\.vite\.config\.mjs/)
   assert.equal(manifest.devDependencies['@openload28/tt-lang'], expectedDependencyChannel)
   assert.equal(manifest.devDependencies.typescript, scaffoldedTypeScript)
   const wrapper = await readFile(join(root, 'tt.vite.config.mjs'), 'utf8')
   assert.match(wrapper, /import base from '.\/vite\.config\.ts'/)
   assert.match(wrapper, /plugins: \[tt\(\), \.\.\.\(config\.plugins/)
+  const config = JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8'))
+  assert.equal(config.extends, './tsconfig.json')
+  assert.deepEqual(config.compilerOptions, { noEmit: true })
+  assert.equal(config.include, undefined)
+  assert.deepEqual(config.contentMappers, [
+    { package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] },
+  ])
 })
 
 test('keeps esbuild scripts intact and returns an explicit manual hook', async () => {
@@ -91,7 +106,7 @@ test('keeps esbuild scripts intact and returns an explicit manual hook', async (
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   assert.equal(result.manualModule, '@openload28/unplugin-tt/esbuild')
   assert.equal(manifest.scripts.build, 'node build.mjs')
-  assert.equal(manifest.scripts['tt:check'], 'ttc --check-types src')
+  assert.equal(manifest.scripts['tt:check'], 'tsc -p tsconfig.tt.json --runExternalCode')
 })
 
 test('generates a composable wrapper for every declarative bundler adapter', async () => {

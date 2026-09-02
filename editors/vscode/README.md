@@ -254,63 +254,12 @@ Run `tsc` with `--runExternalCode` so TypeScript may start the mapper process.
 Diagnostics point to the original `.tt` and `.ttx` positions, and tt-level
 errors use `tt` as their source.
 
-### 클래식 tsserver — 사이드카 (레거시)
+### Classic tsserver — legacy sidecars
 
-content mapper가 없는 TypeScript에서는 소스 옆에
-**사이드카**(`notice.tt.d.ts` 또는 `view.ttx.d.ts`와 map)를 두면
-해결됩니다 — 에러가 사라지고, 정의 이동이 `.d.ts`가 아니라 **원본 `.tt`·`.ttx`의
-해당 줄**로 갑니다.
-
-사이드카는 `ttc --sidecar`가 만들고, 이 확장이 **저장할 때마다 갱신**합니다.
-기본값 `refresh`는 이미 있는 사이드카만 다시 씁니다 — 프로젝트가
-`ttc --sidecar`를 한 번 돌려 명시적으로 참여한 경우에만 파일이 생깁니다.
-처음부터 자동으로 만들려면 `tt.sidecar`를 `always`로 두세요.
-
-컴파일에 실패한 저장은 사이드카를 건드리지 않습니다. 편집 도중 선언이
-사라지는 대신 마지막으로 성공한 상태가 유지됩니다.
-
-사이드카를 읽으려면 그 `.ts` 파일을 포함하는 `tsconfig.json`이 있어야
-합니다 — 추론 프로젝트로 열리면 tsserver가 선언 맵을 따라가지 않습니다.
-
-### 소스 트리를 어지럽히지 않게
-
-**권장: 사이드카를 별도 트리에 두세요.** `tt.sidecarDir`을 `.tt-types` 같은
-값으로 두면 저장 시 그쪽에 쓰이고, 소스 트리에는 아무것도 생기지 않습니다.
-소비 측 `tsconfig.json`에 `rootDirs`를 함께 두면 `"./x.tt"`이 그대로
-해석되고 정의 이동도 원본으로 갑니다.
-
-```jsonc
-// .vscode/settings.json 또는 워크스페이스 설정
-"tt.sidecarDir": ".tt-types"
-
-// src/tsconfig.json
-"rootDirs": [".", "../.tt-types"]
-```
-
-이 방식은 에디터와 무관하게 동작합니다 — 생성물이 소스와 섞이지 않으니
-탐색기 설정이 필요 없습니다.
-
-사이드카를 소스 옆에 두는 경우(`tt.sidecarDir`이 비어 있을 때)를 위해
-이 확장이 보이는 방식을 정리해 둡니다.
-
-| 기본값 | 효과 |
-|--------|------|
-| `explorer.fileNesting` | `notice.tt.d.ts`와 `.map`을 `notice.tt` 아래로 접어 넣습니다 |
-| `search.exclude` | 검색 결과에서 뺍니다 |
-| `files.readonlyInclude` | 생성물이므로 읽기 전용으로 엽니다 |
-
-파일 자체도 `// @generated ... do not edit.` 배너로 시작합니다. 셋 다
-사용자 설정으로 덮어쓸 수 있고, 아예 숨기려면 `files.exclude`에
-`**/*.tt.d.ts`, `**/*.ttx.d.ts`와 각각의 map을 추가하세요.
-
-생성물이므로 `.gitignore`에 넣는 것을 권합니다.
-
-```gitignore
-*.tt.d.ts
-*.tt.d.ts.map
-*.ttx.d.ts
-*.ttx.d.ts.map
-```
+Use declaration sidecars only when the TypeScript host cannot load content
+mappers. Run `ttc --types -w src` and wire the generated tree into that host's
+module resolution. This compatibility path is not recommended for new
+TypeScript 7.1+ projects; use the content mapper above instead.
 
 ## 개발
 

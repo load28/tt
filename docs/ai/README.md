@@ -44,8 +44,9 @@ curl -o docs/tt-ai-guide.md \
   guarded and nested arms.
 - **`@tt/std` 치트시트**: `Option`/`Result`의 필드명(`value`/`error`)과
   콤비네이터, 파이프라인용 `*P` 변형.
-- **빌드 파이프라인**: `ttc` 명령, `tsconfig` 설정, 번들러(@openload28/unplugin-tt),
-  `.tt-types` 사이드카.
+- **Build pipeline**: `ttc` commands, the TypeScript content mapper,
+  `tsc --runExternalCode`, and bundler integration through
+  `@openload28/unplugin-tt`.
 - **에러 읽는 법과 마무리 체크리스트**.
 
 ## 유지 관리
