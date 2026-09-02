@@ -63,6 +63,18 @@ shape assertions cannot observe.
 - **Resolution**: Scoped `TMPDIR` and `BUN_INSTALL_CACHE_DIR` to the disposable
   generated project. The unrestricted registry run then passed.
 
+### Issue 2: A local directory dependency resolved outside the generated project
+
+- **Symptom**: Hosted Vite build failed because `integrations/unplugin/index.js`
+  could not resolve its `unplugin` dependency.
+- **Cause**: Bun linked the local `file:` directory into the generated project.
+  Node followed the real repository path, whose dependencies are intentionally
+  not installed by the root manifest. Published packages are extracted rather
+  than linked, so the harness did not match the user installation topology.
+- **Resolution**: Pack both unpublished tt packages with `npm pack` and install
+  those tarballs. Their dependencies now resolve from the generated project in
+  the same layout as a registry installation.
+
 ## Verification
 
 - [x] Generated project installs with Bun and creates `bun.lock`

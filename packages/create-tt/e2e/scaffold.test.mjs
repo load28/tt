@@ -37,6 +37,18 @@ function run(command, args, cwd, temporaryDirectory) {
       result.stderr,
     ].filter(Boolean).join('\n'),
   )
+  return result.stdout.trim()
+}
+
+function pack(packageDirectory, outputDirectory, temporaryDirectory) {
+  const output = run(
+    'npm',
+    ['pack', packageDirectory, '--pack-destination', outputDirectory, '--json'],
+    repositoryRoot,
+    temporaryDirectory,
+  )
+  const [{ filename }] = JSON.parse(output)
+  return join(outputDirectory, filename)
 }
 
 test('a freshly resolved Bun scaffold type-checks and builds', { timeout: 180_000 }, async () => {
@@ -47,16 +59,28 @@ test('a freshly resolved Bun scaffold type-checks and builds', { timeout: 180_00
   try {
     await createProject({ directory: root })
 
-    // Exercise the unpublished code in this checkout while leaving Vite and
-    // its native transitive dependencies to a real fresh registry resolution.
+    const temporaryDirectory = join(root, '.tmp')
+    const packageDirectory = join(temporaryDirectory, 'packages')
+    await mkdir(packageDirectory, { recursive: true })
+
+    // Install the unpublished code as tarballs, matching npm publication
+    // semantics. Directory file: dependencies become symlinks under Bun and
+    // would resolve their own dependencies from the repository instead.
+    const ttPackage = pack(join(repositoryRoot, 'npm/tt-lang'), packageDirectory, temporaryDirectory)
+    const unpluginPackage = pack(
+      join(repositoryRoot, 'integrations/unplugin'),
+      packageDirectory,
+      temporaryDirectory,
+    )
+
+    // Leave Vite and its native transitive dependencies to a real fresh
+    // registry resolution.
     const manifestPath = join(root, 'package.json')
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-    manifest.devDependencies['@openload28/tt-lang'] = `file:${join(repositoryRoot, 'npm/tt-lang')}`
-    manifest.devDependencies['@openload28/unplugin-tt'] = `file:${join(repositoryRoot, 'integrations/unplugin')}`
+    manifest.devDependencies['@openload28/tt-lang'] = `file:${ttPackage}`
+    manifest.devDependencies['@openload28/unplugin-tt'] = `file:${unpluginPackage}`
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-    const temporaryDirectory = join(root, '.tmp')
-    await mkdir(temporaryDirectory)
     run('bun', ['install'], root, temporaryDirectory)
     await access(join(root, 'bun.lock'), constants.R_OK)
     run('bun', ['run', 'check'], root, temporaryDirectory)
