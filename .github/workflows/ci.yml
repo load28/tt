@@ -45,6 +45,9 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Check agent setup entrypoints
         run: |
           test "$(cat CLAUDE.md)" = "@AGENTS.md"
@@ -89,6 +92,11 @@ jobs:
 
       - name: Test npm release tooling and project initializer
         run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
+
+      - name: Build-test a freshly generated project
+        env:
+          TTC_BINARY: ${{ github.workspace }}/target/debug/ttc
+        run: npm --prefix packages/create-tt run test:e2e
 
       # A skipped suite is green in every other way, so the suite itself
       # has to go red: `TTC_REQUIRE_TSGO` turns "no toolchain found" from a
