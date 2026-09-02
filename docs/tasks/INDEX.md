@@ -322,7 +322,9 @@
 | TASK-311 | Repair reported value-region composition defects | Complete | 2026-09-01 | `TASK-311: repair value-region composition` | [TASK-311](./TASK-311-value-region-composition.md) |
 | TASK-312 | Prove mixed-source structural composition | Complete | 2026-09-01 | 2026-09-02 | [TASK-312](./TASK-312-structural-value-region-nesting.md) |
 | TASK-313 | Resolve language services through linked TypeScript packages | Complete | 2026-09-02 | 2026-09-02 | [TASK-313](./TASK-313-linked-typescript-toolchain.md) |
+| TASK-314 | Split the TypeScript codegen core into responsibility modules | Complete | 2026-09-02 | 2026-09-02 | [TASK-314](./TASK-314-split-codegen-core.md) |
+| TASK-315 | Split every oversized Rust source and test file | Complete | 2026-09-02 | 2026-09-02 | [TASK-315](./TASK-315-split-oversized-rust-files.md) |
 
 ## 다음 태스크 번호
 
-**TASK-314**
+**TASK-316**
