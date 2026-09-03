@@ -16,6 +16,29 @@ fn malformed_pipeline_tail_never_reaches_codegen_as_owned_source() {
 }
 
 #[test]
+fn malformed_namespaced_jsx_member_is_reported_without_panicking() {
+    let options = Options {
+        source_kind: SourceKind::Tsx,
+        ..Options::default()
+    };
+    for source in ["<G:U.m", "<G:U.m |> String"] {
+        let analyzed = std::panic::catch_unwind(|| ttc::analyze(source, &options));
+        assert!(analyzed.is_ok(), "analysis panicked for {source:?}");
+
+        let compiled = std::panic::catch_unwind(|| compile(source, &options));
+        let error = compiled
+            .unwrap_or_else(|_| panic!("compilation panicked for {source:?}"))
+            .expect_err("malformed TSX must not compile");
+        assert!(
+            error
+                .message
+                .contains("JSX namespace name cannot be followed by member access"),
+            "{source:?}: {error}"
+        );
+    }
+}
+
+#[test]
 fn pipeline_values_containing_double_slashes_do_not_become_comments() {
     for source in [r#""//" |> String"#, r#"`//` |> String"#, r#"/\/\// |> String"#] {
         for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {

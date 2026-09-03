@@ -70,6 +70,14 @@ impl ProgramSyntax {
         source: &str,
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
+        if source_kind.is_tsx()
+            && let Some(span) = crate::lexer::invalid_jsx_namespace_member(source)
+        {
+            return Err(ProgramSyntaxError::SourceNotTypeScript {
+                message: "a JSX namespace name cannot be followed by member access".to_string(),
+                source: span.start,
+            });
+        }
         let projection = ProjectionBuilder::new(semantic, core, source).build()?;
         let parsed = parse_module(&projection.code, &projection.source_segments, source_kind)?;
         let mut collector = ParentCollector::new(

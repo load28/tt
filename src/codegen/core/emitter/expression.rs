@@ -388,12 +388,17 @@ impl<'a> Emitter<'a> {
         // plan at the common entry point so a later source-range walk only
         // emits the child's inline slot and never schedules its statement
         // region a second time.
-        if self
-            .owner_slot_rewrites
-            .iter()
-            .any(|rewrite| rewrite.expr == expr)
-        {
-            self.emitted_owner_rewrites.mark(expr);
+        let structural_slot = self.structured_value_slot(expr);
+        for rewrite in &self.owner_slot_rewrites {
+            // A grouping/sequence expression can be the structural value
+            // while the host rewrite belongs to the decision it wraps. The
+            // generated slot is their ownership identity across that Core
+            // boundary, so consume the rewrite through the shared slot too.
+            if rewrite.expr == expr
+                || structural_slot.is_some_and(|slot| slot == &rewrite.slot)
+            {
+                self.emitted_owner_rewrites.mark(rewrite.expr);
+            }
         }
         if let Some(schedule) = self.nested_schedules.get(&expr)
             && !schedule.steps().is_empty()

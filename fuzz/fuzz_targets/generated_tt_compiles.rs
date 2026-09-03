@@ -24,7 +24,7 @@
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use ttc::Options;
+use ttc::{Options, SourceKind};
 
 /// What an arm's body evaluates to. Every variant is an expression, so an
 /// arm is valid wherever it appears.
@@ -61,6 +61,8 @@ struct Program {
     with_try: bool,
     /// Whether an `if let` precedes the match.
     with_if_let: bool,
+    /// Whether the same tt constructs are hosted by TSX attributes and children.
+    with_jsx: bool,
 }
 
 /// The tag of case `index` — plain ASCII, so nothing here tests the
@@ -75,7 +77,7 @@ fn field(case: usize, index: usize) -> String {
 
 impl Program {
     /// The program as tt source, or `None` when the draw is degenerate.
-    fn render(&self) -> Option<String> {
+    fn render(&self) -> Option<(String, SourceKind)> {
         let cases: Vec<usize> = self
             .cases
             .iter()
@@ -163,6 +165,19 @@ impl Program {
         out.push_str(indent);
         out.push_str("};\n");
 
+        if self.with_jsx {
+            out.push_str(indent);
+            out.push_str("const view = <section data-value={chosen}>{match (f) {\n");
+            out.push_str(indent);
+            out.push_str("  Yes => <strong>{chosen |> step}</strong>,\n");
+            out.push_str(indent);
+            out.push_str("  No => null,\n");
+            out.push_str(indent);
+            out.push_str("}}</section>;\n");
+            out.push_str(indent);
+            out.push_str("void view;\n");
+        }
+
         if self.in_result {
             out.push_str(
                 "    return first + chosen;\n  };\n  return value.kind === \"Ok\" ? 0 : 1;\n",
@@ -171,7 +186,12 @@ impl Program {
             out.push_str("  return chosen + (f.kind === \"Yes\" ? 1 : 0);\n");
         }
         out.push_str("}\n");
-        Some(out)
+        let source_kind = if self.with_jsx {
+            SourceKind::Tsx
+        } else {
+            SourceKind::TypeScript
+        };
+        Some((out, source_kind))
     }
 
     /// One arm's body expression.
@@ -181,9 +201,7 @@ impl Program {
             (Some(Body::Bound), Some(name)) => name.to_string(),
             (Some(Body::Piped), Some(name)) => format!("{name} |> step |> step"),
             (Some(Body::Piped), None) => "n |> step |> step".to_string(),
-            (Some(Body::Nested), _) => {
-                "match (f) { Yes => 1, No => 0 }".to_string()
-            }
+            (Some(Body::Nested), _) => "match (f) { Yes => 1, No => 0 }".to_string(),
             (Some(Body::Literal(v)), _) => format!("{}", v % 100),
             (Some(Body::Bound), None) | (None, _) => "0".to_string(),
         }
@@ -191,18 +209,24 @@ impl Program {
 }
 
 fuzz_target!(|program: Program| {
-    let Some(source) = program.render() else {
+    let Some((source, source_kind)) = program.render() else {
         return;
     };
     // Verification on: the emitted TypeScript has to parse. That is the
     // half of the claim a shape-generator is uniquely good at reaching.
-    let options = Options::default();
+    let options = Options {
+        source_kind,
+        ..Options::default()
+    };
     match ttc::compile(&source, &options) {
         Ok(emitted) => {
             // Deterministic: the same input twice is the same output, which
             // is what lets a build cache an emission at all.
             let again = ttc::compile(&source, &options).expect("compiled once already");
-            assert_eq!(emitted, again, "compilation is not deterministic for:\n{source}");
+            assert_eq!(
+                emitted, again,
+                "compilation is not deterministic for:\n{source}"
+            );
         }
         Err(error) => panic!("a well-formed tt program was rejected: {error}\n\n{source}"),
     }

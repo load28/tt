@@ -302,6 +302,9 @@ pub(crate) fn source_expression_effects(
     let Some(text) = source.get(span.start..span.end) else {
         return Effects::ANY;
     };
+    if source_kind.is_tsx() && crate::lexer::invalid_jsx_namespace_member(text).is_some() {
+        return Effects::ANY;
+    }
     let source_map: Lrc<SourceMap> = Default::default();
     let file = source_map.new_source_file(Lrc::new(FileName::Anon), text.to_owned());
     let lexer = Lexer::new(
