@@ -327,7 +327,7 @@
 | TASK-316 | Unify setup on the TypeScript content mapper | Complete | 2026-09-02 | 2026-09-02 | [TASK-316](./TASK-316-unify-content-mapper-setup.md) |
 | TASK-317 | Build-test generated create-tt projects | Complete | 2026-09-02 | 2026-09-02 | [TASK-317](./TASK-317-create-tt-build-gate.md) |
 | TASK-318 | Comprehensive product-surface audit and structural repairs | Complete | 2026-09-02 | 2026-09-03 | [TASK-318](./TASK-318-comprehensive-product-audit.md) |
-| TASK-319 | Audit valid-program compilation failures | In progress | 2026-09-03 | — | [TASK-319](./TASK-319-valid-program-compilation-audit.md) |
+| TASK-319 | Audit valid-program compilation failures | Complete | 2026-09-03 | 2026-09-03 | [TASK-319](./TASK-319-valid-program-compilation-audit.md) |
 
 ## 다음 태스크 번호
 

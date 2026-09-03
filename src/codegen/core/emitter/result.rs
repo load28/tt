@@ -396,7 +396,11 @@ impl<'a> Emitter<'a> {
                             replacement,
                         );
                     } else {
-                        self.emit_statement_expr(*expr, &mut out);
+                        if self.statement_expr_requires_lowering(*expr) {
+                            self.emit_statement_expr(*expr, &mut out);
+                        } else {
+                            out.append(self.emit_expr(*expr));
+                        }
                     }
                 }
                 Statement::Adt(adt) => {

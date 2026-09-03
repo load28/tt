@@ -39,6 +39,34 @@ fn malformed_namespaced_jsx_member_is_reported_without_panicking() {
 }
 
 #[test]
+fn result_body_uses_the_planned_slot_for_a_jsx_child_match() {
+    let output = ok_tsx(
+        r#"import type { TResult } from "@tt/std";
+variant E { A, B }
+variant F { Yes, No }
+declare function step(n: number): number;
+declare function fallible(n: number): TResult<number, string>;
+export function run(e: E, f: F, n: number): number {
+  const value = result {
+    const first = try fallible(n);
+    const chosen = match (e) { A => 1, B => 2 };
+    const view = <section data-value={chosen}>{match (f) {
+      Yes => <strong>{chosen |> step}</strong>,
+      No => null,
+    }}</section>;
+    void view;
+    return first + chosen;
+  };
+  return value.kind === "Ok" ? 0 : 1;
+}
+"#,
+    );
+    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+    assert!(output.contains(">{$tt_v2}</section>"), "{output}");
+    assert!(!output.contains("{let $tt_v2;"), "{output}");
+}
+
+#[test]
 fn pipeline_values_containing_double_slashes_do_not_become_comments() {
     for source in [r#""//" |> String"#, r#"`//` |> String"#, r#"/\/\// |> String"#] {
         for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {

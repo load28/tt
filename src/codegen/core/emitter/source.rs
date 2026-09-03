@@ -453,22 +453,24 @@ impl<'a> Emitter<'a> {
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
-                Statement::Expr(expr)
-                    if self.owner_slot_rewrites.iter().any(|rewrite| {
-                        rewrite.expr == *expr && rewrite.continuation == HostContinuation::Discard
-                    }) || (matches!(self.core.exprs[expr.index()], Expr::Decision(_))
-                        && !self
-                            .owner_slot_rewrites
-                            .iter()
-                            .any(|rewrite| rewrite.expr == *expr)
-                        && !self.value_slots.contains_key(expr)) =>
-                {
+                Statement::Expr(expr) if self.statement_expr_requires_lowering(*expr) => {
                     self.emit_statement_expr(*expr, &mut out);
                 }
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
             }
         }
         out
+    }
+
+    pub(super) fn statement_expr_requires_lowering(&self, expr: ExprId) -> bool {
+        self.owner_slot_rewrites.iter().any(|rewrite| {
+            rewrite.expr == expr && rewrite.continuation == HostContinuation::Discard
+        }) || (matches!(self.core.exprs[expr.index()], Expr::Decision(_))
+            && !self
+                .owner_slot_rewrites
+                .iter()
+                .any(|rewrite| rewrite.expr == expr)
+            && !self.value_slots.contains_key(&expr))
     }
 
     pub(super) fn emit_statement_expr(&self, expr: ExprId, out: &mut Rope<'a>) {
