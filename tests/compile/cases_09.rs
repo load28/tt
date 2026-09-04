@@ -1,4 +1,52 @@
 #[test]
+fn merge_conflict_markers_report_errors_without_panicking() {
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let options = Options {
+            source_kind,
+            ..Options::default()
+        };
+        for marker in ["=======", "<<<<<<< ours", ">>>>>>> theirs", "||||||| base"] {
+            for source in [
+                format!("{marker}\n/\u{2}\n"),
+                format!("const before = 1;\n  {marker}\n/regex/;"),
+                format!("const value = `raw ${{\n{marker}\n/regex/}}`;"),
+                format!("const value = 1 |> String;\n{marker}\n/regex/;"),
+                format!("/* leading trivia */{marker}\n/regex/;"),
+                format!("const before = 1; /*\n*/ {marker}\n/regex/;"),
+            ] {
+                ttc::analyze(&source, &options);
+                let error = compile(&source, &options).expect_err(&source);
+                assert!(
+                    error.message.contains("merge conflict marker"),
+                    "{source_kind:?}: {source:?}: {error}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn conflict_marker_text_in_literals_and_comments_is_preserved() {
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let options = Options {
+            source_kind,
+            ..Options::default()
+        };
+        for source in [
+            "const text = '======= <<<<<<< ours >>>>>>> theirs ||||||| base';",
+            "const text = `\n=======\n<<<<<<< ours\n>>>>>>> theirs\n||||||| base`;",
+            "/*\n=======\n<<<<<<< ours\n>>>>>>> theirs\n||||||| base\n*/\nconst n = 1;",
+            "// =======\nconst pattern = /=======/;",
+            "const text = `raw ${`\n=======\n`}`;",
+        ] {
+            assert_eq!(compile(source, &options).unwrap(), source);
+        }
+    }
+    let source = "const view = <pre>\n=======\n||||||| base\n</pre>;";
+    assert_eq!(ok_tsx(source), source);
+}
+
+#[test]
 fn malformed_pipeline_tail_never_reaches_codegen_as_owned_source() {
     let source = "\u{6}|>'\u{b}";
     for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {

@@ -70,11 +70,9 @@ impl ProgramSyntax {
         source: &str,
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
-        if source_kind.is_tsx()
-            && let Some(span) = crate::lexer::invalid_jsx_namespace_member(source)
-        {
+        if let Some((span, message)) = crate::lexer::host_syntax_error(source, source_kind) {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
-                message: "a JSX namespace name cannot be followed by member access".to_string(),
+                message: message.to_string(),
                 source: span.start,
             });
         }

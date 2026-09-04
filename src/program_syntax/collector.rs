@@ -12,14 +12,12 @@ pub(super) fn parse_module(
     segments: &[ProjectionSourceSegment],
     source_kind: crate::SourceKind,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
-    if source_kind.is_tsx()
-        && let Some(span) = crate::lexer::invalid_jsx_namespace_member(code)
-    {
+    if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
         return Err(parse_failure_at(
             code,
             segments,
             span.start,
-            "a JSX namespace name cannot be followed by member access".to_string(),
+            message.to_string(),
         ));
     }
     let source_map: Lrc<SourceMap> = Default::default();

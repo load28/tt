@@ -331,6 +331,8 @@
 | TASK-320 | Audit mixed-source runtime and project semantics | Complete | 2026-09-04 | 2026-09-05 | [TASK-320](./TASK-320-mixed-source-runtime-audit.md) |
 | TASK-321 | Reject ambiguous build output paths | Complete | 2026-09-05 | 2026-09-05 | [TASK-321](./TASK-321-reject-output-collisions.md) |
 
+| TASK-322 | Diagnose merge conflict markers at the syntax boundary | Complete | 2026-09-05 | 2026-09-05 | [TASK-322](./TASK-322-conflict-marker-syntax-boundary.md) |
+
 ## 다음 태스크 번호
 
-**TASK-322**
+**TASK-323**

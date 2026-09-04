@@ -25,6 +25,9 @@ use crate::SourceKind;
 use crate::ast::Span;
 use crate::scanner::*;
 
+mod validation;
+pub(crate) use validation::host_syntax_error;
+
 /// One significant token.
 #[derive(Debug)]
 pub(crate) struct Token {
