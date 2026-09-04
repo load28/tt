@@ -103,6 +103,99 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
     }
 }
 
+#[test]
+fn mixed_source_project_preserves_all_directed_runtime_values() {
+    if !have("tsc") || !have("bun") || !have("node") {
+        return;
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = root.join("tests/fixtures/mixed-source-runtime");
+    let dir = tmpdir();
+    let emitted = dir.join("emitted");
+    let bundle = dir.join("bundle.js");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--no-banner", "-o"])
+        .arg(&emitted)
+        .arg(&source)
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::write(
+        emitted.join("tsconfig.json"),
+        "{\"compilerOptions\":{\"jsx\":\"react\",\"jsxFactory\":\"h\"}}\n",
+    )
+    .unwrap();
+    let mut inputs: Vec<_> = fs::read_dir(&emitted)
+        .expect("emitted mixed-source tree")
+        .map(|entry| entry.expect("emitted entry").path())
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(|value| value.to_str()),
+                Some("ts" | "tsx")
+            )
+        })
+        .collect();
+    inputs.sort();
+    let output = Command::new("tsc")
+        .args(&inputs)
+        .args([
+            "--strict",
+            "--target",
+            "es2022",
+            "--module",
+            "preserve",
+            "--moduleResolution",
+            "bundler",
+            "--jsx",
+            "preserve",
+            "--skipLibCheck",
+            "--noEmit",
+        ])
+        .output()
+        .expect("tsc runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new("bun")
+        .args(["build"])
+        .arg(emitted.join("main.ts"))
+        .args(["--target", "node", "--format", "esm", "--outfile"])
+        .arg(&bundle)
+        .output()
+        .expect("bun build runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new("node")
+        .arg(&bundle)
+        .output()
+        .expect("node runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        r#"{"values":["ts<-ts","ts<-tsx","ts<-tt","ts<-ttx","tsx<-ts","tsx<-tsx","tsx<-tt","tsx<-ttx","tt<-ts","tt<-tsx","tt<-tt","tt<-ttx","ttx<-ts","ttx<-tsx","ttx<-tt","ttx<-ttx"],"trace":["ts","tsx","tt","ttx","ts","tsx","tt","ttx","ts","tsx","tt","ttx","ts","tsx","tt","ttx"]}"#
+    );
+}
+
 /// A small project: one shared module every other file imports (the shape
 /// that exercises the imported-declaration cache), plus a file that fails
 /// to compile so diagnostics are part of what must stay ordered.

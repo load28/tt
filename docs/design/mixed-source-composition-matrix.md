@@ -21,7 +21,10 @@ contains every edge, including same-kind imports, for sixteen edges total:
 documented relative `.tt`/`.ttx` specifier rewrite. `.tt` emits `.ts`; `.ttx`
 emits `.tsx`. The matrix is exercised through untyped compilation, typed
 project checking, declaration sidecars, and TypeScript checking of the emitted
-tree.
+tree. A separate runtime fixture calls every directed edge, bundles the emitted
+tree, and executes it. Its oracle fixes the sixteen returned values, their
+left-to-right evaluation order, shared module identity, and a `match` lowered
+inside `.ttx` JSX.
 
 ## tt surface matrix
 
