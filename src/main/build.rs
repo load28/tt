@@ -122,6 +122,9 @@ pub(super) fn build_jobs(
             eprintln!("ttc: {input}: {e}");
             return Err(ExitCode::FAILURE);
         }
+        if is_dir && let Some(dir) = out_dir {
+            files.retain(|file| !path_is_within(file, dir));
+        }
         for file in files {
             let out_name = if let Some(kind) = ttc::SourceKind::from_tt_path(&file) {
                 file.with_extension(kind.output_extension())
@@ -154,6 +157,17 @@ pub(super) fn build_jobs(
     Ok(jobs)
 }
 
+/// Whether `path` is inside `dir`, accepting the relative or absolute spellings
+/// a caller may mix on the command line. Existing paths are canonicalized so a
+/// symlink to an output tree cannot make a previous build become a new input.
+fn path_is_within(path: &Path, dir: &Path) -> bool {
+    path.starts_with(dir)
+        || matches!(
+            (path.canonicalize(), dir.canonicalize()),
+            (Ok(path), Ok(dir)) if path.starts_with(&dir)
+        )
+}
+
 /// Whether two paths name the same file. The output side may not exist
 /// yet, so the parents are compared canonically and the file names
 /// literally.
@@ -170,8 +184,7 @@ pub(super) fn same_file(a: &Path, b: &Path) -> bool {
 
 /// What compiling one job produced: the diagnostics it wants printed (in
 /// job order), whether it failed, and any text the parent still has to hand
-/// out — stdout under `-p`, or an output file whose path more than one job
-/// claims, which only the parent can serialize deterministically.
+/// out on stdout under `-p`.
 #[derive(Default)]
 pub(super) struct Outcome {
     messages: Vec<String>,
@@ -186,6 +199,29 @@ pub(super) struct Outcome {
 /// declarations. Diagnostics are collected per job and printed in job
 /// order, so the output of a parallel run is identical to a sequential one.
 pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
+    if !opts.check && !opts.print {
+        let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
+        let mut conflicted = false;
+        for job in jobs {
+            if let Some(first) = claims.get(job.out_path.as_path()) {
+                if !same_file(first, &job.file) {
+                    eprintln!(
+                        "ttc: {}: multiple inputs claim this output: {} and {}",
+                        job.out_path.display(),
+                        first.display(),
+                        job.file.display()
+                    );
+                    conflicted = true;
+                }
+            } else {
+                claims.insert(&job.out_path, &job.file);
+            }
+        }
+        if conflicted {
+            return true;
+        }
+    }
+
     let mut failed = false;
     let loaded = load_jobs(jobs, opts.jobs);
 
@@ -211,21 +247,29 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
     if let Some(dir) = &std_dir
         && !opts.check
         && !opts.print
-        && modules
-            .iter()
-            .copied()
-            .map(|module| dir.join(module.file_name()))
-            .any(|file| jobs.iter().any(|job| same_file(&job.file, &file)))
     {
-        eprintln!(
-            "ttc: {}: the standard library would overwrite an input — pass -o <dir>",
-            dir.display()
-        );
-        failed = true;
-    } else if let Some(dir) = &std_dir
-        && !opts.check
-        && !opts.print
-    {
+        for module in &modules {
+            let support = dir.join(module.file_name());
+            for job in jobs {
+                if same_file(&job.file, &support) {
+                    eprintln!(
+                        "ttc: {}: the compiler support module would overwrite input {} — pass -o <dir>",
+                        support.display(),
+                        job.file.display()
+                    );
+                    return true;
+                }
+                if same_file(&job.out_path, &support) {
+                    eprintln!(
+                        "ttc: {}: compiler support module and input {} claim this output",
+                        support.display(),
+                        job.file.display()
+                    );
+                    return true;
+                }
+            }
+        }
+
         let wrote = fs::create_dir_all(dir).and_then(|()| {
             for module in &modules {
                 let mut code = module.source().to_string();
@@ -244,16 +288,6 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             }
         }
     }
-
-    // Two inputs can claim one output path (`x.tt` and a hand-written
-    // `x.ts` both emit `x.ts`), and the later job wins. Those writes go
-    // back to the parent so the winner stays the same as in a sequential
-    // run; every other job writes itself, straight from its worker.
-    let mut claims: HashMap<&Path, usize> = HashMap::with_capacity(jobs.len());
-    for job in jobs {
-        *claims.entry(job.out_path.as_path()).or_default() += 1;
-    }
-    let contested = |job: &Job| claims[job.out_path.as_path()] > 1;
 
     let cache = ExternCache::new(
         jobs.iter()
@@ -375,7 +409,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                     }
                     code.push_str(&rendered.comment);
                 }
-                if opts.print || (!opts.check && contested(job)) {
+                if opts.print {
                     out.pending = Some(code);
                     return out;
                 }

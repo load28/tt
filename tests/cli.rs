@@ -104,6 +104,136 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
 }
 
 #[test]
+fn a_mixed_source_stem_collision_is_rejected_before_writing() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("model.tt"),
+        "export variant Model { Tt(value: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("model.ts"),
+        "export const source = \"typescript\";\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("view.ttx"),
+        "export const source = <main>ttx</main>;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("view.tsx"),
+        "export const source = <main>tsx</main>;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("model.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("model.tt"), "{stderr}");
+    assert!(stderr.contains("model.ts"), "{stderr}");
+    assert!(
+        stderr.contains("view.tsx: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("view.ttx"), "{stderr}");
+    assert!(stderr.contains("view.tsx"), "{stderr}");
+    assert!(!out_dir.join("model.ts").exists());
+    assert!(!out_dir.join("view.tsx").exists());
+}
+
+#[test]
+fn separate_input_roots_cannot_collapse_to_one_output() {
+    let dir = tmpdir();
+    let left = dir.join("left");
+    let right = dir.join("right");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("index.tt"), "export const side = \"left\";\n").unwrap();
+    fs::write(right.join("index.tt"), "export const side = \"right\";\n").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        left.to_str().unwrap(),
+        right.to_str().unwrap(),
+    ]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("index.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("left/index.tt"), "{stderr}");
+    assert!(stderr.contains("right/index.tt"), "{stderr}");
+    assert!(!out_dir.join("index.ts").exists());
+}
+
+#[test]
+fn a_source_cannot_claim_a_compiler_support_module_output() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(source.join("tt")).unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "const twice = (value: number): number => value * 2;\n\
+         export const result = 1 |> twice;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("tt/runtime.tt"),
+        "export const userOwned = true;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("tt/runtime.ts"), "{stderr}");
+    assert!(stderr.contains("compiler support module"), "{stderr}");
+    assert!(stderr.contains("runtime.tt"), "{stderr}");
+    assert!(!out_dir.join("main.ts").exists());
+    assert!(!out_dir.join("tt/runtime.ts").exists());
+}
+
+#[test]
+fn an_output_directory_inside_the_input_is_not_recompiled() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = source.join("generated");
+    fs::create_dir_all(&out_dir).unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "export const current = \"source\";\n",
+    )
+    .unwrap();
+    fs::write(
+        out_dir.join("stale.ts"),
+        "export const stale = \"previous output\";\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("main.ts").is_file());
+    assert!(out_dir.join("stale.ts").is_file());
+    assert!(!out_dir.join("generated/stale.ts").exists());
+}
+
+#[test]
 fn mixed_source_project_preserves_all_directed_runtime_values() {
     if !have("tsc") || !have("bun") || !have("node") {
         return;
