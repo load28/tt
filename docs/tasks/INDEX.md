@@ -328,7 +328,8 @@
 | TASK-317 | Build-test generated create-tt projects | Complete | 2026-09-02 | 2026-09-02 | [TASK-317](./TASK-317-create-tt-build-gate.md) |
 | TASK-318 | Comprehensive product-surface audit and structural repairs | Complete | 2026-09-02 | 2026-09-03 | [TASK-318](./TASK-318-comprehensive-product-audit.md) |
 | TASK-319 | Audit valid-program compilation failures | Complete | 2026-09-03 | 2026-09-03 | [TASK-319](./TASK-319-valid-program-compilation-audit.md) |
+| TASK-320 | Audit mixed-source runtime and project semantics | In progress | 2026-09-04 | — | [TASK-320](./TASK-320-mixed-source-runtime-audit.md) |
 
 ## 다음 태스크 번호
 
-**TASK-320**
+**TASK-321**
