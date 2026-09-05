@@ -65,7 +65,8 @@ import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
 import * as engine from "./engine";
-import { applyFolderChange, folderRoots } from "./roots";
+import { NoticeLedger } from "./notices";
+import { applyFolderChange, folderRoots, sidecarLocation } from "./roots";
 import * as ttc from "./ttc";
 import * as path from "node:path";
 
@@ -77,7 +78,8 @@ const documents = new TextDocuments(TextDocument);
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let workspaceRoots: string[] = [];
-let warnedCompilerMissing = false;
+/** What the server has already told the user it cannot do (notices.ts). */
+const notices = new NoticeLedger();
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasConfigurationCapability = Boolean(
@@ -188,7 +190,9 @@ async function getSettings(uri?: string): Promise<TtSettings> {
 /** Everything the server has to redo when where it looks changes — the
  * settings it reads, or the folders it reads them for. */
 function rearmProject(): void {
-  warnedCompilerMissing = false;
+  // Every standing notice describes something one of these could have
+  // fixed, so all of them are worth saying again if they are still true.
+  notices.reset();
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
@@ -214,10 +218,7 @@ connection.onDidChangeWatchedFiles((params) => {
     // process too; rebuilding project caches cannot update its machine code.
     engine.shutdownEngineServer();
   }
-  warnedCompilerMissing = false;
-  engine.retryEngineServer();
-  invalidateProjectValidation();
-  void refreshCompiler().then(reloadProjectState);
+  rearmProject();
 });
 
 function invalidateProjectValidation(): void {
@@ -376,9 +377,6 @@ interface TypedDiagnostics {
   diagnostics: Diagnostic[];
   replacesTypes: boolean;
 }
-let warnedTypedCheckUnavailable = false;
-let warnedTypedCompilerFailure = false;
-
 /**
  * Adds the typed diagnostics that say something new.
  *
@@ -440,8 +438,7 @@ async function typedDiagnosticsFor(
 
   if (result.kind === "unavailable") {
     if (result.cause === "internal") {
-      if (!warnedTypedCompilerFailure) {
-        warnedTypedCompilerFailure = true;
+      if (notices.raise("typed-compiler-failure")) {
         connection.console.error(`tt: typed compiler failure: ${result.detail}`);
         void connection.window.showErrorMessage(
           "tt: typed checks failed inside the compiler. " +
@@ -453,8 +450,7 @@ async function typedDiagnosticsFor(
     }
     // A project with no TypeScript toolchain is a normal state: the
     // text-level diagnostics keep working and only typed facts are absent.
-    if (!warnedTypedCheckUnavailable) {
-      warnedTypedCheckUnavailable = true;
+    if (notices.raise("typed-check-unavailable")) {
       connection.console.info(
         `tt: typed checks unavailable (${result.detail}). ` +
           "`val` mutations and typed exhaustiveness are unavailable; " +
@@ -497,7 +493,20 @@ function isCurrentValidation(doc: TextDocument, generation: number): boolean {
   );
 }
 
-async function validate(doc: TextDocument, generation: number): Promise<void> {
+/**
+ * Runs every enabled diagnostic layer for one buffer version and publishes
+ * them together.
+ *
+ * `attempt` counts the tries this generation has already spent on a layer
+ * that could not answer. A publish replaces the file's complete list, so a
+ * generation whose type layer is unknown is not a generation to publish:
+ * it would clear every type error the file still has.
+ */
+async function validate(
+  doc: TextDocument,
+  generation: number,
+  attempt = 0,
+): Promise<void> {
   const settings = await getSettings(doc.uri);
   const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const uri = URI.parse(doc.uri);
@@ -516,8 +525,7 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
   const current = documents.get(doc.uri)!;
 
   if (result.kind === "not-found") {
-    if (!warnedCompilerMissing) {
-      warnedCompilerMissing = true;
+    if (notices.raise("compiler-unusable")) {
       const [log, notice] =
         result.reason === "not-executable"
           ? [
@@ -566,18 +574,46 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
           settings.typedChecks,
         )
       : Promise.resolve(null);
-  const serviceTypes = settings.typeDiagnostics
+  const serviceTypes: Promise<Diagnostic[] | null> = settings.typeDiagnostics
     ? typeDiagnostics(doc, compiler)
     : Promise.resolve([]);
   // Hints are not diagnostics of the compile: ttc never fails on one, and
   // they only reach the user here (`engine::hints`). Run every slower layer
   // together, then publish one complete generation.
-  const [typedResult, typeResults, hints] = await Promise.all([
+  const [typedResult, serviceResults, hints] = await Promise.all([
     typed,
     serviceTypes,
     ttHints(doc, compiler),
   ]);
   if (!isCurrentValidation(doc, generation)) return;
+
+  // The engine could not be reached, which is not the same answer as "this
+  // file has no type errors" — and publishing it as one clears every type
+  // error in the editor. The engine respawns on the next request, so give
+  // it that one chance before showing the file without the layer.
+  let typeResults = serviceResults;
+  if (typeResults === null) {
+    if (attempt === 0) {
+      pendingValidation.set(
+        doc.uri,
+        setTimeout(() => {
+          pendingValidation.delete(doc.uri);
+          void validate(doc, generation, attempt + 1);
+        }, VALIDATION_DELAY_MS),
+      );
+      return;
+    }
+    // It answered nothing twice. The file is published without the layer
+    // rather than left stale forever, and the reason is said out loud.
+    if (notices.raise("type-layer-unreachable")) {
+      connection.console.warn(
+        "tt: the language engine did not answer for type errors, so they " +
+          "are missing from the Problems panel until it does. Check the tt " +
+          "output channel above for why the engine stopped answering.",
+      );
+    }
+    typeResults = [];
+  }
 
   diagnostics.push(...typeResults, ...hints);
   if (typedResult !== null) {
@@ -620,10 +656,11 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
 async function typeDiagnostics(
   doc: TextDocument,
   compiler: string,
-): Promise<Diagnostic[]> {
+): Promise<Diagnostic[] | null> {
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
   const items = await engine.tsDiagnostics(compiler, fsPath, logEngine);
+  if (items === null) return null;
   return items.map((d) => ({
     severity: d.warning
       ? DiagnosticSeverity.Warning
@@ -749,22 +786,6 @@ documents.onDidSave((e) => {
 });
 
 /**
- * Where this file's declarations belong: next to the source when
- * `tt.sidecarDir` is empty, otherwise that directory under the workspace
- * root the file lives in (TypeScript merges the two trees with `rootDirs`).
- */
-function resolveSidecarDir(configured: string, filePath: string): string | undefined {
-  const dir = configured.trim();
-  if (dir === "") return undefined;
-  if (path.isAbsolute(dir)) return dir;
-
-  const root = workspaceRoots
-    .filter((candidate) => filePath.startsWith(`${candidate}${path.sep}`))
-    .sort((a, b) => b.length - a.length)[0];
-  return root === undefined ? undefined : path.join(root, dir);
-}
-
-/**
  * Keeps a saved `.tt` file's editor sidecar (`x.tt.d.ts` + map) current, so
  * `.ts` files importing it type-check and jump into the original on "go to
  * definition" without a build step.
@@ -776,12 +797,33 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
   const settings = await getSettings(doc.uri);
   if (settings.sidecar === "off") return;
 
+  // `tt.sidecarDir` names where the declarations go. When it is relative
+  // and this file belongs to no workspace folder there is no base to
+  // resolve it against, and writing them beside the source instead would
+  // put generated files in a tree the user asked to keep clean, silently.
+  const location = sidecarLocation(
+    settings.sidecarDir,
+    uri.fsPath,
+    workspaceRoots,
+  );
+  if (location.kind === "unresolved") {
+    if (notices.raise("sidecar-dir-unresolved")) {
+      connection.console.warn(
+        `tt: tt.sidecarDir is "${location.configured}", which is relative to a ` +
+          "workspace folder, and this file is in none — sidecars are not " +
+          "written for it. Open its folder in the workspace, or set an " +
+          "absolute path.",
+      );
+    }
+    return;
+  }
+
   const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const result = await sidecar.refreshSidecar(
     compiler,
     uri.fsPath,
     settings.sidecar,
-    resolveSidecarDir(settings.sidecarDir, uri.fsPath),
+    location.kind === "directory" ? location.path : undefined,
   );
   if (result.kind === "failed") {
     connection.console.warn(`tt: sidecar refresh failed — ${result.detail}`);

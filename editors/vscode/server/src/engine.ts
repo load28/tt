@@ -596,16 +596,33 @@ export async function declarations(
   return result ?? { variants: [], matches: [] };
 }
 
+/**
+ * A file's type errors, or `null` when the engine could not be reached.
+ *
+ * The three outcomes are not two. "These are the errors" and "there are
+ * none" are both answers; "no answer" is not, and publishing it as an
+ * empty list clears every type error in the editor for a file that still
+ * has them. An engine that *answers* with an error — no TypeScript
+ * toolchain, a project that will not load — has said something definite,
+ * and that is an empty list with the message on `onError`, the way
+ * [`semanticTokens`] already distinguishes the two (TASK-345).
+ */
 export async function tsDiagnostics(
   compiler: string,
   path: string,
   onError?: (message: string) => void,
-): Promise<EngineDiagnostic[]> {
-  const result = await semantic<{ diagnostics: EngineDiagnostic[] }>(
+): Promise<EngineDiagnostic[] | null> {
+  const answer = await engineRequest(
     compiler,
     "tsDiagnostics",
     { path },
-    onError,
+    SEMANTIC_TIMEOUT_MS,
   );
+  if (!answer) return null;
+  if ("error" in answer) {
+    onError?.(`tt: tsDiagnostics: ${answer.error}`);
+    return [];
+  }
+  const result = answer.result as { diagnostics?: EngineDiagnostic[] } | null;
   return result?.diagnostics ?? [];
 }

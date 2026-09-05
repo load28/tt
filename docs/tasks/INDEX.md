@@ -351,7 +351,10 @@
 | TASK-340 | Make an unusable compiler visible and recoverable in the editor | Complete | 2026-09-05 | 2026-09-05 | [TASK-340](./TASK-340-compiler-recovery-in-the-editor.md) |
 | TASK-341 | A flag that takes a value does not take an option as one | Complete | 2026-09-05 | 2026-09-05 | [TASK-341](./TASK-341-value-flags-take-values.md) |
 | TASK-342 | Follow the window's workspace folders while it is open | Complete | 2026-09-05 | 2026-09-05 | [TASK-342](./TASK-342-live-workspace-folders.md) |
+| TASK-343 | Give the server's standing notices one owner and one reset | Complete | 2026-09-05 | 2026-09-05 | [TASK-343](./TASK-343-standing-notices.md) |
+| TASK-344 | A sidecar directory that cannot be resolved is reported, not ignored | Complete | 2026-09-05 | 2026-09-05 | [TASK-344](./TASK-344-sidecar-directory-resolution.md) |
+| TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
 
 ## Next task number
 
-**TASK-343**
+**TASK-346**

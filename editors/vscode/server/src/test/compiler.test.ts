@@ -14,6 +14,8 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { runCheck, unusableCompiler } from "../ttc";
+import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { caseDir } from "./workspace";
 
 after(() => engine.shutdownEngineServer());
 
@@ -57,5 +59,51 @@ test("a compiler that cannot be started is reported, not swallowed", async () =>
   assert.deepEqual(
     { kind: result.kind, reason: "reason" in result ? result.reason : null },
     { kind: "not-found", reason: "not-executable" },
+  );
+});
+
+/* An engine that cannot answer is not an engine that answered "none".
+ *
+ * `tsDiagnostics` returned `[]` for both, so a session the engine could not
+ * reach published a generation with no type errors at all and the Problems
+ * panel went clean for a file that still had them. Nothing said so, and
+ * nothing retried until the next keystroke (TASK-345). */
+const typedSkip = !compilerAvailable()
+  ? "no ttc — none built, installed, or on PATH"
+  : findTsgo() === null
+    ? "no tsgo executable"
+    : false;
+
+test("an unreachable engine answers null, not an empty diagnostics list", { skip: typedSkip, timeout: 60_000 }, async () => {
+  const project = caseDir("tt-unreachable-");
+  fs.writeFileSync(
+    path.join(project, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: {
+        strict: true,
+        module: "preserve",
+        moduleResolution: "bundler",
+        noEmit: true,
+      },
+      include: ["*"],
+    }),
+  );
+  const file = path.join(project, "main.tt");
+  const source = 'export const bad: number = "text";\n';
+  fs.writeFileSync(file, source);
+
+  engine.openDocument(COMPILER, file, source);
+  const answered = await engine.tsDiagnostics(COMPILER, file);
+  assert.ok(
+    answered?.some((d) => String(d.code) === "2322"),
+    `the working engine reports the error: ${JSON.stringify(answered)}`,
+  );
+
+  // The same question, asked of a compiler that cannot serve.
+  const unreachable = path.join(dir, "nowhere", "ttc");
+  assert.equal(
+    await engine.tsDiagnostics(unreachable, file),
+    null,
+    "no answer is null, so the caller cannot publish it as a clean file",
   );
 });

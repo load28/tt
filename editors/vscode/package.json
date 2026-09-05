@@ -136,7 +136,7 @@
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.tt` or `.ttx` file; set it to a directory such as `.tt-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports."
+          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.tt` or `.ttx` file; set it to a directory such as `.tt-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports. A relative path needs a workspace folder to resolve against: for a file that is in none, no sidecar is written and the tt output channel says so. Use an absolute path to cover those files."
         },
         "tt.trace.server": {
           "scope": "window",
