@@ -30,7 +30,7 @@ pub(super) fn source_map_for(
     job: &Job,
     emit: &ttc::MappedEmit,
     source: &str,
-    opts: &BuildOptions,
+    banner: BannerPlacement,
     mode: SourceMapMode,
 ) -> RenderedSourceMap {
     let out_name = job
@@ -45,7 +45,8 @@ pub(super) fn source_map_for(
             file: out_name.as_deref(),
             source: &source_name,
             embed_source: true,
-            generated_line_offset: usize::from(opts.banner),
+            generated_line_offset: banner.lines,
+            generated_line_offset_at: banner.at_line,
         },
     );
     match mode {

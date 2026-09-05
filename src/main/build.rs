@@ -380,14 +380,17 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                     return out;
                 };
                 let mut code = emit.code.clone();
+                let mut banner = BannerPlacement::default();
                 if opts.banner {
                     let base = job
                         .file
                         .file_name()
                         .unwrap_or(job.file.as_os_str())
                         .to_string_lossy();
-                    code =
-                        format!("// @generated from {base} by ttc — do not edit directly.\n{code}");
+                    banner = write_banner(
+                        &mut code,
+                        &format!("// @generated from {base} by ttc — do not edit directly.\n"),
+                    );
                 }
                 // A map describes a translation. A hand-written `.ts` is not
                 // translated — it passes through byte for byte by contract — so
@@ -401,7 +404,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 let map = match opts.source_map {
                     SourceMapMode::Off => None,
                     _ if ttc::SourceKind::from_tt_path(&job.file).is_none() => None,
-                    mode => Some(source_map_for(job, &emit, &loaded.source, opts, mode)),
+                    mode => Some(source_map_for(job, &emit, &loaded.source, banner, mode)),
                 };
                 if let Some(rendered) = &map {
                     if !code.ends_with('\n') {
@@ -447,7 +450,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             continue;
         };
         if opts.print {
-            print!("{code}");
+            crate::out::text(&code);
             continue;
         }
         match write_output(&job.out_path, &code) {
@@ -459,4 +462,53 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
         }
     }
     failed
+}
+
+/// Where a generated banner went, so a source map can shift only the lines
+/// that actually moved.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct BannerPlacement {
+    /// Lines the banner added.
+    pub(super) lines: usize,
+    /// The generated line it was written at. Lines before it did not move.
+    pub(super) at_line: usize,
+}
+
+/// Writes a banner into `code` at the first position the file allows.
+///
+/// A `#!` line and a byte-order mark are only themselves when they come
+/// first: a comment above either one turns a runnable script into a parse
+/// error and leaves a stray U+FEFF mid-file. Everything else about the top
+/// of a file — a license comment, a blank line, a directive prologue such as
+/// `"use client"` — a comment may precede, because a comment is not a
+/// statement and does not end a prologue.
+pub(super) fn write_banner(code: &mut String, banner: &str) -> BannerPlacement {
+    let mut at = 0;
+    if code.starts_with('\u{feff}') {
+        at += '\u{feff}'.len_utf8();
+    }
+    let mut lines = 1;
+    let mut prefix_newline = false;
+    if code[at..].starts_with("#!") {
+        match code[at..].find('\n') {
+            Some(newline) => at += newline + 1,
+            None => {
+                // A shebang that runs to the end of the file: the banner
+                // needs a line of its own to sit on.
+                at = code.len();
+                prefix_newline = true;
+                lines += 1;
+            }
+        }
+    }
+    let at_line = code[..at].matches('\n').count();
+    let mut written = String::with_capacity(code.len() + banner.len() + 1);
+    written.push_str(&code[..at]);
+    if prefix_newline {
+        written.push('\n');
+    }
+    written.push_str(banner);
+    written.push_str(&code[at..]);
+    *code = written;
+    BannerPlacement { lines, at_line }
 }
