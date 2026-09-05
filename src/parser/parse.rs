@@ -578,7 +578,7 @@ impl Parser<'_> {
                 }
             }
 
-            // Static import / re-export of a relative `.tt` path — only
+            // Literal import / re-export of a relative tt path — only
             // the specifier string is lifted; the clause before it and
             // the rest of the statement stay verbatim.
             if !dotted

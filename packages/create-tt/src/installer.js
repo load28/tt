@@ -24,6 +24,7 @@ const versions = {
 
 export function dependencyChannel(packageVersion) {
   if (/-dev\./.test(packageVersion)) return 'next'
+  if (/-beta(?:\.|$)/.test(packageVersion)) return 'beta'
   if (/-rc(?:\.|$)/.test(packageVersion)) return 'rc'
   return 'latest'
 }
@@ -148,7 +149,7 @@ export async function initializeExisting(options) {
   manifest.scripts['tt:check'] ??= `tsc -p ${typeConfig} --runExternalCode`
 
   const baseConfig = existsSync(join(root, 'tsconfig.json')) ? './tsconfig.json' : undefined
-  await writeJson(join(root, typeConfig), tsconfig(baseConfig))
+  const generated = [[typeConfig, `${JSON.stringify(tsconfig(baseConfig), null, '  ')}\n`]]
 
   const files = []
   let manualModule
@@ -160,7 +161,7 @@ export async function initializeExisting(options) {
     if (bundler === 'esbuild') {
       manualModule = adapter.module
     } else {
-      await writeFile(join(root, adapter.wrapper), wrapperConfig(adapter.module, base))
+      generated.push([adapter.wrapper, wrapperConfig(adapter.module, base)])
       files.push(adapter.wrapper)
       manifest.scripts['tt:dev'] ??= `${adapter.commands.dev} --config ${adapter.wrapper}`
       manifest.scripts['tt:build'] ??= `tsc -p ${typeConfig} --runExternalCode && ${adapter.commands.build} --config ${adapter.wrapper}`
@@ -169,6 +170,16 @@ export async function initializeExisting(options) {
     manifest.scripts['tt:build'] ??= 'ttc -o .tt-build src'
   }
 
+  // Validate the complete output set before changing any project files.
+  // Identical generated files make repeated init safe; customized files
+  // require an explicit user decision outside the initializer.
+  for (const [file, content] of generated) {
+    const path = join(root, file)
+    if (existsSync(path) && await readFile(path, 'utf8') !== content) {
+      throw new Error(`refusing to overwrite existing config: ${path}`)
+    }
+  }
+  for (const [file, content] of generated) await writeFile(join(root, file), content)
   await writeJson(manifestPath, manifest, indentation(source))
   files.push(typeConfig)
   return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule }

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import test from 'node:test'
@@ -21,6 +21,8 @@ const scaffoldedTypeScript = repositoryManifest.devDependencies.typescript
 
 test('keeps dependencies on the installer release channel', () => {
   assert.equal(dependencyChannel('0.3.0-dev.20260826'), 'next')
+  assert.equal(dependencyChannel('0.3.0-beta'), 'beta')
+  assert.equal(dependencyChannel('0.3.0-beta.1'), 'beta')
   assert.equal(dependencyChannel('0.3.0-rc'), 'rc')
   assert.equal(dependencyChannel('0.3.0'), 'latest')
   assert.equal(dependencyChannel('0.0.0-dev'), 'latest')
@@ -127,4 +129,29 @@ test('generates a composable wrapper for every declarative bundler adapter', asy
 test('does not allow a new project to drift from the Bun and Vite baseline', async () => {
   await assert.rejects(() => run(['app', '--package-manager', 'npm']), /new projects use Bun/)
   await assert.rejects(() => run(['app', '--bundler', 'webpack']), /new projects use Vite/)
+})
+
+
+test('init preserves customized generated configs without partial writes', async () => {
+  for (const file of ['tsconfig.tt.json', 'tt.vite.config.mjs']) {
+    const root = await mkdtemp(join(tmpdir(), 'create-tt-conflict-'))
+    const manifest = '{"devDependencies":{"vite":"^8"}}\n'
+    const config = '// customized project configuration\n'
+    await writeFile(join(root, 'package.json'), manifest)
+    await writeFile(join(root, file), config)
+    await assert.rejects(() => initializeExisting({ directory: root, bundler: 'auto' }), /refusing to overwrite existing config/)
+    assert.equal(await readFile(join(root, 'package.json'), 'utf8'), manifest)
+    assert.equal(await readFile(join(root, file), 'utf8'), config)
+    assert.deepEqual((await readdir(root)).sort(), ['package.json', file].sort())
+  }
+})
+
+test('repeated init is idempotent when generated configs are unchanged', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-repeat-'))
+  await writeFile(join(root, 'package.json'), '{"devDependencies":{"vite":"^8"}}\n')
+  await initializeExisting({ directory: root, bundler: 'auto' })
+  const before = await Promise.all(['package.json', 'tsconfig.tt.json', 'tt.vite.config.mjs'].map(file => readFile(join(root, file), 'utf8')))
+  await initializeExisting({ directory: root, bundler: 'auto' })
+  const after = await Promise.all(['package.json', 'tsconfig.tt.json', 'tt.vite.config.mjs'].map(file => readFile(join(root, file), 'utf8')))
+  assert.deepEqual(after, before)
 })

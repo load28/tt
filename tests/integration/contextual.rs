@@ -1056,3 +1056,103 @@ console.log(trace.join(","));
         ]
     );
 }
+
+#[test]
+fn scoped_generic_call_retains_explicit_type_arguments() {
+    require_toolchain!();
+    let (valid, output) = typecheck(
+        r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+declare const state: State;
+declare function consume<T>(item: T): void;
+consume<Item>(match (state) {
+    Ready(value) => ({kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+});
+"#,
+    );
+    assert!(valid, "{output}");
+}
+
+#[test]
+fn scoped_generic_call_instantiates_before_arm_type_shadowing() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function original<T extends Item>(item: T) { trace.push("original:" + item.run(3)); }
+let consume = original;
+consume<Item>(match (State.Ready(4)) {
+  Ready(value) => {
+    type Item = never;
+    consume = () => { trace.push("replaced"); };
+    trace.push("arm");
+    return {kind: "item", run: x => x + value};
+  },
+  Empty => ({kind: "item", run: x => x}),
+});
+console.log(trace.join(","));
+"#);
+    assert_eq!(output, ["arm,original:7"]);
+}
+
+#[test]
+fn scoped_contextual_hosts_and_cleanup_preserve_typescript_context() {
+    require_toolchain!();
+    let header = r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+declare const state: State; declare const flag: boolean;
+declare function consume(item: Item): number;
+declare function wrapped(item: {item: Item}): number;
+declare function pair(first: Item, second: Item): number;
+declare const api: {consume(item: Item): number};
+"#;
+    let value = "match (state) { Ready(value) => ({kind: \"item\", run: x => x + value}), Empty => ({kind: \"item\", run: x => x}) }";
+    let native_value =
+        "(() => { const value = 1; return {kind: \"item\", run: x => x + value}; })()";
+    let mut failures = Vec::new();
+    for (name, host) in [
+        ("consumed call", "const answer = consume(VALUE);"),
+        ("method call", "api.consume(VALUE);"),
+        ("optional call", "consume?.(VALUE);"),
+        ("object argument", "wrapped({item: VALUE});"),
+        ("scoped siblings", "pair(VALUE, VALUE);"),
+    ] {
+        let oracle = format!("{header}{}", host.replace("VALUE", native_value));
+        let (valid, report) = typecheck(&oracle);
+        assert!(valid, "native oracle {name}: {report}");
+        let (valid, report) = typecheck(&format!("{header}{}", host.replace("VALUE", value)));
+        if !valid {
+            failures.push(format!("{name}: {report}"));
+        }
+    }
+    for (name, body) in [
+        (
+            "conditional returns",
+            "if (flag) return {kind: \"item\", run: x => x + value}; return {kind: \"item\", run: x => x};",
+        ),
+        (
+            "finally",
+            "try { return {kind: \"item\", run: x => x + value}; } finally { console.log(\"cleanup\"); }",
+        ),
+        (
+            "catch",
+            "try { return {kind: \"item\", run: x => x + value}; } catch { return {kind: \"item\", run: x => x}; }",
+        ),
+    ] {
+        let (valid, report) = typecheck(&format!(
+            "{header}consume((() => {{ const value = 1; {body} }})());"
+        ));
+        assert!(valid, "native oracle {name}: {report}");
+        let (valid, report) = typecheck(&format!(
+            "{header}consume(match (state) {{ Ready(value) => {{ {body} }}, Empty => ({{kind: \"item\", run: x => x}}) }});"
+        ));
+        if !valid {
+            failures.push(format!("{name}: {report}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}

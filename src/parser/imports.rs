@@ -1,12 +1,9 @@
-//! Structural parsing of static import/re-export module specifiers.
+//! Structural parsing of literal import/re-export module specifiers.
 //!
-//! Only the specifier *string* of a static `import` declaration or an
-//! `export ... from` re-export is lifted, and only when it is a relative
-//! path ending in `.tt`; the rest of the statement stays a verbatim byte
-//! range. Dynamic `import(...)`, `import.meta`, and TypeScript
-//! import-assignment (`import x = require(...)`) never match, and — like
-//! every tt construct — a clause that deviates from the expected token
-//! shape aborts the attempt, leaving the statement untouched.
+//! Only module-specifier strings are lifted; surrounding syntax stays verbatim.
+//! Static declarations, dynamic imports, and import types share the same
+//! relative `.tt`/`.ttx` rewrite. Computed imports and `import.meta` remain
+//! untouched, as do TypeScript import-assignment declarations.
 //!
 //! Alongside the specifier, the clause's imported names are collected for
 //! the declaration-collection API (project-wide exhaustiveness). Name
@@ -22,8 +19,8 @@ use crate::lexer::TokenKind;
 
 /// `cur` is positioned just past an `import` or `export` keyword (`kw`).
 /// Returns the advanced cursor and the lifted import (specifier span plus
-/// imported names) when the clause fully parses as a static
-/// import/re-export *and* the specifier is a relative `.tt` path.
+/// imported names) when the clause identifies an import/re-export module string
+/// recognized by `tt_spec_span`.
 pub(super) fn parse_tt_import<'t>(
     mut cur: Cursor<'t>,
     kw: &str,
@@ -45,8 +42,30 @@ pub(super) fn parse_tt_import<'t>(
                     },
                 ));
             }
-            // `import(...)` / `import.meta` — not a static declaration.
-            TokenKind::Punct(b'(' | b'.') | TokenKind::OptChain => return None,
+            // Both dynamic imports and import types have a literal first
+            // argument. Require the argument boundary so concatenations are
+            // never mistaken for a complete module specifier.
+            TokenKind::Punct(b'(') => {
+                cur.bump();
+                let token = cur.peek()?;
+                if !matches!(token.kind, TokenKind::Str) {
+                    return None;
+                }
+                let (spec, kind) = tt_spec_span(&cur, token.span)?;
+                cur.bump();
+                if !matches!(cur.peek()?.kind, TokenKind::Punct(b')' | b',')) {
+                    return None;
+                }
+                return Some((
+                    cur,
+                    TtImportDecl {
+                        spec,
+                        kind,
+                        names: TtImportNames::None,
+                    },
+                ));
+            }
+            TokenKind::Punct(b'.') | TokenKind::OptChain => return None,
             _ => {}
         }
         clause_then_spec(cur, true)

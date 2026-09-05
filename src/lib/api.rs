@@ -87,7 +87,7 @@ pub struct ExternVariant {
     pub from: Option<String>,
 }
 
-/// One static relative `.tt`/`.ttx` import (or re-export) of a source file, in
+/// One literal relative `.tt`/`.ttx` import (or re-export) of a source file, in
 /// source order — the file's outgoing module-graph edges.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TtImport {
@@ -145,7 +145,7 @@ pub fn exported_variants_with_kind(source: &str, source_kind: SourceKind) -> Vec
         .collect()
 }
 
-/// Lists a source file's static relative `.tt`/`.ttx` imports and re-exports, in
+/// Lists a source file's literal relative `.tt`/`.ttx` imports and re-exports, in
 /// source order — the edges a build tool follows to collect declarations
 /// with [`exported_variants`].
 ///
@@ -181,7 +181,7 @@ pub fn imports_std(source: &str) -> bool {
 }
 
 /// A source file's module-level facts, gathered in a **single** parse:
-/// its static relative `.tt`/`.ttx` imports ([`tt_imports`]) and whether it
+/// its literal relative `.tt`/`.ttx` imports ([`tt_imports`]) and whether it
 /// imports the standard library ([`imports_std`]).
 ///
 /// A build tool walking a whole project needs both of a file, and parsing
@@ -190,7 +190,7 @@ pub fn imports_std(source: &str) -> bool {
 /// scans every input through this.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ModuleScan {
-    /// The file's static relative `.tt`/`.ttx` imports and re-exports, in source
+    /// The file's literal relative `.tt`/`.ttx` imports and re-exports, in source
     /// order — see [`tt_imports`].
     pub imports: Vec<TtImport>,
     /// Whether the file imports [`STD_SPECIFIER`] — see [`imports_std`].

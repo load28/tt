@@ -179,9 +179,9 @@ interface Client {
 }
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
-function connect(): Client {
-  const child: ChildProcess = spawn(process.execPath, [SERVER, "--stdio"], {
-    stdio: ["pipe", "pipe", "ignore"],
+function connect(server = SERVER): Client {
+  const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
+    stdio: ["pipe", "pipe", "pipe"],
     // The LSP case lives in a temporary project, while the test contract is
     // against the compiler built from this checkout. Cover both supported
     // development routes: a linked package consumes TTC_BINARY, and the
@@ -192,16 +192,38 @@ function connect(): Client {
       PATH: `${path.dirname(COMPILER)}${path.delimiter}${process.env.PATH ?? ""}`,
     },
   });
-  const pending = new Map<number, (body: any) => void>();
+  interface Request {
+    method: string;
+    resolve: (body: any) => void;
+    reject: (error: Error) => void;
+  }
+  const pending = new Map<number, Request>();
   interface Waiter {
     method: string;
     want: (params: any) => boolean;
     resolve: (params: any) => void;
+    reject: (error: Error) => void;
   }
   const waiters = new Map<number, Waiter>();
   let nextWaiter = 1;
   let nextId = 1;
   let buf = Buffer.alloc(0);
+  let closed: Error | undefined;
+  let stderr = "";
+  const fail = (reason: string): void => {
+    if (closed) return;
+    const requests = [...pending.values()].map(request => request.method).join(", ");
+    const notifications = [...waiters.values()].map(waiter => waiter.method).join(", ");
+    closed = new Error(`${reason}; pending requests: ${requests || "none"}; waiting notifications: ${notifications || "none"}${stderr ? `\n${stderr}` : ""}`);
+    for (const request of pending.values()) request.reject(closed);
+    for (const waiter of waiters.values()) waiter.reject(closed);
+    pending.clear();
+    waiters.clear();
+  };
+  child.stderr!.on("data", chunk => { stderr = (stderr + chunk.toString()).slice(-16_384); });
+  child.on("error", error => fail(`LSP process error: ${error.message}`));
+  child.on("close", (code, signal) => fail(`LSP process closed: code=${code}, signal=${signal}`));
+  child.stdin!.on("error", error => fail(`LSP input error: ${error.message}`));
 
   child.stdout!.on("data", (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk]);
@@ -216,10 +238,10 @@ function connect(): Client {
       if (buf.length < sep + 4 + size) return;
       const body = JSON.parse(buf.subarray(sep + 4, sep + 4 + size).toString());
       buf = buf.subarray(sep + 4 + size);
-      const resolve = body.id !== undefined ? pending.get(body.id) : undefined;
-      if (resolve) {
+      const request = body.id !== undefined ? pending.get(body.id) : undefined;
+      if (request) {
         pending.delete(body.id);
-        resolve(body);
+        request.resolve(body);
         continue;
       }
       if (body.method !== undefined) {
@@ -241,17 +263,19 @@ function connect(): Client {
   };
   return {
     request: (method, params) =>
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
+        if (closed) { reject(closed); return; }
         const id = nextId++;
-        pending.set(id, resolve);
+        pending.set(id, { method, resolve, reject });
         send({ id, method, params });
       }),
     notify: (method, params) => send({ method, params }),
     waitFor: (method, want) =>
-      new Promise((resolve) => {
-        waiters.set(nextWaiter++, { method, want, resolve });
+      new Promise((resolve, reject) => {
+        if (closed) { reject(closed); return; }
+        waiters.set(nextWaiter++, { method, want, resolve, reject });
       }),
-    stop: () => child.kill(),
+    stop: () => { fail("LSP client stopped"); child.kill(); },
   };
 }
 
@@ -1213,3 +1237,27 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
     },
   );
 }
+
+
+test("LSP client reports process exit instead of hanging pending operations", { timeout }, async () => {
+  const dir = caseDir("tt-lsp-exit-");
+  const server = path.join(dir, "exit.cjs");
+  fs.writeFileSync(server, 'process.stdin.once("data", () => { process.stderr.write("controlled server failure\\n"); process.exitCode = 7; process.stdin.destroy(); });\n');
+  const client = connect(server);
+  try {
+    const notification = client.waitFor("textDocument/publishDiagnostics", () => true);
+    const request = client.request("initialize", {});
+    const outcomes = await Promise.allSettled([request, notification]);
+    for (const outcome of outcomes) {
+      assert.equal(outcome.status, "rejected");
+      if (outcome.status === "rejected") {
+        assert.match(outcome.reason.message, /code=7/);
+        assert.match(outcome.reason.message, /initialize/);
+        assert.match(outcome.reason.message, /publishDiagnostics/);
+        assert.match(outcome.reason.message, /controlled server failure/);
+      }
+    }
+    await assert.rejects(client.request("shutdown", {}), /code=7/);
+    await assert.rejects(client.waitFor("future", () => true), /code=7/);
+  } finally { client.stop(); }
+});

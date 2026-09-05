@@ -571,9 +571,9 @@ fn non_relative_tt_specifiers_are_untouched() {
 }
 
 #[test]
-fn dynamic_import_and_import_meta_are_untouched() {
+fn dynamic_import_is_rewritten_and_import_meta_is_untouched() {
     let src = "const m = import(\"./x.tt\");\nconst u = import.meta.url;\n";
-    assert_eq!(ok(src), src);
+    assert_eq!(ok(src), src.replace("./x.tt", "./x.js"));
 }
 
 #[test]
@@ -647,4 +647,51 @@ fn extern_variant_full_coverage_compiles() {
     )
     .unwrap();
     assert!(out.contains("switch ($tt_m.kind)"));
+}
+
+#[test]
+fn literal_import_rewrite_matrix_preserves_surrounding_syntax() {
+    let hosts = [
+        "const load = () => import(SPEC);",
+        "const load = () => import(/* before */ SPEC /* after */, {with: {type: 'json'}});",
+        "type Module = typeof import(SPEC);",
+        "type Value = import(SPEC).Value;",
+        "export type Value = import(SPEC, {with: {'resolution-mode': 'import'}}).Value;",
+        "async function load() { return (await import(SPEC)).value; }",
+        "const load = `${import(SPEC)}`;",
+    ];
+    for kind in [ttc::SourceKind::TypeScript, ttc::SourceKind::Tsx] {
+        for (extension, js, ts) in [("tt", "js", "ts"), ("ttx", "jsx", "tsx")] {
+            for quote in ["'", "\""] {
+                for host in hosts {
+                    let path = format!("../feature.{extension}");
+                    let source = host.replace("SPEC", &format!("{quote}{path}{quote}"));
+                    for (mode, expected_extension) in [
+                        (ttc::ImportRewrite::Js, js),
+                        (ttc::ImportRewrite::Ts, ts),
+                        (ttc::ImportRewrite::Off, extension),
+                    ] {
+                        let options = Options { source_kind: kind, rewrite_imports: mode, ..Options::default() };
+                        let output = compile(&source, &options).unwrap();
+                        assert_eq!(output, source.replace(&path, &format!("../feature.{expected_extension}")), "{source}");
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn computed_and_non_module_import_lookalikes_remain_unchanged() {
+    for source in [
+        "const load = import('./feature.tt' + suffix);",
+        "const load = import(`./feature.tt`);",
+        "const load = import(path);",
+        "const load = import('package.tt');",
+        "const load = object.import('./feature.tt');",
+        "const load = object?.import('./feature.tt');",
+        "const text = \"import('./feature.tt')\";",
+    ] {
+        assert_eq!(ok(source), source);
+    }
 }

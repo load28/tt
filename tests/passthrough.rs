@@ -329,9 +329,9 @@ fn tt_specifier_in_string_comment_and_template_untouched() {
 }
 
 #[test]
-fn dynamic_import_of_tt_path_untouched() {
-    // Dynamic import is out of scope for specifier rewriting.
-    assert_passthrough("const m = import(\"./x.tt\");\n");
+fn computed_dynamic_import_of_tt_path_is_untouched() {
+    // A literal prefix is not the complete module specifier.
+    assert_passthrough("const m = import(\"./x.tt\" + suffix);\n");
 }
 
 #[test]
