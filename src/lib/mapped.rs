@@ -160,6 +160,8 @@ pub struct MappedEmit {
     pub anchors: Vec<EmitAnchor>,
     /// Explicit Result return values in source and emitted coordinates.
     pub(crate) result_return_temps: Vec<ResultReturnTemp>,
+    /// Byte offsets after generated value declaration identifiers.
+    pub(crate) contextual_slots: Vec<usize>,
 }
 
 impl MappedEmit {
@@ -248,6 +250,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         payload_temps: flat.payload_temps,
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
+        contextual_slots: flat.contextual_slots,
     }
 }
 

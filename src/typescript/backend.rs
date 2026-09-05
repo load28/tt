@@ -130,6 +130,21 @@ pub(crate) struct ResultShapeQuery {
     pub end: usize,
 }
 
+/// Context expected at uses of a generated, unannotated value binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextualSlotQuery {
+    pub module: PathBuf,
+    /// UTF-16 end of the declaration identifier, where an annotation belongs.
+    pub declaration_end: usize,
+}
+
+/// A type expressed in the lexical scope of the generated declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextualSlotType {
+    pub index: usize,
+    pub annotation: String,
+}
+
 /// Everything asked of one project graph, in one round trip.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Query {
@@ -147,6 +162,9 @@ pub(crate) struct Query {
     pub tags: Vec<TagQuery>,
     pub symbols: Vec<SymbolQuery>,
     pub result_shapes: Vec<ResultShapeQuery>,
+    pub contextual_slots: Vec<ContextualSlotQuery>,
+    /// Skip diagnostics while iterating contextual facts.
+    pub contextual_only: bool,
     /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.
@@ -287,6 +305,7 @@ pub(crate) struct Answers {
     pub resolutions: Vec<Resolution>,
     pub result_shapes: Vec<ResultShape>,
     pub declarations: Vec<Declaration>,
+    pub contextual_slots: Vec<ContextualSlotType>,
 }
 
 /// A checker-proven Result shape answer. Absent answers remain unknown.

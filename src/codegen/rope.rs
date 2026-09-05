@@ -33,6 +33,8 @@ pub(crate) use builder::{Flat, Rope};
 pub(crate) enum MarkKind {
     /// A `match`'s scrutinee temporary ([`crate::ScrutineeTemp`]).
     Scrutinee,
+    /// End of an unannotated generated value declaration identifier.
+    ContextualSlot,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
     /// Start of a value explicitly returned from a `result` block.
@@ -507,6 +509,7 @@ impl<'a> TargetFile<'a> {
         let mut marks: Vec<ScrutineeTemp> = Vec::new();
         let mut payloads: Vec<PayloadTemp> = Vec::new();
         let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
+        let mut contextual_slots = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
@@ -546,6 +549,10 @@ impl<'a> TargetFile<'a> {
                         });
                     }
                 }
+                TargetPiece::Mark {
+                    kind: MarkKind::ContextualSlot,
+                    ..
+                } => contextual_slots.push(out.len()),
                 TargetPiece::Mark {
                     src,
                     kind: MarkKind::Scrutinee,
@@ -630,6 +637,7 @@ impl<'a> TargetFile<'a> {
             payload_temps: payloads,
             anchors,
             result_return_temps: result_returns,
+            contextual_slots,
         }
     }
 }

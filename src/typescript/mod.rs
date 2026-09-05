@@ -35,6 +35,7 @@
 //! a pass, and the backend here answers about that snapshot.
 
 pub(crate) mod backend;
+pub(crate) mod contextual;
 pub(crate) mod mapper;
 pub(crate) mod native;
 pub(crate) mod service;

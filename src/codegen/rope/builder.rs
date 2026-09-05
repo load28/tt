@@ -91,6 +91,26 @@ impl<'a> Rope<'a> {
         });
     }
 
+    /// Declares storage whose expected type is supplied by its contextual host.
+    pub(crate) fn push_value_declaration(&mut self, name: &str) {
+        self.push_lit(format!("let {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(";");
+    }
+
+    /// Starts a captured value while retaining its contextual annotation site.
+    pub(crate) fn push_value_capture(&mut self, name: &str) {
+        self.push_lit(format!("const {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(" = (");
+    }
+
     /// Notes that the next copied source byte begins an explicit Result
     /// return value, so a checker query can use its emitted position.
     pub(crate) fn push_result_return_start(&mut self, src: usize) {
@@ -422,4 +442,5 @@ pub(crate) struct Flat {
     pub anchors: Vec<EmitAnchor>,
     /// Explicit Result return values in source and emitted coordinates.
     pub result_return_temps: Vec<ResultReturnTemp>,
+    pub contextual_slots: Vec<usize>,
 }

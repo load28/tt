@@ -1,5 +1,7 @@
 # TASK-333: Preserve contextual types through scheduled captures
 
+> Updated by [TASK-349](./TASK-349-contextual-type-materialization.md): checker-derived ordinary annotations now preserve contextual types for generated value and capture slots, including cleanup and nested match cases. Earlier limitations and the decision against synthesizing contextual annotations below describe the historical implementation.
+
 - **Status**: Complete
 - **Started**: 2026-09-05
 - **Completed**: 2026-09-05

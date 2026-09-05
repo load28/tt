@@ -717,3 +717,59 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
 include!("native/cases_01.rs");
 include!("native/cases_02.rs");
 include!("native/cases_03.rs");
+
+#[test]
+fn scoped_contextual_values_cross_all_mixed_source_edges() {
+    require_tsgo!();
+    let dir = project(&[]);
+    let extensions = ["tt", "ttx", "ts", "tsx"];
+    for extension in extensions {
+        write(
+            &dir,
+            &format!("src/provider.{extension}"),
+            "export type Item = {kind: 'item'; run: (x: number) => number};\nexport function consume(item: Item): number { return item.run(2); }\n",
+        );
+    }
+    for (consumer_index, consumer) in extensions.iter().enumerate() {
+        let mut source = String::new();
+        for (provider_index, provider) in extensions.iter().enumerate() {
+            let specifier = if matches!(*provider, "tt" | "ttx") {
+                format!("./provider.{provider}")
+            } else {
+                // Distinct names avoid extensionless resolution ambiguity.
+                let name = format!("provider_host_{provider_index}");
+                write(
+                    &dir,
+                    &format!("src/{name}.{provider}"),
+                    "export type Item = {kind: 'item'; run: (x: number) => number};\nexport function consume(item: Item): number { return item.run(2); }\n",
+                );
+                format!("./{name}")
+            };
+            source.push_str(&format!(
+                "import {{consume as consume_{provider_index}}} from '{specifier}';\n"
+            ));
+            if matches!(*consumer, "tt" | "ttx") {
+                source.push_str(&format!("export function cell_{consumer_index}_{provider_index}(flag: boolean) {{ return consume_{provider_index}(match (flag) {{ true => {{ const local = 3; try {{ return {{kind: 'item', run: x => x + local}}; }} finally {{ console.log(local); }} }}, false => ({{kind: 'item', run: x => x}}) }}); }}\n"));
+            } else {
+                source.push_str(&format!("export const cell_{consumer_index}_{provider_index} = consume_{provider_index}({{kind: 'item', run: x => x + 3}});\n"));
+            }
+        }
+        write(&dir, &format!("src/consumer.{consumer}"), &source);
+    }
+    let output = run(&dir, &["--check-types", "src"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for consumer in ["tt", "ttx"] {
+        let printed = run(&dir, &["--print", &format!("src/consumer.{consumer}")]);
+        assert!(
+            printed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&printed.stderr)
+        );
+        let code = String::from_utf8(printed.stdout).unwrap();
+        assert_eq!(code.matches(": import(").count(), 4, "{code}");
+    }
+}

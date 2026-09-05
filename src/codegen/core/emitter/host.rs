@@ -131,7 +131,7 @@ impl<'a> Emitter<'a> {
                 ComposeAction::Value(value) => &value.slot,
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
-            out.push_lit(format!("let {slot};"));
+            out.push_value_declaration(slot);
             out.push_break(0);
         }
         let mut captured = HashSet::new();
@@ -157,7 +157,7 @@ impl<'a> Emitter<'a> {
                         // authored order and with its source mapping, so the
                         // arms reference one copy instead of repeating it.
                         for (name, source) in &completion.captures {
-                            region.push_lit(format!("const {name} = ("));
+                            region.push_value_capture(name);
                             region.push_src(&self.source[source.start..source.end], source.start);
                             region.push_lit(");");
                             region.push_break(0);
@@ -227,7 +227,7 @@ impl<'a> Emitter<'a> {
                 ComposeAction::Value(value) => &value.slot,
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
-            out.push_lit(format!("let {slot};"));
+            out.push_value_declaration(slot);
             out.push_break(1);
         }
         self.loop_region_depth.set(self.loop_region_depth.get() + 1);
@@ -434,7 +434,7 @@ impl<'a> Emitter<'a> {
                     match argument {
                         PlannedOperand::Value(expr) => {
                             let name = self.value_name_of(*expr);
-                            body.push_lit(format!("let {name};"));
+                            body.push_value_declaration(name);
                             body.push_break(0);
                             body.append(deliver_value(*expr, name));
                             body.push_break(0);
@@ -445,7 +445,7 @@ impl<'a> Emitter<'a> {
                             ..
                         } => {
                             if captured.insert(*slot) {
-                                body.push_lit(format!("const {} = (", self.value_slot_name(*slot)));
+                                body.push_value_capture(self.value_slot_name(*slot));
                                 body.push_src(&self.source[span.start..span.end], span.start);
                                 body.push_lit(");");
                                 body.push_break(0);
@@ -514,7 +514,7 @@ impl<'a> Emitter<'a> {
         };
         let value_slot = self.value_name_of(value);
         let mut out = Rope::new();
-        out.push_lit(format!("let {value_slot};"));
+        out.push_value_declaration(value_slot);
         out.push_break(0);
         let mut lowered = self
             .emit_continued_expr(value, &ValueContinuation::assign(value_slot))
@@ -671,7 +671,7 @@ impl<'a> Emitter<'a> {
             } => {
                 if captured.insert(*target) {
                     let receiver_source = self.capture_planned_receiver(receiver, captured, out);
-                    out.push_lit(format!("const {} = (", self.value_slot_name(*target)));
+                    out.push_value_capture(self.value_slot_name(*target));
                     if source.start < receiver_source.start {
                         out.push_src(
                             &self.source[source.start..receiver_source.start],
@@ -695,7 +695,7 @@ impl<'a> Emitter<'a> {
             }
             PlannedEvaluationInput::Source { source, target, .. } => {
                 if captured.insert(*target) {
-                    out.push_lit(format!("const {} = (", self.value_slot_name(*target)));
+                    out.push_value_capture(self.value_slot_name(*target));
                     out.push_src(&self.source[source.start..source.end], source.start);
                     out.push_lit(");");
                     out.push_break(0);
@@ -714,7 +714,7 @@ impl<'a> Emitter<'a> {
         match *receiver {
             PlannedReceiver::Captured { source, slot } => {
                 if captured.insert(slot) {
-                    out.push_lit(format!("const {} = (", self.value_slot_name(slot)));
+                    out.push_value_capture(self.value_slot_name(slot));
                     out.push_src(&self.source[source.start..source.end], source.start);
                     out.push_lit(");");
                     out.push_break(0);
@@ -874,7 +874,7 @@ impl<'a> Emitter<'a> {
                     prefix.push_break(0);
                 }
             } else {
-                prefix.push_lit(format!("const {} = (", self.value_slot_name(*target)));
+                prefix.push_value_capture(self.value_slot_name(*target));
                 prefix.push_src(&self.source[source.start..source.end], source.start);
                 prefix.push_lit(");");
                 prefix.push_break(0);

@@ -1,4 +1,4 @@
-# TASK-331: Audit product and mixed-source composition failures
+# TASK-348: Audit product and mixed-source composition failures
 
 - **Status**: Complete
 - **Started**: 2026-09-06

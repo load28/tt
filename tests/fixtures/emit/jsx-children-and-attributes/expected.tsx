@@ -30,7 +30,7 @@ export const view = <main>
   {$tt_v0}
 </main>;
 
-let $tt_v1;
+let $tt_v1: string;
 {
   const $tt_m = state;
   switch ($tt_m.kind) {

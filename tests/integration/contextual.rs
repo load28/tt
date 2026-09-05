@@ -1156,3 +1156,105 @@ declare const api: {consume(item: Item): number};
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+#[test]
+fn nested_scoped_context_preserves_disposal_and_call_order() {
+    require_toolchain!();
+    let lines = run_with_tsc_flags(
+        r#"
+type Item = {kind: "item"; run: (x: number) => number};
+const events: string[] = [];
+const receiver = {
+  base: 10,
+  consume(item: Item) { events.push("call"); return this.base + item.run(2); },
+};
+async function main(flag: boolean) {
+  const answer = receiver.consume(match (flag) {
+    true => {
+      await using outer = { async [Symbol.asyncDispose]() { events.push("outer-dispose"); } };
+      return match (flag) {
+        true => {
+          using inner = { [Symbol.dispose]() { events.push("inner-dispose"); } };
+          const local = 3;
+          events.push("value");
+          return {kind: "item", run: x => x + local};
+        },
+        false => ({kind: "item", run: x => x}),
+      };
+    },
+    false => ({kind: "item", run: x => x}),
+  });
+  console.log(answer, events.join(","));
+}
+await main(true);
+"#,
+        &["--lib", "es2022,dom,esnext.disposable"],
+    );
+    assert_eq!(lines, ["15 value,inner-dispose,outer-dispose,call"]);
+}
+
+#[test]
+fn scoped_contextual_family_matrix_covers_hosts_and_nesting() {
+    require_toolchain!();
+    let values = [
+        "match (state) { Ready(value) => ({kind: 'item', run: x => x + value}), Empty => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { const local = 1; return {kind: 'item', run: x => x + local}; }, false => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { if (flag) return {kind: 'item', run: x => x}; return {kind: 'item', run: x => x}; }, false => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { try { return {kind: 'item', run: x => x}; } catch { return {kind: 'item', run: x => x}; } }, false => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { try { return {kind: 'item', run: x => x}; } finally { console.log(flag); } }, false => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { using resource = {[Symbol.dispose]() { console.log(flag); }}; return {kind: 'item', run: x => x}; }, false => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { const local = 1; return match (flag) { true => ({kind: 'item', run: x => x + local}), false => ({kind: 'item', run: x => x}) }; }, false => ({kind: 'item', run: x => x}) }",
+        "match (flag) { true => { const local = 1; return (match (flag) { true => ({kind: 'item', run: x => x + local}), false => ({kind: 'item', run: x => x}) }); }, false => ({kind: 'item', run: x => x}) }",
+    ];
+    let hosts = [
+        "const answer = consume(VALUE);",
+        "api.consume(VALUE);",
+        "consume?.(VALUE);",
+        "wrapped({item: VALUE});",
+        "pair(VALUE, {kind: 'item', run: x => x});",
+        "pair({kind: 'item', run: x => x}, VALUE);",
+        "pair(VALUE, VALUE);",
+        "const answer: Item = VALUE;",
+    ];
+    for kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let mut source = String::from(
+            "export {};\ntype Item = {kind: 'item'; run: (x: number) => number};\nvariant State { Ready(value: number), Empty }\ndeclare function consume(item: Item): number;\ndeclare function wrapped(item: {item: Item}): number;\ndeclare function pair(a: Item, b: Item): number;\ndeclare const api: {consume(item: Item): number};\ndeclare function Widget(props: {item: Item}): any;\n",
+        );
+        for (value_index, value) in values.iter().enumerate() {
+            for (host_index, host) in hosts.iter().enumerate() {
+                source.push_str(&format!("export function cell_{value_index}_{host_index}(flag: boolean, state: State) {{ {} }}\n", host.replace("VALUE", value)));
+            }
+            if kind == SourceKind::Tsx {
+                source.push_str(&format!("export function jsx_{value_index}(flag: boolean, state: State) {{ return <Widget item={{{value}}} />; }}\n"));
+            }
+        }
+        let code = compile(
+            &source,
+            &Options {
+                source_kind: kind,
+                ..Options::default()
+            },
+        )
+        .unwrap();
+        let dir = tmpdir();
+        let file = dir.join(if kind == SourceKind::Tsx {
+            "matrix.tsx"
+        } else {
+            "matrix.ts"
+        });
+        fs::write(&file, code).unwrap();
+        let checked = Command::new("tsc")
+            .arg(file)
+            .args(TSC_FLAGS)
+            .args([
+                "--noEmit",
+                "--jsx",
+                "preserve",
+                "--lib",
+                "es2022,dom,esnext.disposable",
+            ])
+            .output()
+            .unwrap();
+        assert!(checked.status.success(), "{}", tsc_report(&checked));
+    }
+}

@@ -342,7 +342,15 @@ impl<'a> Emitter<'a> {
         // target already ([`HostExit::captured_break`]).
         let leave = label.map_or_else(|| "break;".to_owned(), |label| format!("break {label};"));
         let mut edits = Vec::new();
+        let mut structured_returns = Vec::new();
         for exit in exits {
+            if let Some(expr) = exit
+                .value_argument
+                .and_then(|argument| self.returned_structured_expr(body, argument))
+            {
+                structured_returns.push((exit, expr));
+                continue;
+            }
             let line_start = self.source[..exit.statement.start]
                 .rfind('\n')
                 .map_or(0, |index| index + 1);
@@ -411,7 +419,87 @@ impl<'a> Emitter<'a> {
             }
         }
         edits.sort_unstable_by_key(|edit| edit.span.start);
-        self.emit_statements_with_edits(&self.core.bodies[body.index()].statements, &edits)
+        let mut out = Rope::new();
+        for statement in &self.core.bodies[body.index()].statements {
+            match statement {
+                Statement::Opaque(node) if !structured_returns.is_empty() => {
+                    let span = self.span(*node);
+                    let mut local = edits.clone();
+                    for (exit, _) in &structured_returns {
+                        let clipped = SourceSpan {
+                            start: span.start.max(exit.statement.start),
+                            end: span.end.min(exit.statement.end),
+                        };
+                        if clipped.start < clipped.end {
+                            local.push(LocalSourceEdit {
+                                span: clipped,
+                                text: String::new(),
+                                result_return_mark: None,
+                            });
+                        }
+                    }
+                    local.sort_unstable_by_key(|edit| edit.span.start);
+                    out.append(self.source_rope_with_edits(*node, &local));
+                }
+                Statement::Expr(expr)
+                    if structured_returns
+                        .iter()
+                        .any(|(_, returned)| returned == expr) =>
+                {
+                    let (exit, _) = structured_returns
+                        .iter()
+                        .find(|(_, returned)| returned == expr)
+                        .expect("matched above");
+                    if exit.requires_block {
+                        out.push_lit("{ ");
+                    }
+                    out.append(self.emit_returned_structured_value(
+                        *expr,
+                        exit.argument.expect("structured return has an argument"),
+                        continuation,
+                    ));
+                    out.push_break(0);
+                    out.push_lit(leave.clone());
+                    if exit.requires_block {
+                        out.push_lit(" }");
+                    }
+                }
+                _ => out.append(
+                    self.emit_statements_with_edits(std::slice::from_ref(statement), &edits),
+                ),
+            }
+        }
+        out
+    }
+
+    /// Deliver a structured return argument while retaining authored wrappers.
+    pub(super) fn emit_returned_structured_value(
+        &self,
+        expr: ExprId,
+        argument: SourceSpan,
+        continuation: &ValueContinuation<'_>,
+    ) -> Rope<'a> {
+        if structured_expr_span(self.semantic, self.core, expr) == Some(argument) {
+            return self
+                .emit_continued_expr(expr, continuation)
+                .unwrap_or_else(|| crate::ice::bug!("returned structured value was not emitted"));
+        }
+        let slot = self
+            .structured_value_slot(expr)
+            .unwrap_or_else(|| crate::ice::bug!("wrapped returned value has no storage"));
+        let mut out = Rope::new();
+        out.push_value_declaration(slot);
+        out.push_break(0);
+        out.append(
+            self.emit_continued_expr(expr, &ValueContinuation::assign(slot))
+                .unwrap_or_else(|| crate::ice::bug!("wrapped returned value was not emitted")),
+        );
+        out.push_break(0);
+        out.append(self.emit_value_delivery_without_region_exit(
+            self.source_range_with_value_slots(argument, &[expr]),
+            continuation,
+        ));
+        out
     }
 
     pub(super) fn emit_statements(&self, statements: &[Statement]) -> Rope<'a> {
@@ -501,7 +589,7 @@ impl<'a> Emitter<'a> {
         }
         if matches!(self.core.exprs[expr.index()], Expr::Decision(_)) {
             if let Some(slot) = self.value_slots.get(&expr) {
-                out.push_lit(format!("let {slot};"));
+                out.push_value_declaration(slot);
                 out.push_break(0);
                 out.append(
                     self.emit_continued_expr(expr, &ValueContinuation::assign(slot))
@@ -577,7 +665,7 @@ impl<'a> Emitter<'a> {
                 continue;
             }
             if !continuation.is_unwrapped_assignment_to(&slot) {
-                out.push_lit(format!("let {slot};"));
+                out.push_value_declaration(&slot);
                 out.push_break(0);
             }
             out.append(self.emit_continued_expr(inner, &ValueContinuation::assign(&slot))?);

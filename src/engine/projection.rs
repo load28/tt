@@ -23,7 +23,7 @@ use crate::{LiteralMatch, MappedEmit, Options, TagMatch, ValProbes};
 /// One `.tt` file as every consumer of the engine sees it: the source the
 /// user wrote, and the TypeScript the compiler is given — plus everything
 /// the engine derives from the text, cached with it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProjectedDocument {
     /// The `.tt` file.
     pub source_path: PathBuf,

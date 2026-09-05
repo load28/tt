@@ -130,6 +130,8 @@ pub(crate) struct HostExit {
     pub(crate) single_return_body: Option<BodyId>,
     pub(crate) statement: SourceSpan,
     pub(crate) argument: Option<SourceSpan>,
+    /// AST value beneath parentheses and TypeScript expression wrappers.
+    pub(crate) value_argument: Option<SourceSpan>,
     /// Whether the exit sits inside a statement that consumes an unlabeled
     /// `break` — a loop or a `switch` written in the arm body. The rewrite
     /// turns the `return` into a `break`, so such an exit is the only

@@ -67,7 +67,10 @@ impl NativeBackend {
         // The host is written beside the run rather than piped in: node reads
         // a module from a path, and the path is what import specifiers in the
         // job resolve against.
-        let dir = std::env::temp_dir().join(format!("ttc-host-{}", std::process::id()));
+        static NEXT_SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let session_id = NEXT_SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("ttc-host-{}-{session_id}", std::process::id()));
         std::fs::create_dir_all(&dir)
             .map_err(|e| Failure::unavailable(format!("cannot prepare the host: {e}")))?;
         let script = dir.join("host.mjs");
@@ -224,6 +227,10 @@ fn job_json(query: &Query) -> serde_json::Value {
         "resultShapeChecks": query.result_shapes.iter()
             .map(|v| json!({ "module": v.module, "start": v.start, "end": v.end }))
             .collect::<Vec<_>>(),
+        "contextualSlots": query.contextual_slots.iter()
+            .map(|v| json!({ "module": v.module, "declarationEnd": v.declaration_end }))
+            .collect::<Vec<_>>(),
+        "contextualOnly": query.contextual_only,
         "emitDeclarations": query.emit_declarations,
     })
 }
@@ -266,6 +273,20 @@ fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
             .filter_map(|module| module.as_str().map(PathBuf::from))
             .collect(),
     );
+    for slot in array(&value, "contextualSlots") {
+        let index = slot["index"]
+            .as_u64()
+            .ok_or_else(|| Failure::internal("contextual slot answer omitted index"))?
+            as usize;
+        let annotation = slot["annotation"]
+            .as_str()
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?;
+        answers.contextual_slots.push(ContextualSlotType {
+            index,
+            annotation: annotation.into(),
+        });
+    }
     for d in array(&value, "diagnostics") {
         answers.diagnostics.push(Diagnostic {
             file: PathBuf::from(d["file"].as_str().unwrap_or_default()),
@@ -390,5 +411,99 @@ fn json_literal(value: &serde_json::Value) -> Option<crate::Literal> {
         serde_json::Value::Number(n) => n.as_f64().map(crate::Literal::Number),
         serde_json::Value::Bool(b) => Some(crate::Literal::Boolean(*b)),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod contextual_tests {
+    use super::*;
+
+    #[test]
+    fn materialized_scoped_values_preserve_context_and_mappings() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let backend = NativeBackend::new(None, root).expect("pinned TypeScript toolchain");
+        let source = r#"
+export {};
+type Item = { kind: "item", run: (x: number) => number };
+declare function consume(value: Item): number;
+declare const flag: boolean;
+const 한글 = "😀";
+const value = consume(match (flag) {
+ true => { const local = 1; try { return {kind: "item", run: x => x + local}; } finally { console.log(한글); } },
+ false => { return {kind: "item", run: x => x}; }
+});
+"#;
+        let emit = crate::compile_mapped(
+            source,
+            &crate::Options {
+                defer_to_checker: true,
+                ..crate::Options::default()
+            },
+        )
+        .unwrap();
+        assert!(!emit.contextual_slots.is_empty());
+        let mut modules = vec![(root.join("contextual-materialized.ts"), emit)];
+        super::super::contextual::materialize(&backend, None, root, &mut modules, &[], &[])
+            .unwrap();
+        let emit = &modules[0].1;
+        for mapping in &emit.mappings {
+            assert_eq!(
+                &emit.code[mapping.out..mapping.out + mapping.len],
+                &source[mapping.src..mapping.src + mapping.len]
+            );
+        }
+        let query = Query {
+            modules: vec![Module {
+                path: modules[0].0.clone(),
+                text: emit.code.clone(),
+            }],
+            ..Query::default()
+        };
+        let answer = backend.ask(None, root, &query).unwrap();
+        assert!(
+            answer.diagnostics.is_empty(),
+            "{:?}\n{}",
+            answer.diagnostics,
+            emit.code
+        );
+    }
+
+    #[test]
+    fn contextual_slots_use_symbol_identity_and_declaration_scope() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let backend = NativeBackend::new(None, root).expect("pinned TypeScript toolchain");
+        let module = root.join("contextual-slot-probe.ts");
+        let text = r#"
+type Item = { kind: "item", run: (x: number) => number };
+declare function consume(value: Item): number;
+let slot;
+{ type Item = string; let slot; slot = "shadow"; }
+slot = { kind: "item", run: x => x };
+const result = consume(slot);
+"#;
+        let query = Query {
+            modules: vec![Module {
+                path: module.clone(),
+                text: text.into(),
+            }],
+            contextual_slots: vec![ContextualSlotQuery {
+                module,
+                declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
+            }],
+            ..Query::default()
+        };
+        let answer = backend.ask(None, root, &query).expect("contextual query");
+        assert_eq!(
+            answer.contextual_slots,
+            vec![ContextualSlotType {
+                index: 0,
+                annotation: "Item".into()
+            }]
+        );
+        let mut typed = query;
+        typed.modules[0].text = text.replacen("let slot;", "let slot: Item;", 1);
+        typed.contextual_slots.clear();
+        let answer = backend.ask(None, root, &typed).expect("annotated snapshot");
+        assert!(answer.diagnostics.is_empty(), "{:?}", answer.diagnostics);
     }
 }

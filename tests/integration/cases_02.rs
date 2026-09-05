@@ -611,7 +611,7 @@ fn cli_skips_unresolvable_imports_silently() {
 #[test]
 fn cli_cross_file_match_runs_end_to_end() {
     require_toolchain!();
-    let dir = tmpdir();
+    let dir = common::Workspace::in_repo("cross-file-context");
     fs::write(dir.join("token.tt"), TOKEN_TT).unwrap();
     fs::write(
         dir.join("main.tt"),

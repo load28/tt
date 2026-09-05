@@ -103,7 +103,7 @@ macro_rules! require_mapper_toolchain {
 /// for `.tt`/`.ttx`, and a stub install of that package whose mapper
 /// process is this build's `ttc`.
 fn mapper_project(jsx: bool) -> Workspace {
-    let workspace = Workspace::with_subdir("content-mapper", "src");
+    let workspace = Workspace::in_repo_with_subdir("content-mapper", "src");
     fs::write(
         workspace.path().join("package.json"),
         "{ \"private\": true }\n",

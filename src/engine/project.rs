@@ -215,6 +215,56 @@ impl Project {
         // blocked update above leaves the previous cache intact instead, so
         // the files that were fine keep their projections.
         self.cache = cache;
+        if projected
+            .iter()
+            .any(|doc| !doc.emit.contextual_slots.is_empty())
+            && let Ok(backend) = &self.backend
+        {
+            let (mut query, _) =
+                projection::assemble(&projected, &blocked_files, &self.root, &self.sources);
+            query
+                .modules
+                .retain(|module| !projected.iter().any(|doc| doc.module_path == module.path));
+            query.modules.extend(
+                self.overlays
+                    .iter()
+                    .filter(|(path, _)| is_host_source(path))
+                    .map(|(path, text)| crate::typescript::backend::Module {
+                        path: path.clone(),
+                        text: text.clone(),
+                    }),
+            );
+            let mut modules: Vec<_> = projected
+                .iter()
+                .map(|doc| (doc.module_path.clone(), doc.emit.clone()))
+                .collect();
+            crate::typescript::contextual::materialize(
+                backend,
+                self.tsconfig.as_deref(),
+                &self.root,
+                &mut modules,
+                &query.modules,
+                &query.sources,
+            )
+            .map_err(|failure| {
+                Box::new(Blocked {
+                    path: self.root.clone(),
+                    error: CompileError {
+                        message: failure.message,
+                        filename: None,
+                        line: 0,
+                        col: 0,
+                        end_line: 0,
+                        end_col: 0,
+                    },
+                })
+            })?;
+            for (doc, (_, emit)) in projected.iter_mut().zip(modules) {
+                if doc.emit != emit {
+                    Arc::make_mut(doc).emit = emit;
+                }
+            }
+        }
         self.next_snapshot += 1;
         Ok(Snapshot {
             id: self.next_snapshot,

@@ -38,7 +38,7 @@ impl<'a> Emitter<'a> {
                     .map(|continued| (slot, continued))
             });
         if let Some((slot, continued)) = structured {
-            out.push_lit(format!("let {slot};"));
+            out.push_value_declaration(slot);
             out.push_break(0);
             out.append(continued);
             out.push_break(0);
@@ -129,8 +129,12 @@ impl<'a> Emitter<'a> {
                 continue;
             }
             if let Some((argument, expr)) = exit.argument.and_then(|argument| {
-                self.result_return_structured_expr(body, argument)
-                    .map(|expr| (argument, expr))
+                self.returned_structured_expr(
+                    body,
+                    exit.value_argument
+                        .expect("value return has an AST argument"),
+                )
+                .map(|expr| (argument, expr))
             }) {
                 structured_returns.push((exit.statement, argument, expr));
                 continue;
@@ -233,7 +237,7 @@ impl<'a> Emitter<'a> {
         )
     }
 
-    pub(super) fn result_return_structured_expr(
+    pub(super) fn returned_structured_expr(
         &self,
         body: hir::BodyId,
         argument: SourceSpan,
@@ -337,15 +341,12 @@ impl<'a> Emitter<'a> {
                     out.append(self.source_rope_with_edits(*node, &opaque_edits));
                 }
                 Statement::Expr(expr) => {
-                    if let Some((return_span, _, _)) = structured_returns
+                    if let Some((return_span, argument, _)) = structured_returns
                         .iter()
                         .find(|(_, _, candidate)| candidate == expr)
                     {
-                        let mut replacement = self
-                            .emit_continued_expr(*expr, context.success)
-                            .unwrap_or_else(|| {
-                                crate::ice::bug!("structured result return was not emitted")
-                            });
+                        let mut replacement =
+                            self.emit_returned_structured_value(*expr, *argument, context.success);
                         if context.success.assigns() {
                             push_control_break(&mut replacement, 0, context.exit_label);
                         }

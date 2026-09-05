@@ -358,6 +358,9 @@
 
 | TASK-347 | Rebase product audit onto updated main | In progress | 2026-09-09 | — | [TASK-347](./TASK-347-rebase-product-audit.md) |
 
+| TASK-348 | Audit product and mixed-source composition failures | Complete | 2026-09-06 | 2026-09-06 | [TASK-348](./TASK-348-product-composition-audit.md) |
+| TASK-349 | Preserve contextual types across scoped values | Complete | 2026-09-06 | 2026-09-06 | [TASK-349](./TASK-349-contextual-type-materialization.md) |
+
 ## Next task number
 
 **TASK-350**
