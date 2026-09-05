@@ -201,6 +201,7 @@ pub(super) struct Outcome {
 pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
     if !opts.check && !opts.print {
         let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
+        let mut outputs: Vec<(&Path, &Path)> = Vec::with_capacity(jobs.len());
         let mut conflicted = false;
         for job in jobs {
             if let Some(first) = claims.get(job.out_path.as_path()) {
@@ -215,6 +216,27 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 }
             } else {
                 claims.insert(&job.out_path, &job.file);
+            }
+            // The other half of the same contract: overlapping input roots
+            // give one source two outputs, so the build would write it
+            // twice, at two paths, and say nothing. Both sides are compared
+            // by identity — the same source reached through two roots is
+            // spelled differently on each.
+            match outputs
+                .iter()
+                .find(|(source, _)| same_file(source, &job.file))
+            {
+                Some((_, first)) if !same_file(first, &job.out_path) => {
+                    eprintln!(
+                        "ttc: {}: one input claims two outputs: {} and {} (overlapping input roots)",
+                        job.file.display(),
+                        first.display(),
+                        job.out_path.display()
+                    );
+                    conflicted = true;
+                }
+                Some(_) => {}
+                None => outputs.push((job.file.as_path(), job.out_path.as_path())),
             }
         }
         if conflicted {

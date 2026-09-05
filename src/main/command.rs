@@ -465,6 +465,26 @@ pub(super) fn run() -> ExitCode {
     if let Some(code) = reject_options(mode, &seen, allowed) {
         return code;
     }
+    // The named config becomes the project's identity and its directory
+    // becomes the project root, so one that is not there roots the project
+    // somewhere the user never named — and reaches the TypeScript backend
+    // as written. Say so here, where the path was given.
+    if let Some(path) = &project {
+        if !path.exists() {
+            eprintln!(
+                "ttc: --project: no such file or directory: {}",
+                path.display()
+            );
+            return ExitCode::FAILURE;
+        }
+        if !path.is_file() {
+            eprintln!(
+                "ttc: --project: not a file: {} (name the tsconfig.json itself)",
+                path.display()
+            );
+            return ExitCode::FAILURE;
+        }
+    }
     if print && source_map == SourceMapMode::File {
         eprintln!(
             "ttc: --print requires --source-map off or inline; file maps require written output"

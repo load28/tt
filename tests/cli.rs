@@ -1162,3 +1162,116 @@ fn a_closed_stdout_ends_the_run_quietly() {
         );
     }
 }
+
+/// `--project` names the config a check runs against, and its directory
+/// becomes the project root. A path that is not there used to root the
+/// project somewhere the user never named — or reach the TypeScript backend
+/// un-canonicalised — so it is rejected where it is given (TASK-338).
+#[test]
+fn a_project_path_that_is_not_a_file_is_rejected_by_name() {
+    let dir = tmpdir();
+    let source = dir.join("a.tt");
+    fs::write(&source, "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"noEmit\": true } }\n",
+    )
+    .unwrap();
+
+    for spelling in ["./tsconfg.json", "tsconfg.json"] {
+        let output = ttc(&[
+            "--check-types",
+            "--project",
+            spelling,
+            source.to_str().unwrap(),
+        ]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("--project") && stderr.contains(spelling),
+            "{spelling}: {stderr}"
+        );
+        assert!(
+            !stderr.contains("internal compiler error"),
+            "{spelling}: {stderr}"
+        );
+        assert!(!output.status.success(), "{spelling}: {stderr}");
+    }
+
+    let output = ttc(&[
+        "--check-types",
+        "--project",
+        dir.path().to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a file"), "{stderr}");
+    assert!(!output.status.success(), "{stderr}");
+}
+
+/// The output-collision contract has two halves. Two inputs claiming one
+/// output was already refused; one input claiming two — overlapping roots —
+/// used to write the same source twice and exit 0 (TASK-338).
+#[test]
+fn overlapping_input_roots_cannot_write_one_source_twice() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/deep")).unwrap();
+    fs::write(dir.join("src/deep/x.tt"), "export const a = 1;\n").unwrap();
+    fs::write(dir.join("src/y.tt"), "export const b = 2;\n").unwrap();
+    let out_dir = dir.join("out");
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.path().to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("one input claims two outputs"),
+        "overlapping roots were accepted: {stderr}"
+    );
+    assert!(!output.status.success(), "{stderr}");
+
+    // The same root named twice still resolves to one output per source.
+    let twice = dir.join("twice");
+    let output = ttc(&[
+        "-o",
+        twice.to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(twice.join("y.ts").exists());
+}
+
+/// A file named on the command line is filtered like any other: the
+/// extensions are the contract, not how the file was reached (TASK-338).
+#[test]
+fn a_named_file_that_is_not_a_source_is_reported() {
+    let dir = tmpdir();
+    let script = dir.join("app.js");
+    fs::write(&script, "variant S { A, B }\n").unwrap();
+    let output = ttc(&["-p", script.to_str().unwrap()]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a tt or TypeScript source"), "{stderr}");
+    assert!(!output.status.success(), "{stderr}");
+
+    // Every extension the walk takes still works when named directly.
+    for (name, body) in [
+        ("a.tt", "export const a = 1;\n"),
+        ("b.ts", "export const b = 2;\n"),
+    ] {
+        let file = dir.join(name);
+        fs::write(&file, body).unwrap();
+        let output = ttc(&["-p", file.to_str().unwrap()]);
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
