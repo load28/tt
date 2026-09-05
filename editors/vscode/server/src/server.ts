@@ -311,8 +311,7 @@ const logEngine = (message: string) => connection.console.warn(message);
 /** A fresh engine session starts with the disk's view of the world; hand it
  * every buffer the editor holds open. Runs on first spawn and on respawn
  * after a crash — recovery the old in-process pipeline never had. */
-engine.setOnSessionStart(() => {
-  const compiler = currentCompiler();
+engine.setOnSessionStart((compiler) => {
   for (const doc of documents.all()) {
     const uri = URI.parse(doc.uri);
     if (uri.scheme === "file") {
