@@ -3,6 +3,28 @@
 use super::*;
 
 impl<'a> Emitter<'a> {
+    pub(super) fn inline_subject_needs_storage(&self, decision: &Decision, index: usize) -> bool {
+        fn reads(plan: &PatternPlan, index: usize) -> bool {
+            match plan {
+                PatternPlan::Any => false,
+                PatternPlan::Bind(_) => true,
+                PatternPlan::Test(
+                    Test::Variant { place, .. }
+                    | Test::Literal { place, .. }
+                    | Test::InstanceOf { place, .. },
+                ) => place.subject == index,
+                PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+                    parts.iter().any(|part| reads(part, index))
+                }
+            }
+        }
+        !decision
+            .arms
+            .last()
+            .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+            || decision.arms.iter().any(|arm| reads(&arm.pattern, index))
+    }
+
     pub(super) fn has_conditional_match_dispatch(&self, expr: ExprId) -> bool {
         matches!(
             &self.core.exprs[expr.index()],
@@ -122,20 +144,109 @@ impl<'a> Emitter<'a> {
                     out.push_lit(format!("{slot} === {index} ? "));
                 }
             }
-            let ArmAction::Yield {
-                body,
-                kind: ArmBodyKind::Expression,
-            } = arm.action
-            else {
-                crate::ice::bug!("deferred match arm is not an expression")
-            };
+            let value = self.emit_deferred_arm_value(expr, &arm.action);
             push_grouped(
                 &mut out,
-                guard_line_comment(self.emit_body(body).trim(), 0, self.source_kind),
+                guard_line_comment(value.trim(), 0, self.source_kind),
             );
             if index + 1 < decision.arms.len() {
                 out.push_lit(" : ");
             }
+        }
+        out.push_lit(")");
+        out
+    }
+
+    fn emit_deferred_arm_value(&self, expr: ExprId, action: &ArmAction) -> Rope<'a> {
+        match *action {
+            ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Expression,
+            } => self.emit_body(body),
+            ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Block { completes: false },
+            } => {
+                let (span, exit) = single_return_arm_value(
+                    self.semantic,
+                    self.core,
+                    body,
+                    &self.exits_for_expr(expr),
+                )
+                .unwrap_or_else(|| crate::ice::bug!("deferred block has no single return value"));
+                // HostExit is an AST ReturnStmt: erase only its keyword
+                // and optional terminator, retaining authored trivia.
+                let value_end = exit.statement.end
+                    - usize::from(self.source.as_bytes()[exit.statement.end - 1] == b';');
+                let mut value =
+                    self.source_range_rope(hir::Span::new(span.start, exit.statement.start));
+                value.append(self.source_range_rope(hir::Span::new(
+                    exit.statement.start + "return".len(),
+                    value_end,
+                )));
+                value.append(self.source_range_rope(hir::Span::new(exit.statement.end, span.end)));
+                value
+            }
+            _ => crate::ice::bug!("deferred match arm is not an expression value"),
+        }
+    }
+
+    pub(super) fn emit_inline_match(&self, expr: ExprId) -> Rope<'a> {
+        let Expr::Decision(decision) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("inline match has no decision")
+        };
+        let names = &self.inline_subjects[&decision.extent];
+        let mut out = Rope::new();
+        out.push_lit("(");
+        for (index, (subject, name)) in decision.subjects.iter().zip(names).enumerate() {
+            if self.inline_subject_needs_storage(decision, index) {
+                out.push_lit(format!("{name} = "));
+            }
+            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            out.push_lit(", ");
+        }
+        let mut total = false;
+        for arm in &decision.arms {
+            if matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none() {
+                total = true;
+            } else {
+                out.push_lit("(");
+                out.append(self.emit_condition(&arm.pattern, decision));
+                if let Some(guard) = arm.guard {
+                    out.push_lit(" && ");
+                    push_grouped(&mut out, self.emit_expr(guard).trim());
+                }
+                out.push_lit(") ? ");
+            }
+            push_grouped(
+                &mut out,
+                guard_line_comment(
+                    self.emit_deferred_arm_value(expr, &arm.action).trim(),
+                    0,
+                    self.source_kind,
+                ),
+            );
+            if total {
+                break;
+            }
+            out.push_lit(" : ");
+        }
+        if !total {
+            self.used_match_raise.set(true);
+            let (kind, value) = match decision.miss {
+                MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
+                    ("literal", names[0].clone())
+                }
+                MissAction::ThrowUnexpected(UnexpectedKind::Case) => ("case", names[0].clone()),
+                MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
+                    ("case", format!("[{}]", names.join(", ")))
+                }
+                _ => crate::ice::bug!("inline match has no failure completion"),
+            };
+            out.push_lit(format!(
+                "{}(new Error(\"tt match: unexpected {kind} \" + JSON.stringify({value})))",
+                self.match_raise_name
+            ));
         }
         out.push_lit(")");
         out
@@ -487,6 +598,7 @@ impl<'a> Emitter<'a> {
         match continuation.destination {
             ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
             ValueDestination::Assign(target) => out.push_lit(format!("{target} = ")),
+            ValueDestination::Invoke(callee) => out.push_lit(format!("{callee}(")),
         }
         if grouped {
             out.push_lit("(");
@@ -496,6 +608,9 @@ impl<'a> Emitter<'a> {
             out.push_break(depth);
         }
         if grouped {
+            out.push_lit(")");
+        }
+        if matches!(continuation.destination, ValueDestination::Invoke(_)) {
             out.push_lit(")");
         }
         out.push_lit(";");
@@ -588,7 +703,12 @@ impl<'a> Emitter<'a> {
         payload_for: Option<NodeId>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        out.push_lit(temp_name(decision.subjects[place.subject].temporary));
+        out.push_lit(
+            self.inline_subjects
+                .get(&decision.extent)
+                .map(|names| names[place.subject].clone())
+                .unwrap_or_else(|| temp_name(decision.subjects[place.subject].temporary)),
+        );
         for (index, field) in place.fields.iter().enumerate() {
             out.push_lit(".");
             if index + 1 == place.fields.len()

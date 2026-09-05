@@ -111,9 +111,13 @@ const view = () => (<aside>
 </aside>);
 "#,
     );
-    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+    assert_eq!(
+        output.matches("const view = () => {").count(),
+        1,
+        "{output}"
+    );
     assert!(
-        output.contains("<aside>\n  {$tt_v0}\n  {$tt_v1}\n</aside>"),
+        output.contains("<aside>\n  {($tt_subject = n,") && output.contains("{($tt_subject_1 = n,"),
         "{output}"
     );
 }

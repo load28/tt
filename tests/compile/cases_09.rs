@@ -613,8 +613,10 @@ fn a_capture_never_copies_a_sibling_tt_value() {
     let source = "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n";
     let out = ok(source);
     assert!(!out.contains("$tt_expr"), "{out}");
-    assert!(out.contains("$tt_v5 = $tt_v0;"), "{out}");
-    assert!(out.contains("$tt_v3($tt_v5, $tt_v1)"), "{out}");
+    assert!(out.contains("g(a && ($tt_subject = a,"), "{out}");
+    assert_eq!(out.matches("$tt_subject = a").count(), 1, "{out}");
+    assert_eq!(out.matches("$tt_subject_1 = a").count(), 1, "{out}");
+    assert!(!out.contains("match ("), "{out}");
 }
 
 #[test]

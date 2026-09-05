@@ -1,0 +1,7 @@
+variant State { Ready(value: number), Empty }
+declare const state: State;
+declare function consume(item: {run: (x: number) => number}): void;
+consume(match (state) {
+  Ready(value) => { const amount = value + 1; return {run: x => x + amount}; },
+  Empty => ({run: x => x}),
+});

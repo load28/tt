@@ -85,6 +85,9 @@ fn parse_failure_at(
 }
 
 pub(super) struct ParentCollector {
+    pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
+    pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
+    pub(super) linear_return_bodies: HashMap<ProjectedSpan, BodyId>,
     pub(super) source_start: u32,
     pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_calls: HashMap<ProjectedSpan, TtNodeId>,
@@ -129,6 +132,8 @@ pub(super) struct FoundOverlay {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ProjectedHostExit {
+    pub(super) linear_return_body: Option<BodyId>,
+    pub(super) single_return_body: Option<BodyId>,
     pub(super) statement: ProjectedSpan,
     pub(super) argument: Option<ProjectedSpan>,
     pub(super) captured_break: bool,
@@ -155,6 +160,7 @@ pub(super) enum ProjectedProtocolFrame {
         alternate: ProjectedSpan,
     },
     Call {
+        discarded_single: bool,
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,

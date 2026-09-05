@@ -1,6 +1,253 @@
 use super::*;
 
 #[test]
+fn sibling_storage_is_hygienic_and_omits_unused_subjects() {
+    require_toolchain!();
+    let source = r#"
+export const $tt_subject = 1, $tt_subject_1 = 2, $tt_raise = 3;
+declare function read(): boolean;
+type Item = {run: (x: number) => number};
+declare function pair(a: Item, b: Item): void;
+pair(match (read()) { _ => ({run: x => x}) }, match (read()) { _ => ({run: x => x}) });
+pair(match (read()) { true => ({run: x => x}), false => ({run: x => x}) }, match (read()) { true => ({run: x => x}), false => ({run: x => x}) });
+"#;
+    let dir = tmpdir();
+    let file = dir.join("unused.ts");
+    fs::write(&file, compile(source, &Options::default()).unwrap()).unwrap();
+    let checked = Command::new("tsc")
+        .arg(file)
+        .args(TSC_FLAGS)
+        .args(["--noEmit", "--noUnusedLocals", "--noUnusedParameters"])
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{}", tsc_report(&checked));
+}
+
+#[test]
+fn scoped_call_completions_preserve_context_scope_and_effects() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function consume(item: Item) { trace.push("call:" + item.run(3)); }
+for (const state of [State.Ready(4), State.Empty]) {
+  trace.length = 0;
+  consume(match (state) {
+    Ready(value) => {
+      const consume = value + 1;
+      const local = () => consume;
+      trace.push("arm");
+      return {kind: "item", run: x => x + local()};
+    },
+    Empty => ({kind: "item", run: x => x - 1}),
+  });
+  trace.push("after");
+  console.log(trace.join(","));
+}
+function throws(item: Item): void { trace.push("throws:" + item.run(2)); throw new Error("consumer"); }
+trace.length = 0;
+try {
+  throws(match (State.Ready(5)) {
+    Ready(value) => { trace.push("value"); return {kind: "item", run: x => x + value}; },
+    Empty => ({kind: "item", run: x => x}),
+  });
+} catch { trace.push("caught"); }
+console.log(trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        ["arm,call:8,after", "call:2,after", "value,throws:7,caught"]
+    );
+}
+
+#[test]
+fn scoped_contextual_call_variants() {
+    require_toolchain!();
+    let (valid, output) = typecheck(
+        r#"
+variant State { Ready(value: number), Empty }
+declare const state: State;
+declare const flag: boolean;
+declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
+consume(match (state) {
+  Ready(value) if value > 0 => ({kind: "item", run: x => x + value}),
+  _ => ({kind: "item", run: x => x}),
+});
+consume(match (state) {
+  Ready(value: amount) => ({kind: "item", run: x => x + amount}),
+  Empty => ({kind: "item", run: x => x}),
+});
+consume(match (flag) {
+  true => { const amount = 1; return {kind: "item", run: x => x + amount}; },
+  false => { function amount() { return 2; } return {kind: "item", run: x => x + amount()}; },
+});
+"#,
+    );
+    assert!(valid, "{output}");
+}
+
+#[test]
+fn inline_sibling_failure_keeps_abrupt_completion() {
+    require_toolchain!();
+    let output = run(r#"
+const trace: string[] = [];
+function bad(): boolean { return JSON.parse('"bad"'); }
+function pair(a: number, b: number) { trace.push("call"); }
+try {
+  pair(match (bad()) { true => 1, false => 2 }, match (true) { true => (trace.push("second"), 3), _ => 4 });
+} catch (error) {
+  console.log(error instanceof Error && error.message.includes("unexpected literal"), trace.length);
+}
+"#);
+    assert_eq!(output, ["true 0"]);
+}
+
+#[test]
+fn sibling_matches_preserve_context_and_native_argument_order() {
+    require_toolchain!();
+    let output = run(r#"
+const trace: string[] = [];
+type Item = {kind: "item"; run: (x: number) => number};
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+let flag: boolean = true;
+const receiver = {
+  base: 10,
+  get pair() {
+    trace.push("callee");
+    return function(this: {base: number}, a: Item, between: number, b: Item) {
+      trace.push("call"); return this.base + a.run(between) + b.run(2);
+    };
+  },
+};
+const result = mark("receiver", receiver).pair(
+  match (mark("subject1", flag)) {
+    true => (trace.push("arm1"), flag = false, {kind: "item", run: x => x + 1}),
+    false => ({kind: "item", run: x => x}),
+  },
+  mark("between", 3),
+  match (mark("subject2", flag)) {
+    true => ({kind: "item", run: x => x}),
+    false => { return (trace.push("arm2"), {kind: "item", run: x => x + 2}); },
+  },
+);
+console.log(result, trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        ["18 receiver,callee,subject1,arm1,between,subject2,arm2,call"]
+    );
+}
+
+#[test]
+fn sibling_contextual_match_family_matrix() {
+    require_toolchain!();
+    let families = [
+        "match (flag) { true => ({kind: 'item', run: x => x}), false => ({kind: 'item', run: x => x + 1}) }",
+        "match (flag) { true if number > 0 => ({kind: 'item', run: x => x}), _ => ({kind: 'item', run: x => x + 1}) }",
+        "match (flag) { true => { return {kind: 'item', run: x => x}; }, false => { return {kind: 'item', run: x => x + 1}; } }",
+        "match (state) { Ready => ({kind: 'item', run: x => x}), Empty => ({kind: 'item', run: x => x + 1}) }",
+    ];
+    let dir = tmpdir();
+    for kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let mut source = String::from(
+            "type Item = {kind: 'item'; run: (x: number) => number};\nvariant State { Ready, Empty }\ndeclare function pair(a: Item, b: Item): void;\ndeclare function Widget(props: {a: Item; b: Item}): any;\n",
+        );
+        for (i, first) in families.iter().enumerate() {
+            for (j, second) in families.iter().enumerate() {
+                let mut hosts = vec![
+                    format!("pair({first}, {second});"),
+                    format!("const items: Item[] = [{first}, {second}];"),
+                    format!("pair({first}, flag ? {second} : {{kind: 'item', run: x => x}});"),
+                ];
+                if kind == SourceKind::Tsx {
+                    hosts.push(format!(
+                        "const view = <Widget a={{{first}}} b={{{second}}} />;"
+                    ));
+                }
+                for (h, host) in hosts.iter().enumerate() {
+                    source.push_str(&format!("function cell_{i}_{j}_{h}(flag: boolean, number: number, state: State) {{ {host} }}\n"));
+                }
+            }
+        }
+        let file = dir.join(if kind == SourceKind::Tsx {
+            "siblings.tsx"
+        } else {
+            "siblings.ts"
+        });
+        fs::write(
+            &file,
+            compile(
+                &as_module(&source),
+                &Options {
+                    source_kind: kind,
+                    ..Options::default()
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let checked = Command::new("tsc")
+            .arg(file)
+            .args(TSC_FLAGS)
+            .args(["--noEmit", "--jsx", "preserve"])
+            .output()
+            .unwrap();
+        assert!(checked.status.success(), "{}", tsc_report(&checked));
+    }
+}
+
+#[test]
+fn single_return_match_blocks_keep_context_and_runtime_order() {
+    require_toolchain!();
+    let output = run(r#"
+const trace: string[] = [];
+const mark = <T,>(name: string, value: T): T => { trace.push(name); return value; };
+const receiver = {
+  base: 10,
+  consume(first: number, item: {kind: "item"; run: (x: number) => number}, last: number) {
+    trace.push("call");
+    return this.base + first + item.run(last);
+  },
+};
+for (const flag of [true, false]) {
+  trace.length = 0;
+  const answer = mark("receiver", receiver).consume(mark("first", 2), match (mark("subject", flag)) {
+    true => { /* selected block */ return (mark("yes", 0), {kind: "item", run: x => x + 1}); /* tail */ },
+    false => { return (mark("no", 0), {kind: "item", run: x => x - 1}); },
+  }, mark("last", 3));
+  console.log(answer, trace.join(","));
+}
+"#);
+    assert_eq!(
+        output,
+        [
+            "16 receiver,first,subject,yes,last,call",
+            "14 receiver,first,subject,no,last,call",
+        ]
+    );
+}
+
+#[test]
+fn statementful_match_blocks_keep_effects_and_scope() {
+    require_toolchain!();
+    let output = run(r#"
+const trace: string[] = [];
+const label = 9;
+function consume(value: number) { trace.push("call"); return value; }
+for (const flag of [true, false]) {
+  trace.length = 0;
+  const result = consume(match (flag) {
+    true => { const label = 3; trace.push("before"); return label; },
+    false => { try { return label; } finally { trace.push("finally"); } },
+  });
+  console.log(result, label, trace.join(","));
+}
+"#);
+    assert_eq!(output, ["3 9 before,call", "9 9 finally,call"]);
+}
+
+#[test]
 fn guarded_contextual_values_have_no_unused_generated_locals() {
     require_toolchain!();
     let dir = tmpdir();
@@ -132,6 +379,12 @@ fn composed_match_values_preserve_typescript_contextual_typing() {
         format!("match (text) {{ 'ready' | 'pending' => {first}, _ => {second} }}"),
         format!("match (flag) {{ true if number > 0 => {first}, _ => {second} }}"),
         format!("match (state) {{ Ready if flag => {first}, _ => {second} }}"),
+        format!(
+            "match (flag) {{ true => {{ return {first}; }}, false => {{ return {second}; }} }}"
+        ),
+        format!(
+            "match (flag) {{ true if number > 0 => {{ return {first}; }}, _ => {{ return {second}; }} }}"
+        ),
     ];
     let hosts = [
         "const value: {item: Item} = {item: VALUE};",

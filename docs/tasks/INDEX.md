@@ -335,7 +335,11 @@
 | TASK-324 | Preserve contextual typing across scoped match continuations | In progress | 2026-09-05 | — | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
 | TASK-325 | Verify real editor editing workflows | Complete | 2026-09-05 | 2026-09-05 | [TASK-325](./TASK-325-editor-workflows.md) |
 | TASK-326 | Keep editor projects current across filesystem changes | Complete | 2026-09-05 | 2026-09-05 | [TASK-326](./TASK-326-editor-filesystem-lifecycle.md) |
+| TASK-327 | Generalize scoped match host continuations | Pending | — | — | [TASK-327](./TASK-327-scoped-host-continuations.md) |
+| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Pending | — | — | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
+| TASK-329 | Audit mixed scoped siblings and nested match composition | Pending | — | — | [TASK-329](./TASK-329-scoped-sibling-composition.md) |
+| TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Pending | — | — | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
 
 ## Next task number
 
-**TASK-327**
+**TASK-331**

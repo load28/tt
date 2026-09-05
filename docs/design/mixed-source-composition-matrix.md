@@ -77,15 +77,30 @@ cells.
 
 ## Green condition
 
-Strict contextual typing is additionally checked by 68 composed-match cells
+Strict contextual typing is additionally checked by 136 composed-match cells
 across TypeScript and TSX, each paired with a TypeScript conditional-expression
 oracle. Binding-free switch matches with expression arms can select an arm in
 the scheduled prelude and evaluate its value inside the authored contextual
 host. This preserves callback inference and literal types without type
-assertions or callback boundaries. This target form requires one TT value in
-the host owner; guards, pattern bindings, block arms, and multiple TT values
-need their existing scoped evaluation plans. A separate regression preserves
-guard-based TypeScript narrowing.
+assertions or callback boundaries. This prelude target form requires one TT
+value in the host owner. Total conditional dispatch with a terminal unconditional
+wildcard retains guards beside arm values, preserving their narrowing.
+Blocks containing only one value-returning statement (plus comments/trivia)
+use the same contextual value path, based on a host-AST statement-list proof
+linked to the Core body identity.
+Multi-value owners whose matches all have expression-compatible arms retain
+native expression evaluation with inline subject captures and conditional
+dispatch. An additional 112 sibling cells cover family pairs in calls, arrays,
+conditional arguments, and TSX props. Unmatched values call a hygienic `never`
+throw helper; no authored code is moved into a callback.
+
+Discarded single-argument identifier calls can use a scoped invocation
+continuation: the callee is captured before the match, and each arm supplies
+its value directly while payload/local bindings remain in scope. A host-AST
+proof permits only expression arms or linear statement sequences ending in
+one value return; it does not cross catch/finally/resource-disposal boundaries.
+More general scoped host continuations remain tracked in
+[TASK-324](../tasks/TASK-324-scoped-contextual-continuations.md).
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a

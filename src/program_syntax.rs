@@ -31,10 +31,10 @@ use swc_common::input::StringInput;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, SourceMap, Spanned};
 use swc_ecma_ast::{
-    ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, CallExpr, CondExpr, Constructor,
-    Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild, JSXExpr,
-    JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall, Pat,
-    Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, UnaryExpr,
+    ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr, CondExpr,
+    Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild,
+    JSXExpr, JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall,
+    Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, UnaryExpr,
     VarDeclarator, YieldExpr,
 };
 use swc_ecma_parser::lexer::Lexer;
@@ -116,6 +116,13 @@ struct OverlayEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct HostExit {
+    /// A straight-line arm whose final value return can invoke a discarded
+    /// consumer without moving that call across a handler or finalizer.
+    pub(crate) linear_return_body: Option<BodyId>,
+    /// The complete match arm body is exactly this value-returning AST
+    /// statement. This identity is established by visiting the projected
+    /// arm's BlockStmt, not inferred from source text during emission.
+    pub(crate) single_return_body: Option<BodyId>,
     pub(crate) statement: SourceSpan,
     pub(crate) argument: Option<SourceSpan>,
     /// Whether the exit sits inside a statement that consumes an unlabeled
@@ -134,6 +141,10 @@ pub(crate) struct HostExit {
 /// minimum source-backed owner. Target lowering must consume every step.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct HostEvaluationProtocol {
+    /// AST-proven discarded identifier call with one non-spread argument.
+    /// Target planning must also prove that this argument is the whole TT
+    /// value, not a larger expression containing it.
+    pub(crate) call_completion: Option<SourceSpan>,
     steps: Vec<HostEvaluationStep>,
 }
 

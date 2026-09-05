@@ -1,6 +1,85 @@
 use super::*;
 use std::collections::BTreeSet;
 
+#[test]
+fn call_completion_proofs_require_a_discarded_single_argument_call() {
+    for (host, expected) in [
+        ("consume(VALUE);", true),
+        ("const result = consume(VALUE);", false),
+        ("consume(VALUE, 1);", false),
+        ("consume({item: VALUE});", true), // The schedule separately rejects nested argument frames.
+        ("object.consume(VALUE);", false),
+        ("consume?.(VALUE);", false),
+        ("consume<Item>(VALUE);", false),
+    ] {
+        let program = syntax(&host.replace("VALUE", "match (flag) { true => 1, _ => 0 }"));
+        assert_eq!(
+            program
+                .overlay
+                .iter()
+                .any(|entry| entry.protocol.call_completion.is_some()),
+            expected,
+            "{host}"
+        );
+    }
+}
+
+#[test]
+fn linear_completion_proofs_do_not_cross_handlers_or_finalizers() {
+    for (body, expected) in [
+        ("return value;", true),
+        ("const local = value; effect(); return local;", true),
+        ("function local() { return value; } return local();", true),
+        ("try { return value; } finally { effect(); }", false),
+        ("try { return value; } catch { return 0; }", false),
+        ("if (value) return value; return 0;", false),
+        ("using resource = value; return resource;", false),
+    ] {
+        let program = syntax(&format!(
+            "consume(match (flag) {{ true => {{ {body} }}, _ => 0 }});"
+        ));
+        assert_eq!(
+            program
+                .overlay
+                .iter()
+                .flat_map(|entry| &entry.exits)
+                .any(|exit| exit.linear_return_body.is_some()),
+            expected,
+            "{body}"
+        );
+    }
+}
+
+#[test]
+fn single_return_arm_proofs_follow_the_ast_statement_list() {
+    for (body, expected) in [
+        ("return value;", 1),
+        ("/* before */ return /* value */ value; // after\n", 1),
+        ("return value", 1),
+        ("return;", 0),
+        ("return\nvalue;", 0),
+        ("; return value;", 0),
+        ("effect(); return value;", 0),
+        ("const local = value; return local;", 0),
+        ("{ return value; }", 0),
+        ("if (value) return value; else return 0;", 0),
+        ("try { return value; } finally { effect(); }", 0),
+        ("function inner() { return value; } return inner();", 0),
+        ("return () => { return value; };", 1),
+    ] {
+        let program = syntax(&format!(
+            "consume(match (flag) {{ true => {{ {body} }}, _ => 0 }});"
+        ));
+        let proofs = program
+            .overlay
+            .iter()
+            .flat_map(|entry| &entry.exits)
+            .filter(|exit| exit.single_return_body.is_some())
+            .count();
+        assert_eq!(proofs, expected, "{body}");
+    }
+}
+
 fn syntax(source: &str) -> ProgramSyntax {
     syntax_kind(source, crate::SourceKind::TypeScript)
 }

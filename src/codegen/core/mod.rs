@@ -187,6 +187,9 @@ pub(crate) fn emit_with_map<'a>(
             .map(|(expr, _)| expr)
             .collect(),
         expression_boundary_name: target.expression_boundary_name,
+        match_raise_name: target.match_raise_name,
+        inline_subjects: target.inline_subjects,
+        used_match_raise: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
         active_scheduled_exprs: ActiveExprStack::default(),
@@ -221,6 +224,15 @@ pub(crate) fn emit_with_map<'a>(
             output.push_lit("\n");
         }
         output.insert_lit_at_source(at, format!("import {{ {names} }} from \"{runtime}\";\n"));
+    }
+    if emitter.used_match_raise.get() {
+        if !output.ends_with_newline() {
+            output.push_lit("\n");
+        }
+        output.push_lit(format!(
+            "function {}(error: unknown): never {{ throw error; }}\n",
+            emitter.match_raise_name
+        ));
     }
     if emitter.used_expression_boundary.get() {
         if !output.ends_with_newline() {

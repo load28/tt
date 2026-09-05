@@ -639,6 +639,14 @@ impl<'a> Emitter<'a> {
             return self.emit_arrow_return_rewrite(rewrite);
         }
         if let Some(slot) = self.slot_exprs.get(&expr) {
+            if let Expr::Decision(decision) = &self.core.exprs[expr.index()]
+                && self.inline_subjects.contains_key(&decision.extent)
+            {
+                let (kind, start, end, extent) = self.value_anchor(expr);
+                let mut out = Rope::new();
+                out.anchored(kind, start, end, extent, self.emit_inline_match(expr));
+                return out;
+            }
             if self.compose_rewrites.iter().flat_map(|rewrite| &rewrite.actions).any(|action| {
                 matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
             }) {
