@@ -28,6 +28,7 @@ const PIN = manifest.devDependencies.typescript
 const DOCUMENTS = [
   'README.md',
   'README.ko.md',
+  'CONTRIBUTING.md',
   'docs/getting-started.md',
   'docs/getting-started.ko.md',
   'npm/tt-lang/README.md',
@@ -95,6 +96,12 @@ test('every published install command names the pinned version', async () => {
       )
     }
   }
+})
+
+test('the compact AI contract names the pinned TypeScript install', async () => {
+  const guide = await readFile(root('docs/ai/tt.md'), 'utf8')
+  assert.match(guide, new RegExp(`typescript@${PIN.replaceAll('.', '\\.')}`))
+  assert.doesNotMatch(guide, /so add `typescript@7`/)
 })
 
 test('the scripts print the pinned version', async () => {

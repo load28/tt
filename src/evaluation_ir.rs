@@ -131,6 +131,8 @@ pub(crate) struct LoweringPlan {
     structurally_owned_children: HashSet<ExprId>,
     nested_relocations: Vec<SourceSpan>,
     expression_boundary_name: String,
+    match_raise_name: String,
+    match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
 }
@@ -328,6 +330,8 @@ pub(crate) enum ExpressionBoundaryReason {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct EvaluationSchedule {
+    /// Optional host-call completion carried from the syntax proof.
+    pub(crate) call_completion: Option<SourceSpan>,
     steps: Vec<PlannedEvaluationStep>,
 }
 
@@ -456,6 +460,17 @@ impl LoweringPlan {
 
     pub(crate) fn expression_boundary_name(&self) -> &str {
         &self.expression_boundary_name
+    }
+
+    pub(crate) fn match_raise_name(&self) -> &str {
+        &self.match_raise_name
+    }
+
+    pub(crate) fn match_subject_names(&self, expr: ExprId) -> &[String] {
+        self.match_subject_names
+            .get(&expr)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
     }
 
     pub(crate) fn for_initializer_propagations(

@@ -70,6 +70,12 @@ impl ProgramSyntax {
         source: &str,
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
+        if let Some((span, message)) = crate::lexer::host_syntax_error(source, source_kind) {
+            return Err(ProgramSyntaxError::SourceNotTypeScript {
+                message: message.to_string(),
+                source: span.start,
+            });
+        }
         let projection = ProjectionBuilder::new(semantic, core, source).build()?;
         let parsed = parse_module(&projection.code, &projection.source_segments, source_kind)?;
         let mut collector = ParentCollector::new(
@@ -77,6 +83,7 @@ impl ProgramSyntax {
             &projection.pending,
             &projection.source_segments,
             &projection.projection_only_protocol_parents,
+            &projection.arm_blocks,
         );
         let mut path = AstNodePath::default();
         parsed.module.visit_with_ast_path(&mut collector, &mut path);
@@ -184,6 +191,7 @@ impl ProgramSyntax {
 }
 
 pub(super) struct Projection {
+    pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) code: String,
     pub(super) pending: Vec<PendingOverlay>,
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
@@ -226,6 +234,7 @@ pub(super) enum OverlayMarker {
 }
 
 pub(super) struct ProjectionBuilder<'a> {
+    pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) semantic: &'a SemanticFile,
     pub(super) core: &'a CoreFile,
     pub(super) source: &'a str,
@@ -239,6 +248,7 @@ pub(super) struct ProjectionBuilder<'a> {
 impl<'a> ProjectionBuilder<'a> {
     pub(super) fn new(semantic: &'a SemanticFile, core: &'a CoreFile, source: &'a str) -> Self {
         Self {
+            arm_blocks: HashMap::new(),
             semantic,
             core,
             source,
@@ -253,6 +263,7 @@ impl<'a> ProjectionBuilder<'a> {
     pub(super) fn build(mut self) -> Result<Projection, ProgramSyntaxError> {
         self.emit_body(self.core.root)?;
         Ok(Projection {
+            arm_blocks: self.arm_blocks,
             code: self.code,
             pending: self.pending,
             source_segments: self.source_segments,
@@ -958,10 +969,18 @@ impl<'a> ProjectionBuilder<'a> {
                     self.push_source_boundary(");", segments_since);
                 }
                 hir::ArmBodyKind::Block { .. } => {
+                    let start = ProjectedByte(self.code.len());
                     self.code.push('{');
                     let segments_since = self.source_segments.len();
                     self.emit_body(body)?;
                     self.push_source_boundary("}", segments_since);
+                    self.arm_blocks.insert(
+                        ProjectedSpan {
+                            start,
+                            end: ProjectedByte(self.code.len()),
+                        },
+                        body,
+                    );
                 }
             }
         }

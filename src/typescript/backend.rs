@@ -133,8 +133,8 @@ pub(crate) struct ResultShapeQuery {
 /// Everything asked of one project graph, in one round trip.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Query {
-    /// The lowered `.tt` modules. Their text is served from memory —
-    /// nothing is written to disk.
+    /// Lowered tt modules and unsaved host sources. Their text is served
+    /// from memory; nothing is written to disk.
     pub modules: Vec<Module>,
     /// Hand-written `.ts` files of the project, by path: the compiler reads
     /// them from disk, where they already are. Listing them matters only

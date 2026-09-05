@@ -87,6 +87,8 @@ test('initializes Vite through a wrapper and preserves the user config', async (
   const wrapper = await readFile(join(root, 'tt.vite.config.mjs'), 'utf8')
   assert.match(wrapper, /import base from '.\/vite\.config\.ts'/)
   assert.match(wrapper, /plugins: \[tt\(\), \.\.\.\(config\.plugins/)
+  assert.match(wrapper, /const addTt/)
+  assert.doesNotMatch(wrapper, /addRl/)
   const config = JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8'))
   assert.equal(config.extends, './tsconfig.json')
   assert.deepEqual(config.compilerOptions, { noEmit: true })
@@ -118,6 +120,7 @@ test('generates a composable wrapper for every declarative bundler adapter', asy
     const wrapper = await readFile(join(root, result.files[0]), 'utf8')
     assert.match(wrapper, new RegExp(`@openload28/unplugin-tt/${bundler}`))
     assert.match(wrapper, /plugins: \[tt\(\)/)
+    assert.doesNotMatch(wrapper, /addRl/)
   }
 })
 

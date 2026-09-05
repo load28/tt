@@ -8,20 +8,23 @@ uses to make a different parsing, ownership, evaluation, or module decision.
 ## Source-kind matrix
 
 The four source kinds form a directed import graph. The mixed-source fixture
-contains every non-self edge, for twelve edges total:
+contains every edge, including same-kind imports, for sixteen edges total:
 
 | Importer | Imported source kinds |
 | --- | --- |
-| `.ts` | `.tsx`, `.tt`, `.ttx` |
-| `.tsx` | `.ts`, `.tt`, `.ttx` |
-| `.tt` | `.ts`, `.tsx`, `.ttx` |
-| `.ttx` | `.ts`, `.tsx`, `.tt` |
+| `.ts` | `.ts`, `.tsx`, `.tt`, `.ttx` |
+| `.tsx` | `.ts`, `.tsx`, `.tt`, `.ttx` |
+| `.tt` | `.ts`, `.tsx`, `.tt`, `.ttx` |
+| `.ttx` | `.ts`, `.tsx`, `.tt`, `.ttx` |
 
 `.ts` and `.tsx` remain byte-preserved TypeScript inputs except for the
 documented relative `.tt`/`.ttx` specifier rewrite. `.tt` emits `.ts`; `.ttx`
 emits `.tsx`. The matrix is exercised through untyped compilation, typed
 project checking, declaration sidecars, and TypeScript checking of the emitted
-tree.
+tree. A separate runtime fixture calls every directed edge, bundles the emitted
+tree, and executes it. Its oracle fixes the sixteen returned values, their
+left-to-right evaluation order, shared module identity, and a `match` lowered
+inside `.ttx` JSX.
 
 ## tt surface matrix
 
@@ -73,6 +76,31 @@ host operand represented by that cell. The complete matrix contains 1,932
 cells.
 
 ## Green condition
+
+Strict contextual typing is additionally checked by 136 composed-match cells
+across TypeScript and TSX, each paired with a TypeScript conditional-expression
+oracle. Binding-free switch matches with expression arms can select an arm in
+the scheduled prelude and evaluate its value inside the authored contextual
+host. This preserves callback inference and literal types without type
+assertions or callback boundaries. This prelude target form requires one TT
+value in the host owner. Total conditional dispatch with a terminal unconditional
+wildcard retains guards beside arm values, preserving their narrowing.
+Blocks containing only one value-returning statement (plus comments/trivia)
+use the same contextual value path, based on a host-AST statement-list proof
+linked to the Core body identity.
+Multi-value owners whose matches all have expression-compatible arms retain
+native expression evaluation with inline subject captures and conditional
+dispatch. An additional 112 sibling cells cover family pairs in calls, arrays,
+conditional arguments, and TSX props. Unmatched values call a hygienic `never`
+throw helper; no authored code is moved into a callback.
+
+Discarded single-argument identifier calls can use a scoped invocation
+continuation: the callee is captured before the match, and each arm supplies
+its value directly while payload/local bindings remain in scope. A host-AST
+proof permits only expression arms or linear statement sequences ending in
+one value return; it does not cross catch/finally/resource-disposal boundaries.
+More general scoped host continuations remain tracked in
+[TASK-324](../tasks/TASK-324-scoped-contextual-continuations.md).
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a

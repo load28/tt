@@ -326,7 +326,20 @@
 | TASK-315 | Split every oversized Rust source and test file | Complete | 2026-09-02 | 2026-09-02 | [TASK-315](./TASK-315-split-oversized-rust-files.md) |
 | TASK-316 | Unify setup on the TypeScript content mapper | Complete | 2026-09-02 | 2026-09-02 | [TASK-316](./TASK-316-unify-content-mapper-setup.md) |
 | TASK-317 | Build-test generated create-tt projects | Complete | 2026-09-02 | 2026-09-02 | [TASK-317](./TASK-317-create-tt-build-gate.md) |
+| TASK-318 | Comprehensive product-surface audit and structural repairs | Complete | 2026-09-02 | 2026-09-03 | [TASK-318](./TASK-318-comprehensive-product-audit.md) |
+| TASK-319 | Audit valid-program compilation failures | Complete | 2026-09-03 | 2026-09-03 | [TASK-319](./TASK-319-valid-program-compilation-audit.md) |
+| TASK-320 | Audit mixed-source runtime and project semantics | Complete | 2026-09-04 | 2026-09-05 | [TASK-320](./TASK-320-mixed-source-runtime-audit.md) |
+| TASK-321 | Reject ambiguous build output paths | Complete | 2026-09-05 | 2026-09-05 | [TASK-321](./TASK-321-reject-output-collisions.md) |
+| TASK-322 | Diagnose merge conflict markers at the syntax boundary | Complete | 2026-09-05 | 2026-09-05 | [TASK-322](./TASK-322-conflict-marker-syntax-boundary.md) |
+| TASK-323 | Preserve contextual typing through composed matches | Complete | 2026-09-05 | 2026-09-05 | [TASK-323](./TASK-323-contextual-match-composition.md) |
+| TASK-324 | Preserve contextual typing across scoped match continuations | In progress | 2026-09-05 | — | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
+| TASK-325 | Verify real editor editing workflows | Complete | 2026-09-05 | 2026-09-05 | [TASK-325](./TASK-325-editor-workflows.md) |
+| TASK-326 | Keep editor projects current across filesystem changes | Complete | 2026-09-05 | 2026-09-05 | [TASK-326](./TASK-326-editor-filesystem-lifecycle.md) |
+| TASK-327 | Generalize scoped match host continuations | Pending | — | — | [TASK-327](./TASK-327-scoped-host-continuations.md) |
+| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Pending | — | — | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
+| TASK-329 | Audit mixed scoped siblings and nested match composition | Pending | — | — | [TASK-329](./TASK-329-scoped-sibling-composition.md) |
+| TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Pending | — | — | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
 
-## 다음 태스크 번호
+## Next task number
 
-**TASK-318**
+**TASK-331**

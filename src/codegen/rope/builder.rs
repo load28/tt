@@ -172,13 +172,31 @@ impl<'a> Rope<'a> {
             return;
         }
         let mut depth = 0usize;
+        let mut top_level_container = None;
         let mut found: Option<(usize, Option<usize>)> = None;
         for (index, piece) in self.pieces.iter().enumerate() {
             match piece {
-                Piece::Open { .. } | Piece::ScopeOpen => depth += 1,
-                Piece::Close | Piece::ScopeClose => depth = depth.saturating_sub(1),
-                Piece::Src { text, src } if depth == 0 && src + text.len() > at => {
-                    found = Some((index, (*src < at).then(|| at - src)));
+                Piece::Open { .. } | Piece::ScopeOpen => {
+                    if depth == 0 {
+                        top_level_container = Some(index);
+                    }
+                    depth += 1;
+                }
+                Piece::Close | Piece::ScopeClose => {
+                    depth = depth.saturating_sub(1);
+                    if depth == 0 {
+                        top_level_container = None;
+                    }
+                }
+                Piece::Src { text, src } if src + text.len() > at => {
+                    found = if depth == 0 {
+                        Some((index, (*src < at).then(|| at - src)))
+                    } else {
+                        // The source sits inside a top-level construct. An
+                        // import cannot split that construct's anchor or
+                        // layout scope, so insert before its outer boundary.
+                        top_level_container.map(|container| (container, None))
+                    };
                     break;
                 }
                 _ => {}
@@ -254,31 +272,44 @@ impl<'a> Rope<'a> {
     /// swallow whatever codegen appends on that line. Only the last line is
     /// inspected (pieces are walked back to the nearest newline), so the
     /// check costs a line, not the whole rope.
-    pub(crate) fn last_line_has_line_comment(&self) -> bool {
-        // `//` can straddle a piece boundary, so the last line is stitched
-        // back together before the search — it is one line, not the rope.
-        let mut tail: Vec<&str> = Vec::new();
-        for piece in self.pieces.iter().rev() {
+    pub(crate) fn last_line_has_line_comment(&self, source_kind: SourceKind) -> bool {
+        // Piece boundaries carry provenance, not lexical meaning. Rebuild the
+        // text with abstract breaks represented as newlines, then let the
+        // language lexer identify the final significant token. Only trailing
+        // trivia after that token can be a line comment: `//` inside a string,
+        // template, regex, or JSX raw text remains part of its token.
+        let mut text = String::with_capacity(self.len + 8);
+        for piece in &self.pieces {
             if matches!(piece, Piece::Break { .. }) {
-                break;
-            }
-            let text = piece.text();
-            match text.rfind('\n') {
-                Some(nl) => {
-                    tail.push(&text[nl + 1..]);
-                    break;
-                }
-                None => tail.push(text),
+                text.push('\n');
+            } else {
+                text.push_str(piece.text());
             }
         }
-        match tail.len() {
-            0 => false,
-            1 => tail[0].contains("//"),
-            _ => {
-                let line: String = tail.iter().rev().copied().collect();
-                line.contains("//")
+        let tokens = crate::lexer::lex_with_kind(&text, 0, text.len(), source_kind);
+        let mut at = tokens.last().map_or(0, |token| token.span.end);
+        let bytes = text.as_bytes();
+        while at < bytes.len() {
+            while at < bytes.len() && crate::scanner::is_ws(bytes[at]) {
+                at += 1;
             }
+            if at >= bytes.len() {
+                return false;
+            }
+            if bytes[at..].starts_with(b"//") {
+                return !bytes[at..].contains(&b'\n');
+            }
+            if bytes[at..].starts_with(b"/*") {
+                let Some(close) = crate::scanner::find_subslice(bytes, b"*/", at + 2, bytes.len())
+                else {
+                    return false;
+                };
+                at = close + 2;
+                continue;
+            }
+            return false;
         }
+        false
     }
 
     /// Trims whitespace from both ends, exactly like `str::trim` on the

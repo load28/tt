@@ -162,18 +162,42 @@ fn mixed_source_fixture_covers_every_directed_edge_and_typechecks() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let fixture = root.join("tests/fixtures/mixed-source-matrix/src");
     let modules = [
-        ("plain.ts", "./plain"),
-        ("plain-jsx.tsx", "./plain-jsx"),
-        ("language.tt", "./language.tt"),
-        ("language-jsx.ttx", "./language-jsx.ttx"),
+        (
+            "plain.ts",
+            [
+                "./same",
+                "./plain-jsx",
+                "./language.tt",
+                "./language-jsx.ttx",
+            ],
+        ),
+        (
+            "plain-jsx.tsx",
+            [
+                "./plain",
+                "./same-jsx",
+                "./language.tt",
+                "./language-jsx.ttx",
+            ],
+        ),
+        (
+            "language.tt",
+            [
+                "./plain",
+                "./plain-jsx",
+                "./same-tt.tt",
+                "./language-jsx.ttx",
+            ],
+        ),
+        (
+            "language-jsx.ttx",
+            ["./plain", "./plain-jsx", "./language.tt", "./same-ttx.ttx"],
+        ),
     ];
     let mut edges = 0;
-    for (file, own_specifier) in modules {
+    for (file, specifiers) in modules {
         let source = fs::read_to_string(fixture.join(file)).expect("matrix fixture source");
-        for (_, specifier) in modules {
-            if specifier == own_specifier {
-                continue;
-            }
+        for specifier in specifiers {
             assert!(
                 source.contains(&format!("from \"{specifier}\"")),
                 "{file} is missing its directed edge to {specifier}"
@@ -181,7 +205,7 @@ fn mixed_source_fixture_covers_every_directed_edge_and_typechecks() {
             edges += 1;
         }
     }
-    assert_eq!(edges, 12);
+    assert_eq!(edges, 16);
     let tt_source = fs::read_to_string(fixture.join("language.tt")).expect("tt fixture source");
     assert!(
         tt_source.contains("FromTtx(value) => readTtx(value)"),
@@ -213,16 +237,32 @@ fn mixed_source_fixture_covers_every_directed_edge_and_typechecks() {
             include_str!("fixtures/mixed-source-matrix/src/plain.ts"),
         ),
         (
+            "src/same.ts",
+            include_str!("fixtures/mixed-source-matrix/src/same.ts"),
+        ),
+        (
             "src/plain-jsx.tsx",
             include_str!("fixtures/mixed-source-matrix/src/plain-jsx.tsx"),
+        ),
+        (
+            "src/same-jsx.tsx",
+            include_str!("fixtures/mixed-source-matrix/src/same-jsx.tsx"),
         ),
         (
             "src/language.tt",
             include_str!("fixtures/mixed-source-matrix/src/language.tt"),
         ),
         (
+            "src/same-tt.tt",
+            include_str!("fixtures/mixed-source-matrix/src/same-tt.tt"),
+        ),
+        (
             "src/language-jsx.ttx",
             include_str!("fixtures/mixed-source-matrix/src/language-jsx.ttx"),
+        ),
+        (
+            "src/same-ttx.ttx",
+            include_str!("fixtures/mixed-source-matrix/src/same-ttx.ttx"),
         ),
     ]);
     let out_dir = dir.join("out");

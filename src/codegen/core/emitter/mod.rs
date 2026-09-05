@@ -14,6 +14,7 @@ pub(super) struct Emitter<'a> {
     pub(super) semantic: &'a SemanticFile,
     pub(super) core: &'a CoreFile,
     pub(super) source: &'a str,
+    pub(super) source_kind: SourceKind,
     pub(super) direct_apply_inputs: HashSet<ExprId>,
     pub(super) rewrite_imports: ImportRewrite,
     pub(super) std_imports: StdImports<'a>,
@@ -33,6 +34,9 @@ pub(super) struct Emitter<'a> {
     pub(super) structurally_nested_values: HashSet<ExprId>,
     pub(super) recovered_propagations: HashSet<ExprId>,
     pub(super) expression_boundary_name: String,
+    pub(super) match_raise_name: String,
+    pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
+    pub(super) used_match_raise: Cell<bool>,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.
@@ -116,6 +120,7 @@ enum ValueDestination<'name> {
     Expression,
     Return,
     Assign(&'name str),
+    Invoke(&'name str),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -165,6 +170,13 @@ impl<'name> ValueContinuation<'name> {
         }
     }
 
+    fn invoke(callee: &'name str) -> Self {
+        Self {
+            destination: ValueDestination::Invoke(callee),
+            wrappers: Vec::new(),
+        }
+    }
+
     fn wrap_result_ok(&self) -> Self {
         let mut continuation = self.clone();
         continuation.wrappers.push(ValueWrapper::ResultOk);
@@ -172,7 +184,10 @@ impl<'name> ValueContinuation<'name> {
     }
 
     fn assigns(&self) -> bool {
-        matches!(self.destination, ValueDestination::Assign(_))
+        matches!(
+            self.destination,
+            ValueDestination::Assign(_) | ValueDestination::Invoke(_)
+        )
     }
 
     fn is_expression(&self) -> bool {
@@ -187,7 +202,7 @@ impl<'name> ValueContinuation<'name> {
     fn assignment_target(&self) -> Option<&str> {
         match self.destination {
             ValueDestination::Expression | ValueDestination::Return => None,
-            ValueDestination::Assign(target) => Some(target),
+            ValueDestination::Assign(target) | ValueDestination::Invoke(target) => Some(target),
         }
     }
 
@@ -197,6 +212,7 @@ impl<'name> ValueContinuation<'name> {
         let mut prefix = match self.destination {
             ValueDestination::Return => "return ".to_owned(),
             ValueDestination::Assign(target) => format!("{target} = "),
+            ValueDestination::Invoke(callee) => format!("{callee}("),
             ValueDestination::Expression => {
                 crate::ice::bug!("inline expression continuation cannot rewrite an exit")
             }
@@ -221,6 +237,9 @@ impl<'name> ValueContinuation<'name> {
         }
         for _ in self.wrappers.iter().rev() {
             suffix.push_str(" }");
+        }
+        if matches!(self.destination, ValueDestination::Invoke(_)) {
+            suffix.push(')');
         }
         suffix
     }

@@ -20,7 +20,9 @@ use std::borrow::Cow;
 
 use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubject};
 use crate::program_syntax::SourceSpan;
-use crate::{AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp, ScrutineeTemp};
+use crate::{
+    AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp, ScrutineeTemp, SourceKind,
+};
 
 pub(crate) use builder::{Flat, Rope};
 
@@ -453,6 +455,18 @@ impl<'a> TargetFile<'a> {
         let source = self
             .source
             .expect("flatten installs the source before validating against it");
+        // Rope trimming follows `str::trim`, which recognizes Unicode
+        // whitespace. Mark every byte of those scalar values so this
+        // validator uses the same classification, including ASCII vertical
+        // tab and multibyte spaces. Classifying one byte at a time would
+        // reject continuation bytes after trimming had legitimately removed
+        // the complete character.
+        let mut whitespace = vec![false; source.len()];
+        for (start, character) in source.char_indices() {
+            if character.is_whitespace() {
+                whitespace[start..start + character.len_utf8()].fill(true);
+            }
+        }
         for span in &preservation.owned {
             let clipped = span.start..span.end.min(self.source_len);
             for (at, &count) in clipped.clone().zip(&printed[clipped]) {
@@ -472,7 +486,7 @@ impl<'a> TargetFile<'a> {
                     .at(byte)
                     .with_origin(vec![*span]));
                 }
-                if count == 0 && !source.as_bytes()[at].is_ascii_whitespace() {
+                if count == 0 && !whitespace[at] {
                     return Err(InternalCompilerError::new(
                         stage,
                         Invariant::SourceOmitted,

@@ -32,6 +32,99 @@ const skipTyped = skip || (findTsgo() ? false : "tsgo not installed");
  * reached when something has hung. */
 const timeout = 60_000;
 
+for (const consumerKind of ["tt", "ttx"]) {
+  for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
+    test(`filesystem and config changes refresh ${providerKind} -> ${consumerKind}`, { skip: skipTyped, timeout }, async () => {
+      const dir = caseDir("tt-filesystem-edit-");
+      const provider = path.join(dir, `provider.${providerKind}`);
+      const consumer = path.join(dir, `consumer.${consumerKind}`);
+      const configPath = path.join(dir, "tsconfig.json");
+      const config = { compilerOptions: { strict: true, noImplicitAny: false, module: "preserve", moduleResolution: "bundler", jsx: "preserve", noEmit: true, allowImportingTsExtensions: true }, include: ["*"] };
+      fs.writeFileSync(configPath, JSON.stringify(config));
+      fs.writeFileSync(consumer, "export {};\n");
+      const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\nexport function identity(input) { return input; }\n`;
+      const uri = pathToFileURL(consumer).toString();
+      const client = connect();
+      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : p.diagnostics.length === 0));
+      const changed = (file: string, type: number) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(file).toString(), type }] });
+      try {
+        await client.request("initialize", { processId: process.pid, rootUri: pathToFileURL(dir).toString(), workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {} });
+        client.notify("initialized", {});
+        let answer = expect("ts2307");
+        client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
+        await answer;
+        answer = expect();
+        fs.writeFileSync(provider, 'export const value: string = "created";\n');
+        changed(provider, 1);
+        await answer;
+        answer = expect("ts2322");
+        fs.writeFileSync(provider, 'export const value: number = 42;\n');
+        changed(provider, 2);
+        await answer;
+        answer = expect("ts2307");
+        fs.unlinkSync(provider);
+        changed(provider, 3);
+        await answer;
+        answer = expect();
+        fs.writeFileSync(provider, 'export const value: string = "restored";\n');
+        changed(provider, 1);
+        await answer;
+        answer = expect("ts7006");
+        config.compilerOptions.noImplicitAny = true;
+        fs.writeFileSync(configPath, JSON.stringify(config));
+        changed(configPath, 2);
+        assert.equal((await answer).version, 1, "the unsaved function survived project reload");
+        answer = expect();
+        config.compilerOptions.noImplicitAny = false;
+        fs.writeFileSync(configPath, JSON.stringify(config));
+        changed(configPath, 2);
+        await answer;
+        assert.equal(fs.readFileSync(consumer, "utf8"), "export {};\n", "reload never saves the buffer");
+      } finally { client.stop(); }
+    });
+
+    test(`unsaved ${providerKind} changes refresh untouched ${consumerKind} diagnostics`, { skip: skipTyped, timeout }, async () => {
+      const dir = caseDir("tt-dependency-edit-");
+      const provider = path.join(dir, `provider.${providerKind}`);
+      const consumer = path.join(dir, `consumer.${consumerKind}`);
+      const original = 'export const value: string = "disk";\n';
+      const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\n`;
+      fs.writeFileSync(provider, original);
+      fs.writeFileSync(consumer, source);
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", jsx: "preserve", noEmit: true, allowImportingTsExtensions: true },
+        include: ["*"],
+      }));
+      const uri = pathToFileURL(consumer).toString();
+      const providerUri = pathToFileURL(provider).toString();
+      const client = connect();
+      try {
+        await client.request("initialize", {
+          processId: process.pid, rootUri: pathToFileURL(dir).toString(),
+          workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {},
+        });
+        client.notify("initialized", {});
+        // Open the host first: the project must exist before any tt request.
+        client.notify("textDocument/didOpen", { textDocument: {
+          uri: providerUri, languageId: providerKind === "ts" ? "typescript" : providerKind === "tsx" ? "typescriptreact" : providerKind,
+          version: 1, text: original,
+        } });
+        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
+        await clean;
+        const failed = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "ts2322"));
+        client.notify("textDocument/didChange", {
+          textDocument: { uri: providerUri, version: 2 }, contentChanges: [{ text: "export const value: number = 42;\n" }],
+        });
+        assert.equal((await failed).version, 1, "consumer was never edited");
+        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        client.notify("textDocument/didClose", { textDocument: { uri: providerUri } });
+        assert.equal((await cleared).version, 1, "closing reveals the disk dependency");
+      } finally { client.stop(); }
+    });
+  }
+}
+
 interface Client {
   request(method: string, params: unknown): Promise<any>;
   notify(method: string, params: unknown): void;
@@ -45,6 +138,15 @@ interface Client {
 function connect(): Client {
   const child: ChildProcess = spawn(process.execPath, [SERVER, "--stdio"], {
     stdio: ["pipe", "pipe", "ignore"],
+    // The LSP case lives in a temporary project, while the test contract is
+    // against the compiler built from this checkout. Cover both supported
+    // development routes: a linked package consumes TTC_BINARY, and the
+    // final PATH fallback finds the same executable when no package exists.
+    env: {
+      ...process.env,
+      TTC_BINARY: COMPILER,
+      PATH: `${path.dirname(COMPILER)}${path.delimiter}${process.env.PATH ?? ""}`,
+    },
   });
   const pending = new Map<number, (body: any) => void>();
   interface Waiter {
@@ -520,6 +622,66 @@ test("pattern positions complete cases and fields", { skip, timeout }, async () 
     assert.ok(
       conditional.labels.includes("Circle"),
       `missing Circle in: ${conditional.labels}`,
+    );
+  } finally {
+    stop();
+  }
+});
+
+test("references, rename, signature help, and document symbols cross the LSP adapter", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Point }",
+    "function format(value: string, width?: number): string {",
+    '  return value.padStart(width ?? 0, " ");',
+    "}",
+    'const label = "tt";',
+    "export const output = format(label, 4);",
+    "void label;",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(source, "const lab"),
+      context: { includeDeclaration: true },
+    });
+    assert.equal(references.result.length, 3, JSON.stringify(references.result));
+    assert.ok(
+      references.result.every(
+        (location: any) =>
+          location.uri === uri && covered(source, location.range) === "label",
+      ),
+      JSON.stringify(references.result),
+    );
+
+    const rename = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, "const lab"),
+      newName: "title",
+    });
+    assert.equal(rename.result.changes[uri].length, 3);
+    assert.ok(
+      rename.result.changes[uri].every((edit: any) => edit.newText === "title"),
+      JSON.stringify(rename.result),
+    );
+
+    const signature = await client.request("textDocument/signatureHelp", {
+      textDocument: { uri },
+      position: positionOf(source, "output = format("),
+      context: { triggerKind: 1, isRetrigger: false },
+    });
+    assert.match(signature.result.signatures[0].label, /format/);
+    assert.equal(signature.result.activeParameter, 0);
+
+    const symbols = await client.request("textDocument/documentSymbol", {
+      textDocument: { uri },
+    });
+    const shape = symbols.result.find((symbol: any) => symbol.name === "Shape");
+    assert.ok(shape, JSON.stringify(symbols.result));
+    assert.deepEqual(
+      shape.children.map((symbol: any) => symbol.name),
+      ["Circle", "Point"],
     );
   } finally {
     stop();

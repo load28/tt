@@ -176,8 +176,18 @@ fn mixed_source_fixture_emits_one_type_clean_typescript_tree() {
             SourceKind::TypeScript,
         ),
         (
+            "same.ts",
+            include_str!("fixtures/mixed-source-matrix/src/same.ts"),
+            SourceKind::TypeScript,
+        ),
+        (
             "plain-jsx.tsx",
             include_str!("fixtures/mixed-source-matrix/src/plain-jsx.tsx"),
+            SourceKind::Tsx,
+        ),
+        (
+            "same-jsx.tsx",
+            include_str!("fixtures/mixed-source-matrix/src/same-jsx.tsx"),
             SourceKind::Tsx,
         ),
         (
@@ -186,8 +196,18 @@ fn mixed_source_fixture_emits_one_type_clean_typescript_tree() {
             SourceKind::TypeScript,
         ),
         (
+            "same-tt.ts",
+            include_str!("fixtures/mixed-source-matrix/src/same-tt.tt"),
+            SourceKind::TypeScript,
+        ),
+        (
             "language-jsx.tsx",
             include_str!("fixtures/mixed-source-matrix/src/language-jsx.ttx"),
+            SourceKind::Tsx,
+        ),
+        (
+            "same-ttx.tsx",
+            include_str!("fixtures/mixed-source-matrix/src/same-ttx.ttx"),
             SourceKind::Tsx,
         ),
     ];
@@ -698,3 +718,6 @@ include!("integration/cases_02.rs");
 include!("integration/cases_03.rs");
 include!("integration/cases_04.rs");
 include!("integration/cases_05.rs");
+
+#[path = "integration/contextual.rs"]
+mod contextual;

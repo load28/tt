@@ -1,0 +1,6 @@
+declare const flag: boolean;
+declare function consume(item: { kind: "item"; run: (x: number) => number }): void;
+consume(match (flag) {
+  true => ({ kind: "item", run: x => x + 1 }),
+  false => ({ kind: "item", run: x => x - 1 }),
+});

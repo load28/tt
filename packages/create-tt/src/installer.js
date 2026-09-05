@@ -264,13 +264,13 @@ function runScript(packageManager, script) {
 function wrapperConfig(moduleName, base) {
   const baseImport = base ? `import base from './${base}'\n` : 'const base = {}\n'
   return `import tt from '${moduleName}'\n${baseImport}
-const addRl = (config = {}) => Array.isArray(config)
-  ? config.map(addRl)
+const addTt = (config = {}) => Array.isArray(config)
+  ? config.map(addTt)
   : { ...config, plugins: [tt(), ...(config.plugins ?? [])] }
 
 export default typeof base === 'function'
-  ? async (...args) => addRl(await base(...args))
-  : Promise.resolve(base).then(addRl)
+  ? async (...args) => addTt(await base(...args))
+  : Promise.resolve(base).then(addTt)
 `
 }
 

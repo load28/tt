@@ -81,7 +81,7 @@ impl<'a> Emitter<'a> {
             if let Some(value) = region.value {
                 push_grouped(
                     &mut out,
-                    guard_line_comment(self.emit_expr(value).trim(), 0),
+                    guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
                 );
             } else {
                 out.push_lit("undefined");
@@ -396,7 +396,11 @@ impl<'a> Emitter<'a> {
                             replacement,
                         );
                     } else {
-                        self.emit_statement_expr(*expr, &mut out);
+                        if self.statement_expr_requires_lowering(*expr) {
+                            self.emit_statement_expr(*expr, &mut out);
+                        } else {
+                            out.append(self.emit_expr(*expr));
+                        }
                     }
                 }
                 Statement::Adt(adt) => {
@@ -625,7 +629,7 @@ impl<'a> Emitter<'a> {
                 out.append(Rope::indented(
                     1,
                     self.emit_value_delivery_with_exit(
-                        guard_line_comment(self.emit_expr(value).trim(), 0),
+                        guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
                         None,
                         &success,
                         exit_label,

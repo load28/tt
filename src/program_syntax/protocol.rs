@@ -16,7 +16,22 @@ pub(super) fn evaluation_protocol(
         .into_iter()
         .flatten()
         .collect();
-    Ok(HostEvaluationProtocol { steps })
+    let call_completion = frames
+        .iter()
+        .find_map(|frame| match frame {
+            ProjectedProtocolFrame::Call {
+                discarded_single: true,
+                parent,
+                ..
+            } => Some(*parent),
+            _ => None,
+        })
+        .map(|span| map_structural_span(segments, span))
+        .transpose()?;
+    Ok(HostEvaluationProtocol {
+        steps,
+        call_completion,
+    })
 }
 
 /// The projected shape of one conditional operation, before span mapping.
@@ -171,6 +186,7 @@ pub(super) fn protocol_step(
             arguments,
             type_args,
             optional,
+            ..
         } => {
             let Some(position) = arguments
                 .iter()

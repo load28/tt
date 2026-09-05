@@ -99,6 +99,26 @@ impl<'a> Emitter<'a> {
         }
         for action in &rewrite.actions {
             let slot = match action {
+                ComposeAction::Value(value) if value.call_completion.is_some() => continue,
+                ComposeAction::Value(value) if value.inline => {
+                    let Expr::Decision(decision) = &self.core.exprs[value.expr.index()] else {
+                        crate::ice::bug!("inline value lost its decision")
+                    };
+                    for (index, name) in self.inline_subjects[&decision.extent].iter().enumerate() {
+                        if !self.inline_subject_needs_storage(decision, index) {
+                            continue;
+                        }
+                        out.push_lit(format!("let {name};"));
+                        out.push_break(0);
+                    }
+                    continue;
+                }
+                ComposeAction::Value(value)
+                    if value.defer_arm_values
+                        && self.has_conditional_match_dispatch(value.expr) =>
+                {
+                    continue;
+                }
                 ComposeAction::Value(value) => &value.slot,
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
@@ -109,11 +129,26 @@ impl<'a> Emitter<'a> {
         for action in &rewrite.actions {
             match action {
                 ComposeAction::Value(value) => {
-                    let mut lowered = self
-                        .emit_continued_expr(value.expr, &ValueContinuation::assign(&value.slot))
+                    if value.inline {
+                        continue;
+                    }
+                    let _active = self.active_structured_exprs.enter(value.expr);
+                    let mut lowered = if let Some(callee) = &value.call_completion {
+                        self.emit_continued_expr(value.expr, &ValueContinuation::invoke(callee))
+                            .unwrap_or_else(|| {
+                                crate::ice::bug!("scoped call lost its value decision")
+                            })
+                    } else if value.defer_arm_values {
+                        self.emit_arm_selector(value.expr, &value.slot)
+                    } else {
+                        self.emit_continued_expr(
+                            value.expr,
+                            &ValueContinuation::assign(&value.slot),
+                        )
                         .unwrap_or_else(|| {
                             crate::ice::bug!("compose value is not structurally emit-able")
-                        });
+                        })
+                    };
                     for step in &value.steps {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }

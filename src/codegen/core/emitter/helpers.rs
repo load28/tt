@@ -55,9 +55,14 @@ pub(super) fn grouping_required(text: &str) -> bool {
 /// Ends the line when `rope` finishes inside a `//` comment, so whatever
 /// codegen appends next is not swallowed by it. `depth` is where the
 /// continued line starts inside the enclosing lowering.
-pub(super) fn guard_line_comment(mut rope: Rope<'_>, depth: u16) -> Rope<'_> {
-    if rope.last_line_has_line_comment() {
+pub(super) fn guard_line_comment(
+    mut rope: Rope<'_>,
+    depth: u16,
+    source_kind: SourceKind,
+) -> Rope<'_> {
+    if rope.last_line_has_line_comment(source_kind) {
         rope.push_break(depth);
+        return Rope::scoped(rope);
     }
     rope
 }

@@ -11,7 +11,7 @@ impl<'a> Emitter<'a> {
         );
         let inner = match apply.head {
             Some(head) => {
-                let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0);
+                let mut acc = guard_line_comment(self.emit_expr(head).trim(), 0, self.source_kind);
                 let mut accumulator_is_inert = self.expression_is_inert(head);
                 // Where the value flowing into the current step was
                 // produced: the head, then each step in turn — the place a
@@ -20,7 +20,8 @@ impl<'a> Emitter<'a> {
                 for step in &apply.steps {
                     let step_span = self.span(step.node);
                     let context = Some((produced.start, produced.end));
-                    let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
+                    let body =
+                        guard_line_comment(self.emit_expr(step.value).trim(), 0, self.source_kind);
                     let mut next = Rope::new();
                     // The value flowing into a step occupies a position the
                     // checker types against that step, so a diagnostic that
@@ -98,13 +99,13 @@ impl<'a> Emitter<'a> {
         let mut acc = Rope::new();
         push_grouped(
             &mut acc,
-            guard_line_comment(self.emit_expr(first.value).trim(), 0),
+            guard_line_comment(self.emit_expr(first.value).trim(), 0, self.source_kind),
         );
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
             let step_span = self.span(step.node);
-            let body = guard_line_comment(self.emit_expr(step.value).trim(), 0);
+            let body = guard_line_comment(self.emit_expr(step.value).trim(), 0, self.source_kind);
             let mut next = Rope::new();
             next.push_lit("$tt_fl(");
             // The composition built so far is what this step composes onto;
@@ -549,7 +550,7 @@ impl<'a> Emitter<'a> {
             inner.push_lit(format!("{accumulator} = "));
             push_grouped(
                 &mut inner,
-                guard_line_comment(self.emit_expr(head).trim(), 1),
+                guard_line_comment(self.emit_expr(head).trim(), 1, self.source_kind),
             );
             inner.push_lit(";");
         }
@@ -574,7 +575,7 @@ impl<'a> Emitter<'a> {
                 value.push_lit(slot.clone());
                 value
             } else {
-                guard_line_comment(self.emit_expr(step.value).trim(), 1)
+                guard_line_comment(self.emit_expr(step.value).trim(), 1, self.source_kind)
             };
             inner.push_break(1);
             let step_span = self.span(step.node);

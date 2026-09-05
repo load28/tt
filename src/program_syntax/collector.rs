@@ -12,6 +12,14 @@ pub(super) fn parse_module(
     segments: &[ProjectionSourceSegment],
     source_kind: crate::SourceKind,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
+    if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
+        return Err(parse_failure_at(
+            code,
+            segments,
+            span.start,
+            message.to_string(),
+        ));
+    }
     let source_map: Lrc<SourceMap> = Default::default();
     let file = source_map.new_source_file(Lrc::new(FileName::Anon), code.to_string());
     let start = file.start_pos.0;
@@ -57,6 +65,15 @@ pub(super) fn parse_failure(
     // A parser can stop one byte past the end (`<eof>` expectations); that
     // byte belongs to the segment it ends.
     let at = usize::try_from(error.span().lo().0.saturating_sub(start)).unwrap_or(0);
+    parse_failure_at(code, segments, at, message)
+}
+
+fn parse_failure_at(
+    code: &str,
+    segments: &[ProjectionSourceSegment],
+    at: usize,
+    message: String,
+) -> ProgramSyntaxError {
     let at = ProjectedByte(at.min(code.len().saturating_sub(1)));
     match source_byte_for_projection(segments, at) {
         Some(source) => ProgramSyntaxError::SourceNotTypeScript { message, source },
@@ -68,6 +85,9 @@ pub(super) fn parse_failure(
 }
 
 pub(super) struct ParentCollector {
+    pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
+    pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
+    pub(super) linear_return_bodies: HashMap<ProjectedSpan, BodyId>,
     pub(super) source_start: u32,
     pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_calls: HashMap<ProjectedSpan, TtNodeId>,
@@ -112,6 +132,8 @@ pub(super) struct FoundOverlay {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ProjectedHostExit {
+    pub(super) linear_return_body: Option<BodyId>,
+    pub(super) single_return_body: Option<BodyId>,
     pub(super) statement: ProjectedSpan,
     pub(super) argument: Option<ProjectedSpan>,
     pub(super) captured_break: bool,
@@ -138,6 +160,7 @@ pub(super) enum ProjectedProtocolFrame {
         alternate: ProjectedSpan,
     },
     Call {
+        discarded_single: bool,
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,

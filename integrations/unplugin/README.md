@@ -27,9 +27,7 @@ import { Notice, render } from "./notice.tt";
 
 | import | 상태 |
 |--------|------|
-| `@openload28/unplugin-tt/vite` | 예제(`tt-interop`)로 검증 |
-| `@openload28/unplugin-tt/esbuild` | 번들·실행 검증 |
-| `@openload28/unplugin-tt/rollup`, `/rolldown`, `/webpack`, `/rspack`, `/farm` | unplugin이 제공하는 어댑터 — 미검증 |
+| `@openload28/unplugin-tt/vite`, `/rollup`, `/rolldown`, `/webpack`, `/rspack`, `/esbuild`, `/farm` | Every published adapter is constructed in the integration gate; the shared hooks compile `.tt`/`.ttx`, serve standard modules, return source maps, and forward diagnostics |
 
 `@openload28/unplugin-tt`를 그대로 import하면 `unplugin` 객체와 `vitePlugin`·
 `esbuildPlugin` 같은 이름들이 나옵니다.
@@ -63,6 +61,7 @@ loader를 명시합니다.
 |------|--------|------|
 | `compiler` | 설치된 `@openload28/tt-lang`의 바이너리, 없으면 `"ttc"` | ttc 실행 파일 경로 |
 | `verify` | `true` | `false`면 `--no-verify`를 넘겨 방출물 자가 검사를 생략합니다 |
+| `sourcemap` | `true` | Set to `false` to omit the source map returned to the bundler |
 
 타입 선언(`index.d.ts`와 서브패스별 `.d.ts`)을 함께 싣습니다 — 소비자가
 `vite.config.ts`를 타입 검사에 넣어도 `tt()`의 옵션이 그대로 검사됩니다.

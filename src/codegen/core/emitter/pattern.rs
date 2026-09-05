@@ -3,6 +3,255 @@
 use super::*;
 
 impl<'a> Emitter<'a> {
+    pub(super) fn inline_subject_needs_storage(&self, decision: &Decision, index: usize) -> bool {
+        fn reads(plan: &PatternPlan, index: usize) -> bool {
+            match plan {
+                PatternPlan::Any => false,
+                PatternPlan::Bind(_) => true,
+                PatternPlan::Test(
+                    Test::Variant { place, .. }
+                    | Test::Literal { place, .. }
+                    | Test::InstanceOf { place, .. },
+                ) => place.subject == index,
+                PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+                    parts.iter().any(|part| reads(part, index))
+                }
+            }
+        }
+        !decision
+            .arms
+            .last()
+            .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+            || decision.arms.iter().any(|arm| reads(&arm.pattern, index))
+    }
+
+    pub(super) fn has_conditional_match_dispatch(&self, expr: ExprId) -> bool {
+        matches!(
+            &self.core.exprs[expr.index()],
+            Expr::Decision(Decision {
+                kind: DecisionKind::Match {
+                    dispatch: MatchDispatch::Conditional,
+                    ..
+                },
+                ..
+            })
+        )
+    }
+
+    /// Select a binding-free expression arm without moving its value out of
+    /// the surrounding TypeScript expression. The plan proves that no other
+    /// TT value intervenes between selection and value evaluation.
+    pub(super) fn emit_arm_selector(&self, expr: ExprId, slot: &str) -> Rope<'a> {
+        let Expr::Decision(decision) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("arm selector has no decision")
+        };
+        let mut out = Rope::new();
+        if self.has_conditional_match_dispatch(expr) {
+            for subject in &decision.subjects {
+                out.append(self.emit_subject_initialization(
+                    subject,
+                    &temp_name(subject.temporary),
+                    decision.head,
+                ));
+                out.push_break(0);
+            }
+            return out;
+        }
+        out.push_lit("{");
+        for subject in &decision.subjects {
+            out.push_break(1);
+            out.append(self.emit_subject_initialization(
+                subject,
+                &temp_name(subject.temporary),
+                decision.head,
+            ));
+        }
+        let DecisionKind::Match { dispatch, .. } = decision.kind else {
+            crate::ice::bug!("selector is not a match")
+        };
+        let temp = temp_name(decision.subjects[0].temporary);
+        if dispatch == MatchDispatch::Conditional {
+            crate::ice::bug!("a narrowing condition cannot be separated from its arm value");
+        }
+        out.push_break(1);
+        out.push_lit(if dispatch == MatchDispatch::LiteralSwitch {
+            format!("switch ({temp}) {{")
+        } else {
+            format!("switch ({temp}.kind) {{")
+        });
+        let mut wildcard = false;
+        for (index, arm) in decision.arms.iter().enumerate() {
+            out.push_break(2);
+            if matches!(arm.pattern, PatternPlan::Any) {
+                wildcard = true;
+                out.push_lit("default");
+            } else {
+                for (alternative_index, alternative) in
+                    pattern_alternatives(&arm.pattern).iter().enumerate()
+                {
+                    out.push_lit(if alternative_index == 0 {
+                        "case "
+                    } else {
+                        ": case "
+                    });
+                    if dispatch == MatchDispatch::LiteralSwitch {
+                        out.append(self.literal_label(alternative));
+                    } else {
+                        out.push_lit(format!("\"{}\"", self.variant_label(alternative)));
+                    }
+                }
+            }
+            out.push_lit(format!(": {slot} = {index}; break;"));
+        }
+        if !wildcard {
+            out.push_break(2);
+            out.push_lit("default: ");
+            out.push_lit(self.unexpected_throw(decision));
+        }
+        out.push_break(1);
+        out.push_lit("}");
+        out.push_break(0);
+        out.push_lit("}");
+        let mut anchored = Rope::new();
+        let head = self.span(decision.head);
+        anchored.anchored(
+            AnchorKind::Match,
+            head.start,
+            head.end,
+            self.span(decision.extent).end,
+            Rope::scoped(out),
+        );
+        anchored
+    }
+
+    pub(super) fn emit_selected_arm_values(&self, expr: ExprId, slot: &str) -> Rope<'a> {
+        let Expr::Decision(decision) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("selected arm values have no decision")
+        };
+        let mut out = Rope::new();
+        out.push_lit("(");
+        for (index, arm) in decision.arms.iter().enumerate() {
+            if index + 1 < decision.arms.len() {
+                if self.has_conditional_match_dispatch(expr) {
+                    out.push_lit("(");
+                    out.append(self.emit_condition(&arm.pattern, decision));
+                    if let Some(guard) = arm.guard {
+                        out.push_lit(" && ");
+                        push_grouped(&mut out, self.emit_expr(guard).trim());
+                    }
+                    out.push_lit(") ? ");
+                } else {
+                    out.push_lit(format!("{slot} === {index} ? "));
+                }
+            }
+            let value = self.emit_deferred_arm_value(expr, &arm.action);
+            push_grouped(
+                &mut out,
+                guard_line_comment(value.trim(), 0, self.source_kind),
+            );
+            if index + 1 < decision.arms.len() {
+                out.push_lit(" : ");
+            }
+        }
+        out.push_lit(")");
+        out
+    }
+
+    fn emit_deferred_arm_value(&self, expr: ExprId, action: &ArmAction) -> Rope<'a> {
+        match *action {
+            ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Expression,
+            } => self.emit_body(body),
+            ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Block { completes: false },
+            } => {
+                let (span, exit) = single_return_arm_value(
+                    self.semantic,
+                    self.core,
+                    body,
+                    &self.exits_for_expr(expr),
+                )
+                .unwrap_or_else(|| crate::ice::bug!("deferred block has no single return value"));
+                // HostExit is an AST ReturnStmt: erase only its keyword
+                // and optional terminator, retaining authored trivia.
+                let value_end = exit.statement.end
+                    - usize::from(self.source.as_bytes()[exit.statement.end - 1] == b';');
+                let mut value =
+                    self.source_range_rope(hir::Span::new(span.start, exit.statement.start));
+                value.append(self.source_range_rope(hir::Span::new(
+                    exit.statement.start + "return".len(),
+                    value_end,
+                )));
+                value.append(self.source_range_rope(hir::Span::new(exit.statement.end, span.end)));
+                value
+            }
+            _ => crate::ice::bug!("deferred match arm is not an expression value"),
+        }
+    }
+
+    pub(super) fn emit_inline_match(&self, expr: ExprId) -> Rope<'a> {
+        let Expr::Decision(decision) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("inline match has no decision")
+        };
+        let names = &self.inline_subjects[&decision.extent];
+        let mut out = Rope::new();
+        out.push_lit("(");
+        for (index, (subject, name)) in decision.subjects.iter().zip(names).enumerate() {
+            if self.inline_subject_needs_storage(decision, index) {
+                out.push_lit(format!("{name} = "));
+            }
+            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            out.push_lit(", ");
+        }
+        let mut total = false;
+        for arm in &decision.arms {
+            if matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none() {
+                total = true;
+            } else {
+                out.push_lit("(");
+                out.append(self.emit_condition(&arm.pattern, decision));
+                if let Some(guard) = arm.guard {
+                    out.push_lit(" && ");
+                    push_grouped(&mut out, self.emit_expr(guard).trim());
+                }
+                out.push_lit(") ? ");
+            }
+            push_grouped(
+                &mut out,
+                guard_line_comment(
+                    self.emit_deferred_arm_value(expr, &arm.action).trim(),
+                    0,
+                    self.source_kind,
+                ),
+            );
+            if total {
+                break;
+            }
+            out.push_lit(" : ");
+        }
+        if !total {
+            self.used_match_raise.set(true);
+            let (kind, value) = match decision.miss {
+                MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
+                    ("literal", names[0].clone())
+                }
+                MissAction::ThrowUnexpected(UnexpectedKind::Case) => ("case", names[0].clone()),
+                MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
+                    ("case", format!("[{}]", names.join(", ")))
+                }
+                _ => crate::ice::bug!("inline match has no failure completion"),
+            };
+            out.push_lit(format!(
+                "{}(new Error(\"tt match: unexpected {kind} \" + JSON.stringify({value})))",
+                self.match_raise_name
+            ));
+        }
+        out.push_lit(")");
+        out
+    }
+
     pub(super) fn expression_is_inert(&self, expr: ExprId) -> bool {
         self.direct_apply_inputs.contains(&expr)
     }
@@ -220,7 +469,9 @@ impl<'a> Emitter<'a> {
                         push_control_break(&mut action, action_depth, chain_exit_label);
                     }
                 } else {
-                    let close = body.last_line_has_line_comment().then_some(action_depth);
+                    let close = body
+                        .last_line_has_line_comment(self.source_kind)
+                        .then_some(action_depth);
                     action.append(self.emit_value_delivery_with_exit(
                         body,
                         close,
@@ -274,7 +525,7 @@ impl<'a> Emitter<'a> {
         }
         if let Some(guard) = arm.guard {
             let guard = self.emit_expr(guard).trim();
-            let guarded = guard.last_line_has_line_comment();
+            let guarded = guard.last_line_has_line_comment(self.source_kind);
             out.push_lit("if (");
             out.append(guard);
             if guarded {
@@ -347,6 +598,7 @@ impl<'a> Emitter<'a> {
         match continuation.destination {
             ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
             ValueDestination::Assign(target) => out.push_lit(format!("{target} = ")),
+            ValueDestination::Invoke(callee) => out.push_lit(format!("{callee}(")),
         }
         if grouped {
             out.push_lit("(");
@@ -356,6 +608,9 @@ impl<'a> Emitter<'a> {
             out.push_break(depth);
         }
         if grouped {
+            out.push_lit(")");
+        }
+        if matches!(continuation.destination, ValueDestination::Invoke(_)) {
             out.push_lit(")");
         }
         out.push_lit(";");
@@ -448,7 +703,12 @@ impl<'a> Emitter<'a> {
         payload_for: Option<NodeId>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        out.push_lit(temp_name(decision.subjects[place.subject].temporary));
+        out.push_lit(
+            self.inline_subjects
+                .get(&decision.extent)
+                .map(|names| names[place.subject].clone())
+                .unwrap_or_else(|| temp_name(decision.subjects[place.subject].temporary)),
+        );
         for (index, field) in place.fields.iter().enumerate() {
             out.push_lit(".");
             if index + 1 == place.fields.len()

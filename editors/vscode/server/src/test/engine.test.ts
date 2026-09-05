@@ -200,6 +200,86 @@ test("ttx receives the complete TypeScript and tt semantic surface", { skip }, a
   assert.ok(tokens?.some((token) => token.kind === "keyword"));
 });
 
+for (const extension of ["tt", "ttx"]) {
+  test(`scoped and sibling matches retain contextual editor services in .${extension}`, { skip }, async () => {
+    const { dir } = workspace();
+    const file = path.join(dir, `src/scoped.${extension}`);
+    const header = [
+      "variant State { Ready(value: number), Empty }",
+      "declare const state: State; declare const flag: boolean;",
+      "type Item = {run: (x: number) => string};",
+      "declare function consume(item: Item): void; declare function pair(a: Item, b: Item): void;",
+    ].join("\n");
+    const cases = [
+      'consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'consume(match (flag) { true => { const amount = 1; return {run: x => x.toFixed() + amount}; }, false => ({run: x => x.toFixed()}) });',
+      'pair(match (flag) { true => ({run: x => x.toFixed()}), false => ({run: x => x.toFixed()}) }, match (flag) { true => ({run: x => x.toFixed()}), false => ({run: x => x.toFixed()}) });',
+    ];
+    fs.writeFileSync(file, "export {};\n");
+    try {
+      for (const statement of cases) {
+        const source = `${header}\n${statement}\nexport {};\n`;
+        engine.openDocument(COMPILER, file, source);
+        assert.deepEqual(await engine.tsDiagnostics(COMPILER, file), [], statement);
+        const offset = source.indexOf("x.toFixed");
+        const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
+        assert.ok(hover, statement);
+        assert.match(hover.signature, /x: number/);
+        assert.equal(sliceOf(source, hover.range), "x");
+        const completion = await engine.completion(COMPILER, file, positionAt(source, offset + 2), true);
+        assert.ok(completion?.items.some(item => item.label === "toFixed"), statement);
+        const invalid = source.replace("x.toFixed()", "x.missing()");
+        engine.openDocument(COMPILER, file, invalid);
+        const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+        const error = diagnostics.find(diagnostic => diagnostic.code === 2339);
+        assert.ok(error, JSON.stringify(diagnostics));
+        assert.equal(sliceOf(invalid, error.range), "missing");
+      }
+    } finally { engine.closeDocument(COMPILER, file); }
+  });
+  for (const block of [false, true]) {
+  test(`guarded contextual ${block ? "return-block" : "expression"} callbacks retain editor types in .${extension}`, { skip }, async () => {
+    const { dir } = workspace();
+    const file = path.join(dir, `src/guarded.${extension}`);
+    const source = [
+      "declare const flag: boolean;",
+      "declare const input: unknown;",
+      "declare function consume(item: {run: (x: number) => string}): void;",
+      "consume(match (flag) {",
+      block
+        ? '  true if typeof input === "string" => { return {run: x => x.toFixed() + input.length}; },'
+        : '  true if typeof input === "string" => ({run: x => x.toFixed() + input.length}),',
+      block
+        ? '  _ => { return {run: x => x.toFixed()}; },'
+        : '  _ => ({run: x => x.toFixed()}),',
+      "});",
+      "export {};",
+    ].join("\n");
+    fs.writeFileSync(file, "export {};\n");
+    engine.openDocument(COMPILER, file, source);
+    try {
+      const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+      assert.deepEqual(diagnostics, []);
+      const offset = source.indexOf("x.toFixed");
+      const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
+      assert.ok(hover, "contextual parameter hover must be available");
+      assert.match(hover.signature, /x: number/);
+      assert.equal(sliceOf(source, hover.range), "x");
+      const completions = await engine.completion(COMPILER, file, positionAt(source, offset + 2), true);
+      assert.ok(completions?.items.some((item) => item.label === "toFixed"));
+      const invalid = source.replace("x.toFixed()", "x.missing()");
+      engine.openDocument(COMPILER, file, invalid);
+      const invalidDiagnostics = await engine.tsDiagnostics(COMPILER, file);
+      const error = invalidDiagnostics.find((diagnostic) => diagnostic.code === 2339);
+      assert.ok(error, JSON.stringify(invalidDiagnostics));
+      assert.equal(sliceOf(invalid, error.range), "missing");
+    } finally {
+      engine.closeDocument(COMPILER, file);
+    }
+  });
+  }
+}
+
 test("hover answers for a buffer the disk never saw", { skip }, async () => {
   const { tt } = workspace();
   // The disk copy never sees this text; the engine's overlay is the truth.

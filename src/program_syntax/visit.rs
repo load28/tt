@@ -8,6 +8,7 @@ impl ParentCollector {
         pending: &[PendingOverlay],
         source_segments: &[ProjectionSourceSegment],
         projection_only_protocol_parents: &[ProjectedSpan],
+        arm_blocks: &HashMap<ProjectedSpan, BodyId>,
     ) -> Self {
         let expected_identifiers = pending
             .iter()
@@ -39,6 +40,9 @@ impl ParentCollector {
             .filter_map(|entry| entry.synthetic_return)
             .collect();
         Self {
+            arm_blocks: arm_blocks.clone(),
+            single_return_bodies: HashMap::new(),
+            linear_return_bodies: HashMap::new(),
             source_start,
             expected_identifiers,
             expected_calls,
@@ -209,6 +213,8 @@ impl ParentCollector {
                     .into_iter()
                     .map(|exit| {
                         Ok(HostExit {
+                            linear_return_body: exit.linear_return_body,
+                            single_return_body: exit.single_return_body,
                             statement: map_evaluation_span(&self.source_segments, exit.statement)?,
                             argument: exit
                                 .argument
@@ -419,6 +425,10 @@ impl VisitAstPath for ParentCollector {
             }
         };
         self.protocol_frames.push(ProjectedProtocolFrame::Call {
+            discarded_single: node.args.len() == 1 && node.args[0].spread.is_none() && node.type_args.is_none()
+                && matches!(&node.callee, swc_ecma_ast::Callee::Expr(callee) if matches!(callee.as_ref(), swc_ecma_ast::Expr::Ident(_)))
+                && path.kinds().iter().rev().find(|kind| !matches!(kind, AstParentKind::Expr(fields::ExprField::Call)))
+                    .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
             parent: span,
             callee: Some(projected_span(
                 match &node.callee {
@@ -610,6 +620,41 @@ impl VisitAstPath for ParentCollector {
         self.function_depth -= 1;
     }
 
+    fn visit_block_stmt<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast BlockStmt,
+        path: &mut AstNodePath<'r>,
+    ) {
+        let block = projected_span(node.span, self.source_start);
+        if let Some(body) = self.arm_blocks.get(&block)
+            && let Some((Stmt::Return(statement), prefix)) = node.stmts.split_last()
+            && statement.arg.is_some()
+            && prefix.iter().all(|stmt| {
+                matches!(
+                    stmt,
+                    Stmt::Empty(_)
+                        | Stmt::Expr(_)
+                        | Stmt::Decl(
+                            swc_ecma_ast::Decl::Var(_)
+                                | swc_ecma_ast::Decl::Fn(_)
+                                | swc_ecma_ast::Decl::Class(_)
+                        )
+                )
+            })
+        {
+            self.linear_return_bodies
+                .insert(projected_span(statement.span, self.source_start), *body);
+        }
+        if let Some(body) = self.arm_blocks.get(&block)
+            && let [Stmt::Return(statement)] = node.stmts.as_slice()
+            && statement.arg.is_some()
+        {
+            self.single_return_bodies
+                .insert(projected_span(statement.span, self.source_start), *body);
+        }
+        <BlockStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+    }
+
     fn visit_return_stmt<'ast: 'r, 'r>(
         &mut self,
         node: &'ast ReturnStmt,
@@ -622,6 +667,8 @@ impl VisitAstPath for ParentCollector {
             && let Some(found) = self.found.get_mut(&id)
         {
             found.exits.push(ProjectedHostExit {
+                linear_return_body: self.linear_return_bodies.get(&statement).copied(),
+                single_return_body: self.single_return_bodies.get(&statement).copied(),
                 statement,
                 argument: node
                     .arg
@@ -657,6 +704,7 @@ impl VisitAstPath for ParentCollector {
     fn visit_opt_call<'ast: 'r, 'r>(&mut self, node: &'ast OptCall, path: &mut AstNodePath<'r>) {
         let (callee_mode, callee_receiver) = call_callee_mode(&node.callee);
         self.protocol_frames.push(ProjectedProtocolFrame::Call {
+            discarded_single: false,
             parent: projected_span(node.span, self.source_start),
             callee: Some(projected_span(
                 reference_value_span(&node.callee),

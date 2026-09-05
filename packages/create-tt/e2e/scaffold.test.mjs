@@ -26,6 +26,10 @@ function run(command, args, cwd, temporaryDirectory) {
       TTC_BINARY: compiler,
       TMPDIR: temporaryDirectory,
       BUN_INSTALL_CACHE_DIR: join(temporaryDirectory, 'bun-cache'),
+      // Packing unpublished inputs is part of this isolated scaffold, too.
+      // Never let a developer's global cache permissions or contents decide
+      // whether the generated project can be verified.
+      npm_config_cache: join(temporaryDirectory, 'npm-cache'),
     },
   })
   assert.equal(

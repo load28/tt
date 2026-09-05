@@ -47,6 +47,15 @@ fn parse_ts_module(
     code: &str,
     source_kind: crate::SourceKind,
 ) -> Result<(), (String, usize, usize)> {
+    if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
+        let before = &code[..span.start];
+        let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let col = before
+            .rsplit('\n')
+            .next()
+            .map_or(1, |line| line.chars().count() + 1);
+        return Err((message.to_string(), line, col));
+    }
     let cm: Lrc<SourceMap> = Default::default();
     let fm = cm.new_source_file(Lrc::new(FileName::Anon), code.to_string());
     let lexer = Lexer::new(

@@ -1,8 +1,8 @@
 # 설계 제안: 파이프라인 연산자 `|>`
 
 - **상태**: 구현됨 (TASK-043, 함수 합성 `flow`는 TASK-063) — 규범은
-  [`language.md` §7](../reference/language.md#7-파이프라인-연산자-),
-  [`std.md`](../reference/std.md#파이프라인-변형-p)
+  [`tt.md` pipeline](../ai/tt.md),
+  [`tt.md` standard library](../ai/tt.md#ttstd)
 - **태스크**: [TASK-013](../tasks/TASK-013-pipeline-operator-proposal.md) (제안),
   [TASK-043](../tasks/TASK-043-pipeline-operator-impl.md) (구현),
   [TASK-063](../tasks/TASK-063-flow-composition.md) (`flow` 합성),

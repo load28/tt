@@ -103,6 +103,229 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
     }
 }
 
+#[test]
+fn a_mixed_source_stem_collision_is_rejected_before_writing() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("model.tt"),
+        "export variant Model { Tt(value: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("model.ts"),
+        "export const source = \"typescript\";\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("view.ttx"),
+        "export const source = <main>ttx</main>;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("view.tsx"),
+        "export const source = <main>tsx</main>;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("model.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("model.tt"), "{stderr}");
+    assert!(stderr.contains("model.ts"), "{stderr}");
+    assert!(
+        stderr.contains("view.tsx: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("view.ttx"), "{stderr}");
+    assert!(stderr.contains("view.tsx"), "{stderr}");
+    assert!(!out_dir.join("model.ts").exists());
+    assert!(!out_dir.join("view.tsx").exists());
+}
+
+#[test]
+fn separate_input_roots_cannot_collapse_to_one_output() {
+    let dir = tmpdir();
+    let left = dir.join("left");
+    let right = dir.join("right");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("index.tt"), "export const side = \"left\";\n").unwrap();
+    fs::write(right.join("index.tt"), "export const side = \"right\";\n").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        left.to_str().unwrap(),
+        right.to_str().unwrap(),
+    ]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("index.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("left/index.tt"), "{stderr}");
+    assert!(stderr.contains("right/index.tt"), "{stderr}");
+    assert!(!out_dir.join("index.ts").exists());
+}
+
+#[test]
+fn a_source_cannot_claim_a_compiler_support_module_output() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(source.join("tt")).unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "const twice = (value: number): number => value * 2;\n\
+         export const result = 1 |> twice;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("tt/runtime.tt"),
+        "export const userOwned = true;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("tt/runtime.ts"), "{stderr}");
+    assert!(stderr.contains("compiler support module"), "{stderr}");
+    assert!(stderr.contains("runtime.tt"), "{stderr}");
+    assert!(!out_dir.join("main.ts").exists());
+    assert!(!out_dir.join("tt/runtime.ts").exists());
+}
+
+#[test]
+fn an_output_directory_inside_the_input_is_not_recompiled() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = source.join("generated");
+    fs::create_dir_all(&out_dir).unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "export const current = \"source\";\n",
+    )
+    .unwrap();
+    fs::write(
+        out_dir.join("stale.ts"),
+        "export const stale = \"previous output\";\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("main.ts").is_file());
+    assert!(out_dir.join("stale.ts").is_file());
+    assert!(!out_dir.join("generated/stale.ts").exists());
+}
+
+#[test]
+fn mixed_source_project_preserves_all_directed_runtime_values() {
+    if !have("tsc") || !have("bun") || !have("node") {
+        return;
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = root.join("tests/fixtures/mixed-source-runtime");
+    let dir = tmpdir();
+    let emitted = dir.join("emitted");
+    let bundle = dir.join("bundle.js");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--no-banner", "-o"])
+        .arg(&emitted)
+        .arg(&source)
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::write(
+        emitted.join("tsconfig.json"),
+        "{\"compilerOptions\":{\"jsx\":\"react\",\"jsxFactory\":\"h\"}}\n",
+    )
+    .unwrap();
+    let mut inputs: Vec<_> = fs::read_dir(&emitted)
+        .expect("emitted mixed-source tree")
+        .map(|entry| entry.expect("emitted entry").path())
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(|value| value.to_str()),
+                Some("ts" | "tsx")
+            )
+        })
+        .collect();
+    inputs.sort();
+    let output = Command::new("tsc")
+        .args(&inputs)
+        .args([
+            "--strict",
+            "--target",
+            "es2022",
+            "--module",
+            "preserve",
+            "--moduleResolution",
+            "bundler",
+            "--jsx",
+            "preserve",
+            "--skipLibCheck",
+            "--noEmit",
+        ])
+        .output()
+        .expect("tsc runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new("bun")
+        .args(["build"])
+        .arg(emitted.join("main.ts"))
+        .args(["--target", "node", "--format", "esm", "--outfile"])
+        .arg(&bundle)
+        .output()
+        .expect("bun build runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new("node")
+        .arg(&bundle)
+        .output()
+        .expect("node runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        r#"{"values":["ts<-ts","ts<-tsx","ts<-tt","ts<-ttx","tsx<-ts","tsx<-tsx","tsx<-tt","tsx<-ttx","tt<-ts","tt<-tsx","tt<-tt","tt<-ttx","ttx<-ts","ttx<-tsx","ttx<-tt","ttx<-ttx"],"trace":["ts","tsx","tt","ttx","ts","tsx","tt","ttx","ts","tsx","tt","ttx","ts","tsx","tt","ttx"]}"#
+    );
+}
+
 /// A small project: one shared module every other file imports (the shape
 /// that exercises the imported-declaration cache), plus a file that fails
 /// to compile so diagnostics are part of what must stay ordered.
@@ -198,6 +421,120 @@ fn jobs_rejects_zero_and_garbage() {
         String::from_utf8(out.stderr)
             .unwrap()
             .contains("--jobs requires a value")
+    );
+}
+
+#[test]
+fn modes_reject_options_they_would_otherwise_ignore() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    let cases = [
+        (
+            vec!["--content-mapper", "--project", "tsconfig.json"],
+            "--content-mapper does not combine with --project",
+        ),
+        (
+            vec!["--server", "--jobs", "2"],
+            "--server does not combine with --jobs",
+        ),
+        (
+            vec!["--emit-std", "types", "--source-map", "off"],
+            "--emit-std does not combine with --source-map",
+        ),
+        (
+            vec!["--symbols", "--no-banner", path],
+            "--symbols does not combine with --no-banner",
+        ),
+        (
+            vec!["--emit-map", "--jobs", "2", path],
+            "--emit-map does not combine with --jobs",
+        ),
+        (
+            vec!["--sidecar", "declarations", "--no-verify", path],
+            "--sidecar does not combine with --no-verify",
+        ),
+        (
+            vec!["--check-types", "--rewrite-imports", "off", path],
+            "--check-types does not combine with --rewrite-imports",
+        ),
+        (
+            vec!["--types", "--jobs", "2", path],
+            "--types does not combine with --jobs",
+        ),
+        (
+            vec!["--project", "tsconfig.json", path],
+            "build mode does not combine with --project",
+        ),
+        (
+            vec!["--symbols", "--emit-map", path],
+            "--symbols does not combine with --emit-map",
+        ),
+    ];
+
+    for (args, message) in cases {
+        let out = ttc(&args);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(!out.status.success(), "{args:?} should fail");
+        assert_eq!(stderr.trim(), format!("ttc: {message}"));
+        assert!(out.stdout.is_empty(), "{args:?} polluted stdout");
+    }
+}
+
+#[test]
+fn check_rejects_output_options_instead_of_silently_changing_or_ignoring_them() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (option, value) in [
+        ("--print", None),
+        ("--out-dir", Some("out")),
+        ("--source-map", Some("inline")),
+        ("--rewrite-imports", Some("off")),
+        ("--no-banner", None),
+    ] {
+        let mut args = vec!["--check", option];
+        if let Some(value) = value {
+            args.push(value);
+        }
+        args.push(path);
+        let out = ttc(&args);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(!out.status.success(), "{args:?} should fail");
+        assert_eq!(
+            stderr.trim(),
+            format!("ttc: --check does not combine with {option}")
+        );
+        assert!(out.stdout.is_empty(), "{args:?} polluted stdout");
+    }
+}
+
+#[test]
+fn print_requires_one_self_contained_stdout_document() {
+    let dir = tmpdir();
+    let first = dir.join("first.tt");
+    let second = dir.join("second.tt");
+    fs::write(&first, "export const first = 1;\n").unwrap();
+    fs::write(&second, "export const second = 2;\n").unwrap();
+
+    let external_map = ttc(&["--print", "--source-map", "file", first.to_str().unwrap()]);
+    assert!(!external_map.status.success());
+    assert!(external_map.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(external_map.stderr).unwrap().trim(),
+        "ttc: --print requires --source-map off or inline; file maps require written output"
+    );
+
+    let multiple = ttc(&["--print", first.to_str().unwrap(), second.to_str().unwrap()]);
+    assert!(!multiple.status.success());
+    assert!(multiple.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(multiple.stderr).unwrap().trim(),
+        "ttc: --print requires exactly one source file"
     );
 }
 

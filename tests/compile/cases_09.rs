@@ -1,4 +1,136 @@
 #[test]
+fn merge_conflict_markers_report_errors_without_panicking() {
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let options = Options {
+            source_kind,
+            ..Options::default()
+        };
+        for marker in ["=======", "<<<<<<< ours", ">>>>>>> theirs", "||||||| base"] {
+            for source in [
+                format!("{marker}\n/\u{2}\n"),
+                format!("const before = 1;\n  {marker}\n/regex/;"),
+                format!("const value = `raw ${{\n{marker}\n/regex/}}`;"),
+                format!("const value = 1 |> String;\n{marker}\n/regex/;"),
+                format!("/* leading trivia */{marker}\n/regex/;"),
+                format!("const before = 1; /*\n*/ {marker}\n/regex/;"),
+            ] {
+                ttc::analyze(&source, &options);
+                let error = compile(&source, &options).expect_err(&source);
+                assert!(
+                    error.message.contains("merge conflict marker"),
+                    "{source_kind:?}: {source:?}: {error}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn conflict_marker_text_in_literals_and_comments_is_preserved() {
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let options = Options {
+            source_kind,
+            ..Options::default()
+        };
+        for source in [
+            "const text = '======= <<<<<<< ours >>>>>>> theirs ||||||| base';",
+            "const text = `\n=======\n<<<<<<< ours\n>>>>>>> theirs\n||||||| base`;",
+            "/*\n=======\n<<<<<<< ours\n>>>>>>> theirs\n||||||| base\n*/\nconst n = 1;",
+            "// =======\nconst pattern = /=======/;",
+            "const text = `raw ${`\n=======\n`}`;",
+        ] {
+            assert_eq!(compile(source, &options).unwrap(), source);
+        }
+    }
+    let source = "const view = <pre>\n=======\n||||||| base\n</pre>;";
+    assert_eq!(ok_tsx(source), source);
+}
+
+#[test]
+fn malformed_pipeline_tail_never_reaches_codegen_as_owned_source() {
+    let source = "\u{6}|>'\u{b}";
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let result = std::panic::catch_unwind(|| {
+            compile(
+                source,
+                &Options {
+                    source_kind,
+                    ..Options::default()
+                },
+            )
+        });
+        assert!(result.is_ok(), "{source_kind:?} panicked");
+    }
+}
+
+#[test]
+fn malformed_namespaced_jsx_member_is_reported_without_panicking() {
+    let options = Options {
+        source_kind: SourceKind::Tsx,
+        ..Options::default()
+    };
+    for source in ["<G:U.m", "<G:U.m |> String"] {
+        let analyzed = std::panic::catch_unwind(|| ttc::analyze(source, &options));
+        assert!(analyzed.is_ok(), "analysis panicked for {source:?}");
+
+        let compiled = std::panic::catch_unwind(|| compile(source, &options));
+        let error = compiled
+            .unwrap_or_else(|_| panic!("compilation panicked for {source:?}"))
+            .expect_err("malformed TSX must not compile");
+        assert!(
+            error
+                .message
+                .contains("JSX namespace name cannot be followed by member access"),
+            "{source:?}: {error}"
+        );
+    }
+}
+
+#[test]
+fn result_body_uses_the_planned_slot_for_a_jsx_child_match() {
+    let output = ok_tsx(
+        r#"import type { TResult } from "@tt/std";
+variant E { A, B }
+variant F { Yes, No }
+declare function step(n: number): number;
+declare function fallible(n: number): TResult<number, string>;
+export function run(e: E, f: F, n: number): number {
+  const value = result {
+    const first = try fallible(n);
+    const chosen = match (e) { A => 1, B => 2 };
+    const view = <section data-value={chosen}>{match (f) {
+      Yes => <strong>{chosen |> step}</strong>,
+      No => null,
+    }}</section>;
+    void view;
+    return first + chosen;
+  };
+  return value.kind === "Ok" ? 0 : 1;
+}
+"#,
+    );
+    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+    assert!(output.contains(">{($tt_v2 === 0 ? <strong>"), "{output}");
+    assert!(!output.contains("{let $tt_v2;"), "{output}");
+}
+
+#[test]
+fn pipeline_values_containing_double_slashes_do_not_become_comments() {
+    for source in [r#""//" |> String"#, r#"`//` |> String"#, r#"/\/\// |> String"#] {
+        for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+            compile(
+                source,
+                &Options {
+                    source_kind,
+                    ..Options::default()
+                },
+            )
+            .unwrap_or_else(|error| panic!("{source_kind:?} rejected {source:?}: {error}"));
+        }
+    }
+}
+
+#[test]
 fn a_witness_names_the_value_that_is_missing() {
     let e = err(r#"variant Inner { Yes(n: number), No }
 variant Outer { Wrap(inner: Inner), Bare }
@@ -481,8 +613,10 @@ fn a_capture_never_copies_a_sibling_tt_value() {
     let source = "declare function g(x: unknown, y: unknown): void;\ndeclare const a: boolean;\ng(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });\n";
     let out = ok(source);
     assert!(!out.contains("$tt_expr"), "{out}");
-    assert!(out.contains("$tt_v5 = $tt_v0;"), "{out}");
-    assert!(out.contains("$tt_v3($tt_v5, $tt_v1)"), "{out}");
+    assert!(out.contains("g(a && ($tt_subject = a,"), "{out}");
+    assert_eq!(out.matches("$tt_subject = a").count(), 1, "{out}");
+    assert_eq!(out.matches("$tt_subject_1 = a").count(), 1, "{out}");
+    assert!(!out.contains("match ("), "{out}");
 }
 
 #[test]
@@ -571,5 +705,5 @@ fn an_inert_argument_is_not_captured_but_an_effectful_one_is() {
     assert!(!out.contains("= (1);"), "{out}");
     assert!(!out.contains("= (2);"), "{out}");
     assert!(out.contains("= (eff());"), "{out}");
-    assert!(out.contains("(1, $tt_v0, 2);"), "{out}");
+    assert!(out.contains("(1, ($tt_v0 === 0 ? 1 : 0), 2);"), "{out}");
 }

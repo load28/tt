@@ -28,7 +28,7 @@ npm ci             # TypeScript 7 포함 — package.json이 버전을 고정한
 
 ```sh
 pnpm add -D file:/path/to/tt/npm/tt-lang   # 재빌드 후에는 --force로 재설치
-pnpm add -D typescript@7
+pnpm add -D typescript@7.1.0-dev.20260826.1
 pnpm ttc --check-types src
 ```
 

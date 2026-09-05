@@ -125,6 +125,38 @@ impl Engine {
             Err(e) => return Err(e.to_string()),
         };
         let (tsconfig, root) = identity_of(&collected, options);
+        self.open_collected(collected, tsconfig, root, options)
+    }
+
+    /// Resolve an editor buffer's project without filtering out host sources.
+    pub fn document_project_identity(
+        path: &std::path::Path,
+        options: &ProjectOptions,
+    ) -> Result<(Option<PathBuf>, PathBuf), String> {
+        let canonical = path.canonicalize().map_err(|error| error.to_string())?;
+        Ok(identity_of(&[canonical], options))
+    }
+
+    /// Open a project from any editor buffer, including a host TypeScript file.
+    /// Host documents are overlays, not tt lowering inputs.
+    pub fn open_document_project(
+        &self,
+        path: &std::path::Path,
+        options: &ProjectOptions,
+    ) -> Result<Project, String> {
+        let (tsconfig, root) = Self::document_project_identity(path, options)?;
+        let collected = project::project_sources(&root, options.out_dir.as_deref(), &["tt", "ttx"])
+            .map_err(|error| error.to_string())?;
+        self.open_collected(collected, tsconfig, root, options)
+    }
+
+    fn open_collected(
+        &self,
+        collected: Vec<PathBuf>,
+        tsconfig: Option<PathBuf>,
+        root: PathBuf,
+        options: &ProjectOptions,
+    ) -> Result<Project, String> {
         // Scan candidates for the layered filesystem. Membership is not
         // inferred from this walk: the configured TypeScript program admits
         // include/files roots and everything reachable through its graph.

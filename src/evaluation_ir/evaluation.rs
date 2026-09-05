@@ -641,7 +641,23 @@ impl EvaluationFile {
             })
         }));
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
+        let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
+        let mut match_subject_names = HashMap::new();
+        for rewrite in &rewrites {
+            for value in &rewrite.values {
+                if let Expr::Decision(decision) = &core.exprs[value.expr.index()] {
+                    let names = decision
+                        .subjects
+                        .iter()
+                        .map(|_| allocate_generated_name("$tt_subject", &mut occupied_names))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    match_subject_names.insert(value.expr, names);
+                }
+            }
+        }
         Ok(LoweringPlan {
+            match_raise_name,
+            match_subject_names,
             owners: rewrites,
             for_initializer_propagations,
             slot_names,

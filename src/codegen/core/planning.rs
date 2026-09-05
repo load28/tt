@@ -367,6 +367,8 @@ pub(super) struct TargetRewritePlan {
     /// before target-specific slot-substitution filtering.
     pub(super) structurally_nested_values: HashSet<ExprId>,
     pub(super) expression_boundary_name: String,
+    pub(super) match_raise_name: String,
+    pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -426,10 +428,154 @@ pub(super) enum ComposeAction {
 
 #[derive(Debug, Clone)]
 pub(super) struct ComposeValue {
+    pub(super) call_completion: Option<String>,
+    /// Multi-value owners keep each match at its native evaluation position.
+    pub(super) inline: bool,
     pub(super) expr: ExprId,
     pub(super) source: SourceSpan,
     pub(super) slot: String,
     pub(super) steps: Vec<PlannedEvaluationStep>,
+    /// Select an expression arm in the prelude, but evaluate its value in
+    /// the authored host so TypeScript can apply contextual typing.
+    pub(super) defer_arm_values: bool,
+}
+
+/// Consume the host AST's single-return-body proof. Only opaque returned
+/// values participate here; structured TT values retain their own schedules.
+pub(super) fn single_return_arm_value(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    body: hir::BodyId,
+    exits: &[HostExit],
+) -> Option<(SourceSpan, HostExit)> {
+    let [Statement::Opaque(node)] = core.bodies[body.index()].statements.as_slice() else {
+        return None;
+    };
+    let span = SourceSpan::from(semantic.hir.source_map.node_span(*node)?);
+    exits
+        .iter()
+        .find(|exit| exit.single_return_body == Some(body))
+        .map(|exit| (span, *exit))
+}
+
+fn scoped_call_completion(
+    core: &CoreFile,
+    expr: ExprId,
+    exits: &[HostExit],
+    steps: &[PlannedEvaluationStep],
+    lowering: &LoweringPlan,
+) -> Option<String> {
+    let Expr::Decision(decision) = &core.exprs[expr.index()] else {
+        return None;
+    };
+    if !matches!(decision.kind, DecisionKind::Match { .. })
+        || !decision.arms.iter().all(|arm| match arm.action {
+            ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Expression,
+            } => core.bodies[body.index()]
+                .statements
+                .iter()
+                .all(|stmt| matches!(stmt, Statement::Opaque(_))),
+            ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Block { completes: false },
+            } => {
+                core.bodies[body.index()]
+                    .statements
+                    .iter()
+                    .all(|stmt| matches!(stmt, Statement::Opaque(_)))
+                    && exits
+                        .iter()
+                        .any(|exit| exit.linear_return_body == Some(body))
+            }
+            _ => false,
+        })
+    {
+        return None;
+    }
+    let [step] = steps else { return None };
+    if step.operation
+        != HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(0))
+    {
+        return None;
+    }
+    let [
+        PlannedEvaluationInput::Source {
+            target,
+            receiver: None,
+            ..
+        },
+    ] = step.inputs.as_slice()
+    else {
+        return None;
+    };
+    Some(lowering.slot_name(*target).to_owned())
+}
+
+fn can_defer_arm_values(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    expr: ExprId,
+    exits: &[HostExit],
+) -> bool {
+    let Expr::Decision(decision) = &core.exprs[expr.index()] else {
+        return false;
+    };
+    fn has_bindings(pattern: &PatternPlan) -> bool {
+        match pattern {
+            PatternPlan::Bind(_) => true,
+            PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => parts.iter().any(has_bindings),
+            PatternPlan::Any | PatternPlan::Test(_) => false,
+        }
+    }
+    let supported_dispatch = match decision.kind {
+        DecisionKind::Match {
+            dispatch: MatchDispatch::Conditional,
+            ..
+        } => {
+            // A total condition chain is an ordinary TS conditional expression.
+            // Keep guards beside values so their narrowing remains in scope.
+            decision
+                .arms
+                .last()
+                .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+        }
+        DecisionKind::Match { .. } => true,
+        _ => false,
+    };
+    supported_dispatch
+        && !decision.arms.is_empty()
+        && decision
+            .subjects
+            .iter()
+            .all(|subject| !core.has_statement_form(subject.value))
+        && decision.arms.iter().all(|arm| {
+            !has_bindings(&arm.pattern)
+                && arm
+                    .guard
+                    .is_none_or(|guard| !core.has_statement_form(guard))
+                && match arm.action {
+                    ArmAction::Yield {
+                        body,
+                        kind: ArmBodyKind::Expression,
+                    } => {
+                        core.bodies[body.index()]
+                            .statements
+                            .iter()
+                            .all(|statement| match statement {
+                                Statement::Opaque(_) => true,
+                                Statement::Expr(expr) => !core.has_statement_form(*expr),
+                                _ => false,
+                            })
+                    }
+                    ArmAction::Yield {
+                        body,
+                        kind: ArmBodyKind::Block { completes: false },
+                    } => single_return_arm_value(semantic, core, body, exits).is_some(),
+                    _ => false,
+                }
+        })
 }
 
 #[derive(Debug, Clone)]
@@ -597,10 +743,13 @@ impl TargetRewritePlan {
                                     crate::ice::bug!("loop value has a non-loop outer step")
                                 }
                                 Some(ComposeAction::Value(ComposeValue {
+                                    call_completion: None,
+                                    inline: false,
                                     expr: value.expr,
                                     source: value.source,
                                     slot: lowering.slot_name(slot).to_owned(),
                                     steps,
+                                    defer_arm_values: false,
                                 }))
                             }
                         })
@@ -636,12 +785,18 @@ impl TargetRewritePlan {
                     })
                     .collect();
                 (!values.is_empty()).then(|| {
+                    let inline = rewrite.values.len() > 1
+                        && values.len() == rewrite.values.len()
+                        && values.iter().all(|value| {
+                            can_defer_arm_values(semantic, core, value.expr, &value.exits)
+                        });
                     // A value consumed by a conditional operation is emitted
                     // by that operation's region, at the position of the
                     // operation's first value.
                     let operation_of: HashMap<ExprId, usize> = rewrite
                         .operations
                         .iter()
+                        .filter(|_| !inline)
                         .enumerate()
                         .flat_map(|(index, operation)| {
                             operation.values.iter().map(move |expr| (*expr, index))
@@ -656,11 +811,43 @@ impl TargetRewritePlan {
                             }),
                             None => {
                                 let ValueTarget::Slot(slot) = value.target;
+                                let call_completion = if rewrite.values.len() == 1
+                                    && !can_defer_arm_values(
+                                        semantic,
+                                        core,
+                                        value.expr,
+                                        &value.exits,
+                                    )
+                                    && value.schedule.call_completion.is_some()
+                                {
+                                    scoped_call_completion(
+                                        core,
+                                        value.expr,
+                                        &value.exits,
+                                        value.schedule.steps(),
+                                        lowering,
+                                    )
+                                } else {
+                                    None
+                                };
                                 Some(ComposeAction::Value(ComposeValue {
+                                    call_completion,
+                                    inline,
                                     expr: value.expr,
                                     source: value.source,
                                     slot: lowering.slot_name(slot).to_owned(),
-                                    steps: value.schedule.steps().to_vec(),
+                                    steps: if inline {
+                                        Vec::new()
+                                    } else {
+                                        value.schedule.steps().to_vec()
+                                    },
+                                    defer_arm_values: rewrite.values.len() == 1
+                                        && can_defer_arm_values(
+                                            semantic,
+                                            core,
+                                            value.expr,
+                                            &value.exits,
+                                        ),
                                 }))
                             }
                         })
@@ -816,8 +1003,40 @@ impl TargetRewritePlan {
                     }),
             )
             .flat_map(|expr| structured_grouping_frames(semantic, core, source, expr));
+        let call_frames = || {
+            composes.iter().flat_map(|rewrite| {
+                rewrite
+                    .actions
+                    .iter()
+                    .filter_map(|action| match action {
+                        ComposeAction::Value(value) if value.call_completion.is_some() => {
+                            Some(value)
+                        }
+                        _ => None,
+                    })
+                    .flat_map(move |value| {
+                        [
+                            (
+                                SourceSpan {
+                                    start: rewrite.owner.start,
+                                    end: value.source.start,
+                                },
+                                value.expr,
+                            ),
+                            (
+                                SourceSpan {
+                                    start: value.source.end,
+                                    end: rewrite.owner.end,
+                                },
+                                value.expr,
+                            ),
+                        ]
+                    })
+            })
+        };
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
+            .chain(call_frames().map(|(span, _)| span))
             .chain(loop_tests.iter().flat_map(|rewrite| {
                 let prefix = (rewrite.kind == LoopTestKind::While).then_some(SourceSpan {
                     start: rewrite.owner.start,
@@ -850,7 +1069,7 @@ impl TargetRewritePlan {
                 }
             })
             .collect();
-        let source_replacements = all_values()
+        let mut source_replacements: Vec<_> = all_values()
             .flat_map(|value| &value.steps)
             .chain(
                 all_operations()
@@ -879,9 +1098,25 @@ impl TargetRewritePlan {
             }))
             .chain(operation_replacements)
             .collect();
+        // A consumed call frame owns its original occurrence; captures
+        // within that frame are still emitted while the value is active.
+        source_replacements.splice(
+            0..0,
+            call_frames().map(|(source, expr)| SourceReplacement {
+                source,
+                slot: String::new(),
+                jsx_child: false,
+                anchor: Some(expr),
+            }),
+        );
         let consumed_exprs: HashSet<ExprId> = compose_operations()
             .flat_map(|operation| operation.values.iter().copied())
             .chain(loop_operations().flat_map(|operation| operation.values.iter().copied()))
+            .chain(
+                compose_values()
+                    .filter(|value| value.call_completion.is_some())
+                    .map(|value| value.expr),
+            )
             .collect();
         let slot_exprs = owner_slots
             .iter()
@@ -950,7 +1185,21 @@ impl TargetRewritePlan {
             })
             .collect();
         let expression_boundary_name = lowering.expression_boundary_name().to_owned();
+        let inline_subjects = compose_values()
+            .filter(|value| value.inline)
+            .map(|value| {
+                let Expr::Decision(decision) = &core.exprs[value.expr.index()] else {
+                    crate::ice::bug!("inline match plan lost its decision")
+                };
+                (
+                    decision.extent,
+                    lowering.match_subject_names(value.expr).to_vec(),
+                )
+            })
+            .collect();
         Self {
+            inline_subjects,
+            match_raise_name: lowering.match_raise_name().to_owned(),
             owner_slots,
             for_initializer_propagations,
             composes,

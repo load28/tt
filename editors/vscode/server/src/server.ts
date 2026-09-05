@@ -171,17 +171,48 @@ connection.onDidChangeConfiguration(() => {
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
-  void refreshCompiler();
-  for (const doc of documents.all()) scheduleValidation(doc);
+  invalidateProjectValidation();
+  void refreshCompiler().then(reloadProjectState);
 });
 
-connection.onDidChangeWatchedFiles(() => {
-  // A freshly built ttc appeared (or changed) — try validating again.
+connection.onDidChangeWatchedFiles((params) => {
+  const relevant = params.changes.some(change => {
+    const uri = URI.parse(change.uri);
+    if (uri.scheme !== "file") return false;
+    // Compiler-created support modules are not user graph changes.
+    if (uri.fsPath.split(path.sep).some(part => part === "node_modules" || part === ".git")) return false;
+    return true;
+  });
+  if (!relevant) return;
+  if (params.changes.some(change => /(?:^|\/)(?:ttc|ttc\.exe)$/.test(URI.parse(change.uri).path))) {
+    // Replacing an executable at the same path must replace the running
+    // process too; rebuilding project caches cannot update its machine code.
+    engine.shutdownEngineServer();
+  }
   warnedCompilerMissing = false;
   engine.retryEngineServer();
-  void refreshCompiler();
-  for (const doc of documents.all()) scheduleValidation(doc);
+  invalidateProjectValidation();
+  void refreshCompiler().then(reloadProjectState);
 });
+
+function invalidateProjectValidation(): void {
+  for (const doc of documents.all()) {
+    const timer = pendingValidation.get(doc.uri);
+    if (timer !== undefined) clearTimeout(timer);
+    pendingValidation.delete(doc.uri);
+    validationGeneration.set(doc.uri, (validationGeneration.get(doc.uri) ?? 0) + 1);
+  }
+}
+
+function reloadProjectState(): void {
+  declCache.clear();
+  engine.reloadProjects(currentCompiler());
+  for (const doc of documents.all()) {
+    const file = enginePath(doc);
+    if (file !== null) engine.openDocument(currentCompiler(), file, doc.getText());
+  }
+  for (const doc of documents.all()) scheduleValidation(doc);
+}
 
 // ---------------------------------------------------------------- analysis
 
@@ -418,6 +449,9 @@ async function typedDiagnosticsFor(
 }
 
 function scheduleValidation(doc: TextDocument): void {
+  // Host TypeScript buffers participate in project state, but their own
+  // diagnostics belong to the TypeScript extension.
+  if (doc.languageId !== "tt" && doc.languageId !== "ttx") return;
   const existing = pendingValidation.get(doc.uri);
   if (existing !== undefined) clearTimeout(existing);
   const generation = (validationGeneration.get(doc.uri) ?? 0) + 1;
@@ -675,6 +709,7 @@ documents.onDidOpen((e) => {
   scheduleValidation(e.document);
 });
 documents.onDidSave((e) => {
+  if (e.document.languageId !== "tt" && e.document.languageId !== "ttx") return;
   void rebuildSidecar(e.document);
 });
 
@@ -728,7 +763,10 @@ documents.onDidChangeContent((e) => {
   for (const uri of declCache.keys()) {
     if (uri !== e.document.uri) declCache.delete(uri);
   }
-  scheduleValidation(e.document);
+  // A dependency edit invalidates answers for unchanged consumers as well.
+  // The engine owns dependency semantics; until it exposes affected files,
+  // conservatively refresh every open tt document with a new generation.
+  for (const doc of documents.all()) scheduleValidation(doc);
 });
 documents.onDidClose((e) => {
   const fsPath = enginePath(e.document);
@@ -748,6 +786,8 @@ documents.onDidClose((e) => {
     version: e.document.version,
     diagnostics: [],
   });
+  declCache.clear();
+  for (const doc of documents.all()) scheduleValidation(doc);
 });
 
 // -------------------------------------------------------------- completion

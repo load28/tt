@@ -10,14 +10,16 @@ pub(super) fn resolve_schedule(
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
 ) -> Result<EvaluationSchedule, EvaluationError> {
-    resolve_schedule_steps(
+    let mut schedule = resolve_schedule_steps(
         protocol.steps(),
         slots,
         source_slots,
         next_slot,
         slot_names,
         occupied_names,
-    )
+    )?;
+    schedule.call_completion = protocol.call_completion;
+    Ok(schedule)
 }
 
 pub(super) fn resolve_schedule_steps(
@@ -103,7 +105,10 @@ pub(super) fn resolve_schedule_steps(
             })
         })
         .collect::<Result<Vec<_>, EvaluationError>>()?;
-    Ok(EvaluationSchedule { steps })
+    Ok(EvaluationSchedule {
+        steps,
+        call_completion: None,
+    })
 }
 
 pub(super) fn overlaps(left: SourceSpan, right: SourceSpan) -> bool {

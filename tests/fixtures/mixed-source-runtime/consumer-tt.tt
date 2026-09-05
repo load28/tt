@@ -1,0 +1,15 @@
+import { produceTs } from "./producer-ts.js";
+import { produceTsx } from "./producer-tsx.jsx";
+import { produceTt } from "./producer-tt.tt";
+import { produceTtx } from "./producer-ttx.ttx";
+
+const mark = (value: string): string => `tt<-${value}`;
+
+export function consumeTt(): string[] {
+  return [
+    produceTs() |> mark,
+    produceTsx() |> mark,
+    produceTt() |> mark,
+    produceTtx() |> mark,
+  ];
+}

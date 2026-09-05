@@ -453,22 +453,24 @@ impl<'a> Emitter<'a> {
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
-                Statement::Expr(expr)
-                    if self.owner_slot_rewrites.iter().any(|rewrite| {
-                        rewrite.expr == *expr && rewrite.continuation == HostContinuation::Discard
-                    }) || (matches!(self.core.exprs[expr.index()], Expr::Decision(_))
-                        && !self
-                            .owner_slot_rewrites
-                            .iter()
-                            .any(|rewrite| rewrite.expr == *expr)
-                        && !self.value_slots.contains_key(expr)) =>
-                {
+                Statement::Expr(expr) if self.statement_expr_requires_lowering(*expr) => {
                     self.emit_statement_expr(*expr, &mut out);
                 }
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
             }
         }
         out
+    }
+
+    pub(super) fn statement_expr_requires_lowering(&self, expr: ExprId) -> bool {
+        self.owner_slot_rewrites.iter().any(|rewrite| {
+            rewrite.expr == expr && rewrite.continuation == HostContinuation::Discard
+        }) || (matches!(self.core.exprs[expr.index()], Expr::Decision(_))
+            && !self
+                .owner_slot_rewrites
+                .iter()
+                .any(|rewrite| rewrite.expr == expr)
+            && !self.value_slots.contains_key(&expr))
     }
 
     pub(super) fn emit_statement_expr(&self, expr: ExprId, out: &mut Rope<'a>) {
@@ -613,7 +615,11 @@ impl<'a> Emitter<'a> {
         {
             let _active = self.active_structured_exprs.enter(expr);
             let mut out = self.emit_compose_rewrite(rewrite);
-            out.push_lit(value.slot.clone());
+            if value.defer_arm_values {
+                out.append(self.emit_selected_arm_values(value.expr, &value.slot));
+            } else {
+                out.push_lit(value.slot.clone());
+            }
             match rewrite.owner_kind {
                 HostOwnerKind::ArrowExpression => {
                     out.append(self.emit_compose_suffix(rewrite));
@@ -633,6 +639,22 @@ impl<'a> Emitter<'a> {
             return self.emit_arrow_return_rewrite(rewrite);
         }
         if let Some(slot) = self.slot_exprs.get(&expr) {
+            if let Expr::Decision(decision) = &self.core.exprs[expr.index()]
+                && self.inline_subjects.contains_key(&decision.extent)
+            {
+                let (kind, start, end, extent) = self.value_anchor(expr);
+                let mut out = Rope::new();
+                out.anchored(kind, start, end, extent, self.emit_inline_match(expr));
+                return out;
+            }
+            if self.compose_rewrites.iter().flat_map(|rewrite| &rewrite.actions).any(|action| {
+                matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
+            }) {
+                let (kind, start, end, extent) = self.value_anchor(expr);
+                let mut out = Rope::new();
+                out.anchored(kind, start, end, extent, self.emit_selected_arm_values(expr, slot));
+                return out;
+            }
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut out = Rope::new();
             let mut rendered_slot = slot.as_str();

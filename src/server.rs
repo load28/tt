@@ -44,6 +44,11 @@
 //!        "specifier", "nameSpan", "span", "cases" }],
 //!        "matches": [{ "keyword", "bodyOpen", "bodyClose" }] } }
 //!
+//! → { "id": 9, "method": "reloadProjects", "params": {} }
+//! ← { "id": 9, "result": {} }
+//! Project graphs and registered overlays are released. The client must
+//! replay its openDocument notifications before subsequent semantic requests.
+//!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
 //! ```
 //!
@@ -154,6 +159,14 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
         "typedCheck" => typed_check(sessions, params),
         "openDocument" | "updateDocument" => open_document(sessions, params),
         "closeDocument" => close_document(sessions, params),
+        "reloadProjects" => {
+            // Filesystem/configuration topology changed. Clients replay open
+            // buffers after this ordered barrier; old snapshots cannot leak
+            // into a graph resolved against the new configuration.
+            sessions.projects.clear();
+            sessions.docs.clear();
+            Ok(json!({}))
+        }
         "hover" => semantic(sessions, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,
@@ -340,14 +353,15 @@ fn open_document(
     let canonical = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| format!("{path}: {e}"))?;
-    let inputs = vec![path.to_string()];
     let options = ProjectOptions::default();
-    let identity = Engine::project_identity(&inputs, &options)?;
+    let identity = Engine::document_project_identity(&canonical, &options)?;
     let project = match sessions.projects.entry(identity.clone()) {
         std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(sessions.engine.open_project(&inputs, &options)?)
-        }
+        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
+            sessions
+                .engine
+                .open_document_project(&canonical, &options)?,
+        ),
     };
     project.open_document(canonical.clone(), text);
     sessions.docs.insert(canonical, identity);

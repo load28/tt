@@ -535,7 +535,7 @@ TypeQuery { module, position, ask }
 ### 10.4 계층 3 — 진단 번역 (문안을 되찾는다)
 
 > **상태: 구현됨** (TASK-104) — `engine::semantics::translate`. 규범은
-> [`errors.md`](../reference/errors.md#생성된-코드에서-난-타입-에러).
+> [`tt.md` Errors](../ai/tt.md#errors).
 > 문안 안의 낮아진 케이스 타입(`{ kind: "X"; ... }`)을 선언 이름(`E.X`)으로
 > 부르는 것은 TASK-118 — 선언 표가 유일하게 지목할 때만, 원문은 그대로 둔 채
 > 옮긴 말 쪽에 덧붙인다.
