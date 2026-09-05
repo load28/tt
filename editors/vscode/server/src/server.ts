@@ -65,6 +65,7 @@ import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
 import * as engine from "./engine";
+import { applyFolderChange, folderRoots } from "./roots";
 import * as ttc from "./ttc";
 import * as path from "node:path";
 
@@ -74,6 +75,7 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability = false;
+let hasWorkspaceFolderCapability = false;
 let workspaceRoots: string[] = [];
 let warnedCompilerMissing = false;
 
@@ -81,13 +83,22 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasConfigurationCapability = Boolean(
     params.capabilities.workspace?.configuration,
   );
-  workspaceRoots = (params.workspaceFolders ?? [])
-    .map((f) => URI.parse(f.uri))
-    .filter((u) => u.scheme === "file")
-    .map((u) => u.fsPath);
+  hasWorkspaceFolderCapability = Boolean(
+    params.capabilities.workspace?.workspaceFolders,
+  );
+  workspaceRoots = folderRoots(params.workspaceFolders);
 
   return {
     capabilities: {
+      // Folders come and go while the window is open, and every one of them
+      // is a place the compiler, the TypeScript toolchain and a relative
+      // `tt.sidecarDir` are resolved from. The client sends the change
+      // notification only to a server that asked for it, so without this
+      // the roots below were whatever the window happened to hold at
+      // startup, for the life of the session.
+      workspace: {
+        workspaceFolders: { supported: true, changeNotifications: true },
+      },
       textDocumentSync: {
         openClose: true,
         change: TextDocumentSyncKind.Incremental,
@@ -124,6 +135,14 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 });
 
 connection.onInitialized(() => {
+  // Asking a client that cannot send the event throws, and would take the
+  // rest of this handler — the first compiler resolution — with it.
+  if (hasWorkspaceFolderCapability) {
+    connection.workspace.onDidChangeWorkspaceFolders((event) => {
+      workspaceRoots = applyFolderChange(workspaceRoots, event);
+      rearmProject();
+    });
+  }
   // The engine session is keyed by the compiler path, and the document
   // sync that starts it cannot await settings — so `tt.compilerPath` is
   // resolved once here, before the first buffer arrives.
@@ -166,13 +185,19 @@ async function getSettings(uri?: string): Promise<TtSettings> {
   };
 }
 
-connection.onDidChangeConfiguration(() => {
+/** Everything the server has to redo when where it looks changes — the
+ * settings it reads, or the folders it reads them for. */
+function rearmProject(): void {
   warnedCompilerMissing = false;
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
   invalidateProjectValidation();
   void refreshCompiler().then(reloadProjectState);
+}
+
+connection.onDidChangeConfiguration(() => {
+  rearmProject();
 });
 
 connection.onDidChangeWatchedFiles((params) => {

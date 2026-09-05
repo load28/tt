@@ -350,7 +350,8 @@
 | TASK-339 | Correct user-facing documentation that no longer matches the tools | Complete | 2026-09-05 | 2026-09-05 | [TASK-339](./TASK-339-documentation-drift.md) |
 | TASK-340 | Make an unusable compiler visible and recoverable in the editor | Complete | 2026-09-05 | 2026-09-05 | [TASK-340](./TASK-340-compiler-recovery-in-the-editor.md) |
 | TASK-341 | A flag that takes a value does not take an option as one | Complete | 2026-09-05 | 2026-09-05 | [TASK-341](./TASK-341-value-flags-take-values.md) |
+| TASK-342 | Follow the window's workspace folders while it is open | Complete | 2026-09-05 | 2026-09-05 | [TASK-342](./TASK-342-live-workspace-folders.md) |
 
 ## Next task number
 
-**TASK-342**
+**TASK-343**
