@@ -220,6 +220,7 @@ for (const extension of ["tt", "ttx"]) {
       'const consumed = api.consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'const optional = maybe?.(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'const instantiated = generic<Item>(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'consume(match (state) { Ready(value) => { if (value > 0) return {run: x => x.toFixed() + value}; return {run: x => x.toFixed()}; }, Empty => ({run: x => x.toFixed()}) });',
     ];
     fs.writeFileSync(file, "export {};\n");
     try {

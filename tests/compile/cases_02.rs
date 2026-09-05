@@ -419,6 +419,22 @@ fn call_arguments_wider_than_the_match_keep_their_authored_frame() {
 }
 
 #[test]
+fn control_flow_arm_completions_use_a_labeled_region() {
+    // A completed call inside a `break`-capturing arm statement leaves the
+    // region through a generated label seeded by the callee slot, and every
+    // authored return carries the call (TASK-328).
+    let out =
+        ok("consume(match (x) { A(v) => { for (const s of [1]) { if (s === v) return s; } return 0; }, _ => 0 });");
+    assert!(out.contains("$tt_y_v1: {"), "{out}");
+    assert!(out.contains("$tt_v1(s); break $tt_y_v1;"), "{out}");
+    assert!(out.contains("$tt_v1(0); break $tt_y_v1;"), "{out}");
+    // A cleanup-bearing arm keeps the consumer outside the arm entirely.
+    let cleanup =
+        ok("consume(match (x) { A(v) => { try { return v; } finally { effect(); } }, _ => 0 });");
+    assert!(cleanup.contains("$tt_v1($tt_v0);"), "{cleanup}");
+}
+
+#[test]
 fn wildcard_with_guard_is_not_tt_syntax() {
     // `_ if ...` does not parse as a tt match; the arrow arm has already
     // committed the construct to tt.

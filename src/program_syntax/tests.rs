@@ -40,28 +40,40 @@ fn call_completion_proofs_require_a_whole_value_single_argument() {
 }
 
 #[test]
-fn linear_completion_proofs_do_not_cross_handlers_or_finalizers() {
+fn call_safe_exit_proofs_do_not_cross_cleanup_boundaries() {
     for (body, expected) in [
         ("return value;", true),
         ("const local = value; effect(); return local;", true),
         ("function local() { return value; } return local();", true),
+        ("if (value) return value; return 0;", true),
+        ("for (;;) { if (value) return value; } return 0;", true),
+        ("switch (value) { default: return value; }", true),
+        ("label: { if (value) return value; } return 0;", true),
+        // A `try` in a nested function never encloses this arm's returns.
+        (
+            "const inner = () => { try { effect(); } finally { effect(); } }; return inner();",
+            true,
+        ),
         ("try { return value; } finally { effect(); }", false),
         ("try { return value; } catch { return 0; }", false),
-        ("if (value) return value; return 0;", false),
+        (
+            "if (value) return value; try { effect(); } finally { effect(); } return 0;",
+            false,
+        ),
         ("using resource = value; return resource;", false),
+        ("for (const item of value) { return item; } return 0;", true),
     ] {
         let program = syntax(&format!(
             "consume(match (flag) {{ true => {{ {body} }}, _ => 0 }});"
         ));
-        assert_eq!(
-            program
-                .overlay
-                .iter()
-                .flat_map(|entry| &entry.exits)
-                .any(|exit| exit.linear_return_body.is_some()),
-            expected,
-            "{body}"
-        );
+        let exits: Vec<_> = program
+            .overlay
+            .iter()
+            .flat_map(|entry| &entry.exits)
+            .filter(|exit| exit.body.is_some())
+            .collect();
+        assert!(!exits.is_empty(), "{body}");
+        assert_eq!(exits.iter().all(|exit| exit.call_safe), expected, "{body}");
     }
 }
 

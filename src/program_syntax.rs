@@ -116,9 +116,14 @@ struct OverlayEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct HostExit {
-    /// A straight-line arm whose final value return can invoke a discarded
-    /// consumer without moving that call across a handler or finalizer.
-    pub(crate) linear_return_body: Option<BodyId>,
+    /// The arm block this exit leaves, when the return sits directly in a
+    /// projected arm body at the arm's own function depth.
+    pub(crate) body: Option<BodyId>,
+    /// Whether this exit's arm block is free of cleanup boundaries — no
+    /// `try`, `with`, or `using` anywhere in the block outside nested
+    /// functions — so a consuming call carried on the rewritten return
+    /// cannot land inside a handler or run before a finalizer or disposal.
+    pub(crate) call_safe: bool,
     /// The complete match arm body is exactly this value-returning AST
     /// statement. This identity is established by visiting the projected
     /// arm's BlockStmt, not inferred from source text during emission.

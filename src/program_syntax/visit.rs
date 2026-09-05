@@ -42,7 +42,6 @@ impl ParentCollector {
         Self {
             arm_blocks: arm_blocks.clone(),
             single_return_bodies: HashMap::new(),
-            linear_return_bodies: HashMap::new(),
             source_start,
             expected_identifiers,
             expected_calls,
@@ -65,6 +64,7 @@ impl ParentCollector {
             function_return_async: Vec::new(),
             break_capture_depth: 0,
             exit_regions: Vec::new(),
+            arm_block_scopes: Vec::new(),
         }
     }
 
@@ -213,7 +213,8 @@ impl ParentCollector {
                     .into_iter()
                     .map(|exit| {
                         Ok(HostExit {
-                            linear_return_body: exit.linear_return_body,
+                            body: exit.body,
+                            call_safe: exit.call_safe,
                             single_return_body: exit.single_return_body,
                             statement: map_evaluation_span(&self.source_segments, exit.statement)?,
                             argument: exit
@@ -629,32 +630,24 @@ impl VisitAstPath for ParentCollector {
     ) {
         let block = projected_span(node.span, self.source_start);
         if let Some(body) = self.arm_blocks.get(&block)
-            && let Some((Stmt::Return(statement), prefix)) = node.stmts.split_last()
-            && statement.arg.is_some()
-            && prefix.iter().all(|stmt| {
-                matches!(
-                    stmt,
-                    Stmt::Empty(_)
-                        | Stmt::Expr(_)
-                        | Stmt::Decl(
-                            swc_ecma_ast::Decl::Var(_)
-                                | swc_ecma_ast::Decl::Fn(_)
-                                | swc_ecma_ast::Decl::Class(_)
-                        )
-                )
-            })
-        {
-            self.linear_return_bodies
-                .insert(projected_span(statement.span, self.source_start), *body);
-        }
-        if let Some(body) = self.arm_blocks.get(&block)
             && let [Stmt::Return(statement)] = node.stmts.as_slice()
             && statement.arg.is_some()
         {
             self.single_return_bodies
                 .insert(projected_span(statement.span, self.source_start), *body);
         }
+        let arm_scope = self.arm_blocks.get(&block).copied();
+        if let Some(body) = arm_scope {
+            self.arm_block_scopes.push((
+                body,
+                statements_are_cleanup_free(&node.stmts),
+                self.function_depth,
+            ));
+        }
         <BlockStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        if arm_scope.is_some() {
+            self.arm_block_scopes.pop();
+        }
     }
 
     fn visit_return_stmt<'ast: 'r, 'r>(
@@ -668,8 +661,14 @@ impl VisitAstPath for ParentCollector {
             && target_depth == self.function_depth
             && let Some(found) = self.found.get_mut(&id)
         {
+            let arm_block = self
+                .arm_block_scopes
+                .last()
+                .copied()
+                .filter(|(_, _, depth)| *depth == self.function_depth);
             found.exits.push(ProjectedHostExit {
-                linear_return_body: self.linear_return_bodies.get(&statement).copied(),
+                body: arm_block.map(|(body, _, _)| body),
+                call_safe: arm_block.is_some_and(|(_, cleanup_free, _)| cleanup_free),
                 single_return_body: self.single_return_bodies.get(&statement).copied(),
                 statement,
                 argument: node
@@ -898,5 +897,51 @@ impl VisitAstPath for ParentCollector {
             return;
         };
         self.record_overlay(id, path);
+    }
+}
+
+/// Whether a projected arm block contains no cleanup boundary — no `try`,
+/// `with`, or `using` declaration — anywhere in its statement tree outside
+/// nested functions. Every rewritten `return` in such a block may carry the
+/// consuming call: nothing can catch the consumer's exceptions, and no
+/// finalizer or disposal is scheduled to run between the authored value and
+/// the match's completion. Statements are the complete search space here: a
+/// statement can only appear inside an expression through a function body,
+/// and exits are never collected across a function boundary.
+pub(super) fn statements_are_cleanup_free(statements: &[Stmt]) -> bool {
+    statements.iter().all(statement_is_cleanup_free)
+}
+
+fn statement_is_cleanup_free(statement: &Stmt) -> bool {
+    use swc_ecma_ast::{Decl, ForHead, VarDeclOrExpr};
+    match statement {
+        Stmt::Try(_) | Stmt::With(_) => false,
+        Stmt::Decl(Decl::Using(_)) => false,
+        Stmt::Decl(_) | Stmt::Expr(_) | Stmt::Empty(_) | Stmt::Debugger(_) => true,
+        Stmt::Return(_) | Stmt::Break(_) | Stmt::Continue(_) | Stmt::Throw(_) => true,
+        Stmt::Block(block) => statements_are_cleanup_free(&block.stmts),
+        Stmt::If(node) => {
+            statement_is_cleanup_free(&node.cons)
+                && node.alt.as_deref().is_none_or(statement_is_cleanup_free)
+        }
+        Stmt::Labeled(node) => statement_is_cleanup_free(&node.body),
+        Stmt::While(node) => statement_is_cleanup_free(&node.body),
+        Stmt::DoWhile(node) => statement_is_cleanup_free(&node.body),
+        Stmt::For(node) => {
+            let init_is_clean = match &node.init {
+                Some(VarDeclOrExpr::VarDecl(_)) | Some(VarDeclOrExpr::Expr(_)) | None => true,
+            };
+            init_is_clean && statement_is_cleanup_free(&node.body)
+        }
+        Stmt::ForIn(node) => {
+            !matches!(node.left, ForHead::UsingDecl(_)) && statement_is_cleanup_free(&node.body)
+        }
+        Stmt::ForOf(node) => {
+            !matches!(node.left, ForHead::UsingDecl(_)) && statement_is_cleanup_free(&node.body)
+        }
+        Stmt::Switch(node) => node
+            .cases
+            .iter()
+            .all(|case| statements_are_cleanup_free(&case.cons)),
     }
 }

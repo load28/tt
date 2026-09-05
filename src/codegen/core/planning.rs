@@ -439,6 +439,9 @@ pub(super) struct CallCompletionPlan {
     /// The value slot receiving the call's result when the authored call is
     /// consumed; `None` for a discarded expression-statement call.
     pub(super) result: Option<String>,
+    /// The callee slot's generated name — a valid identifier that seeds the
+    /// region's exit label when the discarded form needs one.
+    pub(super) label: String,
     /// The whole authored call expression.
     pub(super) call: SourceSpan,
 }
@@ -476,8 +479,9 @@ pub(super) fn single_return_arm_value(
 }
 
 /// Whether a match's arms may perform the consuming call themselves: every
-/// arm is an opaque expression, or a linear-return block whose value return
-/// can carry the call without crossing a handler or finalizer.
+/// arm is an opaque expression, or a never-completing block whose every
+/// rewritten `return` can carry the call without landing inside a handler
+/// or running before a finalizer or disposal ([`HostExit::call_safe`]).
 pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[HostExit]) -> bool {
     let Expr::Decision(decision) = &core.exprs[expr.index()] else {
         return false;
@@ -501,7 +505,8 @@ pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[
                     .all(|stmt| matches!(stmt, Statement::Opaque(_)))
                     && exits
                         .iter()
-                        .any(|exit| exit.linear_return_body == Some(body))
+                        .filter(|exit| exit.body == Some(body))
+                        .all(|exit| exit.call_safe)
             }
             _ => false,
         })
@@ -552,6 +557,7 @@ fn scoped_call_completion(
         invoke,
         instantiation,
         result: completion.facts.consumed.then(|| value_slot.to_owned()),
+        label: callee,
         call: completion.facts.call,
     })
 }

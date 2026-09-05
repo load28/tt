@@ -601,10 +601,12 @@ impl<'a> Emitter<'a> {
             ValueDestination::Invoke {
                 prefix,
                 result: Some(result),
+                ..
             } => out.push_lit(format!("{result} = {prefix}")),
             ValueDestination::Invoke {
                 prefix,
                 result: None,
+                ..
             } => out.push_lit(prefix.to_owned()),
         }
         if grouped {

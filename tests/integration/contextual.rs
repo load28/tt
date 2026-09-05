@@ -538,6 +538,17 @@ fn scoped_host_call_completions_preserve_contextual_typing() {
         format!(
             "match (state) {{ Ready(value) => {{ const amount = value + 1; effect(); return {{kind: \"item\", run: x => x + amount}}; }}, Empty => {second} }}"
         ),
+        // TASK-328: control-flow-bearing arms whose every return is free of
+        // cleanup boundaries carry the call too.
+        format!(
+            "match (state) {{ Ready(value) => {{ if (value > 0) return {first}; return {second}; }}, Empty => {second} }}"
+        ),
+        format!(
+            "match (state) {{ Ready(value) => {{ for (const step of [1, 2]) {{ if (step === value) return {first}; }} return {second}; }}, Empty => {second} }}"
+        ),
+        format!(
+            "match (state) {{ Ready(value) => {{ switch (value) {{ case 0: return {second}; default: return {first}; }} }}, Empty => {second} }}"
+        ),
     ];
     // TASK-327's host forms: consumed results, method and optional calls,
     // and explicit generic arguments. Every callback parameter is
@@ -700,4 +711,88 @@ const item = generic<Item>(match (State.Ready(3)) {
 console.log(item.run(1), trace.join(","));
 "#);
     assert_eq!(output, ["4 arm,call"]);
+}
+
+#[test]
+fn control_flow_arm_completions_call_at_the_authored_exit() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+function consume(item: Item): number { trace.push("call"); return item.run(2); }
+for (const state of [State.Ready(1), State.Ready(5), State.Empty]) {
+  trace.length = 0;
+  const result = consume(match (mark("subject", state)) {
+    Ready(value) => {
+      for (const step of [1, 2]) {
+        if (step === value) { trace.push("loop"); return {kind: "item", run: x => x + value}; }
+      }
+      trace.push("fallthrough");
+      return {kind: "item", run: x => x - value};
+    },
+    Empty => ({kind: "item", run: x => x}),
+  }) + mark("after", 10);
+  console.log(result, trace.join(","));
+}
+function throwing(item: Item): number { trace.push("throwing"); throw new Error("consumer"); }
+trace.length = 0;
+try {
+  throwing(match (State.Ready(1)) {
+    Ready(value) => { if (value > 0) return {kind: "item", run: x => x}; trace.push("unreached"); return {kind: "item", run: x => x}; },
+    Empty => ({kind: "item", run: x => x}),
+  });
+} catch { trace.push("caught"); }
+console.log(trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        [
+            "13 subject,loop,call,after",
+            "7 subject,fallthrough,call,after",
+            "12 subject,call,after",
+            "throwing,caught",
+        ]
+    );
+}
+
+#[test]
+fn cleanup_bearing_arms_keep_the_consumer_outside_the_arm() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function consume(item: Item): number { trace.push("call"); return item.run(1); }
+const finalized = consume(match (State.Ready(3)) {
+  Ready(value) => {
+    try {
+      trace.push("arm");
+      return {kind: "item" as const, run: (x: number) => x + value};
+    } finally {
+      trace.push("finally");
+    }
+  },
+  Empty => ({kind: "item" as const, run: (x: number) => x}),
+});
+console.log(finalized, trace.join(","));
+trace.length = 0;
+function throwingConsumer(item: Item): number { trace.push("throwing"); throw new Error("consumer"); }
+try {
+  throwingConsumer(match (State.Ready(2)) {
+    Ready(value) => {
+      try {
+        return {kind: "item" as const, run: (x: number) => x + value};
+      } catch {
+        trace.push("handler");
+        return {kind: "item" as const, run: (x: number) => x};
+      }
+    },
+    Empty => ({kind: "item" as const, run: (x: number) => x}),
+  });
+} catch { trace.push("caught outside"); }
+console.log(trace.join(","));
+"#);
+    assert_eq!(output, ["4 arm,finally,call", "throwing,caught outside"]);
 }

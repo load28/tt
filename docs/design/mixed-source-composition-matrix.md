@@ -102,13 +102,16 @@ callees (through the existing receiver-preserving capture), explicit type
 arguments (instantiating the captured callee once), and single-argument
 optional calls without type arguments. A consumed completion assigns each
 arm's call result to the value's join slot, which stands at the authored call
-position. A host-AST proof permits only expression arms or linear statement
-sequences ending in one value return; it does not cross
-catch/finally/resource-disposal boundaries, and an argument wider than the
-match — a cast, an operator, a containing literal — keeps its authored call
-frame. Matches nested inside a larger argument expression and scoped sibling
-composition remain tracked in
-[TASK-328](../tasks/TASK-328-control-flow-contextual-arms.md) and
+position. A host-AST proof permits expression arms and never-completing block
+arms whose statement tree is free of cleanup boundaries — no `try`, `with`,
+or `using` outside nested functions — so conditional and multiple returns,
+loops, and `switch` statements in an arm each carry the call at their own
+authored exit. Cleanup-bearing arms keep the consumer outside the arm: moving
+the call would place it inside the arm's handler and ahead of its finalizers
+or disposal. An argument wider than the match — a cast, an operator, a
+containing literal — keeps its authored call frame. Matches nested inside a
+larger argument expression and scoped sibling composition remain tracked in
+[TASK-332](../tasks/TASK-332-wrapped-argument-contextual-values.md) and
 [TASK-329](../tasks/TASK-329-scoped-sibling-composition.md).
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the

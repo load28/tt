@@ -336,7 +336,7 @@
 | TASK-325 | Verify real editor editing workflows | Complete | 2026-09-05 | 2026-09-05 | [TASK-325](./TASK-325-editor-workflows.md) |
 | TASK-326 | Keep editor projects current across filesystem changes | Complete | 2026-09-05 | 2026-09-05 | [TASK-326](./TASK-326-editor-filesystem-lifecycle.md) |
 | TASK-327 | Generalize scoped match host continuations | Complete | 2026-09-05 | 2026-09-05 | [TASK-327](./TASK-327-scoped-host-continuations.md) |
-| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Pending | — | — | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
+| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Complete | 2026-09-05 | 2026-09-05 | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
 | TASK-329 | Audit mixed scoped siblings and nested match composition | Pending | — | — | [TASK-329](./TASK-329-scoped-sibling-composition.md) |
 | TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Pending | — | — | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
 | TASK-331 | Install bundler adapter dependencies before their CI gate | Complete | 2026-09-05 | 2026-09-05 | [TASK-331](./TASK-331-install-unplugin-test-dependencies.md) |

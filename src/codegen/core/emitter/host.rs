@@ -159,6 +159,7 @@ impl<'a> Emitter<'a> {
                                 &ValueContinuation::invoke(
                                     &completion.invoke,
                                     completion.result.as_deref(),
+                                    &completion.label,
                                 ),
                             )
                             .unwrap_or_else(|| {
@@ -393,7 +394,7 @@ impl<'a> Emitter<'a> {
                     let body = self
                         .emit_continued_expr(
                             *expr,
-                            &ValueContinuation::invoke(&prefix, Some(result)),
+                            &ValueContinuation::invoke(&prefix, Some(result), result),
                         )
                         .unwrap_or_else(|| {
                             crate::ice::bug!("optional completed call lost its value decision")

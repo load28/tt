@@ -123,10 +123,13 @@ enum ValueDestination<'name> {
     /// Deliver the value as the single argument of a captured callee. The
     /// prefix carries the callee text up to and excluding the argument;
     /// `result` receives the call's value when the authored call was
-    /// consumed.
+    /// consumed; `label` is a generated identifier (the result or callee
+    /// slot) that seeds the region's exit label when a rewritten exit sits
+    /// inside a `break`-capturing statement.
     Invoke {
         prefix: &'name str,
         result: Option<&'name str>,
+        label: &'name str,
     },
 }
 
@@ -177,9 +180,13 @@ impl<'name> ValueContinuation<'name> {
         }
     }
 
-    fn invoke(prefix: &'name str, result: Option<&'name str>) -> Self {
+    fn invoke(prefix: &'name str, result: Option<&'name str>, label: &'name str) -> Self {
         Self {
-            destination: ValueDestination::Invoke { prefix, result },
+            destination: ValueDestination::Invoke {
+                prefix,
+                result,
+                label,
+            },
             wrappers: Vec::new(),
         }
     }
@@ -210,9 +217,9 @@ impl<'name> ValueContinuation<'name> {
         match self.destination {
             ValueDestination::Expression | ValueDestination::Return => None,
             ValueDestination::Assign(target) => Some(target),
-            // A completed call without a consumed result has no assignment
-            // slot; its prefix still names the continuation for labels.
-            ValueDestination::Invoke { prefix, result } => Some(result.unwrap_or(prefix)),
+            // A completed call names its result slot, or — when the call is
+            // discarded — the callee slot, so exit labels stay identifiers.
+            ValueDestination::Invoke { result, label, .. } => Some(result.unwrap_or(label)),
         }
     }
 
@@ -225,10 +232,12 @@ impl<'name> ValueContinuation<'name> {
             ValueDestination::Invoke {
                 prefix,
                 result: Some(result),
+                ..
             } => format!("{result} = {prefix}"),
             ValueDestination::Invoke {
                 prefix,
                 result: None,
+                ..
             } => prefix.to_owned(),
             ValueDestination::Expression => {
                 crate::ice::bug!("inline expression continuation cannot rewrite an exit")
