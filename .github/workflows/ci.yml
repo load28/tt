@@ -288,7 +288,7 @@ jobs:
         working-directory: editors/vscode
         run: |
           export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
-          node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log
+          node --test "server/out/test/*.test.js" "client/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log
           # Every guard in the suite is satisfiable here — the compiler is
           # on PATH, it can serve a language server, and it can emit
           # declarations — so a skip means the wiring broke.

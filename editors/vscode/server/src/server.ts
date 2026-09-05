@@ -493,15 +493,26 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
   if (result.kind === "not-found") {
     if (!warnedCompilerMissing) {
       warnedCompilerMissing = true;
-      connection.console.warn(
-        `tt: compiler not found (${result.compiler}). ` +
-          "Set tt.compilerPath, build target/{debug,release}/ttc, or put ttc on PATH — " +
-          "diagnostics are disabled until then.",
-      );
-      void connection.window.showWarningMessage(
-        "tt: ttc compiler not found — diagnostics are disabled. " +
-          "Set `tt.compilerPath` or install ttc (cargo install --path .).",
-      );
+      const [log, notice] =
+        result.reason === "not-executable"
+          ? [
+              `tt: compiler cannot be run (${result.compiler}). ` +
+                "It exists but the system refused to start it — check that it is " +
+                "an executable file and that its execute bit is set — " +
+                "diagnostics are disabled until then.",
+              "tt: ttc cannot be run — diagnostics are disabled. " +
+                "The path in `tt.compilerPath` exists but is not an executable file " +
+                "(a missing execute bit, or a directory).",
+            ]
+          : [
+              `tt: compiler not found (${result.compiler}). ` +
+                "Set tt.compilerPath, build target/{debug,release}/ttc, or put ttc on PATH — " +
+                "diagnostics are disabled until then.",
+              "tt: ttc compiler not found — diagnostics are disabled. " +
+                "Set `tt.compilerPath` or install ttc (cargo install --path .).",
+            ];
+      connection.console.warn(log);
+      void connection.window.showWarningMessage(notice);
     }
     void connection.sendDiagnostics({
       uri: doc.uri,

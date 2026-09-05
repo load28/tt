@@ -280,10 +280,11 @@ stage_extension() {
 
   mkdir -p "$LOG_DIR"
   log="$LOG_DIR/extension.log"
-  printf '  $ %s\n' "node --test server/out/test/*.test.js"
+  printf '  $ %s\n' "node --test server/out/test/*.test.js client/out/test/*.test.js"
   (
     cd "$TT_ROOT/editors/vscode" || exit 1
-    PATH="$TT_ROOT/target/debug:$PATH" node --test "server/out/test/*.test.js"
+    PATH="$TT_ROOT/target/debug:$PATH" node --test \
+      "server/out/test/*.test.js" "client/out/test/*.test.js"
   ) 2>&1 | tee "$log"
   status="${PIPESTATUS[0]}"
   [ "$status" -eq 0 ] || return 1

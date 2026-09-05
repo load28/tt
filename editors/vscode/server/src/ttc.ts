@@ -73,9 +73,16 @@ export interface TtcSuggestion {
   } | null;
 }
 
+/** Why a compiler could not be run: it is not there, or it is there and
+ * the operating system refused to start it — an unset execute bit, a path
+ * that names a directory, a file that is not an executable. Both leave the
+ * editor without diagnostics, and both are fixed by the user, so both are
+ * worth saying out loud. */
+export type UnusableCompiler = "missing" | "not-executable";
+
 export type TtcResult =
   | { kind: "ok"; diagnostics: TtcDiagnostic[] }
-  | { kind: "not-found"; compiler: string }
+  | { kind: "not-found"; compiler: string; reason: UnusableCompiler }
   | { kind: "failed"; detail: string };
 
 let tmpDir: string | null = null;
@@ -252,8 +259,9 @@ function runCheckOnce(
       args,
       { timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
       (err, _stdout, stderr) => {
-        if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
-          resolve({ kind: "not-found", compiler });
+        const unusable = unusableCompiler(err);
+        if (unusable) {
+          resolve({ kind: "not-found", compiler, reason: unusable });
           return;
         }
         const diagnostics = parseStderr(String(stderr), file);
@@ -583,4 +591,16 @@ export function parseStderr(stderr: string, file: string): TtcDiagnostic[] {
     });
   }
   return diagnostics;
+}
+
+/** Reads a spawn failure: `null` when the process ran and merely reported
+ * something. */
+export function unusableCompiler(error: unknown): UnusableCompiler | null {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code === "ENOENT") return "missing";
+  // The file is there; the operating system would not start it.
+  if (code === "EACCES" || code === "EPERM" || code === "ENOEXEC" || code === "EISDIR") {
+    return "not-executable";
+  }
+  return null;
 }
