@@ -109,11 +109,17 @@ impl<'a> Emitter<'a> {
         for action in &rewrite.actions {
             match action {
                 ComposeAction::Value(value) => {
-                    let mut lowered = self
-                        .emit_continued_expr(value.expr, &ValueContinuation::assign(&value.slot))
+                    let mut lowered = if value.defer_arm_values {
+                        self.emit_arm_selector(value.expr, &value.slot)
+                    } else {
+                        self.emit_continued_expr(
+                            value.expr,
+                            &ValueContinuation::assign(&value.slot),
+                        )
                         .unwrap_or_else(|| {
                             crate::ice::bug!("compose value is not structurally emit-able")
-                        });
+                        })
+                    };
                     for step in &value.steps {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }

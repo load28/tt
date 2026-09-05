@@ -718,3 +718,6 @@ include!("integration/cases_02.rs");
 include!("integration/cases_03.rs");
 include!("integration/cases_04.rs");
 include!("integration/cases_05.rs");
+
+#[path = "integration/contextual.rs"]
+mod contextual;

@@ -330,9 +330,10 @@
 | TASK-319 | Audit valid-program compilation failures | Complete | 2026-09-03 | 2026-09-03 | [TASK-319](./TASK-319-valid-program-compilation-audit.md) |
 | TASK-320 | Audit mixed-source runtime and project semantics | Complete | 2026-09-04 | 2026-09-05 | [TASK-320](./TASK-320-mixed-source-runtime-audit.md) |
 | TASK-321 | Reject ambiguous build output paths | Complete | 2026-09-05 | 2026-09-05 | [TASK-321](./TASK-321-reject-output-collisions.md) |
-
 | TASK-322 | Diagnose merge conflict markers at the syntax boundary | Complete | 2026-09-05 | 2026-09-05 | [TASK-322](./TASK-322-conflict-marker-syntax-boundary.md) |
+| TASK-323 | Preserve contextual typing through composed matches | Complete | 2026-09-05 | 2026-09-05 | [TASK-323](./TASK-323-contextual-match-composition.md) |
+| TASK-324 | Preserve contextual typing across scoped match continuations | Pending | — | — | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
 
 ## 다음 태스크 번호
 
-**TASK-323**
+**TASK-325**

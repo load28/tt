@@ -110,7 +110,7 @@ export function run(e: E, f: F, n: number): number {
 "#,
     );
     assert_eq!(output.matches("switch (").count(), 2, "{output}");
-    assert!(output.contains(">{$tt_v2}</section>"), "{output}");
+    assert!(output.contains(">{($tt_v2 === 0 ? <strong>"), "{output}");
     assert!(!output.contains("{let $tt_v2;"), "{output}");
 }
 
@@ -703,5 +703,5 @@ fn an_inert_argument_is_not_captured_but_an_effectful_one_is() {
     assert!(!out.contains("= (1);"), "{out}");
     assert!(!out.contains("= (2);"), "{out}");
     assert!(out.contains("= (eff());"), "{out}");
-    assert!(out.contains("(1, $tt_v0, 2);"), "{out}");
+    assert!(out.contains("(1, ($tt_v0 === 0 ? 1 : 0), 2);"), "{out}");
 }

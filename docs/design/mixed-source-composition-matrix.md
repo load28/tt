@@ -77,6 +77,16 @@ cells.
 
 ## Green condition
 
+Strict contextual typing is additionally checked by 68 composed-match cells
+across TypeScript and TSX, each paired with a TypeScript conditional-expression
+oracle. Binding-free switch matches with expression arms can select an arm in
+the scheduled prelude and evaluate its value inside the authored contextual
+host. This preserves callback inference and literal types without type
+assertions or callback boundaries. This target form requires one TT value in
+the host owner; guards, pattern bindings, block arms, and multiple TT values
+need their existing scoped evaluation plans. A separate regression preserves
+guard-based TypeScript narrowing.
+
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a
 specific tt diagnostic code. No cell may panic, silently pass an owned tt token

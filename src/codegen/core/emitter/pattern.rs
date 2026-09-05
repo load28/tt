@@ -3,6 +3,110 @@
 use super::*;
 
 impl<'a> Emitter<'a> {
+    /// Select a binding-free expression arm without moving its value out of
+    /// the surrounding TypeScript expression. The plan proves that no other
+    /// TT value intervenes between selection and value evaluation.
+    pub(super) fn emit_arm_selector(&self, expr: ExprId, slot: &str) -> Rope<'a> {
+        let Expr::Decision(decision) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("arm selector has no decision")
+        };
+        let mut out = Rope::new();
+        out.push_lit("{");
+        for subject in &decision.subjects {
+            out.push_break(1);
+            out.append(self.emit_subject_initialization(
+                subject,
+                &temp_name(subject.temporary),
+                decision.head,
+            ));
+        }
+        let DecisionKind::Match { dispatch, .. } = decision.kind else {
+            crate::ice::bug!("selector is not a match")
+        };
+        let temp = temp_name(decision.subjects[0].temporary);
+        if dispatch == MatchDispatch::Conditional {
+            crate::ice::bug!("a narrowing condition cannot be separated from its arm value");
+        }
+        out.push_break(1);
+        out.push_lit(if dispatch == MatchDispatch::LiteralSwitch {
+            format!("switch ({temp}) {{")
+        } else {
+            format!("switch ({temp}.kind) {{")
+        });
+        let mut wildcard = false;
+        for (index, arm) in decision.arms.iter().enumerate() {
+            out.push_break(2);
+            if matches!(arm.pattern, PatternPlan::Any) {
+                wildcard = true;
+                out.push_lit("default");
+            } else {
+                for (alternative_index, alternative) in
+                    pattern_alternatives(&arm.pattern).iter().enumerate()
+                {
+                    out.push_lit(if alternative_index == 0 {
+                        "case "
+                    } else {
+                        ": case "
+                    });
+                    if dispatch == MatchDispatch::LiteralSwitch {
+                        out.append(self.literal_label(alternative));
+                    } else {
+                        out.push_lit(format!("\"{}\"", self.variant_label(alternative)));
+                    }
+                }
+            }
+            out.push_lit(format!(": {slot} = {index}; break;"));
+        }
+        if !wildcard {
+            out.push_break(2);
+            out.push_lit("default: ");
+            out.push_lit(self.unexpected_throw(decision));
+        }
+        out.push_break(1);
+        out.push_lit("}");
+        out.push_break(0);
+        out.push_lit("}");
+        let mut anchored = Rope::new();
+        let head = self.span(decision.head);
+        anchored.anchored(
+            AnchorKind::Match,
+            head.start,
+            head.end,
+            self.span(decision.extent).end,
+            Rope::scoped(out),
+        );
+        anchored
+    }
+
+    pub(super) fn emit_selected_arm_values(&self, expr: ExprId, slot: &str) -> Rope<'a> {
+        let Expr::Decision(decision) = &self.core.exprs[expr.index()] else {
+            crate::ice::bug!("selected arm values have no decision")
+        };
+        let mut out = Rope::new();
+        out.push_lit("(");
+        for (index, arm) in decision.arms.iter().enumerate() {
+            if index + 1 < decision.arms.len() {
+                out.push_lit(format!("{slot} === {index} ? "));
+            }
+            let ArmAction::Yield {
+                body,
+                kind: ArmBodyKind::Expression,
+            } = arm.action
+            else {
+                crate::ice::bug!("deferred match arm is not an expression")
+            };
+            push_grouped(
+                &mut out,
+                guard_line_comment(self.emit_body(body).trim(), 0, self.source_kind),
+            );
+            if index + 1 < decision.arms.len() {
+                out.push_lit(" : ");
+            }
+        }
+        out.push_lit(")");
+        out
+    }
+
     pub(super) fn expression_is_inert(&self, expr: ExprId) -> bool {
         self.direct_apply_inputs.contains(&expr)
     }

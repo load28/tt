@@ -281,6 +281,10 @@ fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
         SwcExpr::Lit(Lit::Str(_) | Lit::Bool(_) | Lit::Null(_) | Lit::Num(_) | Lit::BigInt(_)) => {
             Effects::NONE
         }
+        // Creating a function does not execute its body or parameter
+        // initializers. Keeping it in its host also preserves contextual
+        // parameter inference; each authored function is still evaluated once.
+        SwcExpr::Arrow(_) | SwcExpr::Fn(_) => Effects::NONE,
         SwcExpr::Paren(inner) => expression_effects(&inner.expr),
         SwcExpr::TsAs(inner) => expression_effects(&inner.expr),
         SwcExpr::TsSatisfies(inner) => expression_effects(&inner.expr),

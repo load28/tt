@@ -430,6 +430,53 @@ pub(super) struct ComposeValue {
     pub(super) source: SourceSpan,
     pub(super) slot: String,
     pub(super) steps: Vec<PlannedEvaluationStep>,
+    /// Select an expression arm in the prelude, but evaluate its value in
+    /// the authored host so TypeScript can apply contextual typing.
+    pub(super) defer_arm_values: bool,
+}
+
+fn can_defer_arm_values(core: &CoreFile, expr: ExprId) -> bool {
+    let Expr::Decision(decision) = &core.exprs[expr.index()] else {
+        return false;
+    };
+    fn has_bindings(pattern: &PatternPlan) -> bool {
+        match pattern {
+            PatternPlan::Bind(_) => true,
+            PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => parts.iter().any(has_bindings),
+            PatternPlan::Any | PatternPlan::Test(_) => false,
+        }
+    }
+    matches!(
+        decision.kind,
+        DecisionKind::Match {
+            dispatch: MatchDispatch::LiteralSwitch | MatchDispatch::VariantSwitch,
+            ..
+        }
+    ) && !decision.arms.is_empty()
+        && decision
+            .subjects
+            .iter()
+            .all(|subject| !core.has_statement_form(subject.value))
+        && decision.arms.iter().all(|arm| {
+            !has_bindings(&arm.pattern)
+                && arm.guard.is_none()
+                && match arm.action {
+                    ArmAction::Yield {
+                        body,
+                        kind: ArmBodyKind::Expression,
+                    } => {
+                        core.bodies[body.index()]
+                            .statements
+                            .iter()
+                            .all(|statement| match statement {
+                                Statement::Opaque(_) => true,
+                                Statement::Expr(expr) => !core.has_statement_form(*expr),
+                                _ => false,
+                            })
+                    }
+                    _ => false,
+                }
+        })
 }
 
 #[derive(Debug, Clone)]
@@ -601,6 +648,7 @@ impl TargetRewritePlan {
                                     source: value.source,
                                     slot: lowering.slot_name(slot).to_owned(),
                                     steps,
+                                    defer_arm_values: false,
                                 }))
                             }
                         })
@@ -661,6 +709,8 @@ impl TargetRewritePlan {
                                     source: value.source,
                                     slot: lowering.slot_name(slot).to_owned(),
                                     steps: value.schedule.steps().to_vec(),
+                                    defer_arm_values: rewrite.values.len() == 1
+                                        && can_defer_arm_values(core, value.expr),
                                 }))
                             }
                         })

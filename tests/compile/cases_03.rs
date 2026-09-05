@@ -220,7 +220,7 @@ fn match_in_spread_operands_enters_the_evaluation_protocol() {
         "consume(...match (kind) { A => [1], _ => [] });\n",
     ] {
         let output = ok(src);
-        assert!(output.contains("...$tt_v"), "{output}");
+        assert!(output.contains("...($tt_v"), "{output}");
         assert!(!output.contains("...match"), "{output}");
     }
 }

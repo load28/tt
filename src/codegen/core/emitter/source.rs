@@ -615,7 +615,11 @@ impl<'a> Emitter<'a> {
         {
             let _active = self.active_structured_exprs.enter(expr);
             let mut out = self.emit_compose_rewrite(rewrite);
-            out.push_lit(value.slot.clone());
+            if value.defer_arm_values {
+                out.append(self.emit_selected_arm_values(value.expr, &value.slot));
+            } else {
+                out.push_lit(value.slot.clone());
+            }
             match rewrite.owner_kind {
                 HostOwnerKind::ArrowExpression => {
                     out.append(self.emit_compose_suffix(rewrite));
@@ -635,6 +639,14 @@ impl<'a> Emitter<'a> {
             return self.emit_arrow_return_rewrite(rewrite);
         }
         if let Some(slot) = self.slot_exprs.get(&expr) {
+            if self.compose_rewrites.iter().flat_map(|rewrite| &rewrite.actions).any(|action| {
+                matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
+            }) {
+                let (kind, start, end, extent) = self.value_anchor(expr);
+                let mut out = Rope::new();
+                out.anchored(kind, start, end, extent, self.emit_selected_arm_values(expr, slot));
+                return out;
+            }
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut out = Rope::new();
             let mut rendered_slot = slot.as_str();
