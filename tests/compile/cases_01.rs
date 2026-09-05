@@ -583,8 +583,9 @@ fn one_shot_for_headers_hoist_match_control_flow_once() {
     let for_of =
         ok("for (const value of match (source) { is Array => source, _ => [] }) { use(value); }\n");
     assert!(!for_of.contains("$tt_expr"), "{for_of}");
-    assert!(for_of.find("instanceof Array").unwrap() < for_of.find("for (").unwrap());
-    assert!(for_of.contains("for (const value of $tt_v0)"), "{for_of}");
+    assert!(for_of.find("const $tt_m = source").unwrap() < for_of.find("for (").unwrap());
+    assert!(for_of.contains("for (const value of (("), "{for_of}");
+    assert_eq!(for_of.matches("instanceof Array").count(), 1, "{for_of}");
 
     let initializer = ok(
         "for (let value = match (source) { is Number => 1, _ => 0 }; value < 2; value++) { use(value); }\n",
@@ -595,6 +596,7 @@ fn one_shot_for_headers_hoist_match_control_flow_once() {
         initializer.contains("for (let value = $tt_v0;"),
         "{initializer}"
     );
+    assert_eq!(initializer.matches("instanceof Number").count(), 1, "{initializer}");
 }
 
 #[test]

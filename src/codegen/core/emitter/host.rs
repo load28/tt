@@ -99,6 +99,12 @@ impl<'a> Emitter<'a> {
         }
         for action in &rewrite.actions {
             let slot = match action {
+                ComposeAction::Value(value)
+                    if value.defer_arm_values
+                        && self.has_conditional_match_dispatch(value.expr) =>
+                {
+                    continue;
+                }
                 ComposeAction::Value(value) => &value.slot,
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };

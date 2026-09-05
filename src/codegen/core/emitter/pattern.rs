@@ -3,6 +3,19 @@
 use super::*;
 
 impl<'a> Emitter<'a> {
+    pub(super) fn has_conditional_match_dispatch(&self, expr: ExprId) -> bool {
+        matches!(
+            &self.core.exprs[expr.index()],
+            Expr::Decision(Decision {
+                kind: DecisionKind::Match {
+                    dispatch: MatchDispatch::Conditional,
+                    ..
+                },
+                ..
+            })
+        )
+    }
+
     /// Select a binding-free expression arm without moving its value out of
     /// the surrounding TypeScript expression. The plan proves that no other
     /// TT value intervenes between selection and value evaluation.
@@ -11,6 +24,17 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("arm selector has no decision")
         };
         let mut out = Rope::new();
+        if self.has_conditional_match_dispatch(expr) {
+            for subject in &decision.subjects {
+                out.append(self.emit_subject_initialization(
+                    subject,
+                    &temp_name(subject.temporary),
+                    decision.head,
+                ));
+                out.push_break(0);
+            }
+            return out;
+        }
         out.push_lit("{");
         for subject in &decision.subjects {
             out.push_break(1);
@@ -86,7 +110,17 @@ impl<'a> Emitter<'a> {
         out.push_lit("(");
         for (index, arm) in decision.arms.iter().enumerate() {
             if index + 1 < decision.arms.len() {
-                out.push_lit(format!("{slot} === {index} ? "));
+                if self.has_conditional_match_dispatch(expr) {
+                    out.push_lit("(");
+                    out.append(self.emit_condition(&arm.pattern, decision));
+                    if let Some(guard) = arm.guard {
+                        out.push_lit(" && ");
+                        push_grouped(&mut out, self.emit_expr(guard).trim());
+                    }
+                    out.push_lit(") ? ");
+                } else {
+                    out.push_lit(format!("{slot} === {index} ? "));
+                }
             }
             let ArmAction::Yield {
                 body,

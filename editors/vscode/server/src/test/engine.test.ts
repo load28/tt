@@ -200,6 +200,44 @@ test("ttx receives the complete TypeScript and tt semantic surface", { skip }, a
   assert.ok(tokens?.some((token) => token.kind === "keyword"));
 });
 
+for (const extension of ["tt", "ttx"]) {
+  test(`guarded contextual callbacks retain editor types in .${extension}`, { skip }, async () => {
+    const { dir } = workspace();
+    const file = path.join(dir, `src/guarded.${extension}`);
+    const source = [
+      "declare const flag: boolean;",
+      "declare const input: unknown;",
+      "declare function consume(item: {run: (x: number) => string}): void;",
+      "consume(match (flag) {",
+      '  true if typeof input === "string" => ({run: x => x.toFixed() + input.length}),',
+      '  _ => ({run: x => x.toFixed()}),',
+      "});",
+      "export {};",
+    ].join("\n");
+    fs.writeFileSync(file, "export {};\n");
+    engine.openDocument(COMPILER, file, source);
+    try {
+      const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+      assert.deepEqual(diagnostics, []);
+      const offset = source.indexOf("x.toFixed");
+      const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
+      assert.ok(hover, "contextual parameter hover must be available");
+      assert.match(hover.signature, /x: number/);
+      assert.equal(sliceOf(source, hover.range), "x");
+      const completions = await engine.completion(COMPILER, file, positionAt(source, offset + 2), true);
+      assert.ok(completions?.items.some((item) => item.label === "toFixed"));
+      const invalid = source.replace("x.toFixed()", "x.missing()");
+      engine.openDocument(COMPILER, file, invalid);
+      const invalidDiagnostics = await engine.tsDiagnostics(COMPILER, file);
+      const error = invalidDiagnostics.find((diagnostic) => diagnostic.code === 2339);
+      assert.ok(error, JSON.stringify(invalidDiagnostics));
+      assert.equal(sliceOf(invalid, error.range), "missing");
+    } finally {
+      engine.closeDocument(COMPILER, file);
+    }
+  });
+}
+
 test("hover answers for a buffer the disk never saw", { skip }, async () => {
   const { tt } = workspace();
   // The disk copy never sees this text; the engine's overlay is the truth.

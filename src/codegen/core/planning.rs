@@ -446,20 +446,32 @@ fn can_defer_arm_values(core: &CoreFile, expr: ExprId) -> bool {
             PatternPlan::Any | PatternPlan::Test(_) => false,
         }
     }
-    matches!(
-        decision.kind,
+    let supported_dispatch = match decision.kind {
         DecisionKind::Match {
-            dispatch: MatchDispatch::LiteralSwitch | MatchDispatch::VariantSwitch,
+            dispatch: MatchDispatch::Conditional,
             ..
+        } => {
+            // A total condition chain is an ordinary TS conditional expression.
+            // Keep guards beside values so their narrowing remains in scope.
+            decision
+                .arms
+                .last()
+                .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
         }
-    ) && !decision.arms.is_empty()
+        DecisionKind::Match { .. } => true,
+        _ => false,
+    };
+    supported_dispatch
+        && !decision.arms.is_empty()
         && decision
             .subjects
             .iter()
             .all(|subject| !core.has_statement_form(subject.value))
         && decision.arms.iter().all(|arm| {
             !has_bindings(&arm.pattern)
-                && arm.guard.is_none()
+                && arm
+                    .guard
+                    .is_none_or(|guard| !core.has_statement_form(guard))
                 && match arm.action {
                     ArmAction::Yield {
                         body,

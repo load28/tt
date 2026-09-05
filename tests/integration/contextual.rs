@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn guarded_contextual_values_have_no_unused_generated_locals() {
+    require_toolchain!();
+    let dir = tmpdir();
+    let source = include_str!("../fixtures/emit/contextual-guarded-match/input.tt");
+    let file = dir.join("guarded.ts");
+    fs::write(
+        &file,
+        compile(&as_module(source), &Options::default()).unwrap(),
+    )
+    .unwrap();
+    let checked = Command::new("tsc")
+        .arg(&file)
+        .args(TSC_FLAGS)
+        .args(["--noEmit", "--noUnusedLocals", "--noUnusedParameters"])
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{}", tsc_report(&checked));
+}
+
+#[test]
 fn match_guards_keep_their_type_narrowing_scope() {
     require_toolchain!();
     let (valid, output) = typecheck(
@@ -110,6 +130,8 @@ fn composed_match_values_preserve_typescript_contextual_typing() {
         format!("match (number) {{ 0 | 1 => {first}, _ => {second} }}"),
         format!("match (state) {{ Ready => {first}, Empty => {second} }}"),
         format!("match (text) {{ 'ready' | 'pending' => {first}, _ => {second} }}"),
+        format!("match (flag) {{ true if number > 0 => {first}, _ => {second} }}"),
+        format!("match (state) {{ Ready if flag => {first}, _ => {second} }}"),
     ];
     let hosts = [
         "const value: {item: Item} = {item: VALUE};",
@@ -200,6 +222,49 @@ for (const flag of [true, false]) {
         output,
         [
             "16 receiver,first,subject,yes,last,call",
+            "14 receiver,first,subject,no,last,call",
+        ]
+    );
+}
+
+#[test]
+fn guarded_contextual_values_preserve_short_circuiting_and_abrupt_completion() {
+    require_toolchain!();
+    let output = run(r#"
+const trace: string[] = [];
+const mark = <T,>(name: string, value: T): T => { trace.push(name); return value; };
+const receiver = {
+  value: 10,
+  consume(first: number, item: {kind: "item"; run: (x: number) => number}, last: number) {
+    trace.push("call");
+    return this.value + first + item.run(last);
+  },
+};
+function guard(value: number): boolean {
+  trace.push("guard");
+  if (value === 2) throw new Error("guard failed");
+  return value === 1;
+}
+for (const value of [0, 1, 2, 3]) {
+  trace.length = 0;
+  try {
+    const result = mark("receiver", receiver).consume(mark("first", 2), match (mark("subject", value < 3)) {
+      true if guard(value) => (trace.push("yes"), {kind: "item", run: x => x + 1}),
+      true if mark("second guard", true) => (trace.push("second"), {kind: "item", run: x => x}),
+      _ => (trace.push("no"), {kind: "item", run: x => x - 1}),
+    }, mark("last", 3));
+    console.log(result, trace.join(","));
+  } catch {
+    console.log("thrown", trace.join(","));
+  }
+}
+"#);
+    assert_eq!(
+        output,
+        [
+            "15 receiver,first,subject,guard,second guard,second,last,call",
+            "16 receiver,first,subject,guard,yes,last,call",
+            "thrown receiver,first,subject,guard",
             "14 receiver,first,subject,no,last,call",
         ]
     );
