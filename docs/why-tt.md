@@ -135,8 +135,7 @@ error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "
 7 |   match (shape) {
   |   ^^^^^^^^^^^^^
   |
-  = help: add the missing arms
-  |     Rect(width, height) => undefined,
+  = help: add the missing arms: `Rect(width, height) => undefined,`
   = help: or add a final `_` arm: `_ => undefined,`
 ```
 

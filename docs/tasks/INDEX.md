@@ -346,7 +346,9 @@
 | TASK-335 | Read the compiler's rendered diagnostics in the one-shot fallback | Complete | 2026-09-05 | 2026-09-05 | [TASK-335](./TASK-335-fallback-diagnostic-parsing.md) |
 | TASK-336 | Write the generated banner where the file allows it | Complete | 2026-09-05 | 2026-09-05 | [TASK-336](./TASK-336-banner-placement.md) |
 | TASK-337 | Treat a closed stdout as an ordinary end, not an internal error | Complete | 2026-09-05 | 2026-09-05 | [TASK-337](./TASK-337-closed-stdout.md) |
+| TASK-338 | Reject CLI inputs the contract already forbids | Complete | 2026-09-05 | 2026-09-05 | [TASK-338](./TASK-338-cli-input-validation.md) |
+| TASK-339 | Correct user-facing documentation that no longer matches the tools | Complete | 2026-09-05 | 2026-09-05 | [TASK-339](./TASK-339-documentation-drift.md) |
 
 ## Next task number
 
-**TASK-338**
+**TASK-340**

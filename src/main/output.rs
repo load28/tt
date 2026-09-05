@@ -185,10 +185,12 @@ pub(super) fn watch_mode(
                 .cloned()
                 .collect();
             let failed = compile_jobs(&selected, opts);
+            // The count is what was rebuilt; only the word after it says
+            // how the round went, so "failed" must not borrow it.
             eprintln!(
                 "ttc: {} file(s) {} — watching",
                 selected.len(),
-                if failed { "failed" } else { "ok" }
+                if failed { "rebuilt, with errors" } else { "ok" }
             );
         }
 

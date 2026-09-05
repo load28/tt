@@ -130,7 +130,7 @@
             "off"
           ],
           "default": "refresh",
-          "markdownDescription": "Rebuild a file's editor sidecar (`x.tt.d.ts` or `x.ttx.d.ts` and its declaration map) when it is saved, so TypeScript-family files importing it keep type-checking and \"go to definition\" lands in the original source. `refresh` only rewrites sidecars that already exist (a project opts in by running `ttc --sidecar` once); `always` creates them on first save; `off` disables it."
+          "markdownDescription": "Rebuild a file's editor sidecar (`x.tt.d.ts` or `x.ttx.d.ts` and its declaration map) when it is saved, so TypeScript-family files importing it keep type-checking and \"go to definition\" lands in the original source. `refresh` only rewrites sidecars that already exist (a project opts in by running `ttc --types` once); `always` creates them on first save; `off` disables it."
         },
         "tt.sidecarDir": {
           "scope": "resource",
