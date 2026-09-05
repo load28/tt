@@ -199,6 +199,8 @@ stage_agents() {
   run test "$(cat CLAUDE.md)" = "@AGENTS.md" || return 1
   run grep -Fq './scripts/doctor' AGENTS.md || return 1
   run bash -n scripts/doctor || return 1
+  # AGENTS.md requires the index and the record to carry the same state.
+  run node scripts/check-task-index || return 1
   before="$(git status --porcelain)"
   printf '  $ %s\n' "./scripts/doctor"
   ./scripts/doctor > /dev/null

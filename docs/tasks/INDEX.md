@@ -234,7 +234,7 @@
 | TASK-224 | 커버리지 측정과 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-224](./TASK-224-coverage-gate.md) |
 | TASK-225 | 성능 벤치마크와 회귀 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-225](./TASK-225-performance-benchmarks.md) |
 | TASK-226 | 로컬과 CI의 Rust 툴체인 격차 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-226](./TASK-226-local-ci-toolchain-parity.md) |
-| TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 진행 중 | 2026-08-25 | — | [TASK-227](./TASK-227-local-only-ci.md) |
+| TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-227](./TASK-227-local-only-ci.md) |
 | TASK-228 | 부분 스냅샷에서 정상 파일의 tt 진단이 사라짐 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-228](./TASK-228-partial-snapshot-diagnostics.md) |
 | TASK-229 | 바인딩 이름 `match`가 tt match로 오인된다 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-229](./TASK-229-match-claimed-as-a-binding-name.md) |
 | TASK-230 | release 0.3.0-dev.7 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-230](./TASK-230-release-0.3.0-dev.7.md) |
@@ -267,8 +267,8 @@
 | TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 완료 | 2026-08-27 | 2026-08-27 | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 | TASK-258 | TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-258](./TASK-258-ts-preview-vsix.md) |
 
-| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 진행 중 | 2026-08-27 | — | [TASK-259](./TASK-259-upstream-extension-id.md) |
-| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 진행 중 | 2026-08-28 | — | [TASK-260](./TASK-260-nightly-install-docs.md) |
+| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-259](./TASK-259-upstream-extension-id.md) |
+| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-260](./TASK-260-nightly-install-docs.md) |
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
 | TASK-262 | Require English documentation | Complete | 2026-08-28 | 2026-08-28 | [TASK-262](./TASK-262-english-documentation-policy.md) |
 | TASK-263 | Pipeline diagnostics name the rejecting step | Complete | 2026-08-28 | 2026-08-28 | [TASK-263](./TASK-263-pipeline-step-diagnostics.md) |
@@ -354,7 +354,8 @@
 | TASK-343 | Give the server's standing notices one owner and one reset | Complete | 2026-09-05 | 2026-09-05 | [TASK-343](./TASK-343-standing-notices.md) |
 | TASK-344 | A sidecar directory that cannot be resolved is reported, not ignored | Complete | 2026-09-05 | 2026-09-05 | [TASK-344](./TASK-344-sidecar-directory-resolution.md) |
 | TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
+| TASK-346 | Hold the task index and the task records to the same state | Complete | 2026-09-05 | 2026-09-05 | [TASK-346](./TASK-346-task-state-agreement.md) |
 
 ## Next task number
 
-**TASK-346**
+**TASK-347**

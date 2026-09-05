@@ -53,6 +53,9 @@ jobs:
           test "$(cat CLAUDE.md)" = "@AGENTS.md"
           grep -Fq './scripts/doctor' AGENTS.md
           bash -n scripts/doctor
+          # AGENTS.md requires the index and the record to carry the same
+          # state; a record left behind reads as current guidance.
+          node scripts/check-task-index
           before="$(git status --porcelain)"
           if ./scripts/doctor; then
             echo "doctor unexpectedly accepted an unconfigured checkout" >&2
