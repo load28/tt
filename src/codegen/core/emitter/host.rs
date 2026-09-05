@@ -153,6 +153,15 @@ impl<'a> Emitter<'a> {
                             region.push_lit(";");
                             region.push_break(0);
                         }
+                        // Bind each elided input the dispatch has to name, in
+                        // authored order and with its source mapping, so the
+                        // arms reference one copy instead of repeating it.
+                        for (name, source) in &completion.captures {
+                            region.push_lit(format!("const {name} = ("));
+                            region.push_src(&self.source[source.start..source.end], source.start);
+                            region.push_lit(");");
+                            region.push_break(0);
+                        }
                         region.append(
                             self.emit_continued_expr(
                                 value.expr,
@@ -650,7 +659,7 @@ impl<'a> Emitter<'a> {
             PlannedEvaluationInput::Slot { slot, .. } => self.value_slot_name(*slot).to_owned(),
             // An inert condition needs no capture; re-reading it in each
             // branch is unobservable and yields the same value.
-            PlannedEvaluationInput::Stable { source } => {
+            PlannedEvaluationInput::Stable { source, .. } => {
                 format!("({})", &self.source[source.start..source.end])
             }
             PlannedEvaluationInput::Source {
@@ -889,7 +898,7 @@ impl<'a> Emitter<'a> {
                     | PlannedEvaluationInput::Slot { slot: target, .. } => {
                         self.value_slot_name(*target).to_owned()
                     }
-                    PlannedEvaluationInput::Stable { source } => {
+                    PlannedEvaluationInput::Stable { source, .. } => {
                         format!("({})", &self.source[source.start..source.end])
                     }
                 };

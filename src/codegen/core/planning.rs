@@ -436,6 +436,11 @@ pub(super) struct CallCompletionPlan {
     /// A capture emitted once before the dispatch, binding the instantiated
     /// callee: generated name, authored type-argument span, callee slot.
     pub(super) instantiation: Option<(String, SourceSpan, String)>,
+    /// Elided captures the dispatch has to name after all: generated name
+    /// and the authored source it binds. The completion re-emits the call
+    /// inside the arms, where the input's authored position is gone, so it
+    /// is captured once here rather than copied into every arm.
+    pub(super) captures: Vec<(String, SourceSpan)>,
     /// The value slot receiving the call's result when the authored call is
     /// consumed; `None` for a discarded expression-statement call.
     pub(super) result: Option<String>,
@@ -514,7 +519,6 @@ pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[
 
 fn scoped_call_completion(
     core: &CoreFile,
-    source: &str,
     expr: ExprId,
     exits: &[HostExit],
     schedule: &EvaluationSchedule,
@@ -562,6 +566,7 @@ fn scoped_call_completion(
             .as_ref()
             .map_or(callee.as_str(), |(name, ..)| name.as_str())
     );
+    let mut captures = Vec::new();
     for input in &step.inputs[1..] {
         match input {
             PlannedEvaluationInput::Source { target, .. } => {
@@ -570,8 +575,14 @@ fn scoped_call_completion(
             PlannedEvaluationInput::Slot { slot, .. } => {
                 invoke.push_str(lowering.slot_name(*slot));
             }
-            PlannedEvaluationInput::Stable { source: span } => {
-                invoke.push_str(source.get(span.start..span.end)?);
+            // The arm reads generated names only, and this input's authored
+            // position is inside the frame the completion claims. Bind it to
+            // the name the schedule reserved; without one there is no way to
+            // name it, and the completion does not apply.
+            PlannedEvaluationInput::Stable { source, reserved } => {
+                let name = lowering.slot_name((*reserved)?).to_owned();
+                invoke.push_str(&name);
+                captures.push((name, *source));
             }
         }
         invoke.push_str(", ");
@@ -579,6 +590,7 @@ fn scoped_call_completion(
     Some(CallCompletionPlan {
         invoke,
         instantiation,
+        captures,
         result: completion.facts.consumed.then(|| value_slot.to_owned()),
         label: callee,
         call: completion.facts.call,
@@ -903,7 +915,6 @@ impl TargetRewritePlan {
                                         )) {
                                     scoped_call_completion(
                                         core,
-                                        source,
                                         value.expr,
                                         &value.exits,
                                         &value.schedule,
@@ -1018,7 +1029,7 @@ impl TargetRewritePlan {
                 std::iter::once(step.parent).chain(step.inputs.iter().filter_map(
                     |input| match input {
                         PlannedEvaluationInput::Source { source, .. }
-                        | PlannedEvaluationInput::Stable { source } => Some(*source),
+                        | PlannedEvaluationInput::Stable { source, .. } => Some(*source),
                         PlannedEvaluationInput::Slot { .. } => None,
                     },
                 ))

@@ -112,12 +112,18 @@ loops, and `switch` statements in an arm each carry the call at their own
 authored exit. Cleanup-bearing arms keep the consumer outside the arm: moving
 the call would place it inside the arm's handler and ahead of its finalizers
 or disposal. An argument wider than the match — a cast, an operator, a
-containing literal — keeps its authored call frame. Matches nested inside a
-larger argument expression remain tracked in
-[TASK-332](../tasks/TASK-332-wrapped-argument-contextual-values.md), and the
-contextual type an unannotated capture erases — for an earlier argument, or
-for a match in a non-final position — in
-[TASK-333](../tasks/TASK-333-captured-argument-contextual-types.md).
+containing literal — keeps its authored call frame.
+
+A host expression the schedule must evaluate before a tt value stays at its
+authored position whenever evaluating it there is unobservable: a literal, a
+function expression, and an object or array literal built from those. Such an
+expression therefore keeps the contextual type its position supplies without
+an annotation. The one exception is a completed call, which is re-emitted
+inside the dispatch: it binds each such input to a reserved generated name
+once, from mapped source, rather than repeating it in every arm. Everything
+else is captured, and a tt value in a position no completion covers still
+crosses the boundary through an unannotated join slot — the residue tracked
+in [TASK-332](../tasks/TASK-332-wrapped-argument-contextual-values.md).
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a

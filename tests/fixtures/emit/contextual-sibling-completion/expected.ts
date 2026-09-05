@@ -34,17 +34,38 @@ const $tt_v2 = (make());
 }
 const paired = $tt_v0;
 
-const $tt_v4 = (trio);
-const $tt_v5 = (made);
+let $tt_v3;
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v4($tt_v5, 7, { kind: "item", run: x => x + value }); break;
+      $tt_v3 = ({ kind: "item" as const, run: (x: number) => x + value });
+      break;
     }
     case "Empty": {
-      $tt_v4($tt_v5, 7, ({ kind: "item", run: x => x }));
+      $tt_v3 = ({ kind: "item" as const, run: (x: number) => x });
+      break;
+    }
+    default: {
+      throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+    }
+  }
+}
+const inert: Item[] = [{ kind: "item", run: x => x }, $tt_v3];
+
+const $tt_v5 = (trio);
+const $tt_v6 = (made);
+const $tt_v7 = (7);
+{
+  const $tt_m = state;
+  switch ($tt_m.kind) {
+    case "Ready": {
+      const { value } = $tt_m;
+      $tt_v5($tt_v6, $tt_v7, { kind: "item", run: x => x + value }); break;
+    }
+    case "Empty": {
+      $tt_v5($tt_v6, $tt_v7, ({ kind: "item", run: x => x }));
       break;
     }
     default: {
@@ -54,18 +75,18 @@ const $tt_v5 = (made);
 }
 
 
-let $tt_v6;
-const $tt_v7 = (pair);
+let $tt_v8;
+const $tt_v9 = (pair);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v6 = ({ kind: "item" as const, run: (x: number) => x + value });
+      $tt_v8 = ({ kind: "item" as const, run: (x: number) => x + value });
       break;
     }
     case "Empty": {
-      $tt_v6 = ({ kind: "item" as const, run: (x: number) => x });
+      $tt_v8 = ({ kind: "item" as const, run: (x: number) => x });
       break;
     }
     default: {
@@ -73,6 +94,6 @@ const $tt_v7 = (pair);
     }
   }
 }
-const leading = $tt_v7($tt_v6, make());
+const leading = $tt_v9($tt_v8, make());
 
-export { paired, leading };
+export { paired, inert, leading };

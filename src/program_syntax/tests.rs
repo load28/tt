@@ -78,6 +78,49 @@ fn call_safe_exit_proofs_do_not_cross_cleanup_boundaries() {
 }
 
 #[test]
+fn inert_expressions_are_exactly_the_unobservable_shapes() {
+    for (expression, inert) in [
+        ("1", true),
+        ("\"text\"", true),
+        ("x => x", true),
+        ("function (x) { effect(); return x; }", true),
+        ("{}", true),
+        ("[]", true),
+        ("{kind: \"item\", run: x => x}", true),
+        ("[1, {a: [2, x => x]}]", true),
+        ("{\"quoted\": 1, 2: [], [\"computed\"]: 3}", true),
+        (
+            "{get a() { return effect(); }, set a(v) { effect(); }, m() { return 1; }}",
+            true,
+        ),
+        // Every shape below evaluates something at construction time.
+        ("/re/", false),
+        ("{...spread}", false),
+        ("[...spread]", false),
+        ("{shorthand}", false),
+        ("{a: read}", false),
+        ("{a: effect()}", false),
+        ("{[key]: 1}", false),
+        ("[read]", false),
+        ("[effect()]", false),
+        ("{a: {b: effect()}}", false),
+    ] {
+        let source = format!("const value = {expression};\n");
+        let span = crate::hir::Span::new("const value = ".len(), source.len() - 2);
+        assert_eq!(
+            crate::program_syntax::source_expression_effects(
+                &source,
+                span,
+                crate::SourceKind::TypeScript,
+            )
+            .is_inert(),
+            inert,
+            "{expression}"
+        );
+    }
+}
+
+#[test]
 fn single_return_arm_proofs_follow_the_ast_statement_list() {
     for (body, expected) in [
         ("return value;", 1),

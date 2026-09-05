@@ -451,6 +451,26 @@ fn final_argument_completions_call_through_captured_earlier_arguments() {
 }
 
 #[test]
+fn inert_arguments_are_not_captured_out_of_their_contextual_position() {
+    // Constructing an object or array literal from inert parts observes
+    // nothing, so the capture is elided and the literal stays where the
+    // consumer types it (TASK-333).
+    let out = ok("const items = [{run: (n) => n}, match (x) { A(v) => v, _ => 0 }];");
+    assert!(!out.contains("= ({run:"), "{out}");
+    assert!(out.contains("[{run: (n) => n}, $tt_v0]"), "{out}");
+    // An argument that evaluates something keeps its capture, so it still
+    // runs before the match's subject.
+    let effectful = ok("const items = [make(), match (x) { A(v) => v, _ => 0 }];");
+    assert!(effectful.contains("const $tt_v1 = (make());"), "{effectful}");
+    assert!(effectful.contains("[$tt_v1, $tt_v0]"), "{effectful}");
+    // A completed call is re-emitted inside the dispatch, where only the
+    // generated names are in scope, so its arguments stay captured.
+    let completed = ok("consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });");
+    assert!(completed.contains("const $tt_v2 = ({run: (n) => n});"), "{completed}");
+    assert!(completed.contains("$tt_v1($tt_v2, v);"), "{completed}");
+}
+
+#[test]
 fn wildcard_with_guard_is_not_tt_syntax() {
     // `_ if ...` does not parse as a tt match; the arrow arm has already
     // committed the construct to tt.

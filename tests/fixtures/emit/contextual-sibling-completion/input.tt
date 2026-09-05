@@ -11,6 +11,11 @@ const paired = pair(make(), match (state) {
   Empty => ({ kind: "item", run: x => x }),
 });
 
+const inert: Item[] = [{ kind: "item", run: x => x }, match (state) {
+  Ready(value) => ({ kind: "item" as const, run: (x: number) => x + value }),
+  Empty => ({ kind: "item" as const, run: (x: number) => x }),
+}];
+
 trio(made, 7, match (state) {
   Ready(value) => { return { kind: "item", run: x => x + value }; },
   Empty => ({ kind: "item", run: x => x }),
@@ -21,4 +26,4 @@ const leading = pair(match (state) {
   Empty => ({ kind: "item" as const, run: (x: number) => x }),
 }, make());
 
-export { paired, leading };
+export { paired, inert, leading };

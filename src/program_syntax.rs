@@ -303,11 +303,18 @@ impl Effects {
 /// The effects one host expression may have, judged from syntax alone.
 ///
 /// Only shapes whose evaluation is provably unobservable answer
-/// [`Effects::NONE`]: plain literals (a regex literal allocates a fresh
-/// object per evaluation, so it is not one), possibly under TypeScript's
-/// transparent expression wrappers. Identifiers may read mutable bindings
-/// and may throw (TDZ); user types never prove runtime purity; everything
-/// unknown is [`Effects::ANY`].
+/// [`Effects::NONE`]: plain literals (a regex literal runs its own
+/// construction, so it is not one), object and array literals built from
+/// them, and function creation — possibly under TypeScript's transparent
+/// expression wrappers. Identifiers may read mutable bindings and may throw
+/// (TDZ); user types never prove runtime purity; everything unknown is
+/// [`Effects::ANY`].
+///
+/// A fresh object or array is allocated per evaluation, and so is a
+/// closure. That allocation is not observable here because eliding a
+/// capture does not change how often the expression is evaluated — only
+/// where — and nothing else holds the value to compare it against
+/// ([`Effects::is_inert`]).
 fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
     use swc_ecma_ast::{Expr as SwcExpr, Lit};
     match expression {
@@ -318,6 +325,8 @@ fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
         // initializers. Keeping it in its host also preserves contextual
         // parameter inference; each authored function is still evaluated once.
         SwcExpr::Arrow(_) | SwcExpr::Fn(_) => Effects::NONE,
+        SwcExpr::Object(object) => object_literal_effects(object),
+        SwcExpr::Array(array) => array_literal_effects(array),
         SwcExpr::Paren(inner) => expression_effects(&inner.expr),
         SwcExpr::TsAs(inner) => expression_effects(&inner.expr),
         SwcExpr::TsSatisfies(inner) => expression_effects(&inner.expr),
@@ -325,6 +334,53 @@ fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
         SwcExpr::TsTypeAssertion(inner) => expression_effects(&inner.expr),
         SwcExpr::TsInstantiation(inner) => expression_effects(&inner.expr),
         _ => Effects::ANY,
+    }
+}
+
+/// Defining a property does not call a setter, and defining an accessor or
+/// method does not run its body, so an object literal is as observable as
+/// the expressions it evaluates: its computed keys and its property values.
+/// A spread reads its operand and may run getters; shorthand reads a
+/// binding.
+fn object_literal_effects(node: &ObjectLit) -> Effects {
+    for property in &node.props {
+        let inert = match property {
+            PropOrSpread::Spread(_) => false,
+            PropOrSpread::Prop(property) => match &**property {
+                Prop::Shorthand(_) => false,
+                Prop::KeyValue(property) => {
+                    prop_name_is_inert(&property.key)
+                        && expression_effects(&property.value).is_inert()
+                }
+                // `{ key = value }` only parses inside a destructuring
+                // pattern, where this classification is never consulted.
+                Prop::Assign(_) => false,
+                Prop::Getter(property) => prop_name_is_inert(&property.key),
+                Prop::Setter(property) => prop_name_is_inert(&property.key),
+                Prop::Method(property) => prop_name_is_inert(&property.key),
+            },
+        };
+        if !inert {
+            return Effects::ANY;
+        }
+    }
+    Effects::NONE
+}
+
+fn array_literal_effects(node: &ArrayLit) -> Effects {
+    for element in node.elems.iter().flatten() {
+        // A spread iterates its operand, which runs user code.
+        if element.spread.is_some() || !expression_effects(&element.expr).is_inert() {
+            return Effects::ANY;
+        }
+    }
+    Effects::NONE
+}
+
+fn prop_name_is_inert(name: &PropName) -> bool {
+    match name {
+        PropName::Ident(_) | PropName::Str(_) | PropName::Num(_) | PropName::BigInt(_) => true,
+        PropName::Computed(computed) => expression_effects(&computed.expr).is_inert(),
     }
 }
 

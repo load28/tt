@@ -341,7 +341,7 @@
 | TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Complete | 2026-09-05 | 2026-09-05 | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
 | TASK-331 | Install bundler adapter dependencies before their CI gate | Complete | 2026-09-05 | 2026-09-05 | [TASK-331](./TASK-331-install-unplugin-test-dependencies.md) |
 | TASK-332 | Preserve contextual typing for matches inside larger argument expressions | Pending | — | — | [TASK-332](./TASK-332-wrapped-argument-contextual-values.md) |
-| TASK-333 | Preserve contextual types through scheduled captures | Pending | — | — | [TASK-333](./TASK-333-captured-argument-contextual-types.md) |
+| TASK-333 | Preserve contextual types through scheduled captures | Complete | 2026-09-05 | 2026-09-05 | [TASK-333](./TASK-333-captured-argument-contextual-types.md) |
 
 ## Next task number
 

@@ -382,7 +382,17 @@ pub(crate) enum PlannedEvaluationInput {
     /// the region changes no trace, no count, and no value. This is the
     /// proof-based capture elision of `docs/design/program-lowering.md` §9,
     /// decided here and only here — never re-derived by the target.
-    Stable { source: SourceSpan },
+    ///
+    /// `reserved` holds a generated name for the one lowering that cannot
+    /// leave the input in place: a completed call re-emits itself inside the
+    /// match's dispatch, where the authored position no longer exists. That
+    /// lowering captures the input under this name instead of copying its
+    /// source into every arm; every other lowering ignores the reservation
+    /// and emits nothing for it.
+    Stable {
+        source: SourceSpan,
+        reserved: Option<ValueSlotId>,
+    },
 }
 
 /// How a member reference preserves its `this` receiver. A provably inert

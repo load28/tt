@@ -390,6 +390,7 @@ impl EvaluationFile {
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,
+                false,
             )?;
             nested_schedules.insert(expr, schedule);
         }

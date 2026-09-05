@@ -10,6 +10,11 @@ pub(super) fn resolve_schedule(
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
 ) -> Result<EvaluationSchedule, EvaluationError> {
+    // A completed call is re-emitted inside the match's dispatch, where the
+    // authored position of an elided input no longer exists. Reserve a name
+    // for each one so that lowering can capture it once instead of copying
+    // its source into every arm; the elision itself still stands for every
+    // other lowering.
     let mut schedule = resolve_schedule_steps(
         protocol.steps(),
         slots,
@@ -17,6 +22,7 @@ pub(super) fn resolve_schedule(
         next_slot,
         slot_names,
         occupied_names,
+        protocol.call_completion.is_some(),
     )?;
     schedule.call_completion = protocol
         .call_completion
@@ -40,6 +46,7 @@ pub(super) fn resolve_schedule_steps(
     next_slot: &mut u32,
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
+    reserve_elided_names: bool,
 ) -> Result<EvaluationSchedule, EvaluationError> {
     let steps = protocol_steps
         .iter()
@@ -66,6 +73,15 @@ pub(super) fn resolve_schedule_steps(
                                 {
                                     return Ok(PlannedEvaluationInput::Stable {
                                         source: input.source,
+                                        reserved: reserve_elided_names
+                                            .then(|| {
+                                                allocate_value_slot(
+                                                    next_slot,
+                                                    slot_names,
+                                                    occupied_names,
+                                                )
+                                            })
+                                            .transpose()?,
                                     });
                                 }
                                 if let Some(slot) = source_slots.get(&input.source) {
@@ -340,7 +356,7 @@ pub(super) fn plan_one_operation(
                             {
                                 Some(Some(*target))
                             }
-                            PlannedEvaluationInput::Stable { source } if *source == span => {
+                            PlannedEvaluationInput::Stable { source, .. } if *source == span => {
                                 Some(None)
                             }
                             _ => None,

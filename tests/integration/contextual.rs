@@ -903,3 +903,78 @@ console.log(trace.join(","));
         ]
     );
 }
+
+#[test]
+fn inert_literal_arguments_keep_their_contextual_position() {
+    require_toolchain!();
+    let (valid, output) = typecheck(
+        r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+declare const state: State;
+declare function widget(props: {first: Item; second: Item}): number;
+declare function tagged(first: Item, second: number[], third: Item): number;
+const items: Item[] = [{kind: "item", run: x => x}, made];
+const nested: {first: Item; second: Item} = {
+  first: {kind: "item", run: x => x},
+  second: made,
+};
+declare const made: Item;
+const wrapped = widget({
+  first: {kind: "item", run: x => x},
+  second: match (state) {
+    Ready(value) => (made),
+    Empty => (made),
+  },
+});
+const counted = tagged({kind: "item", run: x => x}, [1, 2], made);
+export {items, nested, wrapped, counted};
+"#,
+    );
+    assert!(valid, "{output}");
+}
+
+#[test]
+fn elided_and_captured_inputs_preserve_order_identity_and_bindings() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: () => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+let shared = 1;
+for (const state of [State.Ready(9), State.Empty]) {
+  trace.length = 0;
+  shared = 1;
+  const items: Item[] = [{kind: "item", run: () => shared}, match (mark("subject", state)) {
+    Ready(value) => (trace.push("arm"), shared = value, {kind: "item" as const, run: () => shared + 1}),
+    Empty => ({kind: "item" as const, run: () => 0}),
+  }];
+  console.log(`${items[0].run()}:${items[1].run()}:${items[0] === items[0]}`, trace.join(","));
+}
+function pair(first: Item, second: Item): string { trace.push("call"); return `${first.run()}:${second.run()}`; }
+trace.length = 0;
+shared = 1;
+const completed = pair({kind: "item" as const, run: () => shared}, match (mark("subject", State.Ready(4))) {
+  Ready(value) => (trace.push("arm"), shared = value, {kind: "item", run: () => shared + 1}),
+  Empty => ({kind: "item", run: () => 0}),
+});
+console.log(completed, trace.join(","));
+trace.length = 0;
+function effectful(): Item { trace.push("effectful"); return {kind: "item", run: () => 0}; }
+pair(effectful(), match (mark<State>("subject", State.Empty)) {
+  Ready(value) => ({kind: "item", run: () => value}),
+  Empty => ({kind: "item", run: () => 0}),
+});
+console.log(trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        [
+            "9:10:true subject,arm",
+            "1:0:true subject",
+            "4:5 subject,arm,call",
+            "effectful,subject,call",
+        ]
+    );
+}
