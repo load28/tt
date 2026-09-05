@@ -34,6 +34,11 @@ export function activate(context: ExtensionContext): void {
     },
   };
 
+  const watchers = [
+    workspace.createFileSystemWatcher("**/target/{debug,release}/{ttc,ttc.exe}"),
+    workspace.createFileSystemWatcher("**/*.{tt,ttx,ts,tsx,json}"),
+  ];
+  context.subscriptions.push(...watchers);
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
       { scheme: "file", language: "tt" },
@@ -42,10 +47,7 @@ export function activate(context: ExtensionContext): void {
       { scheme: "untitled", language: "ttx" },
     ],
     synchronize: {
-      // Re-validate when the locally built compiler appears or changes.
-      fileEvents: workspace.createFileSystemWatcher(
-        "**/target/{debug,release}/ttc",
-      ),
+      fileEvents: watchers,
     },
   };
 

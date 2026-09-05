@@ -1,269 +1,36 @@
-# tt Language — VSCode extension
+# tt Language — VS Code extension
 
-## Editor workflow tests
+Language support for `.tt` and `.ttx`. The client starts an LSP server; the
+server delegates language semantics to the project's `ttc` engine. TypeScript
+checks use the TypeScript installation resolved from that project.
 
-`npm run test:editor` builds this development extension and launches the local
-`code` executable in an isolated profile. Build the compiler with `cargo build`
-at the repository root first. Set `VSCODE_EXECUTABLE` to use another executable.
-This does not install extensions or change your normal VS Code settings.
+## Installation and mixed-source projects
 
-The default matrix covers all four source extensions as dependencies of `.tt`
-and `.ttx` consumers (8 directed edges, 32 checks). To include `.ts` and `.tsx`
-consumers, set `VSCODE_TYPESCRIPT_EXTENSION` to a locally available TypeScript 7.1
-extension directory with content-mapper support. The runner loads it as a second
-development extension and configures the mapper in the isolated workspace
-(16 directed edges, 64 checks). No extension is downloaded automatically.
-
-Each edge exercises activation, complete and incomplete-buffer completion,
-definition navigation, application of rename edits, source-located diagnostics,
-unsaved dependency changes, updated member completion, and discarding edits.
-The tt consumers include a variant and match; JSX consumers include JSX.
-Test profiles, fixtures, and `results.json` remain under `target/editor-tests/`.
-Missing or incomplete reports fail the command; they are never counted as passes.
-
-The headless `npm test` / `scripts/ci extension` suite also covers the dependency
-edit/close lifecycle over LSP. An extension-host pass is additional evidence, not
-a claim that multi-root workspaces, every third-party extension combination,
-or large-project latency have been verified.
-
-tt(`.tt`)과 ttx(`.ttx`) 파일을 위한 VSCode 언어 서비스입니다. VSCode 공식
-[LSP 확장 패턴](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide)
-(lsp-sample 구조)을 따릅니다: `client/`는 `vscode-languageclient`로 서버를
-띄우고, `server/`는 `vscode-languageserver`로 LSP를 구현합니다.
-
-## 기능
-
-| 기능 | 설명 |
-|------|------|
-| 문법 하이라이팅 | `.tt`은 업스트림 TypeScript, `.ttx`는 업스트림 TSX 문법을 각각 완전히 확장합니다. 두 생성 문법은 `syntaxes/src/`의 vendored 문법과 공용 tt 규칙에서 `npm run grammar`로 재생성합니다 |
-| 마크다운 코드 펜스 | 마크다운·MDX 문서의 ` ```tt `(또는 `~~~tt`) 펜스 안을 tt 문법으로 하이라이팅 — `syntaxes/tt.markdown.tmLanguage.json`이 내장 마크다운 문법(`text.html.markdown`)과 MDX 문법(`source.mdx`)에 주입되어 펜스 내용을 `source.tt`로 임베드한다 (Svelte 확장의 `markdown.svelte.codeblock`과 같은 구조) |
-| semantic 하이라이팅 | 문법(정규식)이 판별할 수 없는 것을 **파서의 분류**로 덮어쓴다 — LSP `semanticTokens` 표준: 파서가 청구한 `match`/`result`/`flow`/패턴 태그·바인딩은 확정 색으로, 청구하지 않은 look-alike(`match(...)`라는 이름의 함수 호출 등)는 평범한 식별자로 되돌린다. 엔진 쪽은 파스 전용·무상태라 TypeScript 툴체인 없이도 동작 |
-| 파일 아이콘 | 탐색기·탭에서 `.tt`은 "TT", `.ttx`는 "TTX" 배지 아이콘 표시 (라이트/다크 테마별). 언어 기본 아이콘을 지원하는 파일 아이콘 테마(기본 Seti 포함)에서 보이며, 자체 아이콘을 정의한 테마가 있으면 그쪽이 우선 |
-| 진단 (tt) | 편집할 때마다 **실제 컴파일러**(`ttc --check`)를 실행해 에러를 표시 — 에디터의 에러는 항상 컴파일러와 일치 |
-| 진단 (타입) | 버퍼가 컴파일된 TypeScript를 타입 검사해 `match` 암·`\|>` 파이프라인 **안의 타입 에러까지** 원본 위치에 표시 (`source: ts`). `tt.typeDiagnostics`로 끌 수 있음 |
-| 진단 (타입 기반 tt) | 타입이 있어야 판정되는 **tt 에러** — `val` 바인딩을 통한 변경, 스크루티니의 실제 타입 기준 소진성 — 을 편집 중에 표시. 서버가 버퍼를 자기 프로젝트의 일부로 두고 `ttc --check-types`를 돌리므로 문안은 컴파일러의 것 그대로. `tt.typedChecks`로 끌 수 있음 |
-| 자동완성 | match 암 위치의 케이스 태그(이미 덮은 태그 제외 — 대상 variant는 구조적 추론, 실패 시 보이는 variant 전체), `Variant.` 뒤 생성자(필드 탭스톱 스니펫)**와 그 객체의 TS 멤버**(`Result.map`·`Option.unwrapOrElse` 등 표준 라이브러리 콤비네이터), `Tag(` 안의 필드 바인딩, `variant`/`match`/`try`/`flow`/`result`/`let-else` 스니펫. 그 외 위치·`obj.` 멤버 접근은 TypeScript 언어 서비스의 완성 목록(tt 항목이 위). 항목을 고르면 그 항목의 **타입 시그니처와 JSDoc**을 채워서 보여줌 |
-| 시그니처 헬프 | 호출을 쓰는 동안 파라미터 힌트 — TypeScript 언어 서비스 위임이라 match 암·`\|>` 파이프라인 안에서도 동작 |
-| 참조 찾기 | TypeScript 언어 서비스 위임 — `.tt`·`.ttx` import 너머 선언·사용처 포함 |
-| 이름 변경 | 일반 TS 심볼은 TypeScript 언어 서비스 위임. tt 심볼(variant·케이스 태그)은 방출물의 `kind` 문자열과 연동되므로 거부(안전) |
-| 호버 | variant·케이스 선언 시그니처와 컴파일 형태 설명 (내장 `Option`/`Result`·import한 variant 포함). 그 외 심볼은 TypeScript 언어 서비스의 quick info |
-| 정의로 이동 | tt 심볼(케이스 태그·variant 이름)은 선언 위치로 — **`.tt`·`.ttx` import 너머까지**. **그 외 모든 심볼(변수·함수·타입·import된 값)은 TypeScript 언어 서비스에 위임** — `.ts`·`.tsx` 파일에서처럼 동작하고 source-extension import도 따라간다 |
-| 문서 심볼 | Outline에 variant와 케이스 트리 표시 |
-| 빠른 수정 | 소진되지 않은 match에 "빠진 암 추가" / "와일드카드 `_` 암 추가" (import한 variant 포함) |
-
-심볼 해석은 컴파일러와 동일한 규칙을 따릅니다: 직접 `.tt` import의
-exported variant가 자동완성·호버·정의 이동에 포함되고(별칭 반영, named import
-한정 — `* as ns`는 아직), 섀도잉은 **로컬 > 임포트 > 내장** 순입니다.
-크로스 파일 정보는 서버가 tt 문법을 다시 구현하지 않고 컴파일러의 심볼
-인터페이스(`ttc --symbols`)를 소비해 얻습니다 — 저장된 파일 기준이므로
-import 줄을 편집한 직후에는 저장 전까지 한 박자 늦을 수 있습니다.
-
-tt 해석이 답하지 못하는 나머지 심볼은 **tt 엔진**(`ttc --server`)이
-맡습니다. 서버는 열린 버퍼를 엔진에 전달하고(didOpen/didChange/didClose),
-질문을 `.tt`·`.ttx` 위치로 보내면 답도 같은 원본 위치로 돌아옵니다 — projection
-(원본↔방출 TS 매핑), TypeScript 세션, 프로브까지 전부 엔진 안의 일입니다
-([`lsp-architecture.md`](../../docs/design/lsp-architecture.md)). 방출물이
-순수 TS이므로 match 암 본문·스크루티니·`try`/`let-else`/`if let` 식·
-파이프라인 스텝·`result` 블록 *내부*에서도 호버·완성·정의 이동이 온전한
-타입 추론으로 동작합니다.
-
-타입이 `any`로 흘러내리지 않도록 두 가지가 더 보장됩니다:
-
-- **`"@tt/std"`는 프로젝트 설정 없이도 해석됩니다.** 프로젝트가 그
-  지정자를 직접 해석하면(`ttc --types` 산출물을 가리키는 tsconfig
-  `paths` 등) 그쪽이 우선이고, 아니면 엔진이 표준 라이브러리 모듈을
-  대신 넣어 둡니다. 설정이 없다고 `Option`/`Result`가 `any`가 되지
-  않습니다.
-- **import한 `.tt`·`.ttx` 모듈도 방출물로 서빙됩니다.** 디스크의 소스는 열려
-  있지 않아도 엔진이 projection해서 넘깁니다(재-export 포함, 내용 기준
-  캐시) — 원문을 넘기면 tt `variant`를 TS가 파싱하지 못해 그
-  import를 건너온 값의 타입이 전부 무너집니다.
-
-**입력 중인 `.` — 프로브.** 완성은 `.`를 친 그 순간에 요청되는데, 그때
-버퍼는 아직 멤버가 없는 상태(`x |> .`)라 컴파일 결과가 원문 그대로입니다 —
-`|>`에서 TS 파싱이 무너지므로 멤버가 하나도 안 나오고, 에디터는 그 빈 목록을
-캐시해 이후에도 안 나옵니다. 그래서 위임이 빈손일 때 엔진이 커서 자리에
-자리표시 식별자를 끼운 **프로브 소스**를 만들어(`x |> .$tt_probe`) 그
-방출물의 매핑된 위치에서 멤버를 얻습니다. 프로브는 완성 전용이며 그 질의
-동안에만 서빙됩니다 — 사용자가 쓰지 않은 텍스트로 진단이 만들어지는 일은
-없습니다.
-
-### 타입 진단
-
-TypeScript 언어 서비스가 보는 것이 방출물이므로, **그 타입 에러를 원본
-`.tt`·`.ttx` 위치로 되돌려 표시합니다**(`tt.typeDiagnostics`, 기본 켜짐). tt
-구문 안에서만 드러나는 타입 에러 — 예를 들어 `|>` 스텝의 인자 타입이
-head와 맞지 않아 콤비네이터 파라미터가 `unknown`으로 추론되는 경우 — 도
-이제 편집기에서 바로 보입니다.
-
-에러 계층은 그대로입니다:
-
-- **tt 수준 에러**(중복 케이스, 소진되지 않은 match, 잘못된 필드 타입)는
-  `ttc --check`만 냅니다 (`source: ttc`).
-- tt 진단의 안정적인 규칙 코드는 LSP `Diagnostic.code`로 전달됩니다.
-- **타입 에러**는 tsc만 냅니다 (`source: ts`, `code`는 TS 에러 번호).
-
-안전장치 두 가지 때문에 잘못된 진단이 새어 나오지 않습니다.
-
-- **매핑되지 않는 스팬은 버립니다.** 컴파일러가 쓴 글루(switch IIFE,
-  구조분해, `$tt_ap` 헬퍼)에 걸린 진단은 사용자 코드가 아니므로 표시하지
-  않습니다 — 방출물 때문에 tsc 에러가 나면 그건 ttc의 버그입니다.
-- **파싱되는 텍스트일 때만** 검사합니다. 진단에 파스 에러(TypeScript가
-  1000–1999번을 쓰는 구문 에러)가 하나라도 있으면 그 파일의 진단은 통째로
-  버립니다 — 미완성 tt 구문은 원문 그대로 projection되어 TypeScript가
-  아니고, 체커의 오류 복구가 지어낸 에러가 뒤따르기 때문입니다.
-
-### 타입 기반 tt 진단
-
-`val` 경로의 built-in 변경 메서드 판정과 리터럴/좁혀진 타입 기준 소진성은
-**타입이 있어야** 답할 수 있어 `ttc --check`가 내지 못합니다
-(`ttc help val`).
-그래서 서버는 편집 중인 버퍼를 그 파일이 프로젝트에서 차지하는 자리에
-그대로 얹어(`ttc --check-types --tt-only --overlay <path>`) 컴파일러에게 묻고,
-돌아온 문장을 **그대로** 표시합니다 — 무엇이 변경인지는 에디터가 판단하지
-않습니다 (`source: ttc`).
-
-이 검사는 프로젝트를 열고 TypeScript 컴파일러를 띄우므로 나머지 진단보다
-느립니다. 서버는 같은 버퍼 버전의 빠른 진단·타입 진단·힌트와 이 결과를 함께
-모은 뒤 전체 목록을 한 번만 게시합니다. 새 세대가 준비되는 동안에는 에디터가
-이전 목록을 유지하므로, 수정하지 않은 오류가 잠시 사라졌다가 다시 나타나지
-않습니다.
-세 가지가 보장됩니다:
-
-- **세대가 맞을 때만 표시합니다.** 검사가 끝난 사이에 버퍼나 설정이 바뀌었으면
-  그 결과는 버립니다. 게시 알림에도 버퍼 버전을 실어 클라이언트가 같은 판정을
-  할 수 있게 합니다.
-- **한 위치에 한 진단.** 소진성은 `ttc --check`와 이 검사가 둘 다, 같은
-  위치에 보고합니다. typed compiler의 구조화된 결과가 잠정 TypeScript 결과를
-  대체한 뒤 하나의 목록으로 게시됩니다.
-- **답할 수 없으면 아무것도 바꾸지 않습니다.** TypeScript가 설치되지 않은
-  프로젝트, 저장된 적 없는 버퍼, 검사가 시작조차 못한 경우 — 전부 "모름"이지
-  "깨끗함"이 아니므로, 기존 진단을 그대로 둡니다. 이유는 출력 채널에 한 번만
-  적습니다.
-
-## 설치 — TT 저장소 없이
-
-이 확장은 컴파일러도 TypeScript도 번들하지 않고, **프로젝트가 설치한 것**을
-씁니다. 그래서 TT 저장소를 직접 빌드하지 않는 개발자의 절차는 이렇습니다.
+Install the compiler and the repository-pinned TypeScript in your project:
 
 ```sh
-npm i -D @openload28/tt-lang typescript@7.1.0-dev.20260826.1                 # ttc + TypeScript 7
-code --install-extension tt-language-<version>.vsix   # 릴리스의 VSIX
+npm i -D @openload28/tt-lang typescript@7.1.0-dev.20260826.1
 ```
 
-설정할 것도, 내보낼 환경 변수도 없습니다. 확장은 그 프로젝트의
-`@openload28/tt-lang`이 가리키는 ttc를 띄우고, ttc는 같은 프로젝트의 TypeScript를
-찾아 언어 서비스를 몰아 줍니다 — `npx ttc`와 **완전히 같은 툴체인**입니다.
-다른 것을 지목할 방법이 없으므로 에디터와 빌드가 갈라질 수 없습니다.
+Install the matching tt language VSIX from the release. For `.ts` and `.tsx`
+consumers of tt modules, also install the release's platform-specific TypeScript
+7.1 VSIX with content-mapper support. Its extension ID is
+`TypeScriptTeam.native-preview`. Use a compiler and extension from the same
+release; an older installed extension does not pick up edits to this checkout.
 
-## 요구사항
+For the preview-based editor setup, enable both settings:
 
-### `ttc`
-
-진단에는 `ttc` 바이너리가 필요합니다. 탐색 순서:
-
-1. `tt.compilerPath` 설정
-2. The most recently built workspace compiler from `target/release/ttc` and
-   `target/debug/ttc` (when the TT repository itself is open)
-3. **프로젝트가 설치한 `@openload28/tt-lang`의 ttc** — 어느 바이너리인지는 그
-   패키지 자신이 답하므로(`binaryPath()`), 게시본 설치·`file:` 개발 설치·
-   `TTC_BINARY` 지정이 모두 같은 경로로 해석됩니다 (`server/src/install.ts`)
-4. PATH의 `ttc`
-
-즉 **프로젝트에 `@openload28/tt-lang`을 설치했다면 아무 설정 없이 동작합니다** —
-`npx ttc`가 실행하는 바로 그 컴파일러를 확장도 실행합니다. 3번은 워크스페이스
-루트에서 위로 올라가며 `node_modules`를 찾으므로, 모노레포 루트에 설치한
-패키지도 하위 폴더의 파일에 적용됩니다.
-
-`ttc`가 없으면 진단과 엔진 위임 기능이 꺼지고, tt 구문 계층(variant·케이스
-태그·문서 심볼·빠른 수정)은 그대로 동작합니다.
-
-### TypeScript
-
-위 표에서 "TypeScript 언어 서비스 위임"이라고 적은 기능 — 호버·정의 이동·
-참조 찾기·이름 변경·자동완성·시그니처 헬프·타입 진단 — 은 tt 엔진이
-**TypeScript 컴파일러 자신의 언어 서버**(`tsgo --lsp`)를 몰아서 답합니다.
-TypeScript 7에는 인프로세스 JS 언어 서비스 API가 없기 때문이며, 확장
-프로그램은 TypeScript를 번들하지 않습니다.
-
-**해석 경로는 하나뿐입니다**: 프로젝트에서 위로 올라가며 찾는
-`node_modules`의 TypeScript 7 패키지. 환경 변수도, 체크아웃 경로도 없습니다 —
-두 번째 경로가 정확히 "CLI는 되는데 에디터는 안 되는" 상태를 만들던
-것이기 때문입니다 (`docs/tasks/TASK-256`).
-
-그 패키지에서 **두 반쪽이 함께** 해석됩니다: API 클라이언트
-(`dist/api/sync/api.js`)는 타입 검사·방출에, 플랫폼 패키지의 실행 파일
-(`@typescript/typescript-<platform>/lib/tsc`)은 언어 서비스에 쓰입니다.
-한쪽만 찾아지면 "CLI는 타입 검사되는데 에디터는 아무것도 답하지 않는" 상태가
-되므로, 순서와 레이아웃을 컴파일러의 `src/typescript/toolchain.rs` 한 곳에서
-기술하고 두 소비자가 그것을 읽습니다 (실행 파일 이름 규칙은 업스트림
-`getExePath.js`와 같습니다 — `typescript`는 `tsc`, 미리보기 채널은 `tsgo`).
-
-즉 **프로젝트가 `typescript@7.1.0-dev.20260826.1`을 설치해 두면 그대로 동작합니다.** 찾지
-못하면 위 위임 기능들이 답하지 않고, tt 자신이 아는 것(variant·케이스 태그·
-소진성)만 동작합니다. TypeScript 세션이 죽으면 다음 질문이 새로
-시작합니다 — 기능이 영구히 침묵하는 일은 없습니다.
-
-표준 라이브러리(`@tt/std`)는 모듈 해석이 디스크를 보므로, 엔진이
-프로젝트의 `node_modules/@tt/std`에 표준 라이브러리 모듈을 한 번 써
-둡니다 (이미 있는 패키지는 건드리지 않습니다).
-
-## 설정
-
-| 설정 | 기본값 | 설명 |
-|------|--------|------|
-| `tt.compilerPath` | `""` | 진단에 사용할 ttc 경로 |
-| `tt.verify` | `true` | `false`면 `ttc --check`에 `--no-verify` 전달 |
-| `tt.typeDiagnostics` | `true` | `.tt`·`.ttx` 파일에 TypeScript 타입 에러 표시 (위 "타입 진단") |
-| `tt.typedChecks` | `true` | 타입이 있어야 판정되는 tt 진단 표시 (위 "타입 기반 tt 진단") |
-| `tt.sidecar` | `refresh` | 저장 시 에디터 사이드카 갱신 — `refresh`(이미 있는 것만) / `always`(없으면 생성) / `off` |
-| `tt.sidecarDir` | `""` | 사이드카를 쓸 디렉터리(워크스페이스 기준). 비우면 `.tt`·`.ttx` 옆 |
-| `tt.trace.server` | `off` | LSP 통신 트레이스 |
-
-## `.ts`·`.tsx`에서 `.tt`·`.ttx` 가져다 쓰기
-
-`.ts`·`.tsx` 파일은 TypeScript의 언어 서버가 담당하는데 그 서버는 `.tt`·`.ttx`
-확장자를 모르므로, `import { Notice } from "./notice.tt"`은 그대로 두면
-`TS2307`이 됩니다. 해법은 TypeScript 세대에 따라 둘입니다.
-
-### TypeScript 7.1+ — content mapper (권장, 설정 0)
-
-TypeScript 7.1의 언어 서버는 **content mapper**를 통해 `.tt`·`.ttx`를
-가상으로 들고 검사합니다 — 디스크에 생성물이 없고, `rootDirs`/`paths`
-배선도 필요 없습니다. 이 확장이 활성화될 때 TypeScript 확장
-(네이티브 프리뷰)에 `.tt`·`.ttx`를 자동 등록하므로, 워크스페이스가
-`@openload28/tt-lang`을 설치해 두었다면 에디터 쪽 설정은 없습니다.
-
-마켓플레이스의 TypeScript Native Preview가 아직 content mapper 이전
-빌드라면, tt 릴리스에 첨부된 `tt-typescript-preview-<버전>-<플랫폼>.vsix`
-(고정 나이틀리와 같은 커밋의 빌드, TASK-258)를 받아 설치하세요:
-
-```sh
-code --install-extension tt-typescript-preview-<버전>-<플랫폼>.vsix
+```json
+{
+  "js/ts.experimental.useTsgo": true,
+  "typescript.experimental.useTsgo": true
+}
 ```
 
-이 VSIX는 업스트림과 같은 확장 ID(`TypeScriptTeam.native-preview`)를
-씁니다 — VS Code 내장 TypeScript 확장이 그 ID 목록에만 양보하기
-때문입니다(TASK-259). 마켓플레이스 판을 대체 설치하는 셈이고, content
-mapper를 실은 정식 프리뷰가 마켓플레이스에 올라오면 같은 ID의 더 높은
-버전이므로 자동 업데이트가 이 빌드를 자연스럽게 교체합니다.
+Declare `contentMappers` at the top level of `tsconfig.json`, not inside
+`compilerOptions`:
 
-`.ts`·`.tsx`를 그 서버가 서빙하게 하려면 `useTsgo`를 켭니다:
-
-```jsonc
-// .vscode/settings.json (또는 사용자 설정)
-"js/ts.experimental.useTsgo": true,
-"typescript.experimental.useTsgo": true
-```
-
-TypeScript 7.1이 정식 릴리스되면 확장은 공식 루트로 설치하면 되고,
-`useTsgo` 설정도 필요 없어집니다.
-
-For CLI (`tsc`) and tsconfig-based projects, `contentMappers` is a top-level
-key. It must be a sibling of `compilerOptions`, not a property inside it:
-
-```jsonc
-// tsconfig.json
+```json
 {
   "compilerOptions": {
     "strict": true,
@@ -276,50 +43,129 @@ key. It must be a sibling of `compilerOptions`, not a property inside it:
 }
 ```
 
-Run `tsc` with `--runExternalCode` so TypeScript may start the mapper process.
-Diagnostics point to the original `.tt` and `.ttx` positions, and tt-level
-errors use `tt` as their source.
+For command-line checking, run `npx tsc --runExternalCode`. The editor registers
+the tt content-mapper contribution when the TypeScript extension exposes that
+API. Mapped modules stay virtual; new TypeScript 7.1 projects do not need
+declaration sidecars or generated-source `paths`/`rootDirs` wiring.
 
-### Classic tsserver — legacy sidecars
+Legacy TypeScript hosts without content mappers can use declaration output from
+`ttc --types -w src` and configure their resolver for that output. The extension's
+save-time sidecar refresh is a separate compatibility feature, not a replacement
+for the content-mapper setup.
 
-Use declaration sidecars only when the TypeScript host cannot load content
-mappers. Run `ttc --types -w src` and wire the generated tree into that host's
-module resolution. This compatibility path is not recommended for new
-TypeScript 7.1+ projects; use the content mapper above instead.
+## Language features
 
-## 개발
+- TypeScript/TSX-derived grammars, tt semantic tokens, Markdown/MDX tt fences,
+  and file icons supported by the active icon theme.
+- Source-located tt and TypeScript diagnostics, including typed exhaustiveness
+  and `val` checks. Quick fixes carry compiler-authored suggestions.
+- Completion for tt patterns, constructors, snippets, and TypeScript members;
+  completion-item details, hover, signature help, references, and definitions.
+- Rename for supported symbols and document symbols. Import aliases follow
+  TypeScript rename semantics; a local rename need not rename the exported symbol.
+  Unsafe or unsupported rename targets can be rejected.
+
+Incomplete member expressions can use a compiler-owned completion probe. Such
+probes answer completion requests; they are not the source used for diagnostics.
+Recovery and source mappings belong to the compiler, not to a second parser in
+the editor adapter. See [the LSP architecture](../../docs/design/lsp-architecture.md).
+
+### Diagnostics and project state
+
+The tt server combines syntax checks, language-service results, typed compiler
+diagnostics, and hints before publishing a complete validation generation. Old
+generations are discarded. Structured compiler results can use `source: ttc`
+and codes such as `ts2322`; consumers must not assume that every TypeScript-derived
+diagnostic has `source: ts` or a numeric code.
+
+Open `.tt`, `.ttx`, `.ts`, and `.tsx` buffers are synchronized into the tt engine.
+TypeScript retains ownership of `.ts`/`.tsx` editor providers. A dependency edit
+or close schedules revalidation of open tt consumers. Host overlays are frozen
+with typed snapshots and served at their authored paths for language queries.
+
+Source/configuration filesystem events reload cached projects and replay open
+buffers before subsequent checks. This covers external edits and module
+creation/deletion without requiring an edit in each consumer. The replay does
+not save user buffers. Support files under `node_modules` and Git metadata are
+not treated as user source events.
+
+The tt adapter currently revalidates all open tt documents conservatively. This
+is a correctness policy, not a measured large-project latency guarantee.
+
+### Toolchain resolution and unavailable features
+
+The compiler is resolved in this order:
+
+1. `tt.compilerPath`, when explicitly configured.
+2. The newest workspace `target/release/ttc` or `target/debug/ttc` build.
+3. The workspace's `@openload28/tt-lang` package via its `binaryPath()` API.
+4. `ttc` on PATH.
+
+An explicit path or a workspace development build can differ from `npx ttc`.
+Check the selected compiler when diagnosing editor/CLI disagreements.
+
+The engine resolves the TypeScript API and native executable through the
+project's `node_modules`, walking upward. Neither compiler is bundled in the tt
+language extension. Missing tools limit semantic features; an empty completion
+list or unavailable typed checker is not evidence that a program is correct.
+Inspect the **tt Language Server** output channel for failures. Grammar-based
+highlighting does not require a working compiler.
+
+## Settings
+
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `tt.compilerPath` | `""` | Explicit compiler executable; otherwise use the resolution order above. |
+| `tt.verify` | `true` | Verify emitted syntax during syntax checks. |
+| `tt.typeDiagnostics` | `true` | Include TypeScript type diagnostics for tt documents. |
+| `tt.typedChecks` | `true` | Include type-dependent tt checks. |
+| `tt.sidecar` | `"refresh"` | On save, refresh existing sidecars; `always` creates them, `off` disables refresh. |
+| `tt.sidecarDir` | `""` | Sidecar directory relative to the workspace; empty means adjacent to sources. |
+| `tt.trace.server` | `"off"` | LSP trace level. |
+
+## Development and verification
+
+From the repository root, run `./scripts/doctor` first. Build the compiler with
+`cargo build`; then use these commands in `editors/vscode`:
 
 ```sh
-cd editors/vscode
-npm install        # client/server 의존성까지 설치 (postinstall)
-npm run compile    # tsc -b (client + server)
-npm test           # 서버 분석 로직 단위 테스트 (node --test)
+npm ci
+npm run compile
+npm test
+npm run test:editor
 ```
 
-VSCode에서 `editors/vscode` 폴더를 열고 **F5** (Launch Extension)를 누르면
-확장 개발 호스트가 뜹니다. `.tt` 또는 `.ttx` 파일을 열어 확인하세요.
+`npm test` runs unit and real LSP tests. `npm run test:editor` launches the local
+`code` executable in an isolated profile. `VSCODE_EXECUTABLE` can select another
+executable. No user extension is reinstalled and no normal profile setting is
+changed. Missing or incomplete reports fail rather than silently skip tests.
 
-저장소 루트의 `./scripts/setup`은 이 확장을 빌드해 vsix로 만들고 실제
-VSCode에 설치까지 합니다 — 업데이트는 항상 기존 설치를 삭제한 뒤 새로
-설치합니다 ([`CONTRIBUTING.md`](../../CONTRIBUTING.md)의 "로컬 개발 환경").
+The default editor matrix covers all four dependency extensions with tt/ttx
+consumers: 8 directed edges and 32 checks. Set `VSCODE_TYPESCRIPT_EXTENSION` to a
+locally available TypeScript 7.1 extension directory to include ts/tsx consumers:
+16 edges and 64 checks. The runner loads it as a second development extension;
+it never downloads an extension automatically.
 
-### 패키징
+Each edge exercises activation, complete/incomplete completion, definitions,
+application of rename edits, source-located diagnostics, unsaved dependency
+changes, changed member types, and discarded edits. The tt fixtures contain a
+variant and match; JSX fixtures contain JSX.
 
-[`@vscode/vsce`](https://github.com/microsoft/vscode-vsce)로 vsix를 만듭니다.
-client/·server/가 각자 `package.json`을 갖는 레이아웃이라 `--no-dependencies`
-로 패키징합니다 (`.vscodeignore`가 담을 것을 그대로 결정합니다):
+Set `TT_EDITOR_TEST_SUITE=filesystem` for the separate external-edit,
+create/delete/recreate, and tsconfig-change suite. Profiles, fixtures, and JSON
+reports are retained under `target/editor-tests/` in the repository.
 
-```sh
-npm ci && npx tsc -b
-npx @vscode/vsce package --no-dependencies
-```
+Use `./scripts/ci` at the repository root for the product gate. Packaging uses
+`vsce package --no-dependencies`; `.vscodeignore` excludes test sources and
+selects the compiled client/server and required LSP runtimes. Installation with
+`./scripts/setup` is a separate, explicit operation, not a prerequisite for
+testing the development extension.
 
-개발 배포는 Marketplace를 사용하지 않습니다. `main`의 기준 버전 상승이 CI를
-통과하면 GitHub Releases에 pre-release와 `.vsix`가 생성됩니다. 파일을 내려받은
-뒤 VSCode 명령 팔레트에서 **Extensions: Install from VSIX...**를 실행해
-설치합니다.
+## Validation boundaries
 
-확장은 TypeScript를 번들하지 않습니다 — 타입은 tt 엔진이 프로젝트의
-TypeScript 7(`tsgo`)로 검사하고, `tsgo`는 표준 라이브러리 선언을 실행
-파일 안에 갖고 있습니다. vsix에 담기는 것은 컴파일된 서버/클라이언트와
-LSP 런타임 패키지뿐입니다 (`.vscodeignore`가 그대로 결정합니다).
+Passing these matrices does not establish correctness for every program,
+multi-root layout, third-party extension combination, or large workspace.
+Known contextual-typing failures for scoped/sibling match continuations remain
+tracked in [TASK-324](../../docs/tasks/TASK-324-scoped-contextual-continuations.md).
+Editor diagnostics can expose those compiler limitations; they are not hidden
+to make the editor appear clean.

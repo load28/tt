@@ -44,6 +44,11 @@
 //!        "specifier", "nameSpan", "span", "cases" }],
 //!        "matches": [{ "keyword", "bodyOpen", "bodyClose" }] } }
 //!
+//! → { "id": 9, "method": "reloadProjects", "params": {} }
+//! ← { "id": 9, "result": {} }
+//! Project graphs and registered overlays are released. The client must
+//! replay its openDocument notifications before subsequent semantic requests.
+//!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
 //! ```
 //!
@@ -154,6 +159,14 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
         "typedCheck" => typed_check(sessions, params),
         "openDocument" | "updateDocument" => open_document(sessions, params),
         "closeDocument" => close_document(sessions, params),
+        "reloadProjects" => {
+            // Filesystem/configuration topology changed. Clients replay open
+            // buffers after this ordered barrier; old snapshots cannot leak
+            // into a graph resolved against the new configuration.
+            sessions.projects.clear();
+            sessions.docs.clear();
+            Ok(json!({}))
+        }
         "hover" => semantic(sessions, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,

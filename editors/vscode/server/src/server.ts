@@ -171,17 +171,48 @@ connection.onDidChangeConfiguration(() => {
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
-  void refreshCompiler();
-  for (const doc of documents.all()) scheduleValidation(doc);
+  invalidateProjectValidation();
+  void refreshCompiler().then(reloadProjectState);
 });
 
-connection.onDidChangeWatchedFiles(() => {
-  // A freshly built ttc appeared (or changed) — try validating again.
+connection.onDidChangeWatchedFiles((params) => {
+  const relevant = params.changes.some(change => {
+    const uri = URI.parse(change.uri);
+    if (uri.scheme !== "file") return false;
+    // Compiler-created support modules are not user graph changes.
+    if (uri.fsPath.split(path.sep).some(part => part === "node_modules" || part === ".git")) return false;
+    return true;
+  });
+  if (!relevant) return;
+  if (params.changes.some(change => /(?:^|\/)(?:ttc|ttc\.exe)$/.test(URI.parse(change.uri).path))) {
+    // Replacing an executable at the same path must replace the running
+    // process too; rebuilding project caches cannot update its machine code.
+    engine.shutdownEngineServer();
+  }
   warnedCompilerMissing = false;
   engine.retryEngineServer();
-  void refreshCompiler();
-  for (const doc of documents.all()) scheduleValidation(doc);
+  invalidateProjectValidation();
+  void refreshCompiler().then(reloadProjectState);
 });
+
+function invalidateProjectValidation(): void {
+  for (const doc of documents.all()) {
+    const timer = pendingValidation.get(doc.uri);
+    if (timer !== undefined) clearTimeout(timer);
+    pendingValidation.delete(doc.uri);
+    validationGeneration.set(doc.uri, (validationGeneration.get(doc.uri) ?? 0) + 1);
+  }
+}
+
+function reloadProjectState(): void {
+  declCache.clear();
+  engine.reloadProjects(currentCompiler());
+  for (const doc of documents.all()) {
+    const file = enginePath(doc);
+    if (file !== null) engine.openDocument(currentCompiler(), file, doc.getText());
+  }
+  for (const doc of documents.all()) scheduleValidation(doc);
+}
 
 // ---------------------------------------------------------------- analysis
 

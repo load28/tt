@@ -299,6 +299,11 @@ export function retryEngineServer(): void {
  * process can exit; the language server just dies with its client. */
 export function shutdownEngineServer(): void {
   if (engineServer) {
+    for (const entry of engineServer.pending.values()) {
+      clearTimeout(entry.timer);
+      entry.resolve(null);
+    }
+    engineServer.pending.clear();
     try {
       engineServer.child.kill();
     } catch {
@@ -319,6 +324,12 @@ export function shutdownEngineServer(): void {
 
 const SYNC_TIMEOUT_MS = 15000;
 const SEMANTIC_TIMEOUT_MS = 15000;
+
+/** Drop project graphs after external disk/configuration changes. The adapter
+ * immediately replays its open buffers before asking any new questions. */
+export function reloadProjects(compiler: string): void {
+  void engineRequest(compiler, "reloadProjects", {}, SYNC_TIMEOUT_MS);
+}
 
 export function openDocument(compiler: string, path: string, text: string): void {
   void engineRequest(compiler, "openDocument", { path, text }, SYNC_TIMEOUT_MS);

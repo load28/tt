@@ -10,6 +10,8 @@ mkdirSync(base, { recursive: true })
 const run = mkdtempSync(join(base, 'run-'))
 const workspace = join(run, 'workspace')
 const nativeExtension = process.env.VSCODE_TYPESCRIPT_EXTENSION
+const suite = process.env.TT_EDITOR_TEST_SUITE || 'editor'
+if (!['editor', 'filesystem'].includes(suite)) throw new Error(`Unknown editor suite: ${suite}`)
 mkdirSync(join(workspace, '.vscode'), { recursive: true })
 writeFileSync(join(workspace, '.vscode', 'settings.json'), JSON.stringify({
   'tt.compilerPath': join(repo, 'target', 'debug', process.platform === 'win32' ? 'ttc.exe' : 'ttc'),
@@ -31,7 +33,7 @@ const child = spawn(process.env.VSCODE_EXECUTABLE || 'code', [
   '--user-data-dir', join(run, 'profile'), '--extensions-dir', join(run, 'extensions'),
   `--extensionDevelopmentPath=${extension}`,
   ...(nativeExtension ? [`--extensionDevelopmentPath=${resolve(nativeExtension)}`] : []),
-  `--extensionTestsPath=${join(extension, 'test', 'editor.cjs')}`,
+  `--extensionTestsPath=${join(extension, 'test', `${suite}.cjs`)}`,
   '--wait', workspace,
 ], { stdio: 'inherit', env: { ...process.env, TTC_BINARY: join(repo, 'target', 'debug', process.platform === 'win32' ? 'ttc.exe' : 'ttc'), TT_EDITOR_TEST_WORKSPACE: workspace } })
 child.on('error', error => { console.error(error); process.exitCode = 1 })
@@ -39,7 +41,8 @@ child.on('exit', code => {
   try {
     const results = JSON.parse(readFileSync(join(run, 'results.json'), 'utf8'))
     console.log(JSON.stringify(results, null, 2))
-    process.exitCode = code === 0 && results.length === (nativeExtension ? 64 : 32) && results.every(result => result.passed) ? 0 : 1
+    const expected = suite === 'filesystem' ? 11 : nativeExtension ? 64 : 32
+    process.exitCode = code === 0 && results.length === expected && results.every(result => result.passed) ? 0 : 1
   } catch (error) {
     console.error('Extension host did not produce a complete test report:', error.message)
     process.exitCode = 1

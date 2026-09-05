@@ -18,6 +18,14 @@ const skip = compilerAvailable() ? false : "no ttc — none built, installed, or
 
 after(() => engine.shutdownEngineServer());
 
+test("an explicit compiler restart settles in-flight requests immediately", { skip, timeout: 2000 }, async () => {
+  const pending = engine.engineRequest(COMPILER, "check", { text: "", filename: "a.tt" }, 15000);
+  engine.shutdownEngineServer();
+  assert.equal(await pending, null);
+  const answer = await check(COMPILER);
+  assert.ok(answer && "result" in answer);
+});
+
 /** A path with nothing behind it — spawning it always fails. */
 function missingCompiler(name: string): string {
   return path.join(os.tmpdir(), `tt-no-such-compiler-${name}`, "ttc");

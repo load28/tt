@@ -334,7 +334,8 @@
 | TASK-323 | Preserve contextual typing through composed matches | Complete | 2026-09-05 | 2026-09-05 | [TASK-323](./TASK-323-contextual-match-composition.md) |
 | TASK-324 | Preserve contextual typing across scoped match continuations | Pending | — | — | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
 | TASK-325 | Verify real editor editing workflows | Complete | 2026-09-05 | 2026-09-05 | [TASK-325](./TASK-325-editor-workflows.md) |
+| TASK-326 | Keep editor projects current across filesystem changes | Complete | 2026-09-05 | 2026-09-05 | [TASK-326](./TASK-326-editor-filesystem-lifecycle.md) |
 
 ## Next task number
 
-**TASK-326**
+**TASK-327**

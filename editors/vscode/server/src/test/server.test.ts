@@ -34,6 +34,55 @@ const timeout = 60_000;
 
 for (const consumerKind of ["tt", "ttx"]) {
   for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
+    test(`filesystem and config changes refresh ${providerKind} -> ${consumerKind}`, { skip: skipTyped, timeout }, async () => {
+      const dir = caseDir("tt-filesystem-edit-");
+      const provider = path.join(dir, `provider.${providerKind}`);
+      const consumer = path.join(dir, `consumer.${consumerKind}`);
+      const configPath = path.join(dir, "tsconfig.json");
+      const config = { compilerOptions: { strict: true, noImplicitAny: false, module: "preserve", moduleResolution: "bundler", jsx: "preserve", noEmit: true, allowImportingTsExtensions: true }, include: ["*"] };
+      fs.writeFileSync(configPath, JSON.stringify(config));
+      fs.writeFileSync(consumer, "export {};\n");
+      const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\nexport function identity(input) { return input; }\n`;
+      const uri = pathToFileURL(consumer).toString();
+      const client = connect();
+      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : p.diagnostics.length === 0));
+      const changed = (file: string, type: number) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(file).toString(), type }] });
+      try {
+        await client.request("initialize", { processId: process.pid, rootUri: pathToFileURL(dir).toString(), workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {} });
+        client.notify("initialized", {});
+        let answer = expect("ts2307");
+        client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
+        await answer;
+        answer = expect();
+        fs.writeFileSync(provider, 'export const value: string = "created";\n');
+        changed(provider, 1);
+        await answer;
+        answer = expect("ts2322");
+        fs.writeFileSync(provider, 'export const value: number = 42;\n');
+        changed(provider, 2);
+        await answer;
+        answer = expect("ts2307");
+        fs.unlinkSync(provider);
+        changed(provider, 3);
+        await answer;
+        answer = expect();
+        fs.writeFileSync(provider, 'export const value: string = "restored";\n');
+        changed(provider, 1);
+        await answer;
+        answer = expect("ts7006");
+        config.compilerOptions.noImplicitAny = true;
+        fs.writeFileSync(configPath, JSON.stringify(config));
+        changed(configPath, 2);
+        assert.equal((await answer).version, 1, "the unsaved function survived project reload");
+        answer = expect();
+        config.compilerOptions.noImplicitAny = false;
+        fs.writeFileSync(configPath, JSON.stringify(config));
+        changed(configPath, 2);
+        await answer;
+        assert.equal(fs.readFileSync(consumer, "utf8"), "export {};\n", "reload never saves the buffer");
+      } finally { client.stop(); }
+    });
+
     test(`unsaved ${providerKind} changes refresh untouched ${consumerKind} diagnostics`, { skip: skipTyped, timeout }, async () => {
       const dir = caseDir("tt-dependency-edit-");
       const provider = path.join(dir, `provider.${providerKind}`);
