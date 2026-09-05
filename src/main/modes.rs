@@ -51,7 +51,7 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
         entry.push_str("]}");
         entries.push(entry);
     }
-    println!("[{}]", entries.join(","));
+    crate::out::line(&format!("[{}]", entries.join(",")));
     if failed {
         ExitCode::FAILURE
     } else {
@@ -92,7 +92,7 @@ pub(super) fn emit_map_mode(jobs: &[Job]) -> ExitCode {
             mappings
         ));
     }
-    println!("[{}]", entries.join(","));
+    crate::out::line(&format!("[{}]", entries.join(",")));
     if failed {
         ExitCode::FAILURE
     } else {

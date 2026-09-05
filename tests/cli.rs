@@ -1008,3 +1008,157 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
 }
 
 include!("cli/cases_01.rs");
+
+/// A `#!` line and a byte-order mark are only themselves when they come
+/// first, so the generated banner is written after them (TASK-336). A
+/// comment above either one turns a runnable script into a parse error and
+/// leaves a stray U+FEFF in the middle of the file.
+#[test]
+fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let shebang = dir.join("cli.tt");
+    fs::write(&shebang, "#!/usr/bin/env node\nconsole.log(1);\n").unwrap();
+    // A hand-written `.ts` passes through, and its shebang matters too.
+    let passthrough = dir.join("plain.ts");
+    fs::write(&passthrough, "#!/usr/bin/env node\nconsole.log(2);\n").unwrap();
+    let bom = dir.join("bom.tt");
+    fs::write(&bom, "\u{feff}export const a = 1;\n").unwrap();
+    // A shebang that runs to the end of the file still needs a line break
+    // before the banner.
+    let bare = dir.join("bare.tt");
+    fs::write(&bare, "#!/usr/bin/env node").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    for name in ["cli.ts", "plain.ts"] {
+        let emitted = fs::read_to_string(out_dir.join(name)).unwrap();
+        let mut lines = emitted.lines();
+        assert_eq!(
+            lines.next(),
+            Some("#!/usr/bin/env node"),
+            "{name}: {emitted}"
+        );
+        assert!(
+            lines
+                .next()
+                .is_some_and(|line| line.starts_with("// @generated")),
+            "{name}: {emitted}"
+        );
+    }
+    let bom_emitted = fs::read_to_string(out_dir.join("bom.ts")).unwrap();
+    assert!(
+        bom_emitted.starts_with("\u{feff}// @generated"),
+        "{bom_emitted:?}"
+    );
+    assert_eq!(
+        bom_emitted.matches('\u{feff}').count(),
+        1,
+        "{bom_emitted:?}"
+    );
+    let bare_emitted = fs::read_to_string(out_dir.join("bare.ts")).unwrap();
+    assert_eq!(
+        bare_emitted.lines().next(),
+        Some("#!/usr/bin/env node"),
+        "{bare_emitted:?}"
+    );
+    assert!(
+        bare_emitted
+            .lines()
+            .nth(1)
+            .is_some_and(|line| line.starts_with("// @generated")),
+        "{bare_emitted:?}"
+    );
+}
+
+/// The banner shifts the lines below it, and only those: a shebang keeps
+/// line 1, so a map built against the emission must not shift it (TASK-336).
+#[test]
+fn a_source_map_follows_the_banner_past_a_shebang() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let source = dir.join("trace.tt");
+    fs::write(
+        &source,
+        "#!/usr/bin/env node\nvariant Shape { Circle(radius: number), Square(side: number) }\n\
+         export const area = (s: Shape): number => match (s) {\n\
+         \x20 Circle(radius) => radius,\n\
+         \x20 Square(side) => side,\n\
+         };\n",
+    )
+    .unwrap();
+    let output = ttc(&[
+        "--source-map",
+        "file",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let map = fs::read_to_string(out_dir.join("trace.ts.map")).unwrap();
+    let mappings = map
+        .split("\"mappings\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("a mappings field");
+    // The shebang owns generated line 1 in both files, so the first line of
+    // the map carries a segment rather than being skipped by the banner's
+    // shift.
+    assert!(
+        !mappings.starts_with(';'),
+        "the shebang line lost its mapping: {mappings}"
+    );
+}
+
+/// A reader that stops reading is the reader's decision, not a compiler
+/// failure: `ttc --help | head` must end quietly rather than reporting an
+/// internal compiler error and exiting 101 (TASK-337).
+#[test]
+fn a_closed_stdout_ends_the_run_quietly() {
+    use std::io::Read;
+    use std::process::Stdio;
+
+    for args in [
+        vec!["--help"],
+        vec!["-v"],
+        vec!["help", "all"],
+        vec!["explain"],
+        vec!["--emit-std", "option"],
+    ] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("failed to run ttc");
+        // Read one byte, then drop the pipe: the next write has nowhere to go.
+        let mut stdout = child.stdout.take().expect("piped stdout");
+        let mut first = [0u8; 1];
+        let _ = stdout.read(&mut first);
+        drop(stdout);
+        let output = child.wait_with_output().expect("ttc did not exit");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.contains("internal compiler error"),
+            "{args:?} reported a compiler bug for a closed pipe: {stderr}"
+        );
+        assert!(
+            output.status.success(),
+            "{args:?} exited with {:?}: {stderr}",
+            output.status.code()
+        );
+    }
+}

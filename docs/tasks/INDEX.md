@@ -344,7 +344,9 @@
 | TASK-333 | Preserve contextual types through scheduled captures | Complete | 2026-09-05 | 2026-09-05 | [TASK-333](./TASK-333-captured-argument-contextual-types.md) |
 | TASK-334 | Keep one engine session per compiler and never crash on a dead pipe | Complete | 2026-09-05 | 2026-09-05 | [TASK-334](./TASK-334-engine-session-per-compiler.md) |
 | TASK-335 | Read the compiler's rendered diagnostics in the one-shot fallback | Complete | 2026-09-05 | 2026-09-05 | [TASK-335](./TASK-335-fallback-diagnostic-parsing.md) |
+| TASK-336 | Write the generated banner where the file allows it | Complete | 2026-09-05 | 2026-09-05 | [TASK-336](./TASK-336-banner-placement.md) |
+| TASK-337 | Treat a closed stdout as an ordinary end, not an internal error | Complete | 2026-09-05 | 2026-09-05 | [TASK-337](./TASK-337-closed-stdout.md) |
 
 ## Next task number
 
-**TASK-336**
+**TASK-338**
