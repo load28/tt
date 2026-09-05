@@ -55,6 +55,32 @@ impl CliOption {
     }
 }
 
+/// The value that follows a value-taking flag, or `None` — with the
+/// failure already reported — when there is none.
+///
+/// A token that begins with `-` is another option, not a value. `ttc -o
+/// --check src` names no output directory: taking `--check` as one created
+/// a directory called `--check`, wrote the build into it, and exited 0
+/// without ever running the check that was asked for. A path that really
+/// begins with `-` is still reachable, spelled `./-name`.
+fn flag_value<'a>(
+    flag: &str,
+    expects: &str,
+    it: &mut std::iter::Peekable<std::slice::Iter<'a, String>>,
+) -> Option<&'a String> {
+    match it.peek().map(|token| token.as_str()) {
+        Some(token) if token.starts_with('-') && token.len() > 1 => {
+            eprintln!("ttc: {flag} requires {expects}, but the next argument is {token}");
+            None
+        }
+        Some(_) => it.next(),
+        None => {
+            eprintln!("ttc: {flag} requires {expects}");
+            None
+        }
+    }
+}
+
 fn reject_options(mode: &str, seen: &[CliOption], allowed: &[CliOption]) -> Option<ExitCode> {
     let option = seen
         .iter()
@@ -124,7 +150,7 @@ pub(super) fn run() -> ExitCode {
     let mut jobs_limit: Option<usize> = None;
     let mut seen = Vec::new();
 
-    let mut it = argv.iter();
+    let mut it = argv.iter().peekable();
     while let Some(a) = it.next() {
         match a.as_str() {
             "-h" | "--help" => {
@@ -168,25 +194,21 @@ pub(super) fn run() -> ExitCode {
                 seen.push(CliOption::ContentMapper);
                 content_mapper = true;
             }
-            "--overlay" => match it.next() {
-                Some(path) => {
-                    seen.push(CliOption::Overlay);
-                    overlay_path = Some(PathBuf::from(path));
+            "--overlay" => {
+                match flag_value("--overlay", "the path the buffer belongs to", &mut it) {
+                    Some(path) => {
+                        seen.push(CliOption::Overlay);
+                        overlay_path = Some(PathBuf::from(path));
+                    }
+                    None => return ExitCode::FAILURE,
                 }
-                None => {
-                    eprintln!("ttc: --overlay requires the path the buffer belongs to");
-                    return ExitCode::FAILURE;
-                }
-            },
-            "--project" => match it.next() {
+            }
+            "--project" => match flag_value("--project", "a path to a tsconfig.json", &mut it) {
                 Some(path) => {
                     seen.push(CliOption::Project);
                     project = Some(PathBuf::from(path));
                 }
-                None => {
-                    eprintln!("ttc: --project requires a path to a tsconfig.json");
-                    return ExitCode::FAILURE;
-                }
+                None => return ExitCode::FAILURE,
             },
             "--symbols" => {
                 seen.push(CliOption::Symbols);
@@ -204,7 +226,13 @@ pub(super) fn run() -> ExitCode {
                 seen.push(CliOption::NoVerify);
                 verify = false;
             }
-            "--emit-std" => match it.next().map(String::as_str) {
+            "--emit-std" => match flag_value(
+                "--emit-std",
+                "a module (types, option, result, or runtime)",
+                &mut it,
+            )
+            .map(String::as_str)
+            {
                 Some("types") => {
                     seen.push(CliOption::EmitStd);
                     emit_std = Some(StdModule::Types);
@@ -227,101 +255,92 @@ pub(super) fn run() -> ExitCode {
                     );
                     return ExitCode::FAILURE;
                 }
-                None => {
-                    eprintln!(
-                        "ttc: --emit-std requires a module (types, option, result, or runtime)"
-                    );
-                    return ExitCode::FAILURE;
-                }
+                None => return ExitCode::FAILURE,
             },
-            "--sidecar" => match it.next() {
+            "--sidecar" => match flag_value(
+                "--sidecar",
+                "a directory of tsc-emitted .d.ts files",
+                &mut it,
+            ) {
                 Some(dir) => {
                     seen.push(CliOption::Sidecar);
                     sidecar_dir = Some(PathBuf::from(dir));
                 }
-                None => {
-                    eprintln!("ttc: --sidecar requires a directory of tsc-emitted .d.ts files");
-                    return ExitCode::FAILURE;
-                }
+                None => return ExitCode::FAILURE,
             },
-            "-j" | "--jobs" => match it.next().map(|n| n.parse::<usize>()) {
-                Some(Ok(n)) if n >= 1 => {
-                    seen.push(CliOption::Jobs);
-                    jobs_limit = Some(n);
+            "-j" | "--jobs" => {
+                match flag_value("--jobs", "a value", &mut it).map(|n| n.parse::<usize>()) {
+                    Some(Ok(n)) if n >= 1 => {
+                        seen.push(CliOption::Jobs);
+                        jobs_limit = Some(n);
+                    }
+                    Some(_) => {
+                        eprintln!("ttc: --jobs expects a positive number of parallel compiles");
+                        return ExitCode::FAILURE;
+                    }
+                    None => return ExitCode::FAILURE,
                 }
-                Some(_) => {
-                    eprintln!("ttc: --jobs expects a positive number of parallel compiles");
-                    return ExitCode::FAILURE;
-                }
-                None => {
-                    eprintln!("ttc: --jobs requires a value");
-                    return ExitCode::FAILURE;
-                }
-            },
-            "-o" | "--out-dir" => match it.next() {
+            }
+            "-o" | "--out-dir" => match flag_value("--out-dir", "a value", &mut it) {
                 Some(dir) => {
                     seen.push(CliOption::OutDir);
                     out_dir = Some(PathBuf::from(dir));
                 }
-                None => {
-                    eprintln!("ttc: --out-dir requires a value");
-                    return ExitCode::FAILURE;
-                }
+                None => return ExitCode::FAILURE,
             },
-            "--node" => match it.next() {
+            "--node" => match flag_value("--node", "a path to the node binary", &mut it) {
                 Some(path) => {
                     seen.push(CliOption::Node);
                     node = Some(PathBuf::from(path));
                 }
-                None => {
-                    eprintln!("ttc: --node requires a path to the node binary");
-                    return ExitCode::FAILURE;
-                }
+                None => return ExitCode::FAILURE,
             },
-            "--source-map" => match it.next().map(String::as_str) {
-                Some("off") => {
-                    seen.push(CliOption::SourceMap);
-                    source_map = SourceMapMode::Off;
+            "--source-map" => {
+                match flag_value("--source-map", "a value (off, file, or inline)", &mut it)
+                    .map(String::as_str)
+                {
+                    Some("off") => {
+                        seen.push(CliOption::SourceMap);
+                        source_map = SourceMapMode::Off;
+                    }
+                    Some("file") => {
+                        seen.push(CliOption::SourceMap);
+                        source_map = SourceMapMode::File;
+                    }
+                    Some("inline") => {
+                        seen.push(CliOption::SourceMap);
+                        source_map = SourceMapMode::Inline;
+                    }
+                    Some(other) => {
+                        eprintln!("ttc: --source-map expects off, file, or inline (got {other})");
+                        return ExitCode::FAILURE;
+                    }
+                    None => return ExitCode::FAILURE,
                 }
-                Some("file") => {
-                    seen.push(CliOption::SourceMap);
-                    source_map = SourceMapMode::File;
+            }
+            "--rewrite-imports" => {
+                match flag_value("--rewrite-imports", "a value (js, ts, or off)", &mut it)
+                    .map(String::as_str)
+                {
+                    Some("js") => {
+                        seen.push(CliOption::RewriteImports);
+                        rewrite_imports = ImportRewrite::Js;
+                    }
+                    Some("ts") => {
+                        seen.push(CliOption::RewriteImports);
+                        rewrite_imports = ImportRewrite::Ts;
+                    }
+                    Some("off") => {
+                        seen.push(CliOption::RewriteImports);
+                        rewrite_imports = ImportRewrite::Off;
+                    }
+                    Some(other) => {
+                        eprintln!("ttc: --rewrite-imports expects js, ts, or off (got {other})");
+                        return ExitCode::FAILURE;
+                    }
+                    None => return ExitCode::FAILURE,
                 }
-                Some("inline") => {
-                    seen.push(CliOption::SourceMap);
-                    source_map = SourceMapMode::Inline;
-                }
-                Some(other) => {
-                    eprintln!("ttc: --source-map expects off, file, or inline (got {other})");
-                    return ExitCode::FAILURE;
-                }
-                None => {
-                    eprintln!("ttc: --source-map requires a value (off, file, or inline)");
-                    return ExitCode::FAILURE;
-                }
-            },
-            "--rewrite-imports" => match it.next().map(String::as_str) {
-                Some("js") => {
-                    seen.push(CliOption::RewriteImports);
-                    rewrite_imports = ImportRewrite::Js;
-                }
-                Some("ts") => {
-                    seen.push(CliOption::RewriteImports);
-                    rewrite_imports = ImportRewrite::Ts;
-                }
-                Some("off") => {
-                    seen.push(CliOption::RewriteImports);
-                    rewrite_imports = ImportRewrite::Off;
-                }
-                Some(other) => {
-                    eprintln!("ttc: --rewrite-imports expects js, ts, or off (got {other})");
-                    return ExitCode::FAILURE;
-                }
-                None => {
-                    eprintln!("ttc: --rewrite-imports requires a value (js, ts, or off)");
-                    return ExitCode::FAILURE;
-                }
-            },
+            }
             other if other.starts_with('-') => {
                 eprintln!("ttc: unknown option {other}");
                 return ExitCode::FAILURE;

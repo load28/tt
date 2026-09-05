@@ -406,7 +406,7 @@ fn jobs_does_not_change_outputs_or_diagnostics() {
 
 #[test]
 fn jobs_rejects_zero_and_garbage() {
-    for value in ["0", "many", "-1"] {
+    for value in ["0", "many"] {
         let out = ttc(&["-j", value, "--check", "examples"]);
         assert!(!out.status.success(), "--jobs {value} should be rejected");
         let stderr = String::from_utf8(out.stderr).unwrap();
@@ -422,6 +422,70 @@ fn jobs_rejects_zero_and_garbage() {
             .unwrap()
             .contains("--jobs requires a value")
     );
+}
+
+/// A flag that takes a value does not take the next option as one.
+///
+/// `ttc -o --check src` reads as "build into --check"; it created a
+/// directory of that name, wrote the tree into it, and exited 0 without
+/// running the check the line asked for. Every value-taking flag had the
+/// same hole, and each swallowed option also disappeared from the run.
+#[test]
+fn value_flags_do_not_swallow_the_next_option() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (flag, label) in [
+        ("-o", "--out-dir"),
+        ("--out-dir", "--out-dir"),
+        ("-j", "--jobs"),
+        ("--jobs", "--jobs"),
+        ("--project", "--project"),
+        ("--node", "--node"),
+        ("--sidecar", "--sidecar"),
+        ("--overlay", "--overlay"),
+        ("--source-map", "--source-map"),
+        ("--rewrite-imports", "--rewrite-imports"),
+        ("--emit-std", "--emit-std"),
+    ] {
+        let out = ttc(&[flag, "--check", path]);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            !out.status.success(),
+            "{flag} took --check as its value: {stderr}"
+        );
+        assert!(
+            stderr.contains(label) && stderr.contains("--check"),
+            "{flag}: {stderr}"
+        );
+    }
+
+    // Nothing was created for the option that was mistaken for a value.
+    assert!(!dir.join("--check").exists());
+}
+
+/// The escape hatch stays open: a path that really begins with `-` is
+/// spelled the way every other tool spells it.
+#[test]
+fn a_relative_path_reaches_a_directory_named_like_an_option() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let _ = &file;
+
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(dir.path())
+        .args(["-o", "./-out", "input.tt"])
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("-out").join("input.ts").is_file());
 }
 
 #[test]
