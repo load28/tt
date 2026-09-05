@@ -401,8 +401,21 @@ fn nested_await_match_keeps_its_expression_boundary() {
         "async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$tt_v0 = await fetch(url);"), "{out}");
-    assert!(out.contains("return $tt_v1($tt_v0);"), "{out}");
+    // The consumed call completes inside each arm, so the awaited value
+    // keeps the consumer's contextual position (TASK-327).
+    assert!(out.contains("$tt_v0 = $tt_v1(await fetch(url));"), "{out}");
+    assert!(out.contains("return $tt_v0;"), "{out}");
+}
+
+#[test]
+fn call_arguments_wider_than_the_match_keep_their_authored_frame() {
+    // The completion proof requires the argument to be exactly the tt
+    // value. A cast (or any containing expression) around the value keeps
+    // the authored call and its frame, with the match joined by its slot.
+    let out = ok("consume(match (x) { A(v) => v, _ => 0 } as number);");
+    assert!(out.contains("$tt_v1($tt_v0 as number);"), "{out}");
+    let object = ok("consume({item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(object.contains("$tt_v1({item: $tt_v0});"), "{object}");
 }
 
 #[test]
@@ -638,10 +651,10 @@ fn try_expression_may_contain_a_match() {
         "function f(): X {\n  const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });\n  return x;\n}\n",
     );
     assert!(nested.contains("const $tt_v1 = (wrap);"), "{nested}");
-    assert!(
-        nested.contains("const $tt_t0 = $tt_v1($tt_v0);"),
-        "{nested}"
-    );
+    // Each arm performs the consuming call itself (TASK-327); the try
+    // propagation then reads the completed result.
+    assert!(nested.contains("$tt_v0 = $tt_v1(value);"), "{nested}");
+    assert!(nested.contains("const $tt_t0 = $tt_v0;"), "{nested}");
     assert!(!nested.contains("$tt_expr"), "{nested}");
 
     let discarded = ok(

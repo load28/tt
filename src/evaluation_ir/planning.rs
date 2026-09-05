@@ -18,7 +18,18 @@ pub(super) fn resolve_schedule(
         slot_names,
         occupied_names,
     )?;
-    schedule.call_completion = protocol.call_completion;
+    schedule.call_completion = protocol
+        .call_completion
+        .map(|facts| {
+            Ok::<_, EvaluationError>(PlannedCallCompletion {
+                instantiated: facts
+                    .type_args
+                    .map(|_| allocate_value_slot(next_slot, slot_names, occupied_names))
+                    .transpose()?,
+                facts,
+            })
+        })
+        .transpose()?;
     Ok(schedule)
 }
 

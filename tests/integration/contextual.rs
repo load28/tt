@@ -522,3 +522,182 @@ for (const value of [0, 1, 2, 3]) {
         ]
     );
 }
+
+#[test]
+fn scoped_host_call_completions_preserve_contextual_typing() {
+    require_toolchain!();
+    let dir = tmpdir();
+    let first = "({kind: \"item\", run: x => x + value})";
+    let second = "({kind: \"item\", run: x => x})";
+    let matches = [
+        format!("match (state) {{ Ready(value) => {first}, Empty => {second} }}"),
+        format!("match (state) {{ Ready(value) if value > 0 => {first}, _ => {second} }}"),
+        format!(
+            "match (state) {{ Ready(value) => {{ return {first}; }}, Empty => {{ return {second}; }} }}"
+        ),
+        format!(
+            "match (state) {{ Ready(value) => {{ const amount = value + 1; effect(); return {{kind: \"item\", run: x => x + amount}}; }}, Empty => {second} }}"
+        ),
+    ];
+    // TASK-327's host forms: consumed results, method and optional calls,
+    // and explicit generic arguments. Every callback parameter is
+    // unannotated so strict checking proves genuine contextual typing.
+    let hosts = [
+        "consume(VALUE);",
+        "const consumed: number = consume(VALUE);",
+        "return consume(VALUE);",
+        "const added: number = consume(VALUE) + 1;",
+        "api.consume(VALUE);",
+        "const method: number = api.consume(VALUE);",
+        "maybeConsume?.(VALUE);",
+        "const optional: number | undefined = maybeConsume?.(VALUE);",
+        "generic<Item>(VALUE);",
+        "const instantiated: Item = generic<Item>(VALUE);",
+    ];
+    let mut files = Vec::new();
+    for kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let mut source = String::from(
+            "type Item = {kind: 'item'; run: (x: number) => number};\n\
+             declare function consume(item: Item): number;\n\
+             declare const api: { consume(item: Item): number };\n\
+             declare const maybeConsume: ((item: Item) => number) | undefined;\n\
+             declare function generic<T>(value: T): T;\n\
+             declare function effect(): void;\n\
+             variant State { Ready(value: number), Empty }\n",
+        );
+        for (match_index, matched) in matches.iter().enumerate() {
+            for (host_index, host) in hosts.iter().enumerate() {
+                source.push_str(&format!(
+                    "function cell_{match_index}_{host_index}(state: State): unknown {{ {} return undefined; }}\n",
+                    host.replace("VALUE", matched),
+                ));
+                source.push_str(&format!(
+                    "function oracle_{match_index}_{host_index}(state: State, value: number): unknown {{ {} return undefined; }}\n",
+                    host.replace("VALUE", &format!("(state ? {first} : {second})")),
+                ));
+            }
+        }
+        let emitted = compile(
+            &as_module(&source),
+            &Options {
+                source_kind: kind,
+                ..Options::default()
+            },
+        )
+        .unwrap();
+        let file = dir.join(if kind == SourceKind::Tsx {
+            "completions.tsx"
+        } else {
+            "completions.ts"
+        });
+        fs::write(&file, emitted).unwrap();
+        files.push(file);
+    }
+    let checked = Command::new("tsc")
+        .args(&files)
+        .args(TSC_FLAGS)
+        .args(["--noEmit", "--jsx", "preserve"])
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{}", tsc_report(&checked));
+}
+
+#[test]
+fn consumed_call_completions_preserve_results_order_and_errors() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+const api = {
+  base: 10,
+  get consume() {
+    trace.push("callee");
+    return function(this: {base: number}, item: Item) { trace.push("call"); return this.base + item.run(3); };
+  },
+};
+for (const state of [State.Ready(4), State.Empty]) {
+  trace.length = 0;
+  const result = mark("receiver", api).consume(match (mark("subject", state)) {
+    Ready(value) => (trace.push("arm"), {kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+  }) + mark("after", 1);
+  console.log(result, trace.join(","));
+}
+function throws(item: Item): number { trace.push("throws:" + item.run(1)); throw new Error("consumer"); }
+trace.length = 0;
+let unreached = "kept";
+try {
+  unreached = "lost:" + throws(match (State.Ready(2)) {
+    Ready(value) => { trace.push("value"); return {kind: "item", run: x => x + value}; },
+    Empty => ({kind: "item", run: x => x}),
+  });
+} catch { trace.push("caught"); }
+console.log(unreached, trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        [
+            "18 receiver,callee,subject,arm,call,after",
+            "14 receiver,callee,subject,call,after",
+            "kept value,throws:3,caught",
+        ]
+    );
+}
+
+#[test]
+fn optional_call_completions_skip_subjects_and_deliver_results() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+const present: ((item: Item) => number) | undefined = item => { trace.push("call"); return item.run(2); };
+const absent: ((item: Item) => number) | undefined = undefined;
+for (const consume of [present, absent]) {
+  trace.length = 0;
+  const result = consume?.(match (mark("subject", State.Ready(5))) {
+    Ready(value) => (trace.push("arm"), {kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+  });
+  console.log(result, trace.join(",") || "silent");
+}
+const holder = {
+  base: 100,
+  maybe(item: Item): number { trace.push("method"); return this.base + item.run(1); },
+};
+trace.length = 0;
+const viaReceiver = holder.maybe?.(match (mark("subject", State.Ready(7))) {
+  Ready(value) => ({kind: "item", run: x => x * value}),
+  Empty => ({kind: "item", run: x => x}),
+});
+console.log(viaReceiver, trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        [
+            "7 subject,arm,call",
+            "undefined silent",
+            "107 subject,method"
+        ]
+    );
+}
+
+#[test]
+fn instantiated_call_completions_keep_generic_context() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function generic<T>(value: T): T { trace.push("call"); return value; }
+const item = generic<Item>(match (State.Ready(3)) {
+  Ready(value) => { trace.push("arm"); return {kind: "item", run: x => x + value}; },
+  Empty => ({kind: "item", run: x => x}),
+});
+console.log(item.run(1), trace.join(","));
+"#);
+    assert_eq!(output, ["4 arm,call"]);
+}

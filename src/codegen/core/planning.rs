@@ -426,9 +426,26 @@ pub(super) enum ComposeAction {
     Operation(PlannedConditionalOperation),
 }
 
+/// A syntax-proven call the dispatch arms perform themselves, so the
+/// argument keeps the consumer's contextual type (TASK-324, TASK-327).
+#[derive(Debug, Clone)]
+pub(super) struct CallCompletionPlan {
+    /// The text each arm calls through, up to and excluding the argument:
+    /// the captured (possibly instantiated) callee plus `(`.
+    pub(super) invoke: String,
+    /// A capture emitted once before the dispatch, binding the instantiated
+    /// callee: generated name, authored type-argument span, callee slot.
+    pub(super) instantiation: Option<(String, SourceSpan, String)>,
+    /// The value slot receiving the call's result when the authored call is
+    /// consumed; `None` for a discarded expression-statement call.
+    pub(super) result: Option<String>,
+    /// The whole authored call expression.
+    pub(super) call: SourceSpan,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct ComposeValue {
-    pub(super) call_completion: Option<String>,
+    pub(super) call_completion: Option<CallCompletionPlan>,
     /// Multi-value owners keep each match at its native evaluation position.
     pub(super) inline: bool,
     pub(super) expr: ExprId,
@@ -458,18 +475,15 @@ pub(super) fn single_return_arm_value(
         .map(|exit| (span, *exit))
 }
 
-fn scoped_call_completion(
-    core: &CoreFile,
-    expr: ExprId,
-    exits: &[HostExit],
-    steps: &[PlannedEvaluationStep],
-    lowering: &LoweringPlan,
-) -> Option<String> {
+/// Whether a match's arms may perform the consuming call themselves: every
+/// arm is an opaque expression, or a linear-return block whose value return
+/// can carry the call without crossing a handler or finalizer.
+pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[HostExit]) -> bool {
     let Expr::Decision(decision) = &core.exprs[expr.index()] else {
-        return None;
+        return false;
     };
-    if !matches!(decision.kind, DecisionKind::Match { .. })
-        || !decision.arms.iter().all(|arm| match arm.action {
+    matches!(decision.kind, DecisionKind::Match { .. })
+        && decision.arms.iter().all(|arm| match arm.action {
             ArmAction::Yield {
                 body,
                 kind: ArmBodyKind::Expression,
@@ -491,26 +505,55 @@ fn scoped_call_completion(
             }
             _ => false,
         })
-    {
+}
+
+fn scoped_call_completion(
+    core: &CoreFile,
+    expr: ExprId,
+    exits: &[HostExit],
+    schedule: &EvaluationSchedule,
+    value_slot: &str,
+    lowering: &LoweringPlan,
+) -> Option<CallCompletionPlan> {
+    let completion = schedule.call_completion?;
+    if !completable_decision_arms(core, expr, exits) {
         return None;
     }
-    let [step] = steps else { return None };
+    // The value's innermost evaluation step must be the proven call itself:
+    // that is what ties the syntactic facts to this value being the whole
+    // argument rather than part of a larger one.
+    let step = schedule.steps().first()?;
     if step.operation
         != HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(0))
+        || step.parent != completion.facts.call
     {
         return None;
     }
-    let [
-        PlannedEvaluationInput::Source {
-            target,
-            receiver: None,
-            ..
-        },
-    ] = step.inputs.as_slice()
-    else {
+    let [PlannedEvaluationInput::Source { target, .. }] = step.inputs.as_slice() else {
         return None;
     };
-    Some(lowering.slot_name(*target).to_owned())
+    let callee = lowering.slot_name(*target).to_owned();
+    let instantiation = match (completion.facts.type_args, completion.instantiated) {
+        (Some(type_args), Some(slot)) => Some((
+            lowering.slot_name(slot).to_owned(),
+            type_args,
+            callee.clone(),
+        )),
+        (None, None) => None,
+        _ => return None,
+    };
+    let invoke = format!(
+        "{}(",
+        instantiation
+            .as_ref()
+            .map_or(callee.as_str(), |(name, ..)| name.as_str())
+    );
+    Some(CallCompletionPlan {
+        invoke,
+        instantiation,
+        result: completion.facts.consumed.then(|| value_slot.to_owned()),
+        call: completion.facts.call,
+    })
 }
 
 fn can_defer_arm_values(
@@ -811,20 +854,20 @@ impl TargetRewritePlan {
                             }),
                             None => {
                                 let ValueTarget::Slot(slot) = value.target;
+                                let slot_name = lowering.slot_name(slot).to_owned();
                                 let call_completion = if rewrite.values.len() == 1
                                     && !can_defer_arm_values(
                                         semantic,
                                         core,
                                         value.expr,
                                         &value.exits,
-                                    )
-                                    && value.schedule.call_completion.is_some()
-                                {
+                                    ) {
                                     scoped_call_completion(
                                         core,
                                         value.expr,
                                         &value.exits,
-                                        value.schedule.steps(),
+                                        &value.schedule,
+                                        &slot_name,
                                         lowering,
                                     )
                                 } else {
@@ -835,7 +878,7 @@ impl TargetRewritePlan {
                                     inline,
                                     expr: value.expr,
                                     source: value.source,
-                                    slot: lowering.slot_name(slot).to_owned(),
+                                    slot: slot_name,
                                     steps: if inline {
                                         Vec::new()
                                     } else {
@@ -1003,22 +1046,32 @@ impl TargetRewritePlan {
                     }),
             )
             .flat_map(|expr| structured_grouping_frames(semantic, core, source, expr));
+        // A discarded call claims its whole statement — nothing of it
+        // remains. A consumed call claims only the call expression's frame;
+        // the value's join slot stands at the authored occurrence and the
+        // rest of the statement keeps consuming it.
         let call_frames = || {
             composes.iter().flat_map(|rewrite| {
                 rewrite
                     .actions
                     .iter()
                     .filter_map(|action| match action {
-                        ComposeAction::Value(value) if value.call_completion.is_some() => {
-                            Some(value)
-                        }
+                        ComposeAction::Value(value) => value
+                            .call_completion
+                            .as_ref()
+                            .map(|completion| (value, completion)),
                         _ => None,
                     })
-                    .flat_map(move |value| {
+                    .flat_map(move |(value, completion)| {
+                        let (start, end) = if completion.result.is_some() {
+                            (completion.call.start, completion.call.end)
+                        } else {
+                            (rewrite.owner.start, rewrite.owner.end)
+                        };
                         [
                             (
                                 SourceSpan {
-                                    start: rewrite.owner.start,
+                                    start,
                                     end: value.source.start,
                                 },
                                 value.expr,
@@ -1026,7 +1079,7 @@ impl TargetRewritePlan {
                             (
                                 SourceSpan {
                                     start: value.source.end,
-                                    end: rewrite.owner.end,
+                                    end,
                                 },
                                 value.expr,
                             ),
@@ -1114,7 +1167,12 @@ impl TargetRewritePlan {
             .chain(loop_operations().flat_map(|operation| operation.values.iter().copied()))
             .chain(
                 compose_values()
-                    .filter(|value| value.call_completion.is_some())
+                    .filter(|value| {
+                        value
+                            .call_completion
+                            .as_ref()
+                            .is_some_and(|completion| completion.result.is_none())
+                    })
                     .map(|value| value.expr),
             )
             .collect();

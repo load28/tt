@@ -141,11 +141,28 @@ pub(crate) struct HostExit {
 /// minimum source-backed owner. Target lowering must consume every step.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct HostEvaluationProtocol {
-    /// AST-proven discarded identifier call with one non-spread argument.
-    /// Target planning must also prove that this argument is the whole TT
-    /// value, not a larger expression containing it.
-    pub(crate) call_completion: Option<SourceSpan>,
+    /// AST-proven call whose single non-spread argument is exactly the TT
+    /// value. Target planning must still tie these facts to the value's
+    /// innermost evaluation step before consuming the call.
+    pub(crate) call_completion: Option<CallCompletionFacts>,
     steps: Vec<HostEvaluationStep>,
+}
+
+/// The syntactic facts of one completable call: a non-optional call
+/// expression with a source-backed callee and exactly one non-spread
+/// argument whose span is the whole TT value. The argument-span equality is
+/// what licenses dispatch arms to perform the call themselves — a larger
+/// argument expression (a cast, an operator) must keep its authored frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CallCompletionFacts {
+    /// The whole call expression.
+    pub(crate) call: SourceSpan,
+    /// Whether the call's result flows onward. A call in expression-statement
+    /// position is discarded; everywhere else the completed call must still
+    /// deliver its result to the authored position.
+    pub(crate) consumed: bool,
+    /// The call's explicit type arguments, verbatim.
+    pub(crate) type_args: Option<SourceSpan>,
 }
 
 impl HostEvaluationProtocol {

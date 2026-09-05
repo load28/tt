@@ -2,22 +2,37 @@ use super::*;
 use std::collections::BTreeSet;
 
 #[test]
-fn call_completion_proofs_require_a_discarded_single_argument_call() {
+fn call_completion_proofs_require_a_whole_value_single_argument() {
+    // expected: None, or Some((consumed, has type arguments)).
     for (host, expected) in [
-        ("consume(VALUE);", true),
-        ("const result = consume(VALUE);", false),
-        ("consume(VALUE, 1);", false),
-        ("consume({item: VALUE});", true), // The schedule separately rejects nested argument frames.
-        ("object.consume(VALUE);", false),
-        ("consume?.(VALUE);", false),
-        ("consume<Item>(VALUE);", false),
+        ("consume(VALUE);", Some((false, false))),
+        ("const result = consume(VALUE);", Some((true, false))),
+        ("return consume(VALUE);", Some((true, false))),
+        ("consume(VALUE, 1);", None),
+        // The argument is wider than the value: a cast or a containing
+        // expression must keep its authored frame around the value.
+        ("consume({item: VALUE});", None),
+        ("consume(VALUE as number);", None),
+        ("consume(1 + VALUE);", None),
+        ("object.consume(VALUE);", Some((false, false))),
+        ("const result = object.consume(VALUE);", Some((true, false))),
+        ("consume?.(VALUE);", None),
+        ("consume<Item>(VALUE);", Some((false, true))),
+        ("consume(...[VALUE]);", None),
     ] {
-        let program = syntax(&host.replace("VALUE", "match (flag) { true => 1, _ => 0 }"));
+        let source = host.replace("VALUE", "match (flag) { true => 1, _ => 0 }");
+        let source = if host.starts_with("return ") {
+            format!("function wrap() {{ {source} }}")
+        } else {
+            source
+        };
+        let program = syntax(&source);
+        let completion = program
+            .overlay
+            .iter()
+            .find_map(|entry| entry.protocol.call_completion);
         assert_eq!(
-            program
-                .overlay
-                .iter()
-                .any(|entry| entry.protocol.call_completion.is_some()),
+            completion.map(|facts| (facts.consumed, facts.type_args.is_some())),
             expected,
             "{host}"
         );

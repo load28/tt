@@ -331,8 +331,20 @@ pub(crate) enum ExpressionBoundaryReason {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct EvaluationSchedule {
     /// Optional host-call completion carried from the syntax proof.
-    pub(crate) call_completion: Option<SourceSpan>,
+    pub(crate) call_completion: Option<PlannedCallCompletion>,
     steps: Vec<PlannedEvaluationStep>,
+}
+
+/// A syntax-proven completable call with its generated-name reservations
+/// ([`crate::program_syntax::CallCompletionFacts`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PlannedCallCompletion {
+    pub(crate) facts: crate::program_syntax::CallCompletionFacts,
+    /// The slot that holds the captured callee instantiated with the
+    /// authored type arguments, when the call carries them. Instantiating
+    /// once keeps one source-mapped copy of the type arguments while every
+    /// dispatch arm calls through the instantiated binding.
+    pub(crate) instantiated: Option<ValueSlotId>,
 }
 
 impl EvaluationSchedule {

@@ -160,7 +160,9 @@ pub(super) enum ProjectedProtocolFrame {
         alternate: ProjectedSpan,
     },
     Call {
-        discarded_single: bool,
+        /// Whether the call sits in expression-statement position, so its
+        /// result is discarded.
+        discarded: bool,
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,

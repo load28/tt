@@ -425,10 +425,12 @@ impl VisitAstPath for ParentCollector {
             }
         };
         self.protocol_frames.push(ProjectedProtocolFrame::Call {
-            discarded_single: node.args.len() == 1 && node.args[0].spread.is_none() && node.type_args.is_none()
-                && matches!(&node.callee, swc_ecma_ast::Callee::Expr(callee) if matches!(callee.as_ref(), swc_ecma_ast::Expr::Ident(_)))
-                && path.kinds().iter().rev().find(|kind| !matches!(kind, AstParentKind::Expr(fields::ExprField::Call)))
-                    .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
+            discarded: path
+                .kinds()
+                .iter()
+                .rev()
+                .find(|kind| !matches!(kind, AstParentKind::Expr(fields::ExprField::Call)))
+                .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
             parent: span,
             callee: Some(projected_span(
                 match &node.callee {
@@ -704,7 +706,7 @@ impl VisitAstPath for ParentCollector {
     fn visit_opt_call<'ast: 'r, 'r>(&mut self, node: &'ast OptCall, path: &mut AstNodePath<'r>) {
         let (callee_mode, callee_receiver) = call_callee_mode(&node.callee);
         self.protocol_frames.push(ProjectedProtocolFrame::Call {
-            discarded_single: false,
+            discarded: false,
             parent: projected_span(node.span, self.source_start),
             callee: Some(projected_span(
                 reference_value_span(&node.callee),

@@ -598,7 +598,14 @@ impl<'a> Emitter<'a> {
         match continuation.destination {
             ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
             ValueDestination::Assign(target) => out.push_lit(format!("{target} = ")),
-            ValueDestination::Invoke(callee) => out.push_lit(format!("{callee}(")),
+            ValueDestination::Invoke {
+                prefix,
+                result: Some(result),
+            } => out.push_lit(format!("{result} = {prefix}")),
+            ValueDestination::Invoke {
+                prefix,
+                result: None,
+            } => out.push_lit(prefix.to_owned()),
         }
         if grouped {
             out.push_lit("(");
@@ -610,7 +617,7 @@ impl<'a> Emitter<'a> {
         if grouped {
             out.push_lit(")");
         }
-        if matches!(continuation.destination, ValueDestination::Invoke(_)) {
+        if matches!(continuation.destination, ValueDestination::Invoke { .. }) {
             out.push_lit(")");
         }
         out.push_lit(";");

@@ -99,7 +99,16 @@ impl<'a> Emitter<'a> {
         }
         for action in &rewrite.actions {
             let slot = match action {
-                ComposeAction::Value(value) if value.call_completion.is_some() => continue,
+                // A discarded completed call produces nothing; a consumed
+                // one still fills the value's join slot with the result.
+                ComposeAction::Value(value)
+                    if value
+                        .call_completion
+                        .as_ref()
+                        .is_some_and(|completion| completion.result.is_none()) =>
+                {
+                    continue;
+                }
                 ComposeAction::Value(value) if value.inline => {
                     let Expr::Decision(decision) = &self.core.exprs[value.expr.index()] else {
                         crate::ice::bug!("inline value lost its decision")
@@ -133,11 +142,30 @@ impl<'a> Emitter<'a> {
                         continue;
                     }
                     let _active = self.active_structured_exprs.enter(value.expr);
-                    let mut lowered = if let Some(callee) = &value.call_completion {
-                        self.emit_continued_expr(value.expr, &ValueContinuation::invoke(callee))
+                    let mut lowered = if let Some(completion) = &value.call_completion {
+                        let mut region = Rope::new();
+                        if let Some((name, type_args, callee)) = &completion.instantiation {
+                            region.push_lit(format!("const {name} = {callee}"));
+                            region.push_src(
+                                &self.source[type_args.start..type_args.end],
+                                type_args.start,
+                            );
+                            region.push_lit(";");
+                            region.push_break(0);
+                        }
+                        region.append(
+                            self.emit_continued_expr(
+                                value.expr,
+                                &ValueContinuation::invoke(
+                                    &completion.invoke,
+                                    completion.result.as_deref(),
+                                ),
+                            )
                             .unwrap_or_else(|| {
                                 crate::ice::bug!("scoped call lost its value decision")
-                            })
+                            }),
+                        );
+                        region
                     } else if value.defer_arm_values {
                         self.emit_arm_selector(value.expr, &value.slot)
                     } else {
@@ -326,6 +354,66 @@ impl<'a> Emitter<'a> {
             } => {
                 out.push_lit(format!("if ({condition} != null) {{"));
                 out.push_break(1);
+                let receiver = match &operation.condition {
+                    PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::MemberReference,
+                        receiver,
+                        ..
+                    } => Some(
+                        receiver
+                            .unwrap_or_else(|| crate::ice::bug!("member callee has no receiver")),
+                    ),
+                    _ => None,
+                };
+                // A single whole-value argument with completable arms calls
+                // the captured callee from each dispatch arm, keeping the
+                // argument in the consumer's contextual position — the same
+                // completion the plain-call path performs (TASK-327).
+                if let [PlannedOperand::Value(expr)] = arguments.as_slice()
+                    && type_args.is_none()
+                    && completable_decision_arms(self.core, *expr, &self.exits_for_expr(*expr))
+                {
+                    let prefix = match receiver {
+                        Some(receiver) => {
+                            let mut text = format!("{condition}.call(");
+                            match receiver {
+                                PlannedReceiver::Captured { slot, .. } => {
+                                    text.push_str(self.value_slot_name(slot));
+                                }
+                                PlannedReceiver::Stable { source } => {
+                                    text.push_str(&self.source[source.start..source.end]);
+                                }
+                            }
+                            text.push_str(", ");
+                            text
+                        }
+                        None => format!("{condition}("),
+                    };
+                    let _active = self.active_structured_exprs.enter(*expr);
+                    let body = self
+                        .emit_continued_expr(
+                            *expr,
+                            &ValueContinuation::invoke(&prefix, Some(result)),
+                        )
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("optional completed call lost its value decision")
+                        });
+                    out.append(Rope::indented(1, body));
+                    out.push_break(0);
+                    out.push_lit("} else {");
+                    out.push_break(1);
+                    out.push_lit(format!("{result} = undefined;"));
+                    out.push_break(0);
+                    out.push_lit("}");
+                    out.push_break(0);
+                    self.conditional_region_depth
+                        .set(self.conditional_region_depth.get() - 1);
+                    let primary = operation.values[0];
+                    let (kind, start, end, extent) = self.value_anchor(primary);
+                    let mut anchored = Rope::new();
+                    anchored.anchored(kind, start, end, extent, Rope::scoped(out));
+                    return anchored;
+                }
                 // The active branch: arguments in source order — captures
                 // for those before a tt value, regions for the values —
                 // then the call, through the receiver when the callee is a
@@ -359,17 +447,6 @@ impl<'a> Emitter<'a> {
                 if let Some(span) = type_args {
                     body.push_src(&self.source[span.start..span.end], span.start);
                 }
-                let receiver = match &operation.condition {
-                    PlannedEvaluationInput::Source {
-                        mode: EvaluationInputMode::MemberReference,
-                        receiver,
-                        ..
-                    } => Some(
-                        receiver
-                            .unwrap_or_else(|| crate::ice::bug!("member callee has no receiver")),
-                    ),
-                    _ => None,
-                };
                 match receiver {
                     Some(receiver) => {
                         body.push_lit(".call(");

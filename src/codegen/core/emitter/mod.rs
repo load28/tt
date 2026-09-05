@@ -120,7 +120,14 @@ enum ValueDestination<'name> {
     Expression,
     Return,
     Assign(&'name str),
-    Invoke(&'name str),
+    /// Deliver the value as the single argument of a captured callee. The
+    /// prefix carries the callee text up to and excluding the argument;
+    /// `result` receives the call's value when the authored call was
+    /// consumed.
+    Invoke {
+        prefix: &'name str,
+        result: Option<&'name str>,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -170,9 +177,9 @@ impl<'name> ValueContinuation<'name> {
         }
     }
 
-    fn invoke(callee: &'name str) -> Self {
+    fn invoke(prefix: &'name str, result: Option<&'name str>) -> Self {
         Self {
-            destination: ValueDestination::Invoke(callee),
+            destination: ValueDestination::Invoke { prefix, result },
             wrappers: Vec::new(),
         }
     }
@@ -186,7 +193,7 @@ impl<'name> ValueContinuation<'name> {
     fn assigns(&self) -> bool {
         matches!(
             self.destination,
-            ValueDestination::Assign(_) | ValueDestination::Invoke(_)
+            ValueDestination::Assign(_) | ValueDestination::Invoke { .. }
         )
     }
 
@@ -202,7 +209,10 @@ impl<'name> ValueContinuation<'name> {
     fn assignment_target(&self) -> Option<&str> {
         match self.destination {
             ValueDestination::Expression | ValueDestination::Return => None,
-            ValueDestination::Assign(target) | ValueDestination::Invoke(target) => Some(target),
+            ValueDestination::Assign(target) => Some(target),
+            // A completed call without a consumed result has no assignment
+            // slot; its prefix still names the continuation for labels.
+            ValueDestination::Invoke { prefix, result } => Some(result.unwrap_or(prefix)),
         }
     }
 
@@ -212,7 +222,14 @@ impl<'name> ValueContinuation<'name> {
         let mut prefix = match self.destination {
             ValueDestination::Return => "return ".to_owned(),
             ValueDestination::Assign(target) => format!("{target} = "),
-            ValueDestination::Invoke(callee) => format!("{callee}("),
+            ValueDestination::Invoke {
+                prefix,
+                result: Some(result),
+            } => format!("{result} = {prefix}"),
+            ValueDestination::Invoke {
+                prefix,
+                result: None,
+            } => prefix.to_owned(),
             ValueDestination::Expression => {
                 crate::ice::bug!("inline expression continuation cannot rewrite an exit")
             }
@@ -238,7 +255,7 @@ impl<'name> ValueContinuation<'name> {
         for _ in self.wrappers.iter().rev() {
             suffix.push_str(" }");
         }
-        if matches!(self.destination, ValueDestination::Invoke(_)) {
+        if matches!(self.destination, ValueDestination::Invoke { .. }) {
             suffix.push(')');
         }
         suffix

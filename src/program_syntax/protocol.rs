@@ -16,17 +16,35 @@ pub(super) fn evaluation_protocol(
         .into_iter()
         .flatten()
         .collect();
+    // The innermost call whose single non-spread argument is exactly the
+    // value. Span equality is the "whole TT value" proof: a cast or operator
+    // around the value widens the argument span and disqualifies the call.
     let call_completion = frames
         .iter()
+        .rev()
         .find_map(|frame| match frame {
             ProjectedProtocolFrame::Call {
-                discarded_single: true,
+                discarded,
                 parent,
+                callee: Some(_),
+                arguments,
+                type_args,
+                optional: false,
                 ..
-            } => Some(*parent),
+            } if matches!(arguments.as_slice(), [(argument, false, _)] if *argument == value) => {
+                Some((*parent, *discarded, *type_args))
+            }
             _ => None,
         })
-        .map(|span| map_structural_span(segments, span))
+        .map(|(span, discarded, type_args)| {
+            Ok::<_, ProgramSyntaxError>(CallCompletionFacts {
+                call: map_structural_span(segments, span)?,
+                consumed: !discarded,
+                type_args: type_args
+                    .map(|span| map_evaluation_span(segments, span))
+                    .transpose()?,
+            })
+        })
         .transpose()?;
     Ok(HostEvaluationProtocol {
         steps,
