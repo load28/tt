@@ -194,6 +194,11 @@ impl<'a> Emitter<'a> {
                         && !replacement
                             .anchor
                             .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                        // A claimed call frame erases source only from the
+                        // remaining statement walk; a sibling's structural
+                        // emission still reads its own subject and arm text
+                        // inside the frame.
+                        && (!replacement.claim || self.active_structured_exprs.is_empty())
                         && replacement.source.start <= cursor
                         && cursor < replacement.source.end
                 } else {
@@ -256,7 +261,8 @@ impl<'a> Emitter<'a> {
                             && self.loop_region_depth.get() == 0
                             && !replacement
                                 .anchor
-                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))))
+                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                            && (!replacement.claim || self.active_structured_exprs.is_empty())))
                         && cursor < replacement.source.start
                         && replacement.source.start < span.end
                 })

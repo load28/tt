@@ -73,6 +73,10 @@ impl ActiveExprStack {
         self.exprs.borrow().contains(&expr)
     }
 
+    fn is_empty(&self) -> bool {
+        self.exprs.borrow().is_empty()
+    }
+
     fn enter(&self, expr: ExprId) -> ActiveExprGuard<'_> {
         self.exprs.borrow_mut().push(expr);
         ActiveExprGuard { stack: self, expr }

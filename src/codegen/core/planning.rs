@@ -514,6 +514,7 @@ pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[
 
 fn scoped_call_completion(
     core: &CoreFile,
+    source: &str,
     expr: ExprId,
     exits: &[HostExit],
     schedule: &EvaluationSchedule,
@@ -526,15 +527,23 @@ fn scoped_call_completion(
     }
     // The value's innermost evaluation step must be the proven call itself:
     // that is what ties the syntactic facts to this value being the whole
-    // argument rather than part of a larger one.
+    // final argument rather than part of a larger one. The step's inputs are
+    // the callee plus every earlier argument, each already scheduled to
+    // evaluate before the dispatch, so the arm's call re-reads them from
+    // their capture slots (a sibling tt value answers with its join slot; a
+    // proven-inert input re-evaluates unobservably in place).
     let step = schedule.steps().first()?;
-    if step.operation
-        != HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(0))
-        || step.parent != completion.facts.call
+    let HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(index)) =
+        step.operation
+    else {
+        return None;
+    };
+    if step.parent != completion.facts.call
+        || step.inputs.len() != usize::try_from(index).ok()?.checked_add(1)?
     {
         return None;
     }
-    let [PlannedEvaluationInput::Source { target, .. }] = step.inputs.as_slice() else {
+    let PlannedEvaluationInput::Source { target, .. } = step.inputs.first()? else {
         return None;
     };
     let callee = lowering.slot_name(*target).to_owned();
@@ -547,12 +556,26 @@ fn scoped_call_completion(
         (None, None) => None,
         _ => return None,
     };
-    let invoke = format!(
+    let mut invoke = format!(
         "{}(",
         instantiation
             .as_ref()
             .map_or(callee.as_str(), |(name, ..)| name.as_str())
     );
+    for input in &step.inputs[1..] {
+        match input {
+            PlannedEvaluationInput::Source { target, .. } => {
+                invoke.push_str(lowering.slot_name(*target));
+            }
+            PlannedEvaluationInput::Slot { slot, .. } => {
+                invoke.push_str(lowering.slot_name(*slot));
+            }
+            PlannedEvaluationInput::Stable { source: span } => {
+                invoke.push_str(source.get(span.start..span.end)?);
+            }
+        }
+        invoke.push_str(", ");
+    }
     Some(CallCompletionPlan {
         invoke,
         instantiation,
@@ -636,6 +659,11 @@ pub(super) struct SourceReplacement {
     /// name carries — a conditional operation's result stands for the whole
     /// operation, so diagnostics on it belong to its primary tt value.
     pub(super) anchor: Option<ExprId>,
+    /// A completed call's claimed frame. It erases the frame only from the
+    /// remaining statement walk; while any value emits structurally (a
+    /// sibling's dispatch reading its subject or arm source inside the
+    /// frame), the authored text still passes through.
+    pub(super) claim: bool,
 }
 
 pub(super) type NestedSourceReplacement = (SourceSpan, String, Option<(AnchorKind, usize)>);
@@ -861,15 +889,21 @@ impl TargetRewritePlan {
                             None => {
                                 let ValueTarget::Slot(slot) = value.target;
                                 let slot_name = lowering.slot_name(slot).to_owned();
-                                let call_completion = if rewrite.values.len() == 1
-                                    && !can_defer_arm_values(
-                                        semantic,
-                                        core,
-                                        value.expr,
-                                        &value.exits,
-                                    ) {
+                                // A single-value owner prefers the deferred
+                                // in-place arm evaluation; in a multi-value
+                                // owner that plan does not apply, so the
+                                // final-argument completion takes over.
+                                let call_completion = if !inline
+                                    && !(rewrite.values.len() == 1
+                                        && can_defer_arm_values(
+                                            semantic,
+                                            core,
+                                            value.expr,
+                                            &value.exits,
+                                        )) {
                                     scoped_call_completion(
                                         core,
+                                        source,
                                         value.expr,
                                         &value.exits,
                                         &value.schedule,
@@ -1125,6 +1159,7 @@ impl TargetRewritePlan {
                     slot: lowering.slot_name(operation.result).to_owned(),
                     jsx_child: false,
                     anchor: Some(primary),
+                    claim: false,
                 }
             })
             .collect();
@@ -1146,6 +1181,7 @@ impl TargetRewritePlan {
                     slot: lowering.slot_name(*target).to_owned(),
                     jsx_child: *mode == EvaluationInputMode::JsxChildValue,
                     anchor: None,
+                    claim: false,
                 }),
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
             })
@@ -1154,6 +1190,7 @@ impl TargetRewritePlan {
                 slot: rewrite.slot.clone(),
                 jsx_child: false,
                 anchor: Some(rewrite.expr),
+                claim: false,
             }))
             .chain(operation_replacements)
             .collect();
@@ -1166,6 +1203,7 @@ impl TargetRewritePlan {
                 slot: String::new(),
                 jsx_child: false,
                 anchor: Some(expr),
+                claim: true,
             }),
         );
         let consumed_exprs: HashSet<ExprId> = compose_operations()
@@ -1181,6 +1219,38 @@ impl TargetRewritePlan {
                     })
                     .map(|value| value.expr),
             )
+            // A sibling value inside a completed call's claimed frame has no
+            // authored occurrence left; the arm's call reads its join slot
+            // through the invoke prefix instead.
+            .chain(composes.iter().flat_map(|rewrite| {
+                rewrite
+                    .actions
+                    .iter()
+                    .filter_map(|action| match action {
+                        ComposeAction::Value(value) => value
+                            .call_completion
+                            .as_ref()
+                            .map(|completion| (value, completion)),
+                        _ => None,
+                    })
+                    .flat_map(move |(value, completion)| {
+                        let start = if completion.result.is_some() {
+                            completion.call.start
+                        } else {
+                            rewrite.owner.start
+                        };
+                        rewrite.actions.iter().filter_map(move |other| match other {
+                            ComposeAction::Value(other_value)
+                                if other_value.expr != value.expr
+                                    && start <= other_value.source.start
+                                    && other_value.source.end <= value.source.start =>
+                            {
+                                Some(other_value.expr)
+                            }
+                            _ => None,
+                        })
+                    })
+            }))
             .collect();
         let slot_exprs = owner_slots
             .iter()

@@ -94,9 +94,12 @@ dispatch. An additional 112 sibling cells cover family pairs in calls, arrays,
 conditional arguments, and TSX props. Unmatched values call a hygienic `never`
 throw helper; no authored code is moved into a callback.
 
-Calls whose single non-spread argument is exactly the match can use a scoped
-invocation continuation: the callee is captured before the match, and each arm
-supplies its value directly while payload/local bindings remain in scope. The
+Calls whose final non-spread argument is exactly the match can use a scoped
+invocation continuation: the callee and every earlier argument are captured
+before the match, and each arm supplies its value directly while payload/local
+bindings remain in scope. A match in a non-final argument position keeps its
+join slot, because the call would otherwise run the later arguments' subjects
+too early. The
 completion covers discarded and consumed results, identifier and member
 callees (through the existing receiver-preserving capture), explicit type
 arguments (instantiating the captured callee once), and single-argument
@@ -110,9 +113,11 @@ authored exit. Cleanup-bearing arms keep the consumer outside the arm: moving
 the call would place it inside the arm's handler and ahead of its finalizers
 or disposal. An argument wider than the match — a cast, an operator, a
 containing literal — keeps its authored call frame. Matches nested inside a
-larger argument expression and scoped sibling composition remain tracked in
-[TASK-332](../tasks/TASK-332-wrapped-argument-contextual-values.md) and
-[TASK-329](../tasks/TASK-329-scoped-sibling-composition.md).
+larger argument expression remain tracked in
+[TASK-332](../tasks/TASK-332-wrapped-argument-contextual-values.md), and the
+contextual type an unannotated capture erases — for an earlier argument, or
+for a match in a non-final position — in
+[TASK-333](../tasks/TASK-333-captured-argument-contextual-types.md).
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a

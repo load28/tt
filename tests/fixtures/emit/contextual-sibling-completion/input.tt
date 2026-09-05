@@ -1,0 +1,24 @@
+type Item = { kind: "item"; run: (x: number) => number };
+declare function pair(first: Item, second: Item): number;
+declare function trio(first: Item, between: number, third: Item): number;
+declare function make(): Item;
+declare const made: Item;
+variant State { Ready(value: number), Empty }
+declare const state: State;
+
+const paired = pair(make(), match (state) {
+  Ready(value) => ({ kind: "item", run: x => x + value }),
+  Empty => ({ kind: "item", run: x => x }),
+});
+
+trio(made, 7, match (state) {
+  Ready(value) => { return { kind: "item", run: x => x + value }; },
+  Empty => ({ kind: "item", run: x => x }),
+});
+
+const leading = pair(match (state) {
+  Ready(value) => ({ kind: "item" as const, run: (x: number) => x + value }),
+  Empty => ({ kind: "item" as const, run: (x: number) => x }),
+}, make());
+
+export { paired, leading };

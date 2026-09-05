@@ -796,3 +796,110 @@ console.log(trace.join(","));
 "#);
     assert_eq!(output, ["4 arm,finally,call", "throwing,caught outside"]);
 }
+
+#[test]
+fn scoped_sibling_final_arguments_keep_contextual_typing() {
+    require_toolchain!();
+    let dir = tmpdir();
+    let scoped = [
+        "match (state) { Ready(value) => ({kind: \"item\", run: x => x + value}), Empty => ({kind: \"item\", run: x => x}) }",
+        "match (state) { Ready(value) if value > 0 => ({kind: \"item\", run: x => x + value}), _ => ({kind: \"item\", run: x => x}) }",
+        "match (state) { Ready(value) => { const amount = value + 1; return {kind: \"item\", run: x => x + amount}; }, Empty => ({kind: \"item\", run: x => x}) }",
+        "match (state) { Ready(value) => { if (value > 0) return {kind: \"item\", run: x => x + value}; return {kind: \"item\", run: x => x}; }, Empty => ({kind: \"item\", run: x => x}) }",
+    ];
+    // Earlier arguments are captured before the dispatch, so their own
+    // types must not depend on the capture's contextual type
+    // (TASK-333 tracks that separate boundary).
+    let firsts = ["made", "make()", "state ? made : make()"];
+    let mut files = Vec::new();
+    for kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let mut source = String::from(
+            "type Item = {kind: 'item'; run: (x: number) => number};\n\
+             declare function pair(first: Item, second: Item): number;\n\
+             declare function trio(first: Item, between: number, third: Item): number;\n\
+             declare function make(): Item;\n\
+             declare const made: Item;\n\
+             variant State { Ready(value: number), Empty }\n",
+        );
+        for (scoped_index, second) in scoped.iter().enumerate() {
+            for (first_index, first) in firsts.iter().enumerate() {
+                source.push_str(&format!(
+                    "function cell_{scoped_index}_{first_index}(state: State): number {{ return pair({first}, {second}); }}\n"
+                ));
+                source.push_str(&format!(
+                    "function trio_{scoped_index}_{first_index}(state: State): number {{ return trio({first}, 7, {second}); }}\n"
+                ));
+                source.push_str(&format!(
+                    "function oracle_{scoped_index}_{first_index}(state: State, value: number): number {{ return pair({first}, state ? {{kind: \"item\", run: x => x + value}} : {{kind: \"item\", run: x => x}}); }}\n"
+                ));
+            }
+        }
+        let emitted = compile(
+            &as_module(&source),
+            &Options {
+                source_kind: kind,
+                ..Options::default()
+            },
+        )
+        .unwrap();
+        let file = dir.join(if kind == SourceKind::Tsx {
+            "sibling-completions.tsx"
+        } else {
+            "sibling-completions.ts"
+        });
+        fs::write(&file, emitted).unwrap();
+        files.push(file);
+    }
+    let checked = Command::new("tsc")
+        .args(&files)
+        .args(TSC_FLAGS)
+        .args(["--noEmit", "--jsx", "preserve"])
+        .output()
+        .unwrap();
+    assert!(checked.status.success(), "{}", tsc_report(&checked));
+}
+
+#[test]
+fn scoped_sibling_completions_preserve_order_and_slots() {
+    require_toolchain!();
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+function pair(first: Item, second: Item): number { trace.push("call"); return first.run(1) + second.run(2); }
+let shared = 10;
+for (const state of [State.Ready(4), State.Empty]) {
+  trace.length = 0;
+  shared = 10;
+  const result = pair(
+    match (mark("subject1", state)) {
+      Ready(value) => (trace.push("arm1"), shared = value, {kind: "item" as const, run: (x: number) => x + shared}),
+      Empty => ({kind: "item" as const, run: (x: number) => x}),
+    },
+    match (mark("subject2", shared > 5)) {
+      true => (trace.push("arm2:big"), {kind: "item", run: x => x * shared}),
+      false => (trace.push("arm2:small"), {kind: "item", run: x => x + shared}),
+    },
+  );
+  console.log(result, trace.join(","));
+}
+function throwingSubject(): State { trace.push("boom"); throw new Error("subject"); }
+trace.length = 0;
+try {
+  pair(
+    match (State.Ready(1)) { Ready(value) => (trace.push("first"), {kind: "item" as const, run: (x: number) => x + value}), Empty => ({kind: "item" as const, run: (x: number) => x}) },
+    match (throwingSubject()) { Ready(value) => ({kind: "item", run: x => x + value}), Empty => ({kind: "item", run: x => x}) },
+  );
+} catch { trace.push("caught"); }
+console.log(trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        [
+            "11 subject1,arm1,subject2,arm2:small,call",
+            "21 subject1,subject2,arm2:big,call",
+            "first,boom,caught",
+        ]
+    );
+}

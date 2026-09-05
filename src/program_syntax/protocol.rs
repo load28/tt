@@ -16,9 +16,12 @@ pub(super) fn evaluation_protocol(
         .into_iter()
         .flatten()
         .collect();
-    // The innermost call whose single non-spread argument is exactly the
+    // The innermost call whose final non-spread argument is exactly the
     // value. Span equality is the "whole TT value" proof: a cast or operator
     // around the value widens the argument span and disqualifies the call.
+    // Earlier arguments evaluate before the value and are captured by the
+    // schedule; an argument after the value would have to run inside the
+    // dispatch, so only the final position completes.
     let call_completion = frames
         .iter()
         .rev()
@@ -31,7 +34,9 @@ pub(super) fn evaluation_protocol(
                 type_args,
                 optional: false,
                 ..
-            } if matches!(arguments.as_slice(), [(argument, false, _)] if *argument == value) => {
+            } if matches!(arguments.last(), Some((argument, false, _)) if *argument == value)
+                && arguments.iter().all(|(_, spread, _)| !*spread) =>
+            {
                 Some((*parent, *discarded, *type_args))
             }
             _ => None,

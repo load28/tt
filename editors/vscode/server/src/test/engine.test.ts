@@ -212,6 +212,7 @@ for (const extension of ["tt", "ttx"]) {
       "declare const api: { consume(item: Item): number };",
       "declare const maybe: ((item: Item) => number) | undefined;",
       "declare function generic<T>(value: T): T;",
+      "declare const made: Item;",
     ].join("\n");
     const cases = [
       'consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
@@ -221,6 +222,7 @@ for (const extension of ["tt", "ttx"]) {
       'const optional = maybe?.(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'const instantiated = generic<Item>(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'consume(match (state) { Ready(value) => { if (value > 0) return {run: x => x.toFixed() + value}; return {run: x => x.toFixed()}; }, Empty => ({run: x => x.toFixed()}) });',
+      'pair(made, match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
     ];
     fs.writeFileSync(file, "export {};\n");
     try {

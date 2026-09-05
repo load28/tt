@@ -435,6 +435,22 @@ fn control_flow_arm_completions_use_a_labeled_region() {
 }
 
 #[test]
+fn final_argument_completions_call_through_captured_earlier_arguments() {
+    // Only the final argument's match performs the call; earlier arguments
+    // keep their authored evaluation order in capture slots the arm reads
+    // (TASK-329).
+    let out = ok("pair(first(), match (x) { A(v) => v, _ => 0 });");
+    assert!(out.contains("const $tt_v2 = (first());"), "{out}");
+    assert!(out.contains("$tt_v1($tt_v2, v);"), "{out}");
+    assert!(out.contains("$tt_v1($tt_v2, 0);"), "{out}");
+    // A match that is not the final argument keeps its join slot: moving the
+    // call into it would run the later argument's subject too early.
+    let leading = ok("pair(match (x) { A(v) => v, _ => 0 }, last());");
+    assert!(leading.contains("$tt_v0 = v;"), "{leading}");
+    assert!(leading.contains("$tt_v1($tt_v0, last());"), "{leading}");
+}
+
+#[test]
 fn wildcard_with_guard_is_not_tt_syntax() {
     // `_ if ...` does not parse as a tt match; the arrow arm has already
     // committed the construct to tt.
