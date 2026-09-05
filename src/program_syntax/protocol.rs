@@ -16,16 +16,21 @@ pub(super) fn evaluation_protocol(
         .into_iter()
         .flatten()
         .collect();
-    // The innermost call whose final non-spread argument is exactly the
-    // value. Span equality is the "whole TT value" proof: a cast or operator
-    // around the value widens the argument span and disqualifies the call.
+    // The innermost call whose final non-spread argument contains the value.
     // Earlier arguments evaluate before the value and are captured by the
     // schedule; an argument after the value would have to run inside the
     // dispatch, so only the final position completes.
+    //
+    // The argument may be wider than the value — `f({ k: match … })` — and
+    // then the authored text around the value has to be re-emitted inside
+    // each arm. Whether that is legal depends on what that text evaluates,
+    // which is the schedule's answer, not syntax's: this records the
+    // argument's extent and leaves the decision to target planning.
     let call_completion = frames
         .iter()
+        .enumerate()
         .rev()
-        .find_map(|frame| match frame {
+        .find_map(|(index, frame)| match frame {
             ProjectedProtocolFrame::Call {
                 discarded,
                 parent,
@@ -34,16 +39,22 @@ pub(super) fn evaluation_protocol(
                 type_args,
                 optional: false,
                 ..
-            } if matches!(arguments.last(), Some((argument, false, _)) if *argument == value)
+            } if matches!(arguments.last(), Some((argument, false, _)) if projected_contains(*argument, value))
                 && arguments.iter().all(|(_, spread, _)| !*spread) =>
             {
-                Some((*parent, *discarded, *type_args))
+                let argument = arguments
+                    .last()
+                    .unwrap_or_else(|| crate::ice::bug!("a matched final argument is present"))
+                    .0;
+                Some((index, *parent, argument, *discarded, *type_args))
             }
             _ => None,
         })
-        .map(|(span, discarded, type_args)| {
+        .map(|(index, span, argument, discarded, type_args)| {
             Ok::<_, ProgramSyntaxError>(CallCompletionFacts {
                 call: map_structural_span(segments, span)?,
+                argument: map_structural_span(segments, argument)?,
+                literal_positions: literal_position_chain(&frames[index + 1..], argument, value),
                 consumed: !discarded,
                 type_args: type_args
                     .map(|span| map_evaluation_span(segments, span))
@@ -55,6 +66,51 @@ pub(super) fn evaluation_protocol(
         steps,
         call_completion,
     })
+}
+
+/// Whether the path from `argument` down to `value` runs only through whole
+/// object- and array-literal positions.
+///
+/// That is what makes the text around the value re-emittable: a literal
+/// position holds one complete expression, so replacing it with an arm's
+/// value leaves the rest of the literal meaning what it meant. Anything else
+/// between them — a cast, an operator, a call — binds to the value, and
+/// re-emitting its text around a different expression would rebind it.
+///
+/// `frames` are the value's enclosing frames below the call, outermost
+/// first. Every one of them encloses the value, so a frame that is not the
+/// literal the walk expects ends the chain.
+fn literal_position_chain(
+    frames: &[ProjectedProtocolFrame],
+    argument: ProjectedSpan,
+    value: ProjectedSpan,
+) -> bool {
+    let mut target = argument;
+    for frame in frames {
+        if target == value {
+            return false;
+        }
+        let ProjectedProtocolFrame::Ordered {
+            parent,
+            positions,
+            kind: OrderedEvaluationKind::Object | OrderedEvaluationKind::Array,
+            spread_free: true,
+        } = frame
+        else {
+            return false;
+        };
+        if *parent != target {
+            return false;
+        }
+        let Some((position, _)) = positions
+            .iter()
+            .find(|(span, _)| projected_contains(*span, value))
+        else {
+            return false;
+        };
+        target = *position;
+    }
+    target == value
 }
 
 /// The projected shape of one conditional operation, before span mapping.
@@ -83,6 +139,7 @@ pub(super) fn protocol_step(
             parent,
             positions,
             kind,
+            ..
         } => {
             let Some(position) = positions
                 .iter()

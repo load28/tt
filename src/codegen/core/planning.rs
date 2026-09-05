@@ -449,6 +449,11 @@ pub(super) struct CallCompletionPlan {
     pub(super) label: String,
     /// The whole authored call expression.
     pub(super) call: SourceSpan,
+    /// The authored literal the value sits inside, split at the value: the
+    /// argument's text before it and after it. Empty when the value is the
+    /// whole argument. Each arm re-emits both around its own value, which is
+    /// what puts the arm value back in the consumer's contextual position.
+    pub(super) frame: Option<(SourceSpan, SourceSpan)>,
 }
 
 #[derive(Debug, Clone)]
@@ -517,34 +522,111 @@ pub(super) fn completable_decision_arms(core: &CoreFile, expr: ExprId, exits: &[
         })
 }
 
+/// Whether the authored text between the completed call's argument and the
+/// value may be re-emitted inside every arm.
+///
+/// The steps below the call are the literal frames the value is nested in.
+/// Only object and array literals qualify: their positions are exactly the
+/// sub-expressions they evaluate, so "every earlier position is inert" is
+/// the whole question — the rest of the frame is keys and punctuation. An
+/// earlier position that is *not* inert would move from before the
+/// scrutinee to after it, which the arms cannot undo.
+fn framed_positions_are_inert(steps: &[PlannedEvaluationStep]) -> bool {
+    steps.iter().all(|step| {
+        matches!(
+            step.operation,
+            HostEvaluationOperation::Eager(
+                crate::program_syntax::EagerPosition::ObjectEvaluation(_)
+                    | crate::program_syntax::EagerPosition::ArrayElement(_)
+            )
+        ) && step
+            .inputs
+            .iter()
+            .all(|input| matches!(input, PlannedEvaluationInput::Stable { .. }))
+    })
+}
+
+/// Whether every arm delivers its value through the expression path.
+///
+/// A block arm rewrites its `return` through the string-building exit
+/// prefix, which cannot carry authored bytes with their source mapping. A
+/// framed completion has authored bytes to place, so it stays with the arms
+/// that deliver through [`emit_value_delivery_control`], where a frame is
+/// pushed as source.
+fn all_arms_are_expressions(core: &CoreFile, expr: ExprId) -> bool {
+    let Expr::Decision(decision) = &core.exprs[expr.index()] else {
+        return false;
+    };
+    decision.arms.iter().all(|arm| {
+        matches!(
+            arm.action,
+            ArmAction::Yield {
+                kind: ArmBodyKind::Expression,
+                ..
+            }
+        )
+    })
+}
+
 fn scoped_call_completion(
     core: &CoreFile,
     expr: ExprId,
     exits: &[HostExit],
     schedule: &EvaluationSchedule,
     value_slot: &str,
+    value_source: SourceSpan,
     lowering: &LoweringPlan,
 ) -> Option<CallCompletionPlan> {
     let completion = schedule.call_completion?;
     if !completable_decision_arms(core, expr, exits) {
         return None;
     }
-    // The value's innermost evaluation step must be the proven call itself:
-    // that is what ties the syntactic facts to this value being the whole
-    // final argument rather than part of a larger one. The step's inputs are
-    // the callee plus every earlier argument, each already scheduled to
+    // One of the value's evaluation steps must be the proven call itself:
+    // that is what ties the syntactic facts to this value. The step's inputs
+    // are the callee plus every earlier argument, each already scheduled to
     // evaluate before the dispatch, so the arm's call re-reads them from
     // their capture slots (a sibling tt value answers with its join slot; a
     // proven-inert input re-evaluates unobservably in place).
-    let step = schedule.steps().first()?;
+    //
+    // Steps before it are the literal frames between the argument and the
+    // value; the arms re-emit their authored text around each arm value.
+    let call_step = schedule.steps().iter().position(|step| {
+        step.parent == completion.facts.call
+            && matches!(
+                step.operation,
+                HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(
+                    _
+                ))
+            )
+    })?;
+    let frame = if completion.facts.argument == value_source {
+        None
+    } else {
+        if !completion.facts.literal_positions
+            || call_step == 0
+            || !framed_positions_are_inert(&schedule.steps()[..call_step])
+            || !all_arms_are_expressions(core, expr)
+        {
+            return None;
+        }
+        Some((
+            SourceSpan {
+                start: completion.facts.argument.start,
+                end: value_source.start,
+            },
+            SourceSpan {
+                start: value_source.end,
+                end: completion.facts.argument.end,
+            },
+        ))
+    };
+    let step = &schedule.steps()[call_step];
     let HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::CallArgument(index)) =
         step.operation
     else {
         return None;
     };
-    if step.parent != completion.facts.call
-        || step.inputs.len() != usize::try_from(index).ok()?.checked_add(1)?
-    {
+    if step.inputs.len() != usize::try_from(index).ok()?.checked_add(1)? {
         return None;
     }
     let PlannedEvaluationInput::Source { target, .. } = step.inputs.first()? else {
@@ -594,6 +676,7 @@ fn scoped_call_completion(
         result: completion.facts.consumed.then(|| value_slot.to_owned()),
         label: callee,
         call: completion.facts.call,
+        frame,
     })
 }
 
@@ -919,6 +1002,7 @@ impl TargetRewritePlan {
                                         &value.exits,
                                         &value.schedule,
                                         &slot_name,
+                                        value.source,
                                         lowering,
                                     )
                                 } else {

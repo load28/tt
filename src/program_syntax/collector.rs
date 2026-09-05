@@ -150,6 +150,12 @@ pub(super) enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         positions: Vec<(ProjectedSpan, Effects)>,
         kind: OrderedEvaluationKind,
+        /// Whether the operation has no spread element. A spread copies its
+        /// operand at the literal's own position, running whatever getters
+        /// the operand has, and the positions below record only the
+        /// operand's effects — so a lowering that moves the literal has to
+        /// ask this separately. Always true where the kind cannot spread.
+        spread_free: bool,
     },
     Binary {
         parent: ProjectedSpan,

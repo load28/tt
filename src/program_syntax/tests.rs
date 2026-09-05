@@ -3,21 +3,36 @@ use std::collections::BTreeSet;
 
 #[test]
 fn call_completion_proofs_require_a_whole_value_single_argument() {
-    // expected: None, or Some((consumed, has type arguments)).
+    // expected: None, or Some((consumed, has type arguments, the value is
+    // reachable through whole literal positions)).
     for (host, expected) in [
-        ("consume(VALUE);", Some((false, false))),
-        ("const result = consume(VALUE);", Some((true, false))),
-        ("return consume(VALUE);", Some((true, false))),
+        ("consume(VALUE);", Some((false, false, true))),
+        ("const result = consume(VALUE);", Some((true, false, true))),
+        ("return consume(VALUE);", Some((true, false, true))),
         ("consume(VALUE, 1);", None),
-        // The argument is wider than the value: a cast or a containing
-        // expression must keep its authored frame around the value.
-        ("consume({item: VALUE});", None),
-        ("consume(VALUE as number);", None),
-        ("consume(1 + VALUE);", None),
-        ("object.consume(VALUE);", Some((false, false))),
-        ("const result = object.consume(VALUE);", Some((true, false))),
+        // The argument is wider than the value. A literal position holds one
+        // complete expression, so an arm's value can take the value's place
+        // inside it; a cast or an operator binds to the value itself and
+        // would rebind to whatever took its place.
+        ("consume({item: VALUE});", Some((false, false, true))),
+        ("consume([VALUE]);", Some((false, false, true))),
+        (
+            "consume({outer: {item: VALUE}});",
+            Some((false, false, true)),
+        ),
+        (
+            "consume({item: VALUE as number});",
+            Some((false, false, false)),
+        ),
+        ("consume(VALUE as number);", Some((false, false, false))),
+        ("consume(1 + VALUE);", Some((false, false, false))),
+        ("object.consume(VALUE);", Some((false, false, true))),
+        (
+            "const result = object.consume(VALUE);",
+            Some((true, false, true)),
+        ),
         ("consume?.(VALUE);", None),
-        ("consume<Item>(VALUE);", Some((false, true))),
+        ("consume<Item>(VALUE);", Some((false, true, true))),
         ("consume(...[VALUE]);", None),
     ] {
         let source = host.replace("VALUE", "match (flag) { true => 1, _ => 0 }");
@@ -32,7 +47,11 @@ fn call_completion_proofs_require_a_whole_value_single_argument() {
             .iter()
             .find_map(|entry| entry.protocol.call_completion);
         assert_eq!(
-            completion.map(|facts| (facts.consumed, facts.type_args.is_some())),
+            completion.map(|facts| (
+                facts.consumed,
+                facts.type_args.is_some(),
+                facts.literal_positions
+            )),
             expected,
             "{host}"
         );

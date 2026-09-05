@@ -154,14 +154,25 @@ pub(crate) struct HostEvaluationProtocol {
 }
 
 /// The syntactic facts of one completable call: a non-optional call
-/// expression with a source-backed callee and exactly one non-spread
-/// argument whose span is the whole TT value. The argument-span equality is
-/// what licenses dispatch arms to perform the call themselves — a larger
-/// argument expression (a cast, an operator) must keep its authored frame.
+/// expression with a source-backed callee whose final non-spread argument
+/// contains the whole TT value. Containment — rather than equality — is
+/// what licenses dispatch arms to perform the call themselves; target
+/// planning decides separately whether the authored text between the
+/// argument and the value may be re-emitted inside the arms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct CallCompletionFacts {
     /// The whole call expression.
     pub(crate) call: SourceSpan,
+    /// The final argument. Equal to the value's own span when the value is
+    /// the whole argument; wider when the value sits inside a literal the
+    /// argument builds.
+    pub(crate) argument: SourceSpan,
+    /// Whether the path from the argument down to the value runs only
+    /// through whole object- and array-literal positions, so the authored
+    /// text around the value can be re-emitted around an arm's value and
+    /// still mean the same thing. Trivially true when the value *is* the
+    /// argument.
+    pub(crate) literal_positions: bool,
     /// Whether the call's result flows onward. A call in expression-statement
     /// position is discarded; everywhere else the completed call must still
     /// deliver its result to the authored position.

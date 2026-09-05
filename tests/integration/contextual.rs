@@ -88,6 +88,84 @@ consume(match (flag) {
 }
 
 #[test]
+fn literal_wrapped_call_arguments_keep_their_context() {
+    require_toolchain!();
+    // The value is a whole position of the literal the argument builds, so
+    // each arm re-emits the literal around its own value and the consumer's
+    // parameter type still reaches the arm (TASK-332). Without this the
+    // value crossed an unannotated join slot and strict checking reported
+    // TS7006 on every callback parameter.
+    let (valid, output) = typecheck(
+        r#"
+variant State { Ready(value: number), Empty }
+declare const state: State;
+declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
+declare function consumeAll(items: ((x: number) => number)[]): void;
+declare function nested(outer: {inner: {run: (x: number) => number}}): void;
+consume({kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}});
+consumeAll([match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}]);
+nested({inner: {run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}}});
+const kept: void = consume({kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}});
+"#,
+    );
+    assert!(valid, "{output}");
+}
+
+#[test]
+fn literal_wrapped_completions_keep_evaluation_order() {
+    require_toolchain!();
+    // The literal moves into the arms, so its own parts run after the
+    // scrutinee. That is only sound while they observe nothing: a part that
+    // does keeps the literal at its authored position, and the trace below
+    // pins both halves of that rule.
+    let output = run(r#"
+variant State { Ready(value: number), Empty }
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+type Item = {kind: string; run: (x: number) => number};
+function consume(item: Item) { trace.push("call:" + item.kind + ":" + item.run(3)); }
+for (const state of [State.Ready(4), State.Empty]) {
+  trace.length = 0;
+  consume({kind: "inert", run: match (mark("subject", state)) {
+    Ready(value) => x => x + value,
+    Empty => x => x,
+  }});
+  console.log(trace.join(","));
+}
+trace.length = 0;
+// An earlier position that observes something keeps the literal where it
+// was written, so it still runs before the scrutinee. The arms annotate
+// their own parameters here: this case is about order, and the value takes
+// the join slot precisely because the literal did not move.
+consume({kind: mark("sibling", "effectful"), run: match (mark("subject", State.Ready(1))) {
+  Ready(value) => (x: number) => x + value,
+  Empty => (x: number) => x,
+}});
+console.log(trace.join(","));
+"#);
+    assert_eq!(
+        output,
+        [
+            "subject,call:inert:7",
+            "subject,call:inert:3",
+            "sibling,subject,call:effectful:4",
+        ]
+    );
+}
+
+#[test]
 fn inline_sibling_failure_keeps_abrupt_completion() {
     require_toolchain!();
     let output = run(r#"

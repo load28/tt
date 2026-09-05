@@ -409,13 +409,68 @@ fn nested_await_match_keeps_its_expression_boundary() {
 
 #[test]
 fn call_arguments_wider_than_the_match_keep_their_authored_frame() {
-    // The completion proof requires the argument to be exactly the tt
-    // value. A cast (or any containing expression) around the value keeps
-    // the authored call and its frame, with the match joined by its slot.
+    // A cast, an operator — anything that binds to the value itself — keeps
+    // the authored call and its frame, with the match joined by its slot:
+    // re-emitting `as number` around an arm's value would rebind it to that
+    // value instead (TASK-332).
     let out = ok("consume(match (x) { A(v) => v, _ => 0 } as number);");
     assert!(out.contains("$tt_v1($tt_v0 as number);"), "{out}");
+    let sum = ok("consume(1 + match (x) { A(v) => v, _ => 0 });");
+    assert!(sum.contains("$tt_v2(1 + $tt_v0);"), "{sum}");
+    let cast_in_literal = ok("consume({item: match (x) { A(v) => v, _ => 0 } as number});");
+    assert!(
+        cast_in_literal.contains("$tt_v1({item: $tt_v0 as number});"),
+        "{cast_in_literal}"
+    );
+    // An earlier position that is not inert evaluates before the scrutinee.
+    // Moving the literal into the arms would run it after, so the literal
+    // stays where it was written.
+    let effectful = ok("consume({a: effect(), item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(
+        effectful.contains("$tt_v2({a: $tt_v1, item: $tt_v0});"),
+        "{effectful}"
+    );
+    // A spread copies its operand where the literal is built, running that
+    // operand's getters. The positions record only the operand, so the
+    // literal is kept where it was written rather than moved past the
+    // scrutinee.
+    let spread = ok("consume({...rest, item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(
+        spread.contains("$tt_v2({...$tt_v1, item: $tt_v0});"),
+        "{spread}"
+    );
+    let array_spread = ok("consume([...items, match (x) { A(v) => v, _ => 0 }]);");
+    assert!(
+        array_spread.contains("$tt_v2([...$tt_v1, $tt_v0]);"),
+        "{array_spread}"
+    );
+    // A block arm rewrites its exits through the string-built prefix, which
+    // carries no source mapping — so a literal with authored bytes to place
+    // stays outside the arms.
+    let block = ok("consume({item: match (x) { A(v) => { return v; }, _ => 0 }});");
+    assert!(block.contains("$tt_v1({item: $tt_v0});"), "{block}");
+}
+
+#[test]
+fn a_match_inside_a_literal_argument_completes_the_call_from_its_arms() {
+    // A whole object- or array-literal position holds one complete
+    // expression, so each arm can re-emit the literal around its own value
+    // and the argument keeps the consumer's contextual position (TASK-332).
     let object = ok("consume({item: match (x) { A(v) => v, _ => 0 }});");
-    assert!(object.contains("$tt_v1({item: $tt_v0});"), "{object}");
+    assert!(object.contains("$tt_v1({item: v});"), "{object}");
+    assert!(object.contains("$tt_v1({item: 0});"), "{object}");
+
+    let array = ok("consume([match (x) { A(v) => v, _ => 0 }]);");
+    assert!(array.contains("$tt_v1([v]);"), "{array}");
+    assert!(array.contains("$tt_v1([0]);"), "{array}");
+
+    let nested = ok("consume({outer: {item: match (x) { A(v) => v, _ => 0 }}});");
+    assert!(nested.contains("$tt_v1({outer: {item: v}});"), "{nested}");
+
+    // A consumed call still delivers its result to the authored position.
+    let consumed = ok("const kept = consume({item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(consumed.contains("$tt_v0 = $tt_v1({item: v});"), "{consumed}");
+    assert!(consumed.contains("const kept = $tt_v0;"), "{consumed}");
 }
 
 #[test]

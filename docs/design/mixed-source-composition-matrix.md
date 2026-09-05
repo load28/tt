@@ -94,7 +94,7 @@ dispatch. An additional 112 sibling cells cover family pairs in calls, arrays,
 conditional arguments, and TSX props. Unmatched values call a hygienic `never`
 throw helper; no authored code is moved into a callback.
 
-Calls whose final non-spread argument is exactly the match can use a scoped
+Calls whose final non-spread argument contains the match can use a scoped
 invocation continuation: the callee and every earlier argument are captured
 before the match, and each arm supplies its value directly while payload/local
 bindings remain in scope. A match in a non-final argument position keeps its
@@ -111,8 +111,21 @@ or `using` outside nested functions — so conditional and multiple returns,
 loops, and `switch` statements in an arm each carry the call at their own
 authored exit. Cleanup-bearing arms keep the consumer outside the arm: moving
 the call would place it inside the arm's handler and ahead of its finalizers
-or disposal. An argument wider than the match — a cast, an operator, a
-containing literal — keeps its authored call frame.
+or disposal.
+
+An argument wider than the match completes when the value is reachable from
+it through whole object- and array-literal positions only. Such a position
+holds one complete expression, so each arm re-emits the literal around its
+own value, as mapped source, and the value lands in the consumer's
+contextual position. The path is refused when anything else stands between
+them — a cast, an operator, a call — because that construct binds to the
+value and would rebind to whatever took its place; when any earlier position
+in the literal observes something, since moving the literal would run it
+after the scrutinee; when the literal spreads, since a spread copies its
+operand at the literal's position and the positions record only the operand;
+and when any arm is a block, whose rewritten exits go through the
+string-built prefix that carries no source mapping. Every refused form keeps
+its authored call frame with the match joined by its slot.
 
 A host expression the schedule must evaluate before a tt value stays at its
 authored position whenever evaluating it there is unobservable: a literal, a
@@ -122,8 +135,7 @@ an annotation. The one exception is a completed call, which is re-emitted
 inside the dispatch: it binds each such input to a reserved generated name
 once, from mapped source, rather than repeating it in every arm. Everything
 else is captured, and a tt value in a position no completion covers still
-crosses the boundary through an unannotated join slot — the residue tracked
-in [TASK-332](../tasks/TASK-332-wrapped-argument-contextual-values.md).
+crosses the boundary through an unannotated join slot.
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a

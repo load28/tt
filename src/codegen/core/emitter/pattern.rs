@@ -609,6 +609,14 @@ impl<'a> Emitter<'a> {
                 ..
             } => out.push_lit(prefix.to_owned()),
         }
+        let frame = match continuation.destination {
+            ValueDestination::Invoke { frame, .. } => frame,
+            _ => None,
+        };
+        // The literal the value was written inside, up to the value itself.
+        if let Some((head, _)) = frame {
+            out.push_src(&self.source[head.start..head.end], head.start);
+        }
         if grouped {
             out.push_lit("(");
         }
@@ -618,6 +626,9 @@ impl<'a> Emitter<'a> {
         }
         if grouped {
             out.push_lit(")");
+        }
+        if let Some((_, tail)) = frame {
+            out.push_src(&self.source[tail.start..tail.end], tail.start);
         }
         if matches!(continuation.destination, ValueDestination::Invoke { .. }) {
             out.push_lit(")");

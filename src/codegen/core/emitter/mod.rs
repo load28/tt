@@ -132,6 +132,11 @@ enum ValueDestination<'name> {
     /// inside a `break`-capturing statement.
     Invoke {
         prefix: &'name str,
+        /// The authored literal the value sits inside, split at the value.
+        /// Each arm re-emits both halves around its own value, as source, so
+        /// the arm value lands in the consumer's contextual position and the
+        /// frame's own bytes keep pointing at where they were written.
+        frame: Option<(SourceSpan, SourceSpan)>,
         result: Option<&'name str>,
         label: &'name str,
     },
@@ -184,10 +189,16 @@ impl<'name> ValueContinuation<'name> {
         }
     }
 
-    fn invoke(prefix: &'name str, result: Option<&'name str>, label: &'name str) -> Self {
+    fn invoke(
+        prefix: &'name str,
+        frame: Option<(SourceSpan, SourceSpan)>,
+        result: Option<&'name str>,
+        label: &'name str,
+    ) -> Self {
         Self {
             destination: ValueDestination::Invoke {
                 prefix,
+                frame,
                 result,
                 label,
             },
@@ -229,7 +240,14 @@ impl<'name> ValueContinuation<'name> {
 
     /// The text an early exit's `return ` becomes. `grouped` says whether
     /// the value it returns has to keep its parentheses ([`push_grouped`]).
+    ///
+    /// This builds a string, so it can carry no source mapping. A framed
+    /// completion has authored bytes to place and is refused for any match
+    /// that reaches this path (`all_arms_are_expressions`).
     fn assignment_prefix(&self, grouped: bool) -> String {
+        if let ValueDestination::Invoke { frame: Some(_), .. } = self.destination {
+            crate::ice::bug!("a framed completion cannot rewrite an exit")
+        }
         let mut prefix = match self.destination {
             ValueDestination::Return => "return ".to_owned(),
             ValueDestination::Assign(target) => format!("{target} = "),

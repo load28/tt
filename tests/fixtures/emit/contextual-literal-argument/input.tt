@@ -1,0 +1,39 @@
+type Item = { kind: string; run: (x: number) => number };
+declare function consume(item: Item): number;
+declare function consumeAll(runs: ((x: number) => number)[]): void;
+declare function nested(outer: { inner: Item }): void;
+declare function effect(): string;
+variant State { Ready(value: number), Empty }
+declare const state: State;
+
+consume({ kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+} });
+
+const kept = consume({ kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+} });
+
+consumeAll([match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}]);
+
+nested({ inner: { kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+} } });
+
+consume({ kind: effect(), run: match (state) {
+  Ready(value) => (x: number) => x + value,
+  Empty => (x: number) => x,
+} });
+
+consume({ kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+} as (x: number) => number });
+
+export { kept };

@@ -303,6 +303,7 @@ impl VisitAstPath for ParentCollector {
                 })
                 .collect(),
             kind: OrderedEvaluationKind::Array,
+            spread_free: node.elems.iter().flatten().all(|e| e.spread.is_none()),
         });
         <ArrayLit as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -317,6 +318,10 @@ impl VisitAstPath for ParentCollector {
             parent: projected_span(node.span, self.source_start),
             positions: object_evaluation_positions(node, self.source_start),
             kind: OrderedEvaluationKind::Object,
+            spread_free: !node
+                .props
+                .iter()
+                .any(|property| matches!(property, PropOrSpread::Spread(_))),
         });
         <ObjectLit as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -334,6 +339,7 @@ impl VisitAstPath for ParentCollector {
                 expression_effects(&node.right),
             )],
             kind: OrderedEvaluationKind::Assignment,
+            spread_free: true,
         });
         <AssignExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -353,6 +359,7 @@ impl VisitAstPath for ParentCollector {
                 })
                 .collect(),
             kind: OrderedEvaluationKind::Sequence,
+            spread_free: true,
         });
         <SeqExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -370,6 +377,7 @@ impl VisitAstPath for ParentCollector {
                 expression_effects(&node.arg),
             )],
             kind: OrderedEvaluationKind::Unary,
+            spread_free: true,
         });
         <UnaryExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
