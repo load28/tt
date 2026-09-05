@@ -32,6 +32,50 @@ const skipTyped = skip || (findTsgo() ? false : "tsgo not installed");
  * reached when something has hung. */
 const timeout = 60_000;
 
+for (const consumerKind of ["tt", "ttx"]) {
+  for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
+    test(`unsaved ${providerKind} changes refresh untouched ${consumerKind} diagnostics`, { skip: skipTyped, timeout }, async () => {
+      const dir = caseDir("tt-dependency-edit-");
+      const provider = path.join(dir, `provider.${providerKind}`);
+      const consumer = path.join(dir, `consumer.${consumerKind}`);
+      const original = 'export const value: string = "disk";\n';
+      const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\n`;
+      fs.writeFileSync(provider, original);
+      fs.writeFileSync(consumer, source);
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", jsx: "preserve", noEmit: true, allowImportingTsExtensions: true },
+        include: ["*"],
+      }));
+      const uri = pathToFileURL(consumer).toString();
+      const providerUri = pathToFileURL(provider).toString();
+      const client = connect();
+      try {
+        await client.request("initialize", {
+          processId: process.pid, rootUri: pathToFileURL(dir).toString(),
+          workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {},
+        });
+        client.notify("initialized", {});
+        // Open the host first: the project must exist before any tt request.
+        client.notify("textDocument/didOpen", { textDocument: {
+          uri: providerUri, languageId: providerKind === "ts" ? "typescript" : providerKind === "tsx" ? "typescriptreact" : providerKind,
+          version: 1, text: original,
+        } });
+        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
+        await clean;
+        const failed = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "ts2322"));
+        client.notify("textDocument/didChange", {
+          textDocument: { uri: providerUri, version: 2 }, contentChanges: [{ text: "export const value: number = 42;\n" }],
+        });
+        assert.equal((await failed).version, 1, "consumer was never edited");
+        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        client.notify("textDocument/didClose", { textDocument: { uri: providerUri } });
+        assert.equal((await cleared).version, 1, "closing reveals the disk dependency");
+      } finally { client.stop(); }
+    });
+  }
+}
+
 interface Client {
   request(method: string, params: unknown): Promise<any>;
   notify(method: string, params: unknown): void;

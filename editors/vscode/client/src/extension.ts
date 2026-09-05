@@ -12,6 +12,7 @@ import {
 } from "vscode-languageclient/node";
 
 import { registerContentMappers } from "./contentMapper";
+import { synchronizeHostDocuments } from "./hostDocuments";
 
 let client: LanguageClient | undefined;
 
@@ -54,6 +55,7 @@ export function activate(context: ExtensionContext): void {
     serverOptions,
     clientOptions,
   );
+  synchronizeHostDocuments(context, client);
   client.start();
 }
 

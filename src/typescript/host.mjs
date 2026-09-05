@@ -708,7 +708,9 @@ function serve(files, dirs, modules) {
   const seen = new Set();
   for (const module of modules) {
     seen.add(module.path);
-    if (!files.has(module.path)) created.push(module.path);
+    if (!files.has(module.path)) {
+      (fs.existsSync(module.path) ? changed : created).push(module.path);
+    }
     else if (files.get(module.path) !== module.text) changed.push(module.path);
     files.set(module.path, module.text);
     for (let d = path.dirname(module.path); d && d !== path.dirname(d); d = path.dirname(d)) {
@@ -717,7 +719,9 @@ function serve(files, dirs, modules) {
   }
   for (const known of [...files.keys()]) {
     if (!seen.has(known)) {
-      deleted.push(known);
+      // Releasing an overlay reveals a real host file again. It is a text
+      // change, not a deletion from the TypeScript project graph.
+      (fs.existsSync(known) ? changed : deleted).push(known);
       files.delete(known);
     }
   }

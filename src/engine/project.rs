@@ -220,6 +220,12 @@ impl Project {
             id: self.next_snapshot,
             files: projected,
             blocked: blocked_files,
+            host_overlays: self
+                .overlays
+                .iter()
+                .filter(|(path, _)| is_host_source(path))
+                .map(|(path, text)| (path.clone(), text.clone()))
+                .collect(),
         })
     }
 
@@ -336,6 +342,14 @@ impl Project {
             &self.sources,
         );
         query.emit_declarations = request.emit_declarations;
+        query
+            .modules
+            .extend(snapshot.host_overlays.iter().map(|(path, text)| {
+                crate::typescript::backend::Module {
+                    path: path.clone(),
+                    text: text.clone(),
+                }
+            }));
         // A backend that cannot run removes the typed facts, not the pass:
         // every typed answer degrades to unknown and the tt layer still
         // reports in full (`docs/design/compiler-core.md` §7).
@@ -379,6 +393,12 @@ impl Project {
             backend_error,
         })
     }
+}
+
+/// Host files retain their original paths and syntax in backend overlays.
+pub(super) fn is_host_source(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension == "ts" || extension == "tsx")
 }
 
 /// One cached [`FileSemantics`] with the half of its key the value does

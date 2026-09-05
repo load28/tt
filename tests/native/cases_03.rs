@@ -1,4 +1,46 @@
 #[test]
+fn host_overlays_are_snapshot_values_and_live_language_inputs() {
+    require_tsgo!();
+    for extension in ["ts", "tsx"] {
+        let provider = format!("src/provider.{extension}");
+        let source = "import { value } from './provider';\nconst result: string = value;\nvalue.toUpperCase();\n";
+        let dir = project(&[
+            (&provider, "export const value: string = 'disk';\n"),
+            ("src/consumer.tt", source),
+        ]);
+        let provider = dir.join(provider).canonicalize().unwrap();
+        let consumer = dir.join("src/consumer.tt").canonicalize().unwrap();
+        let engine = ttc::engine::Engine::new(None);
+        let mut project = engine.open_project(
+            &[consumer.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        ).unwrap();
+        let files = project.initial_files();
+        project.open_document(provider.clone(), "export const value: number = 42;\n".into());
+        let snapshot = project.update(&files).unwrap();
+        project.update_document(provider.clone(), "export const value: string = 'new';\n".into());
+        let checked = project.check(&snapshot, &ttc::engine::CheckRequest::default()).unwrap();
+        assert!(checked.backend_error.is_none(), "{:?}", checked.backend_error);
+        assert!(checked.diagnostics.iter().any(|d| d.path == consumer), "{:?}", checked.diagnostics);
+        assert_eq!(snapshot.source_of(&provider), Some("export const value: number = 42;\n"));
+        let position = ttc::engine::Position { line: 2, character: 6 };
+        let completions = project.completion(&consumer, position, true).unwrap();
+        assert!(completions.items.iter().any(|item| item.label == "toUpperCase"));
+        project.update_document(provider.clone(), "export const value: number = 42;\n".into());
+        let completions = project.completion(&consumer, position, true).unwrap();
+        assert!(completions.items.iter().any(|item| item.label == "toFixed"));
+        assert!(!completions.items.iter().any(|item| item.label == "toUpperCase"));
+        project.close_document(&provider);
+        let completions = project.completion(&consumer, position, true).unwrap();
+        assert!(completions.items.iter().any(|item| item.label == "toUpperCase"));
+        let snapshot = project.update(&files).unwrap();
+        let checked = project.check(&snapshot, &ttc::engine::CheckRequest::default()).unwrap();
+        assert!(checked.backend_error.is_none());
+        assert!(checked.diagnostics.is_empty(), "{:?}", checked.diagnostics);
+    }
+}
+
+#[test]
 fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
     require_tsgo!();
     // The point of asking the checker at all: a case an earlier test

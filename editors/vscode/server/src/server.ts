@@ -418,6 +418,9 @@ async function typedDiagnosticsFor(
 }
 
 function scheduleValidation(doc: TextDocument): void {
+  // Host TypeScript buffers participate in project state, but their own
+  // diagnostics belong to the TypeScript extension.
+  if (doc.languageId !== "tt" && doc.languageId !== "ttx") return;
   const existing = pendingValidation.get(doc.uri);
   if (existing !== undefined) clearTimeout(existing);
   const generation = (validationGeneration.get(doc.uri) ?? 0) + 1;
@@ -675,6 +678,7 @@ documents.onDidOpen((e) => {
   scheduleValidation(e.document);
 });
 documents.onDidSave((e) => {
+  if (e.document.languageId !== "tt" && e.document.languageId !== "ttx") return;
   void rebuildSidecar(e.document);
 });
 
@@ -728,7 +732,10 @@ documents.onDidChangeContent((e) => {
   for (const uri of declCache.keys()) {
     if (uri !== e.document.uri) declCache.delete(uri);
   }
-  scheduleValidation(e.document);
+  // A dependency edit invalidates answers for unchanged consumers as well.
+  // The engine owns dependency semantics; until it exposes affected files,
+  // conservatively refresh every open tt document with a new generation.
+  for (const doc of documents.all()) scheduleValidation(doc);
 });
 documents.onDidClose((e) => {
   const fsPath = enginePath(e.document);
@@ -748,6 +755,8 @@ documents.onDidClose((e) => {
     version: e.document.version,
     diagnostics: [],
   });
+  declCache.clear();
+  for (const doc of documents.all()) scheduleValidation(doc);
 });
 
 // -------------------------------------------------------------- completion

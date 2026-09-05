@@ -158,6 +158,7 @@
     "watch": "tsc -b -w",
     "postinstall": "cd client && npm install && cd ../server && npm install",
     "test": "npm run compile && node --test \"server/out/test/*.test.js\"",
+    "test:editor": "npm run compile && node scripts/test-editor.mjs",
     "grammar": "node syntaxes/build.mjs",
     "grammar:check": "node syntaxes/build.mjs --check"
   },

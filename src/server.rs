@@ -340,14 +340,15 @@ fn open_document(
     let canonical = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| format!("{path}: {e}"))?;
-    let inputs = vec![path.to_string()];
     let options = ProjectOptions::default();
-    let identity = Engine::project_identity(&inputs, &options)?;
+    let identity = Engine::document_project_identity(&canonical, &options)?;
     let project = match sessions.projects.entry(identity.clone()) {
         std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(sessions.engine.open_project(&inputs, &options)?)
-        }
+        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
+            sessions
+                .engine
+                .open_document_project(&canonical, &options)?,
+        ),
     };
     project.open_document(canonical.clone(), text);
     sessions.docs.insert(canonical, identity);

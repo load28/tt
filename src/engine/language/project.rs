@@ -744,6 +744,7 @@ impl Project {
             self.service = Some(ServiceSession {
                 client,
                 served: HashMap::new(),
+                host_served: HashMap::new(),
                 docs: HashMap::new(),
                 last_completion: HashMap::new(),
                 last_probe: None,
@@ -754,6 +755,26 @@ impl Project {
             service, overlays, ..
         } = self;
         let session = service.as_mut().expect("just ensured");
+
+        let closed: Vec<_> = session
+            .host_served
+            .keys()
+            .filter(|path| !overlays.contains_key(*path))
+            .cloned()
+            .collect();
+        for path in closed {
+            session.client.close(&file_uri(&path));
+            session.host_served.remove(&path);
+        }
+        for (path, text) in overlays
+            .iter()
+            .filter(|(path, _)| super::super::project::is_host_source(path))
+        {
+            if session.host_served.get(path) != Some(text) {
+                session.client.open(&file_uri(path), text);
+                session.host_served.insert(path.clone(), text.clone());
+            }
+        }
 
         let doc = serve_one(session, overlays, &canonical)
             .ok_or_else(|| format!("cannot read {}", canonical.display()))?;

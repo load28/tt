@@ -1,4 +1,30 @@
-# tt Language — VSCode 확장
+# tt Language — VSCode extension
+
+## Editor workflow tests
+
+`npm run test:editor` builds this development extension and launches the local
+`code` executable in an isolated profile. Build the compiler with `cargo build`
+at the repository root first. Set `VSCODE_EXECUTABLE` to use another executable.
+This does not install extensions or change your normal VS Code settings.
+
+The default matrix covers all four source extensions as dependencies of `.tt`
+and `.ttx` consumers (8 directed edges, 32 checks). To include `.ts` and `.tsx`
+consumers, set `VSCODE_TYPESCRIPT_EXTENSION` to a locally available TypeScript 7.1
+extension directory with content-mapper support. The runner loads it as a second
+development extension and configures the mapper in the isolated workspace
+(16 directed edges, 64 checks). No extension is downloaded automatically.
+
+Each edge exercises activation, complete and incomplete-buffer completion,
+definition navigation, application of rename edits, source-located diagnostics,
+unsaved dependency changes, updated member completion, and discarding edits.
+The tt consumers include a variant and match; JSX consumers include JSX.
+Test profiles, fixtures, and `results.json` remain under `target/editor-tests/`.
+Missing or incomplete reports fail the command; they are never counted as passes.
+
+The headless `npm test` / `scripts/ci extension` suite also covers the dependency
+edit/close lifecycle over LSP. An extension-host pass is additional evidence, not
+a claim that multi-root workspaces, every third-party extension combination,
+or large-project latency have been verified.
 
 tt(`.tt`)과 ttx(`.ttx`) 파일을 위한 VSCode 언어 서비스입니다. VSCode 공식
 [LSP 확장 패턴](https://code.visualstudio.com/api/language-extensions/language-server-extension-guide)
