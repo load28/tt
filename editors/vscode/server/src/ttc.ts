@@ -532,25 +532,55 @@ function runTypedCheckOnce(
   });
 }
 
-/** Parse `ttc: <file>:<line>:<col>: <msg>` / `ttc: <file>: <msg>` lines. */
+/**
+ * Read the diagnostics out of a one-shot `ttc --check` run.
+ *
+ * The compiler renders each one as a header naming the rule and the
+ * message, then a location line:
+ *
+ * ```text
+ * error[match-not-exhaustive]: match on variant Shape is not exhaustive
+ *  --> src/shape.tt:4:18
+ * ```
+ *
+ * followed by a source excerpt and `= help:` lines this fallback does not
+ * need. Positions come from the location line, so nothing here depends on
+ * the excerpt's layout. A compiler old enough to predate that rendering
+ * still prints `ttc: <file>:<line>:<col>: <msg>`, which is accepted too;
+ * `ttc: ` on its own now prefixes usage errors, which name no file and are
+ * therefore skipped by the same file check.
+ */
 export function parseStderr(stderr: string, file: string): TtcDiagnostic[] {
   const diagnostics: TtcDiagnostic[] = [];
-  for (const line of stderr.split("\n")) {
-    if (!line.startsWith("ttc: ")) continue;
-    const rest = line.slice(5);
-    if (!rest.startsWith(file)) continue; // progress logs, other files
-    const tail = rest.slice(file.length);
-    let m = /^:(\d+):(\d+): (.*)$/.exec(tail);
-    if (m) {
-      diagnostics.push({
-        line: Number(m[1]),
-        col: Number(m[2]),
-        message: m[3],
-      });
+  const lines = stderr.split("\n");
+  for (const [index, line] of lines.entries()) {
+    if (line.startsWith("ttc: ")) {
+      const rest = line.slice(5);
+      if (!rest.startsWith(file)) continue; // progress logs, other files
+      const tail = rest.slice(file.length);
+      let m = /^:(\d+):(\d+): (.*)$/.exec(tail);
+      if (m) {
+        diagnostics.push({
+          line: Number(m[1]),
+          col: Number(m[2]),
+          message: m[3],
+        });
+        continue;
+      }
+      m = /^: (.*)$/.exec(tail);
+      if (m) diagnostics.push({ line: 0, col: 0, message: m[1] });
       continue;
     }
-    m = /^: (.*)$/.exec(tail);
-    if (m) diagnostics.push({ line: 0, col: 0, message: m[1] });
+    const header = /^(?:error|warning)(?:\[([^\]]*)\])?: (.*)$/.exec(line);
+    if (!header) continue;
+    const location = /^\s*--> (.*):(\d+):(\d+)$/.exec(lines[index + 1] ?? "");
+    if (!location || location[1] !== file) continue;
+    diagnostics.push({
+      line: Number(location[2]),
+      col: Number(location[3]),
+      message: header[2],
+      code: header[1] || undefined,
+    });
   }
   return diagnostics;
 }

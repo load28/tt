@@ -342,7 +342,9 @@
 | TASK-331 | Install bundler adapter dependencies before their CI gate | Complete | 2026-09-05 | 2026-09-05 | [TASK-331](./TASK-331-install-unplugin-test-dependencies.md) |
 | TASK-332 | Preserve contextual typing for matches inside larger argument expressions | Pending | — | — | [TASK-332](./TASK-332-wrapped-argument-contextual-values.md) |
 | TASK-333 | Preserve contextual types through scheduled captures | Complete | 2026-09-05 | 2026-09-05 | [TASK-333](./TASK-333-captured-argument-contextual-types.md) |
+| TASK-334 | Keep one engine session per compiler and never crash on a dead pipe | Complete | 2026-09-05 | 2026-09-05 | [TASK-334](./TASK-334-engine-session-per-compiler.md) |
+| TASK-335 | Read the compiler's rendered diagnostics in the one-shot fallback | Complete | 2026-09-05 | 2026-09-05 | [TASK-335](./TASK-335-fallback-diagnostic-parsing.md) |
 
 ## Next task number
 
-**TASK-334**
+**TASK-336**
