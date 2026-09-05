@@ -96,6 +96,9 @@ jobs:
       - name: Test npm release tooling and project initializer
         run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
 
+      - name: Install bundler adapter dependencies
+        run: npm ci --prefix integrations/unplugin
+
       - name: Test bundler adapters against ttc
         env:
           TTC_BINARY: ${{ github.workspace }}/target/debug/ttc

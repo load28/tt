@@ -230,6 +230,7 @@ stage_npm() {
   # Unquoted on purpose: the shell expands the globs, as it does in CI.
   run node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs || return 1
   run cargo build || return 1
+  (cd "$TT_ROOT/integrations/unplugin" && npm_install_if_stale) || return 1
   run env TTC_BINARY="$TT_ROOT/target/debug/ttc" npm --prefix integrations/unplugin test || return 1
   run env TTC_BINARY="$TT_ROOT/target/debug/ttc" npm --prefix packages/create-tt run test:e2e || return 1
   run npm --prefix tools/deliberation-bot test || return 1
