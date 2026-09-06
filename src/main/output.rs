@@ -30,7 +30,7 @@ pub(super) fn source_map_for(
     job: &Job,
     emit: &ttc::MappedEmit,
     source: &str,
-    opts: &BuildOptions,
+    banner: BannerPlacement,
     mode: SourceMapMode,
 ) -> RenderedSourceMap {
     let out_name = job
@@ -45,7 +45,8 @@ pub(super) fn source_map_for(
             file: out_name.as_deref(),
             source: &source_name,
             embed_source: true,
-            generated_line_offset: usize::from(opts.banner),
+            generated_line_offset: banner.lines,
+            generated_line_offset_at: banner.at_line,
         },
     );
     match mode {
@@ -184,10 +185,12 @@ pub(super) fn watch_mode(
                 .cloned()
                 .collect();
             let failed = compile_jobs(&selected, opts);
+            // The count is what was rebuilt; only the word after it says
+            // how the round went, so "failed" must not borrow it.
             eprintln!(
                 "ttc: {} file(s) {} — watching",
                 selected.len(),
-                if failed { "failed" } else { "ok" }
+                if failed { "rebuilt, with errors" } else { "ok" }
             );
         }
 

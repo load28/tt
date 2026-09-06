@@ -85,8 +85,11 @@ Track every development task in `docs/tasks/INDEX.md` and an individual
 2. Record alternatives and rationale, the chronological work log, and each
    issue's symptom, cause, and resolution.
 3. Before completion, record verification results and changed files, then set
-   both the index and task record to `Complete`.
-4. Start commit titles with `TASK-NNN: subject`.
+   both the index and task record to `Complete`. `scripts/check-task-index`
+   holds the two to the same state, and the `agents` gate runs it.
+4. When a later task reverses a decision an earlier record made, say so at the
+   top of that record. A record left standing reads as current guidance.
+5. Start commit titles with `TASK-NNN: subject`.
 
 버전은 작업 단위로 올리지 않습니다. `main`의 Nightly 버전은 예약 CI가 산출물에만
 날짜로 스탬프합니다. Beta 이후 버전은 `release-X.Y`에서만 릴리스 액션이 변경합니다.

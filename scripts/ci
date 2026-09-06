@@ -199,6 +199,8 @@ stage_agents() {
   run test "$(cat CLAUDE.md)" = "@AGENTS.md" || return 1
   run grep -Fq './scripts/doctor' AGENTS.md || return 1
   run bash -n scripts/doctor || return 1
+  # AGENTS.md requires the index and the record to carry the same state.
+  run node scripts/check-task-index || return 1
   before="$(git status --porcelain)"
   printf '  $ %s\n' "./scripts/doctor"
   ./scripts/doctor > /dev/null
@@ -230,6 +232,7 @@ stage_npm() {
   # Unquoted on purpose: the shell expands the globs, as it does in CI.
   run node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs || return 1
   run cargo build || return 1
+  (cd "$TT_ROOT/integrations/unplugin" && npm_install_if_stale) || return 1
   run env TTC_BINARY="$TT_ROOT/target/debug/ttc" npm --prefix integrations/unplugin test || return 1
   run env TTC_BINARY="$TT_ROOT/target/debug/ttc" npm --prefix packages/create-tt run test:e2e || return 1
   run npm --prefix tools/deliberation-bot test || return 1
@@ -279,10 +282,11 @@ stage_extension() {
 
   mkdir -p "$LOG_DIR"
   log="$LOG_DIR/extension.log"
-  printf '  $ %s\n' "node --test server/out/test/*.test.js"
+  printf '  $ %s\n' "node --test server/out/test/*.test.js client/out/test/*.test.js"
   (
     cd "$TT_ROOT/editors/vscode" || exit 1
-    PATH="$TT_ROOT/target/debug:$PATH" node --test "server/out/test/*.test.js"
+    PATH="$TT_ROOT/target/debug:$PATH" node --test \
+      "server/out/test/*.test.js" "client/out/test/*.test.js"
   ) 2>&1 | tee "$log"
   status="${PIPESTATUS[0]}"
   [ "$status" -eq 0 ] || return 1

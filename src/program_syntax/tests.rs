@@ -2,22 +2,56 @@ use super::*;
 use std::collections::BTreeSet;
 
 #[test]
-fn call_completion_proofs_require_a_discarded_single_argument_call() {
+fn call_completion_proofs_require_a_whole_value_single_argument() {
+    // expected: None, or Some((consumed, has type arguments, the value is
+    // reachable through whole literal positions)).
     for (host, expected) in [
-        ("consume(VALUE);", true),
-        ("const result = consume(VALUE);", false),
-        ("consume(VALUE, 1);", false),
-        ("consume({item: VALUE});", true), // The schedule separately rejects nested argument frames.
-        ("object.consume(VALUE);", false),
-        ("consume?.(VALUE);", false),
-        ("consume<Item>(VALUE);", false),
+        ("consume(VALUE);", Some((false, false, true))),
+        ("const result = consume(VALUE);", Some((true, false, true))),
+        ("return consume(VALUE);", Some((true, false, true))),
+        ("consume(VALUE, 1);", None),
+        // The argument is wider than the value. A literal position holds one
+        // complete expression, so an arm's value can take the value's place
+        // inside it; a cast or an operator binds to the value itself and
+        // would rebind to whatever took its place.
+        ("consume({item: VALUE});", Some((false, false, true))),
+        ("consume([VALUE]);", Some((false, false, true))),
+        (
+            "consume({outer: {item: VALUE}});",
+            Some((false, false, true)),
+        ),
+        (
+            "consume({item: VALUE as number});",
+            Some((false, false, false)),
+        ),
+        ("consume(VALUE as number);", Some((false, false, false))),
+        ("consume(1 + VALUE);", Some((false, false, false))),
+        ("object.consume(VALUE);", Some((false, false, true))),
+        (
+            "const result = object.consume(VALUE);",
+            Some((true, false, true)),
+        ),
+        ("consume?.(VALUE);", None),
+        ("consume<Item>(VALUE);", Some((false, true, true))),
+        ("consume(...[VALUE]);", None),
     ] {
-        let program = syntax(&host.replace("VALUE", "match (flag) { true => 1, _ => 0 }"));
+        let source = host.replace("VALUE", "match (flag) { true => 1, _ => 0 }");
+        let source = if host.starts_with("return ") {
+            format!("function wrap() {{ {source} }}")
+        } else {
+            source
+        };
+        let program = syntax(&source);
+        let completion = program
+            .overlay
+            .iter()
+            .find_map(|entry| entry.protocol.call_completion);
         assert_eq!(
-            program
-                .overlay
-                .iter()
-                .any(|entry| entry.protocol.call_completion.is_some()),
+            completion.map(|facts| (
+                facts.consumed,
+                facts.type_args.is_some(),
+                facts.literal_positions
+            )),
             expected,
             "{host}"
         );
@@ -25,27 +59,82 @@ fn call_completion_proofs_require_a_discarded_single_argument_call() {
 }
 
 #[test]
-fn linear_completion_proofs_do_not_cross_handlers_or_finalizers() {
+fn call_safe_exit_proofs_do_not_cross_cleanup_boundaries() {
     for (body, expected) in [
         ("return value;", true),
         ("const local = value; effect(); return local;", true),
         ("function local() { return value; } return local();", true),
+        ("if (value) return value; return 0;", true),
+        ("for (;;) { if (value) return value; } return 0;", true),
+        ("switch (value) { default: return value; }", true),
+        ("label: { if (value) return value; } return 0;", true),
+        // A `try` in a nested function never encloses this arm's returns.
+        (
+            "const inner = () => { try { effect(); } finally { effect(); } }; return inner();",
+            true,
+        ),
         ("try { return value; } finally { effect(); }", false),
         ("try { return value; } catch { return 0; }", false),
-        ("if (value) return value; return 0;", false),
+        (
+            "if (value) return value; try { effect(); } finally { effect(); } return 0;",
+            false,
+        ),
         ("using resource = value; return resource;", false),
+        ("for (const item of value) { return item; } return 0;", true),
     ] {
         let program = syntax(&format!(
             "consume(match (flag) {{ true => {{ {body} }}, _ => 0 }});"
         ));
+        let exits: Vec<_> = program
+            .overlay
+            .iter()
+            .flat_map(|entry| &entry.exits)
+            .filter(|exit| exit.body.is_some())
+            .collect();
+        assert!(!exits.is_empty(), "{body}");
+        assert_eq!(exits.iter().all(|exit| exit.call_safe), expected, "{body}");
+    }
+}
+
+#[test]
+fn inert_expressions_are_exactly_the_unobservable_shapes() {
+    for (expression, inert) in [
+        ("1", true),
+        ("\"text\"", true),
+        ("x => x", true),
+        ("function (x) { effect(); return x; }", true),
+        ("{}", true),
+        ("[]", true),
+        ("{kind: \"item\", run: x => x}", true),
+        ("[1, {a: [2, x => x]}]", true),
+        ("{\"quoted\": 1, 2: [], [\"computed\"]: 3}", true),
+        (
+            "{get a() { return effect(); }, set a(v) { effect(); }, m() { return 1; }}",
+            true,
+        ),
+        // Every shape below evaluates something at construction time.
+        ("/re/", false),
+        ("{...spread}", false),
+        ("[...spread]", false),
+        ("{shorthand}", false),
+        ("{a: read}", false),
+        ("{a: effect()}", false),
+        ("{[key]: 1}", false),
+        ("[read]", false),
+        ("[effect()]", false),
+        ("{a: {b: effect()}}", false),
+    ] {
+        let source = format!("const value = {expression};\n");
+        let span = crate::hir::Span::new("const value = ".len(), source.len() - 2);
         assert_eq!(
-            program
-                .overlay
-                .iter()
-                .flat_map(|entry| &entry.exits)
-                .any(|exit| exit.linear_return_body.is_some()),
-            expected,
-            "{body}"
+            crate::program_syntax::source_expression_effects(
+                &source,
+                span,
+                crate::SourceKind::TypeScript,
+            )
+            .is_inert(),
+            inert,
+            "{expression}"
         );
     }
 }

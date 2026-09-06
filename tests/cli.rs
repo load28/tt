@@ -406,7 +406,7 @@ fn jobs_does_not_change_outputs_or_diagnostics() {
 
 #[test]
 fn jobs_rejects_zero_and_garbage() {
-    for value in ["0", "many", "-1"] {
+    for value in ["0", "many"] {
         let out = ttc(&["-j", value, "--check", "examples"]);
         assert!(!out.status.success(), "--jobs {value} should be rejected");
         let stderr = String::from_utf8(out.stderr).unwrap();
@@ -422,6 +422,70 @@ fn jobs_rejects_zero_and_garbage() {
             .unwrap()
             .contains("--jobs requires a value")
     );
+}
+
+/// A flag that takes a value does not take the next option as one.
+///
+/// `ttc -o --check src` reads as "build into --check"; it created a
+/// directory of that name, wrote the tree into it, and exited 0 without
+/// running the check the line asked for. Every value-taking flag had the
+/// same hole, and each swallowed option also disappeared from the run.
+#[test]
+fn value_flags_do_not_swallow_the_next_option() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (flag, label) in [
+        ("-o", "--out-dir"),
+        ("--out-dir", "--out-dir"),
+        ("-j", "--jobs"),
+        ("--jobs", "--jobs"),
+        ("--project", "--project"),
+        ("--node", "--node"),
+        ("--sidecar", "--sidecar"),
+        ("--overlay", "--overlay"),
+        ("--source-map", "--source-map"),
+        ("--rewrite-imports", "--rewrite-imports"),
+        ("--emit-std", "--emit-std"),
+    ] {
+        let out = ttc(&[flag, "--check", path]);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            !out.status.success(),
+            "{flag} took --check as its value: {stderr}"
+        );
+        assert!(
+            stderr.contains(label) && stderr.contains("--check"),
+            "{flag}: {stderr}"
+        );
+    }
+
+    // Nothing was created for the option that was mistaken for a value.
+    assert!(!dir.join("--check").exists());
+}
+
+/// The escape hatch stays open: a path that really begins with `-` is
+/// spelled the way every other tool spells it.
+#[test]
+fn a_relative_path_reaches_a_directory_named_like_an_option() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let _ = &file;
+
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(dir.path())
+        .args(["-o", "./-out", "input.tt"])
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("-out").join("input.ts").is_file());
 }
 
 #[test]
@@ -1008,3 +1072,270 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
 }
 
 include!("cli/cases_01.rs");
+
+/// A `#!` line and a byte-order mark are only themselves when they come
+/// first, so the generated banner is written after them (TASK-336). A
+/// comment above either one turns a runnable script into a parse error and
+/// leaves a stray U+FEFF in the middle of the file.
+#[test]
+fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let shebang = dir.join("cli.tt");
+    fs::write(&shebang, "#!/usr/bin/env node\nconsole.log(1);\n").unwrap();
+    // A hand-written `.ts` passes through, and its shebang matters too.
+    let passthrough = dir.join("plain.ts");
+    fs::write(&passthrough, "#!/usr/bin/env node\nconsole.log(2);\n").unwrap();
+    let bom = dir.join("bom.tt");
+    fs::write(&bom, "\u{feff}export const a = 1;\n").unwrap();
+    // A shebang that runs to the end of the file still needs a line break
+    // before the banner.
+    let bare = dir.join("bare.tt");
+    fs::write(&bare, "#!/usr/bin/env node").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    for name in ["cli.ts", "plain.ts"] {
+        let emitted = fs::read_to_string(out_dir.join(name)).unwrap();
+        let mut lines = emitted.lines();
+        assert_eq!(
+            lines.next(),
+            Some("#!/usr/bin/env node"),
+            "{name}: {emitted}"
+        );
+        assert!(
+            lines
+                .next()
+                .is_some_and(|line| line.starts_with("// @generated")),
+            "{name}: {emitted}"
+        );
+    }
+    let bom_emitted = fs::read_to_string(out_dir.join("bom.ts")).unwrap();
+    assert!(
+        bom_emitted.starts_with("\u{feff}// @generated"),
+        "{bom_emitted:?}"
+    );
+    assert_eq!(
+        bom_emitted.matches('\u{feff}').count(),
+        1,
+        "{bom_emitted:?}"
+    );
+    let bare_emitted = fs::read_to_string(out_dir.join("bare.ts")).unwrap();
+    assert_eq!(
+        bare_emitted.lines().next(),
+        Some("#!/usr/bin/env node"),
+        "{bare_emitted:?}"
+    );
+    assert!(
+        bare_emitted
+            .lines()
+            .nth(1)
+            .is_some_and(|line| line.starts_with("// @generated")),
+        "{bare_emitted:?}"
+    );
+}
+
+/// The banner shifts the lines below it, and only those: a shebang keeps
+/// line 1, so a map built against the emission must not shift it (TASK-336).
+#[test]
+fn a_source_map_follows_the_banner_past_a_shebang() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let source = dir.join("trace.tt");
+    fs::write(
+        &source,
+        "#!/usr/bin/env node\nvariant Shape { Circle(radius: number), Square(side: number) }\n\
+         export const area = (s: Shape): number => match (s) {\n\
+         \x20 Circle(radius) => radius,\n\
+         \x20 Square(side) => side,\n\
+         };\n",
+    )
+    .unwrap();
+    let output = ttc(&[
+        "--source-map",
+        "file",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let map = fs::read_to_string(out_dir.join("trace.ts.map")).unwrap();
+    let mappings = map
+        .split("\"mappings\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("a mappings field");
+    // The shebang owns generated line 1 in both files, so the first line of
+    // the map carries a segment rather than being skipped by the banner's
+    // shift.
+    assert!(
+        !mappings.starts_with(';'),
+        "the shebang line lost its mapping: {mappings}"
+    );
+}
+
+/// A reader that stops reading is the reader's decision, not a compiler
+/// failure: `ttc --help | head` must end quietly rather than reporting an
+/// internal compiler error and exiting 101 (TASK-337).
+#[test]
+fn a_closed_stdout_ends_the_run_quietly() {
+    use std::io::Read;
+    use std::process::Stdio;
+
+    for args in [
+        vec!["--help"],
+        vec!["-v"],
+        vec!["help", "all"],
+        vec!["explain"],
+        vec!["--emit-std", "option"],
+    ] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("failed to run ttc");
+        // Read one byte, then drop the pipe: the next write has nowhere to go.
+        let mut stdout = child.stdout.take().expect("piped stdout");
+        let mut first = [0u8; 1];
+        let _ = stdout.read(&mut first);
+        drop(stdout);
+        let output = child.wait_with_output().expect("ttc did not exit");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.contains("internal compiler error"),
+            "{args:?} reported a compiler bug for a closed pipe: {stderr}"
+        );
+        assert!(
+            output.status.success(),
+            "{args:?} exited with {:?}: {stderr}",
+            output.status.code()
+        );
+    }
+}
+
+/// `--project` names the config a check runs against, and its directory
+/// becomes the project root. A path that is not there used to root the
+/// project somewhere the user never named — or reach the TypeScript backend
+/// un-canonicalised — so it is rejected where it is given (TASK-338).
+#[test]
+fn a_project_path_that_is_not_a_file_is_rejected_by_name() {
+    let dir = tmpdir();
+    let source = dir.join("a.tt");
+    fs::write(&source, "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"noEmit\": true } }\n",
+    )
+    .unwrap();
+
+    for spelling in ["./tsconfg.json", "tsconfg.json"] {
+        let output = ttc(&[
+            "--check-types",
+            "--project",
+            spelling,
+            source.to_str().unwrap(),
+        ]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("--project") && stderr.contains(spelling),
+            "{spelling}: {stderr}"
+        );
+        assert!(
+            !stderr.contains("internal compiler error"),
+            "{spelling}: {stderr}"
+        );
+        assert!(!output.status.success(), "{spelling}: {stderr}");
+    }
+
+    let output = ttc(&[
+        "--check-types",
+        "--project",
+        dir.path().to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a file"), "{stderr}");
+    assert!(!output.status.success(), "{stderr}");
+}
+
+/// The output-collision contract has two halves. Two inputs claiming one
+/// output was already refused; one input claiming two — overlapping roots —
+/// used to write the same source twice and exit 0 (TASK-338).
+#[test]
+fn overlapping_input_roots_cannot_write_one_source_twice() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/deep")).unwrap();
+    fs::write(dir.join("src/deep/x.tt"), "export const a = 1;\n").unwrap();
+    fs::write(dir.join("src/y.tt"), "export const b = 2;\n").unwrap();
+    let out_dir = dir.join("out");
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.path().to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("one input claims two outputs"),
+        "overlapping roots were accepted: {stderr}"
+    );
+    assert!(!output.status.success(), "{stderr}");
+
+    // The same root named twice still resolves to one output per source.
+    let twice = dir.join("twice");
+    let output = ttc(&[
+        "-o",
+        twice.to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(twice.join("y.ts").exists());
+}
+
+/// A file named on the command line is filtered like any other: the
+/// extensions are the contract, not how the file was reached (TASK-338).
+#[test]
+fn a_named_file_that_is_not_a_source_is_reported() {
+    let dir = tmpdir();
+    let script = dir.join("app.js");
+    fs::write(&script, "variant S { A, B }\n").unwrap();
+    let output = ttc(&["-p", script.to_str().unwrap()]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a tt or TypeScript source"), "{stderr}");
+    assert!(!output.status.success(), "{stderr}");
+
+    // Every extension the walk takes still works when named directly.
+    for (name, body) in [
+        ("a.tt", "export const a = 1;\n"),
+        ("b.ts", "export const b = 2;\n"),
+    ] {
+        let file = dir.join(name);
+        fs::write(&file, body).unwrap();
+        let output = ttc(&["-p", file.to_str().unwrap()]);
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}

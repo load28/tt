@@ -15,7 +15,7 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt, sliceOf, spanOf } from "./positions";
-import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { COMPILER, answered, compilerAvailable, findTsgo } from "./toolchain";
 import { caseDir } from "./workspace";
 
 const skip = !compilerAvailable()
@@ -116,7 +116,7 @@ function ttxWorkspace(): { dir: string; ttx: string } {
 test("ttx receives the complete TypeScript and tt semantic surface", { skip }, async () => {
   const { dir, ttx } = ttxWorkspace();
 
-  const diagnostics = await engine.tsDiagnostics(COMPILER, ttx);
+  const diagnostics = answered(await engine.tsDiagnostics(COMPILER, ttx), "tsDiagnostics");
   const mismatch = diagnostics.find((diagnostic) => diagnostic.code === 2322);
   assert.ok(mismatch, JSON.stringify(diagnostics));
   assert.equal(sliceOf(TTX_SOURCE, mismatch!.range), "bad");
@@ -209,18 +209,27 @@ for (const extension of ["tt", "ttx"]) {
       "declare const state: State; declare const flag: boolean;",
       "type Item = {run: (x: number) => string};",
       "declare function consume(item: Item): void; declare function pair(a: Item, b: Item): void;",
+      "declare const api: { consume(item: Item): number };",
+      "declare const maybe: ((item: Item) => number) | undefined;",
+      "declare function generic<T>(value: T): T;",
+      "declare const made: Item;",
     ].join("\n");
     const cases = [
       'consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'consume(match (flag) { true => { const amount = 1; return {run: x => x.toFixed() + amount}; }, false => ({run: x => x.toFixed()}) });',
       'pair(match (flag) { true => ({run: x => x.toFixed()}), false => ({run: x => x.toFixed()}) }, match (flag) { true => ({run: x => x.toFixed()}), false => ({run: x => x.toFixed()}) });',
+      'const consumed = api.consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'const optional = maybe?.(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'const instantiated = generic<Item>(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'consume(match (state) { Ready(value) => { if (value > 0) return {run: x => x.toFixed() + value}; return {run: x => x.toFixed()}; }, Empty => ({run: x => x.toFixed()}) });',
+      'pair(made, match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
     ];
     fs.writeFileSync(file, "export {};\n");
     try {
       for (const statement of cases) {
         const source = `${header}\n${statement}\nexport {};\n`;
         engine.openDocument(COMPILER, file, source);
-        assert.deepEqual(await engine.tsDiagnostics(COMPILER, file), [], statement);
+        assert.deepEqual(answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics"), [], statement);
         const offset = source.indexOf("x.toFixed");
         const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
         assert.ok(hover, statement);
@@ -230,7 +239,7 @@ for (const extension of ["tt", "ttx"]) {
         assert.ok(completion?.items.some(item => item.label === "toFixed"), statement);
         const invalid = source.replace("x.toFixed()", "x.missing()");
         engine.openDocument(COMPILER, file, invalid);
-        const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+        const diagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
         const error = diagnostics.find(diagnostic => diagnostic.code === 2339);
         assert.ok(error, JSON.stringify(diagnostics));
         assert.equal(sliceOf(invalid, error.range), "missing");
@@ -258,7 +267,7 @@ for (const extension of ["tt", "ttx"]) {
     fs.writeFileSync(file, "export {};\n");
     engine.openDocument(COMPILER, file, source);
     try {
-      const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+      const diagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
       assert.deepEqual(diagnostics, []);
       const offset = source.indexOf("x.toFixed");
       const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
@@ -269,7 +278,7 @@ for (const extension of ["tt", "ttx"]) {
       assert.ok(completions?.items.some((item) => item.label === "toFixed"));
       const invalid = source.replace("x.toFixed()", "x.missing()");
       engine.openDocument(COMPILER, file, invalid);
-      const invalidDiagnostics = await engine.tsDiagnostics(COMPILER, file);
+      const invalidDiagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
       const error = invalidDiagnostics.find((diagnostic) => diagnostic.code === 2339);
       assert.ok(error, JSON.stringify(invalidDiagnostics));
       assert.equal(sliceOf(invalid, error.range), "missing");
@@ -327,7 +336,7 @@ test("definition crosses into the hand-written file on disk", { skip }, async ()
 
 test("diagnostics come back at positions in the .tt source", { skip }, async () => {
   const { tt } = workspace();
-  const diagnostics = await engine.tsDiagnostics(COMPILER, tt);
+  const diagnostics = answered(await engine.tsDiagnostics(COMPILER, tt), "tsDiagnostics");
   const error = diagnostics.find((d) => d.code === 2322);
   assert.ok(error, JSON.stringify(diagnostics));
   assert.equal(sliceOf(RENDER, error!.range), "bad");
@@ -347,7 +356,7 @@ test(
       "",
     ].join("\n");
     engine.openDocument(COMPILER, tt, source);
-    const diagnostics = await engine.tsDiagnostics(COMPILER, tt);
+    const diagnostics = answered(await engine.tsDiagnostics(COMPILER, tt), "tsDiagnostics");
     const error = diagnostics.find(
       (diagnostic) => sliceOf(source, diagnostic.range) === "try value",
     );
@@ -464,7 +473,7 @@ test("an edit is answered against the new text", { skip }, async () => {
   const { tt } = workspace();
   engine.openDocument(COMPILER, tt, RENDER);
   assert.ok(
-    (await engine.tsDiagnostics(COMPILER, tt)).some((d) => d.code === 2322),
+    (answered(await engine.tsDiagnostics(COMPILER, tt), "tsDiagnostics")).some((d) => d.code === 2322),
   );
   engine.updateDocument(
     COMPILER,
@@ -472,7 +481,7 @@ test("an edit is answered against the new text", { skip }, async () => {
     RENDER.replace("  const bad: number = label;\n", ""),
   );
   assert.equal(
-    (await engine.tsDiagnostics(COMPILER, tt)).filter((d) => d.code === 2322)
+    (answered(await engine.tsDiagnostics(COMPILER, tt), "tsDiagnostics")).filter((d) => d.code === 2322)
       .length,
     0,
     "the fix is seen without restarting anything",
@@ -488,14 +497,14 @@ test("a closed document is the disk's again", { skip }, async () => {
     RENDER.replace("  const bad: number = label;\n", ""),
   );
   assert.equal(
-    (await engine.tsDiagnostics(COMPILER, tt)).filter((d) => d.code === 2322)
+    (answered(await engine.tsDiagnostics(COMPILER, tt), "tsDiagnostics")).filter((d) => d.code === 2322)
       .length,
     0,
   );
   engine.closeDocument(COMPILER, tt);
   // The disk copy still has the error; closing dropped the overlay.
   assert.ok(
-    (await engine.tsDiagnostics(COMPILER, tt)).some((d) => d.code === 2322),
+    (answered(await engine.tsDiagnostics(COMPILER, tt), "tsDiagnostics")).some((d) => d.code === 2322),
   );
 });
 

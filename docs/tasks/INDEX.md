@@ -234,7 +234,7 @@
 | TASK-224 | 커버리지 측정과 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-224](./TASK-224-coverage-gate.md) |
 | TASK-225 | 성능 벤치마크와 회귀 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-225](./TASK-225-performance-benchmarks.md) |
 | TASK-226 | 로컬과 CI의 Rust 툴체인 격차 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-226](./TASK-226-local-ci-toolchain-parity.md) |
-| TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 진행 중 | 2026-08-25 | — | [TASK-227](./TASK-227-local-only-ci.md) |
+| TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-227](./TASK-227-local-only-ci.md) |
 | TASK-228 | 부분 스냅샷에서 정상 파일의 tt 진단이 사라짐 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-228](./TASK-228-partial-snapshot-diagnostics.md) |
 | TASK-229 | 바인딩 이름 `match`가 tt match로 오인된다 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-229](./TASK-229-match-claimed-as-a-binding-name.md) |
 | TASK-230 | release 0.3.0-dev.7 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-230](./TASK-230-release-0.3.0-dev.7.md) |
@@ -267,8 +267,8 @@
 | TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 완료 | 2026-08-27 | 2026-08-27 | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 | TASK-258 | TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-258](./TASK-258-ts-preview-vsix.md) |
 
-| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 진행 중 | 2026-08-27 | — | [TASK-259](./TASK-259-upstream-extension-id.md) |
-| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 진행 중 | 2026-08-28 | — | [TASK-260](./TASK-260-nightly-install-docs.md) |
+| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-259](./TASK-259-upstream-extension-id.md) |
+| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-260](./TASK-260-nightly-install-docs.md) |
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
 | TASK-262 | Require English documentation | Complete | 2026-08-28 | 2026-08-28 | [TASK-262](./TASK-262-english-documentation-policy.md) |
 | TASK-263 | Pipeline diagnostics name the rejecting step | Complete | 2026-08-28 | 2026-08-28 | [TASK-263](./TASK-263-pipeline-step-diagnostics.md) |
@@ -332,14 +332,30 @@
 | TASK-321 | Reject ambiguous build output paths | Complete | 2026-09-05 | 2026-09-05 | [TASK-321](./TASK-321-reject-output-collisions.md) |
 | TASK-322 | Diagnose merge conflict markers at the syntax boundary | Complete | 2026-09-05 | 2026-09-05 | [TASK-322](./TASK-322-conflict-marker-syntax-boundary.md) |
 | TASK-323 | Preserve contextual typing through composed matches | Complete | 2026-09-05 | 2026-09-05 | [TASK-323](./TASK-323-contextual-match-composition.md) |
-| TASK-324 | Preserve contextual typing across scoped match continuations | In progress | 2026-09-05 | — | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
+| TASK-324 | Preserve contextual typing across scoped match continuations | Complete | 2026-09-05 | 2026-09-05 | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
 | TASK-325 | Verify real editor editing workflows | Complete | 2026-09-05 | 2026-09-05 | [TASK-325](./TASK-325-editor-workflows.md) |
 | TASK-326 | Keep editor projects current across filesystem changes | Complete | 2026-09-05 | 2026-09-05 | [TASK-326](./TASK-326-editor-filesystem-lifecycle.md) |
-| TASK-327 | Generalize scoped match host continuations | Pending | — | — | [TASK-327](./TASK-327-scoped-host-continuations.md) |
-| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Pending | — | — | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
-| TASK-329 | Audit mixed scoped siblings and nested match composition | Pending | — | — | [TASK-329](./TASK-329-scoped-sibling-composition.md) |
-| TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Pending | — | — | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
+| TASK-327 | Generalize scoped match host continuations | Complete | 2026-09-05 | 2026-09-05 | [TASK-327](./TASK-327-scoped-host-continuations.md) |
+| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Complete | 2026-09-05 | 2026-09-05 | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
+| TASK-329 | Audit mixed scoped siblings and nested match composition | Complete | 2026-09-05 | 2026-09-05 | [TASK-329](./TASK-329-scoped-sibling-composition.md) |
+| TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Complete | 2026-09-05 | 2026-09-05 | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
+| TASK-331 | Install bundler adapter dependencies before their CI gate | Complete | 2026-09-05 | 2026-09-05 | [TASK-331](./TASK-331-install-unplugin-test-dependencies.md) |
+| TASK-332 | Preserve contextual typing for matches inside larger argument expressions | Complete | 2026-09-05 | 2026-09-05 | [TASK-332](./TASK-332-wrapped-argument-contextual-values.md) |
+| TASK-333 | Preserve contextual types through scheduled captures | Complete | 2026-09-05 | 2026-09-05 | [TASK-333](./TASK-333-captured-argument-contextual-types.md) |
+| TASK-334 | Keep one engine session per compiler and never crash on a dead pipe | Complete | 2026-09-05 | 2026-09-05 | [TASK-334](./TASK-334-engine-session-per-compiler.md) |
+| TASK-335 | Read the compiler's rendered diagnostics in the one-shot fallback | Complete | 2026-09-05 | 2026-09-05 | [TASK-335](./TASK-335-fallback-diagnostic-parsing.md) |
+| TASK-336 | Write the generated banner where the file allows it | Complete | 2026-09-05 | 2026-09-05 | [TASK-336](./TASK-336-banner-placement.md) |
+| TASK-337 | Treat a closed stdout as an ordinary end, not an internal error | Complete | 2026-09-05 | 2026-09-05 | [TASK-337](./TASK-337-closed-stdout.md) |
+| TASK-338 | Reject CLI inputs the contract already forbids | Complete | 2026-09-05 | 2026-09-05 | [TASK-338](./TASK-338-cli-input-validation.md) |
+| TASK-339 | Correct user-facing documentation that no longer matches the tools | Complete | 2026-09-05 | 2026-09-05 | [TASK-339](./TASK-339-documentation-drift.md) |
+| TASK-340 | Make an unusable compiler visible and recoverable in the editor | Complete | 2026-09-05 | 2026-09-05 | [TASK-340](./TASK-340-compiler-recovery-in-the-editor.md) |
+| TASK-341 | A flag that takes a value does not take an option as one | Complete | 2026-09-05 | 2026-09-05 | [TASK-341](./TASK-341-value-flags-take-values.md) |
+| TASK-342 | Follow the window's workspace folders while it is open | Complete | 2026-09-05 | 2026-09-05 | [TASK-342](./TASK-342-live-workspace-folders.md) |
+| TASK-343 | Give the server's standing notices one owner and one reset | Complete | 2026-09-05 | 2026-09-05 | [TASK-343](./TASK-343-standing-notices.md) |
+| TASK-344 | A sidecar directory that cannot be resolved is reported, not ignored | Complete | 2026-09-05 | 2026-09-05 | [TASK-344](./TASK-344-sidecar-directory-resolution.md) |
+| TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
+| TASK-346 | Hold the task index and the task records to the same state | Complete | 2026-09-05 | 2026-09-05 | [TASK-346](./TASK-346-task-state-agreement.md) |
 
 ## Next task number
 
-**TASK-331**
+**TASK-347**

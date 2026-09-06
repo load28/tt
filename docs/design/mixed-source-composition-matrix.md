@@ -94,13 +94,48 @@ dispatch. An additional 112 sibling cells cover family pairs in calls, arrays,
 conditional arguments, and TSX props. Unmatched values call a hygienic `never`
 throw helper; no authored code is moved into a callback.
 
-Discarded single-argument identifier calls can use a scoped invocation
-continuation: the callee is captured before the match, and each arm supplies
-its value directly while payload/local bindings remain in scope. A host-AST
-proof permits only expression arms or linear statement sequences ending in
-one value return; it does not cross catch/finally/resource-disposal boundaries.
-More general scoped host continuations remain tracked in
-[TASK-324](../tasks/TASK-324-scoped-contextual-continuations.md).
+Calls whose final non-spread argument contains the match can use a scoped
+invocation continuation: the callee and every earlier argument are captured
+before the match, and each arm supplies its value directly while payload/local
+bindings remain in scope. A match in a non-final argument position keeps its
+join slot, because the call would otherwise run the later arguments' subjects
+too early. The
+completion covers discarded and consumed results, identifier and member
+callees (through the existing receiver-preserving capture), explicit type
+arguments (instantiating the captured callee once), and single-argument
+optional calls without type arguments. A consumed completion assigns each
+arm's call result to the value's join slot, which stands at the authored call
+position. A host-AST proof permits expression arms and never-completing block
+arms whose statement tree is free of cleanup boundaries — no `try`, `with`,
+or `using` outside nested functions — so conditional and multiple returns,
+loops, and `switch` statements in an arm each carry the call at their own
+authored exit. Cleanup-bearing arms keep the consumer outside the arm: moving
+the call would place it inside the arm's handler and ahead of its finalizers
+or disposal.
+
+An argument wider than the match completes when the value is reachable from
+it through whole object- and array-literal positions only. Such a position
+holds one complete expression, so each arm re-emits the literal around its
+own value, as mapped source, and the value lands in the consumer's
+contextual position. The path is refused when anything else stands between
+them — a cast, an operator, a call — because that construct binds to the
+value and would rebind to whatever took its place; when any earlier position
+in the literal observes something, since moving the literal would run it
+after the scrutinee; when the literal spreads, since a spread copies its
+operand at the literal's position and the positions record only the operand;
+and when any arm is a block, whose rewritten exits go through the
+string-built prefix that carries no source mapping. Every refused form keeps
+its authored call frame with the match joined by its slot.
+
+A host expression the schedule must evaluate before a tt value stays at its
+authored position whenever evaluating it there is unobservable: a literal, a
+function expression, and an object or array literal built from those. Such an
+expression therefore keeps the contextual type its position supplies without
+an annotation. The one exception is a completed call, which is re-emitted
+inside the dispatch: it binds each such input to a reserved generated name
+once, from mapped source, rather than repeating it in every arm. Everything
+else is captured, and a tt value in a position no completion covers still
+crosses the boundary through an unannotated join slot.
 
 Every accepted matrix cell must emit parseable TypeScript or TSX and pass the
 typed project path where types are relevant. Every rejected cell must report a

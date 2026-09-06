@@ -1,8 +1,8 @@
 # TASK-324: Preserve contextual typing across scoped match continuations
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-09-05
-- **Completed**: —
+- **Completed**: 2026-09-05
 - **Commit**: —
 
 ## Purpose
@@ -150,7 +150,7 @@ Save as `remaining.tt`, build with `ttc -o out remaining.tt`, and check with
 
 Outstanding work is tracked separately as Pending: [TASK-327](./TASK-327-scoped-host-continuations.md) for broader host continuations, [TASK-328](./TASK-328-control-flow-contextual-arms.md) for control-flow/cleanup-bearing arms, [TASK-329](./TASK-329-scoped-sibling-composition.md) for scoped sibling/nested composition, and [TASK-330](./TASK-330-editor-refresh-test-timeout.md) for the unresolved test-timeout observation. The compiler follow-ups distinguish unvalidated forms from individually reproduced failures; the timeout follow-up does not assert a production defect. These records were added on 2026-09-05 without further compiler changes.
 
-In progress. The recorded guarded, payload-binding, local-declaration, and sibling failures are repaired. Arbitrary scope-sensitive expression continuations (including handler/finalizer-bearing arms and scoped values inside larger argument/object expressions) remain outside the validated forms; this is not a claim that every contextual program compiles.
+Complete. The recorded guarded, payload-binding, local-declaration, and sibling failures are repaired, and the follow-ups this record opened are closed: TASK-327 (broader host continuations), TASK-328 (control-flow and cleanup-bearing arms), TASK-329 (scoped sibling and nested composition), TASK-333 (scheduled captures), and TASK-332 (scoped values inside larger argument/object expressions). Each form the compiler now completes is proven rather than assumed, and each form it refuses keeps its authored frame with the match joined by its slot; this is still not a claim that every contextual program compiles.
 
 Changed files in this partial repair: `src/codegen/core/planning.rs`, `src/codegen/core/emitter/{host,pattern}.rs`, `tests/integration/contextual.rs`, `tests/compile/cases_01.rs`, `tests/fixtures/emit/contextual-guarded-match/{input.tt,expected.ts}`, `editors/vscode/server/src/test/engine.test.ts`, and this task record/index.
 

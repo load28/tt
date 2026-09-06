@@ -6,13 +6,13 @@ import * as path from "path";
 import { ExtensionContext, workspace } from "vscode";
 import {
   LanguageClient,
-  LanguageClientOptions,
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
 
 import { registerContentMappers } from "./contentMapper";
 import { synchronizeHostDocuments } from "./hostDocuments";
+import { ttClientOptions } from "./options";
 
 let client: LanguageClient | undefined;
 
@@ -39,23 +39,11 @@ export function activate(context: ExtensionContext): void {
     workspace.createFileSystemWatcher("**/*.{tt,ttx,ts,tsx,json}"),
   ];
   context.subscriptions.push(...watchers);
-  const clientOptions: LanguageClientOptions = {
-    documentSelector: [
-      { scheme: "file", language: "tt" },
-      { scheme: "untitled", language: "tt" },
-      { scheme: "file", language: "ttx" },
-      { scheme: "untitled", language: "ttx" },
-    ],
-    synchronize: {
-      fileEvents: watchers,
-    },
-  };
-
   client = new LanguageClient(
     "tt",
     "tt Language Server",
     serverOptions,
-    clientOptions,
+    ttClientOptions(watchers),
   );
   synchronizeHostDocuments(context, client);
   client.start();

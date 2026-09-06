@@ -34,9 +34,15 @@ pub struct SourceMapRequest<'a> {
     /// carries its source works in a debugger that cannot resolve the path,
     /// which is every bundled and every `data:` case.
     pub embed_source: bool,
-    /// Lines the caller prepends to the emitted code after this emission —
-    /// a banner comment. Segments shift down by exactly this many lines.
+    /// Lines the caller inserts into the emitted code after this emission —
+    /// a banner comment. Segments at or after
+    /// [`SourceMapRequest::generated_line_offset_at`] shift down by exactly
+    /// this many lines.
     pub generated_line_offset: usize,
+    /// The generated line the insertion happens at. A banner goes to the top
+    /// of an ordinary file, but a `#!` line has to stay first, so the banner
+    /// follows it and that first line does not move.
+    pub generated_line_offset_at: usize,
 }
 
 impl Default for SourceMapRequest<'_> {
@@ -46,6 +52,7 @@ impl Default for SourceMapRequest<'_> {
             source: "<input>",
             embed_source: true,
             generated_line_offset: 0,
+            generated_line_offset_at: 0,
         }
     }
 }
@@ -133,9 +140,6 @@ pub(crate) fn build(
     let mut previous_source_column = 0i64;
     let mut previous_generated_column = 0i64;
     let mut current_line = 0usize;
-    for _ in 0..request.generated_line_offset {
-        encoded.push(';');
-    }
     let mut line_has_segment = false;
 
     for out in cuts {
@@ -146,6 +150,12 @@ pub(crate) fn build(
             continue;
         };
         let (generated_line, generated_column) = code_lines.position(code, out);
+        let generated_line = generated_line
+            + if generated_line >= request.generated_line_offset_at {
+                request.generated_line_offset
+            } else {
+                0
+            };
         let (source_line, source_column) = source_lines.position(source, src.min(source.len()));
         while current_line < generated_line {
             encoded.push(';');
@@ -386,6 +396,7 @@ mod tests {
                 source: "a.tt",
                 embed_source: true,
                 generated_line_offset: 0,
+                generated_line_offset_at: 0,
             },
         );
         let json = map.to_json();

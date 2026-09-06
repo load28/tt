@@ -331,8 +331,20 @@ pub(crate) enum ExpressionBoundaryReason {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct EvaluationSchedule {
     /// Optional host-call completion carried from the syntax proof.
-    pub(crate) call_completion: Option<SourceSpan>,
+    pub(crate) call_completion: Option<PlannedCallCompletion>,
     steps: Vec<PlannedEvaluationStep>,
+}
+
+/// A syntax-proven completable call with its generated-name reservations
+/// ([`crate::program_syntax::CallCompletionFacts`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PlannedCallCompletion {
+    pub(crate) facts: crate::program_syntax::CallCompletionFacts,
+    /// The slot that holds the captured callee instantiated with the
+    /// authored type arguments, when the call carries them. Instantiating
+    /// once keeps one source-mapped copy of the type arguments while every
+    /// dispatch arm calls through the instantiated binding.
+    pub(crate) instantiated: Option<ValueSlotId>,
 }
 
 impl EvaluationSchedule {
@@ -370,7 +382,17 @@ pub(crate) enum PlannedEvaluationInput {
     /// the region changes no trace, no count, and no value. This is the
     /// proof-based capture elision of `docs/design/program-lowering.md` §9,
     /// decided here and only here — never re-derived by the target.
-    Stable { source: SourceSpan },
+    ///
+    /// `reserved` holds a generated name for the one lowering that cannot
+    /// leave the input in place: a completed call re-emits itself inside the
+    /// match's dispatch, where the authored position no longer exists. That
+    /// lowering captures the input under this name instead of copying its
+    /// source into every arm; every other lowering ignores the reservation
+    /// and emits nothing for it.
+    Stable {
+        source: SourceSpan,
+        reserved: Option<ValueSlotId>,
+    },
 }
 
 /// How a member reference preserves its `this` receiver. A provably inert

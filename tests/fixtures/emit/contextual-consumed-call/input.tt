@@ -1,0 +1,29 @@
+type Item = { kind: "item"; run: (x: number) => number };
+declare function consume(item: Item): number;
+declare const api: { consume(item: Item): number };
+declare const maybeConsume: ((item: Item) => number) | undefined;
+declare function generic<T>(value: T): T;
+variant State { Ready(value: number), Empty }
+declare const state: State;
+
+const consumed = consume(match (state) {
+  Ready(value) => ({ kind: "item", run: x => x + value }),
+  Empty => ({ kind: "item", run: x => x }),
+});
+
+api.consume(match (state) {
+  Ready(value) => { return { kind: "item", run: x => x + value }; },
+  Empty => ({ kind: "item", run: x => x }),
+});
+
+const optional = maybeConsume?.(match (state) {
+  Ready(value) => ({ kind: "item", run: x => x + value }),
+  Empty => ({ kind: "item", run: x => x }),
+});
+
+const instantiated = generic<Item>(match (state) {
+  Ready(value) => ({ kind: "item", run: x => x + value }),
+  Empty => ({ kind: "item", run: x => x }),
+});
+
+export { consumed, optional, instantiated };

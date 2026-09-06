@@ -116,9 +116,14 @@ struct OverlayEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct HostExit {
-    /// A straight-line arm whose final value return can invoke a discarded
-    /// consumer without moving that call across a handler or finalizer.
-    pub(crate) linear_return_body: Option<BodyId>,
+    /// The arm block this exit leaves, when the return sits directly in a
+    /// projected arm body at the arm's own function depth.
+    pub(crate) body: Option<BodyId>,
+    /// Whether this exit's arm block is free of cleanup boundaries — no
+    /// `try`, `with`, or `using` anywhere in the block outside nested
+    /// functions — so a consuming call carried on the rewritten return
+    /// cannot land inside a handler or run before a finalizer or disposal.
+    pub(crate) call_safe: bool,
     /// The complete match arm body is exactly this value-returning AST
     /// statement. This identity is established by visiting the projected
     /// arm's BlockStmt, not inferred from source text during emission.
@@ -141,11 +146,39 @@ pub(crate) struct HostExit {
 /// minimum source-backed owner. Target lowering must consume every step.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub(crate) struct HostEvaluationProtocol {
-    /// AST-proven discarded identifier call with one non-spread argument.
-    /// Target planning must also prove that this argument is the whole TT
-    /// value, not a larger expression containing it.
-    pub(crate) call_completion: Option<SourceSpan>,
+    /// AST-proven call whose single non-spread argument is exactly the TT
+    /// value. Target planning must still tie these facts to the value's
+    /// innermost evaluation step before consuming the call.
+    pub(crate) call_completion: Option<CallCompletionFacts>,
     steps: Vec<HostEvaluationStep>,
+}
+
+/// The syntactic facts of one completable call: a non-optional call
+/// expression with a source-backed callee whose final non-spread argument
+/// contains the whole TT value. Containment — rather than equality — is
+/// what licenses dispatch arms to perform the call themselves; target
+/// planning decides separately whether the authored text between the
+/// argument and the value may be re-emitted inside the arms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CallCompletionFacts {
+    /// The whole call expression.
+    pub(crate) call: SourceSpan,
+    /// The final argument. Equal to the value's own span when the value is
+    /// the whole argument; wider when the value sits inside a literal the
+    /// argument builds.
+    pub(crate) argument: SourceSpan,
+    /// Whether the path from the argument down to the value runs only
+    /// through whole object- and array-literal positions, so the authored
+    /// text around the value can be re-emitted around an arm's value and
+    /// still mean the same thing. Trivially true when the value *is* the
+    /// argument.
+    pub(crate) literal_positions: bool,
+    /// Whether the call's result flows onward. A call in expression-statement
+    /// position is discarded; everywhere else the completed call must still
+    /// deliver its result to the authored position.
+    pub(crate) consumed: bool,
+    /// The call's explicit type arguments, verbatim.
+    pub(crate) type_args: Option<SourceSpan>,
 }
 
 impl HostEvaluationProtocol {
@@ -281,11 +314,18 @@ impl Effects {
 /// The effects one host expression may have, judged from syntax alone.
 ///
 /// Only shapes whose evaluation is provably unobservable answer
-/// [`Effects::NONE`]: plain literals (a regex literal allocates a fresh
-/// object per evaluation, so it is not one), possibly under TypeScript's
-/// transparent expression wrappers. Identifiers may read mutable bindings
-/// and may throw (TDZ); user types never prove runtime purity; everything
-/// unknown is [`Effects::ANY`].
+/// [`Effects::NONE`]: plain literals (a regex literal runs its own
+/// construction, so it is not one), object and array literals built from
+/// them, and function creation — possibly under TypeScript's transparent
+/// expression wrappers. Identifiers may read mutable bindings and may throw
+/// (TDZ); user types never prove runtime purity; everything unknown is
+/// [`Effects::ANY`].
+///
+/// A fresh object or array is allocated per evaluation, and so is a
+/// closure. That allocation is not observable here because eliding a
+/// capture does not change how often the expression is evaluated — only
+/// where — and nothing else holds the value to compare it against
+/// ([`Effects::is_inert`]).
 fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
     use swc_ecma_ast::{Expr as SwcExpr, Lit};
     match expression {
@@ -296,6 +336,8 @@ fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
         // initializers. Keeping it in its host also preserves contextual
         // parameter inference; each authored function is still evaluated once.
         SwcExpr::Arrow(_) | SwcExpr::Fn(_) => Effects::NONE,
+        SwcExpr::Object(object) => object_literal_effects(object),
+        SwcExpr::Array(array) => array_literal_effects(array),
         SwcExpr::Paren(inner) => expression_effects(&inner.expr),
         SwcExpr::TsAs(inner) => expression_effects(&inner.expr),
         SwcExpr::TsSatisfies(inner) => expression_effects(&inner.expr),
@@ -303,6 +345,53 @@ fn expression_effects(expression: &swc_ecma_ast::Expr) -> Effects {
         SwcExpr::TsTypeAssertion(inner) => expression_effects(&inner.expr),
         SwcExpr::TsInstantiation(inner) => expression_effects(&inner.expr),
         _ => Effects::ANY,
+    }
+}
+
+/// Defining a property does not call a setter, and defining an accessor or
+/// method does not run its body, so an object literal is as observable as
+/// the expressions it evaluates: its computed keys and its property values.
+/// A spread reads its operand and may run getters; shorthand reads a
+/// binding.
+fn object_literal_effects(node: &ObjectLit) -> Effects {
+    for property in &node.props {
+        let inert = match property {
+            PropOrSpread::Spread(_) => false,
+            PropOrSpread::Prop(property) => match &**property {
+                Prop::Shorthand(_) => false,
+                Prop::KeyValue(property) => {
+                    prop_name_is_inert(&property.key)
+                        && expression_effects(&property.value).is_inert()
+                }
+                // `{ key = value }` only parses inside a destructuring
+                // pattern, where this classification is never consulted.
+                Prop::Assign(_) => false,
+                Prop::Getter(property) => prop_name_is_inert(&property.key),
+                Prop::Setter(property) => prop_name_is_inert(&property.key),
+                Prop::Method(property) => prop_name_is_inert(&property.key),
+            },
+        };
+        if !inert {
+            return Effects::ANY;
+        }
+    }
+    Effects::NONE
+}
+
+fn array_literal_effects(node: &ArrayLit) -> Effects {
+    for element in node.elems.iter().flatten() {
+        // A spread iterates its operand, which runs user code.
+        if element.spread.is_some() || !expression_effects(&element.expr).is_inert() {
+            return Effects::ANY;
+        }
+    }
+    Effects::NONE
+}
+
+fn prop_name_is_inert(name: &PropName) -> bool {
+    match name {
+        PropName::Ident(_) | PropName::Str(_) | PropName::Num(_) | PropName::BigInt(_) => true,
+        PropName::Computed(computed) => expression_effects(&computed.expr).is_inert(),
     }
 }
 

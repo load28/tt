@@ -125,6 +125,50 @@ for (const consumerKind of ["tt", "ttx"]) {
   }
 }
 
+/* A window's folders are not what it started with: people add and remove
+ * them all day. Every folder is a place the compiler, the TypeScript
+ * toolchain and a relative `tt.sidecarDir` are resolved from, and the
+ * client sends the change notification only to a server that declared it
+ * wants one — so without the capability the roots stayed frozen at
+ * startup, for the life of the session (TASK-342). */
+test("the server asks for folder changes, and acts on them", { skip, timeout }, async () => {
+  const dir = caseDir("tt-folders-");
+  const added = caseDir("tt-folders-added-");
+  const file = path.join(dir, "main.tt");
+  const source = "variant State { Ready, Empty }\ndeclare const state: State;\nexport const label = match (state) { Ready => \"r\" };\n";
+  fs.writeFileSync(file, source);
+  const uri = pathToFileURL(file).toString();
+  const client = connect();
+  try {
+    const init = await client.request("initialize", {
+      processId: process.pid,
+      rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "first" }],
+      // What VS Code declares, and the only capability this case needs:
+      // still no `workspace.configuration`, which this client would not
+      // answer.
+      capabilities: { workspace: { workspaceFolders: true } },
+    });
+    const folders = init.result.capabilities.workspace?.workspaceFolders;
+    assert.equal(folders?.supported, true, JSON.stringify(init.result.capabilities.workspace));
+    assert.ok(folders?.changeNotifications, "the client registers its listener on this alone");
+    client.notify("initialized", {});
+
+    const opened = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "match-not-exhaustive"));
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+    await opened;
+    // Let the generation that answered settle, so the publish awaited below
+    // can only be the one the notification causes.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const revalidated = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+    client.notify("workspace/didChangeWorkspaceFolders", {
+      event: { added: [{ uri: pathToFileURL(added).toString(), name: "second" }], removed: [] },
+    });
+    assert.ok((await revalidated).diagnostics.some((d: any) => String(d.code) === "match-not-exhaustive"), "the open buffer is re-validated against the new roots");
+  } finally { client.stop(); }
+});
+
 interface Client {
   request(method: string, params: unknown): Promise<any>;
   notify(method: string, params: unknown): void;

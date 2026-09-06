@@ -67,3 +67,52 @@ test("an environment change re-arms a compiler that struck out", { skip }, async
   const answer = await check(COMPILER);
   assert.ok(answer && "result" in answer, "the session is usable again");
 });
+
+test("a second compiler keeps its own session instead of ending the first", { skip }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-two-compilers-"));
+  const copy = path.join(dir, "ttc");
+  fs.copyFileSync(COMPILER, copy);
+  fs.chmodSync(copy, 0o755);
+
+  const first = await check(COMPILER);
+  assert.ok(first && "result" in first, "the first compiler answers");
+  const second = await check(copy);
+  assert.ok(second && "result" in second, "so does the second");
+  // `tt.compilerPath` is resource-scoped, so alternating between two
+  // documents alternates the compiler. Neither session may end the other.
+  for (let round = 0; round < 3; round += 1) {
+    assert.ok((await check(COMPILER)) !== null, `round ${round}: first still serves`);
+    assert.ok((await check(copy)) !== null, `round ${round}: second still serves`);
+  }
+});
+
+test("a session start that opens documents elsewhere cannot kill its own session", { skip }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-session-start-"));
+  const copy = path.join(dir, "ttc");
+  fs.copyFileSync(COMPILER, copy);
+  fs.chmodSync(copy, 0o755);
+  const file = path.join(dir, "a.tt");
+  fs.writeFileSync(file, "variant S { A, B }\n");
+
+  // What `server.ts` does: re-send every open buffer when a session starts.
+  // The callback is told which session started; a stale "current compiler"
+  // here used to shut that session down and leave the caller writing to a
+  // dead pipe, which took the whole language server with it.
+  const started: string[] = [];
+  engine.setOnSessionStart((compiler) => {
+    started.push(compiler);
+    engine.openDocument(copy, file, "variant S { A, B }\n");
+  });
+  try {
+    await check(copy);
+    const answer = await check(COMPILER);
+    assert.ok(answer && "result" in answer, `the fresh session answers: ${JSON.stringify(answer)}`);
+    assert.deepEqual(started, [copy, COMPILER], "each session start names its own compiler");
+  } finally {
+    engine.setOnSessionStart(null);
+  }
+});

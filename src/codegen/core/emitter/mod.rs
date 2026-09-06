@@ -73,6 +73,10 @@ impl ActiveExprStack {
         self.exprs.borrow().contains(&expr)
     }
 
+    fn is_empty(&self) -> bool {
+        self.exprs.borrow().is_empty()
+    }
+
     fn enter(&self, expr: ExprId) -> ActiveExprGuard<'_> {
         self.exprs.borrow_mut().push(expr);
         ActiveExprGuard { stack: self, expr }
@@ -120,7 +124,22 @@ enum ValueDestination<'name> {
     Expression,
     Return,
     Assign(&'name str),
-    Invoke(&'name str),
+    /// Deliver the value as the single argument of a captured callee. The
+    /// prefix carries the callee text up to and excluding the argument;
+    /// `result` receives the call's value when the authored call was
+    /// consumed; `label` is a generated identifier (the result or callee
+    /// slot) that seeds the region's exit label when a rewritten exit sits
+    /// inside a `break`-capturing statement.
+    Invoke {
+        prefix: &'name str,
+        /// The authored literal the value sits inside, split at the value.
+        /// Each arm re-emits both halves around its own value, as source, so
+        /// the arm value lands in the consumer's contextual position and the
+        /// frame's own bytes keep pointing at where they were written.
+        frame: Option<(SourceSpan, SourceSpan)>,
+        result: Option<&'name str>,
+        label: &'name str,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -170,9 +189,19 @@ impl<'name> ValueContinuation<'name> {
         }
     }
 
-    fn invoke(callee: &'name str) -> Self {
+    fn invoke(
+        prefix: &'name str,
+        frame: Option<(SourceSpan, SourceSpan)>,
+        result: Option<&'name str>,
+        label: &'name str,
+    ) -> Self {
         Self {
-            destination: ValueDestination::Invoke(callee),
+            destination: ValueDestination::Invoke {
+                prefix,
+                frame,
+                result,
+                label,
+            },
             wrappers: Vec::new(),
         }
     }
@@ -186,7 +215,7 @@ impl<'name> ValueContinuation<'name> {
     fn assigns(&self) -> bool {
         matches!(
             self.destination,
-            ValueDestination::Assign(_) | ValueDestination::Invoke(_)
+            ValueDestination::Assign(_) | ValueDestination::Invoke { .. }
         )
     }
 
@@ -202,17 +231,36 @@ impl<'name> ValueContinuation<'name> {
     fn assignment_target(&self) -> Option<&str> {
         match self.destination {
             ValueDestination::Expression | ValueDestination::Return => None,
-            ValueDestination::Assign(target) | ValueDestination::Invoke(target) => Some(target),
+            ValueDestination::Assign(target) => Some(target),
+            // A completed call names its result slot, or — when the call is
+            // discarded — the callee slot, so exit labels stay identifiers.
+            ValueDestination::Invoke { result, label, .. } => Some(result.unwrap_or(label)),
         }
     }
 
     /// The text an early exit's `return ` becomes. `grouped` says whether
     /// the value it returns has to keep its parentheses ([`push_grouped`]).
+    ///
+    /// This builds a string, so it can carry no source mapping. A framed
+    /// completion has authored bytes to place and is refused for any match
+    /// that reaches this path (`all_arms_are_expressions`).
     fn assignment_prefix(&self, grouped: bool) -> String {
+        if let ValueDestination::Invoke { frame: Some(_), .. } = self.destination {
+            crate::ice::bug!("a framed completion cannot rewrite an exit")
+        }
         let mut prefix = match self.destination {
             ValueDestination::Return => "return ".to_owned(),
             ValueDestination::Assign(target) => format!("{target} = "),
-            ValueDestination::Invoke(callee) => format!("{callee}("),
+            ValueDestination::Invoke {
+                prefix,
+                result: Some(result),
+                ..
+            } => format!("{result} = {prefix}"),
+            ValueDestination::Invoke {
+                prefix,
+                result: None,
+                ..
+            } => prefix.to_owned(),
             ValueDestination::Expression => {
                 crate::ice::bug!("inline expression continuation cannot rewrite an exit")
             }
@@ -238,7 +286,7 @@ impl<'name> ValueContinuation<'name> {
         for _ in self.wrappers.iter().rev() {
             suffix.push_str(" }");
         }
-        if matches!(self.destination, ValueDestination::Invoke(_)) {
+        if matches!(self.destination, ValueDestination::Invoke { .. }) {
             suffix.push(')');
         }
         suffix

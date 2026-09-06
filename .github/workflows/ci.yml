@@ -53,6 +53,9 @@ jobs:
           test "$(cat CLAUDE.md)" = "@AGENTS.md"
           grep -Fq './scripts/doctor' AGENTS.md
           bash -n scripts/doctor
+          # AGENTS.md requires the index and the record to carry the same
+          # state; a record left behind reads as current guidance.
+          node scripts/check-task-index
           before="$(git status --porcelain)"
           if ./scripts/doctor; then
             echo "doctor unexpectedly accepted an unconfigured checkout" >&2
@@ -95,6 +98,9 @@ jobs:
 
       - name: Test npm release tooling and project initializer
         run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
+
+      - name: Install bundler adapter dependencies
+        run: npm ci --prefix integrations/unplugin
 
       - name: Test bundler adapters against ttc
         env:
@@ -285,7 +291,7 @@ jobs:
         working-directory: editors/vscode
         run: |
           export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
-          node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log
+          node --test "server/out/test/*.test.js" "client/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log
           # Every guard in the suite is satisfiable here — the compiler is
           # on PATH, it can serve a language server, and it can emit
           # declarations — so a skip means the wiring broke.

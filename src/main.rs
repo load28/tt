@@ -32,6 +32,8 @@ mod content_mapper;
 mod loading;
 #[path = "main/modes.rs"]
 mod modes;
+#[path = "main/out.rs"]
+mod out;
 #[path = "main/output.rs"]
 mod output;
 mod server;
@@ -58,7 +60,7 @@ use typed::*;
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn usage() {
-    println!(
+    out::line(&format!(
         "ttc v{VERSION} — tt to TypeScript compiler
 
 Usage: ttc [options] <file | dir> ...
@@ -124,8 +126,13 @@ Tooling options (bundler plugins, editors):
   --content-mapper      serve .tt/.ttx to TypeScript 7.1+ as a content
                         mapper process (JSON-RPC on stdin/stdout) — the
                         mode `contentMappers` entries in tsconfig.json and
-                        the editor integration spawn; not for direct use"
-    );
+                        the editor integration spawn; not for direct use
+  --overlay <path>      check the buffer on stdin as if it were <path>, so an
+                        editor can ask about text it has not saved; needs
+                        --check-types or --types
+  --tt-only             report the tt layer of --check-types/--types and
+                        leave the type layer to TypeScript"
+    ));
 }
 
 /// The language & workflow guide (docs/ai/tt.md), embedded so `ttc help`
@@ -187,7 +194,7 @@ fn guide_section(heading: &str) -> &'static str {
 fn run_help(args: &[String]) -> ExitCode {
     let topic = match args {
         [] => {
-            println!(
+            out::line(&format!(
                 "ttc help <topic> — tt language & workflow reference\n\n\
                  Topics:\n  {}\n\n\
                  `ttc help all` prints the whole guide; `ttc -h` shows CLI options.",
@@ -200,7 +207,7 @@ fn run_help(args: &[String]) -> ExitCode {
                     })
                     .collect::<Vec<_>>()
                     .join("\n  ")
-            );
+            ));
             return ExitCode::SUCCESS;
         }
         [topic] => topic.to_lowercase(),
@@ -210,7 +217,7 @@ fn run_help(args: &[String]) -> ExitCode {
         }
     };
     if topic == "all" || topic == "guide" {
-        print!("{GUIDE}");
+        out::text(GUIDE);
         return ExitCode::SUCCESS;
     }
     let found = HELP_TOPICS
@@ -218,7 +225,7 @@ fn run_help(args: &[String]) -> ExitCode {
         .find(|(name, aliases, _)| *name == topic || aliases.contains(&topic.as_str()));
     match found {
         Some((_, _, heading)) => {
-            print!("{}", guide_section(heading));
+            out::text(guide_section(heading));
             ExitCode::SUCCESS
         }
         None => {
@@ -232,10 +239,10 @@ fn run_help(args: &[String]) -> ExitCode {
 fn run_explain(args: &[String]) -> ExitCode {
     let code = match args {
         [] => {
-            println!("ttc explain <code> — what a diagnostic's rule is and why\n");
-            println!("Codes:");
+            out::line("ttc explain <code> — what a diagnostic's rule is and why\n");
+            out::line("Codes:");
             for code in ttc::DiagnosticCode::ALL {
-                println!("  {}", code.as_str());
+                out::line(&format!("  {}", code.as_str()));
             }
             return ExitCode::SUCCESS;
         }
@@ -255,8 +262,8 @@ fn run_explain(args: &[String]) -> ExitCode {
         .trim_end_matches(']');
     match ttc::DiagnosticCode::parse(code) {
         Some(code) => {
-            println!("error[{}]\n", code.as_str());
-            println!("{}", code.explanation());
+            out::line(&format!("error[{}]\n", code.as_str()));
+            out::line(code.explanation());
             ExitCode::SUCCESS
         }
         None => {

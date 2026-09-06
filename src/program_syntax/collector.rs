@@ -87,7 +87,6 @@ fn parse_failure_at(
 pub(super) struct ParentCollector {
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
-    pub(super) linear_return_bodies: HashMap<ProjectedSpan, BodyId>,
     pub(super) source_start: u32,
     pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_calls: HashMap<ProjectedSpan, TtNodeId>,
@@ -111,6 +110,10 @@ pub(super) struct ParentCollector {
     /// The exit-collecting regions in scope, with the function depth an
     /// exit must sit at and the break-capture depth the region opened at.
     pub(super) exit_regions: Vec<(TtNodeId, usize, usize)>,
+    /// The projected arm blocks currently being visited: the arm's Core
+    /// body, whether the block is free of cleanup boundaries, and the
+    /// function depth the block sits at.
+    pub(super) arm_block_scopes: Vec<(BodyId, bool, usize)>,
 }
 
 pub(super) struct CollectedProgramSyntax {
@@ -132,7 +135,8 @@ pub(super) struct FoundOverlay {
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct ProjectedHostExit {
-    pub(super) linear_return_body: Option<BodyId>,
+    pub(super) body: Option<BodyId>,
+    pub(super) call_safe: bool,
     pub(super) single_return_body: Option<BodyId>,
     pub(super) statement: ProjectedSpan,
     pub(super) argument: Option<ProjectedSpan>,
@@ -146,6 +150,12 @@ pub(super) enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         positions: Vec<(ProjectedSpan, Effects)>,
         kind: OrderedEvaluationKind,
+        /// Whether the operation has no spread element. A spread copies its
+        /// operand at the literal's own position, running whatever getters
+        /// the operand has, and the positions below record only the
+        /// operand's effects — so a lowering that moves the literal has to
+        /// ask this separately. Always true where the kind cannot spread.
+        spread_free: bool,
     },
     Binary {
         parent: ProjectedSpan,
@@ -160,7 +170,9 @@ pub(super) enum ProjectedProtocolFrame {
         alternate: ProjectedSpan,
     },
     Call {
-        discarded_single: bool,
+        /// Whether the call sits in expression-statement position, so its
+        /// result is discarded.
+        discarded: bool,
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,

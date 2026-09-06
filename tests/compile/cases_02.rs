@@ -401,8 +401,128 @@ fn nested_await_match_keeps_its_expression_boundary() {
         "async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$tt_v0 = await fetch(url);"), "{out}");
-    assert!(out.contains("return $tt_v1($tt_v0);"), "{out}");
+    // The consumed call completes inside each arm, so the awaited value
+    // keeps the consumer's contextual position (TASK-327).
+    assert!(out.contains("$tt_v0 = $tt_v1(await fetch(url));"), "{out}");
+    assert!(out.contains("return $tt_v0;"), "{out}");
+}
+
+#[test]
+fn call_arguments_wider_than_the_match_keep_their_authored_frame() {
+    // A cast, an operator — anything that binds to the value itself — keeps
+    // the authored call and its frame, with the match joined by its slot:
+    // re-emitting `as number` around an arm's value would rebind it to that
+    // value instead (TASK-332).
+    let out = ok("consume(match (x) { A(v) => v, _ => 0 } as number);");
+    assert!(out.contains("$tt_v1($tt_v0 as number);"), "{out}");
+    let sum = ok("consume(1 + match (x) { A(v) => v, _ => 0 });");
+    assert!(sum.contains("$tt_v2(1 + $tt_v0);"), "{sum}");
+    let cast_in_literal = ok("consume({item: match (x) { A(v) => v, _ => 0 } as number});");
+    assert!(
+        cast_in_literal.contains("$tt_v1({item: $tt_v0 as number});"),
+        "{cast_in_literal}"
+    );
+    // An earlier position that is not inert evaluates before the scrutinee.
+    // Moving the literal into the arms would run it after, so the literal
+    // stays where it was written.
+    let effectful = ok("consume({a: effect(), item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(
+        effectful.contains("$tt_v2({a: $tt_v1, item: $tt_v0});"),
+        "{effectful}"
+    );
+    // A spread copies its operand where the literal is built, running that
+    // operand's getters. The positions record only the operand, so the
+    // literal is kept where it was written rather than moved past the
+    // scrutinee.
+    let spread = ok("consume({...rest, item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(
+        spread.contains("$tt_v2({...$tt_v1, item: $tt_v0});"),
+        "{spread}"
+    );
+    let array_spread = ok("consume([...items, match (x) { A(v) => v, _ => 0 }]);");
+    assert!(
+        array_spread.contains("$tt_v2([...$tt_v1, $tt_v0]);"),
+        "{array_spread}"
+    );
+    // A block arm rewrites its exits through the string-built prefix, which
+    // carries no source mapping — so a literal with authored bytes to place
+    // stays outside the arms.
+    let block = ok("consume({item: match (x) { A(v) => { return v; }, _ => 0 }});");
+    assert!(block.contains("$tt_v1({item: $tt_v0});"), "{block}");
+}
+
+#[test]
+fn a_match_inside_a_literal_argument_completes_the_call_from_its_arms() {
+    // A whole object- or array-literal position holds one complete
+    // expression, so each arm can re-emit the literal around its own value
+    // and the argument keeps the consumer's contextual position (TASK-332).
+    let object = ok("consume({item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(object.contains("$tt_v1({item: v});"), "{object}");
+    assert!(object.contains("$tt_v1({item: 0});"), "{object}");
+
+    let array = ok("consume([match (x) { A(v) => v, _ => 0 }]);");
+    assert!(array.contains("$tt_v1([v]);"), "{array}");
+    assert!(array.contains("$tt_v1([0]);"), "{array}");
+
+    let nested = ok("consume({outer: {item: match (x) { A(v) => v, _ => 0 }}});");
+    assert!(nested.contains("$tt_v1({outer: {item: v}});"), "{nested}");
+
+    // A consumed call still delivers its result to the authored position.
+    let consumed = ok("const kept = consume({item: match (x) { A(v) => v, _ => 0 }});");
+    assert!(consumed.contains("$tt_v0 = $tt_v1({item: v});"), "{consumed}");
+    assert!(consumed.contains("const kept = $tt_v0;"), "{consumed}");
+}
+
+#[test]
+fn control_flow_arm_completions_use_a_labeled_region() {
+    // A completed call inside a `break`-capturing arm statement leaves the
+    // region through a generated label seeded by the callee slot, and every
+    // authored return carries the call (TASK-328).
+    let out =
+        ok("consume(match (x) { A(v) => { for (const s of [1]) { if (s === v) return s; } return 0; }, _ => 0 });");
+    assert!(out.contains("$tt_y_v1: {"), "{out}");
+    assert!(out.contains("$tt_v1(s); break $tt_y_v1;"), "{out}");
+    assert!(out.contains("$tt_v1(0); break $tt_y_v1;"), "{out}");
+    // A cleanup-bearing arm keeps the consumer outside the arm entirely.
+    let cleanup =
+        ok("consume(match (x) { A(v) => { try { return v; } finally { effect(); } }, _ => 0 });");
+    assert!(cleanup.contains("$tt_v1($tt_v0);"), "{cleanup}");
+}
+
+#[test]
+fn final_argument_completions_call_through_captured_earlier_arguments() {
+    // Only the final argument's match performs the call; earlier arguments
+    // keep their authored evaluation order in capture slots the arm reads
+    // (TASK-329).
+    let out = ok("pair(first(), match (x) { A(v) => v, _ => 0 });");
+    assert!(out.contains("const $tt_v2 = (first());"), "{out}");
+    assert!(out.contains("$tt_v1($tt_v2, v);"), "{out}");
+    assert!(out.contains("$tt_v1($tt_v2, 0);"), "{out}");
+    // A match that is not the final argument keeps its join slot: moving the
+    // call into it would run the later argument's subject too early.
+    let leading = ok("pair(match (x) { A(v) => v, _ => 0 }, last());");
+    assert!(leading.contains("$tt_v0 = v;"), "{leading}");
+    assert!(leading.contains("$tt_v1($tt_v0, last());"), "{leading}");
+}
+
+#[test]
+fn inert_arguments_are_not_captured_out_of_their_contextual_position() {
+    // Constructing an object or array literal from inert parts observes
+    // nothing, so the capture is elided and the literal stays where the
+    // consumer types it (TASK-333).
+    let out = ok("const items = [{run: (n) => n}, match (x) { A(v) => v, _ => 0 }];");
+    assert!(!out.contains("= ({run:"), "{out}");
+    assert!(out.contains("[{run: (n) => n}, $tt_v0]"), "{out}");
+    // An argument that evaluates something keeps its capture, so it still
+    // runs before the match's subject.
+    let effectful = ok("const items = [make(), match (x) { A(v) => v, _ => 0 }];");
+    assert!(effectful.contains("const $tt_v1 = (make());"), "{effectful}");
+    assert!(effectful.contains("[$tt_v1, $tt_v0]"), "{effectful}");
+    // A completed call is re-emitted inside the dispatch, where only the
+    // generated names are in scope, so its arguments stay captured.
+    let completed = ok("consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });");
+    assert!(completed.contains("const $tt_v2 = ({run: (n) => n});"), "{completed}");
+    assert!(completed.contains("$tt_v1($tt_v2, v);"), "{completed}");
 }
 
 #[test]
@@ -638,10 +758,10 @@ fn try_expression_may_contain_a_match() {
         "function f(): X {\n  const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });\n  return x;\n}\n",
     );
     assert!(nested.contains("const $tt_v1 = (wrap);"), "{nested}");
-    assert!(
-        nested.contains("const $tt_t0 = $tt_v1($tt_v0);"),
-        "{nested}"
-    );
+    // Each arm performs the consuming call itself (TASK-327); the try
+    // propagation then reads the completed result.
+    assert!(nested.contains("$tt_v0 = $tt_v1(value);"), "{nested}");
+    assert!(nested.contains("const $tt_t0 = $tt_v0;"), "{nested}");
     assert!(!nested.contains("$tt_expr"), "{nested}");
 
     let discarded = ok(

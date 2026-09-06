@@ -23,8 +23,12 @@ bun run tt:check
 `init` performs these steps:
 
 - Detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, or Farm
-- Adds `@openload28/tt-lang`, `@openload28/unplugin-tt`, TypeScript, and TT scripts
-- Configures the TypeScript content mapper for `.tt` and `.ttx` imports
+- Adds `@openload28/tt-lang`, TypeScript, and TT scripts — plus
+  `@openload28/unplugin-tt` when a bundler is used (`--bundler none` adds no
+  plugin)
+- Writes `tsconfig.tt.json`, which extends the project's `tsconfig.json`
+  with the TypeScript content mapper for `.tt` and `.ttx` imports, and
+  points the generated scripts at it
 - Creates `tt.*.config.mjs` for declarative bundlers
 - Prints the plugin code to add for esbuild
 

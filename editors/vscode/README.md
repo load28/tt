@@ -120,7 +120,7 @@ highlighting does not require a working compiler.
 | `tt.typeDiagnostics` | `true` | Include TypeScript type diagnostics for tt documents. |
 | `tt.typedChecks` | `true` | Include type-dependent tt checks. |
 | `tt.sidecar` | `"refresh"` | On save, refresh existing sidecars; `always` creates them, `off` disables refresh. |
-| `tt.sidecarDir` | `""` | Sidecar directory relative to the workspace; empty means adjacent to sources. |
+| `tt.sidecarDir` | `""` | Sidecar directory relative to the workspace; empty means adjacent to sources. A relative path is skipped, with a note in the output channel, for a file in no workspace folder. |
 | `tt.trace.server` | `"off"` | LSP trace level. |
 
 ## Development and verification

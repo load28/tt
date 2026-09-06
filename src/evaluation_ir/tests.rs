@@ -455,31 +455,64 @@ fn an_inert_input_needs_no_capture_but_an_effectful_one_does() {
     // §9 capture elision: a literal's evaluation is unobservable, so it
     // stays in place; a call may do anything, so it is captured to
     // preserve its order against the hoisted region.
-    let (file, core) = evaluation(
-        "declare function g(a: number, b: number): void;\ndeclare function eff(): number;\ng(1, match (1) { 1 => 1, _ => 0 });\ng(eff(), match (1) { 1 => 2, _ => 0 });\n",
-    );
-    let plan = plan(&file, &core);
-    let inputs: Vec<_> = plan
-        .owners()
-        .flat_map(|owner| &owner.values)
-        .flat_map(|value| value.schedule.steps())
-        .flat_map(|step| &step.inputs)
-        .collect();
+    let value_inputs = |source: &str| {
+        let (file, core) = evaluation(source);
+        let plan = plan(&file, &core);
+        plan.owners()
+            .flat_map(|owner| &owner.values)
+            .flat_map(|value| value.schedule.steps())
+            .flat_map(|step| &step.inputs)
+            .filter(|input| {
+                !matches!(
+                    input,
+                    PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::DirectReference
+                            | EvaluationInputMode::MemberReference,
+                        ..
+                    }
+                )
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+
+    let elided = value_inputs("const a = [1, match (1) { 1 => 1, _ => 0 }];\n");
     assert!(
-        inputs
+        elided
             .iter()
-            .any(|input| matches!(input, PlannedEvaluationInput::Stable { .. })),
-        "{inputs:#?}"
+            .all(|input| matches!(input, PlannedEvaluationInput::Stable { .. })),
+        "{elided:#?}"
+    );
+
+    let captured = value_inputs(
+        "declare function eff(): number;\nconst a = [eff(), match (1) { 1 => 2, _ => 0 }];\n",
     );
     assert!(
-        inputs.iter().any(|input| matches!(
+        captured.iter().all(|input| matches!(
             input,
             PlannedEvaluationInput::Source {
                 mode: EvaluationInputMode::Value,
                 ..
             }
         )),
-        "{inputs:#?}"
+        "{captured:#?}"
+    );
+
+    // A completed call re-emits itself inside the dispatch, where the
+    // authored position is gone, so its elided inputs also reserve a name
+    // the completion can bind them to.
+    let completed = value_inputs(
+        "declare function g(a: number, b: number): void;\ng(1, match (1) { 1 => 1, _ => 0 });\n",
+    );
+    assert!(
+        completed.iter().all(|input| matches!(
+            input,
+            PlannedEvaluationInput::Stable {
+                reserved: Some(_),
+                ..
+            }
+        )),
+        "{completed:#?}"
     );
 }
 

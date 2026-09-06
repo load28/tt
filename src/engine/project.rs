@@ -470,6 +470,19 @@ pub fn collect_sources(
 ) -> std::io::Result<()> {
     let meta = std::fs::metadata(entry)?;
     if meta.is_file() {
+        // A named file is filtered the same way the walk filters one: the
+        // contract is about extensions, not about how the file was reached.
+        // Without this, `ttc -o build src/app.js` wrote TypeScript syntax
+        // into a file still called `.js`.
+        if !is_source(entry, include_ts) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "not a tt or TypeScript source (expected {})",
+                    source_extensions(include_ts)
+                ),
+            ));
+        }
         out.push(entry.to_path_buf());
         return Ok(());
     }
@@ -492,12 +505,7 @@ pub fn collect_sources(
                 if !skip {
                     collect_sources(&child, include_ts, out)?;
                 }
-            } else if meta.is_file()
-                && child.extension().is_some_and(|e| {
-                    TT_EXTENSIONS.iter().any(|tt| *tt == e)
-                        || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
-                })
-            {
+            } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
             }
         }
@@ -516,4 +524,22 @@ pub(crate) fn collect_tt(inputs: &[String]) -> std::io::Result<Vec<PathBuf>> {
         .filter(|f| crate::SourceKind::from_tt_path(f).is_some())
         .map(|f| f.canonicalize())
         .collect()
+}
+
+/// Whether `path` names a source this compiler takes: a tt source always,
+/// and hand-written TypeScript when pass-through is on.
+fn is_source(path: &Path, include_ts: bool) -> bool {
+    path.extension().is_some_and(|e| {
+        TT_EXTENSIONS.iter().any(|tt| *tt == e)
+            || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
+    })
+}
+
+/// The extensions [`is_source`] accepts, for an error that has to name them.
+fn source_extensions(include_ts: bool) -> String {
+    let mut names: Vec<String> = TT_EXTENSIONS.iter().map(|e| format!(".{e}")).collect();
+    if include_ts {
+        names.extend(TS_EXTENSIONS.iter().map(|e| format!(".{e}")));
+    }
+    names.join(", ")
 }
