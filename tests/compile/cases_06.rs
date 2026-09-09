@@ -725,3 +725,36 @@ fn a_tt_value_anywhere_in_a_concise_arrow_body_keeps_the_block_balanced() {
         );
     }
 }
+
+#[test]
+fn a_slot_carries_the_declared_type_only_when_it_is_the_returned_value_s() {
+    let head = "variant Shape { Circle(radius: number), Point }\ndeclare const s: Shape;\n";
+    let value = "match (s) { Circle(radius) => 1, Point => 0 }";
+
+    // An ordinary, async or arrow function declares the type of what its
+    // `return` delivers, so the slot carries it.
+    let out = ok(&format!(
+        "{head}export function plain(): number {{ return {value}; }}\n"
+    ));
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
+    let out = ok(&format!(
+        "{head}export async function asy(): Promise<number> {{ return {value}; }}\n"
+    ));
+    assert!(out.contains("Awaited< Promise<number>>"), "{out}");
+
+    // A generator declares the iterator it produces, not the value its
+    // `return` delivers, and a type predicate is not a type at all. Both
+    // leave the slot to be inferred, and the output has to parse.
+    let out = ok(&format!(
+        "{head}export function* gen(): Generator<number, number, void> \
+         {{ yield 1; return {value}; }}\n"
+    ));
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(!out.contains("$tt_v0: Generator"), "{out}");
+    let out = ok(&format!(
+        "{head}export function pred(x: unknown): x is number \
+         {{ return match (s) {{ Circle(radius) => typeof x === \"number\", Point => false }}; }}\n"
+    ));
+    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(!out.contains("is number;"), "{out}");
+}

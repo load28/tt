@@ -61,6 +61,9 @@ defect in the layer that owns the behavior.
 - 2026-09-09: Gave the block a concise arrow body is rewritten to one
   closing brace, written where the body ends, and covered the placement
   matrix in `tests/compile/cases_06.rs`.
+- 2026-09-09: Narrowed the declared return type a `return` slot carries to
+  the functions whose declaration names that value's type, and checked the
+  emitted output of every shape with the repository's TypeScript.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -109,6 +112,22 @@ defect in the layer that owns the behavior.
   matched neither.
 - **Resolution**: Each path now closes only at the end of the body, and a
   registry on the emitter keeps the brace to one write.
+
+### Issue 3: A generator's declared type was copied onto its return slot
+
+- **Symptom**: `function* gen(): Generator<number, string, void>` emitted
+  `let $tt_v0: Generator<number, string, void>;` and its async counterpart
+  `let $tt_v1: Awaited< AsyncGenerator<...>>;` — both rejected by tsc. A
+  type predicate emitted `let $tt_v2: x is number;`, which does not parse,
+  so the user saw `verify-failed` with no position.
+- **Cause**: The host projection captured `return_type` for every function
+  and lowering copied it onto the slot the `return` assigns through. That
+  is sound only when the declared return type *is* the returned value's
+  type; a generator declares the iterator it produces, and a predicate is
+  not a type.
+- **Resolution**: One predicate in the projection decides what the
+  annotation describes, and answers `None` for generators and predicates,
+  which leaves the slot to be inferred from the value assigned to it.
 
 ## Verification
 
