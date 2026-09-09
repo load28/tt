@@ -96,6 +96,8 @@ defect in the layer that owns the behavior.
   the suite passes with 168 tests.
 - 2026-09-09: Made two error messages name what actually failed — the entry
   the walk could not read, and the path a server request sent.
+- 2026-09-09: Put the editor's hover and completion text into English, the
+  language every other user-visible string in the server already uses.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -404,6 +406,16 @@ defect in the layer that owns the behavior.
   and the server borrowed the CLI's wording for a protocol error.
 - **Resolution**: The walk names the entry it could not read, and the
   server names the path the request sent.
+
+### Issue 18: The editor's own help text was Korean only
+
+- **Symptom**: Hovering `match` and the six keyword-snippet completions
+  described tt in Korean, as did two completion details, while every other
+  user-visible string in the server — diagnostics, notifications, output
+  channel — is English.
+- **Cause**: The strings predate the documentation-language rule in
+  `AGENTS.md`.
+- **Resolution**: Translated in place, saying the same thing.
 
 ## Verification
 

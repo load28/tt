@@ -922,7 +922,8 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "tt 태그드 유니언 선언. 유닛 케이스는 괄호 없이 값으로 선언할 수 있습니다.",
+        "A tt tagged-union declaration. A unit case is declared without\n" +
+        "parentheses and is a value.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "variant ${1:Name} {\n\t${2:Case}(${3:field}: ${4:number}),\n\t${5:Unit},\n}",
@@ -934,7 +935,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`kind` 태그로 분기하는 match 표현식. `_` 없는 match는 같은 파일·import한 tt variant에 대해 소진성이 검사됩니다.",
+        "A match expression, dispatching on the `kind` tag. A match without a\n" +
+        "`_` arm is checked for exhaustiveness against the tt variants this\n" +
+        "file declares or imports.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "match (${1:value}) {\n\t$0\n}",
@@ -946,7 +949,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "Rust의 `?`에 해당합니다. `Ok` 값을 풀고 `Err`이면 가장 가까운 Result 스코프(`result` 블록 또는 일반 함수)를 끝냅니다. 이 completion은 세미콜론이 필요한 문장 형태를 삽입합니다.",
+        "Rust's `?`: unwraps an `Ok` value, and on `Err` ends the nearest\n" +
+        "Result scope — a `result` block, or the enclosing function. This\n" +
+        "completion inserts the statement form, which takes a semicolon.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "try ${1:expression};",
@@ -958,7 +963,8 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "값 대신 함수를 합성해 새 함수를 만듭니다. 첫 스텝이 입력 타입을 정하며, 메서드 스텝이 될 수 없습니다.",
+        "Composes functions into a new one instead of flowing a value. The\n" +
+        "first step decides the input type and cannot be a method step.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "flow |> ${1:first} |> ${0:next}",
@@ -970,7 +976,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`Result` 연산을 평탄하게 잇습니다. `const x = try 식;`은 `Ok` 값을 묶고 실패하면 블록을 `Err`로 끝냅니다. 명시적인 `return 값;`은 `Ok`로 감싸집니다.",
+        "Chains `Result` operations flatly. `const x = try expression;` binds\n" +
+        "the `Ok` value and ends the block with the `Err` on failure; an\n" +
+        "explicit `return value;` is wrapped as `Ok`.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "result {\n\tconst ${1:value} = try ${2:expression};\n\treturn ${1:value};\n}",
@@ -982,7 +990,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "패턴이 일치하면 필드를 바인딩하고, 아니면 발산하는 else 블록을 실행합니다. 괄호와 세미콜론 필수.",
+        "Binds the pattern's fields when it matches, and otherwise runs an\n" +
+        "`else` block that must diverge. The parentheses and the semicolon\n" +
+        "are required.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText:
@@ -1139,7 +1149,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     kind: CompletionItemKind.Enum,
     detail:
       e.origin === "builtin"
-        ? `내장 variant ${e.name}${e.generics}`
+        ? `built-in variant ${e.name}${e.generics}`
         : e.origin === "imported"
           ? `variant ${e.name}${e.generics}${e.specifier ? ` — ${e.specifier}` : ""}`
           : `variant ${e.name}${e.generics}`,
@@ -1269,9 +1279,11 @@ connection.onHover(async (params) => {
         contents: {
           kind: MarkupKind.Markdown,
           value:
-            "```tt\nmatch (값) { 패턴 => 본문, ... }\n```\n" +
-            "tt match 표현식 — 값의 `kind` 필드로 분기합니다. " +
-            "`_` 없는 match는 같은 파일·import한 tt variant(내장 `Option`/`Result` 포함)에 대해 소진성이 검사됩니다.",
+            "```tt\nmatch (value) { pattern => body, ... }\n```\n" +
+            "A tt match expression, dispatching on the value's `kind` field. " +
+            "A match without a `_` arm is checked for exhaustiveness against " +
+            "the tt variants this file declares or imports, the built-in " +
+            "`Option` and `Result` included.",
         },
         range: { start: doc.positionAt(w.start), end: doc.positionAt(w.end) },
       };
