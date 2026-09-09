@@ -417,6 +417,37 @@ defect in the layer that owns the behavior.
   `AGENTS.md`.
 - **Resolution**: Translated in place, saying the same thing.
 
+### Issue 19: A `return` inside an `if let` inside a block arm — diagnosed, not fixed
+
+- **Symptom**: `docs/ai/tt.md` line 49 says a block arm's direct `return`
+  delivers the match value and only "returns inside nested functions remain
+  JavaScript returns". An `if let` is control flow, not a nested function,
+  but a `return` inside one still leaves the enclosing function:
+
+  ```tt
+  const v = match (o) {
+    Some(value) => { if let Some(value: v2) = o { return v2; } return value; },
+    None => 0,
+  };
+  return v + 100;
+  ```
+
+  With `{ kind: "Some", value: 5 }` this prints 5, not 105. The arm's own
+  trailing `return value` lowers correctly to `$tt_v0 = value; break;`; the
+  nested one is emitted as a plain `return`.
+- **Cause**: A statement-level decision is projected as one placeholder
+  (`ProjectionBuilder::emit_statement_decision`), so nothing written inside
+  its bodies is visited by the exit collector. The shadow island beside it
+  (`emit_shadow_body_island`) exists only to give a *nested decision* its
+  overlay, is skipped when the body holds none, and is itself an arrow —
+  which the collector reads as a function boundary.
+- **Why it is not fixed here**: Making the exit analysis see into a
+  statement decision's bodies changes how the owner model projects them,
+  which is the lowering's central contract rather than a local repair. It
+  wants its own task, with the projection and Evaluation IR contracts
+  restated together. A speculative change was written, measured against the
+  case, and reverted when it did not address the cause.
+
 ## Verification
 
 - [ ] `cargo fmt --check`
