@@ -220,7 +220,10 @@ stage_agents() {
 stage_rust() {
   run cargo fmt --check || return 1
   run cargo clippy --all-targets -- -D warnings || return 1
-  run cargo test || return 1
+  # The emit fixtures pin the artifact a configured checkout produces,
+  # annotations included, so without a TypeScript they skip — and a skipped
+  # contract is green in every other way. The gate says one must be there.
+  run env TTC_REQUIRE_TSGO=1 cargo test || return 1
   run cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked || return 1
 }
 

@@ -367,7 +367,8 @@
 | TASK-352 | Repair the developer-facing surfaces of tt | Complete | 2026-09-09 | 2026-09-09 | [TASK-352](./TASK-352-developer-surface-structural-fixes.md) |
 | TASK-353 | Correct PR 115 at the owning compiler and tooling layers | Complete | 2026-09-10 | 2026-09-10 | [TASK-353](./TASK-353-pr115-structural-corrections.md) |
 | TASK-354 | A missing toolchain removes the refinement, not the compilation | Complete | 2026-09-10 | 2026-09-10 | [TASK-354](./TASK-354-contextual-refinement-degrades.md) |
+| TASK-355 | Say which artifact an emit fixture pins | Complete | 2026-09-10 | 2026-09-10 | [TASK-355](./TASK-355-emit-fixture-toolchain-contract.md) |
 
 ## Next task number
 
-**TASK-355**
+**TASK-356**

@@ -98,8 +98,6 @@ documented as needing none, stopped working without one.
 the emitted output for those files matches the previous head byte for byte.
 The gate is green across all six stages.
 
-Left open: the emit fixtures now depend on an installed TypeScript —
-`cargo test` in a checkout that has not run `npm ci` fails on
-`contextual-composed-match`. That is a contract question for the fixtures
-(whether an emit snapshot may encode checker-derived types) rather than a
-defect in this change, and it wants its own task.
+The fixture contract this exposed — that an emit snapshot's content depends
+on an installed TypeScript — is settled in
+[TASK-355](./TASK-355-emit-fixture-toolchain-contract.md).
