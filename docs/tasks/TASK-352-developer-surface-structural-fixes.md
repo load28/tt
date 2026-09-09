@@ -80,6 +80,9 @@ defect in the layer that owns the behavior.
   against a full filesystem and a rename that cannot succeed.
 - 2026-09-09: Gave a hand-written file's type errors their position back,
   checked on a line containing Korean text and through the server protocol.
+- 2026-09-09: Audited the editor surfaces and made every position the
+  server reports a UTF-16 one, verified by applying an offered fix to a
+  line containing an emoji. `./scripts/ci extension` passes with 160 tests.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -142,6 +145,21 @@ defect in the layer that owns the behavior.
   reports in full. Its coverage is answered from the declarations the file
   can see — the same answer `ttc --check` gives — so naming a file never
   passes in silence.
+
+### Decision 7: The protocol's coordinate is converted at the protocol
+
+- **Context**: `docs/design/lsp-architecture.md` §C fixes UTF-16 as the
+  editor protocol's coordinate. The compiler measures a column in code
+  points, which is what its own rendered caret lines up with, and reports
+  declaration spans in bytes. The JSON-lines server passed both through.
+- **Alternatives considered**: Make the compiler measure in UTF-16
+  everywhere (the CLI's caret then misaligns for anyone whose source has
+  astral characters); convert in the extension (every other client would
+  have to repeat it, and the design doc puts the conversion in the engine).
+- **Decision and rationale**: One helper at the server converts each
+  position it emits, and the library exposes the two conversions so no
+  surface counts its own way. The compiler keeps code points for the
+  terminal; the protocol gets what the protocol means.
 
 ## Issues and resolutions
 
@@ -277,6 +295,22 @@ defect in the layer that owns the behavior.
 - **Resolution**: They are converted against the file's text — the buffer's
   when one is open, the disk's otherwise. A file that cannot be read keeps
   the path alone rather than a made-up position.
+
+### Issue 11: An offered quick fix deleted the code beside the one it named
+
+- **Symptom**: In a file with an emoji earlier on the line, the
+  `match-not-exhaustive` quick fix replaced the arm body instead of
+  inserting before the closing brace: `Circle(r) => r` became
+  `Circle(r) => , Square(s) => undefined, `. The diagnostic's own underline
+  was off by the same amount, and a declaration's outline entry pointed at
+  unrelated text because those spans were bytes.
+- **Cause**: The compiler counts a column in code points and a declaration
+  span in bytes; the editor protocol counts UTF-16 code units. The server
+  passed both through unconverted, so each astral character earlier on the
+  line moved the reported span by one.
+- **Resolution**: The server converts every position it emits, through two
+  conversions the library now exposes. The compiler keeps code points for
+  its own caret.
 
 ## Verification
 

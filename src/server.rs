@@ -387,6 +387,18 @@ fn close_document(
     Ok(serde_json::json!({}))
 }
 
+/// One position as the protocol counts it.
+///
+/// Every column that leaves this server is a UTF-16 one
+/// (`docs/design/lsp-architecture.md` §C). The compiler measures columns in
+/// code points, because that is what its own rendered caret lines up with,
+/// and the two differ by one for every astral character earlier on the line
+/// — enough for an offered edit to land on the code beside the one it names.
+/// The conversion happens here, at the boundary that speaks the protocol.
+fn protocol_position(source: &str, at: (usize, usize)) -> (usize, usize) {
+    (at.0, ttc::utf16_column(source, at.0, at.1))
+}
+
 /// A diagnostic's suggestions as the JSON the protocol speaks.
 ///
 /// The edit's byte offsets become the same 1-based line/column the
@@ -400,8 +412,9 @@ fn suggestions_json(suggestions: &[ttc::Suggestion], source: Option<&str>) -> se
         .iter()
         .map(|suggestion| {
             let edit = suggestion.edit.as_ref().zip(source).map(|(edit, source)| {
-                let (line, col) = ttc::line_col(source, edit.start);
-                let (end_line, end_col) = ttc::line_col(source, edit.end);
+                let (line, col) = protocol_position(source, ttc::line_col(source, edit.start));
+                let (end_line, end_col) =
+                    protocol_position(source, ttc::line_col(source, edit.end));
                 json!({
                     "line": line,
                     "col": col,
@@ -459,11 +472,13 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
         .iter()
         .map(|d| {
             let e = d.to_compile_error(text, filename);
+            let (line, col) = protocol_position(text, (e.line, e.col));
+            let (end_line, end_col) = protocol_position(text, (e.end_line, e.end_col));
             json!({
-                "line": e.line,
-                "col": e.col,
-                "endLine": e.end_line,
-                "endCol": e.end_col,
+                "line": line,
+                "col": col,
+                "endLine": end_line,
+                "endCol": end_col,
                 "message": e.message,
                 "code": d.code.as_str(),
                 "suggestions": suggestions_json(&d.suggestions, Some(text)),
@@ -487,12 +502,19 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let decls = ttc::engine::tt_declarations(Path::new(path), text_param(params)?);
+    let text = text_param(params)?;
+    let decls = ttc::engine::tt_declarations(Path::new(path), text);
+    // The engine measures these in bytes; a consumer addresses the buffer
+    // in UTF-16 code units, which is what the protocol counts. One
+    // conversion here keeps the two from disagreeing about where a name is
+    // (`docs/design/lsp-architecture.md` §C).
+    let offset = |byte: usize| ttc::utf16_offset(text, byte);
+    let span = |bounds: (usize, usize)| serde_json::json!({ "start": offset(bounds.0), "end": offset(bounds.1) });
     let variants: Vec<_> = decls
         .variants
         .iter()
         .map(|e| {
-            let (origin, specifier, name_span, span) = match &e.origin {
+            let (origin, specifier, name_span, declaration_span) = match &e.origin {
                 ttc::engine::TtVariantOrigin::Local { name_span, span } => (
                     "local",
                     serde_json::Value::Null,
@@ -517,11 +539,11 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
                 "generics": e.generics,
                 "origin": origin,
                 "specifier": specifier,
-                "nameSpan": name_span.map(|(start, end)| json!({ "start": start, "end": end })),
-                "span": span.map(|(start, end)| json!({ "start": start, "end": end })),
+                "nameSpan": name_span.map(&span),
+                "span": declaration_span.map(&span),
                 "cases": e.cases.iter().map(|c| json!({
                     "tag": c.tag,
-                    "span": c.span.map(|(start, end)| json!({ "start": start, "end": end })),
+                    "span": c.span.map(&span),
                     "unit": c.unit,
                     "fields": c.fields.iter().map(|f| json!({
                         "name": f.name,
@@ -537,9 +559,9 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
         .iter()
         .map(|m| {
             json!({
-                "keyword": m.keyword,
-                "bodyOpen": m.body_open,
-                "bodyClose": m.body_close,
+                "keyword": offset(m.keyword),
+                "bodyOpen": offset(m.body_open),
+                "bodyClose": offset(m.body_close),
             })
         })
         .collect();
@@ -732,8 +754,16 @@ fn typed_check(
                         .diagnostics
                         .iter()
                         .map(|d| {
-                            let (line, col) = d.position.unwrap_or((0, 0));
-                            let (end_line, end_col) = d.end.unwrap_or((0, 0));
+                            let source = snapshot.source_of(&d.path);
+                            let at = |position: Option<(usize, usize)>| match (position, source) {
+                                (Some(position), Some(source)) => {
+                                    protocol_position(source, position)
+                                }
+                                (Some(position), None) => position,
+                                (None, _) => (0, 0),
+                            };
+                            let (line, col) = at(d.position);
+                            let (end_line, end_col) = at(d.end);
                             let mut entry = json!({
                                 "path": d.path,
                                 "line": line,
@@ -751,7 +781,9 @@ fn typed_check(
                             // consumer of the existing shape sees no new
                             // field until a diagnostic actually carries one.
                             if !d.labels.is_empty() {
-                                entry["labels"] = labels_json(&d.labels);
+                                entry["labels"] = labels_json(&d.labels, &d.path, &|path| {
+                                    snapshot.source_of(path)
+                                });
                             }
                             entry
                         })
@@ -785,16 +817,30 @@ fn typed_check(
 /// A diagnostic's secondary labeled spans as the JSON the protocol speaks:
 /// 1-based line/column pairs like the diagnostic itself, plus the label's
 /// words, and a `path` only when the span is in another file.
-fn labels_json(labels: &[ttc::engine::DiagnosticLabel]) -> serde_json::Value {
+fn labels_json<'a>(
+    labels: &[ttc::engine::DiagnosticLabel],
+    default_path: &Path,
+    source_of: &dyn Fn(&Path) -> Option<&'a str>,
+) -> serde_json::Value {
     use serde_json::json;
     labels
         .iter()
         .map(|label| {
+            // A label carries a path only when it points into another
+            // file, so its column is counted against that file's text and
+            // otherwise against the diagnostic's own.
+            let source = source_of(label.path.as_deref().unwrap_or(default_path));
+            let at = |position: (usize, usize)| match source {
+                Some(source) => protocol_position(source, position),
+                None => position,
+            };
+            let (line, col) = at(label.position);
+            let (end_line, end_col) = at(label.end);
             let mut entry = json!({
-                "line": label.position.0,
-                "col": label.position.1,
-                "endLine": label.end.0,
-                "endCol": label.end.1,
+                "line": line,
+                "col": col,
+                "endLine": end_line,
+                "endCol": end_col,
                 "message": label.message,
             });
             if let Some(path) = &label.path {
