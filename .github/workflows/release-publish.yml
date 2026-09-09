@@ -88,6 +88,9 @@ jobs:
 
   publish:
     name: publish verified artifacts
+    concurrency:
+      group: npm-release-tags
+      cancel-in-progress: false
     needs: verify
     runs-on: ubuntu-latest
     environment:
