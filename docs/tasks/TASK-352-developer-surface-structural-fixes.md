@@ -94,6 +94,8 @@ defect in the layer that owns the behavior.
   cannot take over the window; the suite passes with 167 tests.
 - 2026-09-09: Stopped a JSX closing tag from reading as a regex in `.ttx`;
   the suite passes with 168 tests.
+- 2026-09-09: Made two error messages name what actually failed — the entry
+  the walk could not read, and the path a server request sent.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -390,6 +392,18 @@ defect in the layer that owns the behavior.
 - **Resolution**: The mask is told which surface it is reading. On the JSX
   one, a slash immediately after `<` closes an element; a comparison
   against a regex still reads as a regex on both.
+
+### Issue 17: Two messages named something other than the cause
+
+- **Symptom**: One dangling symlink under a directory input failed the
+  whole build with `ttc: src: No such file or directory`, about a directory
+  that plainly exists, never naming the link. The server answered a
+  `typedCheck` for a missing file with `--overlay <path>: ...`, a command
+  line the caller never wrote and a flag the protocol does not have.
+- **Cause**: The walk propagated the entry's I/O error without its path,
+  and the server borrowed the CLI's wording for a protocol error.
+- **Resolution**: The walk names the entry it could not read, and the
+  server names the path the request sent.
 
 ## Verification
 

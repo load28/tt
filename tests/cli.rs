@@ -1424,3 +1424,22 @@ fn a_failed_write_leaves_the_previous_output_and_no_litter() {
         "staging files left behind: {leftovers:?}"
     );
 }
+
+/// An entry the walk cannot read is named. It used to surface as
+/// "no such file or directory" against the directory the user named, which
+/// plainly does exist, leaving the actual dangling link unmentioned.
+#[test]
+fn an_unreadable_entry_is_named_rather_than_the_directory_holding_it() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/ok.tt"), "export const a = 1;\n").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("/nonexistent/gone.tt", dir.join("src/dangling.tt")).unwrap();
+    #[cfg(not(unix))]
+    return;
+
+    let output = ttc(&["--check", dir.join("src").to_str().unwrap()]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(stderr.contains("dangling.tt"), "{stderr}");
+}

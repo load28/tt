@@ -704,8 +704,11 @@ fn typed_check(
     let text = text_param(params)?.to_string();
     let include_types = params["includeTypes"].as_bool().unwrap_or(false);
     let canonical = PathBuf::from(&path)
+        // The buffer is checked as the file it stands for, so that file has
+        // to exist. The protocol has no flags — name the path the request
+        // sent, not a command line the caller never wrote.
         .canonicalize()
-        .map_err(|e| format!("--overlay {path}: {e}"))?;
+        .map_err(|e| format!("{path}: {e}"))?;
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
     // stays stateless while the projection cache keeps the incremental win.

@@ -519,7 +519,7 @@ pub fn collect_sources(
     include_ts: bool,
     out: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
-    let meta = std::fs::metadata(entry)?;
+    let meta = std::fs::metadata(entry).map_err(|e| named(entry, e))?;
     if meta.is_file() {
         // A named file is filtered the same way the walk filters one: the
         // contract is about extensions, not about how the file was reached.
@@ -538,12 +538,18 @@ pub fn collect_sources(
         return Ok(());
     }
     if meta.is_dir() {
-        let mut children: Vec<PathBuf> = std::fs::read_dir(entry)?
+        let mut children: Vec<PathBuf> = std::fs::read_dir(entry)
+            .map_err(|e| named(entry, e))?
             .filter_map(|e| e.ok().map(|e| e.path()))
             .collect();
         children.sort();
         for child in children {
-            let meta = std::fs::metadata(&child)?;
+            // A directory holds entries the walk cannot read — a dangling
+            // symlink, a loop, a permission. Naming the one that failed is
+            // the difference between a fixable report and "the directory
+            // you named does not exist", which is what the bare error said
+            // about a directory that plainly does.
+            let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
             if meta.is_dir() {
                 // Dot-directories (.git, .tt-build, .tt-types, ...) and
                 // node_modules are never sources; descending into them
@@ -562,6 +568,11 @@ pub fn collect_sources(
         }
     }
     Ok(())
+}
+
+/// An I/O error that says which entry it is about.
+fn named(path: &Path, error: std::io::Error) -> std::io::Error {
+    std::io::Error::new(error.kind(), format!("{}: {error}", path.display()))
 }
 
 /// The `.tt` files of `inputs`, as absolute paths.
