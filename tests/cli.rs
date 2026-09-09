@@ -1540,3 +1540,47 @@ fn watch_reports_input_failure_transitions_and_recovers() {
         std::panic::resume_unwind(error);
     }
 }
+
+/// A contextual annotation refines the type of a generated storage slot;
+/// the emitted program is correct without one. `--check` is documented as
+/// needing no TypeScript, and `-p` is what bundler plugins call, so a
+/// toolchain that is not installed has to remove the refinement rather than
+/// the compilation.
+#[test]
+fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
+    // Outside the repository: the toolchain is resolved by walking up from
+    // the file, and every directory inside this checkout has the
+    // repository's own `node_modules` above it.
+    let isolated = std::env::temp_dir().join(format!(
+        "tt-no-toolchain-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = fs::remove_dir_all(&isolated);
+    fs::create_dir_all(&isolated).unwrap();
+    let file = isolated.join("shape.tt");
+    fs::write(
+        &file,
+        "variant Shape { Circle(r: number), Point }\n\
+         declare const s: Shape;\n\
+         export const v = match (s) { Circle(r) => r, Point => 0 };\n",
+    )
+    .unwrap();
+
+    for mode in ["--check", "-p"] {
+        // Run from that directory too: the toolchain is looked up from the
+        // process's own location as well as the file's.
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args([mode, "shape.tt"])
+            .current_dir(&isolated)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.contains("no TypeScript compiler found"),
+            "{mode} demanded a toolchain: {stderr}"
+        );
+        assert!(output.status.success(), "{mode} failed: {stderr}");
+    }
+    let _ = fs::remove_dir_all(&isolated);
+}

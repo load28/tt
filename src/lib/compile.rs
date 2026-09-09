@@ -217,16 +217,26 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     if options.defer_to_checker {
         return Ok(emit);
     }
-    crate::typescript::contextual::standalone(emit, source, options).map_err(|failure| {
-        CompileError {
+    // A contextual annotation refines the *type* of a generated storage
+    // slot; the emitted program is correct without one. So a backend that
+    // is not there removes the refinement, not the compilation — the same
+    // rule the typed pass follows (`docs/design/compiler-core.md` §7), and
+    // what keeps `--check` and `-p` answering with no TypeScript installed.
+    // A backend that ran and broke its own contract is still a failure.
+    match crate::typescript::contextual::standalone(emit.clone(), source, options) {
+        Ok(typed) => Ok(typed),
+        Err(failure) if failure.kind == crate::typescript::backend::FailureKind::Unavailable => {
+            Ok(emit)
+        }
+        Err(failure) => Err(CompileError {
             message: failure.message,
             filename: options.filename.map(str::to_owned),
             line: 0,
             col: 0,
             end_line: 0,
             end_col: 0,
-        }
-    })
+        }),
+    }
 }
 
 /// Every tt-level violation of `source`, in source order — the semantic
@@ -686,8 +696,14 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     if !options.defer_to_checker
         && let Some(lowered) = emit.take()
     {
-        match crate::typescript::contextual::standalone(lowered, source, options) {
+        match crate::typescript::contextual::standalone(lowered.clone(), source, options) {
             Ok(typed) => emit = Some(typed),
+            // As above: no backend means no refinement, not no emission.
+            Err(failure)
+                if failure.kind == crate::typescript::backend::FailureKind::Unavailable =>
+            {
+                emit = Some(lowered);
+            }
             Err(failure) => errors.push(TtError::positionless(failure.message)),
         }
     }
