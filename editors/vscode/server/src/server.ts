@@ -268,7 +268,7 @@ function analyze(doc: TextDocument): Analyzed {
   const cached = analysisCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached;
   const text = doc.getText();
-  const masked = analysis.maskNonCode(text);
+  const masked = analysis.maskNonCode(text, doc.languageId === "ttx");
   const result: Analyzed = { version: doc.version, text, masked };
   analysisCache.set(doc.uri, result);
   return result;

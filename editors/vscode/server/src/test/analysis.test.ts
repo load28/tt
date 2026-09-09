@@ -46,3 +46,17 @@ test("isIdent rejects reserved words and bad starts", () => {
   assert.ok(!isIdent("variant"));
   assert.ok(!isIdent("1x"));
 });
+
+test("a JSX closing tag is not a regex in a .ttx buffer", () => {
+  // `<` is a position a regex may follow, so without the JSX surface the
+  // slash of `</p>` starts an imagined literal that swallows the rest of
+  // the line — and the cursor context after it is whatever that left.
+  const src = "const el = <><p>{t.a}</p><p>{t.</p></>;";
+  assert.equal(maskNonCode(src, true), src);
+  assert.equal(memberAccessAt(maskNonCode(src, true), src.lastIndexOf("{t.") + 3), "t");
+
+  // A comparison against a regex is still a regex, in either surface.
+  const compared = "const b = a < /x[/]y/g;";
+  assert.equal(maskNonCode(compared, true), "const b = a <         ;");
+  assert.equal(maskNonCode(compared, false), "const b = a <         ;");
+});

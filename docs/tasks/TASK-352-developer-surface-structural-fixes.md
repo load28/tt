@@ -92,6 +92,8 @@ defect in the layer that owns the behavior.
   checked with the real tokenizer; the suite passes with 166 tests.
 - 2026-09-09: Made the compiler a per-folder answer so one folder's setting
   cannot take over the window; the suite passes with 167 tests.
+- 2026-09-09: Stopped a JSX closing tag from reading as a regex in `.ttx`;
+  the suite passes with 168 tests.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -374,6 +376,20 @@ defect in the layer that owns the behavior.
   up by the document being served; the window's default answers for a
   document in no folder. A session is handed only the buffers it serves,
   and a settings or folder change clears the recorded answers.
+
+### Issue 16: A closing tag broke member completion in `.ttx`
+
+- **Symptom**: With a closing tag earlier on the line, typing `t.` in a
+  `.ttx` buffer offered `Option`, `Result` and the tt keyword snippets ahead
+  of the object's own members — none of which can follow a dot.
+- **Cause**: The cursor-context mask treated the slash of `</p>` as the
+  start of a regex, because `<` is a position a regex may follow in
+  TypeScript. The imagined literal swallowed the rest of the line, so the
+  member access at the cursor was not recognised and completion fell
+  through to the general branch.
+- **Resolution**: The mask is told which surface it is reading. On the JSX
+  one, a slash immediately after `<` closes an element; a comparison
+  against a regex still reads as a regex on both.
 
 ## Verification
 
