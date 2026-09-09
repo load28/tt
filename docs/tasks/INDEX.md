@@ -361,6 +361,8 @@
 | TASK-348 | Audit product and mixed-source composition failures | Complete | 2026-09-06 | 2026-09-06 | [TASK-348](./TASK-348-product-composition-audit.md) |
 | TASK-349 | Preserve contextual types across scoped values | Complete | 2026-09-06 | 2026-09-06 | [TASK-349](./TASK-349-contextual-type-materialization.md) |
 
+| TASK-350 | Manually promote a published Nightly to latest | Complete | 2026-09-09 | 2026-09-09 | [TASK-350](./TASK-350-manual-nightly-latest.md) |
+
 ## Next task number
 
-**TASK-350**
+**TASK-351**

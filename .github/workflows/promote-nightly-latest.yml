@@ -1,0 +1,53 @@
+# Temporary opt-in policy: default npm installs receive a published Nightly.
+# No push, schedule, or workflow_run trigger is permitted here.
+name: Temporarily Promote Nightly to Latest
+run-name: Manually promote published main Nightly to npm latest
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Resolve and preflight the published Nightly
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node npm/scripts/promote-nightly-latest.mjs prepare nightly-latest-plan.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-latest-plan
+          path: nightly-latest-plan.json
+          retention-days: 7
+          if-no-files-found: error
+
+  promote:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: npm-release-tags
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: nightly-latest-plan
+      - name: Revalidate the candidate and update latest tags
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node npm/scripts/promote-nightly-latest.mjs apply nightly-latest-plan.json

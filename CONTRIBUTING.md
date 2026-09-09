@@ -141,3 +141,6 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
 bun add -d @openload28/tt-lang@next @openload28/unplugin-tt@next
 bunx @openload28/create-tt@next my-app
 ```
+
+For the temporary, manual-only policy that points npm `latest` at a published
+Nightly, see [Manual Nightly promotion](./docs/manual-nightly-latest.md).
