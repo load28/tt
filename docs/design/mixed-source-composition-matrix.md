@@ -26,6 +26,16 @@ tree, and executes it. Its oracle fixes the sixteen returned values, their
 left-to-right evaluation order, shared module identity, and a `match` lowered
 inside `.ttx` JSX.
 
+Literal dynamic imports have a separate sixteen-edge executable matrix. Both
+`js` and `ts` rewrite modes must type-check, bundle, and execute all edges (32
+edge/mode combinations). The `.tt` producer contains a match and the `.ttx`
+producer hosts a match in JSX; `.tsx` independently exercises native JSX.
+A 168-cell emission matrix crosses TypeScript/TSX parsing, `.tt`/`.ttx` targets,
+quote styles, seven import hosts, and all three rewrite modes. The hosts include
+import types, attributes, callbacks, templates, and awaited imports. Computed
+specifier expressions are byte-preserved. A whole-output TSX snapshot also
+covers lazy JSX callbacks and awaited imports inside match arms.
+
 ## tt surface matrix
 
 The fixture and compiler tests cover every compiler-owned surface:

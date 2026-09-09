@@ -14,7 +14,7 @@ declare const state: State;
 
 let $tt_v0;
 const $tt_v1 = (pair);
-const $tt_v2 = (make());
+const $tt_v2: Item = (make());
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -34,7 +34,7 @@ const $tt_v2 = (make());
 }
 const paired = $tt_v0;
 
-let $tt_v3;
+let $tt_v3: Item;
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -55,7 +55,7 @@ let $tt_v3;
 const inert: Item[] = [{ kind: "item", run: x => x }, $tt_v3];
 
 const $tt_v5 = (trio);
-const $tt_v6 = (made);
+const $tt_v6: Item = (made);
 const $tt_v7 = (7);
 {
   const $tt_m = state;
@@ -75,7 +75,7 @@ const $tt_v7 = (7);
 }
 
 
-let $tt_v8;
+let $tt_v8: Item;
 const $tt_v9 = (pair);
 {
   const $tt_m = state;

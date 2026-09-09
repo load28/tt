@@ -803,6 +803,39 @@ impl Project {
                 }
             }
         }
+        // Serve the same contextualized graph used by typed compilation. A
+        // host overlay can change an imported expected type without changing
+        // this document's source, so source equality alone cannot cache it.
+        let mut files = self.initial_files();
+        files.extend(seen);
+        files.sort();
+        files.dedup();
+        files.retain(|path| path.is_file() || self.overlays.contains_key(path));
+        let snapshot = self
+            .update(&files)
+            .map_err(|blocked| blocked.error.to_string())?;
+        let session = self.session();
+        for projected in snapshot.files {
+            let path = &projected.source_path;
+            if session.served.get(path) != Some(&projected.emit.code) {
+                session.client.open(&served_uri(path), &projected.emit.code);
+                session
+                    .served
+                    .insert(path.clone(), projected.emit.code.clone());
+            }
+            session.docs.insert(
+                path.clone(),
+                Arc::new(ServiceDoc {
+                    source: projected.source.clone(),
+                    code: projected.emit.code.clone(),
+                    mappings: projected.emit.mappings.clone(),
+                    anchors: projected.emit.anchors.clone(),
+                    recovered: projected.recovered.clone(),
+                    tt_diagnostics: projected.tt_diagnostics.clone(),
+                }),
+            );
+        }
+        let doc = session.docs.get(&canonical).cloned().unwrap_or(doc);
         Ok((doc, canonical))
     }
 

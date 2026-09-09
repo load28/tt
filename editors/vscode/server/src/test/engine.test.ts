@@ -213,8 +213,11 @@ for (const extension of ["tt", "ttx"]) {
       "declare const maybe: ((item: Item) => number) | undefined;",
       "declare function generic<T>(value: T): T;",
       "declare const made: Item;",
+      "declare function wrapped(item: {item: Item}): void;",
     ].join("\n");
     const cases = [
+      'generic<Item>(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'generic<Item>(match (state) { Ready(value) => { type Item = never; return {run: x => x.toFixed() + value}; }, Empty => ({run: x => x.toFixed()}) });',
       'consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'consume(match (flag) { true => { const amount = 1; return {run: x => x.toFixed() + amount}; }, false => ({run: x => x.toFixed()}) });',
       'pair(match (flag) { true => ({run: x => x.toFixed()}), false => ({run: x => x.toFixed()}) }, match (flag) { true => ({run: x => x.toFixed()}), false => ({run: x => x.toFixed()}) });',
@@ -223,6 +226,13 @@ for (const extension of ["tt", "ttx"]) {
       'const instantiated = generic<Item>(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
       'consume(match (state) { Ready(value) => { if (value > 0) return {run: x => x.toFixed() + value}; return {run: x => x.toFixed()}; }, Empty => ({run: x => x.toFixed()}) });',
       'pair(made, match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'const answer = consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'api.consume(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'consume?.(match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'wrapped({item: match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) }});',
+      'pair({run: x => x.toFixed()}, match (state) { Ready(value) => ({run: x => x.toFixed() + value}), Empty => ({run: x => x.toFixed()}) });',
+      'consume(match (flag) { true => { try { return {run: x => x.toFixed()}; } finally { console.log(flag); } }, false => ({run: x => x.toFixed()}) });',
+      'consume(match (flag) { true => { const local = 1; return (match (flag) { true => ({run: x => x.toFixed() + local}), false => ({run: x => x.toFixed()}) }); }, false => ({run: x => x.toFixed()}) });',
     ];
     fs.writeFileSync(file, "export {};\n");
     try {
@@ -243,6 +253,14 @@ for (const extension of ["tt", "ttx"]) {
         const error = diagnostics.find(diagnostic => diagnostic.code === 2339);
         assert.ok(error, JSON.stringify(diagnostics));
         assert.equal(sliceOf(invalid, error.range), "missing");
+        if (statement.startsWith("generic<Item>")) {
+          const invalidType = source.replace("generic<Item>", "generic<MissingItem>");
+          engine.openDocument(COMPILER, file, invalidType);
+          const typeDiagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
+          const missing = typeDiagnostics.find(diagnostic => diagnostic.code === 2304);
+          assert.ok(missing, JSON.stringify(typeDiagnostics));
+          assert.equal(sliceOf(invalidType, missing.range), "MissingItem");
+        }
       }
     } finally { engine.closeDocument(COMPILER, file); }
   });

@@ -704,12 +704,12 @@
         "en": [
           "Write the .tt or .ttx extension in source imports.",
           "Re-export chains and package paths are not collected for exhaustiveness.",
-          "Dynamic import() specifiers are not rewritten."
+          "Literal dynamic import() and import-type specifiers are rewritten; computed specifiers stay unchanged."
         ],
         "ko": [
           "소스 import에는 .tt 또는 .ttx 확장자를 적어야 합니다.",
           "재-export 체인과 패키지 경로는 소진성 정보로 수집하지 않습니다.",
-          "동적 import() 지정자는 재작성하지 않습니다."
+          "Literal dynamic import() and import-type specifiers are rewritten; computed specifiers stay unchanged."
         ]
       }
     },

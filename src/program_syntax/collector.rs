@@ -140,6 +140,7 @@ pub(super) struct ProjectedHostExit {
     pub(super) single_return_body: Option<BodyId>,
     pub(super) statement: ProjectedSpan,
     pub(super) argument: Option<ProjectedSpan>,
+    pub(super) value_argument: Option<ProjectedSpan>,
     pub(super) captured_break: bool,
     pub(super) requires_block: bool,
 }

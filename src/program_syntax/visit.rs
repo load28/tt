@@ -108,7 +108,7 @@ impl ParentCollector {
             .iter()
             .map(|entry| (entry.id, entry.projected))
             .collect();
-        for entry in pending {
+        for entry in &pending {
             let found = self
                 .found
                 .remove(&entry.id)
@@ -221,6 +221,18 @@ impl ParentCollector {
                                 .argument
                                 .map(|argument| {
                                     map_structural_span(&self.source_segments, argument)
+                                })
+                                .transpose()?,
+                            value_argument: exit
+                                .value_argument
+                                .map(|argument| {
+                                    if let Some(value) =
+                                        pending.iter().find(|value| value.projected == argument)
+                                    {
+                                        Ok(value.source)
+                                    } else {
+                                        map_structural_span(&self.source_segments, argument)
+                                    }
                                 })
                                 .transpose()?,
                             captured_break: exit.captured_break,
@@ -683,6 +695,9 @@ impl VisitAstPath for ParentCollector {
                     .arg
                     .as_ref()
                     .map(|argument| projected_span(argument.span(), self.source_start)),
+                value_argument: node.arg.as_ref().map(|argument| {
+                    projected_span(reference_value_span(argument), self.source_start)
+                }),
                 captured_break: self.break_capture_depth > region_break_depth,
                 requires_block: path
                     .kinds()

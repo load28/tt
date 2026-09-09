@@ -415,7 +415,7 @@ impl<'a> Emitter<'a> {
                 .map(|step| step.parent)
                 .unwrap_or_else(|| crate::ice::bug!("nested schedule lost its parent"));
             let mut out = Rope::new();
-            out.push_lit(format!("let {slot};"));
+            out.push_value_declaration(slot);
             out.push_break(0);
             out.append(action);
             out.push_break(0);
@@ -460,7 +460,7 @@ impl<'a> Emitter<'a> {
                     let slot = self
                         .structured_value_slot(*inner)
                         .unwrap_or_else(|| crate::ice::bug!("nested template value has no slot"));
-                    out.push_lit(format!("let {slot};"));
+                    out.push_value_declaration(slot);
                     out.push_break(0);
                     out.append(self.emit_continued_expr(*inner, &ValueContinuation::assign(slot))?);
                     out.push_break(0);
@@ -537,7 +537,7 @@ impl<'a> Emitter<'a> {
         inner.push_lit("do {");
         if !accumulator_is_host_slot {
             inner.push_break(1);
-            inner.push_lit(format!("let {accumulator};"));
+            inner.push_value_declaration(accumulator);
         }
         inner.push_break(1);
         if self.nested_structured_value_slot(head).is_some() {
@@ -562,7 +562,7 @@ impl<'a> Emitter<'a> {
                 .filter(|_| !conditionally_reached)
             {
                 inner.push_break(1);
-                inner.push_lit(format!("let {slot};"));
+                inner.push_value_declaration(slot);
                 inner.push_break(1);
                 inner.append(Rope::indented(
                     1,

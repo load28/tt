@@ -35,6 +35,7 @@ const area = match (shape) {
 };
 ```
 - Expression: use after `=`, in `return`, in `${...}`. The compiler uses owner-scoped slots and `switch`/`if`; match never emits an IIFE, callback, or `$tt_expr` helper. A value under `&&`/`||`/`??`/`? :`/`f?.()` lowers the WHOLE operation as one region, preserving short-circuiting, evaluation order, and `this`. `while` and C-style `for` conditions own a region that runs on every test; C-style initializers and `for..of`/`for..in` right-hand sides lower once before the loop. Parameter defaults, class fields, destructuring defaults, `switch` case tests, C-style updates, and any host operation that cannot be owned soundly are rejected with `match-placement`. Scrutinee parens mandatory, non-empty.
+- Scoped values preserve contextual callback and object-literal types through ordinary annotations on generated storage. This compilation phase uses the TypeScript installed in the invoking project; it does not introduce a runtime callback or type assertion.
 - Bindings by field name, NEVER position; subset ok, any order.
 - Arm body: expr, or block `{ ... return v; }` (no return → undefined; a block whose every path returns or throws gets no fall-through in the output). Object literal body needs parens: `Tag => ({a: 1})`.
 - `_` arm must be LAST.
@@ -173,7 +174,7 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 - Import `.tt`/`.ttx` files by relative path WITH extension: `./token.tt` → `./token.js`, `./view.ttx` → `./view.jsx` by default (`--rewrite-imports ts` emits `.ts`/`.tsx`; `off` preserves source specifiers).
 - CLI builds reject distinct inputs that map to one output (`x.tt` + `x.ts`, `x.ttx` + `x.tsx`, overlapping roots, or a compiler support-module path). When `-o` is inside a directory input, that output subtree is excluded from source collection.
 - Exhaustiveness sees exported variants from DIRECT (1-hop) relative `.tt`/`.ttx` imports (named/aliased/`* as ns`); re-export chains & package paths NOT collected → those matches compile unchecked.
-- Dynamic `import()` specifiers not rewritten.
+- Literal dynamic `import()` and import-type specifiers use the same rewrite; computed specifiers remain unchanged.
 
 ## Install
 

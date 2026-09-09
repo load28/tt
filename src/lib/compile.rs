@@ -17,6 +17,7 @@ use super::*;
 #[derive(Debug, Clone)]
 pub struct Options<'a> {
     /// Filename reported in [`CompileError`]s (and their `Display` output).
+    /// An existing file also locates the project for contextual type analysis.
     /// `None` renders as `<input>`.
     pub filename: Option<&'a str>,
     /// Whether the source surface is TypeScript or TSX.
@@ -33,8 +34,8 @@ pub struct Options<'a> {
     /// built-ins of the same name). The `ttc` CLI fills this from the
     /// file's direct relative `.tt`/`.ttx` imports.
     pub extern_variants: &'a [ExternVariant],
-    /// Leave the two judgments a TypeScript checker makes better to a
-    /// TypeScript checker: match exhaustiveness, and which binding a
+    /// Leave contextual storage typing and the two judgments below to a
+    /// project TypeScript checker: match exhaustiveness, and which binding a
     /// mutation path is rooted at (`val`).
     ///
     /// ttc answers both on its own, from its variant declarations and a lexical
@@ -204,13 +205,27 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(failure).to_compile_error(source, options.filename)
         );
     }
-    Ok(MappedEmit {
+    let emit = MappedEmit {
         code: flat.code,
         mappings: flat.mappings,
         scrutinee_temps: flat.scrutinee_temps,
         payload_temps: flat.payload_temps,
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
+        contextual_slots: flat.contextual_slots,
+    };
+    if options.defer_to_checker {
+        return Ok(emit);
+    }
+    crate::typescript::contextual::standalone(emit, source, options).map_err(|failure| {
+        CompileError {
+            message: failure.message,
+            filename: options.filename.map(str::to_owned),
+            line: 0,
+            col: 0,
+            end_line: 0,
+            end_col: 0,
+        }
     })
 }
 
@@ -666,7 +681,16 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         payload_temps: flat.payload_temps,
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
+        contextual_slots: flat.contextual_slots,
     });
+    if !options.defer_to_checker
+        && let Some(lowered) = emit.take()
+    {
+        match crate::typescript::contextual::standalone(lowered, source, options) {
+            Ok(typed) => emit = Some(typed),
+            Err(failure) => errors.push(TtError::positionless(failure.message)),
+        }
+    }
     if options.verify
         && let Some(flat) = &emit
         && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)

@@ -1339,3 +1339,6 @@ fn a_named_file_that_is_not_a_source_is_reported() {
         );
     }
 }
+
+#[path = "cli/dynamic_imports.rs"]
+mod dynamic_imports;

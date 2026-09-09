@@ -6,6 +6,7 @@
 //! then flattens the mapping-aware structured writer into TypeScript text.
 //! Parser AST types are deliberately absent from this boundary.
 
+pub(crate) mod contextual;
 mod core;
 mod rope;
 

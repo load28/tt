@@ -356,6 +356,11 @@
 | TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
 | TASK-346 | Hold the task index and the task records to the same state | Complete | 2026-09-05 | 2026-09-05 | [TASK-346](./TASK-346-task-state-agreement.md) |
 
+| TASK-347 | Rebase product audit onto updated main | Complete | 2026-09-09 | 2026-09-09 | [TASK-347](./TASK-347-rebase-product-audit.md) |
+
+| TASK-348 | Audit product and mixed-source composition failures | Complete | 2026-09-06 | 2026-09-06 | [TASK-348](./TASK-348-product-composition-audit.md) |
+| TASK-349 | Preserve contextual types across scoped values | Complete | 2026-09-06 | 2026-09-06 | [TASK-349](./TASK-349-contextual-type-materialization.md) |
+
 ## Next task number
 
-**TASK-347**
+**TASK-350**

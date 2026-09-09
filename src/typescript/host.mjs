@@ -160,10 +160,13 @@ async function main() {
   }
 
   let API;
+  let TypeFlags;
   let isExpression;
+  let isIdentifier;
+  let isVariableDeclaration;
   try {
-    ({ API } = await import(open.apiModule));
-    ({ isExpression } = await import(
+    ({ API, TypeFlags } = await import(open.apiModule));
+    ({ isExpression, isIdentifier, isVariableDeclaration } = await import(
       path.resolve(path.dirname(open.apiModule), "../../ast/index.js")
     ));
   } catch (e) {
@@ -218,6 +221,7 @@ async function main() {
       symbols: [],
       resultShapes: [],
       declarations: [],
+      contextualSlots: [],
     };
     const changes = serve(files, dirs, job.modules ?? []);
     // With a `tsconfig.json` the project is the user's own. Without one —
@@ -232,7 +236,7 @@ async function main() {
     // hand-written `.ts` files come along: one nothing imports is still the
     // user's code, and `ttc --types src` is expected to check it.
     const params = opened
-      ? { fileChanges: changes }
+      ? { fileChanges: changes, ...(!open.tsconfig ? { openFiles: [...paths, ...(job.sources ?? [])] } : {}) }
       : open.tsconfig
         ? { openProjects: [open.tsconfig] }
         : { openFiles: [...paths, ...(job.sources ?? [])] };
@@ -260,6 +264,40 @@ async function main() {
     // report. Which file it lands in decides how it is positioned, and that
     // is ttc's half.
     const checker = project.checker;
+    for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
+      const source = project.program.getSourceFile(slot.module);
+      if (!source) continue;
+      let declaration;
+      const identifiers = [];
+      const visit = (node) => {
+        if (isVariableDeclaration(node) && isIdentifier(node.name) &&
+            node.name.end === slot.declarationEnd && !node.type) declaration = node;
+        if (isIdentifier(node)) identifiers.push(node);
+        node.forEachChild(visit);
+      };
+      visit(source);
+      if (!declaration) continue;
+      const symbol = checker.getSymbolAtLocation(declaration.name);
+      if (!symbol) continue;
+      const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
+      let expected;
+      let ambiguous = false;
+      for (const identifier of identifiers) {
+        if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
+        if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
+        // A use narrowed by control flow cannot supply the declaration's
+        // type: doing so would reject the initializer's other constituents.
+        if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
+        const context = checker.getContextualType(identifier);
+        if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
+        if (expected && expected.id !== context.id) { ambiguous = true; break; }
+        expected = context;
+      }
+      if (!expected || ambiguous) continue;
+      const node = checker.typeToTypeNode(expected, declaration);
+      if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
+    }
+    if (job.contextualOnly) return out;
     for (const d of project.program.getSemanticDiagnostics()) {
       if (!d.fileName) continue;
       const mismatch = contextualMismatch(project, checker, d, isExpression);
