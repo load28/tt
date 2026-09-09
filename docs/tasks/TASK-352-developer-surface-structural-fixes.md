@@ -1,9 +1,9 @@
 # TASK-352: Repair the developer-facing surfaces of tt
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-09-09
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-09-09
+- **Commit**: `TASK-352: fix(compiler): lower a tuple arm over the subjects it has` … `TASK-352: feat(sema): reject a payload field that takes the case tag's property`
 
 ## Purpose
 
@@ -468,10 +468,51 @@ defect in the layer that owns the behavior.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci` — all six stages pass: `agents rust npm website native
+      extension`. The extension suite reports 168 tests, 0 failures, 0
+      skips. The only warning is that this checkout has no VS Code package
+      built, which `./scripts/setup` produces and no change here affects.
+
+Each repair was also re-run against the case that exposed it: both
+tuple-arity crashes, the nine concise-arrow body shapes, generator, async
+generator, type-predicate, ordinary, async and arrow return slots (whose
+emitted output type-checks under `--strict`), a hand-written file's
+passthrough bytes, named file inputs under `-o`, the temporary directories
+a typed run leaves, a named file outside the project's `include`, a build
+that runs out of disk, a type error's position on a line holding Korean
+text, an offered quick fix on a line holding an emoji, an untitled buffer
+over real LSP, a `.ttx` member completion after a closing tag, a dangling
+symlink, and a payload field named for the case tag.
 
 ## Result
 
-In progress.
+Twenty findings from an audit of the documentation, the command line, the
+compiler and the editor. Eighteen are repaired here, each in the layer that
+owns the behavior and each pinned by a test at the closest public boundary.
+
+The compiler stops crashing on a tuple arm wider than its match, closes the
+block a concise arrow body is rewritten to, and annotates a return slot only
+from a type that describes the returned value. Sema gained one rule: a
+payload field may not take the property the case tag lives in.
+
+The command line publishes an output whole or not at all, leaves a
+hand-written file's bytes alone, mirrors named file inputs, cleans up after
+a typed run, and names what actually failed. The engine answers for files
+the checker does not hold, so naming a file no longer passes in silence,
+and keeps a hand-written file's type-error positions.
+
+The editor reports every position in the units an editor counts — which is
+what made an offered quick fix delete the code beside the one it named —
+serves each folder with the compiler it configures, answers for a buffer
+that has no file yet, keeps its project state across a save, reads a JSX
+closing tag as a tag, and scopes a block arm body as the statements it
+holds.
+
+Issue 19 is diagnosed and recorded rather than repaired: a `return` inside
+an `if let` inside a match block arm still leaves the enclosing function,
+because a statement-level decision is projected as one placeholder and
+nothing inside it reaches the exit collector. Fixing it changes how the
+owner model projects those bodies, which wants its own task.
