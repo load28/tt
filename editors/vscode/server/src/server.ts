@@ -67,7 +67,7 @@ import { URI } from "vscode-uri";
 import * as analysis from "./analysis";
 import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
-import { applyFolderChange, folderRoots, sidecarLocation } from "./roots";
+import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
 import * as ttc from "./ttc";
 import * as path from "node:path";
 
@@ -194,6 +194,8 @@ function rearmProject(): void {
   // Every standing notice describes something one of these could have
   // fixed, so all of them are worth saying again if they are still true.
   notices.reset();
+  // A folder may have gained, lost or changed its `tt.compilerPath`.
+  compilerByRoot.clear();
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
@@ -236,10 +238,14 @@ function invalidateProjectValidation(): void {
 
 function reloadProjectState(): void {
   declCache.clear();
-  engine.reloadProjects(currentCompiler());
+  // Every session the window is using, not just one: two folders may be
+  // served by different compilers.
+  for (const compiler of new Set([...compilerByRoot.values(), compilerFor(undefined)])) {
+    engine.reloadProjects(compiler);
+  }
   for (const doc of documents.all()) {
     const file = enginePath(doc);
-    if (file !== null) engine.openDocument(currentCompiler(), file, doc.getText());
+    if (file !== null) engine.openDocument(compilerFor(doc), file, doc.getText());
   }
   for (const doc of documents.all()) scheduleValidation(doc);
 }
@@ -283,7 +289,7 @@ async function declarationsOf(
   const cached = declCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached.decls;
   const decls = await engine.declarations(
-    currentCompiler(),
+    compilerFor(doc),
     bufferPath(doc),
     doc.getText(),
     logEngine,
@@ -311,18 +317,37 @@ function caseSignature(
  * settings. */
 let servedCompiler: string | null = null;
 
-function currentCompiler(): string {
-  return servedCompiler ?? ttc.findCompiler("", workspaceRoots);
+/** The compiler each workspace folder resolved to, by folder path.
+ *
+ * `tt.compilerPath` is a resource-scoped setting, so two folders in one
+ * window may name different compilers, and the engine keys its sessions by
+ * compiler path — it can serve both. What could not was this server, which
+ * kept a single answer: validating a file in one folder repointed every
+ * later request, for every folder, at that folder's compiler. */
+const compilerByRoot = new Map<string, string>();
+
+/** The compiler serving `doc`, or the window's last answer for a document
+ * outside every folder. The synchronous paths cannot await settings, so
+ * this reads what the last validation of that folder resolved. */
+function compilerFor(doc: TextDocument | undefined): string {
+  const uri = doc && URI.parse(doc.uri);
+  const root =
+    uri && uri.scheme === "file"
+      ? containingRoot(workspaceRoots, uri.fsPath)
+      : undefined;
+  const served = (root && compilerByRoot.get(root)) ?? servedCompiler;
+  return served ?? ttc.findCompiler("", workspaceRoots);
 }
 
 /**
- * Resolves the compiler from configuration and remembers it. One engine
- * session serves the window, so the setting is read at the first workspace
- * folder's scope; a folder that configures its own path is served the
- * moment one of its files is validated ([validate]).
+ * Resolves the window's default compiler from configuration and remembers
+ * it — the answer for a document that is in no workspace folder. A folder
+ * that configures its own `tt.compilerPath` is recorded separately, the
+ * moment one of its files is validated ([validate]), and served from there
+ * ([compilerFor]).
  *
  * The engine session is keyed by the compiler, so a change of path starts a
- * new session by itself; every open buffer is re-sent to it
+ * new session by itself; the buffers that session serves are re-sent to it
  * (`setOnSessionStart`).
  */
 async function refreshCompiler(): Promise<void> {
@@ -336,12 +361,16 @@ async function refreshCompiler(): Promise<void> {
 const logEngine = (message: string) => connection.console.warn(message);
 
 /** A fresh engine session starts with the disk's view of the world; hand it
- * every buffer the editor holds open. Runs on first spawn and on respawn
- * after a crash — recovery the old in-process pipeline never had. */
+ * the buffers it serves. Runs on first spawn and on respawn after a crash —
+ * recovery the old in-process pipeline never had.
+ *
+ * A window can be running more than one session, because two folders may
+ * name different compilers, so each is given only the documents it answers
+ * for. */
 engine.setOnSessionStart((compiler) => {
   for (const doc of documents.all()) {
     const uri = URI.parse(doc.uri);
-    if (uri.scheme === "file") {
+    if (uri.scheme === "file" && compilerFor(doc) === compiler) {
       engine.openDocument(compiler, uri.fsPath, doc.getText());
     }
   }
@@ -526,6 +555,8 @@ async function validate(
   const uri = URI.parse(doc.uri);
   const docName = uri.scheme === "file" ? uri.fsPath : uri.path;
   servedCompiler = compiler;
+  const root = uri.scheme === "file" ? containingRoot(workspaceRoots, uri.fsPath) : undefined;
+  if (root) compilerByRoot.set(root, compiler);
 
   const result = await ttc.runCheck(
     compiler,
@@ -790,7 +821,7 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
 documents.onDidOpen((e) => {
   const fsPath = enginePath(e.document);
   if (fsPath !== null) {
-    engine.openDocument(currentCompiler(), fsPath, e.document.getText());
+    engine.openDocument(compilerFor(e.document), fsPath, e.document.getText());
   }
   scheduleValidation(e.document);
 });
@@ -846,7 +877,7 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
 documents.onDidChangeContent((e) => {
   const fsPath = enginePath(e.document);
   if (fsPath !== null) {
-    engine.updateDocument(currentCompiler(), fsPath, e.document.getText());
+    engine.updateDocument(compilerFor(e.document), fsPath, e.document.getText());
   }
   // Editing one file can change what its siblings import — drop their
   // cached declaration surfaces (the edited doc's own entry refreshes by
@@ -862,7 +893,7 @@ documents.onDidChangeContent((e) => {
 documents.onDidClose((e) => {
   const fsPath = enginePath(e.document);
   if (fsPath !== null) {
-    engine.closeDocument(currentCompiler(), fsPath);
+    engine.closeDocument(compilerFor(e.document), fsPath);
   }
   analysisCache.delete(e.document.uri);
   declCache.delete(e.document.uri);
@@ -1019,7 +1050,7 @@ async function tsCompletions(
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
   const list = await engine.completion(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     doc.positionAt(offset),
     atMember,
@@ -1079,7 +1110,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // with, and knows the positions this server never did (`if let`,
   // let-else payloads, nested patterns).
   const ttItemsHere = await engine.ttCompletions(
-    currentCompiler(),
+    compilerFor(doc),
     bufferPath(doc),
     doc.getText(),
     params.position,
@@ -1137,7 +1168,7 @@ connection.onCompletionResolve(
     const fsPath = enginePath(doc);
     if (fsPath === null) return item;
     const detail = await engine.completionResolve(
-      currentCompiler(),
+      compilerFor(doc),
       fsPath,
       doc.positionAt(data.offset),
       data.name,
@@ -1171,7 +1202,7 @@ connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const help = await engine.signatureHelp(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1253,7 +1284,7 @@ connection.onHover(async (params) => {
   // answers only where the service cannot be asked; everywhere else
   // (`Shape.Circle(1)`, `const s: Shape`) the service knows more.
   const sym = await engine.ttSymbol(
-    currentCompiler(),
+    compilerFor(doc),
     bufferPath(doc),
     doc.getText(),
     params.position,
@@ -1276,7 +1307,7 @@ async function tsHover(
 ) {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
-  const info = await engine.hover(currentCompiler(), fsPath, position, logEngine);
+  const info = await engine.hover(compilerFor(doc), fsPath, position, logEngine);
   if (!info || info.signature === "") return null;
   const value =
     "```ts\n" +
@@ -1300,7 +1331,7 @@ connection.onDefinition(async (params) => {
   // names — because the emitted TypeScript carries none of them.
   {
     const sym = await engine.ttSymbol(
-      currentCompiler(),
+      compilerFor(doc),
       bufferPath(doc),
       doc.getText(),
       params.position,
@@ -1327,7 +1358,7 @@ connection.onDefinition(async (params) => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const locations = await engine.definition(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1348,7 +1379,7 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   // Delegated wholesale to the engine: TypeScript resolves the passthrough
   // region exactly, and tt-specific spans degrade to an empty result.
   const references = (
-    await engine.references(currentCompiler(), fsPath, params.position, logEngine)
+    await engine.references(compilerFor(doc), fsPath, params.position, logEngine)
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);
   if (references.length === 0) return null;
   return references.map((r) =>
@@ -1368,7 +1399,7 @@ connection.onRenameRequest(async (params) => {
   // half the job. The engine decides what is a tt name; this server does
   // not keep a second opinion.
   const sym = await engine.ttSymbol(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     doc.getText(),
     params.position,
@@ -1380,7 +1411,7 @@ connection.onRenameRequest(async (params) => {
   // source would corrupt the rename, so such a rename comes back null —
   // whole or not at all.
   const edits = await engine.rename(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1520,7 +1551,7 @@ connection.languages.semanticTokens.on(async (params) => {
   // Text-based and parse-only on the engine side: it answers for unsaved
   // and untitled buffers alike, with or without a TypeScript toolchain.
   const tokens = await engine.semanticTokens(
-    currentCompiler(),
+    compilerFor(doc),
     doc.getText(),
     URI.parse(doc.uri).scheme === "file"
       ? URI.parse(doc.uri).fsPath

@@ -90,6 +90,8 @@ defect in the layer that owns the behavior.
   from its text, checked over real LSP; the suite passes with 165 tests.
 - 2026-09-09: Gave a block arm body its statement scopes in the grammar,
   checked with the real tokenizer; the suite passes with 166 tests.
+- 2026-09-09: Made the compiler a per-folder answer so one folder's setting
+  cannot take over the window; the suite passes with 167 tests.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -358,6 +360,20 @@ defect in the layer that owns the behavior.
 - **Resolution**: The arm body takes a block alternative that includes
   statements, the way the `result` block rule already does. A parenthesized
   object arm keeps its object scopes.
+
+### Issue 15: One folder's compiler took over the whole window
+
+- **Symptom**: `tt.compilerPath` is declared resource-scoped, so folders in
+  one window may name different compilers, but the server kept a single
+  answer. Validating a file in one folder repointed every later request —
+  for every folder — at that folder's compiler, and validation is scheduled
+  for every open document.
+- **Cause**: `currentCompiler()` read one window-global set by whichever
+  document was validated last.
+- **Resolution**: The compiler is recorded per workspace folder and looked
+  up by the document being served; the window's default answers for a
+  document in no folder. A session is handed only the buffers it serves,
+  and a settings or folder change clears the recorded answers.
 
 ## Verification
 
