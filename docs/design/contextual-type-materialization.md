@@ -19,6 +19,17 @@ facts are available; successful rounds strictly reduce the unresolved set.
 Type errors are reported by the subsequent TypeScript check, not used to drive
 this process. Context-only rounds do not compute diagnostics.
 
+## Inferred joins
+
+After contextual propagation reaches a fixed point, an uninitialized generated
+slot without a contextual type uses its assignments
+supply the incoming types. TypeScript computes and widens each right-hand side
+in its branch scope. Its assignability relation removes subsumed constituents
+before the remaining union is serialized at the declaration. For example,
+`number[]` and `never[]` join as `number[]`, preserving empty-array expression
+inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
+`unknown` inputs do not provide a definite annotation in that round.
+
 ## Project and output coordinates
 
 Project snapshots include lowered tt files, TypeScript sources and unsaved host

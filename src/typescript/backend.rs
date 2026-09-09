@@ -165,6 +165,8 @@ pub(crate) struct Query {
     pub contextual_slots: Vec<ContextualSlotQuery>,
     /// Skip diagnostics while iterating contextual facts.
     pub contextual_only: bool,
+    /// Infer incoming join types only after contextual facts reach a fixed point.
+    pub infer_join_types: bool,
     /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.

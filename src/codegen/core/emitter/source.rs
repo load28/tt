@@ -469,6 +469,17 @@ impl<'a> Emitter<'a> {
                         out.push_lit(" }");
                     }
                 }
+                Statement::Decision(decision) => {
+                    self.emit_statement_decision(decision, &mut out, &|body| {
+                        self.emit_body_with_exits(
+                            body,
+                            exits,
+                            continuation,
+                            label,
+                            generated_indent,
+                        )
+                    })
+                }
                 _ => out.append(
                     self.emit_statements_with_edits(std::slice::from_ref(statement), &edits),
                 ),
@@ -551,7 +562,14 @@ impl<'a> Emitter<'a> {
                     };
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
-                Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
+                Statement::Decision(decision) => {
+                    self.emit_statement_decision(decision, &mut out, &|body| {
+                        self.emit_statements_with_edits(
+                            &self.core.bodies[body.index()].statements,
+                            edits,
+                        )
+                    })
+                }
                 Statement::Expr(expr) if self.statement_expr_requires_lowering(*expr) => {
                     self.emit_statement_expr(*expr, &mut out);
                 }
@@ -812,20 +830,12 @@ impl<'a> Emitter<'a> {
                 out
             }
             Expr::Propagate(propagate) => {
-                if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
-                    let span = self.span(propagate.node);
-                    let mut out = Rope::new();
-                    out.anchored(
-                        AnchorKind::Try,
-                        span.start,
-                        span.end,
-                        span.end,
-                        self.emit_propagate(propagate),
-                    );
-                    return out;
-                }
                 if !self.recovered_propagations.contains(&expr) {
-                    crate::ice::bug!("unscheduled expression try reached inline emission");
+                    crate::ice::bug!(
+                        "unscheduled expression try reached inline emission: {:?} {:?}",
+                        expr,
+                        self.span(propagate.node)
+                    );
                 }
                 let span = self.span(propagate.node);
                 let mut generated = Rope::new();

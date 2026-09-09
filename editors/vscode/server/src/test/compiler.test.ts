@@ -107,3 +107,31 @@ test("an unreachable engine answers null, not an empty diagnostics list", { skip
     "no answer is null, so the caller cannot publish it as a clean file",
   );
 });
+
+test("one-shot checks own and remove their temporary input directories", { skip: process.platform === "win32" }, async () => {
+  const project = caseDir("tt-check-lifetime-");
+  const compiler = path.join(project, "compiler");
+  const log = path.join(project, "inputs.jsonl");
+  fs.writeFileSync(compiler, `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+if (args.includes('--server')) process.exit(1);
+const input = args.at(-1);
+fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify(input) + '\\n');
+const before = fs.readFileSync(input, 'utf8');
+setTimeout(() => {
+  if (fs.readFileSync(input, 'utf8') !== before) process.exit(2);
+  process.exit(before.includes('crash') ? 2 : 0);
+}, 100);
+`);
+  fs.chmodSync(compiler, 0o755);
+  const results = await Promise.all([
+    runCheck(compiler, "export const n = 1;", "same.tt", false),
+    runCheck(compiler, "export const n = 2;", "same.tt", false),
+  ]);
+  assert.deepEqual(results.map(r => r.kind), ["ok", "ok"]);
+  assert.equal((await runCheck(compiler, "crash", "same.tt", false)).kind, "failed");
+  const inputs: string[] = fs.readFileSync(log, "utf8").trim().split("\n").map(line => JSON.parse(line));
+  assert.equal(new Set(inputs).size, 3);
+  for (const input of inputs) assert.equal(fs.existsSync(path.dirname(input)), false);
+});

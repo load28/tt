@@ -289,9 +289,9 @@ fn lex_template(
     let mut parts: Vec<TplPart> = Vec::new();
     let mut raw_start = start; // includes the opening backtick
     let push_raw = |parts: &mut Vec<TplPart>, start: usize, end: usize| {
-        if start < end {
-            parts.push(TplPart::Raw(Span { start, end }));
-        }
+        // Empty quasis separate adjacent interpolations and own their
+        // delimiters when lowered. Preserve the alternating template shape.
+        parts.push(TplPart::Raw(Span { start, end }));
     };
     let mut i = start + 1;
     while i < end {

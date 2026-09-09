@@ -1,6 +1,6 @@
 declare const error: unknown;
 
-let $tt_v0;
+let $tt_v0: string;
 {
   const $tt_m = error;
   do {

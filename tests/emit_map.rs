@@ -156,8 +156,8 @@ fn emit_is_infallible_on_tt_level_errors() {
 
 #[test]
 fn emitted_code_matches_compile_with_imports_off() {
-    // For a semantically valid file, the tooling emission is byte-identical
-    // to the real compile with the same import mode (no verification drift).
+    // Structural tooling emission matches compilation before the project
+    // checker materializes contextual and inferred storage annotations.
     let src = r#"variant Shape { Circle(radius: number), Point }
 const r = match (Shape.Circle(2)) {
   Circle(radius) => radius,
@@ -166,6 +166,7 @@ const r = match (Shape.Circle(2)) {
 "#;
     let options = Options {
         rewrite_imports: ImportRewrite::Off,
+        defer_to_checker: true,
         ..Options::default()
     };
     assert_eq!(emit_mapped(src).code, compile(src, &options).unwrap());

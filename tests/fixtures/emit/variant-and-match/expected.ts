@@ -10,7 +10,7 @@ export const Shape = {
 
 declare const shape: Shape;
 
-let $tt_v0;
+let $tt_v0: number;
 {
   const $tt_m = shape;
   switch ($tt_m.kind) {

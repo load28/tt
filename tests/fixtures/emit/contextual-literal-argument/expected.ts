@@ -32,7 +32,7 @@ const $tt_v2 = (consume);
 }
 
 
-let $tt_v3;
+let $tt_v3: number;
 const $tt_v5 = (consume);
 {
   const $tt_m = state;

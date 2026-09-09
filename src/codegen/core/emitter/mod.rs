@@ -28,6 +28,7 @@ pub(super) struct Emitter<'a> {
     pub(super) slot_exprs: HashMap<ExprId, String>,
     pub(super) value_slots: HashMap<ExprId, String>,
     pub(super) scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
+    pub(super) result_failures: RefCell<HashMap<ResultRegionId, ResultFailure>>,
     pub(super) value_exits: HashMap<ExprId, Vec<HostExit>>,
     pub(super) nested_schedules: HashMap<ExprId, EvaluationSchedule>,
     pub(super) nested_values: HashSet<ExprId>,
@@ -347,6 +348,33 @@ fn result_failure_test(temp: &str, layout: ResultLayout) -> String {
     match layout.discriminator {
         ResultDiscriminator::SuccessFieldPresent(field) => {
             format!("!(\"{field}\" in {temp})")
+        }
+    }
+}
+
+/// A resolved Result failure edge while its region is being emitted. Its
+/// identity comes from HIR lexical ownership, independent of whether the
+/// surrounding value uses a function boundary or a labeled statement region.
+#[derive(Clone)]
+pub(super) struct ResultFailure {
+    prefix: String,
+    suffix: String,
+    label: Option<String>,
+    assigns: bool,
+}
+
+pub(super) struct ResultFailureScope<'a> {
+    registry: &'a RefCell<HashMap<ResultRegionId, ResultFailure>>,
+    id: ResultRegionId,
+    previous: Option<ResultFailure>,
+}
+impl Drop for ResultFailureScope<'_> {
+    fn drop(&mut self) {
+        let mut registry = self.registry.borrow_mut();
+        if let Some(previous) = self.previous.take() {
+            registry.insert(self.id, previous);
+        } else {
+            registry.remove(&self.id);
         }
     }
 }

@@ -721,3 +721,6 @@ include!("integration/cases_05.rs");
 
 #[path = "integration/contextual.rs"]
 mod contextual;
+
+#[path = "integration/pr115.rs"]
+mod pr115;

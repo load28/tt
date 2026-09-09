@@ -25,9 +25,11 @@ pub(crate) fn materialize(
         .iter()
         .map(|(_, emit)| (0..emit.contextual_slots.len()).collect())
         .collect();
+    let mut infer_joins = false;
     loop {
         let mut query = Query {
             contextual_only: true,
+            infer_join_types: infer_joins,
             sources: sources.to_vec(),
             modules: support.to_vec(),
             ..Query::default()
@@ -51,8 +53,15 @@ pub(crate) fn materialize(
         }
         let answers = backend.ask(config, root, &query)?;
         if answers.contextual_slots.is_empty() {
-            return Ok(types);
+            if infer_joins {
+                return Ok(types);
+            }
+            infer_joins = true;
+            continue;
         }
+        // New inferred storage can expose further contexts; propagate those
+        // before inferring any more joins.
+        infer_joins = false;
         let mut edits = vec![Vec::new(); modules.len()];
         for answer in answers.contextual_slots {
             let &(module, position, origin) = sites.get(answer.index).ok_or_else(|| {

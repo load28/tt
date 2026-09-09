@@ -240,7 +240,13 @@ pub(super) fn plan_one_operation(
     let Some(facts) = step.conditional.clone() else {
         return Ok(None);
     };
-    let overlaps_tt = |span: SourceSpan| tt_spans.iter().any(|tt| overlaps(span, *tt));
+    // An enclosing tt region owns this operation; it is not syntax inside
+    // a relocated operand. Only descendants can make that operand opaque.
+    let overlaps_tt = |span: SourceSpan| {
+        tt_spans
+            .iter()
+            .any(|tt| !(tt.start <= parent.start && parent.end <= tt.end) && overlaps(span, *tt))
+    };
     let kind = match step.operation {
         HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAndRight)
         | HostEvaluationOperation::Conditional(ConditionalBranch::LogicalOrRight)

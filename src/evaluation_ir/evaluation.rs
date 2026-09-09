@@ -85,19 +85,6 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            // A propagation that terminates a Result region is emitted by
-            // that region's structured body printer. Scheduling it again at
-            // its TypeScript host would both duplicate the exit and make an
-            // enclosing source capture overlap a nested function boundary.
-            if matches!(
-                &core.exprs[expr.index()],
-                Expr::Propagate(Propagate {
-                    exit: ExitTarget::ResultRegion(_),
-                    ..
-                })
-            ) {
-                continue;
-            }
             let (owner, value, context, protocol, exits) = match &region.placement {
                 RegionPlacement::Host {
                     context:

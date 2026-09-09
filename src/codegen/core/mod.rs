@@ -177,6 +177,7 @@ pub(crate) fn emit_with_map<'a>(
         slot_exprs: target.slot_exprs,
         value_slots: target.value_slots,
         scheduled_slots: target.scheduled_slots,
+        result_failures: RefCell::new(HashMap::new()),
         value_exits: target.value_exits,
         nested_schedules: target.nested_schedules,
         nested_values: target.nested_values,

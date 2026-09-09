@@ -11,13 +11,17 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("initializer rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        out.push_lit(format!("let {}", rewrite.slot));
-        self.push_contextual_type(
-            &mut out,
-            rewrite.contextual_type,
-            rewrite.contextual_type_awaited,
-        );
-        out.push_lit(";");
+        if rewrite.contextual_type.is_none() {
+            out.push_value_declaration(&rewrite.slot);
+        } else {
+            out.push_lit(format!("let {}", rewrite.slot));
+            self.push_contextual_type(
+                &mut out,
+                rewrite.contextual_type,
+                rewrite.contextual_type_awaited,
+            );
+            out.push_lit(";");
+        }
         out.push_break(0);
         out.append(anchored);
         out.push_break(0);
@@ -1043,13 +1047,17 @@ impl<'a> Emitter<'a> {
             out.push_lit("{");
         }
         out.push_break(1);
-        out.push_lit(format!("let {}", rewrite.slot));
-        self.push_contextual_type(
-            &mut out,
-            rewrite.contextual_type,
-            rewrite.contextual_type_awaited,
-        );
-        out.push_lit(";");
+        if rewrite.contextual_type.is_some() {
+            out.push_lit(format!("let {}", rewrite.slot));
+            self.push_contextual_type(
+                &mut out,
+                rewrite.contextual_type,
+                rewrite.contextual_type_awaited,
+            );
+            out.push_lit(";");
+        } else {
+            out.push_value_declaration(&rewrite.slot);
+        }
         out.push_break(1);
         out.append(Rope::indented(1, anchored));
         out.push_break(1);

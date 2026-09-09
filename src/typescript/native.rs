@@ -236,6 +236,7 @@ fn job_json(query: &Query) -> serde_json::Value {
             .map(|v| json!({ "module": v.module, "declarationEnd": v.declaration_end }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
+        "inferJoinTypes": query.infer_join_types,
         "emitDeclarations": query.emit_declarations,
     })
 }

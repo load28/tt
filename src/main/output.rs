@@ -89,30 +89,32 @@ pub(super) fn relative_to(path: &Path, base: &Path) -> String {
 /// folded away. Purely lexical — it neither reads the filesystem nor
 /// resolves symlinks, which is the model a source map's `sources` uses.
 pub(super) fn lexical_absolute(path: &Path) -> Vec<String> {
-    let mut parts: Vec<String> = Vec::new();
-    let rooted = path.is_absolute();
-    let prefix = if rooted {
-        Vec::new()
+    normalized_absolute(path)
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect()
+}
+
+pub(super) fn normalized_absolute(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
     } else {
         std::env::current_dir()
-            .unwrap_or_default()
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy().into_owned())
-            .collect()
+            .expect("current directory is available")
+            .join(path)
     };
-    for component in prefix.into_iter().chain(
-        path.components()
-            .map(|c| c.as_os_str().to_string_lossy().into_owned()),
-    ) {
-        match component.as_str() {
-            "." => {}
-            ".." => {
-                parts.pop();
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                normalized.pop();
             }
-            _ => parts.push(component),
+            _ => normalized.push(component.as_os_str()),
         }
     }
-    parts
+    normalized
 }
 
 /// Writes one output file, whole or not at all.
@@ -133,24 +135,34 @@ pub(super) fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
     replace_file(out_path, code.as_bytes()).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
 }
 
-/// Puts `bytes` at `path`, whole or not at all.
-///
-/// The bytes go to a sibling temporary first — beside the target so the
-/// rename stays on one filesystem, and named for this process so two runs
-/// cannot pick the same staging file — and the rename replaces the target
-/// in one step.
+/// Publishes bytes through an exclusively owned sibling staging file.
+/// Exclusive creation handles concurrent writers and stale files from old runs.
 pub(super) fn replace_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let mut staging = path.as_os_str().to_os_string();
-    staging.push(format!(".{}.tmp", std::process::id()));
-    let staging = PathBuf::from(staging);
-    // A staging file that never became the output is this run's litter,
-    // whichever step failed.
-    let result = fs::write(&staging, bytes).and_then(|()| fs::rename(&staging, path));
-    if let Err(e) = result {
+    use std::io::Write;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_STAGING: AtomicU64 = AtomicU64::new(0);
+    let (staging, mut file) = loop {
+        let sequence = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
+        let mut name = path.as_os_str().to_os_string();
+        name.push(format!(".{}.{sequence}.tmp", std::process::id()));
+        let staging = PathBuf::from(name);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staging)
+        {
+            Ok(file) => break (staging, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    };
+    let result = file.write_all(bytes);
+    drop(file);
+    let result = result.and_then(|()| fs::rename(&staging, path));
+    if result.is_err() {
         let _ = fs::remove_file(&staging);
-        return Err(e);
     }
-    Ok(())
+    result
 }
 
 /// How often `--watch` re-reads the inputs' timestamps.
@@ -172,13 +184,21 @@ pub(super) fn watch_mode(
 ) -> ExitCode {
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
     let mut first = true;
+    let mut input_error = None;
 
     loop {
         let jobs = match build_jobs(inputs, out_dir, true) {
-            Ok(jobs) => jobs,
+            Ok(jobs) => {
+                input_error = None;
+                jobs
+            }
             // An input can disappear mid-edit; keep watching rather than
             // tearing the session down.
-            Err(_) => {
+            Err(error) => {
+                if input_error.as_ref() != Some(&error) {
+                    eprintln!("{error}");
+                    input_error = Some(error);
+                }
                 thread::sleep(WATCH_INTERVAL);
                 continue;
             }
@@ -273,4 +293,33 @@ pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<Path
         }
     }
     targets
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn concurrent_replacements_publish_complete_files_and_remove_staging() {
+        let dir = std::env::temp_dir().join(format!("tt-output-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("out.ts");
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for byte in b'a'..=b'h' {
+                let path = &path;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    let bytes = vec![byte; 65536];
+                    barrier.wait();
+                    replace_file(path, &bytes).unwrap();
+                });
+            }
+        });
+        let output = fs::read(&path).unwrap();
+        assert_eq!(output.len(), 65536);
+        assert!(output.iter().all(|byte| *byte == output[0]));
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
 }

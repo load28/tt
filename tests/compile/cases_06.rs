@@ -749,13 +749,13 @@ fn a_slot_carries_the_declared_type_only_when_it_is_the_returned_value_s() {
         "{head}export function* gen(): Generator<number, number, void> \
          {{ yield 1; return {value}; }}\n"
     ));
-    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
     assert!(!out.contains("$tt_v0: Generator"), "{out}");
     let out = ok(&format!(
         "{head}export function pred(x: unknown): x is number \
          {{ return match (s) {{ Circle(radius) => typeof x === \"number\", Point => false }}; }}\n"
     ));
-    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(out.contains("let $tt_v0: boolean;"), "{out}");
     assert!(!out.contains("is number;"), "{out}");
 }
 
@@ -774,4 +774,18 @@ fn a_payload_field_cannot_be_named_like_the_case_tag_s_property() {
     // Any other field name is fine, and the tag itself is untouched.
     let out = ok("variant Token { Word(text: string) }\n");
     assert!(out.contains("{ kind: \"Word\"; text: string }"), "{out}");
+}
+
+#[test]
+fn val_writes_follow_assignment_targets_not_neighboring_tokens() {
+    for statement in ["cfg.a = other;", "(cfg).a = other;", "((cfg.a)) = other;", "[cfg.a] = other;", "({ a: cfg.a } = other);", "({ a: [cfg.a = 1] } = other);", "[...cfg.a] = other;"] {
+        let source = format!("val const cfg = {{ a: 1 }};\n{statement}\n");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        assert_eq!(diagnostics.iter().filter(|d| d.code == ttc::DiagnosticCode::ValMutation).count(), 1, "{source}: {diagnostics:?}");
+        assert_eq!(ttc::val_probes(&source).mutations.iter().filter(|m| m.method.is_none()).count(), 1, "{source}");
+    }
+    for statement in ["const x = cfg.a in other;", "({ [cfg.a]: other.a } = value);", "[other.a = cfg.a] = value;", "function f(cfg: any) { (cfg).a = 2; }"] {
+        let source = format!("val const cfg = {{ a: 1 }};\n{statement}\n");
+        assert!(!ttc::analyze(&source, &Options::default()).iter().any(|d| d.code == ttc::DiagnosticCode::ValMutation), "{source}");
+    }
 }

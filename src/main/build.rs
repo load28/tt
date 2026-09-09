@@ -117,7 +117,7 @@ pub(super) fn build_jobs(
     inputs: &[String],
     out_dir: Option<&Path>,
     include_ts: bool,
-) -> Result<Vec<Job>, ExitCode> {
+) -> Result<Vec<Job>, String> {
     // Named files mirror under the deepest directory they are all inside,
     // so a relative import between two of them still resolves in the output
     // tree. A directory input keeps mirroring under itself, which is what
@@ -127,21 +127,18 @@ pub(super) fn build_jobs(
             .iter()
             .map(Path::new)
             .filter(|path| path.is_file())
-            .filter_map(|path| path.parent().map(Path::to_path_buf)),
+            .filter_map(|path| normalized_absolute(path).parent().map(Path::to_path_buf)),
     );
     let mut jobs: Vec<Job> = Vec::new();
     for input in inputs {
         let input_path = Path::new(input);
         if !input_path.exists() {
-            eprintln!("ttc: no such file or directory: {input}");
-            return Err(ExitCode::FAILURE);
+            return Err(format!("ttc: no such file or directory: {input}"));
         }
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
-        if let Err(e) = collect_sources(input_path, include_ts, &mut files) {
-            eprintln!("ttc: {input}: {e}");
-            return Err(ExitCode::FAILURE);
-        }
+        collect_sources(input_path, include_ts, &mut files)
+            .map_err(|e| format!("ttc: {input}: {e}"))?;
         if is_dir && let Some(dir) = out_dir {
             files.retain(|file| !path_is_within(file, dir));
         }
@@ -154,22 +151,31 @@ pub(super) fn build_jobs(
             let out_path = match out_dir {
                 Some(dir) => {
                     let root = if is_dir {
-                        Some(input_path.to_path_buf())
+                        normalized_absolute(input_path)
                     } else {
-                        named_file_root.clone()
+                        named_file_root
+                            .clone()
+                            .ok_or_else(|| format!("ttc: no output root for {}", file.display()))?
                     };
-                    // A path is still user input and this is the CLI, so a
-                    // shape with no place under the root keeps its file
-                    // name rather than crashing (TASK-221).
-                    let rel = root
-                        .and_then(|root| out_name.strip_prefix(root).ok().map(Path::to_path_buf))
-                        .or_else(|| out_name.file_name().map(PathBuf::from))
-                        .unwrap_or_else(|| out_name.clone());
+                    let mirrored = normalized_absolute(&out_name);
+                    let rel = mirrored.strip_prefix(&root).map_err(|_| {
+                        format!(
+                            "ttc: {} is outside output source root {}",
+                            file.display(),
+                            root.display()
+                        )
+                    })?;
                     dir.join(rel)
                 }
                 None => out_name,
             };
-            jobs.push(Job { file, out_path });
+            // One source/output identity owns exactly one emission job.
+            if !jobs.iter().any(|job| {
+                same_file(&job.file, &file)
+                    && normalized_absolute(&job.out_path) == normalized_absolute(&out_path)
+            }) {
+                jobs.push(Job { file, out_path });
+            }
         }
     }
     Ok(jobs)
@@ -190,7 +196,7 @@ fn path_is_within(path: &Path, dir: &Path) -> bool {
 /// yet, so the parents are compared canonically and the file names
 /// literally.
 pub(super) fn same_file(a: &Path, b: &Path) -> bool {
-    if a == b {
+    if normalized_absolute(a) == normalized_absolute(b) {
         return true;
     }
     if a.file_name() != b.file_name() {

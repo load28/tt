@@ -40,6 +40,7 @@
 //! built-in. Run `ttc help val` for the user-facing limits.
 
 mod checker;
+mod targets;
 
 use std::cell::RefCell;
 use std::collections::HashMap;

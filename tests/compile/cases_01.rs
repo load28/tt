@@ -455,7 +455,7 @@ fn match_wildcard_becomes_default() {
 fn whole_initializer_match_uses_a_statement_slot_without_an_iife() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };\n");
     assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
     assert!(out.contains("$tt_v0 = 1;"), "{out}");
     assert!(out.contains("const r = $tt_v0;"), "{out}");
 }
@@ -465,7 +465,7 @@ fn expression_bodied_arrow_match_becomes_a_block_without_an_iife() {
     let out = ok("variant E { A, B }\nconst f = (e: E) => match (e) { A => 1, B => 2 };\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(
-        out.contains("const f = (e: E) => {\n  let $tt_v0;"),
+        out.contains("const f = (e: E) => {\n  let $tt_v0: number;"),
         "{out}"
     );
     assert!(out.contains("  return $tt_v0;\n};"), "{out}");

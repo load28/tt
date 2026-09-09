@@ -1,0 +1,17 @@
+variant Opt { Some(value: number), None }
+export function pick(o: Opt): number {
+  const v = match (o) {
+    Some(value) => { if let Some(value: v2) = o { return v2; } return value; },
+    None => 0,
+  };
+  return v + 100;
+}
+export function read(o: Opt) {
+  return result {
+    let n;
+    n = try ({ kind: "Ok" as const, value: pick(o) });
+    return n;
+  };
+}
+export const strings = [1].map(x => `${x}` + match (Opt.Some(x)) { Some(value) => value, None => 0 });
+export const values = match (Opt.Some(1)) { Some(value) => [value], None => [] };

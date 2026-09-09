@@ -365,7 +365,8 @@
 
 | TASK-351 | Tolerate registry propagation during latest verification | Complete | 2026-09-09 | 2026-09-09 | [TASK-351](./TASK-351-nightly-tag-verification.md) |
 | TASK-352 | Repair the developer-facing surfaces of tt | Complete | 2026-09-09 | 2026-09-09 | [TASK-352](./TASK-352-developer-surface-structural-fixes.md) |
+| TASK-353 | Correct PR 115 at the owning compiler and tooling layers | Complete | 2026-09-10 | 2026-09-10 | [TASK-353](./TASK-353-pr115-structural-corrections.md) |
 
 ## Next task number
 
-**TASK-353**
+**TASK-354**

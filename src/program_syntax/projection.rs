@@ -502,45 +502,10 @@ impl<'a> ProjectionBuilder<'a> {
             self.source_span(decision.extent)?,
             CoreRoot::Decision(decision.extent),
         )?;
-        self.emit_statement_decision_shadows(decision)
-    }
-
-    fn emit_statement_decision_shadows(
-        &mut self,
-        decision: &Decision,
-    ) -> Result<(), ProgramSyntaxError> {
-        for arm in &decision.arms {
-            if let crate::core_ir::ArmAction::Yield { body, .. }
-            | crate::core_ir::ArmAction::Execute(body) = arm.action
-            {
-                self.emit_shadow_body_island(body)?;
-            }
-        }
-        self.emit_miss_shadow(&decision.miss)
-    }
-
-    fn emit_miss_shadow(
-        &mut self,
-        miss: &crate::core_ir::MissAction,
-    ) -> Result<(), ProgramSyntaxError> {
-        match miss {
-            crate::core_ir::MissAction::Execute(body) => self.emit_shadow_body_island(*body),
-            crate::core_ir::MissAction::Decision(decision) => {
-                self.emit_statement_decision_shadows(decision)
-            }
-            crate::core_ir::MissAction::ThrowUnexpected(_)
-            | crate::core_ir::MissAction::Nothing => Ok(()),
-        }
-    }
-
-    fn emit_shadow_body_island(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
-        if !self.body_contains_decision(body) {
-            return Ok(());
-        }
-        self.code.push_str("\n(() => {");
-        self.emit_shadow_body(body)?;
-        self.code.push_str("});");
-        Ok(())
+        // Statement decisions do not introduce a function boundary. Keep their
+        // bodies in this lexical control-flow region so returns belong to the
+        // surrounding match/result, and nested values retain their real owner.
+        self.emit_inline_decision_bodies(decision)
     }
 
     fn emit_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
@@ -723,43 +688,6 @@ impl<'a> ProjectionBuilder<'a> {
         }
     }
 
-    fn body_contains_decision(&self, body: BodyId) -> bool {
-        self.core.bodies[body.index()]
-            .statements
-            .iter()
-            .any(|statement| match statement {
-                Statement::Expr(expr) => self.expr_contains_decision(*expr),
-                Statement::Decision(decision) => {
-                    decision.arms.iter().any(|arm| match arm.action {
-                        crate::core_ir::ArmAction::Yield { body, .. }
-                        | crate::core_ir::ArmAction::Execute(body) => {
-                            self.body_contains_decision(body)
-                        }
-                        crate::core_ir::ArmAction::BindThrough(_) => false,
-                    }) || match &decision.miss {
-                        crate::core_ir::MissAction::Execute(body) => {
-                            self.body_contains_decision(*body)
-                        }
-                        crate::core_ir::MissAction::Decision(decision) => {
-                            decision.arms.iter().any(|arm| match arm.action {
-                                crate::core_ir::ArmAction::Yield { body, .. }
-                                | crate::core_ir::ArmAction::Execute(body) => {
-                                    self.body_contains_decision(body)
-                                }
-                                crate::core_ir::ArmAction::BindThrough(_) => false,
-                            })
-                        }
-                        crate::core_ir::MissAction::ThrowUnexpected(_)
-                        | crate::core_ir::MissAction::Nothing => false,
-                    }
-                }
-                Statement::Opaque(_)
-                | Statement::Adt(_)
-                | Statement::Import(_)
-                | Statement::Propagate(_) => false,
-            })
-    }
-
     fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.push_source(*node),
@@ -824,9 +752,7 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("() => {");
         for item in &region.items {
             match item {
-                crate::core_ir::ResultRegionItem::Statements(body) => {
-                    self.emit_result_body(*body)?
-                }
+                crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
             }
         }
         let synthetic_return_start = ProjectedByte(self.code.len());
@@ -855,39 +781,17 @@ impl<'a> ProjectionBuilder<'a> {
         Ok(())
     }
 
-    /// Result-owned `return` exits remain visible to the host projection
-    /// through inline let-else and if-let bodies. Ordinary statement
-    /// projection uses one placeholder for those tt decisions, but that
-    /// would hide their source returns from the enclosing Result arrow.
-    fn emit_result_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
-        for statement in &self.core.bodies[body.index()].statements {
-            match statement {
-                Statement::Decision(decision) => self.emit_result_decision(decision)?,
-                _ => self.emit_body_fragment(statement)?,
-            }
-        }
-        Ok(())
-    }
-
-    fn emit_body_fragment(&mut self, statement: &Statement) -> Result<(), ProgramSyntaxError> {
-        match statement {
-            Statement::Opaque(node) => self.push_source(*node),
-            Statement::Adt(adt) => self.emit_adt(adt),
-            Statement::Import(import) => self.emit_import(import),
-            Statement::Propagate(propagate) => self.emit_propagate(propagate),
-            Statement::Decision(_) => unreachable!("Result body handles decisions separately"),
-            Statement::Expr(expr) => self.emit_expr(*expr),
-        }
-    }
-
-    fn emit_result_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
+    fn emit_inline_decision_bodies(
+        &mut self,
+        decision: &Decision,
+    ) -> Result<(), ProgramSyntaxError> {
         match &decision.kind {
             crate::core_ir::DecisionKind::LetElse { .. } => {
                 let crate::core_ir::MissAction::Execute(body) = decision.miss else {
                     crate::ice::bug!("let-else has no else body")
                 };
                 self.code.push_str("if (true) {");
-                self.emit_result_body(body)?;
+                self.emit_body(body)?;
                 self.code.push('}');
             }
             crate::core_ir::DecisionKind::IfLet => {
@@ -895,17 +799,17 @@ impl<'a> ProjectionBuilder<'a> {
                     crate::ice::bug!("if-let has no then body")
                 };
                 self.code.push_str("if (true) {");
-                self.emit_result_body(body)?;
+                self.emit_body(body)?;
                 self.code.push('}');
                 match &decision.miss {
                     crate::core_ir::MissAction::Execute(body) => {
                         self.code.push_str(" else {");
-                        self.emit_result_body(*body)?;
+                        self.emit_body(*body)?;
                         self.code.push('}');
                     }
                     crate::core_ir::MissAction::Decision(inner) => {
                         self.code.push_str(" else ");
-                        self.emit_result_decision(inner)?;
+                        self.emit_inline_decision_bodies(inner)?;
                     }
                     crate::core_ir::MissAction::Nothing => {}
                     crate::core_ir::MissAction::ThrowUnexpected(_) => {
@@ -1004,10 +908,7 @@ impl<'a> ProjectionBuilder<'a> {
             match part {
                 TemplatePart::Raw(node) => self.push_source(*node)?,
                 TemplatePart::Interpolation(expr) => {
-                    self.code.push_str("${");
-                    let segments_since = self.source_segments.len();
                     self.emit_expr(*expr)?;
-                    self.push_source_boundary("}", segments_since);
                 }
             }
         }

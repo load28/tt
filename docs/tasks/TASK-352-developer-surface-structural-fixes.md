@@ -1,5 +1,8 @@
 # TASK-352: Repair the developer-facing surfaces of tt
 
+> TASK-353 supersedes the deferral of issue 19 and corrects the output path
+> and staging-file ownership decisions below.
+
 - **Status**: Complete
 - **Started**: 2026-09-09
 - **Completed**: 2026-09-09

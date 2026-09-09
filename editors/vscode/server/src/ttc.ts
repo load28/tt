@@ -6,7 +6,6 @@
  * own (`file:line:col: message`).
  * ----------------------------------------------------------------------- */
 import { execFile } from "child_process";
-import * as crypto from "crypto";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -84,14 +83,6 @@ export type TtcResult =
   | { kind: "ok"; diagnostics: TtcDiagnostic[] }
   | { kind: "not-found"; compiler: string; reason: UnusableCompiler }
   | { kind: "failed"; detail: string };
-
-let tmpDir: string | null = null;
-function tempDir(): string {
-  if (tmpDir === null) {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-lsp-"));
-  }
-  return tmpDir;
-}
 
 const CANDIDATE_PATHS = [
   path.join("target", "release", "ttc"),
@@ -230,7 +221,7 @@ export async function runCheck(
 }
 
 /** The one-shot `ttc --check`, via a temp file. */
-function runCheckOnce(
+async function runCheckOnce(
   compiler: string,
   text: string,
   docName: string,
@@ -240,43 +231,51 @@ function runCheckOnce(
   const base = rawBase.endsWith(".tt") || rawBase.endsWith(".ttx")
     ? rawBase
     : `${rawBase}.tt`;
-  const hash = crypto.createHash("sha1").update(docName).digest("hex");
-  const file = path.join(tempDir(), `${hash.slice(0, 8)}-${base}`);
-
+  // Each request owns its input until its child exits, including concurrent
+  // checks of different versions of the same document.
+  let directory: string;
+  try {
+    directory = fs.mkdtempSync(path.join(os.tmpdir(), "tt-lsp-"));
+  } catch (e) {
+    return { kind: "failed", detail: String(e) };
+  }
+  const file = path.join(directory, base);
   try {
     fs.writeFileSync(file, text);
+
+    const args = ["--check"];
+    if (!verify) args.push("--no-verify");
+    args.push(file);
+
+    return await new Promise<TtcResult>((resolve) => {
+      execFile(
+        compiler,
+        args,
+        { timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
+        (err, _stdout, stderr) => {
+          const unusable = unusableCompiler(err);
+          if (unusable) {
+            resolve({ kind: "not-found", compiler, reason: unusable });
+            return;
+          }
+          const diagnostics = parseStderr(String(stderr), file);
+          if (err && diagnostics.length === 0) {
+            // Crashed or timed out without a parseable diagnostic.
+            resolve({
+              kind: "failed",
+              detail: `${compiler} exited abnormally: ${String(stderr).trim() || err.message}`,
+            });
+            return;
+          }
+          resolve({ kind: "ok", diagnostics });
+        },
+      );
+    });
   } catch (e) {
-    return Promise.resolve({ kind: "failed", detail: String(e) });
+    return { kind: "failed", detail: String(e) };
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
   }
-
-  const args = ["--check"];
-  if (!verify) args.push("--no-verify");
-  args.push(file);
-
-  return new Promise((resolve) => {
-    execFile(
-      compiler,
-      args,
-      { timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
-      (err, _stdout, stderr) => {
-        const unusable = unusableCompiler(err);
-        if (unusable) {
-          resolve({ kind: "not-found", compiler, reason: unusable });
-          return;
-        }
-        const diagnostics = parseStderr(String(stderr), file);
-        if (err && diagnostics.length === 0) {
-          // Crashed or timed out without a parseable diagnostic.
-          resolve({
-            kind: "failed",
-            detail: `${compiler} exited abnormally: ${String(stderr).trim() || err.message}`,
-          });
-          return;
-        }
-        resolve({ kind: "ok", diagnostics });
-      },
-    );
-  });
 }
 
 /* ----------------------------------------------------------------------

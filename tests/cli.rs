@@ -1443,3 +1443,100 @@ fn an_unreadable_entry_is_named_rather_than_the_directory_holding_it() {
     assert!(!output.status.success());
     assert!(stderr.contains("dangling.tt"), "{stderr}");
 }
+
+#[test]
+fn named_inputs_with_parent_components_stay_inside_the_output_tree() {
+    let dir = tmpdir();
+    let work = dir.join("work");
+    fs::create_dir(&work).unwrap();
+    fs::write(dir.join("a.tt"), "export const a = 1;\n").unwrap();
+    fs::write(work.join("b.tt"), "export const b = 2;\n").unwrap();
+    let handwritten = "// handwritten\nexport const untouched = 42;\n";
+    fs::write(work.join("a.ts"), handwritten).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&work)
+        .args(["-o", "out", "../a.tt", "b.tt", "./b.tt"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(work.join("a.ts")).unwrap(), handwritten);
+    assert!(work.join("out/a.ts").exists());
+    assert!(work.join("out/work/b.ts").exists());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).matches('→').count(),
+        2
+    );
+}
+
+#[test]
+fn watch_reports_input_failure_transitions_and_recovers() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let dir = tmpdir();
+    let input = dir.join("src");
+    fs::create_dir(&input).unwrap();
+    fs::write(input.join("a.tt"), "export const a = 1;").unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&dir)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let result = std::panic::catch_unwind(|| {
+        loop {
+            if receive
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .contains("Ctrl-C")
+            {
+                break;
+            }
+        }
+        fs::remove_dir_all(&input).unwrap();
+        assert!(
+            receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("no such file")
+        );
+        assert!(receive.recv_timeout(Duration::from_millis(1000)).is_err());
+        fs::create_dir(&input).unwrap();
+        fs::write(input.join("a.tt"), "export const a = 2;").unwrap();
+        loop {
+            if receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("file(s) ok")
+            {
+                break;
+            }
+        }
+        fs::remove_dir_all(&input).unwrap();
+        assert!(
+            receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("no such file")
+        );
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}

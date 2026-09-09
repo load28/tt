@@ -489,7 +489,7 @@ macro_rules! require_types_typescript {
 
 #[test]
 fn cli_checks_exhaustiveness_across_tt_imports() {
-    let dir = tmpdir();
+    let dir = project_dir();
     fs::write(dir.join("token.tt"), TOKEN_TT).unwrap();
     fs::write(
         dir.join("parser.tt"),
@@ -598,7 +598,7 @@ fn untyped_cli_does_not_infer_a_generic_payload_owner() {
 fn cli_skips_unresolvable_imports_silently() {
     // A missing module is tsc's problem (TS2307); the match simply stays
     // unchecked, as before phase 2.
-    let dir = tmpdir();
+    let dir = project_dir();
     fs::write(
         dir.join("main.tt"),
         "import { Gone } from \"./missing.tt\";\nconst x = match (g) { A(v) => v, B => 0 };\n",
