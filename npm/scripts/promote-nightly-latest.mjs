@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import { execFileSync } from "node:child_process";
 import { appendFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -34,7 +35,7 @@ export function packagesFor(metadata) {
     .concat({ name: unplugin, version: metadata.unpluginVersion });
 }
 
-export async function promote(metadata, { readPackage, setTag, report }, apply) {
+export async function promote(metadata, { readPackage, setTag, report, wait = sleep, log = console.warn }, apply) {
   const packages = packagesFor(metadata);
   const plan = [];
   // Validate every package before the first registry write. Independent
@@ -62,11 +63,25 @@ export async function promote(metadata, { readPackage, setTag, report }, apply) 
     for (const pkg of plan) {
       if (pkg.previous !== pkg.version) await setTag(pkg.name, pkg.version, "latest");
     }
-    for (const pkg of plan) {
-      const published = await readPackage(pkg.name, pkg.version);
-      if (published["dist-tags"]?.latest !== pkg.version) {
-        throw new Error(`latest verification failed: ${pkg.name}`);
+    // Registry reads may lag behind successful tag writes. Retry only reads,
+    // in shared rounds, so multiple stale packages do not multiply the wait.
+    const delays = [2000, 4000, 8000, 16000, 30000];
+    let pending = plan;
+    for (let attempt = 0; ; attempt++) {
+      const mismatches = [];
+      for (const pkg of pending) {
+        const published = await readPackage(pkg.name, pkg.version);
+        const observed = published["dist-tags"]?.latest ?? "(absent)";
+        if (observed !== pkg.version) mismatches.push({ ...pkg, observed });
       }
+      if (mismatches.length === 0) break;
+      const details = mismatches.map(pkg => `${pkg.name}: expected ${pkg.version}, observed ${pkg.observed}`).join("; ");
+      if (attempt === delays.length) {
+        throw new Error(`latest verification failed after ${attempt + 1} reads: ${details}. Tag writes already completed; inspect the registry before rerunning.`);
+      }
+      log(`Waiting ${delays[attempt] / 1000}s for registry propagation (read ${attempt + 1}): ${details}`);
+      await wait(delays[attempt]);
+      pending = mismatches;
     }
   }
   return plan;
@@ -107,7 +122,7 @@ async function main() {
     if (JSON.stringify(candidate) !== JSON.stringify(saved)) throw new Error("Approved candidate metadata changed");
   }
   await promote(candidate.metadata, {
-    readPackage: (name, version) => JSON.parse(command("npm", ["view", `${name}@${version}`, "--json", "--registry", registry])),
+    readPackage: (name, version) => JSON.parse(command("npm", ["view", `${name}@${version}`, "--json", "--prefer-online", "--registry", registry])),
     setTag: (name, version, tag) => command("npm", ["dist-tag", "add", `${name}@${version}`, tag, "--registry", registry]),
     report: plan => {
       const summary = `## Temporary Nightly → latest\n\nCI: https://github.com/${repository}/actions/runs/${candidate.runId}\n\nSource: ${candidate.metadata.sourceSha}\n\n| Package | Previous latest | Target |\n| --- | --- | --- |\n` +
