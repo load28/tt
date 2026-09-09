@@ -363,6 +363,8 @@
 
 | TASK-350 | Manually promote a published Nightly to latest | Complete | 2026-09-09 | 2026-09-09 | [TASK-350](./TASK-350-manual-nightly-latest.md) |
 
+| TASK-351 | Tolerate registry propagation during latest verification | Complete | 2026-09-09 | 2026-09-09 | [TASK-351](./TASK-351-nightly-tag-verification.md) |
+
 ## Next task number
 
-**TASK-351**
+**TASK-352**

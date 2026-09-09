@@ -46,7 +46,11 @@ installed packages are not automatically upgraded.
 npm has no atomic multi-package tag update. All packages are preflighted before
 the first write, and normal publishing shares the same concurrency group. If
 npm fails midway, rerun the failed job while the candidate is still `next`;
-completed tag updates are skipped. The summary records previous tags for manual
+completed tag updates are skipped. Successful writes are verified with up to six
+online-preferring reads of mismatched packages. Shared backoff rounds wait 2, 4,
+8, 16, and 30 seconds (60 seconds of waiting plus request time); they never
+repeat tag writes. Persistent mismatches fail with expected and observed tags.
+The summary records previous tags for manual
 rollback with `npm dist-tag add PACKAGE@PREVIOUS_VERSION latest` (or
 `npm dist-tag rm PACKAGE latest` if the tag was previously absent). Registry
 administrators making tag changes outside these workflows are not covered by

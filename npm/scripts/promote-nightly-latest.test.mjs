@@ -15,7 +15,7 @@ function fixture() {
   const writes = [];
   return { state, writes, readPackage: async name => structuredClone(state.get(name)),
     setTag: async (name, version, tag) => { writes.push({ name, version, tag }); state.get(name)["dist-tags"][tag] = version; },
-    report: async () => {},
+    report: async () => {}, wait: async () => {}, log: () => {},
   };
 }
 
@@ -89,4 +89,52 @@ test("promotion is manual-only and uses the publisher's serialization group", ()
   assert.match(workflow, /environment: production/);
   const publisher = readFileSync(new URL("../../.github/workflows/release-publish.yml", import.meta.url), "utf8");
   for (const source of [workflow, publisher]) assert.match(source, /group: npm-release-tags\n\s+cancel-in-progress: false/);
+});
+
+
+test("stale reads converge without repeating writes or rechecking confirmed packages", async () => {
+  const io = fixture();
+  const read = io.readPackage;
+  const reads = new Map();
+  const waits = [];
+  const delayed = "@openload28/tt-lang-linux-arm64";
+  io.wait = async ms => waits.push(ms);
+  io.readPackage = async (name, version) => {
+    const result = await read(name, version);
+    if (io.writes.length === 8) {
+      const count = (reads.get(name) ?? 0) + 1;
+      reads.set(name, count);
+      if (name === delayed && count < 3) result["dist-tags"].latest = "old";
+    }
+    return result;
+  };
+  await promote(metadata, io, true);
+  assert.deepEqual(waits, [2000, 4000]);
+  assert.equal(reads.get(delayed), 3);
+  assert.equal(reads.get("@openload28/tt-lang-linux-x64"), 1);
+  assert.equal(io.writes.length, 8);
+});
+
+test("persistent mismatches exhaust one shared budget and report every remaining package", async () => {
+  const io = fixture();
+  const waits = [];
+  io.wait = async ms => waits.push(ms);
+  io.setTag = async () => {};
+  await assert.rejects(promote(metadata, io, true), error => {
+    assert.match(error.message, /after 6 reads/);
+    assert.match(error.message, /tt-lang-linux-arm64: expected .*observed 0.0.1/);
+    assert.match(error.message, /unplugin-tt: expected/);
+    return true;
+  });
+  assert.deepEqual(waits, [2000, 4000, 8000, 16000, 30000]);
+});
+
+test("preflight and mutation errors do not enter propagation polling", async () => {
+  for (const stage of ["preflight", "mutation"]) {
+    const io = fixture();
+    io.wait = async () => assert.fail("unexpected propagation retry");
+    if (stage === "preflight") io.state.get("@openload28/create-tt").version = "wrong";
+    else io.setTag = async () => { throw new Error("permission denied"); };
+    await assert.rejects(promote(metadata, io, true));
+  }
 });
