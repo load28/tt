@@ -26,17 +26,18 @@ const $tt_v1 = (consume);
 }
 
 declare function generic<T>(item: T): void;
-const $tt_v3 = (generic<{run: (x: number) => number}>);
+const $tt_v3 = (generic);
+const $tt_v4 = $tt_v3<{run: (x: number) => number}>;
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v3(({run: x => x + value}));
+      $tt_v4(({run: x => x + value}));
       break;
     }
     case "Empty": {
-      $tt_v3(({run: x => x}));
+      $tt_v4(({run: x => x}));
       break;
     }
     default: {

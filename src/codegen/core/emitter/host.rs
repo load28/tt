@@ -714,7 +714,9 @@ impl<'a> Emitter<'a> {
         match *receiver {
             PlannedReceiver::Captured { source, slot } => {
                 if captured.insert(slot) {
-                    out.push_value_capture(self.value_slot_name(slot));
+                    // A receiver retains its inferred members. The `this`
+                    // parameter at a later bind is not its contextual type.
+                    out.push_lit(format!("const {} = (", self.value_slot_name(slot)));
                     out.push_src(&self.source[source.start..source.end], source.start);
                     out.push_lit(");");
                     out.push_break(0);

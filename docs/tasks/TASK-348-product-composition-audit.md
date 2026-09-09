@@ -3,7 +3,7 @@
 - **Status**: Complete
 - **Started**: 2026-09-06
 - **Completed**: 2026-09-06
-- **Commit**: —
+- **Commit**: Originally `081adfc` (TASK-331); rebased as `d6e7909` and renumbered to avoid the upstream task collision.
 
 ## Purpose
 

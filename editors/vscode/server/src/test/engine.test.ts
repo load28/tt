@@ -256,7 +256,7 @@ for (const extension of ["tt", "ttx"]) {
         if (statement.startsWith("generic<Item>")) {
           const invalidType = source.replace("generic<Item>", "generic<MissingItem>");
           engine.openDocument(COMPILER, file, invalidType);
-          const typeDiagnostics = await engine.tsDiagnostics(COMPILER, file);
+          const typeDiagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
           const missing = typeDiagnostics.find(diagnostic => diagnostic.code === 2304);
           assert.ok(missing, JSON.stringify(typeDiagnostics));
           assert.equal(sliceOf(invalidType, missing.range), "MissingItem");

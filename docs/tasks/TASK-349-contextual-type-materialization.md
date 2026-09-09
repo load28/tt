@@ -3,7 +3,7 @@
 - **Status**: Complete
 - **Started**: 2026-09-06
 - **Completed**: 2026-09-06
-- **Commit**: See the TASK-349 commit in Git history
+- **Commit**: Originally `eeb8eb0` (TASK-332); rebased as `fe6920c` and renumbered to avoid the upstream task collision.
 
 ## Purpose
 
