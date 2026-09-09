@@ -68,6 +68,9 @@ defect in the layer that owns the behavior.
   hand-written file, named file inputs losing their depth under `-o`, and a
   temporary directory left behind by every typed run — and covered the
   first two in `tests/cli.rs`.
+- 2026-09-09: Gave the typed pass a declaration-based answer for files the
+  checker holds none about, which is both the file a caller names outside
+  the project's `include` and every file when no TypeScript is installed.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -111,6 +114,25 @@ defect in the layer that owns the behavior.
 - **Decision and rationale**: Named files mirror under the deepest
   directory they are all inside. A directory input keeps mirroring under
   itself, so both collision contracts answer exactly as before.
+
+### Decision 6: Deferring to the checker needs a checker that holds the file
+
+- **Context**: `ttc --check-types lib/outside.tt` reported nothing and
+  exited 0 while `ttc --check` on the same file reported a coverage hole and
+  exited 1. The typed pass defers exhaustiveness to the checker because its
+  alphabet is narrower, but the configured program does not contain that
+  file, so no question about it is ever asked.
+- **Alternatives considered**: Add the named file to the TypeScript program
+  (the project's own `include` decides its members, and overriding it makes
+  ttc disagree with `tsc` about what the project is); report that the file
+  is not part of the project and stop (truthful, but it still leaves the
+  file unchecked when `--check` checks it fine).
+- **Decision and rationale**: A file the checker holds no answer about is
+  in the same position as a file checked with no backend at all, and the
+  rule for that is already written down: the typed facts go, the tt layer
+  reports in full. Its coverage is answered from the declarations the file
+  can see — the same answer `ttc --check` gives — so naming a file never
+  passes in silence.
 
 ## Issues and resolutions
 
@@ -185,6 +207,21 @@ defect in the layer that owns the behavior.
 - **Cause**: The session removed the host script it wrote but not the
   directory it created to hold it.
 - **Resolution**: The session owns that directory and removes it on drop.
+
+### Issue 7: A named file outside the project passed silently
+
+- **Symptom**: `ttc --check-types lib/outside.tt` printed nothing and exited
+  0 on a file whose match is not exhaustive; `ttc --check` on the same file
+  reported it and exited 1. With no TypeScript installed, `--check-types`
+  printed "only tt-level diagnostics are shown" and then showed none of the
+  coverage ones.
+- **Cause**: Exhaustiveness on the typed path is derived from the checker's
+  answers about each scrutinee. The host asks only about files the
+  configured program contains, so a file outside it produced no answer, and
+  nothing filled the gap.
+- **Resolution**: The report falls back to the declaration-based coverage
+  for any file the checker holds no answers about, which covers both the
+  excluded file and the missing toolchain.
 
 ## Verification
 

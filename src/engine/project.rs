@@ -65,7 +65,7 @@ pub struct Project {
     /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
-    /// the project scan, or the inputs when the scan found nothing. The
+    /// the project scan together with the inputs the caller named. The
     /// configured TypeScript program filters these to actual members.
     initial: Vec<PathBuf>,
     /// The project's hand-written TypeScript, listed only when there is no
@@ -162,8 +162,9 @@ impl Project {
     }
 
     /// The candidate set the first pass layers, decided when the project was
-    /// opened: the project scan, or — when that found nothing (inputs outside
-    /// the root) — the inputs themselves.
+    /// opened: the project scan and the inputs the caller named. A named
+    /// file is a root by request, so it is checked even when the project's
+    /// own configuration does not list it.
     pub fn initial_files(&self) -> Vec<PathBuf> {
         self.initial.clone()
     }

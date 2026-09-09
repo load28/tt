@@ -131,6 +131,44 @@ pub(crate) fn report(
         }
     }
 
+    // A file the configured program does not contain gets no answers from
+    // the checker: no question about its scrutinees is ever asked, so the
+    // tag path below has nothing to report about it. That is the same
+    // situation as a backend that could not run, and the same rule applies
+    // — the typed facts go, the tt layer does not. Its coverage is
+    // answered from the declarations the file can see, exactly as
+    // `ttc --check` answers it, so a file the caller named is never passed
+    // in silence.
+    let checker_members: Option<HashSet<&std::path::Path>> = answers
+        .project_modules
+        .as_ref()
+        .map(|modules| modules.iter().map(PathBuf::as_path).collect());
+    for file in files {
+        if checker_members
+            .as_ref()
+            .is_some_and(|members| members.contains(file.module_path.as_path()))
+        {
+            continue;
+        }
+        let Some(semantics) = semantics.get(&file.source_path) else {
+            continue;
+        };
+        for error in crate::sema::coverage_errors(&file.source, &semantics.analyses) {
+            let diagnostic = Diagnostic {
+                path: file.source_path.clone(),
+                position: error.offset.map(|at| crate::line_col(&file.source, at)),
+                end: error.end.map(|at| crate::line_col(&file.source, at)),
+                message: error.message,
+                code: Some(error.code.as_str().to_string()),
+                suggestions: error.suggestions,
+                labels: Vec::new(),
+            };
+            if !out.contains(&diagnostic) {
+                out.push(diagnostic);
+            }
+        }
+    }
+
     // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
     let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };

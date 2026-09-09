@@ -160,12 +160,20 @@ impl Engine {
         // Scan candidates for the layered filesystem. Membership is not
         // inferred from this walk: the configured TypeScript program admits
         // include/files roots and everything reachable through its graph.
-        let initial =
+        //
+        // The inputs join the scan rather than standing in for it when it
+        // comes back empty. A file the caller named is a root by request —
+        // the same rule the typed report already applies to them — so a
+        // named file the project's own `include` leaves out is still
+        // snapshotted, and still answers for its tt layer.
+        let mut initial =
             match project::project_sources(&root, options.out_dir.as_deref(), &["tt", "ttx"]) {
-                Ok(all) if !all.is_empty() => all,
-                Ok(_) => collected.clone(),
+                Ok(all) => all,
                 Err(e) => return Err(e.to_string()),
             };
+        initial.extend(collected.iter().cloned());
+        initial.sort();
+        initial.dedup();
         // No toolchain is not "no project": the tt layer answers without
         // one, and the missing backend is carried as the typed layer's
         // failure instead ([`Checked::backend_error`]).

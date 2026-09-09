@@ -3,7 +3,7 @@
 use super::*;
 
 /// Turns analysis coverage into positioned tt errors.
-pub(super) fn report_coverage(
+pub(crate) fn report_coverage(
     source: &str,
     analyses: &crate::analysis::PatternAnalyses,
     suppressed: &[usize],
