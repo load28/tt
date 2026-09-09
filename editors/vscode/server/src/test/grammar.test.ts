@@ -482,3 +482,28 @@ test("generated grammar matches its sources (build.mjs --check)", () => {
     stdio: "pipe",
   });
 });
+
+test("a block arm body is a statement position, not an object literal", async () => {
+  // An object-valued arm has to be parenthesized, so a bare brace after
+  // `=>` opens a block. Reading it as an object literal costs `const` and
+  // `return` their keyword scopes and colours the binding as a member.
+  const lines = await tokenize(
+    "source.tt",
+    "const r = match (v) {\n  _ => { const q = 1; return q; },\n};\n",
+  );
+  assertScope(lines, 2, "const", "storage.type.ts");
+  assertScope(lines, 2, "return", "keyword.control.flow.ts");
+  for (const token of lines.flat()) {
+    assert.ok(
+      !token.scopes.includes("meta.objectliteral.ts"),
+      `a block arm was read as an object literal: ${JSON.stringify(token.text)}`,
+    );
+  }
+
+  // The parenthesized object arm keeps its object scopes.
+  const object = await tokenize("source.tt", "const r = match (v) { _ => ({ a: 1 }) };\n");
+  assert.ok(
+    object.flat().some(token => token.scopes.includes("meta.objectliteral.ts")),
+    "a parenthesized object arm is still an object literal",
+  );
+});

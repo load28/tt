@@ -6043,6 +6043,31 @@
           "end": "(?=[,}])",
           "patterns": [
             {
+              "//": [
+                "A block arm body is a statement position, not an object",
+                "literal: an object-valued arm has to be parenthesized, so a",
+                "bare brace after `=>` opens a block."
+              ],
+              "name": "meta.match.arm.block.tt",
+              "begin": "\\{",
+              "end": "\\}",
+              "beginCaptures": {
+                "0": {
+                  "name": "punctuation.definition.block.ts"
+                }
+              },
+              "endCaptures": {
+                "0": {
+                  "name": "punctuation.definition.block.ts"
+                }
+              },
+              "patterns": [
+                {
+                  "include": "#statements"
+                }
+              ]
+            },
+            {
               "include": "#expression"
             }
           ]

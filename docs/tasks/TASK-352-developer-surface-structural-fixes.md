@@ -88,6 +88,8 @@ defect in the layer that owns the behavior.
   extension suite passes with 164 tests.
 - 2026-09-09: Let an unsaved `.tt` buffer have the answers the engine reads
   from its text, checked over real LSP; the suite passes with 165 tests.
+- 2026-09-09: Gave a block arm body its statement scopes in the grammar,
+  checked with the real tokenizer; the suite passes with 166 tests.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -343,6 +345,19 @@ defect in the layer that owns the behavior.
   semantic tokens already did. The typed surfaces still require a real file,
   and go-to-definition resolves a declaration found in an unsaved buffer to
   that document rather than to a file of the synthetic name.
+
+### Issue 14: A block arm body was highlighted as an object literal
+
+- **Symptom**: In `match (v) { _ => { const q = 1; return q; } }` the
+  grammar scoped the braces as `meta.objectliteral.ts`, so `const` and
+  `return` lost their keyword colours and the binding read as an object
+  member.
+- **Cause**: The arm-body rule included only expressions, so the brace fell
+  through to TypeScript's object-literal rule. An object-valued arm has to
+  be parenthesized, so a bare brace after `=>` can only open a block.
+- **Resolution**: The arm body takes a block alternative that includes
+  statements, the way the `result` block rule already does. A parenthesized
+  object arm keeps its object scopes.
 
 ## Verification
 
