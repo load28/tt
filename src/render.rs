@@ -26,6 +26,7 @@
 //!             start: Position { line: 1, col: 1 },
 //!             end: Some(Position { line: 1, col: 14 }),
 //!         }),
+//!         labels: &[],
 //!         suggestions: &[],
 //!     },
 //!     Some("match (shape) {\n}\n"),
@@ -173,6 +174,24 @@ pub struct Span {
     pub end: Option<Position>,
 }
 
+/// A secondary place a diagnostic points at, with its own words — rustc's
+/// labeled spans ("expected because of this", "first declared here").
+///
+/// A label in the diagnostic's own file on one line joins the primary
+/// snippet, underlined with `-` where the primary uses `^`. A label in
+/// another file, or one whose span the snippet cannot draw, degrades to a
+/// `= note:` line naming the place — the same honest fallback rustc uses.
+#[derive(Debug, Clone, Copy)]
+pub struct Label<'a> {
+    /// Where the label points.
+    pub span: Span,
+    /// What this place explains.
+    pub message: &'a str,
+    /// The file the span is in, when it is not the diagnostic's own —
+    /// `None` means [`Report::path`].
+    pub path: Option<&'a str>,
+}
+
 /// One diagnostic in the form [`render`] draws.
 ///
 /// This is deliberately not [`crate::Diagnostic`]: the typed pipeline
@@ -193,6 +212,8 @@ pub struct Report<'a> {
     pub path: &'a str,
     /// Where in the file, when the reporter knows.
     pub span: Option<Span>,
+    /// Secondary places the diagnostic points at, each with its own words.
+    pub labels: &'a [Label<'a>],
     /// How to fix it, drawn as one `= help:` line each.
     pub suggestions: &'a [Suggestion],
 }
@@ -247,6 +268,8 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
                 let _ = write!(out, "\n {arrow} {}", report.path);
             }
         }
+        let all: Vec<&Label<'_>> = report.labels.iter().collect();
+        write_notes(&mut out, report, &all, 0, styles);
         write_suggestions(&mut out, report.suggestions, 0, false, styles);
         return out;
     };
@@ -274,7 +297,34 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
     // underflow.
     let end_line = end.line.min(lines.len().max(1)).max(start.line);
 
-    let width = end_line.max(start.line).to_string().len();
+    // Which labels can join the primary snippet, and which degrade to
+    // notes: same file, one line, inside the text held — and only under a
+    // single-line primary, whose picture has room for more rows.
+    let mut inline: Vec<&Label<'_>> = Vec::new();
+    let mut notes: Vec<&Label<'_>> = Vec::new();
+    for label in report.labels {
+        let line = label.span.start.line;
+        let one_line = label.span.end.is_none_or(|e| e.line == line);
+        if end_line == start.line
+            && label.path.is_none()
+            && one_line
+            && line >= 1
+            && line <= lines.len()
+        {
+            inline.push(label);
+        } else {
+            notes.push(label);
+        }
+    }
+
+    let width = inline
+        .iter()
+        .map(|label| label.span.start.line)
+        .chain([end_line.max(start.line)])
+        .max()
+        .unwrap_or(1)
+        .to_string()
+        .len();
     let _ = write!(
         out,
         "\n{:width$}{} {}:{}:{}\n{}",
@@ -287,7 +337,11 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
         width = width
     );
 
-    if end_line == start.line {
+    if !inline.is_empty() {
+        write_annotated(
+            &mut out, &lines, width, start, end, &inline, severity, styles,
+        );
+    } else if end_line == start.line {
         write_single_line(&mut out, &lines, width, start, end, severity, styles);
     } else {
         write_multi_line(
@@ -295,6 +349,7 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
         );
     }
 
+    write_notes(&mut out, report, &notes, width, styles);
     write_suggestions(&mut out, report.suggestions, width, true, styles);
     out
 }
@@ -335,6 +390,7 @@ pub fn diagnostic(
             message: &diagnostic.message,
             path,
             span,
+            labels: &[],
             suggestions: &diagnostic.suggestions,
         },
         Some(source),
@@ -371,6 +427,7 @@ pub fn compile_error(
             message: &error.message,
             path,
             span,
+            labels: &[],
             suggestions: &[],
         },
         source,
@@ -396,6 +453,24 @@ pub fn engine_diagnostic(
         start: at(start),
         end: diagnostic.end.map(at),
     });
+    let label_paths: Vec<Option<std::borrow::Cow<'_, str>>> = diagnostic
+        .labels
+        .iter()
+        .map(|label| label.path.as_deref().map(|p| p.to_string_lossy()))
+        .collect();
+    let labels: Vec<Label<'_>> = diagnostic
+        .labels
+        .iter()
+        .zip(&label_paths)
+        .map(|(label, path)| Label {
+            span: Span {
+                start: at(label.position),
+                end: Some(at(label.end)),
+            },
+            message: &label.message,
+            path: path.as_deref(),
+        })
+        .collect();
     render(
         &Report {
             // Every diagnostic a checked project reports stops the build;
@@ -405,6 +480,7 @@ pub fn engine_diagnostic(
             message: &diagnostic.message,
             path,
             span,
+            labels: &labels,
             suggestions: &diagnostic.suggestions,
         },
         source,
@@ -533,6 +609,139 @@ fn write_multi_line(
     );
 }
 
+/// The primary span and its same-file labels in one snippet — rustc's
+/// annotated block:
+///
+/// ```text
+/// 11 |     |> Option.mapP((x: number) => String(x))
+///    |        ------------------------------------- the piped value comes from this step
+/// 12 |     |> Option.unwrapOrP(0)
+///    |        ^^^^^^^^^^^^^^^^^^^
+/// ```
+///
+/// Annotated lines are drawn in order; one plain line bridges a gap of
+/// exactly one, a wider gap elides to `...`. A label sharing the primary's
+/// line gets its own underline row beneath the caret row.
+#[allow(clippy::too_many_arguments)]
+fn write_annotated(
+    out: &mut String,
+    lines: &[&str],
+    width: usize,
+    start: Position,
+    end: Position,
+    labels: &[&Label<'_>],
+    severity: &str,
+    styles: Styles,
+) {
+    // One row per underline; rows on one source line draw under one quote
+    // of it, the primary's carets first.
+    struct Row<'a> {
+        line: usize,
+        col: usize,
+        end_col: usize,
+        message: Option<&'a str>,
+    }
+    let mut rows: Vec<Row<'_>> = Vec::with_capacity(labels.len() + 1);
+    rows.push(Row {
+        line: start.line,
+        col: start.col,
+        end_col: end.col,
+        message: None,
+    });
+    for label in labels {
+        let col = label.span.start.col;
+        rows.push(Row {
+            line: label.span.start.line,
+            col,
+            end_col: label.span.end.map_or(col + 1, |e| e.col),
+            message: Some(label.message),
+        });
+    }
+    rows.sort_by_key(|row| (row.line, row.message.is_some(), row.col));
+
+    let mut previous: Option<usize> = None;
+    let mut index = 0;
+    while index < rows.len() {
+        let line = rows[index].line;
+        match previous {
+            Some(p) if line == p + 2 => {
+                let _ = write!(
+                    out,
+                    "\n{} {}",
+                    numbered_bar(p + 1, width, styles),
+                    shown_line(lines, p + 1),
+                );
+            }
+            Some(p) if line > p + 2 => {
+                let _ = write!(
+                    out,
+                    "\n{}",
+                    styles.paint(
+                        styles.gutter,
+                        &format!("{:<width$} |", "...", width = width)
+                    ),
+                );
+            }
+            _ => {}
+        }
+        if previous != Some(line) {
+            let _ = write!(
+                out,
+                "\n{} {}",
+                numbered_bar(line, width, styles),
+                shown_line(lines, line),
+            );
+        }
+        let row = &rows[index];
+        let from = display_col(lines, row.line, row.col);
+        let to = display_col(lines, row.line, row.end_col);
+        let marks = to.saturating_sub(from).max(1);
+        let underline = match row.message {
+            None => styles.paint(severity, &"^".repeat(marks)),
+            Some(_) => styles.paint(styles.gutter, &"-".repeat(marks)),
+        };
+        let _ = write!(
+            out,
+            "\n{} {}{}",
+            bar(width, styles),
+            " ".repeat(from - 1),
+            underline
+        );
+        if let Some(message) = row.message
+            && !message.is_empty()
+        {
+            let _ = write!(out, " {message}");
+        }
+        previous = Some(line);
+        index += 1;
+    }
+}
+
+/// The `= note:` lines — labels the snippet could not draw: a place in
+/// another file, or a span the quoted text cannot underline.
+fn write_notes(
+    out: &mut String,
+    report: &Report<'_>,
+    labels: &[&Label<'_>],
+    width: usize,
+    styles: Styles,
+) {
+    for label in labels {
+        let path = label.path.unwrap_or(report.path);
+        let _ = write!(
+            out,
+            "\n{:width$} = {} {} --> {}:{}:{}",
+            "",
+            styles.paint(styles.help, "note:"),
+            label.message,
+            path,
+            label.span.start.line,
+            label.span.start.col,
+            width = width
+        );
+    }
+}
+
 /// The `= help:` lines. A suggestion that names a replacement shows it, so
 /// the reader can apply the fix without opening an editor's lightbulb.
 fn write_suggestions(
@@ -564,7 +773,11 @@ fn write_suggestions(
             // machine applies are unchanged — they travel in the wire
             // form, not in this drawing.
             let text = edit.replacement.trim_matches('\n');
-            if text.contains('\n') {
+            if text.is_empty() {
+                // The sentence already names a deletion. Empty backticks
+                // would depict no source and make the actionable advice
+                // harder to read.
+            } else if text.contains('\n') {
                 // A fix that spans lines is quoted the way the snippet
                 // above quotes source, so it reads as code rather than as
                 // a sentence with newlines in it. Each line keeps the
@@ -581,260 +794,4 @@ fn write_suggestions(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::diagnostics::Edit;
-
-    const SOURCE: &str = "variant Shape { Circle(radius: number), Rect }\ndeclare const s: Shape;\nconst a = match (s) {\n  Circel(r) => r,\n};\n";
-
-    fn at(line: usize, col: usize) -> Position {
-        Position { line, col }
-    }
-
-    fn report<'a>(span: Option<Span>, suggestions: &'a [Suggestion]) -> Report<'a> {
-        Report {
-            severity: Severity::Error,
-            code: Some("unknown-case"),
-            message: "variant Shape has no case `Circel`",
-            path: "shapes.tt",
-            span,
-            suggestions,
-        }
-    }
-
-    #[test]
-    fn no_styling_writes_the_same_bytes_it_always_has() {
-        // The contract `tests/fixtures/` rests on: adding colour cannot
-        // move a byte of the uncoloured picture.
-        let span = Span {
-            start: at(4, 3),
-            end: Some(at(4, 9)),
-        };
-        let fix = [Suggestion {
-            message: "a case with a similar name exists".to_string(),
-            edit: Some(Edit {
-                start: 0,
-                end: 0,
-                replacement: "Circle".to_string(),
-            }),
-        }];
-        let plain = render(&report(Some(span), &fix), Some(SOURCE), Styles::PLAIN);
-        assert!(!plain.contains('\x1b'));
-        let painted = render(&report(Some(span), &fix), Some(SOURCE), Styles::ANSI);
-        assert_eq!(strip(&painted), plain);
-    }
-
-    #[test]
-    fn colour_separates_severity_frame_and_advice() {
-        let span = Span {
-            start: at(4, 3),
-            end: Some(at(4, 9)),
-        };
-        let fix = [Suggestion {
-            message: "a case with a similar name exists".to_string(),
-            edit: None,
-        }];
-        let out = render(&report(Some(span), &fix), Some(SOURCE), Styles::ANSI);
-        assert!(
-            out.starts_with("\x1b[1;31merror[unknown-case]\x1b[0m: "),
-            "{out}"
-        );
-        assert!(out.contains("\x1b[1;34m -->\x1b[0m") || out.contains("\x1b[1;34m-->\x1b[0m"));
-        assert!(out.contains("\x1b[1;31m^^^^^^\x1b[0m"), "{out}");
-        assert!(out.contains("\x1b[1;36mhelp:\x1b[0m"), "{out}");
-    }
-
-    #[test]
-    fn a_warning_is_painted_in_its_own_colour() {
-        let out = render(
-            &Report {
-                severity: Severity::Warning,
-                code: None,
-                message: "the output failed the TypeScript self-check",
-                path: "shapes.tt",
-                span: None,
-                suggestions: &[],
-            },
-            Some(SOURCE),
-            Styles::ANSI,
-        );
-        assert!(out.starts_with("\x1b[1;33mwarning\x1b[0m: "), "{out}");
-    }
-
-    #[test]
-    fn a_multi_line_span_survives_the_paint_unchanged() {
-        let source = "const a = match (s) {\n  Circel(r) => r,\n};\n";
-        let span = Span {
-            start: at(1, 11),
-            end: Some(at(3, 2)),
-        };
-        let plain = render(&report(Some(span), &[]), Some(source), Styles::PLAIN);
-        let painted = render(&report(Some(span), &[]), Some(source), Styles::ANSI);
-        assert_eq!(strip(&painted), plain);
-    }
-
-    /// Every SGR sequence removed — what the drawing says once the colour
-    /// is taken off it.
-    fn strip(text: &str) -> String {
-        let mut out = String::new();
-        let mut rest = text;
-        while let Some(at) = rest.find('\x1b') {
-            out.push_str(&rest[..at]);
-            let Some(end) = rest[at..].find('m') else {
-                break;
-            };
-            rest = &rest[at + end + 1..];
-        }
-        out.push_str(rest);
-        out
-    }
-
-    #[test]
-    fn a_single_line_span_underlines_exactly_the_construct() {
-        let span = Span {
-            start: at(4, 3),
-            end: Some(at(4, 9)),
-        };
-        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
-        assert_eq!(
-            out,
-            "error[unknown-case]: variant Shape has no case `Circel`\n \
-             --> shapes.tt:4:3\n  \
-             |\n\
-             4 |   Circel(r) => r,\n  \
-             |   ^^^^^^",
-        );
-    }
-
-    #[test]
-    fn a_multi_line_span_brackets_the_lines_it_covers() {
-        let span = Span {
-            start: at(3, 11),
-            end: Some(at(5, 2)),
-        };
-        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
-        assert!(out.contains("3 |   const a = match (s) {\n"), "{out}");
-        assert!(out.contains("  |  ___________^\n"), "{out}");
-        assert!(out.contains("4 | |   Circel(r) => r,\n"), "{out}");
-        assert!(out.ends_with("  | |_^"), "{out}");
-    }
-
-    #[test]
-    fn a_suggestion_shows_its_replacement() {
-        let span = Span {
-            start: at(4, 3),
-            end: Some(at(4, 9)),
-        };
-        let fix = [Suggestion {
-            message: "a case with a similar name exists".to_string(),
-            edit: Some(Edit {
-                start: 0,
-                end: 0,
-                replacement: "Circle".to_string(),
-            }),
-        }];
-        let out = render(&report(Some(span), &fix), Some(SOURCE), Styles::PLAIN);
-        assert!(
-            out.ends_with("  = help: a case with a similar name exists: `Circle`"),
-            "{out}",
-        );
-    }
-
-    #[test]
-    fn advice_with_no_edit_still_renders_as_help() {
-        let fix = [Suggestion {
-            message: "add the missing arms or a final `_` arm".to_string(),
-            edit: None,
-        }];
-        let out = render(&report(None, &fix), None, Styles::PLAIN);
-        assert!(
-            out.ends_with(" = help: add the missing arms or a final `_` arm"),
-            "{out}",
-        );
-    }
-
-    #[test]
-    fn without_source_the_header_and_location_still_render() {
-        let span = Span {
-            start: at(4, 3),
-            end: Some(at(4, 9)),
-        };
-        let out = render(&report(Some(span), &[]), None, Styles::PLAIN);
-        assert_eq!(
-            out,
-            "error[unknown-case]: variant Shape has no case `Circel`\n --> shapes.tt:4:3",
-        );
-    }
-
-    #[test]
-    fn a_positionless_diagnostic_names_only_its_file() {
-        let out = render(
-            &Report {
-                severity: Severity::Warning,
-                code: None,
-                message: "the output failed the TypeScript self-check",
-                path: "shapes.tt",
-                span: None,
-                suggestions: &[],
-            },
-            Some(SOURCE),
-            Styles::PLAIN,
-        );
-        assert_eq!(
-            out,
-            "warning: the output failed the TypeScript self-check\n --> shapes.tt",
-        );
-    }
-
-    #[test]
-    fn tabs_expand_so_the_caret_lands_under_its_construct() {
-        let source = "f();\n\t\tCircel(r);\n";
-        let span = Span {
-            start: at(2, 3),
-            end: Some(at(2, 9)),
-        };
-        let out = render(&report(Some(span), &[]), Some(source), Styles::PLAIN);
-        let lines: Vec<&str> = out.lines().collect();
-        let text = lines.iter().find(|l| l.starts_with("2 |")).unwrap();
-        let carets = lines.iter().find(|l| l.contains('^')).unwrap();
-        assert_eq!(
-            text.find("Circel"),
-            carets.find('^'),
-            "caret and construct must start in the same column\n{out}",
-        );
-    }
-
-    #[test]
-    fn an_end_before_its_start_still_renders_one_caret() {
-        let span = Span {
-            start: at(4, 3),
-            end: Some(at(2, 1)),
-        };
-        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
-        assert!(out.ends_with("  |   ^"), "{out}");
-    }
-
-    #[test]
-    fn a_span_past_the_end_of_a_stale_buffer_does_not_panic() {
-        let span = Span {
-            start: at(400, 90),
-            end: Some(at(900, 3)),
-        };
-        let out = render(&report(Some(span), &[]), Some(SOURCE), Styles::PLAIN);
-        assert!(out.contains("--> shapes.tt:400:90"), "{out}");
-    }
-
-    #[test]
-    fn a_long_span_elides_its_middle() {
-        let source: String = (1..=40).map(|n| format!("line {n}\n")).collect();
-        let span = Span {
-            start: at(2, 1),
-            end: Some(at(30, 2)),
-        };
-        let out = render(&report(Some(span), &[]), Some(&source), Styles::PLAIN);
-        assert!(out.contains("| |_^"), "{out}");
-        assert!(out.contains("... | |"), "{out}");
-        assert!(out.contains("30 | | line 30"), "{out}");
-        assert!(!out.contains("line 20"), "the middle must be elided\n{out}");
-    }
-}
+mod tests;

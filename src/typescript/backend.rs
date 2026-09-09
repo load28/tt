@@ -28,6 +28,41 @@
 
 use std::path::PathBuf;
 
+/// Why the TypeScript boundary could not answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FailureKind {
+    /// The required process or compatible toolchain is not available.
+    Unavailable,
+    /// The compiler boundary ran and broke its own protocol or execution
+    /// contract. This is a compiler failure, never a source diagnostic.
+    Internal,
+}
+
+/// A failure of the TypeScript boundary, classified before it reaches a
+/// consumer so a missing installation is never presented as a compiler bug
+/// and a backend crash is never presented as a missing installation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Failure {
+    pub kind: FailureKind,
+    pub message: String,
+}
+
+impl Failure {
+    pub fn unavailable(message: impl Into<String>) -> Self {
+        Self {
+            kind: FailureKind::Unavailable,
+            message: message.into(),
+        }
+    }
+
+    pub fn internal(message: impl Into<String>) -> Self {
+        Self {
+            kind: FailureKind::Internal,
+            message: message.into(),
+        }
+    }
+}
+
 /// One module of the project as TypeScript should see it: the ordinary
 /// TypeScript an `.tt` file lowers to, at the path that `.tt` file occupies
 /// with a `.ts` extension.
@@ -83,11 +118,38 @@ pub(crate) struct SymbolQuery {
     pub position: usize,
 }
 
+/// Whether the type at a position is definitely the two-case Result shape.
+///
+/// This is deliberately structural: aliases and generic instantiations are
+/// accepted when the checker proves both literal `kind` cases and their
+/// payload fields; unions, `any`, and type parameters produce no answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResultShapeQuery {
+    pub module: PathBuf,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// Context expected at uses of a generated, unannotated value binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextualSlotQuery {
+    pub module: PathBuf,
+    /// UTF-16 end of the declaration identifier, where an annotation belongs.
+    pub declaration_end: usize,
+}
+
+/// A type expressed in the lexical scope of the generated declaration.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ContextualSlotType {
+    pub index: usize,
+    pub annotation: String,
+}
+
 /// Everything asked of one project graph, in one round trip.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Query {
-    /// The lowered `.tt` modules. Their text is served from memory —
-    /// nothing is written to disk.
+    /// Lowered tt modules and unsaved host sources. Their text is served
+    /// from memory; nothing is written to disk.
     pub modules: Vec<Module>,
     /// Hand-written `.ts` files of the project, by path: the compiler reads
     /// them from disk, where they already are. Listing them matters only
@@ -99,6 +161,10 @@ pub(crate) struct Query {
     pub literals: Vec<LiteralQuery>,
     pub tags: Vec<TagQuery>,
     pub symbols: Vec<SymbolQuery>,
+    pub result_shapes: Vec<ResultShapeQuery>,
+    pub contextual_slots: Vec<ContextualSlotQuery>,
+    /// Skip diagnostics while iterating contextual facts.
+    pub contextual_only: bool,
     /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.
@@ -121,6 +187,20 @@ pub(crate) struct Diagnostic {
     /// expression and its contextual type. The raw message remains the
     /// lossless fallback; renderers prefer these facts.
     pub mismatch: Option<TypeMismatch>,
+    /// The checker's own related places — "the expected type comes from
+    /// this declaration", "first declared here" — each in the coordinates
+    /// of the file it names. Empty when the checker offered none.
+    pub related: Vec<RelatedInformation>,
+}
+
+/// One place the checker relates a diagnostic to, in that file's own
+/// UTF-16 coordinates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RelatedInformation {
+    pub file: PathBuf,
+    pub start: usize,
+    pub end: usize,
+    pub message: String,
 }
 
 /// A checker-proven type mismatch, independent of the syntax that placed
@@ -136,6 +216,11 @@ pub(crate) struct TypeMismatch {
     /// Minimal incompatible leaves found by descending through unions and
     /// matching generic aliases. Empty means no safe reduction was found.
     pub differences: Vec<TypeDifference>,
+    /// The declaration of the symbol used as the mismatched expression,
+    /// when the checker resolved one. This lets the reporter connect a
+    /// later diagnostic to the lowering that introduced the value without
+    /// guessing from identifier text or source proximity.
+    pub declaration: Option<RelatedInformation>,
 }
 
 /// The smallest expected/found pair the checker can prove incompatible.
@@ -209,12 +294,24 @@ pub(crate) struct Declaration {
 /// The answers to one [`Query`].
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Answers {
+    /// Lowered modules that TypeScript admitted to the configured program.
+    /// `None` means the backend did not run; an empty program is different
+    /// from an unavailable answer.
+    pub project_modules: Option<Vec<PathBuf>>,
     pub diagnostics: Vec<Diagnostic>,
     pub literal_missing: Vec<LiteralMissing>,
     pub tag_missing: Vec<TagMissing>,
     pub tag_members: Vec<TagMembers>,
     pub resolutions: Vec<Resolution>,
+    pub result_shapes: Vec<ResultShape>,
     pub declarations: Vec<Declaration>,
+    pub contextual_slots: Vec<ContextualSlotType>,
+}
+
+/// A checker-proven Result shape answer. Absent answers remain unknown.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResultShape {
+    pub index: usize,
 }
 
 /// A source of TypeScript semantics for one project.
@@ -233,5 +330,5 @@ pub(crate) trait TypeScriptBackend {
         tsconfig: Option<&std::path::Path>,
         root: &std::path::Path,
         query: &Query,
-    ) -> Result<Answers, String>;
+    ) -> Result<Answers, Failure>;
 }

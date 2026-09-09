@@ -6,16 +6,57 @@ use ttc::ExternVariant;
 use ttc::hir::{self, FileId};
 use ttc::resolve::{self, DefKind, Namespace, Res, Resolution, UseKind};
 
-fn resolved(source: &str, externs: &[ExternVariant]) -> (hir::HirFile, Resolution) {
+fn resolved(source: &str, externs: &[resolve::ExternDecl]) -> (hir::HirFile, Resolution) {
     let mut hir = hir::lower_source(FileId(0), source);
-    let decls: Vec<resolve::ExternDecl> = externs.iter().map(Into::into).collect();
-    let resolution = resolve::resolve_file(&mut hir, &decls);
+    let resolution = resolve::resolve_file(&mut hir, externs);
     (hir, resolution)
+}
+
+fn tags(name: &str, variants: &[&str], from: Option<&str>) -> resolve::ExternDecl {
+    resolve::ExternDecl {
+        name: name.to_string(),
+        from: from.map(str::to_string),
+        generics: String::new(),
+        variants: variants
+            .iter()
+            .map(|tag| ((*tag).to_string(), None))
+            .collect(),
+    }
+}
+
+fn card_decl() -> resolve::ExternDecl {
+    resolve::ExternDecl {
+        name: "PaymentMethod".to_string(),
+        from: Some("./domain.tt".to_string()),
+        generics: String::new(),
+        variants: vec![(
+            "Card".to_string(),
+            Some(vec![("brand".to_string(), false, "string".to_string())]),
+        )],
+    }
 }
 
 fn span_text<'s>(source: &'s str, hir: &hir::HirFile, node: hir::NodeId) -> &'s str {
     let span = hir.source_map.node_span(node).expect("node has a span");
     &source[span.start..span.end]
+}
+
+#[test]
+fn the_legacy_extern_variant_literal_remains_a_supported_input() {
+    let legacy = ExternVariant {
+        name: "Token".to_string(),
+        tags: vec!["Word".to_string(), "Punct".to_string()],
+        from: Some("./token.tt".to_string()),
+    };
+    let declaration = resolve::ExternDecl::from(&legacy);
+    assert_eq!(declaration.name, "Token");
+    assert_eq!(declaration.variants.len(), 2);
+    assert!(
+        declaration
+            .variants
+            .iter()
+            .all(|(_, fields)| fields.is_none())
+    );
 }
 
 #[test]
@@ -76,11 +117,7 @@ fn locals_shadow_imports_shadow_builtins() {
     // an imported `Result` would shadow the built-in the same way.
     let src = "variant Option { Nothing, Just(v: number) }\n\
         const a = match (o) { Just(v) => v, Nothing => 0 };\n";
-    let externs = [ExternVariant {
-        name: "Token".to_string(),
-        tags: vec!["Num".to_string(), "Eof".to_string()],
-        from: Some("./token.tt".to_string()),
-    }];
+    let externs = [tags("Token", &["Num", "Eof"], Some("./token.tt"))];
     let (hir, resolution) = resolved(src, &externs);
     let option = resolution.lookup(Namespace::Type, "Option").unwrap();
     let DefKind::Variant(data) = &resolution.defs[option].kind else {
@@ -120,16 +157,39 @@ fn locals_shadow_imports_shadow_builtins() {
 fn an_import_alias_is_the_name_in_scope() {
     // The CLI hands the resolver the alias-applied name (`T` for
     // `import { Token as T }`) — resolution happens under it.
-    let externs = [ExternVariant {
-        name: "T".to_string(),
-        tags: vec!["Num".to_string(), "Eof".to_string()],
-        from: Some("./token.tt".to_string()),
-    }];
+    let externs = [tags("T", &["Num", "Eof"], Some("./token.tt"))];
     let src = "const v = match (t) { Num => 1, Eof => 0 };\n";
     let (hir, resolution) = resolved(src, &externs);
     let site_id = hir.sites.iter().next().unwrap().0;
     let subject = resolution.sites[&site_id].subjects[0].expect("identified");
     assert_eq!(resolution.defs[subject].name, "T");
+}
+
+#[test]
+fn imported_payload_fields_resolve_with_their_source_declaration() {
+    let externs = [card_decl()];
+    let source = "const value = match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n";
+    let (hir, resolution) = resolved(source, &externs);
+    let unresolved = resolution.unresolved.first().expect("field misspelling");
+    assert_eq!(unresolved.kind, UseKind::Field);
+    assert_eq!(unresolved.name, "brnad");
+    assert_eq!(unresolved.suggestion, "brand");
+    assert_eq!(span_text(source, &hir, unresolved.node), "brnad");
+}
+
+#[test]
+fn a_single_case_near_miss_without_an_owner_is_not_reported() {
+    let externs = [card_decl()];
+    let source = "const fee = match (method) { Crad(brand) => 1, _ => 0 };\n";
+    let (_, resolution) = resolved(source, &externs);
+    assert!(resolution.unresolved.is_empty());
+
+    let ambiguous = ["Left", "Right"].map(|name| tags(name, &["Card"], None));
+    let (_, resolution) = resolved(source, &ambiguous);
+    assert!(
+        resolution.unresolved.is_empty(),
+        "an ambiguous replacement is not a diagnostic"
+    );
 }
 
 #[test]
@@ -184,16 +244,38 @@ fn nested_patterns_resolve_against_the_fields_declared_type() {
 }
 
 #[test]
-fn a_single_pattern_site_reports_only_a_unique_one_edit_miss() {
-    // `Circel` is one transposition from Shape's `Circle` and nothing
-    // else is that close → reported. `Cxxcle` is not → silence.
+fn a_nested_generic_payload_waits_for_checker_owned_type_evidence() {
+    let source = "variant PaymentMethod { Card(brand: string), Cash }\n\
+        const brand = match (result) {\n\
+        \x20 Ok(value: Card(brnd)) => brnd,\n\
+        \x20 Ok(value) => \"other\",\n\
+        \x20 Err(error) => \"error\",\n\
+        };\n";
+    let (_, resolution) = resolved(source, &[]);
+    assert!(resolution.unresolved.is_empty());
+
+    let ambiguous = "variant PaymentMethod { Card(brand: string) }\n\
+        variant Identity { Card(number: string) }\n\
+        const brand = match (result) {\n\
+        \x20 Ok(value: Card(brnd)) => brnd,\n\
+        \x20 Err(error) => \"error\",\n\
+        };\n";
+    let (_, resolution) = resolved(ambiguous, &[]);
+    assert!(
+        resolution.unresolved.is_empty(),
+        "two exact Card declarations provide no source-level owner"
+    );
+}
+
+#[test]
+fn a_single_pattern_site_does_not_infer_an_owner_from_spelling() {
+    // Neither spelling proves that the value belongs to Shape. The typed
+    // checker owns the comparison against the subject's actual type.
     let src = "variant Shape { Circle(radius: number), Empty }\n\
         if let Circel(radius) = s {\n  use(radius);\n}\n\
         if let Cxxcle(radius) = s {\n  use(radius);\n}\n";
     let (_, resolution) = resolved(src, &[]);
-    assert_eq!(resolution.unresolved.len(), 1);
-    assert_eq!(resolution.unresolved[0].name, "Circel");
-    assert_eq!(resolution.unresolved[0].kind, UseKind::Case);
+    assert!(resolution.unresolved.is_empty());
 }
 
 #[test]

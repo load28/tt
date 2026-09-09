@@ -3,7 +3,7 @@
 TypeScript의 타입 추론이 Rust에 미치지 못하는 지점들을 tsc 실측으로
 분류하고, 그중 tt이 — `match`처럼 런타임 코드를 방출하는 구문을 포함해 —
 메울 수 있는 것들을 기능으로 제안합니다. 이 문서는 제안이며 규범이 아닙니다.
-채택된 항목은 구현 태스크에서 [`docs/reference/`](../reference/)로 옮깁니다.
+채택된 항목은 구현 태스크에서 [`docs/ai/`](../ai/)로 옮깁니다.
 
 실측 환경: tsc 6.0.2, `--strict --noEmit --target es2022`.
 
@@ -153,7 +153,7 @@ Rust에는 대응 문제가 없습니다(리터럴이 아니라 enum을 쓰므�
 ## 3. 제안 P1: 튜플 match — 다중 스크루티니와 곱집합 소진성
 
 > **상태: 구현됨** (TASK-044) — 규범은
-> [`language.md` §3.7](../reference/language.md#37-튜플-match--다중-스크루티니).
+> [`tt.md` match](../ai/tt.md#match).
 > 방출은 중첩 switch 대신 if-체인으로 확정 (§3.4와 다름 — 구현 태스크 결정 2).
 
 다섯 제안 중 가장 큽니다. **곱집합 소진성은 TS가 어떤 타입 트릭으로도
@@ -229,7 +229,7 @@ const step = ((() => {
 ## 4. 제안 P2: 중첩 패턴 — `Ok(value: Some(v))`
 
 > **상태: 구현됨** (TASK-045) — 규범은
-> [`language.md` §3.2/§3.6](../reference/language.md#32-의미). 유닛 케이스
+> [`tt.md` match](../ai/tt.md#match). 유닛 케이스
 > 중첩은 별칭과의 문법 충돌 때문에 괄호 필수(`value: None()`)로 확정.
 
 ### 4.1 문법
@@ -269,7 +269,7 @@ G4에서 봤듯 이 조건 체인 형태는 tsc가 완전하게 좁히므로 타
 > **갱신**: 아래 v1 규칙은 더 이상 구현이 아니다. TASK-103이 소진성을
 > usefulness 알고리즘으로 바꾸면서 중첩 패턴은 **안쪽까지 검사되고**, 빠진 값은
 > 패턴으로 지목된다(`missing "Ok(value: None)"`). 규범은
-> [`language.md` §3.6](../reference/language.md#36-소진성-검사).
+> [`tt.md` match](../ai/tt.md#match).
 
 중첩 패턴이 달린 암은 **가드 암과 동일하게 케이스를 커버하지 못합니다**
 (내부 태그가 다를 수 있으므로). 위 예시가 검사를 통과하려면
@@ -328,7 +328,7 @@ switch ($tt_m) { case "ArrowUp": { return (-1); } ... default: { return (NaN); }
 ## 6. 제안 P4: `if let` — 조건부 스코프의 값 추출
 
 > **상태: 구현됨** (TASK-046) — 규범은
-> [`language.md` §6.5](../reference/language.md#65-if-let-문--조건부-값-추출).
+> [`tt.md` if let](../ai/tt.md#if-let).
 > 제안과 달리 중첩 패턴도 지원하고, 표현식 위치 금지는 sema의 문맥 구분
 > (Top/Stmt/Expr)으로 강제한다.
 
@@ -369,37 +369,42 @@ let-else가 "불일치 시 반드시 이탈"이라면 `if let`은 이탈 의무�
 
 ---
 
-## 7. 제안 P5: `is` 패턴 — `unknown`과 클래스 계층 match
+## 7. P5: `is` patterns for `unknown` and class hierarchies
 
-### 7.1 문법과 의미
+### 7.1 Syntax and semantics
 
 ```tt
 const msg = match (err) {
-  is SyntaxError(message)  => `bad syntax: ${message}`,
+  is SyntaxError { message } => `bad syntax: ${message}`,
   is RangeError | is TypeError => "bad value",
-  is Error(message)        => message,
+  is Error { message }     => message,
   _                        => String(err),
 };
 ```
 
-패턴 앞의 `is` 키워드(문맥 키워드 — 태그 자리 뒤에 식별자가 또 오는 형태는
-현재 문법에 없음)가 instanceof 매치를 나타냅니다. 선언 순서대로 검사하므로
-서브클래스를 위에 씁니다. 클래스 계층은 열려 있어 소진성 검사가 원리상
-불가능하므로 **`_` 암 필수**입니다(ttc 구조 검사). `is`와 태그 패턴은 한
-match에서 혼용 불가.
+`is` is contextual within match-arm patterns. Its constructor is an identifier
+or dotted path and its runtime meaning is JavaScript `instanceof`. Arms run in
+source order. Because class hierarchies are open, every match containing `is`
+requires a final `_` arm. Literal and `is` arms may mix; tag and tuple patterns
+may not join that match. Type-only alternatives use `is A | is B`; alternatives
+cannot bind properties.
 
-### 7.2 방출
+### 7.2 Lowering
 
-if-체인 IIFE(가드 기계 재사용) + instanceof + 물질화:
+The match owner receives a result slot and an ordered conditional region. No
+IIFE or expression helper is emitted:
 
 ```ts
-if ($tt_m instanceof SyntaxError) { const { message } = $tt_m; return (`bad syntax: ${message}`); }
+if ($tt_m instanceof SyntaxError) { const { message } = $tt_m; $tt_v0 = `bad syntax: ${message}`; break; }
 ```
 
-instanceof는 tsc의 표준 내로잉이므로 구조 분해가 타입 트릭 없이 통과합니다.
-바인딩은 태그 패턴과 같은 이름 기준이며, 좁혀진 클래스의 프로퍼티명과
-일치해야 합니다(불일치는 tsc 책임 — G6의 값 자체가 `unknown`인 경우
-`instanceof`가 유일한 표준 좁히기 수단이라는 점이 이 제안의 존재 이유입니다).
+The `instanceof` branch lets TypeScript narrow the value before ordinary
+`const` destructuring. Property existence and types remain TypeScript's
+responsibility. Direct block-arm returns deliver the slot; nested-function
+returns remain JavaScript returns. Cross-arm `break` and `continue` are
+rejected. Host lowering owns conditional operations and repeated loop tests;
+contexts with no sound statement owner are diagnosed instead of hidden behind
+a closure.
 
 ---
 

@@ -8,6 +8,12 @@
 
 ### Added
 
+- **Class patterns and closure-free expression matches** (TASK-301). `match`
+  accepts ordered `is Type`, dotted constructor paths, property bindings, and
+  type-only alternatives. Accepted expression matches lower through explicit
+  host-owned statements without IIFEs or `$tt_expr`; loop tests and
+  short-circuit operations preserve their native evaluation contracts.
+
 - **파이프라인에 JavaScript 방식 optional postfix step을 추가한다** (TASK-250).
   `value |> ?.name`, `?.[key]`, `?.(args)`와 이어지는 member·index·call tail을
   지원한다. optional step은 해당 tail만 단락 평가하며 다음 `|>` step은
@@ -75,7 +81,7 @@
   - `EmitAnchor`가 점이 아니라 span(`src..src_end`)이 됐다 — 글루에서 난
     타입 에러는 그 글루를 쓴 구문의 텍스트를 덮는다.
   - 소진되지 않은 match는 `match (스크루티니)`를, 중복 암·오타 이름·`val`
-    위반은 그 이름을 덮는다 ([`errors.md`](docs/reference/errors.md#진단의-범위)).
+    위반은 그 이름을 덮는다 ([`tt.md` Errors](docs/ai/tt.md#errors)).
 
 - **생성물 자가 검사 실패가 `.tt`의 위치를 갖는다** (TASK-116). 거의 맞은 tt
   구문(스크루티니 괄호 누락, `try`의 `;` 누락)은 계약대로 통과 영역으로
@@ -274,7 +280,7 @@
   - 보고 조건은 "해석 실패"가 아니라 **"고칠 이름을 댈 수 있음"** 이다. 태그
     패턴은 손으로 쓴 `kind` 유니언에도 쓸 수 있으므로(`language.md` §3.2),
     선언 표에 없는 태그가 곧 오류는 아니다. 오타가 아닌 틀린 이름은 타입이
-    필요하므로 검사하지 않는다 ([§3.10](docs/reference/language.md)).
+    필요하므로 검사하지 않는다 ([`tt.md` match](docs/ai/tt.md#match)).
 
 ### Changed
 

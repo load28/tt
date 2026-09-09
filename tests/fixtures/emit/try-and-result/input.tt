@@ -6,10 +6,10 @@ declare function getCompany(id: string): TResult<{ title: string }, string>;
 
 export function load(id: string): TResult<{ name: string; title: string }, string> {
   const both = result {
-    const user <- getUser(id);
+    const user = try getUser(id);
     const name = user.name;
-    const company <- getCompany(user.companyId);
-    { name, title: company.title }
+    const company = try getCompany(user.companyId);
+    return { name, title: company.title };
   };
   const value = try both;
   return Result.Ok(value);

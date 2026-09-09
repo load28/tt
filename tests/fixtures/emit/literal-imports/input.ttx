@@ -1,0 +1,12 @@
+import type { Model } from './model.tt';
+export type LazyView = typeof import('./view.ttx');
+export const load = () => import(/* retained */ './model.tt');
+export const withOptions = () => import('./data.tt', { with: { type: 'json' } });
+export const computed = (suffix: string) => import('./model.tt' + suffix);
+export const view = <button onClick={() => import('./view.ttx')}>Load</button>;
+export async function selected(flag: boolean) {
+  return match (flag) {
+    true => await import('./model.tt'),
+    false => await import('./fallback.tt'),
+  };
+}

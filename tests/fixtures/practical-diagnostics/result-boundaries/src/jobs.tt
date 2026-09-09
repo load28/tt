@@ -1,0 +1,24 @@
+import type { TResult } from "@tt/std";
+
+interface Job { id: string }
+declare function fetchJob(): TResult<Job, "offline">;
+declare function persist(job: Job): void;
+
+export const queued = result { //~ ERROR[result-no-success-value] can reach the end of its body without a success value
+  const job = try fetchJob();
+  persist(job);
+};
+
+export function notify(): void {
+  result { //~ ERROR[result-value-discarded] its `Err` would be discarded
+    const job = try fetchJob();
+    return job.id;
+  };
+}
+
+export class Worker {
+  constructor() {
+    const job = try fetchJob(); //~ ERROR[try-placement] cannot be used in a constructor or generator
+    persist(job);
+  }
+}

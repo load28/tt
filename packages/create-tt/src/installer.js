@@ -24,6 +24,7 @@ const versions = {
 
 export function dependencyChannel(packageVersion) {
   if (/-dev\./.test(packageVersion)) return 'next'
+  if (/-beta(?:\.|$)/.test(packageVersion)) return 'beta'
   if (/-rc(?:\.|$)/.test(packageVersion)) return 'rc'
   return 'latest'
 }
@@ -107,8 +108,8 @@ export async function createProject(options) {
     type: 'module',
     scripts: {
       dev: 'vite',
-      build: 'ttc --check-types src && vite build',
-      check: 'ttc --check-types src',
+      build: 'tsc -p tsconfig.json --runExternalCode && vite build',
+      check: 'tsc -p tsconfig.json --runExternalCode',
     },
     devDependencies: {
       '@openload28/tt-lang': versions['@openload28/tt-lang'],
@@ -123,7 +124,7 @@ export async function createProject(options) {
   await writeFile(join(root, 'index.html'), indexHtml)
   await writeFile(join(root, 'src/main.ts'), "import './app.tt'\n")
   await writeFile(join(root, 'src/app.tt'), starterSource)
-  await writeFile(join(root, '.gitignore'), 'node_modules/\ndist/\n.tt-types/\n')
+  await writeFile(join(root, '.gitignore'), 'node_modules/\ndist/\n')
   if (options.registry) {
     await writeFile(join(root, 'bunfig.toml'), `[install]\nregistry = ${JSON.stringify(options.registry)}\n`)
   }
@@ -144,7 +145,11 @@ export async function initializeExisting(options) {
   devDependencies.typescript ??= versions.typescript
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
-  manifest.scripts['tt:check'] ??= 'ttc --check-types src'
+  const typeConfig = 'tsconfig.tt.json'
+  manifest.scripts['tt:check'] ??= `tsc -p ${typeConfig} --runExternalCode`
+
+  const baseConfig = existsSync(join(root, 'tsconfig.json')) ? './tsconfig.json' : undefined
+  const generated = [[typeConfig, `${JSON.stringify(tsconfig(baseConfig), null, '  ')}\n`]]
 
   const files = []
   let manualModule
@@ -156,16 +161,27 @@ export async function initializeExisting(options) {
     if (bundler === 'esbuild') {
       manualModule = adapter.module
     } else {
-      await writeFile(join(root, adapter.wrapper), wrapperConfig(adapter.module, base))
+      generated.push([adapter.wrapper, wrapperConfig(adapter.module, base)])
       files.push(adapter.wrapper)
       manifest.scripts['tt:dev'] ??= `${adapter.commands.dev} --config ${adapter.wrapper}`
-      manifest.scripts['tt:build'] ??= `ttc --check-types src && ${adapter.commands.build} --config ${adapter.wrapper}`
+      manifest.scripts['tt:build'] ??= `tsc -p ${typeConfig} --runExternalCode && ${adapter.commands.build} --config ${adapter.wrapper}`
     }
   } else {
     manifest.scripts['tt:build'] ??= 'ttc -o .tt-build src'
   }
 
+  // Validate the complete output set before changing any project files.
+  // Identical generated files make repeated init safe; customized files
+  // require an explicit user decision outside the initializer.
+  for (const [file, content] of generated) {
+    const path = join(root, file)
+    if (existsSync(path) && await readFile(path, 'utf8') !== content) {
+      throw new Error(`refusing to overwrite existing config: ${path}`)
+    }
+  }
+  for (const [file, content] of generated) await writeFile(join(root, file), content)
   await writeJson(manifestPath, manifest, indentation(source))
+  files.push(typeConfig)
   return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule }
 }
 
@@ -259,28 +275,36 @@ function runScript(packageManager, script) {
 function wrapperConfig(moduleName, base) {
   const baseImport = base ? `import base from './${base}'\n` : 'const base = {}\n'
   return `import tt from '${moduleName}'\n${baseImport}
-const addRl = (config = {}) => Array.isArray(config)
-  ? config.map(addRl)
+const addTt = (config = {}) => Array.isArray(config)
+  ? config.map(addTt)
   : { ...config, plugins: [tt(), ...(config.plugins ?? [])] }
 
 export default typeof base === 'function'
-  ? async (...args) => addRl(await base(...args))
-  : Promise.resolve(base).then(addRl)
+  ? async (...args) => addTt(await base(...args))
+  : Promise.resolve(base).then(addTt)
 `
 }
 
-function tsconfig() {
-  return {
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'Preserve',
-      moduleResolution: 'Bundler',
-      strict: true,
-      noEmit: true,
-      skipLibCheck: true,
-    },
-    include: ['src', 'vite.config.ts'],
+function tsconfig(extendsConfig) {
+  const config = {
+    ...(extendsConfig
+      ? { extends: extendsConfig, compilerOptions: { noEmit: true } }
+      : {
+          compilerOptions: {
+            target: 'ES2022',
+            module: 'Preserve',
+            moduleResolution: 'Bundler',
+            strict: true,
+            noEmit: true,
+            skipLibCheck: true,
+          },
+          include: ['src', 'vite.config.ts'],
+        }),
+    contentMappers: [
+      { package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] },
+    ],
   }
+  return config
 }
 
 function packageName(value) {

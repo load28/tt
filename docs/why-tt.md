@@ -135,8 +135,7 @@ error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "
 7 |   match (shape) {
   |   ^^^^^^^^^^^^^
   |
-  = help: add the missing arms
-  |     Rect(width, height) => undefined,
+  = help: add the missing arms: `Rect(width, height) => undefined,`
   = help: or add a final `_` arm: `_ => undefined,`
 ```
 
@@ -151,16 +150,17 @@ and gives the ergonomics that usually make people give up on that style:
 ```tt
 const loadProfile = (id: string): TResult<Profile, DbError | HttpError> =>
   result {
-    const user <- findUser(id);
-    const company <- fetchCompany(user.companyId);
-    { user, company }
+    const user = try findUser(id);
+    const company = try fetchCompany(user.companyId);
+    return { user, company };
   };
 ```
 
-Each `<-` unwraps a success and short-circuits a failure, and the error types
-union themselves as you go. It reads like the happy path because it is the
-happy path, but the failures are in the signature rather than in a comment or a
-`catch` three frames up.
+Each `try` unwraps a success and short-circuits a failure to the nearest Result
+scope. Here that scope is the `result` block, so the enclosing function keeps
+running and the error types union themselves as you go. It reads like the happy
+path because it is the happy path, but the failures are in the signature rather
+than in a comment or a `catch` three frames up.
 
 tt doesn't forbid throwing — it's still TypeScript, and `throw` is still there
 when you want it. It just makes the other style comfortable enough to actually

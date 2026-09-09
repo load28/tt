@@ -5,6 +5,12 @@
 - **완료일**: 2026-08-25
 - **커밋**: —
 
+> **뒤집힌 결정 (2026-09-05 기록)**: 결정 1(`ci.yml`을
+> `workflow_dispatch` 하나로)은 [TASK-235](./TASK-235-rc-first-release-model.md)가
+> 되돌렸다. CI는 지금 `main`·`release-X.Y`의 push와 이들을 대상으로 하는 PR에서
+> 자동으로 돈다 — `AGENTS.md`의 계약이 현행이다. 결정 2·3(로컬 게이트
+> `scripts/ci`와 도구 부재 경고)은 그대로 살아 있다. 아래 본문은 당시의 기록이다.
+
 ## 목적
 
 이 저장소 소유자는 GitHub 무료 플랜이라 Actions 실행 한도가 빠듯하다. 현재

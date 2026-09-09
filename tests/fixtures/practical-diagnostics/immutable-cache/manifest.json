@@ -1,0 +1,41 @@
+{
+  "entry": "src/cache.tt",
+  "diagnostics": [
+    {
+      "code": "val-mutation",
+      "text": "cache",
+      "line": 7,
+      "message": "cannot call mutating method `set` through val binding `cache` (the binding is declared with `val`, so every access path from it is read-only)",
+      "help": ["remove `val` if this binding is intended to be mutable"],
+      "fix": {
+        "title": "remove `val` if this binding is intended to be mutable",
+        "text": "val ",
+        "replacement": "",
+        "fixed": "expected/cache.fixed.tt"
+      },
+      "labels": [
+        {
+          "text": "val",
+          "line": 6,
+          "message": "the read-only binding is declared here"
+        }
+      ]
+    },
+    {
+      "code": "let-else-not-diverging",
+      "text": "else",
+      "line": 10,
+      "message": "let-else: every path through the `else` block must diverge",
+      "help": ["end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)"],
+      "labels": []
+    },
+    {
+      "code": "ts2345",
+      "text": "42",
+      "line": 16,
+      "message": "type mismatch: expected `string`, found `42`",
+      "help": [],
+      "labels": []
+    }
+  ]
+}

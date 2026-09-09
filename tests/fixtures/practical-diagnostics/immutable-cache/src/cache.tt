@@ -1,0 +1,16 @@
+import type { TOption } from "@tt/std";
+
+declare const selected: TOption<string>;
+const format = (value: string): string => value.toUpperCase();
+
+val const cache = new Map<string, number>();
+cache.set("orders", 1); //~ ERROR[val-mutation] cannot call mutating method
+
+export function selectedLabel(): string {
+  const Some(name) = selected else { //~ ERROR[let-else-not-diverging] every path through the `else` block must diverge
+    console.warn("no selection");
+  };
+  return name;
+}
+
+export const count = 42 |> format; //~ ERROR[ts2345] type mismatch

@@ -163,6 +163,7 @@ mod tests {
             src: 12,
             src_end: 25,
             owner_end: 40,
+            context: None,
             kind: AnchorKind::Match,
         };
         assert_eq!(

@@ -69,8 +69,7 @@ pub struct TtCaseDecl {
     /// `true` when the case is declared without parens — the constructor
     /// is a plain value, not a call.
     pub unit: bool,
-    /// The payload fields (empty for a unit case, and for imported
-    /// declarations that carried tags only).
+    /// The payload fields (empty for a unit case).
     pub fields: Vec<TtFieldDecl>,
 }
 
@@ -109,7 +108,7 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
             .iter()
             .map(Into::into)
             .collect();
-    let mut hir = hir::lower_program(hir::FileId(0), &program);
+    let mut hir = hir::lower_program(hir::FileId(0), source, &program);
     let resolution = resolve::resolve_file(&mut hir, &externs);
 
     let mut variants = Vec::new();
@@ -233,6 +232,7 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
                 }
             }
             Segment::Try(stmt) => collect_matches(&stmt.expr, out),
+            Segment::TryExpr(expr) => collect_matches(&expr.expr, out),
             Segment::LetElse(stmt) => {
                 collect_matches(&stmt.expr, out);
                 collect_matches(&stmt.else_body, out);
@@ -262,12 +262,12 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => collect_matches(stmts, out),
-                        ResultItem::Bind(bind) => collect_matches(&bind.expr, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    collect_matches(stmts, out);
                 }
-                collect_matches(&block.value, out);
+                if let Some(value) = &block.value {
+                    collect_matches(value, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {

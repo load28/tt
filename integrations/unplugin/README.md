@@ -27,9 +27,7 @@ import { Notice, render } from "./notice.tt";
 
 | import | 상태 |
 |--------|------|
-| `@openload28/unplugin-tt/vite` | 예제(`tt-interop`)로 검증 |
-| `@openload28/unplugin-tt/esbuild` | 번들·실행 검증 |
-| `@openload28/unplugin-tt/rollup`, `/rolldown`, `/webpack`, `/rspack`, `/farm` | unplugin이 제공하는 어댑터 — 미검증 |
+| `@openload28/unplugin-tt/vite`, `/rollup`, `/rolldown`, `/webpack`, `/rspack`, `/esbuild`, `/farm` | Every published adapter is constructed in the integration gate; the shared hooks compile `.tt`/`.ttx`, serve standard modules, return source maps, and forward diagnostics |
 
 `@openload28/unplugin-tt`를 그대로 import하면 `unplugin` 객체와 `vitePlugin`·
 `esbuildPlugin` 같은 이름들이 나옵니다.
@@ -63,21 +61,33 @@ loader를 명시합니다.
 |------|--------|------|
 | `compiler` | 설치된 `@openload28/tt-lang`의 바이너리, 없으면 `"ttc"` | ttc 실행 파일 경로 |
 | `verify` | `true` | `false`면 `--no-verify`를 넘겨 방출물 자가 검사를 생략합니다 |
+| `sourcemap` | `true` | Set to `false` to omit the source map returned to the bundler |
 
 타입 선언(`index.d.ts`와 서브패스별 `.d.ts`)을 함께 싣습니다 — 소비자가
 `vite.config.ts`를 타입 검사에 넣어도 `tt()`의 옵션이 그대로 검사됩니다.
 
-## 타입은 별도입니다
+## Type checking uses the content mapper
 
-번들러 플러그인은 **런타임만** 해결합니다. `.ts` 파일이 `.tt`을 import할 때
-타입 검사와 정의 이동이 동작하려면 사이드카가 필요하고, 그건 ttc가 만듭니다.
+The bundler plugin handles runtime loading. TypeScript 7.1+ resolves `.tt` and
+`.ttx` imports through the compiler package's content mapper without sidecar
+files. Declare the mapper at the top level of `tsconfig.json`, then allow the
+TypeScript CLI to start it:
 
-```sh
-ttc --types src/        # .tt-types/<이름>.tt.d.ts + .map
+```jsonc
+{
+  "contentMappers": [
+    { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
+  ]
+}
 ```
 
-CLI에서 `ttc help workflow`를 실행하거나 [VSCode 확장](../../editors/vscode/README.md)을
-참조하세요. 확장은 저장할 때마다 사이드카를 갱신합니다.
+```sh
+tsc -p tsconfig.json --runExternalCode
+```
+
+See the [installation guide](../../docs/getting-started.md) for the complete
+project setup. Use `ttc --types` only with legacy TypeScript hosts that cannot
+load content mappers.
 
 ## 알려진 제약
 

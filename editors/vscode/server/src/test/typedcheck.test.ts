@@ -12,6 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { runTypedCheck } from "../ttc";
+import { shutdownEngineServer } from "../engine";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 import { caseDir } from "./workspace";
 
@@ -40,6 +41,55 @@ test("a buffer that was never saved has no place in the project", async () => {
   // Not "ok with no diagnostics": that would render as a clean file.
   assert.equal(result.kind, "unavailable");
 });
+
+test(
+  "an internal backend failure is distinct from toolchain availability",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = tmpProject();
+    const file = path.join(dir, "backend.tt");
+    const source = "export const value = 1;\n";
+    fs.writeFileSync(file, source);
+
+    shutdownEngineServer();
+    process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST = "1";
+    try {
+      const result = await runTypedCheck(COMPILER, source, file, true);
+      assert.equal(result.kind, "unavailable");
+      if (result.kind !== "unavailable") return;
+      assert.equal(result.cause, "internal");
+      assert.match(result.detail, /injected TypeScript backend contract failure/);
+      assert.doesNotMatch(result.detail, /host\.mjs:|at handle/);
+    } finally {
+      delete process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST;
+      shutdownEngineServer();
+    }
+  },
+);
+
+test(
+  "a pipeline mismatch keeps its secondary labels through the typed check",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = tmpProject();
+    const file = path.join(dir, "pipe.tt");
+    const source =
+      "const inc = (n: number): number => n + 1;\n" +
+      "const shout = (s: string): string => s.toUpperCase();\n" +
+      "const a = 1 |> inc |> shout;\n";
+    fs.writeFileSync(file, source);
+
+    const result = await runTypedCheck(COMPILER, source, file, true);
+    if (result.kind === "unavailable") return;
+    const mismatch = result.diagnostics.find((d) => d.code === "ts2345");
+    assert.ok(mismatch, JSON.stringify(result.diagnostics));
+    const labels = mismatch?.labels ?? [];
+    assert.equal(labels.length, 1, JSON.stringify(mismatch));
+    assert.equal(labels[0].message, "the piped value is produced here");
+    // 1-based, like the diagnostic itself: `inc` on line 3.
+    assert.equal(labels[0].line, 3);
+  },
+);
 
 test(
   "the buffer is what gets checked, and the message is the compiler's",

@@ -43,7 +43,8 @@ bun run tt:check
 ```
 
 See the [installation guide](./docs/getting-started.md) for automatic and
-bundler-specific manual setup.
+bundler-specific manual setup. `create-tt` configures the TypeScript 7.1 content
+mapper, so `.ts` and `.tsx` can import `.tt` and `.ttx` without sidecar files.
 
 ### VS Code extension
 
@@ -78,7 +79,7 @@ bunx ttc --check-types src   # check tt and TypeScript
 
 ## The language at a glance
 
-- Model data with Rust-style `variant` declarations and unpack it with exhaustive `match` expressions, including guards, tuples, literals, or-patterns, and nested patterns. TypeScript `enum` declarations remain ordinary TypeScript.
+- Model data with Rust-style `variant` declarations and unpack it with exhaustive `match` expressions, including guards, tuples, literals, or-patterns, nested patterns, and `is Error { message }` class patterns over open JavaScript hierarchies. TypeScript `enum` declarations remain ordinary TypeScript.
 - Work with `TOption` and `TResult` through `try`, `let-else`, `if let`, and `result` blocks. Types come from `@tt/std`; tree-shakeable operations use `@tt/std/option` and `@tt/std/result`.
 - Build value and function pipelines with `|>` and `flow`, including JavaScript-style optional postfix steps such as `value |> ?.name`.
 - Mark bindings and parameters with `val` when mutation through them must be rejected.

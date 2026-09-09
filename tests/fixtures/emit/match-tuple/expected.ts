@@ -20,9 +20,21 @@ let $tt_v0;
   const $tt_m0 = d;
   const $tt_m1 = s;
   do {
-    if ($tt_m0.kind === "North" && $tt_m1.kind === "Fast") { const { dx } = $tt_m0; const { v } = $tt_m1; $tt_v0 = dx + v; break; }
-    if ($tt_m0.kind === "North" && $tt_m1.kind === "Slow") { const { dx } = $tt_m0; $tt_v0 = dx; break; }
-    if ($tt_m0.kind === "South") { $tt_v0 = 0; break; }
+    if ($tt_m0.kind === "North" && $tt_m1.kind === "Fast") {
+      const { dx } = $tt_m0;
+      const { v } = $tt_m1;
+      $tt_v0 = dx + v;
+      break;
+    }
+    if ($tt_m0.kind === "North" && $tt_m1.kind === "Slow") {
+      const { dx } = $tt_m0;
+      $tt_v0 = dx;
+      break;
+    }
+    if ($tt_m0.kind === "South") {
+      $tt_v0 = 0;
+      break;
+    }
     throw new Error("tt match: unexpected case " + JSON.stringify([$tt_m0, $tt_m1]));
   } while (false);
 }

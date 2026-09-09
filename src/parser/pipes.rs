@@ -79,6 +79,10 @@ pub(super) fn parse_pipeline(
         start: tokens[head_idx].span.start,
         end: tokens[pipe_idx - 1].span.end,
     };
+    let case_test = head_idx.checked_sub(1).is_some_and(|before| {
+        matches!(tokens[before].kind, TokenKind::Ident)
+            && &parser.src[tokens[before].span.start..tokens[before].span.end] == "case"
+    });
 
     let mut steps: Vec<PipeStep> = Vec::new();
     let mut k = pipe_idx;
@@ -89,8 +93,10 @@ pub(super) fn parse_pipeline(
         while let Some(t) = tokens.get(k) {
             match &t.kind {
                 TokenKind::PipeOp if depth == 0 => break,
+                TokenKind::JsxRaw if depth == 0 => break,
                 TokenKind::Punct(b';' | b',') if depth == 0 => break,
                 TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
+                TokenKind::Punct(b':') if depth == 0 && case_test => break,
                 TokenKind::Punct(b'?' | b':') if depth == 0 => return None,
                 TokenKind::Arrow if depth == 0 => return None,
                 TokenKind::Punct(b'=') if depth == 0 && is_assignment_eq(parser.bytes, t.span) => {
@@ -152,7 +158,7 @@ pub(super) fn parse_pipeline(
         steps.push(PipeStep {
             span,
             kind,
-            body: parser.parse_tokens(&tokens[step_from..k], span.start, span.end),
+            body: parser.parse_expression_tokens(&tokens[step_from..k], span.start, span.end),
         });
     }
     if steps.is_empty() {
@@ -160,8 +166,9 @@ pub(super) fn parse_pipeline(
     }
 
     let head_kind = head_kind(parser, tokens, head_idx, pipe_idx);
-    let head = (head_kind != PipeHeadKind::Flow)
-        .then(|| parser.parse_tokens(&tokens[head_idx..pipe_idx], head_span.start, head_span.end));
+    let head = (head_kind != PipeHeadKind::Flow).then(|| {
+        parser.parse_expression_tokens(&tokens[head_idx..pipe_idx], head_span.start, head_span.end)
+    });
     Some(Attempt::Parsed(
         k,
         PipeExpr {
@@ -241,6 +248,7 @@ fn malformed_pipeline_end(tokens: &[Token], mut k: usize) -> (usize, usize) {
         .map_or(0, |token| token.span.end);
     while let Some(token) = tokens.get(k) {
         match token.kind {
+            TokenKind::JsxRaw if depth == 0 => break,
             TokenKind::Punct(b';' | b',') if depth == 0 => break,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
             TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,

@@ -1,0 +1,10 @@
+declare const flag: boolean;
+declare function consume(item: { kind: "item"; run: (x: number) => number }): void;
+consume(match (flag) {
+  true => {
+    // leading comment
+    return /* returned value */ { kind: "item", run: x => x + 1 };
+    // trailing comment
+  },
+  false => { return { kind: "item", run: x => x - 1 }; },
+});

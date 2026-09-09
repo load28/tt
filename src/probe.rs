@@ -171,6 +171,7 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
             }
             Segment::IfLet(stmt) => payload_if_let(stmt, out),
             Segment::Try(stmt) => payload_walk(&stmt.expr, out),
+            Segment::TryExpr(expr) => payload_walk(&expr.expr, out),
             Segment::LetElse(stmt) => {
                 payload_walk(&stmt.expr, out);
                 payload_walk(&stmt.else_body, out);
@@ -185,12 +186,12 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => payload_walk(stmts, out),
-                        ResultItem::Bind(bind) => payload_walk(&bind.expr, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    payload_walk(stmts, out);
                 }
-                payload_walk(&block.value, out);
+                if let Some(value) = &block.value {
+                    payload_walk(value, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {
@@ -339,6 +340,7 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
                 }
             }
             Segment::Try(stmt) => walk(&stmt.expr, src, out),
+            Segment::TryExpr(expr) => walk(&expr.expr, src, out),
             Segment::LetElse(stmt) => {
                 walk(&stmt.expr, src, out);
                 walk(&stmt.else_body, src, out);
@@ -354,12 +356,12 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
             }
             Segment::ResultBlock(block) => {
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => walk(stmts, src, out),
-                        ResultItem::Bind(bind) => walk(&bind.expr, src, out),
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    walk(stmts, src, out);
                 }
-                walk(&block.value, src, out);
+                if let Some(value) = &block.value {
+                    walk(value, src, out);
+                }
             }
             Segment::Template(template) => {
                 for chunk in &template.chunks {
@@ -395,8 +397,9 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
         return;
     };
 
-    // Literal and tag patterns never mix in one match, so at most one of
-    // these fires.
+    // Tag patterns never mix with the value-pattern family. An `is` arm
+    // suppresses typed coverage for the whole open hierarchy before this
+    // point, so exactly one of the literal or tag probes can fire here.
     let mut literals = Vec::new();
     let mut tags = Vec::new();
     let mut kind = Kind::None;
@@ -421,6 +424,7 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
                 }
                 kind = Kind::Tag;
             }
+            Pattern::Instances(_) => return,
             Pattern::Wildcard => {}
         }
     }

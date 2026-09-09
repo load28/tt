@@ -44,6 +44,11 @@
 //!        "specifier", "nameSpan", "span", "cases" }],
 //!        "matches": [{ "keyword", "bodyOpen", "bodyClose" }] } }
 //!
+//! → { "id": 9, "method": "reloadProjects", "params": {} }
+//! ← { "id": 9, "result": {} }
+//! Project graphs and registered overlays are released. The client must
+//! replay its openDocument notifications before subsequent semantic requests.
+//!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
 //! ```
 //!
@@ -154,6 +159,14 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
         "typedCheck" => typed_check(sessions, params),
         "openDocument" | "updateDocument" => open_document(sessions, params),
         "closeDocument" => close_document(sessions, params),
+        "reloadProjects" => {
+            // Filesystem/configuration topology changed. Clients replay open
+            // buffers after this ordered barrier; old snapshots cannot leak
+            // into a graph resolved against the new configuration.
+            sessions.projects.clear();
+            sessions.docs.clear();
+            Ok(json!({}))
+        }
         "hover" => semantic(sessions, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,
@@ -256,12 +269,32 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 .service_diagnostics(path)?
                 .into_iter()
                 .map(|d| {
-                    json!({
+                    let mut entry = json!({
                         "range": range_json(d.range),
                         "message": d.message,
                         "code": d.code,
                         "warning": d.warning,
-                    })
+                    });
+                    // Secondary labeled spans ride only when there are any,
+                    // so consumers of the existing shape see no new field
+                    // until a diagnostic actually carries one.
+                    if !d.related.is_empty() {
+                        entry["related"] = d
+                            .related
+                            .iter()
+                            .map(|r| {
+                                let mut related = json!({
+                                    "range": range_json(r.range),
+                                    "message": r.message,
+                                });
+                                if let Some(path) = &r.path {
+                                    related["path"] = json!(path);
+                                }
+                                related
+                            })
+                            .collect();
+                    }
+                    entry
                 })
                 .collect();
             Ok(json!({ "diagnostics": diagnostics }))
@@ -320,14 +353,15 @@ fn open_document(
     let canonical = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| format!("{path}: {e}"))?;
-    let inputs = vec![path.to_string()];
     let options = ProjectOptions::default();
-    let identity = Engine::project_identity(&inputs, &options)?;
+    let identity = Engine::document_project_identity(&canonical, &options)?;
     let project = match sessions.projects.entry(identity.clone()) {
         std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            entry.insert(sessions.engine.open_project(&inputs, &options)?)
-        }
+        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
+            sessions
+                .engine
+                .open_document_project(&canonical, &options)?,
+        ),
     };
     project.open_document(canonical.clone(), text);
     sessions.docs.insert(canonical, identity);
@@ -700,7 +734,7 @@ fn typed_check(
                         .map(|d| {
                             let (line, col) = d.position.unwrap_or((0, 0));
                             let (end_line, end_col) = d.end.unwrap_or((0, 0));
-                            json!({
+                            let mut entry = json!({
                                 "path": d.path,
                                 "line": line,
                                 "col": col,
@@ -712,15 +746,31 @@ fn typed_check(
                                     &d.suggestions,
                                     snapshot.source_of(&d.path),
                                 ),
-                            })
+                            });
+                            // Labels ride only when there are any, so a
+                            // consumer of the existing shape sees no new
+                            // field until a diagnostic actually carries one.
+                            if !d.labels.is_empty() {
+                                entry["labels"] = labels_json(&d.labels);
+                            }
+                            entry
                         })
                         .collect();
                     // `backendError`: the TypeScript layer could not run —
                     // the tt diagnostics above are still complete.
+                    let backend_error = checked.backend_error.as_ref().map(|error| {
+                        json!({
+                            "kind": match error.kind {
+                                ttc::engine::BackendErrorKind::Unavailable => "unavailable",
+                                ttc::engine::BackendErrorKind::Internal => "internal",
+                            },
+                            "message": error.message,
+                        })
+                    });
                     json!({
                         "blocked": false,
                         "diagnostics": diagnostics,
-                        "backendError": checked.backend_error,
+                        "backendError": backend_error,
                     })
                 }
             }
@@ -730,6 +780,29 @@ fn typed_check(
         project.close_document(&canonical);
     }
     Ok(response)
+}
+
+/// A diagnostic's secondary labeled spans as the JSON the protocol speaks:
+/// 1-based line/column pairs like the diagnostic itself, plus the label's
+/// words, and a `path` only when the span is in another file.
+fn labels_json(labels: &[ttc::engine::DiagnosticLabel]) -> serde_json::Value {
+    use serde_json::json;
+    labels
+        .iter()
+        .map(|label| {
+            let mut entry = json!({
+                "line": label.position.0,
+                "col": label.position.1,
+                "endLine": label.end.0,
+                "endCol": label.end.1,
+                "message": label.message,
+            });
+            if let Some(path) = &label.path {
+                entry["path"] = json!(path);
+            }
+            entry
+        })
+        .collect()
 }
 
 fn text_param(params: &serde_json::Value) -> Result<&str, String> {

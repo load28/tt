@@ -151,16 +151,17 @@ error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "
 ```tt
 const loadProfile = (id: string): TResult<Profile, DbError | HttpError> =>
   result {
-    const user <- findUser(id);
-    const company <- fetchCompany(user.companyId);
-    { user, company }
+    const user = try findUser(id);
+    const company = try fetchCompany(user.companyId);
+    return { user, company };
   };
 ```
 
-각 `<-`는 성공 값을 꺼내고, 실패하면 그 실패를 즉시 반환합니다. 연산을 이어 갈수록
-오류 타입은 자동으로 유니언으로 합쳐집니다. 성공 경로처럼 읽히는 이유는 실제로
-성공 경로이기 때문입니다. 실패 가능성은 주석이나 호출 스택 몇 단계 위의 `catch`가
-아니라 함수 시그니처에 드러납니다.
+각 `try`는 성공 값을 꺼내고, 실패하면 가장 가까운 Result 스코프를 그 실패로
+끝냅니다. 여기서는 `result` 블록이 그 스코프이므로 바깥 함수는 계속 실행됩니다.
+연산을 이어 갈수록 오류 타입은 자동으로 유니언으로 합쳐집니다. 성공 경로처럼
+읽히는 이유는 실제로 성공 경로이기 때문입니다. 실패 가능성은 주석이나 호출 스택
+몇 단계 위의 `catch`가 아니라 함수 시그니처에 드러납니다.
 
 tt가 예외 던지기를 금지하는 것은 아닙니다. 여전히 TypeScript이므로 필요할 때는
 그대로 `throw`를 사용할 수 있습니다. 다만 오류를 반환하는 방식도 실제로 편하게

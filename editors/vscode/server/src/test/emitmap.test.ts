@@ -16,7 +16,7 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt, sliceOf } from "./positions";
-import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
+import { COMPILER, answered, compilerAvailable, findTsgo } from "./toolchain";
 import { caseDir } from "./workspace";
 
 const skip = !compilerAvailable()
@@ -234,11 +234,30 @@ const BAD_PIPE = [
 test("a type error inside a pipeline is reported", { skip }, async () => {
   const dir = fixture("tt-std-test-", { "calc.tt": BAD_PIPE });
   const file = path.join(dir, "calc.tt");
-  const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+  const diagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
   assert.equal(diagnostics.length, 1, JSON.stringify(diagnostics));
   assert.equal(diagnostics[0].code, 2339); // property does not exist
   assert.match(diagnostics[0].message, /'length' does not exist on type/);
   assert.equal(sliceOf(BAD_PIPE, diagnostics[0].range), "length");
+});
+
+const BAD_BOUNDARY = [
+  "const inc = (n: number): number => n + 1;",
+  "const shout = (s: string): string => s.toUpperCase();",
+  "const a = 1 |> inc |> shout;",
+  "",
+].join("\n");
+
+test("a pipeline boundary mismatch labels the producing step", { skip }, async () => {
+  const dir = fixture("tt-std-test-", { "calc.tt": BAD_BOUNDARY });
+  const file = path.join(dir, "calc.tt");
+  const diagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
+  assert.equal(diagnostics.length, 1, JSON.stringify(diagnostics));
+  assert.equal(sliceOf(BAD_BOUNDARY, diagnostics[0].range), "shout");
+  const related = diagnostics[0].related ?? [];
+  assert.equal(related.length, 1, JSON.stringify(diagnostics));
+  assert.equal(related[0].message, "the piped value is produced here");
+  assert.equal(sliceOf(BAD_BOUNDARY, related[0].range), "inc");
 });
 
 const BAD_ARM = [
@@ -259,7 +278,7 @@ const BAD_ARM = [
 test("a type error inside a match arm is reported", { skip }, async () => {
   const dir = fixture("tt-std-test-", { "calc.tt": BAD_ARM });
   const file = path.join(dir, "calc.tt");
-  const diagnostics = await engine.tsDiagnostics(COMPILER, file);
+  const diagnostics = answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics");
   assert.equal(diagnostics.length, 1, JSON.stringify(diagnostics));
   assert.equal(diagnostics[0].code, 2339);
   assert.equal(sliceOf(BAD_ARM, diagnostics[0].range), "toUpperCase");
@@ -268,7 +287,7 @@ test("a type error inside a match arm is reported", { skip }, async () => {
 test("clean tt syntax reports nothing", { skip }, async () => {
   const dir = fixture("tt-std-test-", { "calc.tt": PIPE_SOURCE });
   assert.deepEqual(
-    await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.tt")),
+    answered(await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.tt")), "tsDiagnostics"),
     [],
   );
 });
@@ -286,7 +305,7 @@ test("a buffer mid-edit is never invented errors for", { skip }, async () => {
   const dir = fixture("tt-rawdiag-test-", { "shapes.tt": broken });
   const file = path.join(dir, "shapes.tt");
   engine.openDocument(COMPILER, file, broken);
-  assert.deepEqual(await engine.tsDiagnostics(COMPILER, file), []);
+  assert.deepEqual(answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics"), []);
   engine.closeDocument(COMPILER, file);
 });
 
@@ -312,7 +331,7 @@ const TUPLE_SOURCE = [
 test("tuple destructuring over the std module reports nothing", { skip }, async () => {
   const dir = fixture("tt-std-test-", { "calc.tt": TUPLE_SOURCE });
   assert.deepEqual(
-    await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.tt")),
+    answered(await engine.tsDiagnostics(COMPILER, path.join(dir, "calc.tt")), "tsDiagnostics"),
     [],
   );
 });
@@ -415,10 +434,10 @@ const NAMED_SOURCE = [
 
 test("a restated diagnostic names the case it is about", { skip }, async () => {
   const dir = fixture("tt-named-test-", { "wire.tt": NAMED_SOURCE });
-  const diagnostics = await engine.tsDiagnostics(
+  const diagnostics = answered(await engine.tsDiagnostics(
     COMPILER,
     path.join(dir, "wire.tt"),
-  );
+  ), "tsDiagnostics");
   const error = diagnostics.find((d) => d.code === 2322);
   assert.ok(error, JSON.stringify(diagnostics));
   // The propagation is the extent, and the wording is tt's (TASK-104/116).
@@ -448,10 +467,10 @@ test(
       "",
     ].join("\n");
     const dir = fixture("tt-owned-diagnostic-test-", { "mixed.tt": source });
-    const diagnostics = await engine.tsDiagnostics(
+    const diagnostics = answered(await engine.tsDiagnostics(
       COMPILER,
       path.join(dir, "mixed.tt"),
-    );
+    ), "tsDiagnostics");
     assert.deepEqual(
       diagnostics,
       [],

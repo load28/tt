@@ -33,3 +33,18 @@ export function compilerAvailable(): boolean {
 export function findTsgo(): string | null {
   return resolveTsgo([]) || null;
 }
+
+/**
+ * The engine's answer, asserted to be one.
+ *
+ * `null` means the engine could not be reached at all. In a suite whose
+ * guards already establish a working compiler and toolchain that is a
+ * failure to report, never an empty result to carry on with — which is the
+ * distinction the answer type exists to make (TASK-345).
+ */
+export function answered<T>(value: T | null, what: string): T {
+  if (value === null) {
+    throw new Error(`the engine did not answer ${what}`);
+  }
+  return value;
+}

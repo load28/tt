@@ -1,0 +1,29 @@
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+  --> src/jobs.tt:7:23
+   |
+ 7 |   export const queued = result {
+   |  _______________________^
+ 8 | |   const job = try fetchJob();
+ 9 | |   persist(job);
+10 | | };
+   | |_^
+   |
+   = help: return a value from every reachable path in this `result` block
+error[result-value-discarded]: `result` is used as a statement, so its `Err` would be discarded
+  --> src/jobs.tt:13:3
+   |
+13 |     result {
+   |  ___^
+14 | |     const job = try fetchJob();
+15 | |     return job.id;
+16 | |   };
+   | |___^
+   |
+   = help: assign, return, or otherwise consume this Result value
+error[try-placement]: `try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return
+  --> src/jobs.tt:21:17
+   |
+21 |     const job = try fetchJob();
+   |                 ^^^^^^^^^^^^^^
+   |
+   = help: move the propagation into an ordinary function, or handle the Result explicitly

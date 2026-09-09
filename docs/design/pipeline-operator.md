@@ -1,8 +1,8 @@
 # 설계 제안: 파이프라인 연산자 `|>`
 
 - **상태**: 구현됨 (TASK-043, 함수 합성 `flow`는 TASK-063) — 규범은
-  [`language.md` §7](../reference/language.md#7-파이프라인-연산자-),
-  [`std.md`](../reference/std.md#파이프라인-변형-p)
+  [`tt.md` pipeline](../ai/tt.md),
+  [`tt.md` standard library](../ai/tt.md#ttstd)
 - **태스크**: [TASK-013](../tasks/TASK-013-pipeline-operator-proposal.md) (제안),
   [TASK-043](../tasks/TASK-043-pipeline-operator-impl.md) (구현),
   [TASK-063](../tasks/TASK-063-flow-composition.md) (`flow` 합성),
@@ -242,6 +242,42 @@ error[stray-pipe]: pipeline: `|>` could not be parsed here
  --> file.tt:3:9
   = help: a step is an expression — parenthesize a ternary or an arrow function
 ```
+
+### 5.1.1 Checker mismatches name the rejecting step (TASK-263)
+
+The nested `$tt_ap`/`$tt_fl` emission puts the accumulated value in the
+helper's first argument, and TypeScript infers `A` from the step function —
+so a boundary mismatch lands on the *value* argument, which for every
+boundary after the first is compiler glue. Emission therefore anchors each
+piped-value position (`AnchorKind::Pipe`) to the **step that consumes it**:
+a diagnostic crossing that glue re-homes onto the step that rejected the
+value, while verbatim spans keep resolving exactly. The whole pipeline
+remains anchored for context errors (e.g. the pipeline's result not fitting
+an annotation).
+
+The shared CLI/editor translation table renders the boundary as
+
+```
+error[ts2345]: this pipeline step expects `string`, but receives `number`
+ --> file.tt:4:23
+  |
+4 | const a = 1 |> inc |> shout;
+  |                       ^^^^^
+```
+
+descending to the minimal incompatible pair (a `flow` boundary's function
+types reduce to the value types of the boundary, with the complete
+obligation kept as `required type:` context). The `pipe-step-input`
+translation class also deduplicates per step in the editor.
+
+Since TASK-264 each per-step anchor also records where the consumed value
+was produced (`EmitAnchor::context` — the previous step, or the head), and
+the report layers attach it as a labeled secondary span: the CLI draws it
+rustc-style in the same snippet (`--- the piped value is produced here`),
+and the editor serves it as LSP related information. The same label
+mechanism carries the checker's own `relatedInformation` for every other
+construct ("the expected type comes from property … declared here"), mapped
+back through the same origin machinery.
 
 ### 5.2 기존 구문과의 상호작용
 

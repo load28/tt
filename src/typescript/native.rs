@@ -63,14 +63,19 @@ impl NativeBackend {
     }
 
     /// Starts the host and opens the project.
-    fn start(&self, tsconfig: Option<&Path>, root: &Path) -> Result<Session, String> {
+    fn start(&self, tsconfig: Option<&Path>, root: &Path) -> Result<Session, Failure> {
         // The host is written beside the run rather than piped in: node reads
         // a module from a path, and the path is what import specifiers in the
         // job resolve against.
-        let dir = std::env::temp_dir().join(format!("ttc-host-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).map_err(|e| format!("cannot prepare the host: {e}"))?;
+        static NEXT_SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let session_id = NEXT_SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir =
+            std::env::temp_dir().join(format!("ttc-host-{}-{session_id}", std::process::id()));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| Failure::unavailable(format!("cannot prepare the host: {e}")))?;
         let script = dir.join("host.mjs");
-        std::fs::write(&script, HOST).map_err(|e| format!("cannot write the host: {e}"))?;
+        std::fs::write(&script, HOST)
+            .map_err(|e| Failure::unavailable(format!("cannot write the host: {e}")))?;
 
         let mut child = Command::new(&self.node)
             .arg(&script)
@@ -79,7 +84,9 @@ impl NativeBackend {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("cannot run {}: {e}", self.node.display()))?;
+            .map_err(|e| {
+                Failure::unavailable(format!("cannot run {}: {e}", self.node.display()))
+            })?;
         let mut stdin = child.stdin.take().expect("stdin piped");
         let mut stdout = BufReader::new(child.stdout.take().expect("stdout piped"));
 
@@ -88,10 +95,15 @@ impl NativeBackend {
             "cwd": root,
             "tsconfig": tsconfig,
         });
-        writeln!(stdin, "{open}").map_err(|e| format!("cannot start the host: {e}"))?;
+        writeln!(stdin, "{open}")
+            .map_err(|e| Failure::unavailable(format!("cannot start the host: {e}")))?;
 
         let mut ack = String::new();
-        if stdout.read_line(&mut ack).map_err(|e| e.to_string())? == 0 {
+        if stdout
+            .read_line(&mut ack)
+            .map_err(|e| Failure::unavailable(e.to_string()))?
+            == 0
+        {
             return Err(host_died(&mut child));
         }
         Ok(Session {
@@ -107,7 +119,7 @@ impl NativeBackend {
 /// What the host said on its way out. A crash before the first answer is
 /// usually a missing API or an unreadable client, and its message is on
 /// stderr.
-fn host_died(child: &mut Child) -> String {
+fn host_died(child: &mut Child) -> Failure {
     let status = child.wait().ok();
     let mut stderr = String::new();
     if let Some(mut pipe) = child.stderr.take() {
@@ -115,21 +127,27 @@ fn host_died(child: &mut Child) -> String {
         let _ = pipe.read_to_string(&mut stderr);
     }
     if status.and_then(|s| s.code()) == Some(5) {
-        return "the installed TypeScript can check but cannot emit \
+        return Failure::unavailable(
+            "the installed TypeScript can check but cannot emit \
                 declarations — that API arrived in TypeScript 7.1. Install a \
                 7.1 in this project (`npm i -D typescript@7.1`), or use \
-                --check-types, which writes nothing"
-            .to_string();
+                --check-types, which writes nothing",
+        );
     }
     let stderr = stderr.trim();
-    format!(
+    let message = format!(
         "the TypeScript backend failed:\n{}",
         if stderr.is_empty() {
             "(no output)"
         } else {
             stderr
         }
-    )
+    );
+    if status.and_then(|s| s.code()) == Some(2) {
+        Failure::unavailable(message)
+    } else {
+        Failure::internal(message)
+    }
 }
 
 impl Drop for Session {
@@ -143,7 +161,7 @@ impl Drop for Session {
 }
 
 impl TypeScriptBackend for NativeBackend {
-    fn ask(&self, tsconfig: Option<&Path>, root: &Path, query: &Query) -> Result<Answers, String> {
+    fn ask(&self, tsconfig: Option<&Path>, root: &Path, query: &Query) -> Result<Answers, Failure> {
         let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
         let mut slot = self.session.borrow_mut();
         // A question about a different project needs its own session: the
@@ -206,6 +224,13 @@ fn job_json(query: &Query) -> serde_json::Value {
         "symbolChecks": query.symbols.iter()
             .map(|v| json!({ "module": v.module, "start": v.position }))
             .collect::<Vec<_>>(),
+        "resultShapeChecks": query.result_shapes.iter()
+            .map(|v| json!({ "module": v.module, "start": v.start, "end": v.end }))
+            .collect::<Vec<_>>(),
+        "contextualSlots": query.contextual_slots.iter()
+            .map(|v| json!({ "module": v.module, "declarationEnd": v.declaration_end }))
+            .collect::<Vec<_>>(),
+        "contextualOnly": query.contextual_only,
         "emitDeclarations": query.emit_declarations,
     })
 }
@@ -226,14 +251,42 @@ fn literal_json(literal: &crate::Literal) -> serde_json::Value {
 
 /// Reads the host's answer. A shape that does not match is a bug in the pair
 /// of this file and `host.mjs`, and is reported as one.
-fn parse_answers(stdout: &str) -> Result<Answers, String> {
-    let value: serde_json::Value = serde_json::from_str(stdout.trim())
-        .map_err(|e| format!("the TypeScript backend answered with malformed JSON: {e}"))?;
+fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
+    let value: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
+        Failure::internal(format!(
+            "the TypeScript backend answered with malformed JSON: {e}"
+        ))
+    })?;
     if let Some(error) = value["error"].as_str() {
-        return Err(format!("the TypeScript backend failed:\n{error}"));
+        return Err(Failure::internal(format!(
+            "the TypeScript backend failed:\n{error}"
+        )));
     }
 
     let mut answers = Answers::default();
+    let project_modules = value["projectModules"]
+        .as_array()
+        .ok_or_else(|| Failure::internal("the TypeScript backend answer omitted projectModules"))?;
+    answers.project_modules = Some(
+        project_modules
+            .iter()
+            .filter_map(|module| module.as_str().map(PathBuf::from))
+            .collect(),
+    );
+    for slot in array(&value, "contextualSlots") {
+        let index = slot["index"]
+            .as_u64()
+            .ok_or_else(|| Failure::internal("contextual slot answer omitted index"))?
+            as usize;
+        let annotation = slot["annotation"]
+            .as_str()
+            .filter(|text| !text.is_empty())
+            .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?;
+        answers.contextual_slots.push(ContextualSlotType {
+            index,
+            annotation: annotation.into(),
+        });
+    }
     for d in array(&value, "diagnostics") {
         answers.diagnostics.push(Diagnostic {
             file: PathBuf::from(d["file"].as_str().unwrap_or_default()),
@@ -242,6 +295,22 @@ fn parse_answers(stdout: &str) -> Result<Answers, String> {
             code: d["code"].as_u64().unwrap_or_default() as u32,
             message: d["message"].as_str().unwrap_or_default().to_string(),
             mismatch: parse_type_mismatch(&d["mismatch"]),
+            related: d["related"]
+                .as_array()
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .filter_map(|r| {
+                            Some(RelatedInformation {
+                                file: PathBuf::from(r["file"].as_str()?),
+                                start: r["start"].as_u64()? as usize,
+                                end: r["end"].as_u64()? as usize,
+                                message: r["message"].as_str()?.to_string(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
         });
     }
     for m in array(&value, "literalMissing") {
@@ -287,6 +356,11 @@ fn parse_answers(stdout: &str) -> Result<Answers, String> {
             builtin: v["builtin"].as_bool().unwrap_or(false),
         });
     }
+    for v in array(&value, "resultShapes") {
+        answers.result_shapes.push(ResultShape {
+            index: v["index"].as_u64().unwrap_or_default() as usize,
+        });
+    }
     for d in array(&value, "declarations") {
         answers.declarations.push(Declaration {
             path: PathBuf::from(d["path"].as_str().unwrap_or_default()),
@@ -315,6 +389,14 @@ fn parse_type_mismatch(value: &serde_json::Value) -> Option<TypeMismatch> {
         expected: object.get("expected")?.as_str()?.to_string(),
         found: object.get("found")?.as_str()?.to_string(),
         differences,
+        declaration: object.get("declaration").and_then(|declaration| {
+            Some(RelatedInformation {
+                file: PathBuf::from(declaration["file"].as_str()?),
+                start: declaration["start"].as_u64()? as usize,
+                end: declaration["end"].as_u64()? as usize,
+                message: "symbol declaration".to_string(),
+            })
+        }),
     })
 }
 
@@ -329,5 +411,99 @@ fn json_literal(value: &serde_json::Value) -> Option<crate::Literal> {
         serde_json::Value::Number(n) => n.as_f64().map(crate::Literal::Number),
         serde_json::Value::Bool(b) => Some(crate::Literal::Boolean(*b)),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod contextual_tests {
+    use super::*;
+
+    #[test]
+    fn materialized_scoped_values_preserve_context_and_mappings() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let backend = NativeBackend::new(None, root).expect("pinned TypeScript toolchain");
+        let source = r#"
+export {};
+type Item = { kind: "item", run: (x: number) => number };
+declare function consume(value: Item): number;
+declare const flag: boolean;
+const 한글 = "😀";
+const value = consume(match (flag) {
+ true => { const local = 1; try { return {kind: "item", run: x => x + local}; } finally { console.log(한글); } },
+ false => { return {kind: "item", run: x => x}; }
+});
+"#;
+        let emit = crate::compile_mapped(
+            source,
+            &crate::Options {
+                defer_to_checker: true,
+                ..crate::Options::default()
+            },
+        )
+        .unwrap();
+        assert!(!emit.contextual_slots.is_empty());
+        let mut modules = vec![(root.join("contextual-materialized.ts"), emit)];
+        super::super::contextual::materialize(&backend, None, root, &mut modules, &[], &[])
+            .unwrap();
+        let emit = &modules[0].1;
+        for mapping in &emit.mappings {
+            assert_eq!(
+                &emit.code[mapping.out..mapping.out + mapping.len],
+                &source[mapping.src..mapping.src + mapping.len]
+            );
+        }
+        let query = Query {
+            modules: vec![Module {
+                path: modules[0].0.clone(),
+                text: emit.code.clone(),
+            }],
+            ..Query::default()
+        };
+        let answer = backend.ask(None, root, &query).unwrap();
+        assert!(
+            answer.diagnostics.is_empty(),
+            "{:?}\n{}",
+            answer.diagnostics,
+            emit.code
+        );
+    }
+
+    #[test]
+    fn contextual_slots_use_symbol_identity_and_declaration_scope() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let backend = NativeBackend::new(None, root).expect("pinned TypeScript toolchain");
+        let module = root.join("contextual-slot-probe.ts");
+        let text = r#"
+type Item = { kind: "item", run: (x: number) => number };
+declare function consume(value: Item): number;
+let slot;
+{ type Item = string; let slot; slot = "shadow"; }
+slot = { kind: "item", run: x => x };
+const result = consume(slot);
+"#;
+        let query = Query {
+            modules: vec![Module {
+                path: module.clone(),
+                text: text.into(),
+            }],
+            contextual_slots: vec![ContextualSlotQuery {
+                module,
+                declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
+            }],
+            ..Query::default()
+        };
+        let answer = backend.ask(None, root, &query).expect("contextual query");
+        assert_eq!(
+            answer.contextual_slots,
+            vec![ContextualSlotType {
+                index: 0,
+                annotation: "Item".into()
+            }]
+        );
+        let mut typed = query;
+        typed.modules[0].text = text.replacen("let slot;", "let slot: Item;", 1);
+        typed.contextual_slots.clear();
+        let answer = backend.ask(None, root, &typed).expect("annotated snapshot");
+        assert!(answer.diagnostics.is_empty(), "{:?}", answer.diagnostics);
     }
 }

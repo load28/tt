@@ -103,6 +103,229 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
     }
 }
 
+#[test]
+fn a_mixed_source_stem_collision_is_rejected_before_writing() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("model.tt"),
+        "export variant Model { Tt(value: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("model.ts"),
+        "export const source = \"typescript\";\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("view.ttx"),
+        "export const source = <main>ttx</main>;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("view.tsx"),
+        "export const source = <main>tsx</main>;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("model.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("model.tt"), "{stderr}");
+    assert!(stderr.contains("model.ts"), "{stderr}");
+    assert!(
+        stderr.contains("view.tsx: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("view.ttx"), "{stderr}");
+    assert!(stderr.contains("view.tsx"), "{stderr}");
+    assert!(!out_dir.join("model.ts").exists());
+    assert!(!out_dir.join("view.tsx").exists());
+}
+
+#[test]
+fn separate_input_roots_cannot_collapse_to_one_output() {
+    let dir = tmpdir();
+    let left = dir.join("left");
+    let right = dir.join("right");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&left).unwrap();
+    fs::create_dir_all(&right).unwrap();
+    fs::write(left.join("index.tt"), "export const side = \"left\";\n").unwrap();
+    fs::write(right.join("index.tt"), "export const side = \"right\";\n").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        left.to_str().unwrap(),
+        right.to_str().unwrap(),
+    ]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("index.ts: multiple inputs claim this output"),
+        "{stderr}"
+    );
+    assert!(stderr.contains("left/index.tt"), "{stderr}");
+    assert!(stderr.contains("right/index.tt"), "{stderr}");
+    assert!(!out_dir.join("index.ts").exists());
+}
+
+#[test]
+fn a_source_cannot_claim_a_compiler_support_module_output() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(source.join("tt")).unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "const twice = (value: number): number => value * 2;\n\
+         export const result = 1 |> twice;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("tt/runtime.tt"),
+        "export const userOwned = true;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("tt/runtime.ts"), "{stderr}");
+    assert!(stderr.contains("compiler support module"), "{stderr}");
+    assert!(stderr.contains("runtime.tt"), "{stderr}");
+    assert!(!out_dir.join("main.ts").exists());
+    assert!(!out_dir.join("tt/runtime.ts").exists());
+}
+
+#[test]
+fn an_output_directory_inside_the_input_is_not_recompiled() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = source.join("generated");
+    fs::create_dir_all(&out_dir).unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "export const current = \"source\";\n",
+    )
+    .unwrap();
+    fs::write(
+        out_dir.join("stale.ts"),
+        "export const stale = \"previous output\";\n",
+    )
+    .unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("main.ts").is_file());
+    assert!(out_dir.join("stale.ts").is_file());
+    assert!(!out_dir.join("generated/stale.ts").exists());
+}
+
+#[test]
+fn mixed_source_project_preserves_all_directed_runtime_values() {
+    if !have("tsc") || !have("bun") || !have("node") {
+        return;
+    }
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = root.join("tests/fixtures/mixed-source-runtime");
+    let dir = tmpdir();
+    let emitted = dir.join("emitted");
+    let bundle = dir.join("bundle.js");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--no-banner", "-o"])
+        .arg(&emitted)
+        .arg(&source)
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::write(
+        emitted.join("tsconfig.json"),
+        "{\"compilerOptions\":{\"jsx\":\"react\",\"jsxFactory\":\"h\"}}\n",
+    )
+    .unwrap();
+    let mut inputs: Vec<_> = fs::read_dir(&emitted)
+        .expect("emitted mixed-source tree")
+        .map(|entry| entry.expect("emitted entry").path())
+        .filter(|path| {
+            matches!(
+                path.extension().and_then(|value| value.to_str()),
+                Some("ts" | "tsx")
+            )
+        })
+        .collect();
+    inputs.sort();
+    let output = Command::new("tsc")
+        .args(&inputs)
+        .args([
+            "--strict",
+            "--target",
+            "es2022",
+            "--module",
+            "preserve",
+            "--moduleResolution",
+            "bundler",
+            "--jsx",
+            "preserve",
+            "--skipLibCheck",
+            "--noEmit",
+        ])
+        .output()
+        .expect("tsc runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new("bun")
+        .args(["build"])
+        .arg(emitted.join("main.ts"))
+        .args(["--target", "node", "--format", "esm", "--outfile"])
+        .arg(&bundle)
+        .output()
+        .expect("bun build runs");
+    assert!(
+        output.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let output = Command::new("node")
+        .arg(&bundle)
+        .output()
+        .expect("node runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        r#"{"values":["ts<-ts","ts<-tsx","ts<-tt","ts<-ttx","tsx<-ts","tsx<-tsx","tsx<-tt","tsx<-ttx","tt<-ts","tt<-tsx","tt<-tt","tt<-ttx","ttx<-ts","ttx<-tsx","ttx<-tt","ttx<-ttx"],"trace":["ts","tsx","tt","ttx","ts","tsx","tt","ttx","ts","tsx","tt","ttx","ts","tsx","tt","ttx"]}"#
+    );
+}
+
 /// A small project: one shared module every other file imports (the shape
 /// that exercises the imported-declaration cache), plus a file that fails
 /// to compile so diagnostics are part of what must stay ordered.
@@ -183,7 +406,7 @@ fn jobs_does_not_change_outputs_or_diagnostics() {
 
 #[test]
 fn jobs_rejects_zero_and_garbage() {
-    for value in ["0", "many", "-1"] {
+    for value in ["0", "many"] {
         let out = ttc(&["-j", value, "--check", "examples"]);
         assert!(!out.status.success(), "--jobs {value} should be rejected");
         let stderr = String::from_utf8(out.stderr).unwrap();
@@ -198,6 +421,184 @@ fn jobs_rejects_zero_and_garbage() {
         String::from_utf8(out.stderr)
             .unwrap()
             .contains("--jobs requires a value")
+    );
+}
+
+/// A flag that takes a value does not take the next option as one.
+///
+/// `ttc -o --check src` reads as "build into --check"; it created a
+/// directory of that name, wrote the tree into it, and exited 0 without
+/// running the check the line asked for. Every value-taking flag had the
+/// same hole, and each swallowed option also disappeared from the run.
+#[test]
+fn value_flags_do_not_swallow_the_next_option() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (flag, label) in [
+        ("-o", "--out-dir"),
+        ("--out-dir", "--out-dir"),
+        ("-j", "--jobs"),
+        ("--jobs", "--jobs"),
+        ("--project", "--project"),
+        ("--node", "--node"),
+        ("--sidecar", "--sidecar"),
+        ("--overlay", "--overlay"),
+        ("--source-map", "--source-map"),
+        ("--rewrite-imports", "--rewrite-imports"),
+        ("--emit-std", "--emit-std"),
+    ] {
+        let out = ttc(&[flag, "--check", path]);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(
+            !out.status.success(),
+            "{flag} took --check as its value: {stderr}"
+        );
+        assert!(
+            stderr.contains(label) && stderr.contains("--check"),
+            "{flag}: {stderr}"
+        );
+    }
+
+    // Nothing was created for the option that was mistaken for a value.
+    assert!(!dir.join("--check").exists());
+}
+
+/// The escape hatch stays open: a path that really begins with `-` is
+/// spelled the way every other tool spells it.
+#[test]
+fn a_relative_path_reaches_a_directory_named_like_an_option() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let _ = &file;
+
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(dir.path())
+        .args(["-o", "./-out", "input.tt"])
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(dir.join("-out").join("input.ts").is_file());
+}
+
+#[test]
+fn modes_reject_options_they_would_otherwise_ignore() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    let cases = [
+        (
+            vec!["--content-mapper", "--project", "tsconfig.json"],
+            "--content-mapper does not combine with --project",
+        ),
+        (
+            vec!["--server", "--jobs", "2"],
+            "--server does not combine with --jobs",
+        ),
+        (
+            vec!["--emit-std", "types", "--source-map", "off"],
+            "--emit-std does not combine with --source-map",
+        ),
+        (
+            vec!["--symbols", "--no-banner", path],
+            "--symbols does not combine with --no-banner",
+        ),
+        (
+            vec!["--emit-map", "--jobs", "2", path],
+            "--emit-map does not combine with --jobs",
+        ),
+        (
+            vec!["--sidecar", "declarations", "--no-verify", path],
+            "--sidecar does not combine with --no-verify",
+        ),
+        (
+            vec!["--check-types", "--rewrite-imports", "off", path],
+            "--check-types does not combine with --rewrite-imports",
+        ),
+        (
+            vec!["--types", "--jobs", "2", path],
+            "--types does not combine with --jobs",
+        ),
+        (
+            vec!["--project", "tsconfig.json", path],
+            "build mode does not combine with --project",
+        ),
+        (
+            vec!["--symbols", "--emit-map", path],
+            "--symbols does not combine with --emit-map",
+        ),
+    ];
+
+    for (args, message) in cases {
+        let out = ttc(&args);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(!out.status.success(), "{args:?} should fail");
+        assert_eq!(stderr.trim(), format!("ttc: {message}"));
+        assert!(out.stdout.is_empty(), "{args:?} polluted stdout");
+    }
+}
+
+#[test]
+fn check_rejects_output_options_instead_of_silently_changing_or_ignoring_them() {
+    let dir = tmpdir();
+    let file = dir.join("input.tt");
+    fs::write(&file, "export const value = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (option, value) in [
+        ("--print", None),
+        ("--out-dir", Some("out")),
+        ("--source-map", Some("inline")),
+        ("--rewrite-imports", Some("off")),
+        ("--no-banner", None),
+    ] {
+        let mut args = vec!["--check", option];
+        if let Some(value) = value {
+            args.push(value);
+        }
+        args.push(path);
+        let out = ttc(&args);
+        let stderr = String::from_utf8(out.stderr).unwrap();
+        assert!(!out.status.success(), "{args:?} should fail");
+        assert_eq!(
+            stderr.trim(),
+            format!("ttc: --check does not combine with {option}")
+        );
+        assert!(out.stdout.is_empty(), "{args:?} polluted stdout");
+    }
+}
+
+#[test]
+fn print_requires_one_self_contained_stdout_document() {
+    let dir = tmpdir();
+    let first = dir.join("first.tt");
+    let second = dir.join("second.tt");
+    fs::write(&first, "export const first = 1;\n").unwrap();
+    fs::write(&second, "export const second = 2;\n").unwrap();
+
+    let external_map = ttc(&["--print", "--source-map", "file", first.to_str().unwrap()]);
+    assert!(!external_map.status.success());
+    assert!(external_map.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(external_map.stderr).unwrap().trim(),
+        "ttc: --print requires --source-map off or inline; file maps require written output"
+    );
+
+    let multiple = ttc(&["--print", first.to_str().unwrap(), second.to_str().unwrap()]);
+    assert!(!multiple.status.success());
+    assert!(multiple.stdout.is_empty());
+    assert_eq!(
+        String::from_utf8(multiple.stderr).unwrap().trim(),
+        "ttc: --print requires exactly one source file"
     );
 }
 
@@ -670,566 +1071,274 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     assert!(err.contains("gone.tt"), "{err}");
 }
 
-/// The overlay is what gets checked: a mutation that exists only in the
-/// buffer is reported, and one that exists only on disk is not. This is the
-/// whole point — an editor asks about the text it is showing.
+include!("cli/cases_01.rs");
+
+/// A `#!` line and a byte-order mark are only themselves when they come
+/// first, so the generated banner is written after them (TASK-336). A
+/// comment above either one turns a runnable script into a parse error and
+/// leaves a stray U+FEFF in the middle of the file.
 #[test]
-fn overlay_checks_the_buffer_rather_than_the_saved_file() {
-    require_types_toolchain!();
-    let saved = "val const saved = new Map<string, number>();\n\
-                 saved.set(\"gone\", 1);\n\
-                 export const n = saved.size;\n";
-    let buffer = "val const edited = new Map<string, number>();\n\
-                  edited.delete(\"new\");\n\
-                  export const n = edited.size;\n";
-
-    let err = types_stderr_overlay(saved, buffer, true);
-    assert!(
-        err.contains("cannot call mutating method `delete` through val binding `edited`"),
-        "the buffer's mutation should be reported:\n{err}"
-    );
-    assert!(
-        !err.contains("saved"),
-        "the saved file's text should not be checked:\n{err}"
-    );
-    // The position is the buffer's, and the file is named as the user knows
-    // it — not as a temporary.
-    assert!(err.contains("--> src/main.tt:2:1"), "{err}");
-}
-
-/// `--tt-only` drops TypeScript's layer and keeps tt's. The editor uses this
-/// form when its type-diagnostic setting is disabled.
-#[test]
-fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
-    require_types_toolchain!();
-    let source = "val const scores = new Map<string, number>();\n\
-                  scores.set(\"a\", 1);\n\
-                  const wrong: number = \"not a number\";\n\
-                  export const n = scores.size + wrong;\n";
-
-    let full = types_stderr_overlay(source, source, false);
-    assert!(
-        full.contains("type mismatch: expected `number`, found `\"not a number\"`"),
-        "{full}"
-    );
-    assert!(full.contains("cannot call mutating method `set`"), "{full}");
-
-    let tt_only = types_stderr_overlay(source, source, true);
-    assert!(
-        !tt_only.contains("type mismatch:"),
-        "no type error should survive --tt-only:\n{tt_only}"
-    );
-    assert!(
-        tt_only.contains("cannot call mutating method `set`"),
-        "{tt_only}"
-    );
-}
-
-/// A `val` mutation is judged by what the receiver *is*, and the overlay
-/// keeps the buffer in its own project — so a type that comes from another
-/// module of the project still resolves.
-#[test]
-fn overlay_keeps_the_buffer_in_its_project() {
-    require_types_toolchain!();
+fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
     let dir = tmpdir();
-    let src = dir.join("src");
-    fs::create_dir_all(&src).unwrap();
-    fs::write(
-        src.join("store.ts"),
-        "export const scores = new Map<string, number>();\n\
-         export class Query { set(k: string): Query { return this; } }\n",
-    )
-    .unwrap();
-    let file = src.join("main.tt");
-    fs::write(&file, "export const nothing = 0;\n").unwrap();
-
-    let buffer = "import { scores, Query } from \"./store\";\n\
-                  val const shared = scores;\n\
-                  shared.set(\"a\", 1);\n\
-                  val const query = new Query();\n\
-                  query.set(\"b\");\n\
-                  export const n = shared.size;\n";
-
-    use std::io::Write;
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .args([
-            "--check-types",
-            "--tt-only",
-            "--overlay",
-            file.to_str().unwrap(),
-            "src",
-        ])
-        .current_dir(&dir)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .expect("failed to run ttc");
-    child
-        .stdin
-        .take()
-        .expect("stdin piped")
-        .write_all(buffer.as_bytes())
-        .unwrap();
-    let out = child.wait_with_output().expect("failed to run ttc");
-    let err = String::from_utf8_lossy(&out.stderr).into_owned();
-
-    // `Map#set` through the imported binding is a built-in mutation …
-    assert!(
-        err.contains("cannot call mutating method `set` through val binding `shared`"),
-        "{err}"
-    );
-    // … and `Query#set`, which only shares the name, is not.
-    assert!(!err.contains("`query`"), "{err}");
-}
-
-/// `ttc --server` answers `ttSymbol` without a project or a toolchain: the
-/// names it resolves exist only in `.tt` source, so nothing else can.
-#[test]
-fn the_server_resolves_tt_names_without_a_toolchain() {
-    use std::io::Write;
-    let dir = tmpdir();
-    let file = dir.join("shape.tt");
-    let source = "variant Shape { Circle(radius: number), Point }\n\
-                  const a = match (s) { Circle(radius) => radius, Point => 0 };\n";
-    fs::write(&file, source).unwrap();
-
-    let request = serde_json::json!({
-        "id": 1,
-        "method": "ttSymbol",
-        "params": {
-            "path": file.to_string_lossy(),
-            "text": source,
-            // line 1, on the `Circle` of the match arm
-            "position": { "line": 1, "character": 22 },
-        },
-    });
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .arg("--server")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .expect("server starts");
-    writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
-    drop(child.stdin.take());
-    let out = child.wait_with_output().expect("server answers");
-    let answer: serde_json::Value =
-        serde_json::from_slice(String::from_utf8_lossy(&out.stdout).trim().as_bytes())
-            .expect("one JSON line");
-    assert_eq!(answer["result"]["kind"], "case");
-    assert_eq!(answer["result"]["variantName"], "Shape");
-    assert!(answer["result"].get("enumName").is_none());
-    assert_eq!(
-        answer["result"]["signature"],
-        "Shape.Circle(radius: number)"
-    );
-    // ...and points at the declaration on line 0.
-    assert_eq!(answer["result"]["definition"]["range"]["start"]["line"], 0);
-}
-
-/* ------------------------------------------------------------------ */
-/* typed check without a backend (TASK-124)                            */
-/* ------------------------------------------------------------------ */
-
-#[test]
-fn a_missing_backend_still_reports_tt_diagnostics() {
-    // The TypeScript layer failing to run removes the typed facts, not
-    // the pass: tt's own diagnostics are still reported in full, the
-    // failure is named, and the exit code stays "could not check" (2).
-    let dir = tmpdir();
-    fs::write(
-        dir.join("a.tt"),
-        "variant E { A(x: number), B }\n\
-         const v = match (E.A(1)) { A(x) => x, A(x) => 0, B => 1 };\n",
-    )
-    .unwrap();
-    // A temporary directory has no `node_modules` above it, so the project
-    // has no TypeScript and the backend cannot run — the one way to say
-    // that now that a toolchain comes from the project and nowhere else.
-    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .args(["--check-types", dir.to_str().unwrap()])
-        .output()
-        .expect("failed to run ttc");
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(out.status.code(), Some(2), "{stderr}");
-    assert!(stderr.contains("duplicate arm"), "{stderr}");
-    assert!(
-        stderr.contains("only tt-level diagnostics are shown"),
-        "{stderr}"
-    );
-}
-
-#[test]
-fn a_build_writes_no_source_map_unless_it_is_asked_for() {
-    // TASK-200: emitting a map appends a `sourceMappingURL` line, and a
-    // hand-written `.ts` passes through byte for byte by contract — so the
-    // default has to be off.
-    let dir = tmpdir();
-    let source = dir.join("a.tt");
     let out_dir = dir.join("out");
-    fs::write(
-        &source,
-        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
-    )
-    .unwrap();
-    let out = ttc(&[
+    let shebang = dir.join("cli.tt");
+    fs::write(&shebang, "#!/usr/bin/env node\nconsole.log(1);\n").unwrap();
+    // A hand-written `.ts` passes through, and its shebang matters too.
+    let passthrough = dir.join("plain.ts");
+    fs::write(&passthrough, "#!/usr/bin/env node\nconsole.log(2);\n").unwrap();
+    let bom = dir.join("bom.tt");
+    fs::write(&bom, "\u{feff}export const a = 1;\n").unwrap();
+    // A shebang that runs to the end of the file still needs a line break
+    // before the banner.
+    let bare = dir.join("bare.tt");
+    fs::write(&bare, "#!/usr/bin/env node").unwrap();
+
+    let output = ttc(&[
         "-o",
         out_dir.to_str().unwrap(),
-        "--no-banner",
-        source.to_str().unwrap(),
+        dir.path().to_str().unwrap(),
     ]);
-    assert!(out.status.success(), "{out:?}");
-    let code = fs::read_to_string(out_dir.join("a.ts")).unwrap();
-    assert!(!code.contains("sourceMappingURL"), "{code}");
-    assert!(!out_dir.join("a.ts.map").exists());
-}
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
-#[test]
-fn a_source_map_file_lands_beside_its_output_and_names_the_tt_source() {
-    let dir = tmpdir();
-    let src_dir = dir.join("src");
-    fs::create_dir_all(&src_dir).unwrap();
-    let source = src_dir.join("a.tt");
-    let out_dir = dir.join("out");
-    fs::write(
-        &source,
-        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
-    )
-    .unwrap();
-    let out = ttc(&[
-        "-o",
-        out_dir.to_str().unwrap(),
-        "--source-map",
-        "file",
-        "--no-banner",
-        source.to_str().unwrap(),
-    ]);
-    assert!(out.status.success(), "{out:?}");
-    let code = fs::read_to_string(out_dir.join("a.ts")).unwrap();
-    assert!(code.ends_with("//# sourceMappingURL=a.ts.map\n"), "{code}");
-    let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
-    assert!(map.contains("\"version\":3"), "{map}");
-    assert!(map.contains("\"file\":\"a.ts\""), "{map}");
-    // The map sits in `out/`, the source in `src/`; the name it records has
-    // to resolve from the map's own directory even on a first build, when
-    // `out/` did not exist while the map was being built.
-    assert!(map.contains("\"sources\":[\"../src/a.tt\"]"), "{map}");
-    assert!(map.contains("\"sourcesContent\""), "{map}");
-}
-
-#[test]
-fn an_inline_source_map_travels_with_printed_output() {
-    let dir = tmpdir();
-    let source = dir.join("a.tt");
-    fs::write(
-        &source,
-        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
-    )
-    .unwrap();
-    let out = ttc(&[
-        "-p",
-        "--no-banner",
-        "--source-map",
-        "inline",
-        source.to_str().unwrap(),
-    ]);
-    assert!(out.status.success(), "{out:?}");
-    let code = String::from_utf8(out.stdout).unwrap();
-    let marker = "//# sourceMappingURL=data:application/json;charset=utf-8;base64,";
-    let at = code.find(marker).expect("inline map");
-    let encoded = code[at + marker.len()..].trim_end();
-    let json = String::from_utf8(base64_decode(encoded)).expect("utf-8 map");
-    assert!(json.contains("\"version\":3"), "{json}");
-    assert!(json.contains("a.tt"), "{json}");
-}
-
-/// Minimal Base64 decoder for the inline-map test — the test decodes what
-/// the compiler encoded rather than comparing encoded text.
-fn base64_decode(text: &str) -> Vec<u8> {
-    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut bits = 0u32;
-    let mut count = 0u32;
-    let mut out = Vec::new();
-    for byte in text.bytes().filter(|b| *b != b'=') {
-        let value = ALPHABET
-            .iter()
-            .position(|c| *c == byte)
-            .unwrap_or_else(|| panic!("not base64: {byte}")) as u32;
-        bits = (bits << 6) | value;
-        count += 6;
-        if count >= 8 {
-            count -= 8;
-            out.push((bits >> count) as u8);
-        }
+    for name in ["cli.ts", "plain.ts"] {
+        let emitted = fs::read_to_string(out_dir.join(name)).unwrap();
+        let mut lines = emitted.lines();
+        assert_eq!(
+            lines.next(),
+            Some("#!/usr/bin/env node"),
+            "{name}: {emitted}"
+        );
+        assert!(
+            lines
+                .next()
+                .is_some_and(|line| line.starts_with("// @generated")),
+            "{name}: {emitted}"
+        );
     }
-    out
+    let bom_emitted = fs::read_to_string(out_dir.join("bom.ts")).unwrap();
+    assert!(
+        bom_emitted.starts_with("\u{feff}// @generated"),
+        "{bom_emitted:?}"
+    );
+    assert_eq!(
+        bom_emitted.matches('\u{feff}').count(),
+        1,
+        "{bom_emitted:?}"
+    );
+    let bare_emitted = fs::read_to_string(out_dir.join("bare.ts")).unwrap();
+    assert_eq!(
+        bare_emitted.lines().next(),
+        Some("#!/usr/bin/env node"),
+        "{bare_emitted:?}"
+    );
+    assert!(
+        bare_emitted
+            .lines()
+            .nth(1)
+            .is_some_and(|line| line.starts_with("// @generated")),
+        "{bare_emitted:?}"
+    );
 }
 
+/// The banner shifts the lines below it, and only those: a shebang keeps
+/// line 1, so a map built against the emission must not shift it (TASK-336).
 #[test]
-fn a_pass_through_file_keeps_its_bytes_even_when_maps_are_on() {
-    // Invariant 1: a valid `.ts` is copied byte for byte. There is no
-    // translation for a map to describe, so none is written.
+fn a_source_map_follows_the_banner_past_a_shebang() {
     let dir = tmpdir();
-    let source = dir.join("plain.ts");
     let out_dir = dir.join("out");
-    let text = "export const x: number = 1;\n";
-    fs::write(&source, text).unwrap();
-    let out = ttc(&[
-        "-o",
-        out_dir.to_str().unwrap(),
-        "--source-map",
-        "file",
-        "--no-banner",
-        source.to_str().unwrap(),
-    ]);
-    assert!(out.status.success(), "{out:?}");
-    assert_eq!(fs::read_to_string(out_dir.join("plain.ts")).unwrap(), text);
-    assert!(!out_dir.join("plain.ts.map").exists());
-}
-
-#[test]
-fn a_banner_shifts_the_map_so_positions_still_line_up() {
-    let dir = tmpdir();
-    let source = dir.join("a.tt");
-    let out_dir = dir.join("out");
+    let source = dir.join("trace.tt");
     fs::write(
         &source,
-        "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
+        "#!/usr/bin/env node\nvariant Shape { Circle(radius: number), Square(side: number) }\n\
+         export const area = (s: Shape): number => match (s) {\n\
+         \x20 Circle(radius) => radius,\n\
+         \x20 Square(side) => side,\n\
+         };\n",
     )
     .unwrap();
-    let with_banner = ttc(&[
-        "-o",
-        out_dir.to_str().unwrap(),
+    let output = ttc(&[
         "--source-map",
         "file",
+        "-o",
+        out_dir.to_str().unwrap(),
         source.to_str().unwrap(),
     ]);
-    assert!(with_banner.status.success(), "{with_banner:?}");
-    let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let map = fs::read_to_string(out_dir.join("trace.ts.map")).unwrap();
     let mappings = map
         .split("\"mappings\":\"")
         .nth(1)
         .and_then(|rest| rest.split('"').next())
-        .expect("mappings");
-    // The banner is one generated line with nothing behind it.
-    assert!(mappings.starts_with(';'), "{mappings}");
-    assert!(!mappings.starts_with(";;"), "{mappings}");
-}
-
-/* ------------------------------------------------------------------ */
-/* ttc explain                                                        */
-/* ------------------------------------------------------------------ */
-
-#[test]
-fn explain_prints_the_rule_behind_a_code() {
-    let out = ttc(&["explain", "match-not-exhaustive"]);
-    assert!(out.status.success(), "{out:?}");
-    let text = String::from_utf8(out.stdout).unwrap();
-    assert!(text.starts_with("error[match-not-exhaustive]"), "{text}");
-    assert!(text.contains("does not cover every case"), "{text}");
-    // Longer than the message it explains — that is the point of it.
-    assert!(text.lines().count() > 4, "{text}");
-}
-
-#[test]
-fn explain_accepts_a_code_pasted_from_a_build_log() {
-    // What a reader copies is `error[val-mutation]`, brackets and all.
-    let out = ttc(&["explain", "error[val-mutation]"]);
-    assert!(out.status.success(), "{out:?}");
-    let text = String::from_utf8(out.stdout).unwrap();
-    assert!(text.starts_with("error[val-mutation]"), "{text}");
-}
-
-#[test]
-fn explain_with_no_code_lists_every_rule() {
-    let out = ttc(&["explain"]);
-    assert!(out.status.success(), "{out:?}");
-    let text = String::from_utf8(out.stdout).unwrap();
-    for code in ttc::DiagnosticCode::ALL {
-        assert!(
-            text.contains(code.as_str()),
-            "{} missing:\n{text}",
-            code.as_str()
-        );
-    }
-}
-
-#[test]
-fn explain_names_the_list_when_the_code_is_unknown() {
-    let out = ttc(&["explain", "no-such-rule"]);
-    assert!(!out.status.success(), "{out:?}");
-    let err = String::from_utf8(out.stderr).unwrap();
-    assert!(err.contains("unknown diagnostic code"), "{err}");
-    assert!(err.contains("ttc explain"), "{err}");
-}
-
-/* ------------------------------------------------------------------ */
-/* rendered diagnostics                                               */
-/* ------------------------------------------------------------------ */
-
-#[test]
-fn a_diagnostic_is_rendered_with_its_rule_position_snippet_and_fix() {
-    // The whole user-visible contract of a tt error, in one place: the
-    // rule's code names it, `-->` places it, the snippet quotes the line
-    // the reader has to change, the carets cover the construct as written,
-    // and `= help:` says what to write instead.
-    let dir = tmpdir();
-    let source = dir.join("shapes.tt");
-    fs::write(
-        &source,
-        "variant Shape { Circle(radius: number), Empty }\nconst a = match (s) { Circel(radius) => radius, Empty => 0 };\n",
-    )
-    .unwrap();
-    let out = ttc(&["--check", source.to_str().unwrap()]);
-    assert!(!out.status.success(), "expected a failing exit code");
-    let err = String::from_utf8(out.stderr).unwrap();
-    let rendered: Vec<&str> = err.lines().map(|line| line.trim_end()).collect();
-
-    assert_eq!(
-        rendered[0],
-        "error[unknown-case]: variant Shape has no case `Circel`",
-    );
-    assert!(rendered[1].ends_with("shapes.tt:2:23"), "{err}");
-    assert!(rendered[1].trim_start().starts_with("-->"), "{err}");
-    assert_eq!(rendered[2], "  |");
-    assert_eq!(
-        rendered[3],
-        "2 | const a = match (s) { Circel(radius) => radius, Empty => 0 };",
-    );
-    assert_eq!(
-        rendered[4], "  |                       ^^^^^^",
-        "the carets cover the tag as written\n{err}",
-    );
-    assert_eq!(rendered[5], "  |");
-    assert_eq!(
-        rendered[6],
-        "  = help: a case with a similar name exists: `Circle`",
-    );
-}
-
-#[test]
-fn the_rendered_code_is_the_one_explain_answers_to() {
-    // A reader's path out of a diagnostic: read the code off the header,
-    // paste it into `ttc explain`. That only works if they are the same
-    // string, so this pins the round trip rather than each half.
-    let dir = tmpdir();
-    let source = dir.join("holes.tt");
-    fs::write(
-        &source,
-        "variant Shape { Circle(r: number), Empty }\nconst a = match (s) { Circle(r) => r };\n",
-    )
-    .unwrap();
-    let out = ttc(&["--check", source.to_str().unwrap()]);
-    let err = String::from_utf8(out.stderr).unwrap();
-    let code = err
-        .split_once("error[")
-        .and_then(|(_, rest)| rest.split_once(']'))
-        .map(|(code, _)| code.to_string())
-        .unwrap_or_else(|| panic!("no rendered code:\n{err}"));
-    assert_eq!(code, "match-not-exhaustive");
-
-    let explained = ttc(&["explain", &code]);
-    assert!(explained.status.success(), "`ttc explain {code}` failed");
-}
-
-/* ------------------------------------------------------------------ */
-/* the panic safety net (TASK-214)                                    */
-/* ------------------------------------------------------------------ */
-
-/// `ttc` with the environment a test needs. `TTC_PANIC_FOR_TEST` makes a
-/// debug build fail at a named point, which is the only way to observe
-/// what the compiler does when the compiler itself is wrong.
-fn ttc_failing_at(point: &str, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .args(args)
-        .env("TTC_PANIC_FOR_TEST", point)
-        // The report offers a backtrace; a test reads the report.
-        .env_remove("RUST_BACKTRACE")
-        .output()
-        .expect("failed to run ttc")
-}
-
-#[test]
-fn a_compiler_bug_is_reported_as_a_bug_and_names_the_file() {
-    let dir = tmpdir();
-    let source = dir.join("main.tt");
-    fs::write(&source, "const a = 1;\n").unwrap();
-    let out = ttc_failing_at("compile", &["--check", source.to_str().unwrap()]);
-
-    // 101 is what a Rust panic exits with; keeping it means a caller that
-    // already distinguishes "crashed" from "your code is wrong" still can.
-    assert_eq!(out.status.code(), Some(101), "{out:?}");
-    let err = String::from_utf8_lossy(&out.stderr);
+        .expect("a mappings field");
+    // The shebang owns generated line 1 in both files, so the first line of
+    // the map carries a segment rather than being skipped by the banner's
+    // shift.
     assert!(
-        err.starts_with("error: internal compiler error:"),
-        "the report has to lead, not a backtrace: {err}"
-    );
-    assert!(
-        err.contains(&format!("while compiling: {}", source.display())),
-        "the report names the file it was working on: {err}"
-    );
-    assert!(
-        err.contains("This is a bug in ttc, not in the code it was given"),
-        "a reader must not think their own file is at fault: {err}"
-    );
-    assert!(err.contains("github.com/load28/tt/issues"), "{err}");
-    assert!(
-        err.contains("RUST_BACKTRACE=1"),
-        "and must be told how to attach a backtrace: {err}"
+        !mappings.starts_with(';'),
+        "the shebang line lost its mapping: {mappings}"
     );
 }
 
+/// A reader that stops reading is the reader's decision, not a compiler
+/// failure: `ttc --help | head` must end quietly rather than reporting an
+/// internal compiler error and exiting 101 (TASK-337).
 #[test]
-fn the_server_answers_a_failed_request_and_keeps_the_session() {
-    // The protocol promises a failed request never ends the session. A
-    // panic is a failed request, so it may not be the exception.
-    use std::io::Write;
+fn a_closed_stdout_ends_the_run_quietly() {
+    use std::io::Read;
     use std::process::Stdio;
 
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .arg("--server")
-        .env("TTC_PANIC_FOR_TEST", "server")
-        .env_remove("RUST_BACKTRACE")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("failed to spawn the server");
-    let requests = "{\"id\":1,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n\
-                    {\"id\":2,\"method\":\"check\",\"params\":{\"text\":\"const b = 2;\\n\"}}\n";
-    child
-        .stdin
-        .as_mut()
-        .unwrap()
-        .write_all(requests.as_bytes())
-        .unwrap();
-    drop(child.stdin.take());
-    let out = child.wait_with_output().unwrap();
-
-    // Both questions were answered, in order, each with its own id — the
-    // second one is the whole point: the session outlived the first panic.
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let answers: Vec<&str> = stdout.lines().collect();
-    assert_eq!(answers.len(), 2, "both requests answered: {stdout}");
-    for (index, answer) in answers.iter().enumerate() {
-        let value: serde_json::Value = serde_json::from_str(answer).unwrap();
-        assert_eq!(value["id"], serde_json::json!(index + 1), "{answer}");
+    for args in [
+        vec!["--help"],
+        vec!["-v"],
+        vec!["help", "all"],
+        vec!["explain"],
+        vec!["--emit-std", "option"],
+    ] {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(&args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("failed to run ttc");
+        // Read one byte, then drop the pipe: the next write has nowhere to go.
+        let mut stdout = child.stdout.take().expect("piped stdout");
+        let mut first = [0u8; 1];
+        let _ = stdout.read(&mut first);
+        drop(stdout);
+        let output = child.wait_with_output().expect("ttc did not exit");
+        let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
-            value["error"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("internal compiler error"),
-            "{answer}"
+            !stderr.contains("internal compiler error"),
+            "{args:?} reported a compiler bug for a closed pipe: {stderr}"
+        );
+        assert!(
+            output.status.success(),
+            "{args:?} exited with {:?}: {stderr}",
+            output.status.code()
         );
     }
-    // Stdin closing is the only thing that ends the session.
-    assert_eq!(out.status.code(), Some(0), "{out:?}");
-    // And the bug still reached a human, on the stream that is not the
-    // protocol's.
-    let err = String::from_utf8_lossy(&out.stderr);
-    assert_eq!(
-        err.matches("This is a bug in ttc").count(),
-        2,
-        "one report per panic: {err}"
-    );
 }
+
+/// `--project` names the config a check runs against, and its directory
+/// becomes the project root. A path that is not there used to root the
+/// project somewhere the user never named — or reach the TypeScript backend
+/// un-canonicalised — so it is rejected where it is given (TASK-338).
+#[test]
+fn a_project_path_that_is_not_a_file_is_rejected_by_name() {
+    let dir = tmpdir();
+    let source = dir.join("a.tt");
+    fs::write(&source, "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"noEmit\": true } }\n",
+    )
+    .unwrap();
+
+    for spelling in ["./tsconfg.json", "tsconfg.json"] {
+        let output = ttc(&[
+            "--check-types",
+            "--project",
+            spelling,
+            source.to_str().unwrap(),
+        ]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("--project") && stderr.contains(spelling),
+            "{spelling}: {stderr}"
+        );
+        assert!(
+            !stderr.contains("internal compiler error"),
+            "{spelling}: {stderr}"
+        );
+        assert!(!output.status.success(), "{spelling}: {stderr}");
+    }
+
+    let output = ttc(&[
+        "--check-types",
+        "--project",
+        dir.path().to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a file"), "{stderr}");
+    assert!(!output.status.success(), "{stderr}");
+}
+
+/// The output-collision contract has two halves. Two inputs claiming one
+/// output was already refused; one input claiming two — overlapping roots —
+/// used to write the same source twice and exit 0 (TASK-338).
+#[test]
+fn overlapping_input_roots_cannot_write_one_source_twice() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/deep")).unwrap();
+    fs::write(dir.join("src/deep/x.tt"), "export const a = 1;\n").unwrap();
+    fs::write(dir.join("src/y.tt"), "export const b = 2;\n").unwrap();
+    let out_dir = dir.join("out");
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.path().to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("one input claims two outputs"),
+        "overlapping roots were accepted: {stderr}"
+    );
+    assert!(!output.status.success(), "{stderr}");
+
+    // The same root named twice still resolves to one output per source.
+    let twice = dir.join("twice");
+    let output = ttc(&[
+        "-o",
+        twice.to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(twice.join("y.ts").exists());
+}
+
+/// A file named on the command line is filtered like any other: the
+/// extensions are the contract, not how the file was reached (TASK-338).
+#[test]
+fn a_named_file_that_is_not_a_source_is_reported() {
+    let dir = tmpdir();
+    let script = dir.join("app.js");
+    fs::write(&script, "variant S { A, B }\n").unwrap();
+    let output = ttc(&["-p", script.to_str().unwrap()]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not a tt or TypeScript source"), "{stderr}");
+    assert!(!output.status.success(), "{stderr}");
+
+    // Every extension the walk takes still works when named directly.
+    for (name, body) in [
+        ("a.tt", "export const a = 1;\n"),
+        ("b.ts", "export const b = 2;\n"),
+    ] {
+        let file = dir.join(name);
+        fs::write(&file, body).unwrap();
+        let output = ttc(&["-p", file.to_str().unwrap()]);
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[path = "cli/dynamic_imports.rs"]
+mod dynamic_imports;

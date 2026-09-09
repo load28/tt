@@ -57,6 +57,9 @@
 //!   has no type information for them. The whole computation lives in
 //!   [`crate::analysis`]; what is here is the reporting.
 
+mod checker;
+mod coverage;
+
 use crate::analysis::{CoveredVariant, NameKind, Origin, has_nested};
 use crate::ast::*;
 use crate::diagnostics::{
@@ -64,6 +67,9 @@ use crate::diagnostics::{
 };
 use crate::error::TtError;
 use crate::verify;
+use std::collections::HashMap;
+
+use coverage::*;
 
 /// Checks a whole program and returns **every** tt-level violation, in
 /// source order. `verify` enables swc validation of field types; `externs`
@@ -78,25 +84,43 @@ pub(crate) fn check_all(
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
-    analyses: &crate::analysis::PatternAnalyses,
+    semantic: &crate::analysis::SemanticFile,
 ) -> Vec<TtError> {
+    let result_completions = semantic
+        .hir
+        .exprs
+        .iter()
+        .filter_map(|(_, expr)| {
+            let crate::hir::Expr::ResultBlock {
+                node, completes, ..
+            } = expr
+            else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            Some((span.start, *completes))
+        })
+        .collect();
     let mut checker = Checker {
+        source: source.to_owned(),
+        tokens: crate::lexer::lex(source, 0, source.len()),
         verify,
         errors: Vec::new(),
         coverage_suppressed: Vec::new(),
+        result_completions,
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
     // names do not resolve has no exhaustiveness question worth asking, and
     // answering both at once would bury the cause under its effect. With
-    // accumulation the suppression is per match ([`MatchAnalysis::
-    // has_unresolved`]), not per file: match B's coverage is not match A's
-    // typo's business.
-    report_resolution(analyses, &mut checker.errors);
+    // accumulation the suppression is per match
+    // ([`PatternAnalyses::match_has_resolution_error`]), not per file: match
+    // B's coverage is not match A's typo's business.
+    checker.errors.extend(resolution_errors(&semantic.patterns));
     if !defer_to_checker {
         report_coverage(
             source,
-            analyses,
+            &semantic.patterns,
             &checker.coverage_suppressed,
             &mut checker.errors,
         );
@@ -116,7 +140,8 @@ pub(crate) fn check_all(
 /// an unresolved name is reportable belongs to the analysis (which is what
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
-fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut Vec<TtError>) {
+pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> Vec<TtError> {
+    let mut errors = Vec::with_capacity(analyses.unresolved.len());
     for unresolved in &analyses.unresolved {
         let described = describe(&CoveredVariant {
             name: unresolved.variant_name.clone(),
@@ -154,9 +179,12 @@ fn report_resolution(analyses: &crate::analysis::PatternAnalyses, errors: &mut V
                 ),
         );
     }
+    errors
 }
 
 struct Checker {
+    source: String,
+    tokens: Vec<crate::lexer::Token>,
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,
@@ -165,6 +193,10 @@ struct Checker {
     /// stacked on a cause, so [`report_coverage`] skips them — the same
     /// per-match recovery boundary resolution failures use.
     coverage_suppressed: Vec<usize>,
+    /// Result completion is a HIR flow fact. Index it by the AST node's
+    /// stable source start so this AST diagnostic walk consumes the same
+    /// answer codegen will lower instead of running a second CFG query.
+    result_completions: HashMap<usize, bool>,
 }
 
 /// The (field, bound name) pairs a tag alternative destructures, sorted so
@@ -248,8 +280,10 @@ enum Ctx {
 /// statement itself stands, so they inherit its place (upgraded to
 /// [`Place::Function`] when the statement sits inside a function written
 /// in its region). A match arm body, a `result` block's statements, and
-/// every isolated value region reset to [`Place::ValueRegion`] — an exit
-/// written there belongs to the construct value, never the user's function.
+/// every isolated value region reset to its owning place — match arms use
+/// [`Place::ValueRegion`], while `result` bodies use [`Place::ResultRegion`].
+/// An exit written there belongs to the construct value, never the user's
+/// function.
 #[derive(Clone, Copy, PartialEq)]
 enum Place {
     /// The module's top level (or an inline chain that bottoms out there).
@@ -258,6 +292,12 @@ enum Place {
     Function,
     /// Inside an isolated tt value region.
     ValueRegion,
+    /// Inside an isolated value region nested in a `result` block. The
+    /// current function-targeted `try` would cross that region once Result
+    /// scope becomes lexical, so the permanent crossing diagnostic reports it.
+    ResultValueRegion,
+    /// Inside a `result` block, whose generated region owns its returns.
+    ResultRegion,
 }
 
 impl Place {
@@ -267,766 +307,12 @@ impl Place {
     fn inline(self, in_function: bool) -> Place {
         if in_function { Place::Function } else { self }
     }
-}
 
-impl Checker {
-    fn error(&mut self, error: TtError) {
-        self.errors.push(error);
-    }
-
-    fn visit_program(&mut self, program: &Program, ctx: Ctx, place: Place) {
-        for error in &program.malformed {
-            self.error(error.clone());
-        }
-        // A stray `|>` or `if let` cannot be passed through: neither is
-        // valid TypeScript, so the output self-check would fail without a
-        // position. Report them as tt errors here instead (error-layering
-        // contract) — all of them, not the first.
-        for &off in &program.stray_pipes {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "|>".len(),
-                    "pipeline: `|>` could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayPipe)
-                .help("a step is an expression — parenthesize a ternary or an arrow function"),
-            );
-        }
-        for &off in &program.stray_if_lets {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "if".len(),
-                    "`if let` could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayIfLet)
-                .help(
-                    "the pattern parens are mandatory, and the `else` must be a block or \
-                     another `if let`",
-                ),
-            );
-        }
-        for &off in &program.stray_results {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "result".len(),
-                    "`result` block could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayResult)
-                .help(
-                    "every binding is `const <binding> <- <expression>;`, and the block must \
-                     end with an expression",
-                ),
-            );
-        }
-        for &span in &program.result_missing_kw {
-            self.error(
-                TtError::span(
-                    span.start,
-                    span.end,
-                    "`result` binding is missing its declaration keyword".to_string(),
-                )
-                .code(DiagnosticCode::ResultMissingKeyword)
-                // The keyword goes in front of the binding, so the fix is
-                // one insertion the reporter can write. `const` is the
-                // suggested one; `let` and `var` bind the same way and the
-                // message names them.
-                .suggest(
-                    "declare the binding — `const` (or `let`/`var`) in front of it",
-                    span.start,
-                    span.start,
-                    "const ",
-                ),
-            );
-        }
-        for &span in &program.result_nested_binds {
-            self.error(
-                TtError::span(
-                    span.start,
-                    span.end,
-                    "`<-` binding must be a top-level statement of the `result` block — \
-                     nested inside a block or a function it cannot early-return the \
-                     block's `Err`"
-                        .to_string(),
-                )
-                .code(DiagnosticCode::ResultNestedBinding)
-                .help("hoist it to the block's top level, or `match` on the `Result` instead"),
-            );
-        }
-        for segment in &program.segments {
-            match segment {
-                Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
-                Segment::Variant(decl) => self.check_variant(decl),
-                Segment::Match(expr) => self.check_match(expr),
-                Segment::TupleMatch(expr) => self.check_tuple_match(expr),
-                Segment::Try(stmt) => self.check_try(stmt, place),
-                Segment::LetElse(stmt) => self.check_let_else(stmt, place),
-                Segment::IfLet(stmt) => self.check_if_let(stmt, ctx, place),
-                Segment::ResultBlock(block) => self.check_result_block(block),
-                Segment::Pipe(pipe) => {
-                    // A `flow` composition has no value to chain a method
-                    // onto until its first function has produced one, so
-                    // its first step must be an ordinary function step.
-                    if pipe.head.is_none()
-                        && let Some(first) = pipe.steps.first()
-                        && matches!(first.kind, PipeStepKind::Postfix { .. })
-                    {
-                        self.error(
-                            TtError::span(
-                                first.span.start,
-                                first.span.end,
-                                "`flow`: the first step cannot be a method step — it is the \
-                                 composed function's input, so it must be a function"
-                                    .to_string(),
-                            )
-                            .code(DiagnosticCode::FlowFirstStepMethod)
-                            .help(
-                                "write the step as a function — \
-                                 `flow |> ((s: string) => s.trim()) |> ...`",
-                            ),
-                        );
-                    }
-                    if pipe.head_kind == PipeHeadKind::BareSuper
-                        && pipe.steps.first().is_some_and(|step| {
-                            matches!(step.kind, PipeStepKind::Postfix { optional: true })
-                        })
-                    {
-                        self.error(
-                            TtError::span(
-                                pipe.head_span.start,
-                                pipe.head_span.end,
-                                "pipeline: `super` cannot be an optional-chain receiver"
-                                    .to_string(),
-                            )
-                            .code(DiagnosticCode::InvalidOptionalReceiver)
-                            .owner(
-                                pipe.head_span.start,
-                                pipe.steps
-                                    .last()
-                                    .map_or(pipe.head_span.end, |step| step.span.end),
-                            )
-                            .help("access a concrete `super.member` before the optional step"),
-                        );
-                    }
-                    // Head and steps are expressions — `try` inside them is
-                    // rejected for the same reason as inside a match.
-                    if let Some(head) = &pipe.head {
-                        self.visit_program(head, Ctx::Expr, Place::ValueRegion);
-                    }
-                    for step in &pipe.steps {
-                        self.visit_program(&step.body, Ctx::Expr, Place::ValueRegion);
-                    }
-                }
-                Segment::Template(template) => {
-                    for chunk in &template.chunks {
-                        if let TemplateChunk::Interp(interp) = chunk {
-                            self.visit_program(interp, Ctx::Expr, Place::ValueRegion);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// `try` placement is a **flow** fact, not a nesting rule: the lowering
-    /// emits a `return`, so the statement must run inside a user-written
-    /// function — one written in its own region (a `try` inside an arrow
-    /// in a match arm, a scrutinee, a pipeline step is fine, exactly like
-    /// `?` inside a closure in Rust), or one an inline chain (an `if let`
-    /// body, a let-else `else` block) bottoms out in. Without one, the
-    /// `return` would exit the construct's own value region, or fall at the
-    /// module's top level, where there is nothing to return from.
-    fn check_try(&mut self, stmt: &TryStmt, place: Place) {
-        if !stmt.in_function && place != Place::Function {
-            let (message, help) = if place == Place::Module {
-                (
-                    "`try` must be inside a function — it compiles to a `return` that \
-                     propagates the `Err`, and at the top level of a module there is no \
-                     function to return from",
-                    "move the code into a function whose `Err` this can return, or `match` \
-                     on the `Result` instead",
-                )
-            } else {
-                (
-                    "`try` cannot be used here — it compiles to a `return`, which would \
-                     exit this construct's own IIFE instead of the enclosing function",
-                    "extract the logic into a function (a `try` inside a function written \
-                     here is fine), or use a `<-` binding in a `result` block",
-                )
-            };
-            self.error(
-                TtError::span(stmt.span.start, stmt.span.end, message.to_string())
-                    .code(DiagnosticCode::TryPlacement)
-                    .help(help),
-            );
-        }
-        self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
-    }
-
-    /// let-else placement is the same flow fact as `try`'s, except the
-    /// module's top level is fine: the lowering emits no `return` of its
-    /// own (a `throw`-diverging `else` is valid anywhere), so only
-    /// [`Place::ValueRegion`] regions — where the `else`'s exits would leave the
-    /// construct's value boundary — need a function written in the region.
-    fn check_let_else(&mut self, stmt: &LetElseStmt, place: Place) {
-        if place == Place::ValueRegion && !stmt.in_function {
-            self.error(
-                TtError::span(
-                    stmt.head_span.start,
-                    stmt.head_span.end,
-                    "let-else cannot be used here — its `else` block's exit (`return`, \
-                     `break`, `continue`) would leave this construct's own IIFE instead of \
-                     the enclosing function"
-                        .to_string(),
-                )
-                .code(DiagnosticCode::LetElsePlacement)
-                .help(
-                    "extract the logic into a function (a let-else inside a function \
-                     written here is fine), or `match` on the value instead",
-                ),
-            );
-        }
-        if !stmt.diverges {
-            self.error(
-                TtError::span(
-                    stmt.else_off,
-                    stmt.else_off + "else".len(),
-                    "let-else: every path through the `else` block must diverge".to_string(),
-                )
-                .code(DiagnosticCode::LetElseNotDiverging)
-                .help(
-                    "end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` \
-                     counts when both branches do)",
-                ),
-            );
-        }
-        self.check_leaf_bindings(&stmt.alternatives[0]);
-        self.check_alternatives(&stmt.alternatives, "let-else");
-        self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
-        // The `else` block is inline: its statements run where the
-        // statement stands.
-        self.visit_program(&stmt.else_body, Ctx::Stmt, place.inline(stmt.in_function));
-    }
-
-    /// `if let` emits a self-contained block statement, so it needs a
-    /// statement position — which an expression region provides exactly
-    /// when the user wrote a function there (the same flow fact that
-    /// places `try`, judged from the other side: no value boundary to escape, just
-    /// a statement stream to stand in).
-    fn check_if_let(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
-        if ctx == Ctx::Expr && !stmt.in_function {
-            self.error(
-                TtError::span(
-                    stmt.head_span.start,
-                    stmt.head_span.end,
-                    "`if let` cannot be used in expression position (a template \
-                     interpolation, a scrutinee or guard, an expression arm body, a `try` \
-                     expression, or a pipeline) — it compiles to a block statement"
-                        .to_string(),
-                )
-                .code(DiagnosticCode::IfLetPlacement)
-                .help(
-                    "write it inside a function here (an `if let` in one is fine), or \
-                     `match` on the value instead",
-                ),
-            );
-        }
-        self.check_leaf_bindings(&stmt.alternatives[0]);
-        self.check_alternatives(&stmt.alternatives, "if let");
-        self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
-        // The then/else bodies are inline: their statements run where the
-        // statement stands, so a `try` inside them exits the function the
-        // chain bottoms out in.
-        let inline = place.inline(stmt.in_function);
-        self.visit_program(&stmt.body, Ctx::Stmt, inline);
-        match &stmt.else_part {
-            Some(IfLetElse::Block(block)) => self.visit_program(block, Ctx::Stmt, inline),
-            Some(IfLetElse::IfLet(inner)) => self.check_if_let(inner, Ctx::Stmt, inline),
-            None => {}
-        }
-    }
-
-    /// The rules every multi-alternative pattern shares with a match
-    /// or-arm ([`Checker::check_match`] keeps its own interleaved copy —
-    /// its duplicate-arm bookkeeping decides which alternatives are even
-    /// compared): the alternatives share one emitted destructuring, so a
-    /// nested pattern cannot ride in them and every alternative must bind
-    /// the same (field, name) set. `construct` prefixes the message.
-    fn check_alternatives(&mut self, alts: &[TagPattern], construct: &str) {
-        if alts.len() < 2 {
-            return;
-        }
-        if let Some(at) = alts.iter().find(|a| has_nested(a)) {
-            self.error(
-                TtError::span(
-                    at.tag_off,
-                    at.tag_off + at.tag.len(),
-                    format!("{construct}: nested patterns cannot be combined with or-patterns"),
-                )
-                .code(DiagnosticCode::MatchNestedInOrPattern),
-            );
-        }
-        let first_set = binding_set(&alts[0].bindings);
-        for alt in &alts[1..] {
-            if binding_set(&alt.bindings) != first_set {
-                self.error(
-                    TtError::span(
-                        alt.tag_off,
-                        alt.tag_off + alt.tag.len(),
-                        format!(
-                            "{construct}: or-pattern alternatives must bind the same names — {}",
-                            binding_mismatch(&alts[0], alt)
-                        ),
-                    )
-                    .code(DiagnosticCode::MatchOrBindingMismatch),
-                );
-            }
-        }
-    }
-
-    /// A `result` block is an expression, so it is allowed anywhere; its
-    /// body is the construct's isolated value stream ([`Place::ValueRegion`] — a `try` or
-    /// let-else there would return from the *block*, not the enclosing
-    /// function), and the bindings and the trailing value are expressions.
-    fn check_result_block(&mut self, block: &ResultBlock) {
-        for item in &block.items {
-            match item {
-                ResultItem::Stmts(stmts) => {
-                    self.visit_program(stmts, Ctx::Stmt, Place::ValueRegion)
-                }
-                ResultItem::Bind(bind) => {
-                    self.visit_program(&bind.expr, Ctx::Expr, Place::ValueRegion)
-                }
-            }
-        }
-        self.visit_program(&block.value, Ctx::Expr, Place::ValueRegion);
-    }
-
-    fn check_variant(&mut self, decl: &VariantDecl) {
-        let mut seen: Vec<&str> = Vec::new();
-        for case in &decl.cases {
-            if seen.contains(&case.tag.as_str()) {
-                self.error(
-                    TtError::span(
-                        case.tag_off,
-                        case.tag_off + case.tag.len(),
-                        format!("variant {}: duplicate case \"{}\"", decl.name, case.tag),
-                    )
-                    .code(DiagnosticCode::VariantDuplicateCase),
-                );
-                continue;
-            }
-            seen.push(&case.tag);
-        }
-
-        if self.verify {
-            for case in &decl.cases {
-                if let Some(fields) = &case.fields {
-                    for field in fields {
-                        if let Err(msg) = verify::check_type_fragment(&field.ty) {
-                            self.error(
-                                TtError::span(
-                                    field.ty_off,
-                                    field.ty_off + field.ty.len(),
-                                    format!(
-                                        "variant {}: invalid type for field `{}`: {}",
-                                        decl.name, field.name, msg
-                                    ),
-                                )
-                                .code(DiagnosticCode::VariantInvalidFieldType),
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /// Bound names must be unique within one pattern — they all land in the
-    /// same scope, so a duplicate would emit two `const`s of one name.
-    fn check_leaf_bindings(&mut self, alt: &TagPattern) {
-        let mut leaves = Vec::new();
-        leaf_bindings(alt, &mut leaves);
-        for (i, name) in leaves.iter().enumerate() {
-            if leaves[..i].contains(name) {
-                self.error(
-                    TtError::span(
-                        alt.tag_off,
-                        alt.tag_off + alt.tag.len(),
-                        format!("match: binding `{name}` is used more than once in this pattern"),
-                    )
-                    .code(DiagnosticCode::PatternDuplicateBinding)
-                    .help("rename one of them with `field: alias`"),
-                );
-            }
-        }
-    }
-
-    fn check_match(&mut self, expr: &MatchExpr) {
-        // Literal and tag patterns discriminate on different things
-        // (`$tt_m` vs `$tt_m.kind`), so one match cannot hold both.
-        let arm_kind = |arm: &Arm| match &arm.pattern {
-            Pattern::Wildcard => None,
-            Pattern::Tags(_) => Some("tag"),
-            Pattern::Literals(_) => Some("literal"),
-        };
-        if let Some(first) = expr.arms.iter().find_map(arm_kind)
-            && let Some(other) = expr
-                .arms
-                .iter()
-                .find(|a| arm_kind(a).is_some_and(|k| k != first))
-        {
-            self.error(
-                TtError::span(
-                    other.pattern_span.start,
-                    other.pattern_span.end,
-                    format!(
-                        "match: cannot mix tag patterns and literal patterns in the same \
-                         match (this match starts with {first} patterns) — the two compare \
-                         different things (`$tt_m.kind` vs `$tt_m`)"
-                    ),
-                )
-                .code(DiagnosticCode::MatchMixedPatterns)
-                .help("split them into two matches")
-                .owner(expr.keyword_off, expr.body_close + 1),
-            );
-            // A mixed match has no one discriminant, so its coverage answer
-            // is not worth asking — report the cause, not its effects.
-            self.coverage_suppressed.push(expr.keyword_off);
-        }
-
-        // Tags covered by an unguarded arm. Any later arm repeating one of
-        // these is unreachable (duplicate); a guarded arm covers nothing, so
-        // guarded arms may repeat each other's tags.
-        let mut covered: Vec<&str> = Vec::new();
-        // The same, for literal patterns.
-        let mut covered_literals: Vec<&LiteralValue> = Vec::new();
-        for (idx, arm) in expr.arms.iter().enumerate() {
-            match &arm.pattern {
-                Pattern::Wildcard => {
-                    if idx != expr.arms.len() - 1 {
-                        self.error(
-                            TtError::span(
-                                arm.pattern_span.start,
-                                arm.pattern_span.end,
-                                "match: the wildcard arm `_` must be the last arm".to_string(),
-                            )
-                            .code(DiagnosticCode::MatchWildcardNotLast),
-                        );
-                    }
-                }
-                Pattern::Literals(alts) => {
-                    let mut arm_values: Vec<&LiteralValue> = Vec::new();
-                    for alt in alts {
-                        if alt.value.kind() != alts[0].value.kind() {
-                            self.error(
-                                TtError::span(
-                                    alt.span.start,
-                                    alt.span.end,
-                                    format!(
-                                        "match: or-pattern alternatives must all be the same kind of \
-                                         literal (found {} after {})",
-                                        alt.value.kind(),
-                                        alts[0].value.kind()
-                                    ),
-                                )
-                                .code(DiagnosticCode::MatchOrLiteralKindMismatch),
-                            );
-                            continue;
-                        }
-                        if covered_literals.contains(&&alt.value)
-                            || arm_values.contains(&&alt.value)
-                        {
-                            self.error(
-                                TtError::span(
-                                    alt.span.start,
-                                    alt.span.end,
-                                    format!("match: duplicate arm {}", alt.value.render()),
-                                )
-                                .code(DiagnosticCode::MatchDuplicateArm),
-                            );
-                            continue;
-                        }
-                        arm_values.push(&alt.value);
-                    }
-                    if arm.guard.is_none() {
-                        covered_literals.append(&mut arm_values);
-                    }
-                }
-                Pattern::Tags(alts) => {
-                    // Codegen emits one destructuring shared by every
-                    // alternative (switch fallthrough), so all alternatives
-                    // must bind the exact same (field, name) set — which is
-                    // also why a nested pattern (per-alternative conditions
-                    // and paths) cannot appear inside an or-pattern.
-                    if alts.len() > 1
-                        && let Some(at) = alts.iter().find(|a| has_nested(a))
-                    {
-                        self.error(
-                            TtError::span(
-                                at.tag_off,
-                                at.tag_off + at.tag.len(),
-                                "match: nested patterns cannot be combined with or-patterns"
-                                    .to_string(),
-                            )
-                            .code(DiagnosticCode::MatchNestedInOrPattern),
-                        );
-                    }
-                    self.check_leaf_bindings(&alts[0]);
-                    let first_set = binding_set(&alts[0].bindings);
-                    let mut arm_tags: Vec<&str> = Vec::new();
-                    for alt in alts {
-                        if covered.contains(&alt.tag.as_str())
-                            || arm_tags.contains(&alt.tag.as_str())
-                        {
-                            self.error(
-                                TtError::span(
-                                    alt.tag_off,
-                                    alt.tag_off + alt.tag.len(),
-                                    format!("match: duplicate arm \"{}\"", alt.tag),
-                                )
-                                .code(DiagnosticCode::MatchDuplicateArm),
-                            );
-                            continue;
-                        }
-                        arm_tags.push(&alt.tag);
-                        if binding_set(&alt.bindings) != first_set {
-                            self.error(
-                                TtError::span(
-                                    alt.tag_off,
-                                    alt.tag_off + alt.tag.len(),
-                                    format!(
-                                        "match: or-pattern alternatives must bind the same names — {}",
-                                        binding_mismatch(&alts[0], alt)
-                                    ),
-                                )
-                                .code(DiagnosticCode::MatchOrBindingMismatch),
-                            );
-                        }
-                    }
-                    // A nested pattern may mismatch, so — like a guard —
-                    // the arm identifies the variant declaration but covers nothing.
-                    if arm.guard.is_none() && !alts.iter().any(has_nested) {
-                        covered.append(&mut arm_tags);
-                    }
-                }
-            }
-        }
-
-        // Exhaustiveness is not recorded here: the analysis walks the same
-        // program and answers for every match at once (`report_coverage`).
-
-        // children, in source order: scrutinee first, then guards and bodies
-        self.visit_program(&expr.scrutinee, Ctx::Expr, Place::ValueRegion);
-        for arm in &expr.arms {
-            if let Some(guard) = &arm.guard {
-                self.visit_program(&guard.expr, Ctx::Expr, Place::ValueRegion);
-            }
-            // A block arm body is a statement context inside the value region.
-            self.visit_program(
-                &arm.body,
-                if arm.block { Ctx::Stmt } else { Ctx::Expr },
-                Place::ValueRegion,
-            );
-        }
-    }
-
-    fn check_tuple_match(&mut self, expr: &TupleMatchExpr) {
-        let arity = expr.scrutinees.len();
-        for (idx, arm) in expr.arms.iter().enumerate() {
-            match &arm.pattern {
-                TuplePattern::Wildcard => {
-                    if idx != expr.arms.len() - 1 {
-                        self.error(
-                            TtError::span(
-                                arm.pattern_span.start,
-                                arm.pattern_span.end,
-                                "match: the wildcard arm `_` must be the last arm".to_string(),
-                            )
-                            .code(DiagnosticCode::MatchWildcardNotLast),
-                        );
-                    }
-                }
-                TuplePattern::Elems(elems) => {
-                    if elems.len() != arity {
-                        self.error(
-                            TtError::span(
-                                arm.pattern_span.start,
-                                arm.pattern_span.end,
-                                format!(
-                                    "match: tuple pattern has {} elements but the match has {} scrutinees",
-                                    elems.len(),
-                                    arity
-                                ),
-                            )
-                            .code(DiagnosticCode::MatchTupleArity),
-                        );
-                    }
-                    // Every element's or-alternatives share one
-                    // destructuring (hence no nested patterns in them);
-                    // bound names must also be unique across the whole
-                    // tuple pattern (they land in one scope).
-                    let mut bound: Vec<&str> = Vec::new();
-                    for elem in elems {
-                        let Pattern::Tags(alts) = elem else { continue };
-                        if alts.len() > 1
-                            && let Some(at) = alts.iter().find(|a| has_nested(a))
-                        {
-                            self.error(
-                                TtError::span(
-                                    at.tag_off,
-                                    at.tag_off + at.tag.len(),
-                                    "match: nested patterns cannot be combined with or-patterns"
-                                        .to_string(),
-                                )
-                                .code(DiagnosticCode::MatchNestedInOrPattern),
-                            );
-                        }
-                        let first_set = binding_set(&alts[0].bindings);
-                        for alt in alts {
-                            if binding_set(&alt.bindings) != first_set {
-                                self.error(
-                                    TtError::span(
-                                        alt.tag_off,
-                                        alt.tag_off + alt.tag.len(),
-                                        format!(
-                                            "match: or-pattern alternatives must bind the same names — {}",
-                                            binding_mismatch(&alts[0], alt)
-                                        ),
-                                    )
-                                    .code(DiagnosticCode::MatchOrBindingMismatch),
-                                );
-                            }
-                        }
-                        let mut leaves = Vec::new();
-                        leaf_bindings(&alts[0], &mut leaves);
-                        for name in leaves {
-                            if bound.contains(&name) {
-                                self.error(
-                                    TtError::span(
-                                        alts[0].tag_off,
-                                        alts[0].tag_off + alts[0].tag.len(),
-                                        format!(
-                                            "match: binding `{name}` is used more than once in this tuple pattern"
-                                        ),
-                                    )
-                                    .code(DiagnosticCode::PatternDuplicateBinding)
-                                    .help("rename one of them with `field: alias`"),
-                                );
-                                continue;
-                            }
-                            bound.push(name);
-                        }
-                    }
-                }
-            }
-        }
-
-        // children, in source order
-        for (_, scrutinee) in &expr.scrutinees {
-            self.visit_program(scrutinee, Ctx::Expr, Place::ValueRegion);
-        }
-        for arm in &expr.arms {
-            if let Some(guard) = &arm.guard {
-                self.visit_program(&guard.expr, Ctx::Expr, Place::ValueRegion);
-            }
-            self.visit_program(
-                &arm.body,
-                if arm.block { Ctx::Stmt } else { Ctx::Expr },
-                Place::ValueRegion,
-            );
-        }
-    }
-}
-
-/// Turns [`crate::analysis`]'s coverage into positioned tt errors — every
-/// uncovered match, in the analysis' source order.
-///
-/// A match whose own names failed to resolve is skipped: the typo is the
-/// cause and its coverage hole the effect, so only the cause is reported
-/// for that match — while every *other* match keeps its own answer.
-fn report_coverage(
-    source: &str,
-    analyses: &crate::analysis::PatternAnalyses,
-    suppressed: &[usize],
-    errors: &mut Vec<TtError>,
-) {
-    let uncovered = analyses
-        .matches
-        .iter()
-        .filter(|m| !m.has_unresolved && !suppressed.contains(&m.keyword_off))
-        .filter_map(|m| m.coverage.as_ref().map(|c| (m, c)))
-        .filter(|(_, c)| !c.missing.is_empty());
-
-    for (analysis, coverage) in uncovered {
-        let (offset, head_end) = (analysis.keyword_off, analysis.head_end);
-        let message = if coverage.positions.len() == 1 {
-            // A single match's one position always resolved — that is what
-            // makes it a coverage answer at all.
-            let Some(subject) = coverage.positions[0].as_ref() else {
-                continue;
-            };
-            let missing: Vec<String> = coverage
-                .missing_tags()
-                .iter()
-                .map(|m| format!("\"{m}\""))
-                .collect();
-            non_exhaustive_message(Some(&describe(subject)), &missing, false)
+    fn isolated(self) -> Place {
+        if matches!(self, Place::ResultRegion | Place::ResultValueRegion) {
+            Place::ResultValueRegion
         } else {
-            let names = coverage
-                .positions
-                .iter()
-                .map(|p| p.as_ref().map_or("_", |e| e.name.as_str()))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let combinations: Vec<String> = coverage
-                .missing
-                .iter()
-                .map(|row| format!("({})", row.pattern.join(", ")))
-                .collect();
-            non_exhaustive_message(Some(&format!("({names})")), &combinations, true)
-        };
-        // The arms that close the hole, written out: one per witness, each
-        // position's binding form joined the way a tuple pattern is
-        // written. Everything in the text comes from the analysis, so the
-        // edit and the message answer from one model.
-        let arms: Vec<String> = coverage
-            .missing
-            .iter()
-            .map(|row| {
-                if row.arm.len() > 1 {
-                    format!("({})", row.arm.join(", "))
-                } else {
-                    row.arm.first().cloned().unwrap_or_else(|| "_".to_string())
-                }
-            })
-            .collect();
-        let mut error =
-            TtError::span(offset, head_end, message).code(DiagnosticCode::MatchNotExhaustive);
-        error.suggestions = non_exhaustive_suggestions(
-            source,
-            MatchSite {
-                keyword_off: offset,
-                body_open: analysis.body_open,
-                body_close: analysis.body_close,
-            },
-            &arms,
-        );
-        errors.push(error);
-    }
-}
-
-/// How an error names the variant a match is over — the declaration's origin,
-/// so "which `Token`?" is answerable from the message alone.
-fn describe(subject: &CoveredVariant) -> String {
-    match &subject.origin {
-        Origin::Local => format!("variant {}", subject.name),
-        Origin::Builtin => format!("built-in variant {}", subject.name),
-        Origin::Imported { from: Some(from) } => {
-            format!("variant {} (imported from \"{from}\")", subject.name)
+            Place::ValueRegion
         }
-        Origin::Imported { from: None } => format!("imported variant {}", subject.name),
     }
 }

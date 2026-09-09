@@ -103,7 +103,7 @@ macro_rules! require_mapper_toolchain {
 /// for `.tt`/`.ttx`, and a stub install of that package whose mapper
 /// process is this build's `ttc`.
 fn mapper_project(jsx: bool) -> Workspace {
-    let workspace = Workspace::with_subdir("content-mapper", "src");
+    let workspace = Workspace::in_repo_with_subdir("content-mapper", "src");
     fs::write(
         workspace.path().join("package.json"),
         "{ \"private\": true }\n",
@@ -226,6 +226,132 @@ fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
 }
 
 #[test]
+fn a_deep_expression_try_typechecks_through_the_content_mapper() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/deep-try.tt"),
+        "type TResult<T, E> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: E };\n\
+         declare const Result: { Ok<T>(value: T): TResult<T, never> };\n\
+         declare function total(): TResult<number, string>;\n\
+         export function amount(): TResult<{ amount: number }, string> {\n\
+         \x20 return Result.Ok({ amount: try total() });\n\
+         }\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(ok, "content mapper rejected expression try:\n{text}");
+}
+
+#[test]
+fn an_imported_field_error_is_checker_owned_at_the_field_token() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string, last4: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function brand(method: PaymentMethod): string {\n\
+         \x20 return match (method) { Card(brnad) => brnad, _ => \"n/a\" };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { brand } from \"./payment.tt\";\nvoid brand;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("payment.tt(4,32): error TS2339")
+            && text.contains("Property 'brnad' does not exist"),
+        "expected the checker's source-mapped field diagnostic, got:\n{text}"
+    );
+    assert!(!text.contains("error tt26"), "{text}");
+}
+
+#[test]
+fn an_imported_case_error_with_a_wildcard_is_checker_owned() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), BankTransfer(iban: string) }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/payment.tt"),
+        "import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function fee(method: PaymentMethod): number {\n\
+         \x20 return match (method) { Crad(brand) => 1, _ => 0 };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { fee } from \"./payment.tt\";\nvoid fee;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("payment.tt(4,10): error TS2678")
+            && text.contains("Type '\"Crad\"' is not comparable"),
+        "expected the checker's source-mapped case diagnostic, got:\n{text}"
+    );
+    assert!(!text.contains("error tt25"), "{text}");
+}
+
+#[test]
+fn a_nested_imported_field_error_is_reported_at_its_token() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/domain.tt"),
+        "export variant PaymentMethod { Card(brand: string), Cash }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/nested.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import { PaymentMethod } from \"./domain.tt\";\n\n\
+         export function brand(r: TResult<PaymentMethod, string>): string {\n\
+         \x20 return match (r) {\n\
+         \x20   Ok(value: Card(brnd)) => brnd,\n\
+         \x20   Ok(value) => \"other\",\n\
+         \x20   Err(error) => \"error\",\n\
+         \x20 };\n\
+         }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { brand } from \"./nested.tt\";\nvoid brand;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(!ok);
+    assert!(
+        text.contains("nested.tt(6,20): error TS2339")
+            && text.contains("Property 'brnd' does not exist"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("{ brnd: any; }") && !text.contains("error tt26"),
+        "{text}"
+    );
+}
+
+#[test]
 fn a_type_error_inside_glue_reports_at_the_construct() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);
@@ -247,8 +373,42 @@ fn a_type_error_inside_glue_reports_at_the_construct() {
     let (ok, text) = check(&tsc, project.path());
     assert!(!ok);
     assert!(
-        text.contains("wrong.tt(4,3): error TS2322"),
+        text.contains("wrong.tt(4,10): error TS2322"),
         "expected the checker's error mapped to the match, got:\n{text}"
+    );
+}
+
+#[test]
+fn generated_slots_preserve_contextual_literal_types_for_the_checker() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("src/context.tt"),
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\n\
+         type Toggle = \"on\" | \"off\";\n\
+         declare const next: () => TResult<number, string>;\n\
+         export const flip = (value: Toggle): Toggle => match (value) {\n\
+         \x20 \"on\" => \"off\", \"off\" => \"on\",\n\
+         };\n\
+         export const values = (): TResult<readonly number[], string> => result {\n\
+         \x20 const value = try next();\n\
+         \x20 if (value === 0) return [];\n\
+         \x20 return [value];\n\
+         };\n\
+         void Result.Ok;\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { flip, values } from \"./context.tt\";\nvoid flip;\nvoid values;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(
+        ok,
+        "expected contextual literals to type-check, got:\n{text}"
     );
 }
 

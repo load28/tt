@@ -26,10 +26,20 @@ pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile 
         .iter()
         .map(|(_, expr)| cx.lower_expr(expr))
         .collect();
+    let sequence_nodes = semantic
+        .hir
+        .exprs
+        .iter()
+        .filter_map(|(_, expr)| match expr {
+            hir::Expr::Seq { node, body } => Some((*body, *node)),
+            _ => None,
+        })
+        .collect();
     let file = CoreFile {
         root: semantic.hir.root,
         bodies,
         exprs,
+        sequence_nodes,
         temporary_count: u32::try_from(cx.temp_ordinals.len())
             .unwrap_or_else(|_| crate::ice::bug!("Core IR temporary overflow")),
     };
@@ -122,7 +132,11 @@ impl Lowering<'_> {
                 value: stmt.expr,
                 temporary: self.temp(stmt.node, false),
                 binding: stmt.binding,
-                exit: ExitTarget::EnclosingFunction,
+                exit: stmt
+                    .result_target
+                    .map_or(ExitTarget::EnclosingFunction, |target| {
+                        ExitTarget::ResultRegion(ResultRegionId(target))
+                    }),
                 layout: RESULT_LAYOUT,
             })),
             hir::Stmt::LetElse(stmt) => {
@@ -182,6 +196,21 @@ impl Lowering<'_> {
                 decision.kind = match_kind(&decision);
                 Expr::Decision(decision)
             }
+            hir::Expr::Try {
+                node,
+                value,
+                result_target,
+            } => Expr::Propagate(Propagate {
+                node: *node,
+                owner: *node,
+                value: *value,
+                temporary: self.temp(*node, false),
+                binding: None,
+                exit: result_target.map_or(ExitTarget::EnclosingFunction, |target| {
+                    ExitTarget::ResultRegion(ResultRegionId(target))
+                }),
+                layout: RESULT_LAYOUT,
+            }),
             hir::Expr::Pipe { node, head, steps } => Expr::Apply(Apply {
                 node: *node,
                 head: *head,
@@ -199,29 +228,24 @@ impl Lowering<'_> {
                     })
                     .collect(),
             }),
-            hir::Expr::ResultBlock { node, items, value } => Expr::ResultRegion(ResultRegion {
-                node: *node,
+            hir::Expr::ResultBlock {
+                node: region_node,
+                items,
+                completes,
+                value,
+            } => Expr::ResultRegion(ResultRegion {
+                id: ResultRegionId(*region_node),
+                node: *region_node,
                 items: items
                     .iter()
-                    .map(|item| match item {
-                        hir::ResultItem::Stmts(body) => ResultRegionItem::Statements(*body),
-                        hir::ResultItem::Bind {
-                            node,
-                            binding,
-                            expr,
-                        } => ResultRegionItem::Propagate(Propagate {
-                            node: *node,
-                            owner: *node,
-                            value: *expr,
-                            temporary: self.temp(*node, true),
-                            binding: Some(*binding),
-                            exit: ExitTarget::Region,
-                            layout: RESULT_LAYOUT,
-                        }),
+                    .map(|item| {
+                        let hir::ResultItem::Stmts(body) = item;
+                        ResultRegionItem::Statements(*body)
                     })
                     .collect(),
+                completes: *completes,
                 value: *value,
-                is_async: self.node_contains_await(*node),
+                is_async: self.node_contains_await(*region_node),
             }),
             hir::Expr::Template { node, chunks } => Expr::Template(Template {
                 node: *node,
@@ -341,6 +365,34 @@ impl Lowering<'_> {
                     .collect(),
             ),
             Pat::Literal(_) => PatternPlan::Test(Test::Literal { place, pattern }),
+            Pat::Instance {
+                constructor,
+                fields,
+                ..
+            } => {
+                let mut parts = vec![PatternPlan::Test(Test::InstanceOf {
+                    place: place.clone(),
+                    constructor: *constructor,
+                })];
+                for field in fields.as_deref().unwrap_or_default() {
+                    let access = FieldAccess::Recovery {
+                        node: field.node,
+                        name: field.name.clone(),
+                    };
+                    let mut field_place = place.clone();
+                    field_place.fields.push(access);
+                    let FieldBinding::Named { alias } = &field.binding else {
+                        crate::ice::bug!("class property pattern contains a nested pattern")
+                    };
+                    let binding = alias.as_ref().map_or(field.node, |(_, node)| *node);
+                    parts.push(PatternPlan::Bind(Bind {
+                        source: field_place,
+                        source_field: None,
+                        binding,
+                    }));
+                }
+                PatternPlan::AllOf(parts)
+            }
             Pat::Constructor { path, fields } => {
                 let constructor = match self.semantic.resolution.uses.get(&path.node) {
                     Some(Res::Variant(reference)) => Constructor::Resolved {
@@ -422,12 +474,14 @@ fn temp_ordinals(semantic: &SemanticFile) -> HashMap<NodeId, u32> {
         }
     }
     for (_, expr) in semantic.hir.exprs.iter() {
-        if let hir::Expr::ResultBlock { items, .. } = expr {
-            for item in items {
-                if let hir::ResultItem::Bind { node, .. } = item {
-                    nodes.push(*node);
-                }
-            }
+        match expr {
+            hir::Expr::Try { node, .. } => nodes.push(*node),
+            hir::Expr::ResultBlock { .. } => {}
+            hir::Expr::OpaqueTs(_)
+            | hir::Expr::Seq { .. }
+            | hir::Expr::Match { .. }
+            | hir::Expr::Pipe { .. }
+            | hir::Expr::Template { .. } => {}
         }
     }
     nodes.sort_unstable_by_key(|node| {
@@ -464,7 +518,7 @@ fn pattern_has_literal(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
         Pat::Or(parts) | Pat::Tuple(parts) => {
             parts.iter().any(|part| pattern_has_literal(hir, *part))
         }
-        Pat::Wildcard | Pat::Constructor { .. } => false,
+        Pat::Wildcard | Pat::Constructor { .. } | Pat::Instance { .. } => false,
     }
 }
 
@@ -484,10 +538,9 @@ fn match_kind(decision: &Decision) -> DecisionKind {
     });
     let switch = decision.subjects.len() == 1
         && decision.arms.iter().all(|arm| arm.guard.is_none())
-        && decision
-            .arms
-            .iter()
-            .all(|arm| !pattern_has_nested_test(&arm.pattern));
+        && decision.arms.iter().all(|arm| {
+            !pattern_has_nested_test(&arm.pattern) && !pattern_has_instance_test(&arm.pattern)
+        });
     let dispatch = if !switch {
         MatchDispatch::Conditional
     } else if decision
@@ -511,7 +564,9 @@ fn pattern_has_literal_test(plan: &PatternPlan) -> bool {
         PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
             parts.iter().any(pattern_has_literal_test)
         }
-        PatternPlan::Any | PatternPlan::Bind(_) | PatternPlan::Test(Test::Variant { .. }) => false,
+        PatternPlan::Any
+        | PatternPlan::Bind(_)
+        | PatternPlan::Test(Test::Variant { .. } | Test::InstanceOf { .. }) => false,
     }
 }
 
@@ -521,7 +576,21 @@ fn pattern_has_nested_test(plan: &PatternPlan) -> bool {
         PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
             parts.iter().any(pattern_has_nested_test)
         }
-        PatternPlan::Any | PatternPlan::Bind(_) | PatternPlan::Test(Test::Literal { .. }) => false,
+        PatternPlan::Any
+        | PatternPlan::Bind(_)
+        | PatternPlan::Test(Test::Literal { .. } | Test::InstanceOf { .. }) => false,
+    }
+}
+
+fn pattern_has_instance_test(plan: &PatternPlan) -> bool {
+    match plan {
+        PatternPlan::Test(Test::InstanceOf { .. }) => true,
+        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+            parts.iter().any(pattern_has_instance_test)
+        }
+        PatternPlan::Any
+        | PatternPlan::Bind(_)
+        | PatternPlan::Test(Test::Variant { .. } | Test::Literal { .. }) => false,
     }
 }
 
@@ -564,6 +633,7 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
             Expr::Opaque(node) => validate_node(*node, semantic),
             Expr::Sequence(body) => validate_body(*body, file),
             Expr::Decision(decision) => validate_decision(decision, file, semantic),
+            Expr::Propagate(propagate) => validate_propagate(propagate, file, semantic),
             Expr::Apply(apply) => {
                 validate_node(apply.node, semantic);
                 if let Some(head) = apply.head {
@@ -580,16 +650,18 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
             }
             Expr::ResultRegion(region) => {
                 validate_node(region.node, semantic);
+                assert_eq!(
+                    region.id.0, region.node,
+                    "Result region identity follows its node"
+                );
                 let _is_async = region.is_async;
                 for item in &region.items {
-                    match item {
-                        ResultRegionItem::Statements(body) => validate_body(*body, file),
-                        ResultRegionItem::Propagate(propagate) => {
-                            validate_propagate(propagate, file, semantic)
-                        }
-                    }
+                    let ResultRegionItem::Statements(body) = item;
+                    validate_body(*body, file);
                 }
-                validate_expr(region.value, file);
+                if let Some(value) = region.value {
+                    validate_expr(value, file);
+                }
             }
             Expr::Template(template) => {
                 validate_node(template.node, semantic);
@@ -730,6 +802,10 @@ fn validate_test(test: &Test, semantic: &SemanticFile) {
                 "Core IR literal pattern is invalid"
             );
         }
+        Test::InstanceOf { place, constructor } => {
+            validate_place(place, semantic);
+            validate_node(*constructor, semantic);
+        }
     }
 }
 
@@ -762,12 +838,14 @@ fn validate_propagate(propagate: &Propagate, file: &CoreFile, semantic: &Semanti
         validate_binding_mode(binding.mode);
     }
     match propagate.exit {
-        ExitTarget::EnclosingFunction | ExitTarget::Region => {}
+        ExitTarget::EnclosingFunction => {}
+        ExitTarget::ResultRegion(_) => {}
     }
     assert!(
-        !propagate.layout.success_tag.is_empty()
-            && !propagate.layout.discriminant_field.is_empty()
-            && !propagate.layout.payload_field.is_empty(),
+        matches!(
+            propagate.layout.discriminator,
+            ResultDiscriminator::SuccessFieldPresent(field) if !field.is_empty()
+        ) && !propagate.layout.payload_field.is_empty(),
         "Core IR Result layout is empty"
     );
 }

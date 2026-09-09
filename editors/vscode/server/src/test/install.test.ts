@@ -65,7 +65,10 @@ function binaryPath() {
 module.exports = { binaryPath };
 `,
   );
-  return binary;
+  // Node's `require.resolve` returns the real path. macOS exposes its temp
+  // directory through both `/var` and `/private/var`, so mirror the package
+  // contract instead of comparing the spelling supplied by `mkdtempSync`.
+  return withBinary ? fs.realpathSync(binary) : binary;
 }
 
 test("a project's installed package provides the compiler", () => {
@@ -112,6 +115,25 @@ test("a compiler built in the workspace still wins over the install", () => {
   fs.mkdirSync(path.dirname(built), { recursive: true });
   fs.writeFileSync(built, "");
   assert.equal(findCompiler("", [workspace]), built);
+});
+
+test("the newest workspace build wins when both Cargo profiles exist", () => {
+  const workspace = scratch("tt-install-profiles-");
+  const release = path.join(workspace, "target", "release", EXE);
+  const debug = path.join(workspace, "target", "debug", EXE);
+  fs.mkdirSync(path.dirname(release), { recursive: true });
+  fs.mkdirSync(path.dirname(debug), { recursive: true });
+  fs.writeFileSync(release, "");
+  fs.writeFileSync(debug, "");
+
+  const old = new Date("2026-01-01T00:00:00Z");
+  const recent = new Date("2026-01-02T00:00:00Z");
+  fs.utimesSync(release, old, old);
+  fs.utimesSync(debug, recent, recent);
+  assert.equal(findCompiler("", [workspace]), debug);
+
+  fs.utimesSync(release, new Date("2026-01-03T00:00:00Z"), new Date("2026-01-03T00:00:00Z"));
+  assert.equal(findCompiler("", [workspace]), release);
 });
 
 test("the configured path wins over everything", () => {

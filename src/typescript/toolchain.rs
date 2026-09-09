@@ -91,12 +91,21 @@ pub(crate) fn client(from: &Path) -> Result<Client, String> {
 pub(crate) fn service_binary(from: &Path) -> Result<PathBuf, String> {
     for node_modules in node_modules_from(from) {
         for distribution in &DISTRIBUTIONS {
-            let exe = node_modules
-                .join(distribution.platform_package())
-                .join("lib")
-                .join(exe_file_name(distribution.exe));
-            if exe.exists() {
-                return Ok(absolute(exe));
+            if let Some(exe) = distribution.executable_in(&node_modules) {
+                return Ok(exe);
+            }
+
+            // `file:` dependencies and linked package stores expose the client
+            // package at the consumer path while its optional platform package
+            // remains in the client package's real node_modules. Follow that
+            // package identity, then apply the same published-layout lookup.
+            let client = node_modules.join(distribution.client);
+            if let Ok(real_client) = client.canonicalize()
+                && let Some(real_node_modules) = package_parent(&real_client, distribution.client)
+                && real_node_modules != node_modules
+                && let Some(exe) = distribution.executable_in(&real_node_modules)
+            {
+                return Ok(exe);
             }
         }
     }
@@ -109,6 +118,24 @@ impl Distribution {
     fn platform_package(&self) -> String {
         format!("@typescript/{}-{}-{}", self.base, os_name(), arch_name())
     }
+
+    fn executable_in(&self, node_modules: &Path) -> Option<PathBuf> {
+        let exe = node_modules
+            .join(self.platform_package())
+            .join("lib")
+            .join(exe_file_name(self.exe));
+        exe.exists().then(|| absolute(exe))
+    }
+}
+
+/// The `node_modules` that contains a canonical package path. Package names
+/// supply the depth: one component for `typescript`, two for a scoped package.
+fn package_parent(package: &Path, package_name: &str) -> Option<PathBuf> {
+    let mut parent = package;
+    for _ in Path::new(package_name).components() {
+        parent = parent.parent()?;
+    }
+    Some(parent.to_path_buf())
 }
 
 /// The executable's file name on this platform.
@@ -228,6 +255,40 @@ mod tests {
         assert!(client(&nested).is_ok());
         assert!(service_binary(&nested).is_ok());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    /// A local `file:` install may link only the JS client package into the
+    /// consumer. The native optional dependency stays beside the real package,
+    /// and the language service must follow the link just as the client API does.
+    #[cfg(unix)]
+    #[test]
+    fn service_binary_follows_a_linked_client_package() {
+        use std::os::unix::fs::symlink;
+
+        let source = scratch("linked-source");
+        let consumer = scratch("linked-consumer");
+        for distribution in &DISTRIBUTIONS {
+            let source_modules = install(&source, distribution);
+            let consumer_client = consumer.join("node_modules").join(distribution.client);
+            std::fs::create_dir_all(consumer_client.parent().unwrap()).unwrap();
+            symlink(source_modules.join(distribution.client), &consumer_client).unwrap();
+
+            let exe = service_binary(&consumer).unwrap();
+            assert_eq!(
+                exe,
+                absolute(
+                    source_modules
+                        .join(distribution.platform_package())
+                        .join("lib")
+                        .join(exe_file_name(distribution.exe))
+                )
+            );
+
+            std::fs::remove_dir_all(consumer.join("node_modules")).unwrap();
+            std::fs::remove_dir_all(source.join("node_modules")).unwrap();
+        }
+        std::fs::remove_dir_all(consumer).ok();
+        std::fs::remove_dir_all(source).ok();
     }
 
     /// Both halves fail the same way, and the message names the one fix —

@@ -2,7 +2,7 @@
 
 이 문서는 **조사 기록이자 제안**이다. 규범 문서가 아니다 — 구현된 backend
 구조의 규범 서술은 `src/typescript/mod.rs`의 모듈 문서와
-[`cli.md` §타입 검사](../reference/cli.md#타입-검사---check-types---types)에
+[`tt.md` Workflow](../ai/tt.md#workflow)에
 있다.
 
 **출처와 상태.** 원문은 폐기된 `claude/unpack-file-new-branch-push-4xjnys`
@@ -538,7 +538,7 @@ positive 방지 테스트 통과.
   source of truth로 남는다.
 - **선언 방출이 릴리스된 패키지에서 열리는 시점.** 지금은 `--types`의 사이드카
   쓰기가 빌드된 typescript-go 체크아웃을 요구한다
-  ([`cli.md` §타입 검사](../reference/cli.md#타입-검사---check-types---types)).
+  ([`tt.md` Workflow](../ai/tt.md#workflow)).
   검사만 하는 `--check-types`는 릴리스 패키지로도 동작한다.
 - **`ttc compile`/`check`/`build` 하위 명령 재편.** 하지 않기로 한 것이지
   막힌 것은 아니다. 필요해지면 별도 태스크로 다룬다.

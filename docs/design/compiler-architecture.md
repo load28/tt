@@ -146,7 +146,7 @@ sema를 통과한 AST에서 텍스트로의 순수 매핑이다. verbatim 구간
 속성·자식 expression은 `Jsx` protocol frame의 순서 있는 eager position이며,
 concise arrow의 expression body는 이름 있는 `ArrowExpression` host owner다. 이
 두 모델이 JSX 속성의 부작용 순서와 화살표 함수의 렉시컬 범위를 보존한다(코드 형태의 규범은
-[`../reference/language.md`](../reference/language.md)). `await` 감지는
+[`../ai/tt.md`](../ai/tt.md)). `await` 감지는
 AST에 남긴 원시 Span 위로 `scanner::contains_await`를 돌려 수행한다.
 
 방출된 코드의 **레이아웃은 프린터가 소유한다**(TASK-198). 방출부는 공백을

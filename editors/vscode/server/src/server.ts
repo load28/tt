@@ -65,6 +65,8 @@ import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
 import * as engine from "./engine";
+import { NoticeLedger } from "./notices";
+import { applyFolderChange, folderRoots, sidecarLocation } from "./roots";
 import * as ttc from "./ttc";
 import * as path from "node:path";
 
@@ -74,20 +76,31 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability = false;
+let hasWorkspaceFolderCapability = false;
 let workspaceRoots: string[] = [];
-let warnedCompilerMissing = false;
+/** What the server has already told the user it cannot do (notices.ts). */
+const notices = new NoticeLedger();
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasConfigurationCapability = Boolean(
     params.capabilities.workspace?.configuration,
   );
-  workspaceRoots = (params.workspaceFolders ?? [])
-    .map((f) => URI.parse(f.uri))
-    .filter((u) => u.scheme === "file")
-    .map((u) => u.fsPath);
+  hasWorkspaceFolderCapability = Boolean(
+    params.capabilities.workspace?.workspaceFolders,
+  );
+  workspaceRoots = folderRoots(params.workspaceFolders);
 
   return {
     capabilities: {
+      // Folders come and go while the window is open, and every one of them
+      // is a place the compiler, the TypeScript toolchain and a relative
+      // `tt.sidecarDir` are resolved from. The client sends the change
+      // notification only to a server that asked for it, so without this
+      // the roots below were whatever the window happened to hold at
+      // startup, for the life of the session.
+      workspace: {
+        workspaceFolders: { supported: true, changeNotifications: true },
+      },
       textDocumentSync: {
         openClose: true,
         change: TextDocumentSyncKind.Incremental,
@@ -124,6 +137,14 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 });
 
 connection.onInitialized(() => {
+  // Asking a client that cannot send the event throws, and would take the
+  // rest of this handler — the first compiler resolution — with it.
+  if (hasWorkspaceFolderCapability) {
+    connection.workspace.onDidChangeWorkspaceFolders((event) => {
+      workspaceRoots = applyFolderChange(workspaceRoots, event);
+      rearmProject();
+    });
+  }
   // The engine session is keyed by the compiler path, and the document
   // sync that starts it cannot await settings — so `tt.compilerPath` is
   // resolved once here, before the first buffer arrives.
@@ -166,22 +187,58 @@ async function getSettings(uri?: string): Promise<TtSettings> {
   };
 }
 
-connection.onDidChangeConfiguration(() => {
-  warnedCompilerMissing = false;
+/** Everything the server has to redo when where it looks changes — the
+ * settings it reads, or the folders it reads them for. */
+function rearmProject(): void {
+  // Every standing notice describes something one of these could have
+  // fixed, so all of them are worth saying again if they are still true.
+  notices.reset();
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
-  void refreshCompiler();
-  for (const doc of documents.all()) scheduleValidation(doc);
+  invalidateProjectValidation();
+  void refreshCompiler().then(reloadProjectState);
+}
+
+connection.onDidChangeConfiguration(() => {
+  rearmProject();
 });
 
-connection.onDidChangeWatchedFiles(() => {
-  // A freshly built ttc appeared (or changed) — try validating again.
-  warnedCompilerMissing = false;
-  engine.retryEngineServer();
-  void refreshCompiler();
-  for (const doc of documents.all()) scheduleValidation(doc);
+connection.onDidChangeWatchedFiles((params) => {
+  const relevant = params.changes.some(change => {
+    const uri = URI.parse(change.uri);
+    if (uri.scheme !== "file") return false;
+    // Compiler-created support modules are not user graph changes.
+    if (uri.fsPath.split(path.sep).some(part => part === "node_modules" || part === ".git")) return false;
+    return true;
+  });
+  if (!relevant) return;
+  if (params.changes.some(change => /(?:^|\/)(?:ttc|ttc\.exe)$/.test(URI.parse(change.uri).path))) {
+    // Replacing an executable at the same path must replace the running
+    // process too; rebuilding project caches cannot update its machine code.
+    engine.shutdownEngineServer();
+  }
+  rearmProject();
 });
+
+function invalidateProjectValidation(): void {
+  for (const doc of documents.all()) {
+    const timer = pendingValidation.get(doc.uri);
+    if (timer !== undefined) clearTimeout(timer);
+    pendingValidation.delete(doc.uri);
+    validationGeneration.set(doc.uri, (validationGeneration.get(doc.uri) ?? 0) + 1);
+  }
+}
+
+function reloadProjectState(): void {
+  declCache.clear();
+  engine.reloadProjects(currentCompiler());
+  for (const doc of documents.all()) {
+    const file = enginePath(doc);
+    if (file !== null) engine.openDocument(currentCompiler(), file, doc.getText());
+  }
+  for (const doc of documents.all()) scheduleValidation(doc);
+}
 
 // ---------------------------------------------------------------- analysis
 
@@ -280,8 +337,7 @@ const logEngine = (message: string) => connection.console.warn(message);
 /** A fresh engine session starts with the disk's view of the world; hand it
  * every buffer the editor holds open. Runs on first spawn and on respawn
  * after a crash — recovery the old in-process pipeline never had. */
-engine.setOnSessionStart(() => {
-  const compiler = currentCompiler();
+engine.setOnSessionStart((compiler) => {
   for (const doc of documents.all()) {
     const uri = URI.parse(doc.uri);
     if (uri.scheme === "file") {
@@ -321,8 +377,6 @@ interface TypedDiagnostics {
   diagnostics: Diagnostic[];
   replacesTypes: boolean;
 }
-let warnedTypedCheckUnavailable = false;
-
 /**
  * Adds the typed diagnostics that say something new.
  *
@@ -383,16 +437,24 @@ async function typedDiagnosticsFor(
   );
 
   if (result.kind === "unavailable") {
-    // A project with no TypeScript toolchain is a normal state, not an
-    // error to put in front of the user: the text-level diagnostics keep
-    // working and only the typed layer is missing.
-    if (!warnedTypedCheckUnavailable) {
-      warnedTypedCheckUnavailable = true;
+    if (result.cause === "internal") {
+      if (notices.raise("typed-compiler-failure")) {
+        connection.console.error(`tt: typed compiler failure: ${result.detail}`);
+        void connection.window.showErrorMessage(
+          "tt: typed checks failed inside the compiler. " +
+            "See the tt output channel for details and report this at " +
+            "https://github.com/load28/tt/issues.",
+        );
+      }
+      return null;
+    }
+    // A project with no TypeScript toolchain is a normal state: the
+    // text-level diagnostics keep working and only typed facts are absent.
+    if (notices.raise("typed-check-unavailable")) {
       connection.console.info(
         `tt: typed checks unavailable (${result.detail}). ` +
-          "`val` mutations and typed exhaustiveness are reported by " +
-          "the typed pass, which needs a TypeScript install — set " +
-          "tt.typedChecks to false to stop trying.",
+          "`val` mutations and typed exhaustiveness are unavailable; " +
+          "set tt.typedChecks to false to stop trying.",
       );
     }
     return null;
@@ -407,6 +469,9 @@ async function typedDiagnosticsFor(
 }
 
 function scheduleValidation(doc: TextDocument): void {
+  // Host TypeScript buffers participate in project state, but their own
+  // diagnostics belong to the TypeScript extension.
+  if (doc.languageId !== "tt" && doc.languageId !== "ttx") return;
   const existing = pendingValidation.get(doc.uri);
   if (existing !== undefined) clearTimeout(existing);
   const generation = (validationGeneration.get(doc.uri) ?? 0) + 1;
@@ -428,7 +493,20 @@ function isCurrentValidation(doc: TextDocument, generation: number): boolean {
   );
 }
 
-async function validate(doc: TextDocument, generation: number): Promise<void> {
+/**
+ * Runs every enabled diagnostic layer for one buffer version and publishes
+ * them together.
+ *
+ * `attempt` counts the tries this generation has already spent on a layer
+ * that could not answer. A publish replaces the file's complete list, so a
+ * generation whose type layer is unknown is not a generation to publish:
+ * it would clear every type error the file still has.
+ */
+async function validate(
+  doc: TextDocument,
+  generation: number,
+  attempt = 0,
+): Promise<void> {
   const settings = await getSettings(doc.uri);
   const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const uri = URI.parse(doc.uri);
@@ -447,17 +525,27 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
   const current = documents.get(doc.uri)!;
 
   if (result.kind === "not-found") {
-    if (!warnedCompilerMissing) {
-      warnedCompilerMissing = true;
-      connection.console.warn(
-        `tt: compiler not found (${result.compiler}). ` +
-          "Set tt.compilerPath, build target/{debug,release}/ttc, or put ttc on PATH — " +
-          "diagnostics are disabled until then.",
-      );
-      void connection.window.showWarningMessage(
-        "tt: ttc compiler not found — diagnostics are disabled. " +
-          "Set `tt.compilerPath` or install ttc (cargo install --path .).",
-      );
+    if (notices.raise("compiler-unusable")) {
+      const [log, notice] =
+        result.reason === "not-executable"
+          ? [
+              `tt: compiler cannot be run (${result.compiler}). ` +
+                "It exists but the system refused to start it — check that it is " +
+                "an executable file and that its execute bit is set — " +
+                "diagnostics are disabled until then.",
+              "tt: ttc cannot be run — diagnostics are disabled. " +
+                "The path in `tt.compilerPath` exists but is not an executable file " +
+                "(a missing execute bit, or a directory).",
+            ]
+          : [
+              `tt: compiler not found (${result.compiler}). ` +
+                "Set tt.compilerPath, build target/{debug,release}/ttc, or put ttc on PATH — " +
+                "diagnostics are disabled until then.",
+              "tt: ttc compiler not found — diagnostics are disabled. " +
+                "Set `tt.compilerPath` or install ttc (cargo install --path .).",
+            ];
+      connection.console.warn(log);
+      void connection.window.showWarningMessage(notice);
     }
     void connection.sendDiagnostics({
       uri: doc.uri,
@@ -486,18 +574,46 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
           settings.typedChecks,
         )
       : Promise.resolve(null);
-  const serviceTypes = settings.typeDiagnostics
+  const serviceTypes: Promise<Diagnostic[] | null> = settings.typeDiagnostics
     ? typeDiagnostics(doc, compiler)
     : Promise.resolve([]);
   // Hints are not diagnostics of the compile: ttc never fails on one, and
   // they only reach the user here (`engine::hints`). Run every slower layer
   // together, then publish one complete generation.
-  const [typedResult, typeResults, hints] = await Promise.all([
+  const [typedResult, serviceResults, hints] = await Promise.all([
     typed,
     serviceTypes,
     ttHints(doc, compiler),
   ]);
   if (!isCurrentValidation(doc, generation)) return;
+
+  // The engine could not be reached, which is not the same answer as "this
+  // file has no type errors" — and publishing it as one clears every type
+  // error in the editor. The engine respawns on the next request, so give
+  // it that one chance before showing the file without the layer.
+  let typeResults = serviceResults;
+  if (typeResults === null) {
+    if (attempt === 0) {
+      pendingValidation.set(
+        doc.uri,
+        setTimeout(() => {
+          pendingValidation.delete(doc.uri);
+          void validate(doc, generation, attempt + 1);
+        }, VALIDATION_DELAY_MS),
+      );
+      return;
+    }
+    // It answered nothing twice. The file is published without the layer
+    // rather than left stale forever, and the reason is said out loud.
+    if (notices.raise("type-layer-unreachable")) {
+      connection.console.warn(
+        "tt: the language engine did not answer for type errors, so they " +
+          "are missing from the Problems panel until it does. Check the tt " +
+          "output channel above for why the engine stopped answering.",
+      );
+    }
+    typeResults = [];
+  }
 
   diagnostics.push(...typeResults, ...hints);
   if (typedResult !== null) {
@@ -507,6 +623,21 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
       typedResult.replacesTypes,
     );
   }
+  // The layers finish independently and typed diagnostics are merged last,
+  // but the user reads and fixes one file from top to bottom. Restore the
+  // compiler's source-order contract after the final merge so the Problems
+  // panel agrees with the CLI regardless of which layer authored a rule.
+  diagnostics.sort((left, right) => {
+    const start =
+      left.range.start.line - right.range.start.line ||
+      left.range.start.character - right.range.start.character;
+    if (start !== 0) return start;
+    const end =
+      left.range.end.line - right.range.end.line ||
+      left.range.end.character - right.range.end.character;
+    if (end !== 0) return end;
+    return String(left.code ?? "").localeCompare(String(right.code ?? ""));
+  });
   void connection.sendDiagnostics({
     uri: doc.uri,
     version: doc.version,
@@ -525,10 +656,11 @@ async function validate(doc: TextDocument, generation: number): Promise<void> {
 async function typeDiagnostics(
   doc: TextDocument,
   compiler: string,
-): Promise<Diagnostic[]> {
+): Promise<Diagnostic[] | null> {
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
   const items = await engine.tsDiagnostics(compiler, fsPath, logEngine);
+  if (items === null) return null;
   return items.map((d) => ({
     severity: d.warning
       ? DiagnosticSeverity.Warning
@@ -537,6 +669,18 @@ async function typeDiagnostics(
     message: d.message,
     code: d.code,
     source: "ts",
+    // The compiler's secondary labeled spans, as the LSP's own related
+    // information — the editor renders each as a clickable "here" link
+    // under the diagnostic.
+    relatedInformation: d.related?.length
+      ? d.related.map((r) => ({
+          location: {
+            uri: r.path ? URI.file(r.path).toString() : doc.uri,
+            range: r.range,
+          },
+          message: r.message,
+        }))
+      : undefined,
   }));
 }
 
@@ -600,6 +744,28 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     message: d.message,
     code: d.code,
     source: "ttc",
+    // The compiler's secondary labeled spans. Typed diagnostics replace
+    // the language-service layer under the default settings, so the
+    // related places must travel on this path too or the editor loses
+    // them the moment the typed answer lands.
+    relatedInformation: d.labels?.length
+      ? d.labels.map((label) => ({
+          location: {
+            uri: label.path ? URI.file(label.path).toString() : doc.uri,
+            range: {
+              start: {
+                line: Math.max(0, label.line - 1),
+                character: Math.max(0, label.col - 1),
+              },
+              end: {
+                line: Math.max(0, label.endLine - 1),
+                character: Math.max(0, label.endCol - 1),
+              },
+            },
+          },
+          message: label.message,
+        }))
+      : undefined,
     // The compiler's own fixes, carried through to `onCodeAction`. LSP
     // round-trips `data` untouched, so the quick fix is the compiler's
     // answer rather than this server's reading of the message.
@@ -615,24 +781,9 @@ documents.onDidOpen((e) => {
   scheduleValidation(e.document);
 });
 documents.onDidSave((e) => {
+  if (e.document.languageId !== "tt" && e.document.languageId !== "ttx") return;
   void rebuildSidecar(e.document);
 });
-
-/**
- * Where this file's declarations belong: next to the source when
- * `tt.sidecarDir` is empty, otherwise that directory under the workspace
- * root the file lives in (TypeScript merges the two trees with `rootDirs`).
- */
-function resolveSidecarDir(configured: string, filePath: string): string | undefined {
-  const dir = configured.trim();
-  if (dir === "") return undefined;
-  if (path.isAbsolute(dir)) return dir;
-
-  const root = workspaceRoots
-    .filter((candidate) => filePath.startsWith(`${candidate}${path.sep}`))
-    .sort((a, b) => b.length - a.length)[0];
-  return root === undefined ? undefined : path.join(root, dir);
-}
 
 /**
  * Keeps a saved `.tt` file's editor sidecar (`x.tt.d.ts` + map) current, so
@@ -646,12 +797,33 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
   const settings = await getSettings(doc.uri);
   if (settings.sidecar === "off") return;
 
+  // `tt.sidecarDir` names where the declarations go. When it is relative
+  // and this file belongs to no workspace folder there is no base to
+  // resolve it against, and writing them beside the source instead would
+  // put generated files in a tree the user asked to keep clean, silently.
+  const location = sidecarLocation(
+    settings.sidecarDir,
+    uri.fsPath,
+    workspaceRoots,
+  );
+  if (location.kind === "unresolved") {
+    if (notices.raise("sidecar-dir-unresolved")) {
+      connection.console.warn(
+        `tt: tt.sidecarDir is "${location.configured}", which is relative to a ` +
+          "workspace folder, and this file is in none — sidecars are not " +
+          "written for it. Open its folder in the workspace, or set an " +
+          "absolute path.",
+      );
+    }
+    return;
+  }
+
   const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const result = await sidecar.refreshSidecar(
     compiler,
     uri.fsPath,
     settings.sidecar,
-    resolveSidecarDir(settings.sidecarDir, uri.fsPath),
+    location.kind === "directory" ? location.path : undefined,
   );
   if (result.kind === "failed") {
     connection.console.warn(`tt: sidecar refresh failed — ${result.detail}`);
@@ -668,7 +840,10 @@ documents.onDidChangeContent((e) => {
   for (const uri of declCache.keys()) {
     if (uri !== e.document.uri) declCache.delete(uri);
   }
-  scheduleValidation(e.document);
+  // A dependency edit invalidates answers for unchanged consumers as well.
+  // The engine owns dependency semantics; until it exposes affected files,
+  // conservatively refresh every open tt document with a new generation.
+  for (const doc of documents.all()) scheduleValidation(doc);
 });
 documents.onDidClose((e) => {
   const fsPath = enginePath(e.document);
@@ -688,6 +863,8 @@ documents.onDidClose((e) => {
     version: e.document.version,
     diagnostics: [],
   });
+  declCache.clear();
+  for (const doc of documents.all()) scheduleValidation(doc);
 });
 
 // -------------------------------------------------------------- completion
@@ -724,7 +901,7 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "Rust의 `?`에 해당. `Err`면 둘러싼 함수에서 즉시 return합니다. 세미콜론 필수.",
+        "Rust의 `?`에 해당합니다. `Ok` 값을 풀고 `Err`이면 가장 가까운 Result 스코프(`result` 블록 또는 일반 함수)를 끝냅니다. 이 completion은 세미콜론이 필요한 문장 형태를 삽입합니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "try ${1:expression};",
@@ -748,10 +925,10 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`Result` 연산을 평탄하게 잇습니다. `const x <- 식;`은 `Ok` 값을 묶고 `Err`를 블록 밖으로 전파하며, 마지막 값 식(세미콜론 없이)이 `Ok`로 감싸집니다.",
+        "`Result` 연산을 평탄하게 잇습니다. `const x = try 식;`은 `Ok` 값을 묶고 실패하면 블록을 `Err`로 끝냅니다. 명시적인 `return 값;`은 `Ok`로 감싸집니다.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
-    insertText: "result {\n\tconst ${1:value} <- ${2:expression};\n\t$0\n}",
+    insertText: "result {\n\tconst ${1:value} = try ${2:expression};\n\treturn ${1:value};\n}",
   },
   {
     label: "let-else",

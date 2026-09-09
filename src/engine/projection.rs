@@ -14,14 +14,16 @@ use std::sync::Arc;
 use super::snapshot::BlockedFile;
 #[cfg(test)]
 use crate::CompileError;
-use crate::typescript::backend::{LiteralQuery, Module, Query, SymbolQuery, TagQuery};
+use crate::typescript::backend::{
+    LiteralQuery, Module, Query, ResultShapeQuery, SymbolQuery, TagQuery,
+};
 use crate::typescript::mapper;
 use crate::{LiteralMatch, MappedEmit, Options, TagMatch, ValProbes};
 
 /// One `.tt` file as every consumer of the engine sees it: the source the
 /// user wrote, and the TypeScript the compiler is given — plus everything
 /// the engine derives from the text, cached with it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ProjectedDocument {
     /// The `.tt` file.
     pub source_path: PathBuf,
@@ -205,6 +207,7 @@ pub(crate) fn declaration_path_of(file: &ProjectedDocument) -> PathBuf {
 /// is dropped rather than asked about at an approximate position.
 pub(crate) fn assemble(
     files: &[Arc<ProjectedDocument>],
+    blocked: &[Arc<BlockedFile>],
     root: &Path,
     sources: &[PathBuf],
 ) -> (Query, Probes) {
@@ -235,6 +238,23 @@ pub(crate) fn assemble(
             path: file.module_path.clone(),
             text: file.emit.code.clone(),
         });
+
+        for result_return in &file.emit.result_return_temps {
+            query.result_shapes.push(ResultShapeQuery {
+                module: file.module_path.clone(),
+                // Codegen brackets the emitted expression. The backend asks
+                // for the smallest expression node covering this exact range,
+                // so member calls and non-ASCII identifiers are classified as
+                // values rather than by an arbitrary token position.
+                start: mapper::to_utf16(&file.emit.code, result_return.out),
+                end: mapper::to_utf16(&file.emit.code, result_return.out_end),
+            });
+            probes.result_returns.push(SourceAnchor {
+                source_path: file.source_path.clone(),
+                offset: result_return.src,
+                end: result_return.src_end,
+            });
+        }
 
         for probe in &file.literal_probes {
             if file
@@ -323,7 +343,15 @@ pub(crate) fn assemble(
                 module: file.module_path.clone(),
                 position,
             });
-            probes.val_bindings.push(query.symbols.len() - 1);
+            probes.val_bindings.push(ValBindingAnchor {
+                root: query.symbols.len() - 1,
+                anchor: SourceAnchor {
+                    source_path: file.source_path.clone(),
+                    offset: binding.val_at,
+                    end: binding.val_at + "val".len(),
+                },
+                modifier_end: crate::val::modifier_end(&file.source, binding.val_at + "val".len()),
+            });
         }
         for mutation in &val.mutations {
             // A method call outside tt's mutator policy can never be
@@ -454,6 +482,16 @@ pub(crate) fn assemble(
         }
     }
 
+    // A source that failed tt projection still has to enter the candidate
+    // set. The configured TypeScript program is the authority for whether
+    // that path belongs through `files`/`include`/`exclude` or an import.
+    // The placeholder carries no probes and no user code; it exists only so
+    // the backend can return that membership decision in `projectModules`.
+    query.modules.extend(blocked.iter().map(|file| Module {
+        path: module_path_of(&file.source_path),
+        text: "export {};\n".to_string(),
+    }));
+
     (query, probes)
 }
 
@@ -553,12 +591,27 @@ pub(crate) struct Probes {
     /// them after [`Probes::tags`]: which file, and which
     /// `(constructor, field)` column the answer names the alphabet of.
     pub payloads: Vec<PayloadAnchor>,
-    /// Indices into [`Query::symbols`] for every `val` binding's identifier.
-    pub val_bindings: Vec<usize>,
+    /// Every `val` binding's symbol question and declaration-side source span.
+    pub val_bindings: Vec<ValBindingAnchor>,
     pub mutations: Vec<MutationAnchor>,
     /// The declarations a pass's callee may resolve to, project-wide.
     pub functions: Vec<FnAnchor>,
     pub passes: Vec<PassAnchor>,
+    /// Explicit successful Result-return values, aligned with
+    /// [`Query::result_shapes`].
+    pub result_returns: Vec<SourceAnchor>,
+}
+
+/// One `val` declaration, paired with the symbol question for its binding.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ValBindingAnchor {
+    /// Index into [`Query::symbols`] for the binding identifier.
+    pub root: usize,
+    /// The `val` keyword itself, used as a rustc-style secondary label.
+    pub anchor: SourceAnchor,
+    /// End of the keyword and following horizontal whitespace, so removing
+    /// the modifier leaves a clean TypeScript declaration.
+    pub modifier_end: usize,
 }
 
 /// A payload column asked about: where it was written, and which
@@ -736,6 +789,7 @@ mod tests {
             code,
             message: message.to_string(),
             mismatch: None,
+            related: Vec::new(),
         }
     }
 
@@ -794,7 +848,7 @@ mod tests {
         let file = project("function f() {\n  const a = try plain();\n  return a;\n}\n");
         let diagnostic = ts_at(
             &file,
-            "$tt_t0.kind",
+            "\"value\" in $tt_t0",
             2339,
             "Property 'kind' does not exist on type 'number'.",
         );
@@ -820,7 +874,12 @@ mod tests {
     #[test]
     fn an_unrecognized_code_on_glue_is_not_guessed_at() {
         let file = project("function f() {\n  const a = try plain();\n  return a;\n}\n");
-        let diagnostic = ts_at(&file, "$tt_t0.kind", 2739, "Type is missing properties.");
+        let diagnostic = ts_at(
+            &file,
+            "\"value\" in $tt_t0",
+            2739,
+            "Type is missing properties.",
+        );
         assert!(translate_on_glue(&file, &diagnostic, &declarations(&file)).is_none());
     }
 

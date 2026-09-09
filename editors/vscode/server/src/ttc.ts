@@ -39,6 +39,23 @@ export interface TtcDiagnostic {
    * a fix the editor can apply; one without names advice only. Older
    * compilers omit the field. */
   suggestions?: TtcSuggestion[];
+  /** Secondary labeled spans ("the piped value is produced here"), absent
+   * when the diagnostic has only its primary range or the compiler
+   * predates them. */
+  labels?: TtcLabel[];
+}
+
+/** One secondary labeled span of a diagnostic — 1-based line/column pairs,
+ * `endLine`/`endCol` past the last character, the same coordinates the
+ * diagnostic itself is reported in. `path` names another file; without it
+ * the span is in the diagnostic's own file. */
+export interface TtcLabel {
+  line: number;
+  col: number;
+  endLine: number;
+  endCol: number;
+  message: string;
+  path?: string;
 }
 
 /** One way to resolve a diagnostic (`ttc`'s `Suggestion`). */
@@ -56,9 +73,16 @@ export interface TtcSuggestion {
   } | null;
 }
 
+/** Why a compiler could not be run: it is not there, or it is there and
+ * the operating system refused to start it — an unset execute bit, a path
+ * that names a directory, a file that is not an executable. Both leave the
+ * editor without diagnostics, and both are fixed by the user, so both are
+ * worth saying out loud. */
+export type UnusableCompiler = "missing" | "not-executable";
+
 export type TtcResult =
   | { kind: "ok"; diagnostics: TtcDiagnostic[] }
-  | { kind: "not-found"; compiler: string }
+  | { kind: "not-found"; compiler: string; reason: UnusableCompiler }
   | { kind: "failed"; detail: string };
 
 let tmpDir: string | null = null;
@@ -75,6 +99,27 @@ const CANDIDATE_PATHS = [
   path.join("target", "release", "ttc.exe"),
   path.join("target", "debug", "ttc.exe"),
 ];
+
+/** The newest compiler build in a development workspace. `cargo build` and
+ * `cargo build --release` are both legitimate; fixed profile precedence can
+ * select an older protocol whenever both artifacts happen to exist. */
+function workspaceCompiler(root: string): string {
+  let selected = "";
+  let selectedMtime = -Infinity;
+  for (const rel of CANDIDATE_PATHS) {
+    const candidate = path.join(root, rel);
+    try {
+      const mtime = fs.statSync(candidate).mtimeMs;
+      if (mtime > selectedMtime) {
+        selected = candidate;
+        selectedMtime = mtime;
+      }
+    } catch {
+      // Missing and unreadable candidates do not participate.
+    }
+  }
+  return selected;
+}
 
 /**
  * Resolve the compiler to run:
@@ -98,14 +143,8 @@ export function findCompiler(
 ): string {
   if (configuredPath.trim() !== "") return configuredPath.trim();
   for (const root of workspaceRoots) {
-    for (const rel of CANDIDATE_PATHS) {
-      const candidate = path.join(root, rel);
-      try {
-        if (fs.existsSync(candidate)) return candidate;
-      } catch {
-        // ignore and keep looking
-      }
-    }
+    const built = workspaceCompiler(root);
+    if (built !== "") return built;
   }
   const installed = packageCompiler(workspaceRoots);
   if (installed !== "") return installed;
@@ -220,8 +259,9 @@ function runCheckOnce(
       args,
       { timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
       (err, _stdout, stderr) => {
-        if (err && (err as NodeJS.ErrnoException).code === "ENOENT") {
-          resolve({ kind: "not-found", compiler });
+        const unusable = unusableCompiler(err);
+        if (unusable) {
+          resolve({ kind: "not-found", compiler, reason: unusable });
           return;
         }
         const diagnostics = parseStderr(String(stderr), file);
@@ -336,7 +376,13 @@ export type ValCheckResult =
   | { kind: "ok"; diagnostics: TtcDiagnostic[] }
   /** The check could not run (no toolchain, crash, or nothing to check).
    * Distinct from "ran and found nothing": the caller keeps what it has. */
-  | { kind: "unavailable"; detail: string };
+  | {
+      kind: "unavailable";
+      detail: string;
+      /** Environmental absence stays quiet; an internal backend failure
+       * must be surfaced as a compiler failure by the presentation layer. */
+      cause: "availability" | "internal";
+    };
 
 export async function runTypedCheck(
   compiler: string,
@@ -347,7 +393,11 @@ export async function runTypedCheck(
   // The overlay stands in for a file of the project, so there has to be one:
   // a buffer that was never saved has no place in the project graph yet.
   if (!exists(fsPath)) {
-    return { kind: "unavailable", detail: "not on disk yet" };
+    return {
+      kind: "unavailable",
+      detail: "the document is not on disk yet",
+      cause: "availability",
+    };
   }
   // The engine session keeps the project — and the TypeScript compiler
   // behind it — alive between checks, so this answers in milliseconds
@@ -362,11 +412,19 @@ export async function runTypedCheck(
   if (answer && "error" in answer) {
     // The session ran and the request failed (no toolchain, a backend
     // crash) — what the one-shot reports as "could not run".
-    return { kind: "unavailable", detail: answer.error };
+    return {
+      kind: "unavailable",
+      detail: answer.error,
+      cause: "internal",
+    };
   }
   if (answer && "result" in answer) {
     const result = answer.result as {
       blocked?: boolean;
+      backendError?: {
+        kind: "unavailable" | "internal";
+        message: string;
+      } | null;
       diagnostics?: {
         path: string;
         line: number;
@@ -376,8 +434,19 @@ export async function runTypedCheck(
         message: string;
         code?: string;
         suggestions?: TtcSuggestion[];
+        labels?: TtcLabel[];
       }[];
     };
+    if (result.backendError) {
+      return {
+        kind: "unavailable",
+        detail: result.backendError.message,
+        cause:
+          result.backendError.kind === "internal"
+            ? "internal"
+            : "availability",
+      };
+    }
     const all = result.diagnostics ?? [];
     let real = fsPath;
     try {
@@ -393,6 +462,7 @@ export async function runTypedCheck(
       return {
         kind: "unavailable",
         detail: "the check reported only outside this file",
+        cause: "availability",
       };
     }
     return {
@@ -405,6 +475,7 @@ export async function runTypedCheck(
         message: d.message,
         code: d.code,
         suggestions: d.suggestions,
+        labels: d.labels,
       })),
     };
   }
@@ -449,6 +520,7 @@ function runTypedCheckOnce(
             resolve({
               kind: "unavailable",
               detail: `${compiler} (${String(code)}): ${String(stderr).trim() || err.message}`,
+              cause: code === 101 ? "internal" : "availability",
             });
             return;
           }
@@ -456,7 +528,11 @@ function runTypedCheckOnce(
         },
       );
     } catch (e) {
-      resolve({ kind: "unavailable", detail: String(e) });
+      resolve({
+        kind: "unavailable",
+        detail: String(e),
+        cause: "availability",
+      });
       return;
     }
     // The buffer is the overlay; the compiler reads it from stdin.
@@ -464,25 +540,67 @@ function runTypedCheckOnce(
   });
 }
 
-/** Parse `ttc: <file>:<line>:<col>: <msg>` / `ttc: <file>: <msg>` lines. */
+/**
+ * Read the diagnostics out of a one-shot `ttc --check` run.
+ *
+ * The compiler renders each one as a header naming the rule and the
+ * message, then a location line:
+ *
+ * ```text
+ * error[match-not-exhaustive]: match on variant Shape is not exhaustive
+ *  --> src/shape.tt:4:18
+ * ```
+ *
+ * followed by a source excerpt and `= help:` lines this fallback does not
+ * need. Positions come from the location line, so nothing here depends on
+ * the excerpt's layout. A compiler old enough to predate that rendering
+ * still prints `ttc: <file>:<line>:<col>: <msg>`, which is accepted too;
+ * `ttc: ` on its own now prefixes usage errors, which name no file and are
+ * therefore skipped by the same file check.
+ */
 export function parseStderr(stderr: string, file: string): TtcDiagnostic[] {
   const diagnostics: TtcDiagnostic[] = [];
-  for (const line of stderr.split("\n")) {
-    if (!line.startsWith("ttc: ")) continue;
-    const rest = line.slice(5);
-    if (!rest.startsWith(file)) continue; // progress logs, other files
-    const tail = rest.slice(file.length);
-    let m = /^:(\d+):(\d+): (.*)$/.exec(tail);
-    if (m) {
-      diagnostics.push({
-        line: Number(m[1]),
-        col: Number(m[2]),
-        message: m[3],
-      });
+  const lines = stderr.split("\n");
+  for (const [index, line] of lines.entries()) {
+    if (line.startsWith("ttc: ")) {
+      const rest = line.slice(5);
+      if (!rest.startsWith(file)) continue; // progress logs, other files
+      const tail = rest.slice(file.length);
+      let m = /^:(\d+):(\d+): (.*)$/.exec(tail);
+      if (m) {
+        diagnostics.push({
+          line: Number(m[1]),
+          col: Number(m[2]),
+          message: m[3],
+        });
+        continue;
+      }
+      m = /^: (.*)$/.exec(tail);
+      if (m) diagnostics.push({ line: 0, col: 0, message: m[1] });
       continue;
     }
-    m = /^: (.*)$/.exec(tail);
-    if (m) diagnostics.push({ line: 0, col: 0, message: m[1] });
+    const header = /^(?:error|warning)(?:\[([^\]]*)\])?: (.*)$/.exec(line);
+    if (!header) continue;
+    const location = /^\s*--> (.*):(\d+):(\d+)$/.exec(lines[index + 1] ?? "");
+    if (!location || location[1] !== file) continue;
+    diagnostics.push({
+      line: Number(location[2]),
+      col: Number(location[3]),
+      message: header[2],
+      code: header[1] || undefined,
+    });
   }
   return diagnostics;
+}
+
+/** Reads a spawn failure: `null` when the process ran and merely reported
+ * something. */
+export function unusableCompiler(error: unknown): UnusableCompiler | null {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code === "ENOENT") return "missing";
+  // The file is there; the operating system would not start it.
+  if (code === "EACCES" || code === "EPERM" || code === "ENOEXEC" || code === "EISDIR") {
+    return "not-executable";
+  }
+  return null;
 }

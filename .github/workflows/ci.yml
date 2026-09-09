@@ -45,11 +45,17 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Check agent setup entrypoints
         run: |
           test "$(cat CLAUDE.md)" = "@AGENTS.md"
           grep -Fq './scripts/doctor' AGENTS.md
           bash -n scripts/doctor
+          # AGENTS.md requires the index and the record to carry the same
+          # state; a record left behind reads as current guidance.
+          node scripts/check-task-index
           before="$(git status --porcelain)"
           if ./scripts/doctor; then
             echo "doctor unexpectedly accepted an unconfigured checkout" >&2
@@ -87,8 +93,41 @@ jobs:
           TTC_REQUIRE_TSGO: "1"
         run: cargo test
 
+      - name: Check the standalone fuzz targets
+        run: cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked
+
       - name: Test npm release tooling and project initializer
         run: node --test npm/scripts/*.test.mjs packages/create-tt/test/*.test.mjs
+
+      - name: Install bundler adapter dependencies
+        run: npm ci --prefix integrations/unplugin
+
+      - name: Test bundler adapters against ttc
+        env:
+          TTC_BINARY: ${{ github.workspace }}/target/debug/ttc
+        run: npm --prefix integrations/unplugin test
+
+      - name: Build-test a freshly generated project
+        env:
+          TTC_BINARY: ${{ github.workspace }}/target/debug/ttc
+        run: npm --prefix packages/create-tt run test:e2e
+
+      - name: Test deliberation tooling
+        run: |
+          npm --prefix tools/deliberation-bot test
+          npm --prefix tools/deliberation-bot run check
+
+      - name: Install website dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
+
+      - name: Type-check and build the website
+        working-directory: website
+        env:
+          SITE_BASE_PATH: /tt/
+        run: |
+          bun run typecheck
+          bun run build
 
       # A skipped suite is green in every other way, so the suite itself
       # has to go red: `TTC_REQUIRE_TSGO` turns "no toolchain found" from a
@@ -246,13 +285,13 @@ jobs:
         working-directory: editors/vscode
         run: |
           npm ci
-          npx tsc -b
+          npm run compile
 
       - name: Test — the extension against a compiler that can emit
         working-directory: editors/vscode
         run: |
           export PATH="$GITHUB_WORKSPACE/target/debug:$PATH"
-          node --test "server/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log
+          node --test "server/out/test/*.test.js" "client/out/test/*.test.js" 2>&1 | tee /tmp/extension-native.log
           # Every guard in the suite is satisfiable here — the compiler is
           # on PATH, it can serve a language server, and it can emit
           # declarations — so a skip means the wiring broke.

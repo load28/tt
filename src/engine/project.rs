@@ -24,7 +24,7 @@ use super::projection::{self, ProjectedDocument};
 use super::semantics::{self, Checked, FileSemantics};
 use super::snapshot::Snapshot;
 use crate::CompileError;
-use crate::typescript::backend::TypeScriptBackend;
+use crate::typescript::backend::{FailureKind, TypeScriptBackend};
 use crate::typescript::native::NativeBackend;
 
 /// What counts as a tt source, and what counts as hand-written TypeScript.
@@ -61,11 +61,12 @@ pub struct Project {
     /// The output tree a scan must not descend into (`--types`'s sidecar
     /// directory).
     out_dir: Option<PathBuf>,
-    /// The inputs' `.tt` files — what a `--types` run writes. The graph is
-    /// always the whole project; this only narrows emission.
+    /// The inputs' `.tt` files — what a `--types` run writes. The TypeScript
+    /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
-    /// The file set the first pass runs over, fixed at open: the project
-    /// scan, or the inputs themselves when the scan found nothing.
+    /// Candidate files for the first layered-filesystem pass, fixed at open:
+    /// the project scan, or the inputs when the scan found nothing. The
+    /// configured TypeScript program filters these to actual members.
     initial: Vec<PathBuf>,
     /// The project's hand-written TypeScript, listed only when there is no
     /// `tsconfig.json` to decide the program's files — see
@@ -153,17 +154,16 @@ impl Project {
         self.overlays.remove(path);
     }
 
-    /// Every `.tt` file of the project, as sorted absolute paths — the
-    /// compiler resolves modules by absolute path, and so must the modules
-    /// ttc adds. Scanned fresh so a file created since the last call is
-    /// seen.
+    /// Every candidate `.tt` file under the project root, as sorted absolute
+    /// paths. TypeScript later decides which candidates are configured or
+    /// reachable. Scanned fresh so a newly created file is seen.
     pub fn scan(&self) -> std::io::Result<Vec<PathBuf>> {
         project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)
     }
 
-    /// The file set the first pass runs over, decided when the project was
-    /// opened: the project scan, or — when that found nothing (inputs
-    /// outside the root) — the inputs themselves.
+    /// The candidate set the first pass layers, decided when the project was
+    /// opened: the project scan, or — when that found nothing (inputs outside
+    /// the root) — the inputs themselves.
     pub fn initial_files(&self) -> Vec<PathBuf> {
         self.initial.clone()
     }
@@ -215,11 +215,67 @@ impl Project {
         // blocked update above leaves the previous cache intact instead, so
         // the files that were fine keep their projections.
         self.cache = cache;
+        if projected
+            .iter()
+            .any(|doc| !doc.emit.contextual_slots.is_empty())
+            && let Ok(backend) = &self.backend
+        {
+            let (mut query, _) =
+                projection::assemble(&projected, &blocked_files, &self.root, &self.sources);
+            query
+                .modules
+                .retain(|module| !projected.iter().any(|doc| doc.module_path == module.path));
+            query.modules.extend(
+                self.overlays
+                    .iter()
+                    .filter(|(path, _)| is_host_source(path))
+                    .map(|(path, text)| crate::typescript::backend::Module {
+                        path: path.clone(),
+                        text: text.clone(),
+                    }),
+            );
+            let mut modules: Vec<_> = projected
+                .iter()
+                .map(|doc| (doc.module_path.clone(), doc.emit.clone()))
+                .collect();
+            crate::typescript::contextual::materialize(
+                backend,
+                self.tsconfig.as_deref(),
+                &self.root,
+                &mut modules,
+                &query.modules,
+                &query.sources,
+            )
+            .map_err(|failure| {
+                Box::new(Blocked {
+                    path: self.root.clone(),
+                    error: CompileError {
+                        message: failure.message,
+                        filename: None,
+                        line: 0,
+                        col: 0,
+                        end_line: 0,
+                        end_col: 0,
+                    },
+                })
+            })?;
+            for (doc, (_, emit)) in projected.iter_mut().zip(modules) {
+                if doc.emit != emit {
+                    Arc::make_mut(doc).emit = emit;
+                }
+            }
+        }
         self.next_snapshot += 1;
         Ok(Snapshot {
             id: self.next_snapshot,
             files: projected,
             blocked: blocked_files,
+            host_overlays: self
+                .overlays
+                .iter()
+                .filter(|(path, _)| is_host_source(path))
+                .map(|(path, text)| (path.clone(), text.clone()))
+                .collect(),
         })
     }
 
@@ -329,17 +385,45 @@ impl Project {
     /// changed since the last ask travels.
     pub fn check(&self, snapshot: &Snapshot, request: &CheckRequest) -> Result<Checked, String> {
         let semantics = self.file_semantics(snapshot);
-        let (mut query, probes) = projection::assemble(snapshot.files(), &self.root, &self.sources);
+        let (mut query, probes) = projection::assemble(
+            snapshot.files(),
+            snapshot.blocked(),
+            &self.root,
+            &self.sources,
+        );
         query.emit_declarations = request.emit_declarations;
+        query
+            .modules
+            .extend(snapshot.host_overlays.iter().map(|(path, text)| {
+                crate::typescript::backend::Module {
+                    path: path.clone(),
+                    text: text.clone(),
+                }
+            }));
         // A backend that cannot run removes the typed facts, not the pass:
         // every typed answer degrades to unknown and the tt layer still
         // reports in full (`docs/design/compiler-core.md` §7).
         let (answers, backend_error) = match &self.backend {
             Ok(backend) => match backend.ask(self.tsconfig.as_deref(), &self.root, &query) {
                 Ok(answers) => (answers, None),
-                Err(error) => (Default::default(), Some(error)),
+                Err(error) => (
+                    Default::default(),
+                    Some(super::BackendError {
+                        kind: match error.kind {
+                            FailureKind::Unavailable => super::BackendErrorKind::Unavailable,
+                            FailureKind::Internal => super::BackendErrorKind::Internal,
+                        },
+                        message: error.message,
+                    }),
+                ),
             },
-            Err(missing) => (Default::default(), Some(missing.clone())),
+            Err(missing) => (
+                Default::default(),
+                Some(super::BackendError {
+                    kind: super::BackendErrorKind::Unavailable,
+                    message: missing.clone(),
+                }),
+            ),
         };
         let declarations = if request.emit_declarations && backend_error.is_none() {
             semantics::match_declarations(snapshot, &answers, &self.root, &self.requested)
@@ -353,11 +437,18 @@ impl Project {
                 &probes,
                 request.tt_only,
                 &semantics,
+                &self.requested,
             ),
             declarations,
             backend_error,
         })
     }
+}
+
+/// Host files retain their original paths and syntax in backend overlays.
+pub(super) fn is_host_source(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension == "ts" || extension == "tsx")
 }
 
 /// One cached [`FileSemantics`] with the half of its key the value does
@@ -429,6 +520,19 @@ pub fn collect_sources(
 ) -> std::io::Result<()> {
     let meta = std::fs::metadata(entry)?;
     if meta.is_file() {
+        // A named file is filtered the same way the walk filters one: the
+        // contract is about extensions, not about how the file was reached.
+        // Without this, `ttc -o build src/app.js` wrote TypeScript syntax
+        // into a file still called `.js`.
+        if !is_source(entry, include_ts) {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "not a tt or TypeScript source (expected {})",
+                    source_extensions(include_ts)
+                ),
+            ));
+        }
         out.push(entry.to_path_buf());
         return Ok(());
     }
@@ -451,12 +555,7 @@ pub fn collect_sources(
                 if !skip {
                     collect_sources(&child, include_ts, out)?;
                 }
-            } else if meta.is_file()
-                && child.extension().is_some_and(|e| {
-                    TT_EXTENSIONS.iter().any(|tt| *tt == e)
-                        || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
-                })
-            {
+            } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
             }
         }
@@ -475,4 +574,22 @@ pub(crate) fn collect_tt(inputs: &[String]) -> std::io::Result<Vec<PathBuf>> {
         .filter(|f| crate::SourceKind::from_tt_path(f).is_some())
         .map(|f| f.canonicalize())
         .collect()
+}
+
+/// Whether `path` names a source this compiler takes: a tt source always,
+/// and hand-written TypeScript when pass-through is on.
+fn is_source(path: &Path, include_ts: bool) -> bool {
+    path.extension().is_some_and(|e| {
+        TT_EXTENSIONS.iter().any(|tt| *tt == e)
+            || (include_ts && TS_EXTENSIONS.iter().any(|ts| *ts == e))
+    })
+}
+
+/// The extensions [`is_source`] accepts, for an error that has to name them.
+fn source_extensions(include_ts: bool) -> String {
+    let mut names: Vec<String> = TT_EXTENSIONS.iter().map(|e| format!(".{e}")).collect();
+    if include_ts {
+        names.extend(TS_EXTENSIONS.iter().map(|e| format!(".{e}")));
+    }
+    names.join(", ")
 }

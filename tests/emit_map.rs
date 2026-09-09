@@ -215,16 +215,16 @@ fn result_block_bindings_are_mapped_to_emitted_declarations() {
 import * as Result from "@tt/std/result";
 function load(): TResult<number, string> { return Result.Ok(1); }
 const total = result {
-  const first <- load();
-  let { a, b }: { a: number; b: number } <- load2();
-  first + a + b
+  const first = try load();
+  let { a, b }: { a: number; b: number } = try load2();
+  return first + a + b;
 };
 "#;
     let m = emit_mapped(src);
     assert_mapping_invariants(src, &m);
 
     // A plain binding name reaches the emitted declaration.
-    let first = src.find("const first <-").unwrap() + "const ".len();
+    let first = src.find("const first =").unwrap() + "const ".len();
     let out = map_offset(&m, first).expect("binding name is mapped");
     assert_eq!(&m.code[out..out + "first".len()], "first");
 
@@ -234,6 +234,34 @@ const total = result {
     let at = src.find(pattern).unwrap();
     let out = map_offset(&m, at).expect("destructuring binding is mapped");
     assert_eq!(&m.code[out..out + pattern.len()], pattern);
+}
+
+#[test]
+fn result_statement_match_and_template_hosts_keep_source_mappings() {
+    let src = r#"const events: string[] = [];
+const value = result {
+  const item = try read();
+  match (subject()) {
+    1 => { events.push("one"); },
+    _ => { events.push("other"); },
+  }
+  return item;
+};
+const text = `value=${result { const item = try read(); return item; }}`;
+"#;
+    let m = emit_mapped(src);
+    assert_mapping_invariants(src, &m);
+    assert_mapped_in(src, &m, "match (subject())", "subject()");
+    assert_mapped_in(src, &m, "events.push(\"one\")", "events.push(\"one\")");
+    assert_mapped_in(src, &m, "events.push(\"other\")", "events.push(\"other\")");
+    assert_mapped_in(src, &m, "const text = `value=", "const text = `value=");
+    assert!(
+        m.anchors
+            .iter()
+            .any(|anchor| anchor.kind == ttc::AnchorKind::Match),
+        "{:#?}",
+        m.anchors
+    );
 }
 
 /// The byte offset of `needle` inside the first occurrence of `context`.
@@ -383,7 +411,7 @@ fn every_construct_anchors_the_glue_it_writes() {
     // diagnostic about its glue is drawn over.
     assert_eq!(&src[anchor.src..anchor.src_end], "try readNum()");
     // ...and covers the glue the construct wrote.
-    assert!(m.code[anchor.out..anchor.end].contains("$tt_t0.kind !== \"Ok\""));
+    assert!(m.code[anchor.out..anchor.end].contains("\"value\" in $tt_t0"));
 }
 
 #[test]
@@ -410,6 +438,53 @@ fn anchors_nest_innermost_first() {
 }
 
 #[test]
+fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
+    let src = "const a = one() |> f |> g |> h;\n";
+    let m = emit_mapped(src);
+    let pipes: Vec<&ttc::EmitAnchor> = m
+        .anchors
+        .iter()
+        .filter(|a| a.kind == ttc::AnchorKind::Pipe)
+        .collect();
+    // One anchor per step plus the whole pipeline: a mismatch on the value
+    // flowing into step N belongs to step N, and anything wider still
+    // belongs to the pipeline.
+    let spans: Vec<&str> = pipes.iter().map(|a| &src[a.src..a.src_end]).collect();
+    for step in ["f", "g", "h"] {
+        assert!(spans.contains(&step), "step {step} is anchored: {spans:?}");
+    }
+    assert!(
+        spans.contains(&"one() |> f |> g |> h"),
+        "the whole pipeline stays anchored: {spans:?}"
+    );
+
+    // The value argument of the outermost helper call is the accumulated
+    // inner call; a diagnostic starting on its glue belongs to the step
+    // that consumes it — the innermost anchor covering that byte.
+    let outer_arg = m.code.find("$tt_ap($tt_ap(").expect("nested helpers") + "$tt_ap(".len();
+    let owner = m.anchor_at(outer_arg).expect("anchored glue");
+    assert_eq!(&src[owner.src..owner.src_end], "h");
+
+    let inner_arg = outer_arg + "$tt_ap(".len();
+    let owner = m.anchor_at(inner_arg).expect("anchored glue");
+    assert_eq!(&src[owner.src..owner.src_end], "g");
+
+    // Each step anchor also names where the value it consumes was
+    // produced — the previous step, or the head — so a diagnostic there
+    // can label the producer.
+    let produced: Vec<(&str, &str)> = pipes
+        .iter()
+        .filter_map(|a| {
+            a.context
+                .map(|(from, to)| (&src[a.src..a.src_end], &src[from..to]))
+        })
+        .collect();
+    for pair in [("f", "one()"), ("g", "f"), ("h", "g")] {
+        assert!(produced.contains(&pair), "{pair:?} in {produced:?}");
+    }
+}
+
+#[test]
 fn anchors_do_not_change_the_emitted_bytes() {
     // Anchors are zero-length notes; the output must be what it always was.
     let src = r#"variant E { A(x: number), B }
@@ -417,7 +492,7 @@ function f() {
   const a = try readNum();
   const A(x) = e else { return; };
   if let B() = e { log(); }
-  const r = result { const v <- readNum(); v };
+  const r = result { const v = try readNum(); return v; };
   const p = x |> f |> g;
   const m = match (e) { A(x) => x, B => 0 };
 }
@@ -442,7 +517,7 @@ fn a_buffer_whose_typescript_does_not_parse_still_emits() {
     // Without an owner model there are no host rewrites to plan, so the
     // emit degrades to the shape a file needing no host lowering gets —
     // and the diagnostic stays `compile`'s to report.
-    let src = "const r = result {\n  const a <- f();\n  const b = ;\n  b\n};\n";
+    let src = "const r = result {\n  const a = try f();\n  const b = ;\n  return a;\n};\n";
     let m = emit_mapped(src);
     assert!(!m.code.is_empty());
     assert_mapping_invariants(src, &m);

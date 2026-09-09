@@ -1,0 +1,12 @@
+variant State { Ready(value: number), Empty }
+declare const state: State;
+declare function consume(item: {run: (x: number) => number}): void;
+consume(match (state) {
+  Ready(value) => { const amount = value + 1; return {run: x => x + amount}; },
+  Empty => ({run: x => x}),
+});
+declare function generic<T>(item: T): void;
+generic<{run: (x: number) => number}>(match (state) {
+  Ready(value) => ({run: x => x + value}),
+  Empty => ({run: x => x}),
+});

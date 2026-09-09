@@ -23,7 +23,12 @@ bun run tt:check
 `init` performs these steps:
 
 - Detects Vite, Rollup, Rolldown, webpack, Rspack, esbuild, or Farm
-- Adds `@openload28/tt-lang`, `@openload28/unplugin-tt`, TypeScript, and TT scripts
+- Adds `@openload28/tt-lang`, TypeScript, and TT scripts — plus
+  `@openload28/unplugin-tt` when a bundler is used (`--bundler none` adds no
+  plugin)
+- Writes `tsconfig.tt.json`, which extends the project's `tsconfig.json`
+  with the TypeScript content mapper for `.tt` and `.ttx` imports, and
+  points the generated scripts at it
 - Creates `tt.*.config.mjs` for declarative bundlers
 - Prints the plugin code to add for esbuild
 
@@ -39,7 +44,7 @@ bunx @openload28/create-tt@next init --package-manager bun
 New projects use Bun. Existing projects keep the package manager from their
 `packageManager` field or lockfile.
 
-## Manual compiler setup
+## Manual TypeScript setup
 
 Install the compiler and the TypeScript it drives:
 
@@ -47,20 +52,44 @@ Install the compiler and the TypeScript it drives:
 bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
-Keep sources in `src/**/*.tt` or `src/**/*.ttx`, then add scripts like these:
+Declare the content mapper as a top-level `tsconfig.json` key. It is a sibling
+of `compilerOptions`, not a compiler option:
+
+```jsonc
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true
+  },
+  "contentMappers": [
+    { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
+  ],
+  "include": ["src"]
+}
+```
+
+Run TypeScript with permission to start the mapper process. Keep this flag in
+the project's check and build scripts:
 
 ```json
 {
   "scripts": {
-    "build:tt": "ttc -o .tt-build src",
-    "check:tt": "ttc --check-types src"
+    "check": "tsc -p tsconfig.json --runExternalCode"
   }
 }
 ```
 
-`bun run build:tt` produces ordinary `.ts`/`.tsx` files in `.tt-build`; point
-an existing TypeScript build at that tree. Add `.tt-build/` and `.tt-types/`
-to `.gitignore`. Do not edit generated files.
+```sh
+bunx tsc -p tsconfig.json --runExternalCode
+```
+
+TypeScript holds `.tt` and `.ttx` transforms virtually. No `.tt-types`,
+`rootDirs`, or declaration-generation step is required. If another tool needs
+plain TypeScript files, run `bunx ttc -o .tt-build src` and treat `.tt-build`
+as generated output.
+
+Putting `contentMappers` inside `compilerOptions` produces `TS5023: Unknown
+compiler option 'contentMappers'` and leaves `.tt` imports unresolved.
 
 ## Manual bundler setup
 
@@ -108,8 +137,8 @@ await build({ entryPoints: ["src/main.tt"], bundle: true, plugins: [tt()] });
 ```
 
 The plugin makes the bundler read `.tt` and `.ttx` directly. Keep
-`ttc --check-types src` as a separate check because transpiling bundlers do not
-replace TypeScript type checking.
+`tsc -p tsconfig.json --runExternalCode` as a separate check because
+transpiling bundlers do not replace TypeScript type checking.
 
 ## Migrating files
 
@@ -121,7 +150,7 @@ Ordinary TypeScript and TSX may remain unchanged and can be migrated gradually.
 import { render } from "./notice.tt";
 ```
 
-Run `bunx ttc --check-types src` before the normal build. For editor diagnostics
+Run `bunx tsc -p tsconfig.json --runExternalCode` before the normal build. For editor diagnostics
 and navigation, download `tt-language-<version>.vsix` from the newest
 [GitHub Releases](https://github.com/load28/tt/releases) pre-release. Install it
 with **Extensions: Install from VSIX...** in the VS Code Command Palette, or:
@@ -140,3 +169,9 @@ After installing both VSIX files, enable TypeScript 7 in the editor:
 ```
 
 Open the project root in VS Code.
+
+## Legacy TypeScript hosts
+
+Use `ttc --types` sidecars only when a TypeScript host cannot load content
+mappers. New projects and TypeScript 7.1+ CLI builds should use the content
+mapper setup above.

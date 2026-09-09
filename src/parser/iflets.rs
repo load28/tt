@@ -83,9 +83,9 @@ pub(super) fn parse_if_let<'t>(
     if cur.parser.src[expr_start..expr_end].trim().is_empty() {
         return None;
     }
-    let expr = cur
-        .parser
-        .parse_tokens(&cur.tokens[expr_from..brace_idx], expr_start, expr_end);
+    let expr =
+        cur.parser
+            .parse_expression_tokens(&cur.tokens[expr_from..brace_idx], expr_start, expr_end);
     cur.idx = brace_idx;
 
     // then-block

@@ -88,6 +88,10 @@ export interface EngineDiagnostic {
   message: string;
   code: number;
   warning: boolean;
+  /** Secondary labeled spans ("the piped value is produced here"), absent
+   * when the diagnostic has only its primary range. `path` names another
+   * file; without it the span is in the diagnostic's own file. */
+  related?: { range: EngineRange; message: string; path?: string }[];
 }
 
 export interface EngineTtSymbol {
@@ -142,42 +146,48 @@ interface EngineServer {
   answered: boolean;
 }
 
-let engineServer: EngineServer | null = null;
-let engineServerCompiler: string | null = null;
-/** Consecutive server losses without a single answer; two disable it. */
-let engineServerStrikes = 0;
-/** Which compiler those strikes are against. A ttc that cannot serve says
- * nothing about the next one, so a different path — a `tt.compilerPath` that
- * arrived after the first documents, a freshly installed package — starts
- * with a clean count instead of inheriting a verdict it never earned. */
-let strikingCompiler: string | null = null;
+/** The live session for each compiler path. `tt.compilerPath` is a
+ * resource-scoped setting, so one window can legitimately serve two
+ * compilers; keeping a session each is what stops a second compiler from
+ * tearing down the first one's session on every request. */
+const engineServers = new Map<string, EngineServer>();
+/** Consecutive losses without a single answer, per compiler; two disable
+ * it. A ttc that cannot serve says nothing about the next one, so each path
+ * carries its own count instead of inheriting a verdict it never earned. */
+const engineServerStrikes = new Map<string, number>();
 
 /** Called whenever a fresh server comes up (first spawn or respawn after a
  * crash), so the owner can re-send the documents it holds open — a new
- * engine session starts with the disk's view of the world. */
-let onSessionStart: (() => void) | null = null;
+ * engine session starts with the disk's view of the world. It receives the
+ * compiler *that session* is for: the caller's idea of a current compiler
+ * can name a different one, and re-sending there would open the documents
+ * against another session. */
+let onSessionStart: ((compiler: string) => void) | null = null;
 
-export function setOnSessionStart(callback: (() => void) | null): void {
+export function setOnSessionStart(
+  callback: ((compiler: string) => void) | null,
+): void {
   onSessionStart = callback;
 }
 
+function strikeOut(compiler: string): void {
+  engineServerStrikes.set(compiler, (engineServerStrikes.get(compiler) ?? 0) + 1);
+}
+
 function engineServerFor(compiler: string): EngineServer | null {
-  if (strikingCompiler !== compiler) {
-    strikingCompiler = compiler;
-    engineServerStrikes = 0;
+  if ((engineServerStrikes.get(compiler) ?? 0) >= 2) return null;
+  const running = engineServers.get(compiler);
+  if (running && running.alive) {
+    return running;
   }
-  if (engineServerStrikes >= 2) return null;
-  if (engineServer && engineServer.alive && engineServerCompiler === compiler) {
-    return engineServer;
-  }
-  shutdownEngineServer();
+  if (running) engineServers.delete(compiler);
   let child: ChildProcess;
   try {
     child = spawn(compiler, ["--server"], {
       stdio: ["pipe", "pipe", "ignore"],
     });
   } catch {
-    engineServerStrikes += 1;
+    strikeOut(compiler);
     return null;
   }
   const server: EngineServer = {
@@ -191,10 +201,11 @@ function engineServerFor(compiler: string): EngineServer | null {
   const fail = () => {
     if (!server.alive) return;
     server.alive = false;
-    // Only against the compiler this session was for: another one may have
-    // been asked for since, and it has not failed at anything.
-    if (!server.answered && strikingCompiler === compiler) {
-      engineServerStrikes += 1;
+    if (engineServers.get(compiler) === server) {
+      engineServers.delete(compiler);
+    }
+    if (!server.answered) {
+      strikeOut(compiler);
     }
     for (const [, entry] of server.pending) {
       clearTimeout(entry.timer);
@@ -204,6 +215,12 @@ function engineServerFor(compiler: string): EngineServer | null {
   };
   child.on("error", fail);
   child.on("exit", fail);
+  // Node reports a write to a dead pipe on the stream as well as through the
+  // write callback. Without a listener that is an uncaught exception, and
+  // this process is the language server: the whole editor integration would
+  // go down with it. Ending the session is what every other loss does.
+  child.stdin?.on("error", fail);
+  child.stdout?.on("error", fail);
   child.stdout?.setEncoding("utf8");
   child.stdout?.on("data", (chunk: string) => {
     server.buffer += chunk;
@@ -225,7 +242,7 @@ function engineServerFor(compiler: string): EngineServer | null {
       server.pending.delete(message.id as number);
       clearTimeout(entry.timer);
       server.answered = true;
-      engineServerStrikes = 0;
+      engineServerStrikes.delete(compiler);
       entry.resolve(
         typeof message.error === "string"
           ? { error: message.error }
@@ -238,10 +255,12 @@ function engineServerFor(compiler: string): EngineServer | null {
   child.unref();
   (child.stdin as unknown as { unref?: () => void })?.unref?.();
   (child.stdout as unknown as { unref?: () => void })?.unref?.();
-  engineServer = server;
-  engineServerCompiler = compiler;
-  onSessionStart?.();
-  return server;
+  engineServers.set(compiler, server);
+  onSessionStart?.(compiler);
+  // The callback runs arbitrary owner code; if it replaced this session,
+  // answer with whatever is live now rather than a session already gone.
+  const current = engineServers.get(compiler);
+  return current && current.alive ? current : null;
 }
 
 export function engineRequest(
@@ -287,23 +306,26 @@ export function engineRequest(
  * request gets to find out.
  */
 export function retryEngineServer(): void {
-  engineServerStrikes = 0;
-  strikingCompiler = null;
+  engineServerStrikes.clear();
 }
 
 /** Ends the engine server, if one is running. Tests call this so the
  * process can exit; the language server just dies with its client. */
 export function shutdownEngineServer(): void {
-  if (engineServer) {
+  for (const server of engineServers.values()) {
+    for (const entry of server.pending.values()) {
+      clearTimeout(entry.timer);
+      entry.resolve(null);
+    }
+    server.pending.clear();
     try {
-      engineServer.child.kill();
+      server.child.kill();
     } catch {
       // already gone
     }
-    engineServer.alive = false;
-    engineServer = null;
-    engineServerCompiler = null;
+    server.alive = false;
   }
+  engineServers.clear();
 }
 
 /* ------------------------------------------------------------ documents --
@@ -315,6 +337,12 @@ export function shutdownEngineServer(): void {
 
 const SYNC_TIMEOUT_MS = 15000;
 const SEMANTIC_TIMEOUT_MS = 15000;
+
+/** Drop project graphs after external disk/configuration changes. The adapter
+ * immediately replays its open buffers before asking any new questions. */
+export function reloadProjects(compiler: string): void {
+  void engineRequest(compiler, "reloadProjects", {}, SYNC_TIMEOUT_MS);
+}
 
 export function openDocument(compiler: string, path: string, text: string): void {
   void engineRequest(compiler, "openDocument", { path, text }, SYNC_TIMEOUT_MS);
@@ -568,16 +596,33 @@ export async function declarations(
   return result ?? { variants: [], matches: [] };
 }
 
+/**
+ * A file's type errors, or `null` when the engine could not be reached.
+ *
+ * The three outcomes are not two. "These are the errors" and "there are
+ * none" are both answers; "no answer" is not, and publishing it as an
+ * empty list clears every type error in the editor for a file that still
+ * has them. An engine that *answers* with an error — no TypeScript
+ * toolchain, a project that will not load — has said something definite,
+ * and that is an empty list with the message on `onError`, the way
+ * [`semanticTokens`] already distinguishes the two (TASK-345).
+ */
 export async function tsDiagnostics(
   compiler: string,
   path: string,
   onError?: (message: string) => void,
-): Promise<EngineDiagnostic[]> {
-  const result = await semantic<{ diagnostics: EngineDiagnostic[] }>(
+): Promise<EngineDiagnostic[] | null> {
+  const answer = await engineRequest(
     compiler,
     "tsDiagnostics",
     { path },
-    onError,
+    SEMANTIC_TIMEOUT_MS,
   );
+  if (!answer) return null;
+  if ("error" in answer) {
+    onError?.(`tt: tsDiagnostics: ${answer.error}`);
+    return [];
+  }
+  const result = answer.result as { diagnostics?: EngineDiagnostic[] } | null;
   return result?.diagnostics ?? [];
 }

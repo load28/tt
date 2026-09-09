@@ -1,0 +1,12 @@
+declare function next(): number;
+declare function work(value: number): void;
+
+while (match (next()) { 1 => true, _ => false }) {
+  work(1);
+}
+
+for (let value = match (next()) { 1 => 1, _ => 0 };
+     match (next()) { 2 => true, _ => false };
+     value++) {
+  work(value);
+}

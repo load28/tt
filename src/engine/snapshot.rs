@@ -19,7 +19,13 @@ pub(crate) struct BlockedFile {
     pub(crate) source_path: std::path::PathBuf,
     pub(crate) source: String,
     pub(crate) diagnostics: Vec<crate::Diagnostic>,
-    variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
+    metadata: std::sync::OnceLock<Box<BlockedMetadata>>,
+}
+
+#[derive(Debug)]
+struct BlockedMetadata {
+    variant_symbols: Vec<crate::VariantSymbol>,
+    imports: Vec<crate::TtImport>,
 }
 
 impl BlockedFile {
@@ -32,16 +38,25 @@ impl BlockedFile {
             source_path,
             source,
             diagnostics,
-            variant_symbols: std::sync::OnceLock::new(),
+            metadata: std::sync::OnceLock::new(),
         }
     }
 
     pub(crate) fn variant_symbols(&self) -> &[crate::VariantSymbol] {
-        self.variant_symbols.get_or_init(|| {
-            crate::variant_symbols_with_kind(
-                &self.source,
-                crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
-            )
+        &self.metadata().variant_symbols
+    }
+
+    pub(crate) fn tt_imports(&self) -> &[crate::TtImport] {
+        &self.metadata().imports
+    }
+
+    fn metadata(&self) -> &BlockedMetadata {
+        self.metadata.get_or_init(|| {
+            let kind = crate::SourceKind::from_path(&self.source_path).unwrap_or_default();
+            Box::new(BlockedMetadata {
+                variant_symbols: crate::variant_symbols_with_kind(&self.source, kind),
+                imports: crate::tt_imports_with_kind(&self.source, kind),
+            })
         })
     }
 }
@@ -53,6 +68,8 @@ pub struct Snapshot {
     pub(crate) id: u64,
     pub(crate) files: Vec<Arc<ProjectedDocument>>,
     pub(crate) blocked: Vec<Arc<BlockedFile>>,
+    /// Unsaved host TypeScript sources, frozen with the tt projections.
+    pub(crate) host_overlays: std::collections::BTreeMap<std::path::PathBuf, String>,
 }
 
 impl Snapshot {
@@ -80,8 +97,8 @@ impl Snapshot {
     /// as projected ones: a file is at its most worth quoting exactly when
     /// it is too broken to project.
     ///
-    /// `None` when this snapshot does not hold the file — a diagnostic
-    /// TypeScript reported in a hand-written `.ts` outside the tt sources.
+    /// `None` when this snapshot does not hold the file — for example a
+    /// hand-written `.ts` read from disk rather than an editor overlay.
     pub fn source_of(&self, path: &std::path::Path) -> Option<&str> {
         self.files
             .iter()
@@ -93,5 +110,6 @@ impl Snapshot {
                     .find(|file| file.source_path == path)
                     .map(|file| file.source.as_str())
             })
+            .or_else(|| self.host_overlays.get(path).map(String::as_str))
     }
 }

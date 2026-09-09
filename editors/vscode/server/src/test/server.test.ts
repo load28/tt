@@ -32,6 +32,143 @@ const skipTyped = skip || (findTsgo() ? false : "tsgo not installed");
  * reached when something has hung. */
 const timeout = 60_000;
 
+for (const consumerKind of ["tt", "ttx"]) {
+  for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
+    test(`filesystem and config changes refresh ${providerKind} -> ${consumerKind}`, { skip: skipTyped, timeout }, async () => {
+      const dir = caseDir("tt-filesystem-edit-");
+      const provider = path.join(dir, `provider.${providerKind}`);
+      const consumer = path.join(dir, `consumer.${consumerKind}`);
+      const configPath = path.join(dir, "tsconfig.json");
+      const config = { compilerOptions: { strict: true, noImplicitAny: false, module: "preserve", moduleResolution: "bundler", jsx: "preserve", noEmit: true, allowImportingTsExtensions: true }, include: ["*"] };
+      fs.writeFileSync(configPath, JSON.stringify(config));
+      fs.writeFileSync(consumer, "export {};\n");
+      const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\nexport function identity(input) { return input; }\n`;
+      const uri = pathToFileURL(consumer).toString();
+      const client = connect();
+      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : p.diagnostics.length === 0));
+      const changed = (file: string, type: number) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(file).toString(), type }] });
+      try {
+        await client.request("initialize", { processId: process.pid, rootUri: pathToFileURL(dir).toString(), workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {} });
+        client.notify("initialized", {});
+        let answer = expect("ts2307");
+        client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
+        await answer;
+        answer = expect();
+        fs.writeFileSync(provider, 'export const value: string = "created";\n');
+        changed(provider, 1);
+        await answer;
+        answer = expect("ts2322");
+        fs.writeFileSync(provider, 'export const value: number = 42;\n');
+        changed(provider, 2);
+        await answer;
+        answer = expect("ts2307");
+        fs.unlinkSync(provider);
+        changed(provider, 3);
+        await answer;
+        answer = expect();
+        fs.writeFileSync(provider, 'export const value: string = "restored";\n');
+        changed(provider, 1);
+        await answer;
+        answer = expect("ts7006");
+        config.compilerOptions.noImplicitAny = true;
+        fs.writeFileSync(configPath, JSON.stringify(config));
+        changed(configPath, 2);
+        assert.equal((await answer).version, 1, "the unsaved function survived project reload");
+        answer = expect();
+        config.compilerOptions.noImplicitAny = false;
+        fs.writeFileSync(configPath, JSON.stringify(config));
+        changed(configPath, 2);
+        await answer;
+        assert.equal(fs.readFileSync(consumer, "utf8"), "export {};\n", "reload never saves the buffer");
+      } finally { client.stop(); }
+    });
+
+    test(`unsaved ${providerKind} changes refresh untouched ${consumerKind} diagnostics`, { skip: skipTyped, timeout }, async () => {
+      const dir = caseDir("tt-dependency-edit-");
+      const provider = path.join(dir, `provider.${providerKind}`);
+      const consumer = path.join(dir, `consumer.${consumerKind}`);
+      const original = 'export const value: string = "disk";\n';
+      const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\n`;
+      fs.writeFileSync(provider, original);
+      fs.writeFileSync(consumer, source);
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", jsx: "preserve", noEmit: true, allowImportingTsExtensions: true },
+        include: ["*"],
+      }));
+      const uri = pathToFileURL(consumer).toString();
+      const providerUri = pathToFileURL(provider).toString();
+      const client = connect();
+      try {
+        await client.request("initialize", {
+          processId: process.pid, rootUri: pathToFileURL(dir).toString(),
+          workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {},
+        });
+        client.notify("initialized", {});
+        // Open the host first: the project must exist before any tt request.
+        client.notify("textDocument/didOpen", { textDocument: {
+          uri: providerUri, languageId: providerKind === "ts" ? "typescript" : providerKind === "tsx" ? "typescriptreact" : providerKind,
+          version: 1, text: original,
+        } });
+        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
+        await clean;
+        const failed = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "ts2322"));
+        client.notify("textDocument/didChange", {
+          textDocument: { uri: providerUri, version: 2 }, contentChanges: [{ text: "export const value: number = 42;\n" }],
+        });
+        assert.equal((await failed).version, 1, "consumer was never edited");
+        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        client.notify("textDocument/didClose", { textDocument: { uri: providerUri } });
+        assert.equal((await cleared).version, 1, "closing reveals the disk dependency");
+      } finally { client.stop(); }
+    });
+  }
+}
+
+/* A window's folders are not what it started with: people add and remove
+ * them all day. Every folder is a place the compiler, the TypeScript
+ * toolchain and a relative `tt.sidecarDir` are resolved from, and the
+ * client sends the change notification only to a server that declared it
+ * wants one — so without the capability the roots stayed frozen at
+ * startup, for the life of the session (TASK-342). */
+test("the server asks for folder changes, and acts on them", { skip, timeout }, async () => {
+  const dir = caseDir("tt-folders-");
+  const added = caseDir("tt-folders-added-");
+  const file = path.join(dir, "main.tt");
+  const source = "variant State { Ready, Empty }\ndeclare const state: State;\nexport const label = match (state) { Ready => \"r\" };\n";
+  fs.writeFileSync(file, source);
+  const uri = pathToFileURL(file).toString();
+  const client = connect();
+  try {
+    const init = await client.request("initialize", {
+      processId: process.pid,
+      rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "first" }],
+      // What VS Code declares, and the only capability this case needs:
+      // still no `workspace.configuration`, which this client would not
+      // answer.
+      capabilities: { workspace: { workspaceFolders: true } },
+    });
+    const folders = init.result.capabilities.workspace?.workspaceFolders;
+    assert.equal(folders?.supported, true, JSON.stringify(init.result.capabilities.workspace));
+    assert.ok(folders?.changeNotifications, "the client registers its listener on this alone");
+    client.notify("initialized", {});
+
+    const opened = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "match-not-exhaustive"));
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+    await opened;
+    // Let the generation that answered settle, so the publish awaited below
+    // can only be the one the notification causes.
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    const revalidated = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+    client.notify("workspace/didChangeWorkspaceFolders", {
+      event: { added: [{ uri: pathToFileURL(added).toString(), name: "second" }], removed: [] },
+    });
+    assert.ok((await revalidated).diagnostics.some((d: any) => String(d.code) === "match-not-exhaustive"), "the open buffer is re-validated against the new roots");
+  } finally { client.stop(); }
+});
+
 interface Client {
   request(method: string, params: unknown): Promise<any>;
   notify(method: string, params: unknown): void;
@@ -42,20 +179,51 @@ interface Client {
 }
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
-function connect(): Client {
-  const child: ChildProcess = spawn(process.execPath, [SERVER, "--stdio"], {
-    stdio: ["pipe", "pipe", "ignore"],
+function connect(server = SERVER): Client {
+  const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
+    stdio: ["pipe", "pipe", "pipe"],
+    // The LSP case lives in a temporary project, while the test contract is
+    // against the compiler built from this checkout. Cover both supported
+    // development routes: a linked package consumes TTC_BINARY, and the
+    // final PATH fallback finds the same executable when no package exists.
+    env: {
+      ...process.env,
+      TTC_BINARY: COMPILER,
+      PATH: `${path.dirname(COMPILER)}${path.delimiter}${process.env.PATH ?? ""}`,
+    },
   });
-  const pending = new Map<number, (body: any) => void>();
+  interface Request {
+    method: string;
+    resolve: (body: any) => void;
+    reject: (error: Error) => void;
+  }
+  const pending = new Map<number, Request>();
   interface Waiter {
     method: string;
     want: (params: any) => boolean;
     resolve: (params: any) => void;
+    reject: (error: Error) => void;
   }
   const waiters = new Map<number, Waiter>();
   let nextWaiter = 1;
   let nextId = 1;
   let buf = Buffer.alloc(0);
+  let closed: Error | undefined;
+  let stderr = "";
+  const fail = (reason: string): void => {
+    if (closed) return;
+    const requests = [...pending.values()].map(request => request.method).join(", ");
+    const notifications = [...waiters.values()].map(waiter => waiter.method).join(", ");
+    closed = new Error(`${reason}; pending requests: ${requests || "none"}; waiting notifications: ${notifications || "none"}${stderr ? `\n${stderr}` : ""}`);
+    for (const request of pending.values()) request.reject(closed);
+    for (const waiter of waiters.values()) waiter.reject(closed);
+    pending.clear();
+    waiters.clear();
+  };
+  child.stderr!.on("data", chunk => { stderr = (stderr + chunk.toString()).slice(-16_384); });
+  child.on("error", error => fail(`LSP process error: ${error.message}`));
+  child.on("close", (code, signal) => fail(`LSP process closed: code=${code}, signal=${signal}`));
+  child.stdin!.on("error", error => fail(`LSP input error: ${error.message}`));
 
   child.stdout!.on("data", (chunk: Buffer) => {
     buf = Buffer.concat([buf, chunk]);
@@ -70,10 +238,10 @@ function connect(): Client {
       if (buf.length < sep + 4 + size) return;
       const body = JSON.parse(buf.subarray(sep + 4, sep + 4 + size).toString());
       buf = buf.subarray(sep + 4 + size);
-      const resolve = body.id !== undefined ? pending.get(body.id) : undefined;
-      if (resolve) {
+      const request = body.id !== undefined ? pending.get(body.id) : undefined;
+      if (request) {
         pending.delete(body.id);
-        resolve(body);
+        request.resolve(body);
         continue;
       }
       if (body.method !== undefined) {
@@ -95,17 +263,19 @@ function connect(): Client {
   };
   return {
     request: (method, params) =>
-      new Promise((resolve) => {
+      new Promise((resolve, reject) => {
+        if (closed) { reject(closed); return; }
         const id = nextId++;
-        pending.set(id, resolve);
+        pending.set(id, { method, resolve, reject });
         send({ id, method, params });
       }),
     notify: (method, params) => send({ method, params }),
     waitFor: (method, want) =>
-      new Promise((resolve) => {
-        waiters.set(nextWaiter++, { method, want, resolve });
+      new Promise((resolve, reject) => {
+        if (closed) { reject(closed); return; }
+        waiters.set(nextWaiter++, { method, want, resolve, reject });
       }),
-    stop: () => child.kill(),
+    stop: () => { fail("LSP client stopped"); child.kill(); },
   };
 }
 
@@ -526,6 +696,66 @@ test("pattern positions complete cases and fields", { skip, timeout }, async () 
   }
 });
 
+test("references, rename, signature help, and document symbols cross the LSP adapter", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Point }",
+    "function format(value: string, width?: number): string {",
+    '  return value.padStart(width ?? 0, " ");',
+    "}",
+    'const label = "tt";',
+    "export const output = format(label, 4);",
+    "void label;",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(source, "const lab"),
+      context: { includeDeclaration: true },
+    });
+    assert.equal(references.result.length, 3, JSON.stringify(references.result));
+    assert.ok(
+      references.result.every(
+        (location: any) =>
+          location.uri === uri && covered(source, location.range) === "label",
+      ),
+      JSON.stringify(references.result),
+    );
+
+    const rename = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, "const lab"),
+      newName: "title",
+    });
+    assert.equal(rename.result.changes[uri].length, 3);
+    assert.ok(
+      rename.result.changes[uri].every((edit: any) => edit.newText === "title"),
+      JSON.stringify(rename.result),
+    );
+
+    const signature = await client.request("textDocument/signatureHelp", {
+      textDocument: { uri },
+      position: positionOf(source, "output = format("),
+      context: { triggerKind: 1, isRetrigger: false },
+    });
+    assert.match(signature.result.signatures[0].label, /format/);
+    assert.equal(signature.result.activeParameter, 0);
+
+    const symbols = await client.request("textDocument/documentSymbol", {
+      textDocument: { uri },
+    });
+    const shape = symbols.result.find((symbol: any) => symbol.name === "Shape");
+    assert.ok(shape, JSON.stringify(symbols.result));
+    assert.deepEqual(
+      shape.children.map((symbol: any) => symbol.name),
+      ["Circle", "Point"],
+    );
+  } finally {
+    stop();
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* diagnostic ranges (TASK-116)                                        */
 /* ------------------------------------------------------------------ */
@@ -551,6 +781,31 @@ async function published(source: string): Promise<any[]> {
     stop();
   }
 }
+
+test(
+  "the published diagnostic keeps its labels after the typed layer replaces the service one",
+  { skip: skipTyped, timeout },
+  async () => {
+    // Under the default settings the typed pass replaces the
+    // language-service layer wholesale, so the secondary labels must ride
+    // the typed diagnostics or the final publish loses them.
+    const source = [
+      "const inc = (n: number): number => n + 1;",
+      "const shout = (s: string): string => s.toUpperCase();",
+      "const a = 1 |> inc |> shout;",
+      "",
+    ].join("\n");
+    const diagnostics = await published(source);
+    const mismatch = diagnostics.find(
+      (d: any) => String(d.code ?? "") === "ts2345",
+    );
+    assert.ok(mismatch, JSON.stringify(diagnostics));
+    const related = mismatch.relatedInformation ?? [];
+    assert.equal(related.length, 1, JSON.stringify(mismatch));
+    assert.equal(related[0].message, "the piped value is produced here");
+    assert.equal(covered(source, related[0].location.range), "inc");
+  },
+);
 
 test(
   "a new diagnostic generation never drops an untouched typed error",
@@ -686,21 +941,22 @@ test(
 );
 
 test(
-  "return try is diagnosed as an expression placement error",
+  "loop-header try is diagnosed at its expression boundary",
   { skip, timeout },
   async () => {
     const source = [
       "const a = () => Result.Err(10);",
       "",
       "function Test(): TResult<string, string> {",
-      "  return try a();",
+      "  while (try a()) work();",
+      "  return Result.Ok(\"done\");",
       "}",
       "",
     ].join("\n");
     const diagnostics = await published(source);
     const failed = diagnostics.find((d: any) => d.code === "try-placement");
     assert.ok(failed, `no placement error in: ${JSON.stringify(diagnostics)}`);
-    assert.match(failed.message, /statement, not an expression/);
+    assert.match(failed.message, /TypeScript control-flow boundary/);
     assert.equal(covered(source, failed.range), "try a()");
   },
 );
@@ -804,3 +1060,204 @@ test(
     }
   },
 );
+
+/* ------------------------------------------------------------------ */
+/* practical diagnostic matrix (TASK-308)                              */
+/* ------------------------------------------------------------------ */
+
+interface PracticalManifest {
+  entry: string;
+  diagnostics: Array<{
+    code: string;
+    text: string;
+    line: number;
+    message: string;
+    help: string[];
+    fix?: { title: string; text: string; replacement: string; fixed: string };
+    labels: Array<{ text: string; line: number; message: string }>;
+  }>;
+}
+
+const PRACTICAL_REPO_ROOT = path.resolve(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+  "..",
+);
+const PRACTICAL_FIXTURES = path.join(
+  PRACTICAL_REPO_ROOT,
+  "tests",
+  "fixtures",
+  "practical-diagnostics",
+);
+
+function stripPracticalAnnotations(source: string): string {
+  return source
+    .split("\n")
+    .map((line) => {
+      const marker = line.indexOf("//~");
+      return marker < 0 ? line : line.slice(0, marker).trimEnd();
+    })
+    .join("\n");
+}
+
+function applyTextEdit(source: string, edit: any): string {
+  const lines = source.split("\n");
+  const at = (position: { line: number; character: number }) =>
+    lines.slice(0, position.line).reduce((n, line) => n + line.length + 1, 0) +
+    position.character;
+  return (
+    source.slice(0, at(edit.range.start)) +
+    edit.newText +
+    source.slice(at(edit.range.end))
+  );
+}
+
+for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
+  const fixture = path.join(PRACTICAL_FIXTURES, caseName);
+  if (!fs.statSync(fixture).isDirectory()) continue;
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(fixture, "manifest.json"), "utf8"),
+  ) as PracticalManifest;
+
+  test(
+    `the editor reports every practical diagnostic in ${caseName}`,
+    { skip: skipTyped, timeout },
+    async () => {
+      const project = caseDir(`tt-practical-${caseName}-`);
+      fs.cpSync(fixture, project, {
+        recursive: true,
+        filter: (source) => path.basename(source) !== "node_modules",
+      });
+      const file = path.join(project, manifest.entry);
+      const source = stripPracticalAnnotations(fs.readFileSync(file, "utf8"));
+      fs.writeFileSync(file, source);
+      const uri = pathToFileURL(file).toString();
+      const client = connect();
+      try {
+        await client.request("initialize", {
+          processId: process.pid,
+          rootUri: pathToFileURL(PRACTICAL_REPO_ROOT).toString(),
+          workspaceFolders: [
+            {
+              uri: pathToFileURL(PRACTICAL_REPO_ROOT).toString(),
+              name: "tt",
+            },
+          ],
+          capabilities: {},
+        });
+        client.notify("initialized", {});
+        client.notify("textDocument/didOpen", {
+          textDocument: {
+            uri,
+            languageId: file.endsWith(".ttx") ? "ttx" : "tt",
+            version: 1,
+            text: source,
+          },
+        });
+
+        const published = await client.waitFor(
+          "textDocument/publishDiagnostics",
+          (params) => params.uri === uri && params.diagnostics.length > 0,
+        );
+        const expectedCodes = manifest.diagnostics.map(({ code }) => code);
+        const actualCodes = published.diagnostics.map((diagnostic: any) =>
+          String(diagnostic.code),
+        );
+        assert.deepEqual(actualCodes, expectedCodes, JSON.stringify(published));
+
+        for (const expected of manifest.diagnostics) {
+          const diagnostic = published.diagnostics.find(
+            (candidate: any) => String(candidate.code) === expected.code,
+          );
+          assert.ok(diagnostic, `missing ${expected.code}`);
+          assert.equal(
+            diagnostic.range.start.line + 1,
+            expected.line,
+            JSON.stringify(diagnostic),
+          );
+          assert.equal(covered(source, diagnostic.range), expected.text);
+          assert.equal(diagnostic.message, expected.message);
+          assert.deepEqual(
+            (diagnostic.data?.suggestions ?? []).map(
+              (suggestion: any) => suggestion.message,
+            ),
+            expected.help,
+          );
+          const related = diagnostic.relatedInformation ?? [];
+          assert.deepEqual(
+            related.map((label: any) => ({
+              text: covered(source, label.location.range),
+              line: label.location.range.start.line + 1,
+              message: label.message,
+            })),
+            expected.labels,
+          );
+          if (expected.fix !== undefined) {
+            const response = await client.request("textDocument/codeAction", {
+              textDocument: { uri },
+              range: diagnostic.range,
+              context: { diagnostics: [diagnostic] },
+            });
+            const action = (response.result ?? []).find(
+              (candidate: any) => candidate.title === expected.fix?.title,
+            );
+            assert.ok(action, JSON.stringify(response.result));
+            const [edit] = action.edit.changes[uri];
+            assert.equal(covered(source, edit.range), expected.fix.text);
+            assert.equal(edit.newText, expected.fix.replacement);
+            const fixed = applyTextEdit(source, edit);
+            assert.equal(
+              fixed,
+              fs.readFileSync(path.join(project, expected.fix.fixed), "utf8"),
+            );
+            const remainingCodes = manifest.diagnostics
+              .filter(({ code }) => code !== expected.code)
+              .map(({ code }) => code);
+            const republished = client.waitFor(
+              "textDocument/publishDiagnostics",
+              (params) =>
+                params.uri === uri &&
+                params.diagnostics.map((item: any) => String(item.code)).join() ===
+                  remainingCodes.join(),
+            );
+            client.notify("textDocument/didChange", {
+              textDocument: { uri, version: 2 },
+              contentChanges: [{ text: fixed }],
+            });
+            await republished;
+          }
+        }
+      } finally {
+        client.stop();
+        fs.rmSync(project, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
+
+test("LSP client reports process exit instead of hanging pending operations", { timeout }, async () => {
+  const dir = caseDir("tt-lsp-exit-");
+  const server = path.join(dir, "exit.cjs");
+  fs.writeFileSync(server, 'process.stdin.once("data", () => { process.stderr.write("controlled server failure\\n"); process.exitCode = 7; process.stdin.destroy(); });\n');
+  const client = connect(server);
+  try {
+    const notification = client.waitFor("textDocument/publishDiagnostics", () => true);
+    const request = client.request("initialize", {});
+    const outcomes = await Promise.allSettled([request, notification]);
+    for (const outcome of outcomes) {
+      assert.equal(outcome.status, "rejected");
+      if (outcome.status === "rejected") {
+        assert.match(outcome.reason.message, /code=7/);
+        assert.match(outcome.reason.message, /initialize/);
+        assert.match(outcome.reason.message, /publishDiagnostics/);
+        assert.match(outcome.reason.message, /controlled server failure/);
+      }
+    }
+    await assert.rejects(client.request("shutdown", {}), /code=7/);
+    await assert.rejects(client.waitFor("future", () => true), /code=7/);
+  } finally { client.stop(); }
+});

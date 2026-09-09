@@ -1,0 +1,3 @@
+export variant SameTtx {
+  Text(value: string)
+}

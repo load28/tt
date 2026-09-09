@@ -47,6 +47,15 @@ fn parse_ts_module(
     code: &str,
     source_kind: crate::SourceKind,
 ) -> Result<(), (String, usize, usize)> {
+    if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
+        let before = &code[..span.start];
+        let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
+        let col = before
+            .rsplit('\n')
+            .next()
+            .map_or(1, |line| line.chars().count() + 1);
+        return Err((message.to_string(), line, col));
+    }
     let cm: Lrc<SourceMap> = Default::default();
     let fm = cm.new_source_file(Lrc::new(FileName::Anon), code.to_string());
     let lexer = Lexer::new(
@@ -197,15 +206,50 @@ fn byte_of(text: &str, line: usize, col: usize) -> usize {
 /// ([`crate::DiagnosticCode::blocks_projection`]).
 pub(crate) fn in_source(
     source: &str,
-    failure: &crate::codegen::SourceNotTypeScript,
+    failure: &crate::codegen::LoweringFailure,
 ) -> crate::error::TtError {
-    let at = failure.source.min(source.len());
-    let message = format!(
-        "the TypeScript here does not parse: {}. tt lowering models this file's TypeScript, \
-         so no output is emitted (`--no-verify` does not apply).",
-        failure.message,
-    );
-    crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
+    match failure {
+        crate::codegen::LoweringFailure::SourceNotTypeScript {
+            message,
+            source: at,
+        } => {
+            let at = (*at).min(source.len());
+            let message = format!(
+                "the TypeScript here does not parse: {message}. tt lowering models this file's TypeScript, \
+                 so no output is emitted (`--no-verify` does not apply).",
+            );
+            crate::error::TtError::at(at, message).code(crate::DiagnosticCode::SourceNotTypeScript)
+        }
+        crate::codegen::LoweringFailure::Evaluation {
+            error,
+            source: span,
+        } => match error {
+            crate::evaluation_ir::EvaluationError::DiscardedResult { source: result } => {
+                crate::error::TtError::span(
+                    result.start.min(source.len()),
+                    result.end.min(source.len()),
+                    "`result` is used as a statement, so its `Err` would be discarded".to_string(),
+                )
+                .code(crate::DiagnosticCode::ResultValueDiscarded)
+                .help("assign, return, or otherwise consume this Result value")
+            }
+            _ => crate::error::TtError::span(
+                span.start.min(source.len()),
+                span.end.min(source.len()),
+                format!("tt host lowering could not plan this construct: {error:?}"),
+            )
+            .code(crate::DiagnosticCode::LoweringPlanFailed),
+        },
+        crate::codegen::LoweringFailure::HostProjection {
+            error,
+            source: span,
+        } => crate::error::TtError::span(
+            span.start.min(source.len()),
+            span.end.min(source.len()),
+            format!("tt host lowering could not plan this construct: {error:?}"),
+        )
+        .code(crate::DiagnosticCode::LoweringPlanFailed),
+    }
 }
 
 fn unclaimed_candidate_at(

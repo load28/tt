@@ -1,0 +1,29 @@
+{
+  "entry": "src/jobs.tt",
+  "diagnostics": [
+    {
+      "code": "result-no-success-value",
+      "text": "result {\n  const job = try fetchJob();\n  persist(job);\n}",
+      "line": 7,
+      "message": "`result` can reach the end of its body without a success value",
+      "help": ["return a value from every reachable path in this `result` block"],
+      "labels": []
+    },
+    {
+      "code": "result-value-discarded",
+      "text": "result {\n    const job = try fetchJob();\n    return job.id;\n  }",
+      "line": 13,
+      "message": "`result` is used as a statement, so its `Err` would be discarded",
+      "help": ["assign, return, or otherwise consume this Result value"],
+      "labels": []
+    },
+    {
+      "code": "try-placement",
+      "text": "try fetchJob()",
+      "line": 21,
+      "message": "`try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return",
+      "help": ["move the propagation into an ordinary function, or handle the Result explicitly"],
+      "labels": []
+    }
+  ]
+}

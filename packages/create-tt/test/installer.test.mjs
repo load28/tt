@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import test from 'node:test'
@@ -21,6 +21,8 @@ const scaffoldedTypeScript = repositoryManifest.devDependencies.typescript
 
 test('keeps dependencies on the installer release channel', () => {
   assert.equal(dependencyChannel('0.3.0-dev.20260826'), 'next')
+  assert.equal(dependencyChannel('0.3.0-beta'), 'beta')
+  assert.equal(dependencyChannel('0.3.0-beta.1'), 'beta')
   assert.equal(dependencyChannel('0.3.0-rc'), 'rc')
   assert.equal(dependencyChannel('0.3.0'), 'latest')
   assert.equal(dependencyChannel('0.0.0-dev'), 'latest')
@@ -33,11 +35,17 @@ test('creates a complete Vite project without installing', async () => {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   assert.equal(result.bundler, 'vite')
   assert.equal(result.packageManager, 'bun')
-  assert.equal(manifest.scripts.check, 'ttc --check-types src')
+  assert.equal(manifest.scripts.check, 'tsc -p tsconfig.json --runExternalCode')
+  assert.equal(manifest.scripts.build, 'tsc -p tsconfig.json --runExternalCode && vite build')
   assert.equal(manifest.devDependencies['@openload28/unplugin-tt'], expectedDependencyChannel)
   assert.equal(manifest.devDependencies.typescript, scaffoldedTypeScript)
   assert.match(await readFile(join(root, 'vite.config.ts'), 'utf8'), /@openload28\/unplugin-tt\/vite/)
   assert.equal(await readFile(join(root, 'src/main.ts'), 'utf8'), "import './app.tt'\n")
+  const config = JSON.parse(await readFile(join(root, 'tsconfig.json'), 'utf8'))
+  assert.deepEqual(config.contentMappers, [
+    { package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] },
+  ])
+  assert.equal(await readFile(join(root, '.gitignore'), 'utf8'), 'node_modules/\ndist/\n')
   const appSource = await readFile(join(root, 'src/app.tt'), 'utf8')
   assert.match(appSource, /variant Greeting/)
   assert.match(appSource, /match \(greeting\)/)
@@ -67,18 +75,29 @@ test('initializes Vite through a wrapper and preserves the user config', async (
   }, null, 4))
   const original = "export default { plugins: ['user-plugin'] }\n"
   await writeFile(join(root, 'vite.config.ts'), original)
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true } }, null, 4))
 
   await initializeExisting({ directory: root, bundler: 'auto' })
 
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   assert.equal(await readFile(join(root, 'vite.config.ts'), 'utf8'), original)
   assert.equal(manifest.scripts.dev, 'vite')
+  assert.equal(manifest.scripts['tt:check'], 'tsc -p tsconfig.tt.json --runExternalCode')
   assert.match(manifest.scripts['tt:build'], /tt\.vite\.config\.mjs/)
   assert.equal(manifest.devDependencies['@openload28/tt-lang'], expectedDependencyChannel)
   assert.equal(manifest.devDependencies.typescript, scaffoldedTypeScript)
   const wrapper = await readFile(join(root, 'tt.vite.config.mjs'), 'utf8')
   assert.match(wrapper, /import base from '.\/vite\.config\.ts'/)
   assert.match(wrapper, /plugins: \[tt\(\), \.\.\.\(config\.plugins/)
+  assert.match(wrapper, /const addTt/)
+  assert.doesNotMatch(wrapper, /addRl/)
+  const config = JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8'))
+  assert.equal(config.extends, './tsconfig.json')
+  assert.deepEqual(config.compilerOptions, { noEmit: true })
+  assert.equal(config.include, undefined)
+  assert.deepEqual(config.contentMappers, [
+    { package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] },
+  ])
 })
 
 test('keeps esbuild scripts intact and returns an explicit manual hook', async () => {
@@ -91,7 +110,7 @@ test('keeps esbuild scripts intact and returns an explicit manual hook', async (
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   assert.equal(result.manualModule, '@openload28/unplugin-tt/esbuild')
   assert.equal(manifest.scripts.build, 'node build.mjs')
-  assert.equal(manifest.scripts['tt:check'], 'ttc --check-types src')
+  assert.equal(manifest.scripts['tt:check'], 'tsc -p tsconfig.tt.json --runExternalCode')
 })
 
 test('generates a composable wrapper for every declarative bundler adapter', async () => {
@@ -103,10 +122,36 @@ test('generates a composable wrapper for every declarative bundler adapter', asy
     const wrapper = await readFile(join(root, result.files[0]), 'utf8')
     assert.match(wrapper, new RegExp(`@openload28/unplugin-tt/${bundler}`))
     assert.match(wrapper, /plugins: \[tt\(\)/)
+    assert.doesNotMatch(wrapper, /addRl/)
   }
 })
 
 test('does not allow a new project to drift from the Bun and Vite baseline', async () => {
   await assert.rejects(() => run(['app', '--package-manager', 'npm']), /new projects use Bun/)
   await assert.rejects(() => run(['app', '--bundler', 'webpack']), /new projects use Vite/)
+})
+
+
+test('init preserves customized generated configs without partial writes', async () => {
+  for (const file of ['tsconfig.tt.json', 'tt.vite.config.mjs']) {
+    const root = await mkdtemp(join(tmpdir(), 'create-tt-conflict-'))
+    const manifest = '{"devDependencies":{"vite":"^8"}}\n'
+    const config = '// customized project configuration\n'
+    await writeFile(join(root, 'package.json'), manifest)
+    await writeFile(join(root, file), config)
+    await assert.rejects(() => initializeExisting({ directory: root, bundler: 'auto' }), /refusing to overwrite existing config/)
+    assert.equal(await readFile(join(root, 'package.json'), 'utf8'), manifest)
+    assert.equal(await readFile(join(root, file), 'utf8'), config)
+    assert.deepEqual((await readdir(root)).sort(), ['package.json', file].sort())
+  }
+})
+
+test('repeated init is idempotent when generated configs are unchanged', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-repeat-'))
+  await writeFile(join(root, 'package.json'), '{"devDependencies":{"vite":"^8"}}\n')
+  await initializeExisting({ directory: root, bundler: 'auto' })
+  const before = await Promise.all(['package.json', 'tsconfig.tt.json', 'tt.vite.config.mjs'].map(file => readFile(join(root, file), 'utf8')))
+  await initializeExisting({ directory: root, bundler: 'auto' })
+  const after = await Promise.all(['package.json', 'tsconfig.tt.json', 'tt.vite.config.mjs'].map(file => readFile(join(root, file), 'utf8')))
+  assert.deepEqual(after, before)
 })

@@ -18,9 +18,19 @@ let $tt_v0;
 {
   const $tt_m = o;
   do {
-    if ($tt_m.kind === "Wrap" && $tt_m.inner.kind === "Yes") { const { n } = $tt_m.inner; $tt_v0 = n; break; }
-    if ($tt_m.kind === "Wrap" && $tt_m.inner.kind === "No") { $tt_v0 = 0; break; }
-    if ($tt_m.kind === "Bare") { $tt_v0 = -1; break; }
+    if ($tt_m.kind === "Wrap" && $tt_m.inner.kind === "Yes") {
+      const { n } = $tt_m.inner;
+      $tt_v0 = n;
+      break;
+    }
+    if ($tt_m.kind === "Wrap" && $tt_m.inner.kind === "No") {
+      $tt_v0 = 0;
+      break;
+    }
+    if ($tt_m.kind === "Bare") {
+      $tt_v0 = -1;
+      break;
+    }
     throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
   } while (false);
 }

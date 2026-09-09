@@ -9,6 +9,8 @@ syntaxes/build.mjs
 client/src/**
 server/src/**
 server/out/test/**
+test/**
+scripts/test-editor.mjs
 node_modules/**
 !client/node_modules/vscode-languageclient/**
 !server/node_modules/vscode-languageserver/**

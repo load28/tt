@@ -29,7 +29,7 @@ TypeScript는 그대로 통과하므로, ttc는 `.ts` 파일을 통과시키면�
 
 막는 것은 세 가지다.
 
-1. 디렉터리 입력은 `.tt`만 수집한다 ([cli.md](../reference/cli.md) "입력 수집").
+1. 디렉터리 입력은 `.tt`만 수집한다 ([`tt.md` Workflow](../ai/tt.md#workflow) "입력 수집").
    프로젝트를 한 번에 돌릴 수 없다.
 2. `-o` 없이 `.ts`를 컴파일하면 출력 경로가 입력과 같아 **원본을 덮어쓴다**
    (`ttc: inplace.ts → inplace.ts`, `@generated` 배너까지 붙는다).
@@ -118,4 +118,4 @@ require("./m.js")          // tsc가 emit 시점에 바꾼다
 
 - **타입 검사** — tsc의 책임으로 남긴다.
 - **`node_modules` 해석** — 상대 경로만 다룬다.
-- **`.tsx`** — 별개 제약이 있다 ([language.md §11](../reference/language.md#11-제한사항)).
+- **`.tsx`** — 별개 제약이 있다 ([`tt.md`](../ai/tt.md)).

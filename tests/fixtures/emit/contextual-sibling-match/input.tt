@@ -1,0 +1,7 @@
+declare const flag: boolean;
+type Item = {run: (x: number) => number};
+declare function pair(a: Item, b: Item): void;
+pair(
+  match (flag) { true => ({run: x => x + 1}), false => ({run: x => x}) },
+  match (flag) { true => ({run: x => x - 1}), false => ({run: x => x}) },
+);

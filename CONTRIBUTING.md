@@ -28,7 +28,7 @@ npm ci             # TypeScript 7 포함 — package.json이 버전을 고정한
 
 ```sh
 pnpm add -D file:/path/to/tt/npm/tt-lang   # 재빌드 후에는 --force로 재설치
-pnpm add -D typescript@7
+pnpm add -D typescript@7.1.0-dev.20260826.1
 pnpm ttc --check-types src
 ```
 
@@ -122,8 +122,7 @@ rustdoc과 doctest도 갱신하세요. doctest는 `cargo test`에서 함께 실�
   `cargo bench`. 임계값의 근거는
   [`docs/tasks/TASK-225`](./docs/tasks/TASK-225-performance-benchmarks.md).
 
-`CI` 워크플로에도 같은 두 잡이 있고, 워크플로 자체가 수동이므로 dispatch하면
-함께 돕니다.
+`CI` 워크플로에도 같은 두 잡이 있고, 위의 트리거대로 자동으로 함께 돕니다.
 
 ### 버그를 찾으러 가는 것 — `Soak`
 

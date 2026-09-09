@@ -1,0 +1,7 @@
+error[match-placement]: `match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position
+ --> input.tt:1:23
+  |
+1 | function read(value = match (1) { 1 => "one", _ => "other" }) {
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow

@@ -64,7 +64,7 @@ TASK-073~077로 타입을 물을 수 있게 됐으므로 이제 가능하다.
 `match`를 TypeScript `enum` 위에 쓰면 이제 `.rl`의 `match` 위치에서 rl 문안으로
 보고된다. 원문(`ts2339: Property 'kind' does not exist on type 'Plain'.`)이
 괄호 안에 함께 실린다. 규범은
-[`errors.md`](../reference/errors.md#생성된-코드에서-난-타입-에러).
+[`tt.md` Errors](../ai/tt.md#errors).
 
 제외 항목은 그대로다: untyped 배치 빌드에서는 판정하지 않고(타입이 없다),
 TS enum에 대한 `match` 지원(방출 형태 변경)은 별개 사안이다.

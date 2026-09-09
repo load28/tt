@@ -160,6 +160,18 @@ impl Service {
         }
     }
 
+    /// Releases an overlay so subsequent requests observe the disk again.
+    pub(crate) fn close(&mut self, uri: &str) {
+        if self.opened.remove(uri).is_some() {
+            self.notify(
+                "textDocument/didClose",
+                serde_json::json!({
+                    "textDocument": { "uri": uri },
+                }),
+            );
+        }
+    }
+
     /// Asks the server something.
     ///
     /// `Ok(Null)` covers every "no answer" that leaves the conversation

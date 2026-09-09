@@ -1,0 +1,16 @@
+import type { TOption } from "@tt/std";
+
+declare const selected: TOption<string>;
+const format = (value: string): string => value.toUpperCase();
+
+const cache = new Map<string, number>();
+cache.set("orders", 1);
+
+export function selectedLabel(): string {
+  const Some(name) = selected else {
+    console.warn("no selection");
+  };
+  return name;
+}
+
+export const count = 42 |> format;

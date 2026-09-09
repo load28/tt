@@ -1,0 +1,23 @@
+import { produceTs } from "./producer-ts.js";
+import { produceTsx } from "./producer-tsx.jsx";
+import { produceTt } from "./producer-tt.tt";
+import { produceTtx } from "./producer-ttx.ttx";
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      matrix: { values: string[] };
+    }
+  }
+}
+
+const h = (_tag: unknown, props: { values: string[] }): string[] => props.values;
+
+variant Selection { All }
+
+export function consumeTtx(): string[] {
+  return <matrix values={match (Selection.All) {
+    All => [produceTs(), produceTsx(), produceTt(), produceTtx()]
+      .map((value) => `ttx<-${value}`),
+  }} />;
+}

@@ -2,7 +2,7 @@
 
 이 문서는 **검토 기록이자 제안**이다. 규범 문서가 아니다 — backend 구조의
 규범 서술은 `src/typescript/mod.rs`의 모듈 문서와
-[`cli.md` §타입 검사](../reference/cli.md)에 있다.
+[`tt.md` Workflow](../ai/tt.md#workflow)에 있다.
 
 **출처와 상태.** 원안은 "현재 main을 기준으로 TypeScript 7 API를 연동해
 구조를 단순·정확하게 만들자"는 외부 제안서다(TASK-082). 이 문서는 그 원안을

@@ -1,0 +1,16 @@
+[
+  {
+    "code": "match-placement",
+    "col": 23,
+    "endCol": 61,
+    "endLine": 1,
+    "line": 1,
+    "message": "`match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "move the match into a function-body statement that can own its generated control flow"
+      }
+    ]
+  }
+]

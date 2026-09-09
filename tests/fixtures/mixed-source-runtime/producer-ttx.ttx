@@ -1,0 +1,5 @@
+import { record } from "./runtime-state.js";
+
+export function produceTtx(): string {
+  return record("ttx");
+}

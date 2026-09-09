@@ -490,6 +490,16 @@ pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {
         }
         if is_ident_start(c) {
             let j = ident_end(src, i, end);
+            if matches!(&src[i..j], b"function" | b"class") {
+                let mut body = j;
+                while body < end && src[body] != b'{' {
+                    body += 1;
+                }
+                if body < end {
+                    i = find_matching(src, body, end).map_or(end, |close| close + 1);
+                    continue;
+                }
+            }
             if &src[i..j] == b"await" {
                 return true;
             }
@@ -499,4 +509,19 @@ pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {
         i += 1;
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::contains_await;
+
+    #[test]
+    fn await_scan_stops_at_nested_function_and_class_bodies() {
+        let nested =
+            b"function nested() { await later(); } class C { async m() { await later(); } }";
+        assert!(!contains_await(nested, 0, nested.len()));
+
+        let outer = b"await now(); function nested() { await later(); }";
+        assert!(contains_await(outer, 0, outer.len()));
+    }
 }

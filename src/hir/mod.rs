@@ -93,6 +93,15 @@ pub struct HirSourceMap {
 }
 
 impl HirSourceMap {
+    /// The earliest tt node span in source order, for a diagnostic emitted
+    /// before a later lowering phase can identify a narrower construct.
+    pub fn first_node_span(&self) -> Option<Span> {
+        self.node_spans
+            .values()
+            .copied()
+            .min_by_key(|span| span.start)
+    }
+
     /// The byte span a node was lowered from.
     pub fn node_span(&self, node: NodeId) -> Option<Span> {
         self.node_spans.get(&node).copied()
@@ -167,8 +176,6 @@ pub enum AstOrigin {
     PipeStep,
     /// A `result` block.
     ResultBlock,
-    /// One `<-` binding of a `result` block.
-    ResultBind,
     /// A template literal.
     Template,
     /// A pattern piece (constructor, literal, wildcard, or-group, tuple).
@@ -313,6 +320,9 @@ pub struct TryStmt {
     pub binding: Option<BindingText>,
     /// The propagated expression.
     pub expr: ExprId,
+    /// The nearest lexical Result block, when this propagation completes it
+    /// instead of its enclosing function.
+    pub result_target: Option<NodeId>,
 }
 
 /// A source binding copied into generated TypeScript, with its declaration
@@ -399,6 +409,16 @@ pub enum Expr {
         /// Span = the complete match expression, including its closing `}`.
         extent: NodeId,
     },
+    /// A value-producing Result propagation expression.
+    Try {
+        /// Span = `try <expr>`.
+        node: NodeId,
+        /// The Result-valued operand.
+        value: ExprId,
+        /// The nearest lexical Result block when this propagation completes
+        /// that block instead of its enclosing function.
+        result_target: Option<NodeId>,
+    },
     /// A pipeline (`head |> step |> ...`), or a `flow` composition when
     /// `head` is `None`.
     Pipe {
@@ -409,16 +429,17 @@ pub enum Expr {
         /// The steps, in source order. Never empty.
         steps: Vec<PipeStep>,
     },
-    /// A `result { ... }` computation block. Each `<-` binding evaluates
-    /// once and early-returns the `Err` — the same single-evaluation
-    /// meaning as [`Stmt::Try`].
+    /// A `result { ... }` computation block. Direct `try` statements
+    /// evaluate once and route an `Err` to the block's completion.
     ResultBlock {
         /// Span = `result` through the block body.
         node: NodeId,
         /// The body's items, in source order.
         items: Vec<ResultItem>,
-        /// The trailing expression — the block's success value.
-        value: ExprId,
+        /// Whether the statement body completes the Result on every path.
+        completes: bool,
+        /// Optional legacy trailing expression.
+        value: Option<ExprId>,
     },
     /// A template literal; only the interpolations are lowered.
     Template {
@@ -467,15 +488,6 @@ pub enum TemplatePart {
 pub enum ResultItem {
     /// A run of ordinary statements.
     Stmts(BodyId),
-    /// A `const|let|var <binding> <- <expr>;` binding.
-    Bind {
-        /// Span = the binding through its expression.
-        node: NodeId,
-        /// The binding text's node (span = the user's binding bytes).
-        binding: BindingText,
-        /// The expression after `<-`.
-        expr: ExprId,
-    },
 }
 
 /// The construct-neutral pattern site: every pattern-carrying syntax —
@@ -565,6 +577,17 @@ pub enum Pat {
         /// The written tag, unresolved until Phase 2.
         path: UnresolvedPath,
         /// The destructured fields; `None` when no parens were written.
+        fields: Option<Vec<FieldPat>>,
+    },
+    /// `is Type` / `is Type { field }` — a JavaScript `instanceof`
+    /// constructor path plus optional property materialization. The path is
+    /// intentionally not resolved as a tt variant constructor.
+    Instance {
+        /// Span of the dotted constructor path as written.
+        constructor: NodeId,
+        /// Canonical dotted path used for structural duplicate identity.
+        path: String,
+        /// Property bindings; `None` when no braces were written.
         fields: Option<Vec<FieldPat>>,
     },
     /// `"north"`, `200`, `true`, `1n`.

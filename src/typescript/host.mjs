@@ -25,12 +25,14 @@
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
  *            symbolChecks: [{ module, start }],
+ *            resultShapeChecks: [{ module, start, end }],
  *            emitDeclarations: boolean }
  *       →  { diagnostics: [{ file, start, end, code, message, mismatch? }],
  *            literalMissing: [{ index, missing }],
  *            tagMissing: [{ index, missing }],
  *            tagMembers: [{ index, tags }],
  *            symbols: [{ index, id, name, builtin }],
+ *            resultShapes: [{ index }],
  *            declarations: [{ path, text }] }
  *
  * An `ask` may also answer `{ error: "..." }`, which fails that request
@@ -158,10 +160,13 @@ async function main() {
   }
 
   let API;
+  let TypeFlags;
   let isExpression;
+  let isIdentifier;
+  let isVariableDeclaration;
   try {
-    ({ API } = await import(open.apiModule));
-    ({ isExpression } = await import(
+    ({ API, TypeFlags } = await import(open.apiModule));
+    ({ isExpression, isIdentifier, isVariableDeclaration } = await import(
       path.resolve(path.dirname(open.apiModule), "../../ast/index.js")
     ));
   } catch (e) {
@@ -188,10 +193,16 @@ async function main() {
       if (line === null) break;
       let answer;
       try {
+        if (process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST === "1") {
+          throw new Error("injected TypeScript backend contract failure");
+        }
         answer = handle(JSON.parse(line));
         opened = true;
       } catch (e) {
-        answer = { error: String((e && e.stack) || e) };
+        // The Rust boundary classifies this as an internal compiler error.
+        // Keep the protocol response actionable without leaking a Node
+        // implementation stack into the user's diagnostic stream.
+        answer = { error: e instanceof Error ? e.message : String(e) };
       }
       writeLine(JSON.stringify(answer));
     }
@@ -202,12 +213,15 @@ async function main() {
   /** One `ask`: refresh the served modules, then answer every question. */
   function handle(job) {
     const out = {
+      projectModules: [],
       diagnostics: [],
       literalMissing: [],
       tagMissing: [],
       tagMembers: [],
       symbols: [],
+      resultShapes: [],
       declarations: [],
+      contextualSlots: [],
     };
     const changes = serve(files, dirs, job.modules ?? []);
     // With a `tsconfig.json` the project is the user's own. Without one —
@@ -222,7 +236,7 @@ async function main() {
     // hand-written `.ts` files come along: one nothing imports is still the
     // user's code, and `ttc --types src` is expected to check it.
     const params = opened
-      ? { fileChanges: changes }
+      ? { fileChanges: changes, ...(!open.tsconfig ? { openFiles: [...paths, ...(job.sources ?? [])] } : {}) }
       : open.tsconfig
         ? { openProjects: [open.tsconfig] }
         : { openFiles: [...paths, ...(job.sources ?? [])] };
@@ -234,14 +248,60 @@ async function main() {
       throw new Error("no project for " + (open.tsconfig ?? paths[0] ?? "<nothing>"));
     }
 
+    // The candidate modules come from a filesystem scan so the layered
+    // filesystem can implement tsconfig globs and module resolution. The
+    // configured program is the authority on which candidates actually
+    // belong. Keep that distinction explicit: a file outside `include`
+    // may still join through an import, while an unrelated file must never
+    // receive a checker position query.
+    const projectModules = new Set(
+      paths.filter((module) => project.program.getSourceFile(module) !== undefined),
+    );
+    out.projectModules = [...projectModules];
+
     // The whole program, not just the lowered modules: a hand-written `.ts`
     // and an `.tt` are in one project, so an error in either is this run's to
     // report. Which file it lands in decides how it is positioned, and that
     // is ttc's half.
     const checker = project.checker;
+    for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
+      const source = project.program.getSourceFile(slot.module);
+      if (!source) continue;
+      let declaration;
+      const identifiers = [];
+      const visit = (node) => {
+        if (isVariableDeclaration(node) && isIdentifier(node.name) &&
+            node.name.end === slot.declarationEnd && !node.type) declaration = node;
+        if (isIdentifier(node)) identifiers.push(node);
+        node.forEachChild(visit);
+      };
+      visit(source);
+      if (!declaration) continue;
+      const symbol = checker.getSymbolAtLocation(declaration.name);
+      if (!symbol) continue;
+      const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
+      let expected;
+      let ambiguous = false;
+      for (const identifier of identifiers) {
+        if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
+        if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
+        // A use narrowed by control flow cannot supply the declaration's
+        // type: doing so would reject the initializer's other constituents.
+        if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
+        const context = checker.getContextualType(identifier);
+        if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
+        if (expected && expected.id !== context.id) { ambiguous = true; break; }
+        expected = context;
+      }
+      if (!expected || ambiguous) continue;
+      const node = checker.typeToTypeNode(expected, declaration);
+      if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
+    }
+    if (job.contextualOnly) return out;
     for (const d of project.program.getSemanticDiagnostics()) {
       if (!d.fileName) continue;
       const mismatch = contextualMismatch(project, checker, d, isExpression);
+      const related = relatedPlaces(d);
       out.diagnostics.push({
         file: d.fileName,
         start: d.pos,
@@ -249,6 +309,7 @@ async function main() {
         code: d.code,
         message: d.text,
         ...(mismatch ? { mismatch } : {}),
+        ...(related.length > 0 ? { related } : {}),
       });
     }
     /**
@@ -280,7 +341,7 @@ async function main() {
     const typeChecks = [
       ...(job.literalChecks ?? []).map((check, index) => ({ check, index, tag: false })),
       ...(job.tagChecks ?? []).map((check, index) => ({ check, index, tag: true })),
-    ];
+    ].filter((entry) => projectModules.has(entry.check.module));
     const types = perModule(typeChecks, (module, positions) =>
       batched(
         "typesAtPositions",
@@ -360,10 +421,35 @@ async function main() {
       }
     }
 
+    const resultChecks = (job.resultShapeChecks ?? [])
+      .map((check, index) => ({ check, index }))
+      .filter((entry) => projectModules.has(entry.check.module));
+    const resultTypes = resultChecks.map((entry) => {
+      const sourceFile = project.program.getSourceFile(entry.check.module);
+      if (!sourceFile) return null;
+      const expression = smallestExpressionCovering(
+        sourceFile,
+        entry.check.start,
+        entry.check.end,
+        isExpression,
+      );
+      return expression ? checker.getTypeAtLocation(expression) : null;
+    });
+    resultChecks.forEach((entry, at) => {
+      if (
+        resultTypes[at] &&
+        isDefiniteResult(resultTypes[at], constituentsOf, kindSymbolOf, checker)
+      ) {
+        out.resultShapes.push({ index: entry.index });
+      }
+    });
+
     // Resolution: the primitive tt's `val` is built from. Which binding an
     // identifier names, and whether a method is a built-in, are both "what
     // symbol is this?" — asked here, interpreted by tt.
-    const symbolChecks = (job.symbolChecks ?? []).map((check, index) => ({ check, index }));
+    const symbolChecks = (job.symbolChecks ?? [])
+      .map((check, index) => ({ check, index }))
+      .filter((entry) => projectModules.has(entry.check.module));
     const symbols = perModule(symbolChecks, (module, positions) =>
       batched(
         "symbolsAtPositions",
@@ -396,7 +482,7 @@ async function main() {
         fail(5, "ttc host: the resolved TypeScript has no declaration emit API");
       }
       const emitted = project.program.getDeclarationEmit(
-        (job.modules ?? []).map((m) => m.path),
+        (job.modules ?? []).map((m) => m.path).filter((module) => projectModules.has(module)),
       );
       for (const [path, file] of emitted.outputFiles) {
         out.declarations.push({ path, text: file.text });
@@ -412,6 +498,29 @@ async function main() {
  * call arguments and future lowered constructs all participate through the
  * checker’s contextual typing relation.
  */
+/**
+ * The checker's own related places — "the expected type comes from this
+ * declaration", "first declared here" — normalized to the diagnostic item
+ * shape. The property names differ between clients, so both spellings are
+ * accepted; an entry missing a file or a position is dropped rather than
+ * guessed at.
+ */
+function relatedPlaces(diagnostic) {
+  const entries = diagnostic.relatedInformation ?? diagnostic.related ?? [];
+  const out = [];
+  for (const entry of entries) {
+    const file = entry.fileName ?? entry.file;
+    const start = entry.pos ?? entry.start;
+    const end = entry.end ?? (typeof entry.length === "number" ? start + entry.length : undefined);
+    const message = entry.text ?? entry.message ?? entry.messageText;
+    if (typeof file !== "string" || typeof start !== "number" || typeof end !== "number") continue;
+    if (typeof message !== "string") continue;
+    out.push({ file, start, end, message });
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 function contextualMismatch(project, checker, diagnostic, isExpression) {
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
@@ -443,16 +552,48 @@ function contextualMismatch(project, checker, diagnostic, isExpression) {
       }
       if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) continue;
       if (checker.isTypeAssignableTo(found, expected)) continue;
+      let declaration;
+      try {
+        const symbol = checker.getSymbolAtPosition(
+          sourceFile.fileName,
+          expression.getStart(sourceFile),
+        );
+        const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+        const node = handle?.resolve?.(project);
+        const file = node?.getSourceFile?.();
+        if (node && file && handle) {
+          declaration = {
+            file: file.fileName,
+            start: node.getStart(file),
+            end: node.getEnd(),
+          };
+        }
+      } catch {
+        declaration = undefined;
+      }
       return {
         start: expression.getStart(sourceFile),
         end: expression.getEnd(),
         expected: checker.typeToString(expected),
         found: checker.typeToString(found),
         differences: incompatibleLeaves(checker, found, expected),
+        ...(declaration ? { declaration } : {}),
       };
     }
   }
   return null;
+}
+
+/** The innermost expression whose source range contains the emitted value. */
+function smallestExpressionCovering(sourceFile, start, end, isExpression) {
+  let found = null;
+  const visit = (node) => {
+    if (node.getStart(sourceFile) > start || node.end < end) return;
+    if (isExpression(node)) found = node;
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return found;
 }
 
 /** The union constituents of a type, or the type itself as one constituent. */
@@ -500,12 +641,83 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
           }
         }
       }
+      // Two instantiations of one declaration with no retained type
+      // arguments (an instantiated object literal, e.g. a lowered variant
+      // case) differ where a declared property differs.
+      const property = propertyLeaf(checker, found, counterpart, depth);
+      if (property) return property;
     }
+  }
+  // Two single-signature function types differ where their results (or a
+  // parameter) differ — a pipeline `flow` boundary is the canonical case.
+  // The signature API is optional on the native bridge; without it the
+  // complete function types remain the leaf.
+  try {
+    const foundCalls = found.getCallSignatures?.() ?? [];
+    const expectedCalls = expected.getCallSignatures?.() ?? [];
+    if (foundCalls.length === 1 && expectedCalls.length === 1) {
+      const foundReturn = foundCalls[0].getReturnType?.();
+      const expectedReturn = expectedCalls[0].getReturnType?.();
+      if (
+        foundReturn &&
+        expectedReturn &&
+        !checker.isTypeAssignableTo(foundReturn, expectedReturn)
+      ) {
+        return (
+          incompatibleLeaf(checker, foundReturn, expectedReturn, depth + 1) ?? {
+            expected: checker.typeToString(expectedReturn),
+            found: checker.typeToString(foundReturn),
+          }
+        );
+      }
+    }
+  } catch {
+    // Fall through to the complete pair.
   }
   return {
     expected: checker.typeToString(expected),
     found: checker.typeToString(found),
   };
+}
+
+/**
+ * Where two instantiations of one declaration differ: the single declared
+ * property whose types are incompatible, descended recursively. Reached
+ * only through an identity-matched counterpart, so apparent members of
+ * primitives never qualify. Anything ambiguous — no shared properties, or
+ * more than one differing — keeps the complete pair. The property APIs are
+ * optional on the native bridge.
+ */
+function propertyLeaf(checker, found, expected, depth) {
+  try {
+    const properties = found.getProperties?.() ?? [];
+    if (properties.length === 0) return null;
+    let shared = 0;
+    let incompatible = 0;
+    let pair = null;
+    for (const property of properties) {
+      const name = property.getName?.() ?? property.name;
+      if (!name) continue;
+      const counterpart = checker.getPropertyOfType(expected, name);
+      if (!counterpart) continue;
+      shared += 1;
+      const foundType = checker.getTypeOfSymbol(property);
+      const expectedType = checker.getTypeOfSymbol(counterpart);
+      if (!checker.isTypeAssignableTo(foundType, expectedType)) {
+        incompatible += 1;
+        pair = { foundType, expectedType };
+      }
+    }
+    if (shared === 0 || incompatible !== 1 || !pair) return null;
+    return (
+      incompatibleLeaf(checker, pair.foundType, pair.expectedType, depth + 1) ?? {
+        expected: checker.typeToString(pair.expectedType),
+        found: checker.typeToString(pair.foundType),
+      }
+    );
+  } catch {
+    return null;
+  }
 }
 
 function incompatibleLeaves(checker, found, expected) {
@@ -534,7 +746,9 @@ function serve(files, dirs, modules) {
   const seen = new Set();
   for (const module of modules) {
     seen.add(module.path);
-    if (!files.has(module.path)) created.push(module.path);
+    if (!files.has(module.path)) {
+      (fs.existsSync(module.path) ? changed : created).push(module.path);
+    }
     else if (files.get(module.path) !== module.text) changed.push(module.path);
     files.set(module.path, module.text);
     for (let d = path.dirname(module.path); d && d !== path.dirname(d); d = path.dirname(d)) {
@@ -543,7 +757,9 @@ function serve(files, dirs, modules) {
   }
   for (const known of [...files.keys()]) {
     if (!seen.has(known)) {
-      deleted.push(known);
+      // Releasing an overlay reveals a real host file again. It is a text
+      // change, not a deletion from the TypeScript project graph.
+      (fs.existsSync(known) ? changed : deleted).push(known);
       files.delete(known);
     }
   }
@@ -587,6 +803,26 @@ function tagKindSymbols(type, constituentsOf, kindSymbolOf) {
     symbols.push(kind);
   }
   return symbols;
+}
+
+function isDefiniteResult(type, constituentsOf, kindSymbolOf, checker) {
+  if (!type) return false;
+  const constituents = constituentsOf(type);
+  if (constituents.length !== 2) return false;
+  const tags = new Set();
+  for (const constituent of constituents) {
+    const kind = kindSymbolOf(constituent);
+    if (!kind) return false;
+    const tag = literalValue(checker.getTypeOfSymbol(kind));
+    if (tag !== "Ok" && tag !== "Err") return false;
+    const payload = checker.getPropertyOfType(
+      constituent,
+      tag === "Ok" ? "value" : "error",
+    );
+    if (!payload) return false;
+    tags.add(tag);
+  }
+  return tags.size === 2;
 }
 
 /**

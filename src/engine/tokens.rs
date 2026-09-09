@@ -20,8 +20,8 @@
 
 use super::language::{Position, Range};
 use crate::ast::{
-    Binding, IfLetElse, Pattern, Program, ResultItem, Segment, TagPattern, TemplateChunk,
-    TuplePattern,
+    Binding, IfLetElse, InstancePattern, Pattern, Program, ResultItem, Segment, TagPattern,
+    TemplateChunk, TuplePattern,
 };
 use crate::lexer::{self, Token, TokenKind as Lex};
 use crate::typescript::mapper;
@@ -44,8 +44,6 @@ pub enum SemanticTokenKind {
     /// `match(...)` naming a plain function. Reported so the editor
     /// *un*-colors what the grammar over-approximated.
     Function,
-    /// The `<-` of a claimed Result binding.
-    Operator,
 }
 
 impl SemanticTokenKind {
@@ -58,7 +56,6 @@ impl SemanticTokenKind {
             SemanticTokenKind::Variable => "variable",
             SemanticTokenKind::Property => "property",
             SemanticTokenKind::Function => "function",
-            SemanticTokenKind::Operator => "operator",
         }
     }
 }
@@ -159,6 +156,10 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                 }
                 walk(src, &t.expr, out);
             }
+            Segment::TryExpr(expr) => {
+                out.push((expr.span.start, 3, SemanticTokenKind::Keyword));
+                walk(src, &expr.expr, out);
+            }
             Segment::LetElse(stmt) => {
                 for alt in &stmt.alternatives {
                     tag_pattern(alt, out);
@@ -196,25 +197,12 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
             Segment::ResultBlock(block) => {
                 out.push((block.keyword_off, 6, SemanticTokenKind::Keyword));
                 for item in &block.items {
-                    match item {
-                        ResultItem::Stmts(stmts) => walk(src, stmts, out),
-                        ResultItem::Bind(bind) => {
-                            let span = bind.binding_span;
-                            if is_identifier(&src[span.start..span.end]) {
-                                out.push((
-                                    span.start,
-                                    span.end - span.start,
-                                    SemanticTokenKind::Variable,
-                                ));
-                            }
-                            if let Some(arrow_off) = expect_word(src, span.end, "<-") {
-                                out.push((arrow_off, 2, SemanticTokenKind::Operator));
-                            }
-                            walk(src, &bind.expr, out);
-                        }
-                    }
+                    let ResultItem::Stmts(stmts) = item;
+                    walk(src, stmts, out);
                 }
-                walk(src, &block.value, out);
+                if let Some(value) = &block.value {
+                    walk(src, value, out);
+                }
             }
         }
     }
@@ -246,6 +234,18 @@ fn pattern(src: &str, p: &Pattern, out: &mut Vec<(usize, usize, SemanticTokenKin
                 tag_pattern(tag, out);
             }
         }
+        Pattern::Instances(instances) => {
+            for instance in instances {
+                instance_pattern(instance, out);
+            }
+        }
+    }
+}
+
+fn instance_pattern(instance: &InstancePattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
+    out.push((instance.is_off, 2, SemanticTokenKind::Keyword));
+    if let Some(list) = &instance.bindings {
+        bindings(list, out);
     }
 }
 
@@ -348,28 +348,6 @@ fn deny_in(src: &str, tokens: &[Token], out: &mut Vec<(usize, usize, SemanticTok
     }
 }
 
-/// The offset of `word` after `at` when only ASCII whitespace separates
-/// them; `None` otherwise (comments in between — rare — just skip the
-/// token, never mis-place it).
-fn expect_word(src: &str, at: usize, word: &str) -> Option<usize> {
-    let bytes = src.as_bytes();
-    let mut pos = at;
-    while pos < bytes.len() && bytes[pos].is_ascii_whitespace() {
-        pos += 1;
-    }
-    src[pos..].starts_with(word).then_some(pos)
-}
-
-fn is_identifier(text: &str) -> bool {
-    let mut chars = text.bytes();
-    chars
-        .next()
-        .is_some_and(|b| b.is_ascii_alphabetic() || b == b'_' || b == b'$')
-        && text
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'$')
-}
-
 /// Line starts, for byte-offset → line / UTF-16-column conversion.
 struct LineIndex {
     starts: Vec<usize>,
@@ -453,20 +431,18 @@ mod tests {
 
     #[test]
     fn unclaimed_result_block_is_a_variable() {
-        // No `<-` binding, so the parser passes it through — and the
-        // identifier should be shown as one.
+        // No `try` expression follows, so the parser passes it through —
+        // and the identifier should be shown as one.
         let src = "const r = result\n{ a: 1 };\n";
         assert!(kinds_at(src).contains(&("result".into(), SemanticTokenKind::Variable)));
     }
 
     #[test]
     fn multi_line_flow_and_result_bind_are_claimed() {
-        let src = "const f = flow\n  |> trim\n  |> parse;\nconst r = result {\n  const n <- get();\n  n\n};\n";
+        let src = "const f = flow\n  |> trim\n  |> parse;\nconst r = result {\n  const n = try get();\n  return n;\n};\n";
         let tokens = kinds_at(src);
         assert!(tokens.contains(&("flow".into(), SemanticTokenKind::Keyword)));
         assert!(tokens.contains(&("result".into(), SemanticTokenKind::Keyword)));
-        assert!(tokens.contains(&("n".into(), SemanticTokenKind::Variable)));
-        assert!(tokens.contains(&("<-".into(), SemanticTokenKind::Operator)));
     }
 
     #[test]

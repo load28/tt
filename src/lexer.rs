@@ -25,6 +25,9 @@ use crate::SourceKind;
 use crate::ast::Span;
 use crate::scanner::*;
 
+mod validation;
+pub(crate) use validation::host_syntax_error;
+
 /// One significant token.
 #[derive(Debug)]
 pub(crate) struct Token {
@@ -200,6 +203,77 @@ pub(crate) fn lex_with_kind(
         i += len;
     }
     tokens
+}
+
+/// Finds a JSX namespace name followed by member access (`<ns:name.member`).
+///
+/// JSX admits either a namespace name or a member chain, but never both in
+/// one element name. SWC 45.x reaches an internal `unreachable` while
+/// recovering this malformed shape, so the shared syntax boundary rejects it
+/// before entering SWC. The tt lexer supplies the lexical isolation here:
+/// strings, comments, regex literals, JSX text, and template raw chunks never
+/// appear as punctuation tokens.
+pub(crate) fn invalid_jsx_namespace_member(src: &str) -> Option<Span> {
+    fn in_tokens(tokens: &[Token]) -> Option<Span> {
+        for (index, token) in tokens.iter().enumerate() {
+            if let TokenKind::Template(parts) = &token.kind {
+                for part in parts.iter() {
+                    if let TplPart::Interp { tokens, .. } = part
+                        && let Some(span) = in_tokens(tokens)
+                    {
+                        return Some(span);
+                    }
+                }
+            }
+
+            let mut cursor = index;
+            if !matches!(tokens[cursor].kind, TokenKind::Punct(b'<')) {
+                continue;
+            }
+            cursor += 1;
+            if matches!(
+                tokens.get(cursor).map(|token| &token.kind),
+                Some(TokenKind::Punct(b'/'))
+            ) {
+                cursor += 1;
+            }
+            let shape = (
+                tokens.get(cursor),
+                tokens.get(cursor + 1),
+                tokens.get(cursor + 2),
+                tokens.get(cursor + 3),
+                tokens.get(cursor + 4),
+            );
+            if let (
+                Some(Token {
+                    kind: TokenKind::Ident,
+                    ..
+                }),
+                Some(Token {
+                    kind: TokenKind::Punct(b':'),
+                    ..
+                }),
+                Some(Token {
+                    kind: TokenKind::Ident,
+                    ..
+                }),
+                Some(Token {
+                    kind: TokenKind::Punct(b'.'),
+                    span,
+                }),
+                Some(Token {
+                    kind: TokenKind::Ident,
+                    ..
+                }),
+            ) = shape
+            {
+                return Some(*span);
+            }
+        }
+        None
+    }
+
+    in_tokens(&lex_with_kind(src, 0, src.len(), SourceKind::Tsx))
 }
 
 /// `src[start]` is a backtick — lexes the template into raw chunks and

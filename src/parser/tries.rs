@@ -18,8 +18,9 @@
 
 use super::Claim;
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
-use crate::ast::{Span, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
+use crate::ast::{Span, TryExpr, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
 use crate::lexer::{Token, TokenKind};
+use crate::scanner::is_primary_expression;
 
 /// `cur` is positioned just past the `try` keyword (`kw_span`) of a bare
 /// `try <expr>;` statement. On success returns the advanced cursor, the
@@ -31,10 +32,11 @@ pub(super) fn parse_try_stmt<'t>(
     let Some(first) = cur.peek() else {
         return Claim::NotTt;
     };
-    if !is_expr_start(first) {
+    let parenthesized = matches!(first.kind, TokenKind::Punct(b'('));
+    if !is_expr_start(first) && !parenthesized {
         return Claim::NotTt;
     }
-    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur) else {
+    let Some((cur, byte_end, expr_span, expr_tokens)) = parse_try_tail(cur, parenthesized) else {
         return Claim::Unclaimed(UnclaimedTtCandidate {
             kind: UnclaimedTtKind::Try,
             keyword: kw_span,
@@ -43,7 +45,20 @@ pub(super) fn parse_try_stmt<'t>(
     };
     let expr = cur
         .parser
-        .parse_tokens(expr_tokens, expr_span.start, expr_span.end);
+        .parse_expression_tokens(expr_tokens, expr_span.start, expr_span.end);
+    // `try(x);` is a valid member signature in classes and interfaces, so
+    // a merely parenthesized tail cannot establish tt ownership. A fully
+    // recognized tt construct inside the parentheses does: valid
+    // TypeScript cannot contain that construct, and the outer propagation
+    // can therefore own the complete operand structurally.
+    if parenthesized
+        && expr
+            .segments
+            .iter()
+            .all(|segment| matches!(segment, crate::ast::Segment::Verbatim(_)))
+    {
+        return Claim::NotTt;
+    }
     Claim::Parsed((
         cur,
         byte_end,
@@ -57,11 +72,78 @@ pub(super) fn parse_try_stmt<'t>(
                 start: kw_span.start,
                 end: expr_span.end,
             },
+            expr_span,
             decl: None,
             expr,
             // Filled by the caller, which knows the statement's token
             // index in the parse region.
             in_function: false,
+        },
+    ))
+}
+
+/// Parses a value-producing `try <primary>` inside another expression.
+/// `try` binds like a prefix operator to the following primary expression,
+/// including its calls and member/index postfixes. Parentheses deliberately
+/// widen the operand to an arbitrary expression.
+pub(super) fn parse_try_expr(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, TryExpr)> {
+    let first = cur.peek()?;
+    if !is_expr_start(first) && !matches!(first.kind, TokenKind::Punct(b'(')) {
+        return None;
+    }
+
+    let mut depth = 0usize;
+    let mut k = cur.idx;
+    let mut operand_end = None;
+    let mut operand_token_end = cur.idx;
+    while let Some(token) = cur.tokens.get(k) {
+        if depth == 0
+            && matches!(
+                token.kind,
+                TokenKind::Punct(b')' | b']' | b'}' | b',' | b';')
+            )
+        {
+            break;
+        }
+        if depth == 0
+            && k > cur.idx
+            && matches!(token.kind, TokenKind::Ident)
+            && !dotted_at(cur.tokens, cur.idx, k)
+            && STMT_ONLY_WORDS.contains(&cur.text(token))
+        {
+            break;
+        }
+
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        k += 1;
+        if is_primary_expression(cur.parser.src.as_bytes(), first.span.start, token.span.end) {
+            operand_end = Some(token.span.end);
+            operand_token_end = k;
+        }
+    }
+
+    let end = operand_end?;
+    let k = operand_token_end;
+    let expr_span = Span {
+        start: first.span.start,
+        end,
+    };
+    let expr =
+        cur.parser
+            .parse_expression_tokens(&cur.tokens[cur.idx..k], expr_span.start, expr_span.end);
+    Some((
+        k,
+        TryExpr {
+            span: Span {
+                start: kw_span.start,
+                end,
+            },
+            expr_span,
+            expr,
         },
     ))
 }
@@ -153,10 +235,10 @@ pub(super) fn parse_try_decl<'t>(
         _ => return None,
     };
 
-    let (cur, byte_end, expr_span, expr_tokens) = parse_try_tail(cur)?;
+    let (cur, byte_end, expr_span, expr_tokens) = parse_try_tail(cur, true)?;
     let expr = cur
         .parser
-        .parse_tokens(expr_tokens, expr_span.start, expr_span.end);
+        .parse_expression_tokens(expr_tokens, expr_span.start, expr_span.end);
     Some((
         cur,
         byte_end,
@@ -172,6 +254,7 @@ pub(super) fn parse_try_decl<'t>(
                 start: try_off,
                 end: expr_span.end,
             },
+            expr_span,
             decl: Some((
                 cur.parser.src[kw_span.start..kw_span.end].to_string(),
                 binding_span,
@@ -185,9 +268,14 @@ pub(super) fn parse_try_decl<'t>(
 /// Parses `<expr>;` with the cursor just past a `try` keyword. Returns the
 /// advanced cursor, the byte just past the `;`, and the expression's span
 /// and tokens.
-fn parse_try_tail<'t>(mut cur: Cursor<'t>) -> Option<(Cursor<'t>, usize, Span, &'t [Token])> {
+fn parse_try_tail<'t>(
+    mut cur: Cursor<'t>,
+    allow_parenthesized: bool,
+) -> Option<(Cursor<'t>, usize, Span, &'t [Token])> {
     let first = cur.peek()?;
-    if !is_expr_start(first) {
+    if !is_expr_start(first)
+        && !(allow_parenthesized && matches!(first.kind, TokenKind::Punct(b'(')))
+    {
         return None; // includes `try {` blocks and member-signature shapes
     }
     let (semi_idx, semi_byte) = stmt_expr_end(&cur)?;

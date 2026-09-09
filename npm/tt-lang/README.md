@@ -24,15 +24,14 @@ looks. The TT installer does not add it for you:
 bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
-Declaration output (`ttc --types`, editor `.tt.d.ts` sidecars) and content
-mappers (below) use APIs that arrived in TypeScript 7.1; everything else
-works on 7.0. See the
+Content mappers use APIs that arrived in TypeScript 7.1; everything else works
+on 7.0. See the
 [installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md).
 
 ```sh
 bunx ttc -o build src/     # compile a source tree to TypeScript
 bunx ttc --check src/      # check without writing anything
-bunx ttc --types src/      # editor/typecheck declarations
+bunx ttc --check-types src/ # check tt and TypeScript
 ```
 
 On TypeScript 7.1+, `.ts` files can import `.tt` directly — this package
@@ -41,10 +40,21 @@ virtually (no sidecar files). Declare it once in `tsconfig.json` and run
 `tsc` with `--runExternalCode`:
 
 ```jsonc
-"contentMappers": [
-  { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
-]
+{
+  "compilerOptions": { "strict": true, "noEmit": true },
+  "contentMappers": [
+    { "package": "@openload28/tt-lang", "extensions": [".tt", ".ttx"] }
+  ],
+  "include": ["src"]
+}
 ```
+
+```sh
+bunx tsc -p tsconfig.json --runExternalCode
+```
+
+Use `ttc --types` sidecars only for legacy TypeScript hosts that cannot load a
+content mapper.
 
 Using a bundler? [`@openload28/unplugin-tt`](https://github.com/load28/tt/tree/main/integrations/unplugin)
 reads `.tt` files directly in Vite, Rollup, webpack, Rspack, esbuild and

@@ -234,7 +234,7 @@
 | TASK-224 | 커버리지 측정과 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-224](./TASK-224-coverage-gate.md) |
 | TASK-225 | 성능 벤치마크와 회귀 게이트 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-225](./TASK-225-performance-benchmarks.md) |
 | TASK-226 | 로컬과 CI의 Rust 툴체인 격차 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-226](./TASK-226-local-ci-toolchain-parity.md) |
-| TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 진행 중 | 2026-08-25 | — | [TASK-227](./TASK-227-local-only-ci.md) |
+| TASK-227 | CI를 로컬 실행으로 옮기고 GitHub 실행은 수동으로 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-227](./TASK-227-local-only-ci.md) |
 | TASK-228 | 부분 스냅샷에서 정상 파일의 tt 진단이 사라짐 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-228](./TASK-228-partial-snapshot-diagnostics.md) |
 | TASK-229 | 바인딩 이름 `match`가 tt match로 오인된다 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-229](./TASK-229-match-claimed-as-a-binding-name.md) |
 | TASK-230 | release 0.3.0-dev.7 | 완료 | 2026-08-25 | 2026-08-25 | [TASK-230](./TASK-230-release-0.3.0-dev.7.md) |
@@ -267,11 +267,100 @@
 | TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 완료 | 2026-08-27 | 2026-08-27 | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 | TASK-258 | TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-258](./TASK-258-ts-preview-vsix.md) |
 
-| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 진행 중 | 2026-08-27 | — | [TASK-259](./TASK-259-upstream-extension-id.md) |
-| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 진행 중 | 2026-08-28 | — | [TASK-260](./TASK-260-nightly-install-docs.md) |
+| TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-259](./TASK-259-upstream-extension-id.md) |
+| TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-260](./TASK-260-nightly-install-docs.md) |
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
 | TASK-262 | Require English documentation | Complete | 2026-08-28 | 2026-08-28 | [TASK-262](./TASK-262-english-documentation-policy.md) |
+| TASK-263 | Pipeline diagnostics name the rejecting step | Complete | 2026-08-28 | 2026-08-28 | [TASK-263](./TASK-263-pipeline-step-diagnostics.md) |
+| TASK-264 | Rust-style labeled diagnostics (secondary spans) | Complete | 2026-08-28 | 2026-08-28 | [TASK-264](./TASK-264-rust-style-labeled-diagnostics.md) |
+| TASK-265 | PR #85 review fixes — step-anchor gating and typed-path labels | Complete | 2026-08-28 | 2026-08-28 | [TASK-265](./TASK-265-pr85-review-fixes.md) |
+| TASK-266 | Diagnose fields of imported variants in every compiler path | Complete | 2026-08-28 | 2026-08-28 | [TASK-266](./TASK-266-imported-variant-field-diagnostics.md) |
+| TASK-267 | Preserve typed exhaustiveness when pattern diagnostics are reportable | Complete | 2026-08-28 | 2026-08-28 | [TASK-267](./TASK-267-pattern-resolution-suppression.md) |
+| TASK-268 | Diagnose unknown cases independently of wildcard coverage | Complete | 2026-08-28 | 2026-08-28 | [TASK-268](./TASK-268-wildcard-independent-case-resolution.md) |
+| TASK-269 | Respect tsconfig source boundaries and surface backend failures | Complete | 2026-08-28 | 2026-08-28 | [TASK-269](./TASK-269-typed-project-boundaries.md) |
+| TASK-270 | Render nested pattern errors in source vocabulary | Complete | 2026-08-28 | 2026-08-28 | [TASK-270](./TASK-270-nested-pattern-diagnostics.md) |
+| TASK-271 | Diagnose deep expression `try` placement before verification | Complete | 2026-08-28 | 2026-08-28 | [TASK-271](./TASK-271-deep-try-placement.md) |
+| TASK-272 | Point malformed `result` tails at the trailing semicolon | Complete | 2026-08-28 | 2026-08-28 | [TASK-272](./TASK-272-result-tail-semicolon.md) |
+| TASK-273 | Suppress checker cascades owned by proven tt errors | Complete | 2026-08-28 | 2026-08-28 | [TASK-273](./TASK-273-owned-checker-cascades.md) |
+| TASK-274 | Show the top-level `contentMappers` configuration shape | Complete | 2026-08-28 | 2026-08-28 | [TASK-274](./TASK-274-content-mapper-documentation.md) |
+| TASK-275 | Prove variant ownership and preserve typed project boundaries | Complete | 2026-08-29 | 2026-08-29 | [TASK-275](./TASK-275-structural-pattern-ownership.md) |
+| TASK-276 | Preserve typed membership for blocked configured files | Complete | 2026-08-29 | 2026-08-29 | [TASK-276](./TASK-276-blocked-file-typed-membership.md) |
+| TASK-277 | Diagnose ambiguous result tails without unsafe edits | Complete | 2026-08-29 | 2026-08-29 | [TASK-277](./TASK-277-result-missing-value-diagnostic.md) |
+| TASK-278 | Align resolver documentation with structural ownership | Complete | 2026-08-29 | 2026-08-29 | [TASK-278](./TASK-278-resolver-contract-documentation.md) |
+| TASK-279 | Bound misplaced try recovery at ternary branches | Complete | 2026-08-29 | 2026-08-29 | [TASK-279](./TASK-279-ternary-try-recovery-span.md) |
+| TASK-280 | Lower `try` as an expression through the host evaluation protocol | Complete | 2026-08-29 | 2026-08-29 | [TASK-280](./TASK-280-expression-try.md) |
+| TASK-281 | Record the ratified `try`/`result` scopes consensus | Complete | 2026-08-29 | 2026-08-29 | [TASK-281](./TASK-281-try-result-scopes-consensus.md) |
+| TASK-282 | P0: Preserve the planner's existing failure return | Complete | 2026-08-29 | 2026-08-29 | [TASK-282](./TASK-282-planner-failure-return.md) |
+| TASK-283 | P1: Close host projection and source-preservation crashes | Complete | 2026-08-29 | 2026-08-30 | [TASK-283](./TASK-283-host-projection-crashes.md) |
+| TASK-284 | P2: Repair expression-boundary Result hosting | Complete | 2026-08-30 | 2026-08-30 | [TASK-284](./TASK-284-expression-boundary-result-hosting.md) |
+| TASK-285 | P3: Repair concise-arrow propagation | Complete | 2026-08-30 | 2026-08-30 | [TASK-285](./TASK-285-concise-arrow-propagation.md) |
+| TASK-286 | P4: Reject unsound function targets | Complete | 2026-08-30 | 2026-08-30 | [TASK-286](./TASK-286-unsound-function-targets.md) |
+| TASK-287 | P5: Close shipped claimer gaps | Complete | 2026-08-30 | `TASK-287: close shipped claimer gaps` | [TASK-287](./TASK-287-shipped-claimer-gaps.md) |
+| TASK-288 | P6: Preserve placement reasons | Complete | 2026-08-30 | `TASK-288: preserve placement reasons` | [TASK-288](./TASK-288-preserve-placement-reasons.md) |
+| TASK-289 | P-matrix: Prerequisite placement matrix gate | Complete | 2026-08-30 | `TASK-289: add placement matrix gate` | [TASK-289](./TASK-289-placement-matrix-gate.md) |
+| TASK-290 | M0: Freeze the one-release crossing migration | Complete | 2026-08-30 | See git history | [TASK-290](./TASK-290-crossing-migration-diagnostic.md) |
+| TASK-291 | L0: Repair Result completion in both existing printers | Complete | 2026-08-30 | See git history | [TASK-291](./TASK-291-result-completion-printers.md) |
+| TASK-292 | L1: Add scope and completion identity | Complete | 2026-08-30 | See git history | [TASK-292](./TASK-292-result-scope-identity.md) |
+| TASK-293 | L2: Cut over syntax and nearest-scope propagation | Complete | 2026-08-30 | See git history | [TASK-293](./TASK-293-nearest-scope-cutover.md) |
+| TASK-294 | L3: Add control-flow and use diagnostics | Complete | 2026-08-30 | See git history | [TASK-294](./TASK-294-result-flow-diagnostics.md) |
+| TASK-295 | L4: Remove `<-` and the old tail surface | Complete | 2026-08-30 | See git history | [TASK-295](./TASK-295-remove-result-bind.md) |
+| TASK-296 | L5: Add typed nested-Result diagnostics | Complete | 2026-08-30 | See git history | [TASK-296](./TASK-296-typed-nested-result.md) |
+| TASK-297 | L6: Complete public documentation and release gates | Complete | 2026-08-30 | See git history | [TASK-297](./TASK-297-try-result-docs-and-gates.md) |
+| TASK-298 | Remove pre-1.0 Result migration compatibility | Complete | 2026-08-30 | 2026-08-30 | [TASK-298](./TASK-298-remove-result-migration.md) |
+| TASK-299 | Close Result scope review gaps | Complete | 2026-08-30 | 2026-08-30 | [TASK-299](./TASK-299-close-result-review-gaps.md) |
+| TASK-300 | Refresh Result syntax across user surfaces | Complete | 2026-08-30 | 2026-08-30 | [TASK-300](./TASK-300-refresh-result-user-surfaces.md) |
+| TASK-301 | Add structural `is` patterns and remove match expression closures | Complete | 2026-08-30 | 2026-08-30 | [TASK-301](./TASK-301-is-pattern-match.md) |
+| TASK-302 | Use a collision-free label for Result exits | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-302](./TASK-302-collision-free-result-exits.md) |
+| TASK-303 | Preserve statement-position match inside Result blocks | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-303](./TASK-303-statement-match-preservation.md) |
+| TASK-304 | Repair expression-boundary and template-hosted Result | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-304](./TASK-304-result-boundary-and-template.md) |
+| TASK-305 | Emit a type-clean Result discriminator | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-305](./TASK-305-type-clean-result-discriminator.md) |
+| TASK-306 | Close the Result design and user-surface documentation | Complete | 2026-08-30 | `TASK-302: repair Result completion defects` | [TASK-306](./TASK-306-result-surface-closure.md) |
+| TASK-307 | Close Result review follow-ups | Complete | 2026-08-30 | `TASK-307: close Result review follow-ups` | [TASK-307](./TASK-307-result-review-followups.md) |
+| TASK-308 | Add a practical CLI/editor diagnostic matrix | Complete | 2026-08-30 | `TASK-308: add practical diagnostic UI matrix` | [TASK-308](./TASK-308-practical-diagnostic-matrix.md) |
+| TASK-309 | Adopt compiler UI-test conventions for diagnostics | Complete | 2026-08-30 | `TASK-308: add practical diagnostic UI matrix` | [TASK-309](./TASK-309-diagnostic-ui-test-conventions.md) |
+| TASK-310 | Expand generated control flow into readable TypeScript | Complete | 2026-09-01 | `TASK-310: expand generated control flow readability` | [TASK-310](./TASK-310-readable-generated-control-flow.md) |
+| TASK-311 | Repair reported value-region composition defects | Complete | 2026-09-01 | `TASK-311: repair value-region composition` | [TASK-311](./TASK-311-value-region-composition.md) |
+| TASK-312 | Prove mixed-source structural composition | Complete | 2026-09-01 | 2026-09-02 | [TASK-312](./TASK-312-structural-value-region-nesting.md) |
+| TASK-313 | Resolve language services through linked TypeScript packages | Complete | 2026-09-02 | 2026-09-02 | [TASK-313](./TASK-313-linked-typescript-toolchain.md) |
+| TASK-314 | Split the TypeScript codegen core into responsibility modules | Complete | 2026-09-02 | 2026-09-02 | [TASK-314](./TASK-314-split-codegen-core.md) |
+| TASK-315 | Split every oversized Rust source and test file | Complete | 2026-09-02 | 2026-09-02 | [TASK-315](./TASK-315-split-oversized-rust-files.md) |
+| TASK-316 | Unify setup on the TypeScript content mapper | Complete | 2026-09-02 | 2026-09-02 | [TASK-316](./TASK-316-unify-content-mapper-setup.md) |
+| TASK-317 | Build-test generated create-tt projects | Complete | 2026-09-02 | 2026-09-02 | [TASK-317](./TASK-317-create-tt-build-gate.md) |
+| TASK-318 | Comprehensive product-surface audit and structural repairs | Complete | 2026-09-02 | 2026-09-03 | [TASK-318](./TASK-318-comprehensive-product-audit.md) |
+| TASK-319 | Audit valid-program compilation failures | Complete | 2026-09-03 | 2026-09-03 | [TASK-319](./TASK-319-valid-program-compilation-audit.md) |
+| TASK-320 | Audit mixed-source runtime and project semantics | Complete | 2026-09-04 | 2026-09-05 | [TASK-320](./TASK-320-mixed-source-runtime-audit.md) |
+| TASK-321 | Reject ambiguous build output paths | Complete | 2026-09-05 | 2026-09-05 | [TASK-321](./TASK-321-reject-output-collisions.md) |
+| TASK-322 | Diagnose merge conflict markers at the syntax boundary | Complete | 2026-09-05 | 2026-09-05 | [TASK-322](./TASK-322-conflict-marker-syntax-boundary.md) |
+| TASK-323 | Preserve contextual typing through composed matches | Complete | 2026-09-05 | 2026-09-05 | [TASK-323](./TASK-323-contextual-match-composition.md) |
+| TASK-324 | Preserve contextual typing across scoped match continuations | Complete | 2026-09-05 | 2026-09-05 | [TASK-324](./TASK-324-scoped-contextual-continuations.md) |
+| TASK-325 | Verify real editor editing workflows | Complete | 2026-09-05 | 2026-09-05 | [TASK-325](./TASK-325-editor-workflows.md) |
+| TASK-326 | Keep editor projects current across filesystem changes | Complete | 2026-09-05 | 2026-09-05 | [TASK-326](./TASK-326-editor-filesystem-lifecycle.md) |
+| TASK-327 | Generalize scoped match host continuations | Complete | 2026-09-05 | 2026-09-05 | [TASK-327](./TASK-327-scoped-host-continuations.md) |
+| TASK-328 | Preserve contextual typing across control-flow and cleanup arms | Complete | 2026-09-05 | 2026-09-05 | [TASK-328](./TASK-328-control-flow-contextual-arms.md) |
+| TASK-329 | Audit mixed scoped siblings and nested match composition | Complete | 2026-09-05 | 2026-09-05 | [TASK-329](./TASK-329-scoped-sibling-composition.md) |
+| TASK-330 | Investigate intermittent editor buffer-refresh test timeout | Complete | 2026-09-05 | 2026-09-05 | [TASK-330](./TASK-330-editor-refresh-test-timeout.md) |
+| TASK-331 | Install bundler adapter dependencies before their CI gate | Complete | 2026-09-05 | 2026-09-05 | [TASK-331](./TASK-331-install-unplugin-test-dependencies.md) |
+| TASK-332 | Preserve contextual typing for matches inside larger argument expressions | Complete | 2026-09-05 | 2026-09-05 | [TASK-332](./TASK-332-wrapped-argument-contextual-values.md) |
+| TASK-333 | Preserve contextual types through scheduled captures | Complete | 2026-09-05 | 2026-09-05 | [TASK-333](./TASK-333-captured-argument-contextual-types.md) |
+| TASK-334 | Keep one engine session per compiler and never crash on a dead pipe | Complete | 2026-09-05 | 2026-09-05 | [TASK-334](./TASK-334-engine-session-per-compiler.md) |
+| TASK-335 | Read the compiler's rendered diagnostics in the one-shot fallback | Complete | 2026-09-05 | 2026-09-05 | [TASK-335](./TASK-335-fallback-diagnostic-parsing.md) |
+| TASK-336 | Write the generated banner where the file allows it | Complete | 2026-09-05 | 2026-09-05 | [TASK-336](./TASK-336-banner-placement.md) |
+| TASK-337 | Treat a closed stdout as an ordinary end, not an internal error | Complete | 2026-09-05 | 2026-09-05 | [TASK-337](./TASK-337-closed-stdout.md) |
+| TASK-338 | Reject CLI inputs the contract already forbids | Complete | 2026-09-05 | 2026-09-05 | [TASK-338](./TASK-338-cli-input-validation.md) |
+| TASK-339 | Correct user-facing documentation that no longer matches the tools | Complete | 2026-09-05 | 2026-09-05 | [TASK-339](./TASK-339-documentation-drift.md) |
+| TASK-340 | Make an unusable compiler visible and recoverable in the editor | Complete | 2026-09-05 | 2026-09-05 | [TASK-340](./TASK-340-compiler-recovery-in-the-editor.md) |
+| TASK-341 | A flag that takes a value does not take an option as one | Complete | 2026-09-05 | 2026-09-05 | [TASK-341](./TASK-341-value-flags-take-values.md) |
+| TASK-342 | Follow the window's workspace folders while it is open | Complete | 2026-09-05 | 2026-09-05 | [TASK-342](./TASK-342-live-workspace-folders.md) |
+| TASK-343 | Give the server's standing notices one owner and one reset | Complete | 2026-09-05 | 2026-09-05 | [TASK-343](./TASK-343-standing-notices.md) |
+| TASK-344 | A sidecar directory that cannot be resolved is reported, not ignored | Complete | 2026-09-05 | 2026-09-05 | [TASK-344](./TASK-344-sidecar-directory-resolution.md) |
+| TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
+| TASK-346 | Hold the task index and the task records to the same state | Complete | 2026-09-05 | 2026-09-05 | [TASK-346](./TASK-346-task-state-agreement.md) |
 
-## 다음 태스크 번호
+| TASK-347 | Rebase product audit onto updated main | Complete | 2026-09-09 | 2026-09-09 | [TASK-347](./TASK-347-rebase-product-audit.md) |
 
-**TASK-263**
+| TASK-348 | Audit product and mixed-source composition failures | Complete | 2026-09-06 | 2026-09-06 | [TASK-348](./TASK-348-product-composition-audit.md) |
+| TASK-349 | Preserve contextual types across scoped values | Complete | 2026-09-06 | 2026-09-06 | [TASK-349](./TASK-349-contextual-type-materialization.md) |
+
+## Next task number
+
+**TASK-350**
