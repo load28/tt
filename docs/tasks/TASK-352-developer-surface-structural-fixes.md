@@ -78,6 +78,8 @@ defect in the layer that owns the behavior.
   — verifying each against the built tools before changing it.
 - 2026-09-09: Made every file the compiler publishes appear whole, checked
   against a full filesystem and a rename that cannot succeed.
+- 2026-09-09: Gave a hand-written file's type errors their position back,
+  checked on a line containing Korean text and through the server protocol.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -262,6 +264,19 @@ defect in the layer that owns the behavior.
   them onto it, so a reader sees the previous file or the new one. The
   `--types` sidecars go through the same helper, and a staging file that
   never became an output is removed whichever step failed.
+
+### Issue 10: A hand-written file's type errors arrived without a position
+
+- **Symptom**: `ttc --check-types src` rendered `--> src/plain.ts` with no
+  line or column and no excerpt, and the server answered the same
+  diagnostic with `line: 0, col: 0`, which an editor pins to the top of the
+  file.
+- **Cause**: The report dropped TypeScript's own coordinates for a file
+  nothing was lowered from, though the comment beside the code said they
+  were used as they are.
+- **Resolution**: They are converted against the file's text — the buffer's
+  when one is open, the disk's otherwise. A file that cannot be read keeps
+  the path alone rather than a made-up position.
 
 ## Verification
 

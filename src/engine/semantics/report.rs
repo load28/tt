@@ -191,12 +191,26 @@ pub(crate) fn report(
     for diagnostic in type_diagnostics {
         let (diagnostic_start, diagnostic_end) = diagnostic_span(diagnostic);
         let Some(file) = files.iter().find(|f| f.module_path == diagnostic.file) else {
-            // A hand-written file: TypeScript's own coordinates already name
-            // a file the user can open, so they are used as they are.
+            // A hand-written file: nothing was lowered, so TypeScript's own
+            // coordinates already name the place. They arrive as UTF-16
+            // offsets and every consumer of this report reads line and
+            // column, so they are converted against the file's text — the
+            // buffer's when one is open, the disk's otherwise. A file that
+            // cannot be read keeps the path alone rather than a made-up
+            // position.
+            let text = snapshot
+                .source_of(&diagnostic.file)
+                .map(str::to_owned)
+                .or_else(|| std::fs::read_to_string(&diagnostic.file).ok());
+            let at = |utf16: usize| {
+                text.as_deref().map(|text| {
+                    crate::line_col(text, crate::typescript::mapper::from_utf16(text, utf16))
+                })
+            };
             out.push(Diagnostic {
                 path: diagnostic.file.clone(),
-                position: None,
-                end: None,
+                position: at(diagnostic_start),
+                end: at(diagnostic_end),
                 message: diagnostic_message(diagnostic, &[]),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
