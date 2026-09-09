@@ -150,7 +150,7 @@ impl Lowering<'_> {
                     DecisionKind::LetElse {
                         binding_mode: stmt.binding_mode,
                         direct_variants: direct_variant_alternatives(
-                            &self.lower_pattern(site.arms[0].pattern),
+                            &self.lower_pattern(site.arms[0].pattern, site.subjects.len()),
                         ),
                     },
                 )))
@@ -290,7 +290,7 @@ impl Lowering<'_> {
             .arms
             .iter()
             .map(|arm| DecisionArm {
-                pattern: self.lower_pattern(arm.pattern),
+                pattern: self.lower_pattern(arm.pattern, site.subjects.len()),
                 guard: arm.guard,
                 action: action(arm, arm.body_kind),
             })
@@ -330,29 +330,39 @@ impl Lowering<'_> {
         )
     }
 
-    fn lower_pattern(&self, pattern: hir::PatternId) -> PatternPlan {
+    /// The arm's plan over a decision with `subjects` subjects.
+    fn lower_pattern(&self, pattern: hir::PatternId, subjects: usize) -> PatternPlan {
         self.pattern_at(
             pattern,
             Place {
                 subject: 0,
                 fields: Vec::new(),
             },
+            subjects,
         )
     }
 
-    fn pattern_at(&self, pattern: hir::PatternId, place: Place) -> PatternPlan {
+    fn pattern_at(&self, pattern: hir::PatternId, place: Place, subjects: usize) -> PatternPlan {
         match &self.semantic.hir.patterns[pattern] {
             Pat::Wildcard => PatternPlan::Any,
             Pat::Or(alternatives) => PatternPlan::AnyOf(
                 alternatives
                     .iter()
-                    .map(|pattern| self.pattern_at(*pattern, place.clone()))
+                    .map(|pattern| self.pattern_at(*pattern, place.clone(), subjects))
                     .collect(),
             ),
-            Pat::Tuple(elements) => PatternPlan::AllOf(
-                elements
+            // A tuple element is a subject index. The parser claims a tuple
+            // match as soon as either side proves tuple intent, so an arm
+            // may name more positions than the match has scrutinees; sema
+            // reports that arity, and an element with no subject to read
+            // tests nothing. Dropping it here is what keeps every `Place`
+            // an index into this decision's own subjects — the invariant
+            // emission relies on ([`validate_plan_subjects`]).
+            Pat::Tuple(elements) => {
+                let positions: Vec<PatternPlan> = elements
                     .iter()
                     .enumerate()
+                    .take(subjects)
                     .map(|(subject, element)| {
                         self.pattern_at(
                             *element,
@@ -360,10 +370,23 @@ impl Lowering<'_> {
                                 subject,
                                 fields: Vec::new(),
                             },
+                            subjects,
                         )
                     })
-                    .collect(),
-            ),
+                    .collect();
+                // A conjunction over one position *is* that position's plan.
+                // Keeping the wrapper would give a one-subject decision an
+                // arm shape no single match produces, which the switch
+                // emitter reads as an alternative with no constructor.
+                if positions.len() == 1 {
+                    positions
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| crate::ice::bug!("one-position plan disappeared"))
+                } else {
+                    PatternPlan::AllOf(positions)
+                }
+            }
             Pat::Literal(_) => PatternPlan::Test(Test::Literal { place, pattern }),
             Pat::Instance {
                 constructor,
@@ -434,7 +457,7 @@ impl Lowering<'_> {
                             }));
                         }
                         FieldBinding::Nested(inner) => {
-                            parts.push(self.pattern_at(*inner, field_place));
+                            parts.push(self.pattern_at(*inner, field_place, subjects));
                         }
                     }
                 }
@@ -729,6 +752,7 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
             validate_expr(guard, file);
         }
         validate_pattern_plan(&arm.pattern, semantic);
+        validate_plan_subjects(&arm.pattern, decision.subjects.len());
         match arm.action {
             ArmAction::Yield { body, kind } => {
                 validate_body(body, file);
@@ -761,6 +785,34 @@ fn validate_pattern_plan(plan: &PatternPlan, semantic: &SemanticFile) {
             assert!(!parts.is_empty(), "Core IR boolean pattern is empty");
             for part in parts {
                 validate_pattern_plan(part, semantic);
+            }
+        }
+    }
+}
+
+/// Every place an arm tests names one of the decision's own subjects. The
+/// emitter indexes `subjects` by `Place::subject`, so a plan that reaches
+/// past them is a lowering that built arms for a match it does not have —
+/// caught here, at the boundary that owns the invariant, rather than as an
+/// index panic inside emission.
+fn validate_plan_subjects(plan: &PatternPlan, subjects: usize) {
+    match plan {
+        PatternPlan::Any => {}
+        PatternPlan::Test(
+            Test::Variant { place, .. }
+            | Test::Literal { place, .. }
+            | Test::InstanceOf { place, .. },
+        ) => assert!(
+            place.subject < subjects,
+            "Core IR pattern tests a subject the decision does not have"
+        ),
+        PatternPlan::Bind(binding) => assert!(
+            binding.source.subject < subjects,
+            "Core IR binding reads a subject the decision does not have"
+        ),
+        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+            for part in parts {
+                validate_plan_subjects(part, subjects);
             }
         }
     }

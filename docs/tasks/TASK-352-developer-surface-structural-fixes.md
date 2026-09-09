@@ -1,0 +1,88 @@
+# TASK-352: Repair the developer-facing surfaces of tt
+
+- **Status**: In progress
+- **Started**: 2026-09-09
+- **Completed**: —
+- **Commit**: —
+
+## Purpose
+
+Audit what a developer actually runs — the documentation, the `ttc` command
+line, the compiler, and the editor integration — and repair each confirmed
+defect in the layer that owns the behavior.
+
+## Scope
+
+- Included: user-facing documents and their examples, every CLI mode and its
+  edge inputs, compiler diagnostics and emitted output, and the VS Code
+  extension with the engine surfaces it drives
+- Excluded: release publication, and any change to what the language means
+
+## Decisions
+
+### Decision 1: Audit each surface against the tools, not against the tests
+
+- **Context**: The suite is green, so a defect that survives it is one no
+  test describes. Reading the code alone would reproduce its assumptions.
+- **Alternatives considered**: Extend the existing suites and see what
+  breaks; sample features by hand; drive every documented surface with the
+  built compiler and compare what it does against what it promises.
+- **Decision and rationale**: Exercise the shipped binary, the extension
+  build, and every documented example, and treat only a reproduced
+  difference as a finding. Each finding carries its command and output.
+
+### Decision 2: A subject index is the Core IR's invariant, so lowering owns it
+
+- **Context**: A tuple arm naming more positions than the match has
+  scrutinees crashed emission — once by indexing past the subject list, once
+  by handing the switch emitter an alternative with no constructor test.
+- **Alternatives considered**: Add `match-tuple-arity` to
+  `blocks_projection` (this suppressed the file's independent type errors,
+  which TASK-117 requires to survive); leave the arity-mismatched match as
+  source text in HIR (the same suppression, plus a projection that no
+  longer parses).
+- **Decision and rationale**: `Place::subject` indexes the decision's own
+  subjects, so Core IR lowering keeps only the positions that have one. Sema
+  still reports the arity, the emitted TypeScript still parses, and the
+  file's other diagnostics still reach the user. A one-position conjunction
+  collapses to that position's plan so a single-subject decision keeps the
+  arm shape the switch emitter is documented to receive. The invariant is
+  now asserted where it belongs, in `validate_decision`.
+
+## Work log
+
+- 2026-09-09: Ran `./scripts/doctor`, installed dependencies, built the
+  release compiler, and recorded a green `cargo test` baseline.
+- 2026-09-09: Audited the four surfaces against the built tools and
+  reproduced each reported difference before recording it.
+- 2026-09-09: Repaired the two tuple-arity compiler crashes in Core IR
+  lowering and pinned the contract in `tests/compile/cases_06.rs`.
+
+## Issues and resolutions
+
+### Issue 1: A tuple arm wider than its match crashed the compiler
+
+- **Symptom**: `match (x) { (A, B) => 1 }` exited 101 with `internal
+  compiler error: switch variant alternative tests no constructor`, and
+  `match (x, y) { (A, B, C) => 1, _ => 2 }` with `index out of bounds: the
+  len is 2 but the index is 2`. Both crashed `--check` and `--emit-map`, so
+  an editor keystroke could kill the compiler.
+- **Cause**: `Lowering::pattern_at` turned every tuple element into a
+  `Place` whose `subject` was the element's index, without consulting the
+  decision's subject count. The parser keeps an arity-disagreeing tuple
+  match on purpose so sema can name the mismatch, so the two phases
+  disagreed about what a position was.
+- **Resolution**: Lowering takes only the elements that have a subject and
+  collapses a one-position conjunction to that position's plan.
+  `validate_decision` now asserts that every place an arm tests names one of
+  the decision's own subjects.
+
+## Verification
+
+- [ ] `cargo fmt --check`
+- [ ] `cargo clippy --all-targets -- -D warnings`
+- [ ] `cargo test`
+
+## Result
+
+In progress.

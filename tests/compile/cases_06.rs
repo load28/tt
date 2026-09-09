@@ -267,6 +267,40 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
 }
 
 #[test]
+fn tuple_match_arity_mismatch_lowers_over_the_subjects_it_has() {
+    // A tuple element is a subject index, so an arm naming more positions
+    // than the match has scrutinees describes places that do not exist.
+    // Lowering keeps only the positions with a subject: sema still reports
+    // the arity, and every pass below stays total instead of indexing past
+    // the decision's own subjects.
+    for src in [
+        "variant V { A, B }\ndeclare const a: V;\nconst r = match (a) {\n  (A, B) => 1,\n};\n",
+        "variant V { A, B }\ndeclare const a: V;\ndeclare const b: V;\n\
+         const r = match (a, b) {\n  (A, B, A) => 1,\n  _ => 0,\n};\n",
+        "variant V { A, B }\ndeclare const a: V;\ndeclare const b: V;\n\
+         const r = match (a, b) {\n  (A, B) => 1,\n  (B) => 2,\n  _ => 0,\n};\n",
+    ] {
+        let codes: Vec<_> = ttc::analyze(src, &Options::default())
+            .into_iter()
+            .map(|d| d.code)
+            .collect();
+        assert!(
+            codes.contains(&ttc::DiagnosticCode::MatchTupleArity),
+            "{codes:?}"
+        );
+        // The tooling emit is infallible by contract and an editor drives
+        // it on every keystroke: it must answer, and answer with the
+        // TypeScript its own self-check accepts.
+        let emit = ttc::emit_mapped(src);
+        assert!(
+            ttc::compile(&emit.code, &Options::default()).is_ok(),
+            "emitted output does not re-parse:\n{}",
+            emit.code
+        );
+    }
+}
+
+#[test]
 fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
     let src = "const r = match value { A => 1, _ => 0 };\n";
     let e = err(src);
