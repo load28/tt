@@ -605,7 +605,7 @@
         "en": "Represent an optional value as Some(value) or None.",
         "ko": "선택적인 값을 Some(value) 또는 None으로 표현합니다."
       },
-      "code": "import * as Option from \"@tt/std/option\";\n\nconst port = Option.fromNullable(env.PORT)\n  |> Option.mapP(Number)\n  |> Option.filterP(Number.isFinite)\n  |> Option.unwrapOrP(3000);",
+      "code": "import * as Option from \"@tt/std/option\";\n\nconst port = Option.fromNullable(env.PORT)\n  |> Option.mapP(Number)\n  |> Option.filterP((n: number) => Number.isFinite(n))\n  |> Option.unwrapOrP(3000);",
       "works": {
         "en": [
           "Construct with Option.Some(value) and the Option.None value.",

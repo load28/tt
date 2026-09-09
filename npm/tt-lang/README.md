@@ -24,8 +24,8 @@ looks. The TT installer does not add it for you:
 bun add -d @openload28/tt-lang@next typescript@7.1.0-dev.20260826.1
 ```
 
-Content mappers use APIs that arrived in TypeScript 7.1; everything else works
-on 7.0. See the
+Content mappers and `ttc --types` both use APIs that arrived in TypeScript
+7.1; everything else works on 7.0. See the
 [installation guide](https://github.com/load28/tt/blob/main/docs/getting-started.md).
 
 ```sh

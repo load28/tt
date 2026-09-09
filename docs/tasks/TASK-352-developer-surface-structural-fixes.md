@@ -71,6 +71,11 @@ defect in the layer that owns the behavior.
 - 2026-09-09: Gave the typed pass a declaration-based answer for files the
   checker holds none about, which is both the file a caller names outside
   the project's `include` and every file when no TypeScript is installed.
+- 2026-09-09: Corrected the user-facing statements the tools contradict —
+  two flag descriptions in `ttc --help`, three in the reference the compiler
+  embeds, the website's `Option` pipeline, the TypeScript 7.1 requirement in
+  the npm README, and the gate table and contract count in `CONTRIBUTING.md`
+  — verifying each against the built tools before changing it.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -222,6 +227,25 @@ defect in the layer that owns the behavior.
 - **Resolution**: The report falls back to the declaration-based coverage
   for any file the checker holds no answers about, which covers both the
   excluded file and the missing toolchain.
+
+### Issue 8: Documented behavior the tools do not have
+
+- **Symptom**: `ttc --help` offered `--overlay` and `--tt-only` with
+  `--types`, which the CLI rejects by design. The reference the compiler
+  serves as `ttc help` said a reserved word makes a construct "silently
+  pass through" (it is a located `malformed-variant`, or a self-check
+  failure), that `-o` means in-place overwrites are refused (only an output
+  landing on its own hand-written input is), and that emitted `.ts` starts
+  with `@generated` (a passthrough file does not). The website's `Option`
+  pipeline did not type-check, because `Number.isFinite` takes `unknown`
+  and infers the element type away. `npm/tt-lang/README.md` named content
+  mappers as the only TypeScript 7.1 requirement, though `--types` needs
+  the declaration-emit API that arrived with it. `CONTRIBUTING.md` listed
+  five of the six gate stages and counted two of the three contracts.
+- **Cause**: Drift; each statement was true of an earlier behavior.
+- **Resolution**: Every claim was re-run against the built tools and the
+  document corrected to what they do. The website's generated highlight
+  files were rebuilt from the corrected source.
 
 ## Verification
 

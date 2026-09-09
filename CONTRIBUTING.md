@@ -37,11 +37,13 @@ launcher(`npm/tt-lang/bin/ttc.js`)는 이 저장소의 `target/release/ttc`를
 
 ## 절대 불변 원칙
 
-어떤 변경도 이 두 계약을 깨뜨릴 수 없습니다 (자세한 내용은 [`AGENTS.md`](./AGENTS.md)):
+어떤 변경도 이 세 계약을 깨뜨릴 수 없습니다 (자세한 내용은 [`AGENTS.md`](./AGENTS.md)):
 
 1. 모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이다 (바이트 단위 통과).
 2. tt 수준 에러는 ttc가 직접 보고하고, 방출 코드는 타입 트릭 없는 순수
    TypeScript다 — ttc가 방출한 코드가 tsc 에러를 만들면 안 된다.
+3. 해결은 책임 있는 컴파일러 계층에 일반화해 구현한다 — 특정 테스트나 문자열
+   모양을 겨냥한 분기·휴리스틱·진단 억제·폴백으로 덮지 않는다.
 
 ## 작업 절차 (필수)
 
@@ -67,7 +69,8 @@ PR을 열기 전에 먼저 실행해야 합니다.
 | --- | --- |
 | `agents` | 에이전트 진입점 계약(`CLAUDE.md`, `scripts/doctor`) |
 | `rust` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
-| `npm` | npm 릴리스 도구와 프로젝트 초기화기 테스트 |
+| `npm` | npm 릴리스 도구, 프로젝트 초기화기, unplugin 어댑터, 심의 도구 테스트 |
+| `website` | 공개 사이트의 타입 검사와 정적 렌더 (Bun 필요) |
 | `native` | TypeScript 7을 실제로 구동하는 타입 검사 모드 |
 | `extension` | VS Code 확장 빌드와 서버 테스트 |
 

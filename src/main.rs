@@ -129,9 +129,9 @@ Tooling options (bundler plugins, editors):
                         the editor integration spawn; not for direct use
   --overlay <path>      check the buffer on stdin as if it were <path>, so an
                         editor can ask about text it has not saved; needs
-                        --check-types or --types
-  --tt-only             report the tt layer of --check-types/--types and
-                        leave the type layer to TypeScript"
+                        --check-types (not --types, which writes)
+  --tt-only             report the tt layer of --check-types and leave the
+                        type layer to TypeScript (not --types, which writes)"
     ));
 }
 
