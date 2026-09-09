@@ -169,6 +169,45 @@ test("the server asks for folder changes, and acts on them", { skip, timeout }, 
   } finally { client.stop(); }
 });
 
+/// A `.tt` file that has never been saved is still tt. The engine's
+/// text-only answers read the buffer and nothing else, so refusing them
+/// for an untitled document leaves a new file with no outline, no hover
+/// and no variant completions until it is written to disk.
+test("an untitled buffer gets the answers the engine reads from its text", { skip, timeout }, async () => {
+  const client = connect();
+  const uri = "untitled:Untitled-1";
+  const source = "variant Shape { Circle(r: number), Square(s: number) }\nconst x = Shape.\n";
+  try {
+    await client.request("initialize", { processId: process.pid, rootUri: null, capabilities: {} });
+    client.notify("initialized", {});
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+
+    // The first answer starts the engine; ask until it has one rather than
+    // racing the start-up.
+    let symbols: any[] = [];
+    for (let attempt = 0; attempt < 40 && symbols.length === 0; attempt += 1) {
+      const answer = await client.request("textDocument/documentSymbol", { textDocument: { uri } });
+      symbols = Array.isArray(answer.result) ? answer.result : [];
+      if (symbols.length === 0) await new Promise(resolve => setTimeout(resolve, 250));
+    }
+    assert.deepEqual(symbols.map((s: any) => s.name), ["Shape"]);
+
+    const completion = await client.request("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 1, character: 16 },
+    });
+    const items = completion.result?.items ?? completion.result ?? [];
+    const labels = items.map((i: any) => i.label);
+    assert.deepEqual(labels.filter((l: string) => l === "Circle" || l === "Square"), ["Circle", "Square"]);
+
+    const hover = await client.request("textDocument/hover", {
+      textDocument: { uri },
+      position: { line: 0, character: 10 },
+    });
+    assert.ok(hover.result, "the variant name has a hover");
+  } finally { client.stop(); }
+});
+
 interface Client {
   request(method: string, params: unknown): Promise<any>;
   notify(method: string, params: unknown): void;

@@ -86,6 +86,8 @@ defect in the layer that owns the behavior.
 - 2026-09-09: Stopped a save from being read as an edit made elsewhere, and
   named the rule that decides so it could be tested on its own. The
   extension suite passes with 164 tests.
+- 2026-09-09: Let an unsaved `.tt` buffer have the answers the engine reads
+  from its text, checked over real LSP; the suite passes with 165 tests.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -328,6 +330,19 @@ defect in the layer that owns the behavior.
 - **Resolution**: A named rule decides what is news. A change to a buffer
   the server holds is not; creation and deletion still are, because those
   change what the project contains whoever holds the file.
+
+### Issue 13: An unsaved buffer lost every tt-specific answer
+
+- **Symptom**: In an untitled `.tt` document the outline was empty, `Shape.`
+  offered no cases, and hovering a variant name answered nothing — though
+  the engine answers all three for a path that does not exist.
+- **Cause**: The surfaces asked for a filesystem path and gave up without
+  one, even though what they read is the buffer's text. Semantic tokens
+  already named an untitled buffer to get its answer.
+- **Resolution**: A named buffer path serves the text-only surfaces the way
+  semantic tokens already did. The typed surfaces still require a real file,
+  and go-to-definition resolves a declaration found in an unsaved buffer to
+  that document rather than to a file of the synthetic name.
 
 ## Verification
 

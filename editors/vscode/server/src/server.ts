@@ -282,15 +282,12 @@ async function declarationsOf(
 ): Promise<engine.EngineDeclarations> {
   const cached = declCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached.decls;
-  const fsPath = enginePath(doc);
-  const decls = fsPath
-    ? await engine.declarations(
-        currentCompiler(),
-        fsPath,
-        doc.getText(),
-        logEngine,
-      )
-    : { variants: [], matches: [] };
+  const decls = await engine.declarations(
+    currentCompiler(),
+    bufferPath(doc),
+    doc.getText(),
+    logEngine,
+  );
   declCache.set(doc.uri, { version: doc.version, decls });
   return decls;
 }
@@ -354,6 +351,19 @@ engine.setOnSessionStart((compiler) => {
 function enginePath(doc: TextDocument): string | null {
   const uri = URI.parse(doc.uri);
   return uri.scheme === "file" ? uri.fsPath : null;
+}
+
+/** A name for the buffer, whether or not it is a file on disk.
+ *
+ * The engine's text-only answers — the declarations in this buffer, the
+ * names it defines, the completions they allow — read the text and nothing
+ * else; the path only tells them how to resolve relative tt imports, which
+ * an unsaved buffer has none of. Refusing to answer for one leaves a new
+ * `.tt` file with no outline, no hover and no variant completions until it
+ * is saved, though the answers were available all along. Semantic tokens
+ * already name an untitled buffer this way. */
+function bufferPath(doc: TextDocument): string {
+  return enginePath(doc) ?? `buffer.${doc.languageId === "ttx" ? "ttx" : "tt"}`;
 }
 
 // ------------------------------------------------------------- diagnostics
@@ -1068,16 +1078,13 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // declaration table, under the same shadowing the compiler resolves
   // with, and knows the positions this server never did (`if let`,
   // let-else payloads, nested patterns).
-  const fsPath = enginePath(doc);
-  const ttItemsHere = fsPath
-    ? await engine.ttCompletions(
-        currentCompiler(),
-        fsPath,
-        doc.getText(),
-        params.position,
-        logEngine,
-      )
-    : [];
+  const ttItemsHere = await engine.ttCompletions(
+    currentCompiler(),
+    bufferPath(doc),
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
   if (ttItemsHere.length > 0) {
     return ttItemsHere.map((item) => ({
       label: item.label,
@@ -1245,16 +1252,13 @@ connection.onHover(async (params) => {
   // so the engine answers from the compiler's own declaration table. It
   // answers only where the service cannot be asked; everywhere else
   // (`Shape.Circle(1)`, `const s: Shape`) the service knows more.
-  const fsPath = enginePath(doc);
-  const sym = fsPath
-    ? await engine.ttSymbol(
-        currentCompiler(),
-        fsPath,
-        doc.getText(),
-        params.position,
-        logEngine,
-      )
-    : null;
+  const sym = await engine.ttSymbol(
+    currentCompiler(),
+    bufferPath(doc),
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
   if (!sym) return tsHover(doc, params.position);
   return {
     contents: {
@@ -1294,20 +1298,23 @@ connection.onDefinition(async (params) => {
   // A tt name first: a variant, a case tag, a payload field. The engine
   // knows where each is declared — in this file or in the `.tt` the import
   // names — because the emitted TypeScript carries none of them.
-  const ttPath = enginePath(doc);
-  if (ttPath !== null) {
+  {
     const sym = await engine.ttSymbol(
       currentCompiler(),
-      ttPath,
+      bufferPath(doc),
       doc.getText(),
       params.position,
       logEngine,
     );
     if (sym?.definition) {
-      return Location.create(
-        URI.file(sym.definition.path).toString(),
-        sym.definition.range,
-      );
+      // An unsaved buffer is served under a synthetic name, so a
+      // declaration the engine found in it belongs to this document rather
+      // than to a file of that name.
+      const target =
+        sym.definition.path === bufferPath(doc) && enginePath(doc) === null
+          ? doc.uri
+          : URI.file(sym.definition.path).toString();
+      return Location.create(target, sym.definition.range);
     }
     // A built-in case has no declaration to open; nothing else does either
     // once the engine has claimed the position.
