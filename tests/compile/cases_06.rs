@@ -758,3 +758,20 @@ fn a_slot_carries_the_declared_type_only_when_it_is_the_returned_value_s() {
     assert!(out.contains("let $tt_v0;"), "{out}");
     assert!(!out.contains("is number;"), "{out}");
 }
+
+#[test]
+fn a_payload_field_cannot_be_named_like_the_case_tag_s_property() {
+    // Every case carries its tag in one fixed property. A payload field of
+    // that name has nowhere to go: the declaration would name the property
+    // twice, and the constructor would write the payload over the tag, so
+    // the value could no longer say which case it is.
+    let e = err("variant Token { Word(kind: string) }\n");
+    assert!(e.message.contains("cannot have a field named `kind`"), "{e}");
+    assert_eq!((e.line, e.col), (1, 22));
+    let diagnostic = &ttc::analyze("variant Token { Word(kind: string) }\n", &Options::default())[0];
+    assert_eq!(diagnostic.code, ttc::DiagnosticCode::VariantFieldShadowsTag);
+
+    // Any other field name is fine, and the tag itself is untouched.
+    let out = ok("variant Token { Word(text: string) }\n");
+    assert!(out.contains("{ kind: \"Word\"; text: string }"), "{out}");
+}

@@ -98,6 +98,9 @@ defect in the layer that owns the behavior.
   the walk could not read, and the path a server request sent.
 - 2026-09-09: Put the editor's hover and completion text into English, the
   language every other user-visible string in the server already uses.
+- 2026-09-09: Added the rule that a payload field cannot take the property
+  the case tag lives in, with its explanation, wire number and reference
+  entry.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -447,6 +450,21 @@ defect in the layer that owns the behavior.
   wants its own task, with the projection and Evaluation IR contracts
   restated together. A speculative change was written, measured against the
   case, and reverted when it did not address the cause.
+
+### Issue 20: A payload field named `kind` destroyed its own variant
+
+- **Symptom**: `variant Token { Word(kind: string) }` passed every check and
+  emitted `{ kind: "Word"; kind: string }` — a property named twice, which
+  tsc rejects — and a constructor `({ kind: "Word", kind })` that writes the
+  payload over the tag, so the value can no longer say which case it is.
+  `ttc --check` exited 0.
+- **Cause**: Nothing checked payload names against the property the lowering
+  reserves for the tag, and that property was a literal spelled out at each
+  emission site rather than a named part of the shape.
+- **Resolution**: The tag's property is one named constant the emitter and
+  the new rule both read, and sema reports a case that would take it.
+  Documented in the reference the compiler serves, with an explanation
+  under `ttc explain`.
 
 ## Verification
 

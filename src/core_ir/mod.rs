@@ -337,6 +337,14 @@ pub(crate) enum ResultDiscriminator {
     SuccessFieldPresent(&'static str),
 }
 
+/// The property every lowered variant carries its case tag in.
+///
+/// It is part of the emitted shape a user's own TypeScript reads
+/// (`docs/ai/tt.md`), so it is fixed — which makes a payload field of the
+/// same name a collision the declaration cannot express, and sema rejects
+/// one rather than emitting a duplicate property.
+pub(crate) const VARIANT_TAG_FIELD: &str = "kind";
+
 pub(crate) const RESULT_LAYOUT: ResultLayout = ResultLayout {
     discriminator: ResultDiscriminator::SuccessFieldPresent("value"),
     payload_field: "value",

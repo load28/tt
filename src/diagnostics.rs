@@ -95,6 +95,8 @@ pub enum DiagnosticCode {
     VariantDuplicateCase,
     /// A variant field whose type annotation does not parse as TypeScript.
     VariantInvalidFieldType,
+    /// A variant payload field named like the property the case tag uses.
+    VariantFieldShadowsTag,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
     /// A match mixing tag patterns with literal or `is` patterns.
@@ -169,6 +171,7 @@ impl DiagnosticCode {
             DiagnosticCode::IfLetPlacement => "if-let-placement",
             DiagnosticCode::VariantDuplicateCase => "variant-duplicate-case",
             DiagnosticCode::VariantInvalidFieldType => "variant-invalid-field-type",
+            DiagnosticCode::VariantFieldShadowsTag => "variant-field-shadows-tag",
             DiagnosticCode::PatternDuplicateBinding => "pattern-duplicate-binding",
             DiagnosticCode::MatchMixedPatterns => "match-mixed-patterns",
             DiagnosticCode::MatchWildcardNotLast => "match-wildcard-not-last",
@@ -222,6 +225,7 @@ impl DiagnosticCode {
         DiagnosticCode::IfLetPlacement,
         DiagnosticCode::VariantDuplicateCase,
         DiagnosticCode::VariantInvalidFieldType,
+        DiagnosticCode::VariantFieldShadowsTag,
         DiagnosticCode::PatternDuplicateBinding,
         DiagnosticCode::MatchMixedPatterns,
         DiagnosticCode::MatchWildcardNotLast,
@@ -483,6 +487,21 @@ A variant field's type annotation does not parse as TypeScript.
 Field types are emitted into the generated union verbatim, so they are
 checked as TypeScript type syntax where they are written — that way the
 error points at your declaration rather than at generated code."
+            }
+
+            DiagnosticCode::VariantFieldShadowsTag => {
+                "\
+A case declares a payload field named like the property its tag lives in.
+
+Every case of a lowered variant carries its tag in one fixed property, and
+that property is part of the shape your own TypeScript reads. A payload
+field of the same name has nowhere to go: the declaration would name the
+property twice, and the constructor would write the payload over the tag,
+so the value could no longer say which case it is.
+
+Rename the field. Nothing else about the case changes:
+
+    variant Token { Word(text: string) }"
             }
 
             DiagnosticCode::PatternDuplicateBinding => {

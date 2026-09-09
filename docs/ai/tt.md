@@ -21,6 +21,7 @@ variant Tree<T> { Leaf(value: T), Node(left: Tree<T>, right: Tree<T>) }
 ```
 → emits type alias `Shape` = union of `{ kind: "Tag"; ...fields }` + constructor object `Shape` (both exported if `export`).
 - Use: `Shape.Circle(1)`; unit case is a VALUE not fn: `Shape.Point`. Empty-paren cases remain zero-argument constructor functions when explicitly written.
+- The tag lives in `kind`, so no case may declare a payload field named `kind` — the property would be written twice and the constructor would put the payload over the tag (`variant-field-shadows-tag`). Any other field name is free; a case tag may be `kind`.
 - Discriminant always `kind`. Plain `{ kind: "Circle", radius: 1 }` is assignable; match works on ANY `kind`-string-discriminated union.
 - Every `variant` is a tt tagged union, including unit-only declarations. Every `enum` (`enum Color { Red }`, `const enum`, `declare enum`) belongs to TypeScript and passes through.
 - Duplicate case tag = error.
