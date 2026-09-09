@@ -61,6 +61,7 @@ import {
   TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { isExternalChange } from "./watch";
 import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
@@ -205,12 +206,15 @@ connection.onDidChangeConfiguration(() => {
 });
 
 connection.onDidChangeWatchedFiles((params) => {
+  // The buffers the server already holds, by the path the watcher names
+  // them with, so a save can be told apart from an edit made elsewhere.
+  const open = new Set(documents.all().map(doc => URI.parse(doc.uri).fsPath));
   const relevant = params.changes.some(change => {
     const uri = URI.parse(change.uri);
     if (uri.scheme !== "file") return false;
     // Compiler-created support modules are not user graph changes.
     if (uri.fsPath.split(path.sep).some(part => part === "node_modules" || part === ".git")) return false;
-    return true;
+    return isExternalChange({ path: uri.fsPath, type: change.type }, open);
   });
   if (!relevant) return;
   if (params.changes.some(change => /(?:^|\/)(?:ttc|ttc\.exe)$/.test(URI.parse(change.uri).path))) {

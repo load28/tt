@@ -83,6 +83,9 @@ defect in the layer that owns the behavior.
 - 2026-09-09: Audited the editor surfaces and made every position the
   server reports a UTF-16 one, verified by applying an offered fix to a
   line containing an emoji. `./scripts/ci extension` passes with 160 tests.
+- 2026-09-09: Stopped a save from being read as an edit made elsewhere, and
+  named the rule that decides so it could be tested on its own. The
+  extension suite passes with 164 tests.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -311,6 +314,20 @@ defect in the layer that owns the behavior.
 - **Resolution**: The server converts every position it emits, through two
   conversions the library now exposes. The compiler keeps code points for
   its own caret.
+
+### Issue 12: Every save threw away the state the session exists to keep
+
+- **Symptom**: The user's own Ctrl+S arrives as a watched-file change, and
+  the handler rebuilt the engine's project graphs and every buffer's
+  projection for it — the audit measured a typed check going from 7 ms warm
+  back to 267 ms after each one. The same path re-armed standing notices,
+  so "ttc compiler not found" popped up again on every save.
+- **Cause**: The handler could not tell a save from an edit made outside
+  the editor, though the server already holds the saved buffer and its text
+  reached the engine as it was typed.
+- **Resolution**: A named rule decides what is news. A change to a buffer
+  the server holds is not; creation and deletion still are, because those
+  change what the project contains whoever holds the file.
 
 ## Verification
 
