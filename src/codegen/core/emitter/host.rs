@@ -799,8 +799,18 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| crate::ice::bug!("conditional operation value has no slot"))
     }
 
+    /// Closes the block a compose rewrite opened for a concise arrow body.
+    ///
+    /// The block is opened once, by [`Self::emit_compose_rewrite`], and ends
+    /// where the arrow body's own source range ends. The structured-value
+    /// path reaches that point when the value *is* the whole body; otherwise
+    /// the source walk reaches it while emitting the rest of the body. Both
+    /// ask here, and the first one to arrive writes the brace.
     pub(super) fn emit_compose_suffix(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         debug_assert_eq!(rewrite.owner_kind, HostOwnerKind::ArrowExpression);
+        if !self.closed_compose_blocks.claim(rewrite.owner) {
+            return Rope::new();
+        }
         let mut out = Rope::new();
         out.push_lit(";");
         out.push_break(0);

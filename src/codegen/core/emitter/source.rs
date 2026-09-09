@@ -96,8 +96,13 @@ impl<'a> Emitter<'a> {
             .compose_rewrites
             .iter()
             .filter(|rewrite| {
+                // `<=` on the left as well: when the body's last token is a
+                // tt value, the source that follows begins exactly where the
+                // body ends, and that span is the only one that can carry
+                // the brace. Writing it twice is prevented by the registry
+                // the suffix claims, not by this range.
                 rewrite.owner_kind == HostOwnerKind::ArrowExpression
-                    && span.start < rewrite.owner.end
+                    && span.start <= rewrite.owner.end
                     && rewrite.owner.end <= span.end
                     && !rewrite.actions.iter().any(|action| match action {
                         ComposeAction::Value(value) => {
@@ -715,9 +720,15 @@ impl<'a> Emitter<'a> {
                 out.push_lit(value.slot.clone());
             }
             match rewrite.owner_kind {
-                HostOwnerKind::ArrowExpression => {
+                // The block closes where the arrow body ends. That is here
+                // only when the value *is* the whole body; when source
+                // follows it, the walk over that source closes the block
+                // after it, so closing here would leave the rest outside
+                // the arrow.
+                HostOwnerKind::ArrowExpression if value.source.end == rewrite.owner.end => {
                     out.append(self.emit_compose_suffix(rewrite));
                 }
+                HostOwnerKind::ArrowExpression => {}
                 // The Core body retains a trailing statement/module frame
                 // (normally the authored semicolon) outside the direct
                 // expression and emits it after this value.

@@ -688,3 +688,40 @@ fn malformed_if_let_is_an_error_with_position() {
         e.message
     );
 }
+
+/* ------------------------------------------------------------------ */
+/* concise arrow bodies                                                */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn a_tt_value_anywhere_in_a_concise_arrow_body_keeps_the_block_balanced() {
+    // Lowering rewrites a concise arrow body to a block, so the block has
+    // to close where that body ends — not where the tt value ends, and not
+    // never. `compile` runs the output self-check, so an unbalanced or
+    // early brace fails here.
+    let head = "variant Shape { Circle(radius: number), Point }\ndeclare const s: Shape;\n\
+                declare function f(a: number, b: number): number;\n";
+    let matched = "match (s) { Circle(radius) => radius, Point => 0 }";
+    for body in [
+        "M",
+        "x + M",
+        "M + x",
+        "x + M + x",
+        "M + x + x",
+        "x && M",
+        "x ? M : 0",
+        "[x, M]",
+        "f(x, M)",
+    ] {
+        let src = format!(
+            "{head}export const v = [1].map((x: number) => {});\n",
+            body.replace('M', matched)
+        );
+        let out = ok(&src);
+        assert_eq!(
+            out.matches('{').count(),
+            out.matches('}').count(),
+            "unbalanced braces for `{body}`:\n{out}"
+        );
+    }
+}

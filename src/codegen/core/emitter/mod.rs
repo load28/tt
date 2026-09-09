@@ -50,6 +50,12 @@ pub(super) struct Emitter<'a> {
     /// or through the Core expression entry. Record which path emitted the
     /// prelude so the other path contributes only the join-slot occurrence.
     pub(super) emitted_owner_rewrites: EmittedOwnerRewrites,
+    /// An arrow body rewritten to a block is opened once, by the compose
+    /// rewrite, and must be closed once, at the end of the body's own source
+    /// range. Both the structured-value path and the source walk can reach
+    /// that point; this records which blocks are already closed so the
+    /// brace is written exactly once.
+    pub(super) closed_compose_blocks: ClosedComposeBlocks,
     /// Loop-test actions emit their tt values before the rebuilt source test.
     /// Host replacements apply only to that source test, not while the
     /// actions recursively emit their own source fragments.
@@ -101,6 +107,19 @@ impl Drop for ActiveExprGuard<'_> {
 #[derive(Default)]
 pub(super) struct EmittedOwnerRewrites {
     exprs: RefCell<HashSet<ExprId>>,
+}
+
+#[derive(Default)]
+pub(super) struct ClosedComposeBlocks {
+    owners: RefCell<HashSet<(usize, usize)>>,
+}
+
+impl ClosedComposeBlocks {
+    /// Whether this owner's block still needs its closing brace, marking it
+    /// closed when it does.
+    fn claim(&self, owner: crate::program_syntax::SourceSpan) -> bool {
+        self.owners.borrow_mut().insert((owner.start, owner.end))
+    }
 }
 
 impl EmittedOwnerRewrites {

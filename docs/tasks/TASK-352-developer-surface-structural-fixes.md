@@ -57,6 +57,24 @@ defect in the layer that owns the behavior.
   reproduced each reported difference before recording it.
 - 2026-09-09: Repaired the two tuple-arity compiler crashes in Core IR
   lowering and pinned the contract in `tests/compile/cases_06.rs`.
+- 2026-09-09: Rebased onto `main` at `e3b89e2` and re-verified.
+- 2026-09-09: Gave the block a concise arrow body is rewritten to one
+  closing brace, written where the body ends, and covered the placement
+  matrix in `tests/compile/cases_06.rs`.
+
+### Decision 3: A rewritten arrow body closes where the body ends
+
+- **Context**: The brace that closes a concise arrow body's block was
+  written from two places, each of which knew only part of the body.
+- **Alternatives considered**: Widen the source walk's boundary alone (the
+  early close from the value path remains); suppress the value path
+  entirely for arrow owners (it also emits the value, so the output loses
+  it).
+- **Decision and rationale**: Keep both paths, and let each close only at
+  the position that ends the body — the value path when the value *is* the
+  body, the source walk when source follows it. A registry on the emitter
+  makes the brace exactly one write, so neither path has to know whether
+  the other already ran.
 
 ## Issues and resolutions
 
@@ -76,6 +94,21 @@ defect in the layer that owns the behavior.
   collapses a one-position conjunction to that position's plan.
   `validate_decision` now asserts that every place an arm tests names one of
   the decision's own subjects.
+
+### Issue 2: A concise arrow body containing a tt value lost its brace
+
+- **Symptom**: `[1].map(x => x + match (s) { ... })` emitted
+  `return $tt_v1 + $tt_v0);` with no closing brace, and
+  `[1].map(x => match (s) { ... } + x)` closed the block before `+ x`,
+  leaving it outside the arrow. Both failed the output self-check with a
+  message that names no position the user can act on.
+- **Cause**: The block's closing brace was written either by the
+  structured-value path, which fired whenever the value *started* the body,
+  or by the source walk, whose boundary excluded a following span that
+  begins exactly where the body ends. A body whose value sits at the tail
+  matched neither.
+- **Resolution**: Each path now closes only at the end of the body, and a
+  registry on the emitter keeps the brace to one write.
 
 ## Verification
 
