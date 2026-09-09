@@ -2,8 +2,6 @@
 
 use super::*;
 
-/// Writes one compiled output, creating its directory. The error is already
-/// formatted as a diagnostic line.
 /// A built map, ready to attach: the `//# sourceMappingURL=` line the
 /// output ends with, and the document to write beside it (`None` when the
 /// comment carries the map itself).
@@ -117,13 +115,42 @@ pub(super) fn lexical_absolute(path: &Path) -> Vec<String> {
     parts
 }
 
+/// Writes one output file, whole or not at all.
+///
+/// A build that fails partway must not leave a half-written file where a
+/// good one was — that is what `main`'s panic path already promises about
+/// every file a run wrote. Writing in place cannot keep that promise: the
+/// open truncates, so a failure between the truncation and the last byte
+/// (a full disk, a signal) publishes the truncated file. The bytes go to a
+/// sibling temporary first and the rename replaces the target in one step,
+/// so a reader sees the previous file or the new one, never a prefix.
 pub(super) fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
     if let Some(parent) = out_path.parent()
         && let Err(e) = fs::create_dir_all(parent)
     {
         return Err(format!("ttc: {}: {e}", parent.display()));
     }
-    fs::write(out_path, code).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
+    replace_file(out_path, code.as_bytes()).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
+}
+
+/// Puts `bytes` at `path`, whole or not at all.
+///
+/// The bytes go to a sibling temporary first — beside the target so the
+/// rename stays on one filesystem, and named for this process so two runs
+/// cannot pick the same staging file — and the rename replaces the target
+/// in one step.
+pub(super) fn replace_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let mut staging = path.as_os_str().to_os_string();
+    staging.push(format!(".{}.tmp", std::process::id()));
+    let staging = PathBuf::from(staging);
+    // A staging file that never became the output is this run's litter,
+    // whichever step failed.
+    let result = fs::write(&staging, bytes).and_then(|()| fs::rename(&staging, path));
+    if let Err(e) = result {
+        let _ = fs::remove_file(&staging);
+        return Err(e);
+    }
+    Ok(())
 }
 
 /// How often `--watch` re-reads the inputs' timestamps.

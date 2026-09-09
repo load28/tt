@@ -259,8 +259,8 @@ pub(super) fn write_declarations(
             &declaration.text,
             &relative_path(&dir, &file.source_path),
         );
-        fs::write(&target, &sidecar.declarations)?;
-        fs::write(target.with_extension("ts.map"), &sidecar.map)?;
+        super::output::replace_file(&target, sidecar.declarations.as_bytes())?;
+        super::output::replace_file(&target.with_extension("ts.map"), sidecar.map.as_bytes())?;
     }
     Ok(())
 }

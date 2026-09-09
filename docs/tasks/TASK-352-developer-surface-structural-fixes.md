@@ -76,6 +76,8 @@ defect in the layer that owns the behavior.
   embeds, the website's `Option` pipeline, the TypeScript 7.1 requirement in
   the npm README, and the gate table and contract count in `CONTRIBUTING.md`
   — verifying each against the built tools before changing it.
+- 2026-09-09: Made every file the compiler publishes appear whole, checked
+  against a full filesystem and a rename that cannot succeed.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -246,6 +248,20 @@ defect in the layer that owns the behavior.
 - **Resolution**: Every claim was re-run against the built tools and the
   document corrected to what they do. The website's generated highlight
   files were rebuilt from the corrected source.
+
+### Issue 9: A failed write replaced a good output with a prefix
+
+- **Symptom**: With the output filesystem full, `ttc -o <dir> src` reported
+  the error and left the previously good `big.ts` truncated to the bytes
+  that fit.
+- **Cause**: Outputs were written in place. The open truncates, so any
+  failure between the truncation and the last byte publishes a prefix —
+  while `main` already promises that "every file this run wrote was written
+  whole".
+- **Resolution**: One helper stages the bytes beside the target and renames
+  them onto it, so a reader sees the previous file or the new one. The
+  `--types` sidecars go through the same helper, and a staging file that
+  never became an output is removed whichever step failed.
 
 ## Verification
 

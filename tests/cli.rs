@@ -1386,3 +1386,41 @@ fn named_file_inputs_keep_their_layout_under_the_output_directory() {
     assert!(helper.contains("\"../shape.js\""), "{helper}");
     assert!(out_dir.join("sub").join("../shape.ts").exists(), "{helper}");
 }
+
+/// A build that cannot finish writing must leave the previous output where
+/// it was. Writing in place cannot do that — the open truncates — so the
+/// bytes are staged beside the target and renamed onto it.
+#[test]
+fn a_failed_write_leaves_the_previous_output_and_no_litter() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    fs::create_dir_all(&out_dir).unwrap();
+
+    // A directory where the output file belongs: the rename cannot replace
+    // it, which is a write that fails after the source compiled.
+    fs::create_dir_all(out_dir.join("a.ts")).unwrap();
+    fs::write(out_dir.join("a.ts/keep.txt"), "kept\n").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    assert!(!output.status.success());
+    assert_eq!(
+        fs::read_to_string(out_dir.join("a.ts/keep.txt")).unwrap(),
+        "kept\n",
+        "the existing entry was replaced by a partial write"
+    );
+    let leftovers: Vec<_> = fs::read_dir(&out_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok().map(|entry| entry.file_name()))
+        .filter(|name| name.to_string_lossy().ends_with(".tmp"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "staging files left behind: {leftovers:?}"
+    );
+}
