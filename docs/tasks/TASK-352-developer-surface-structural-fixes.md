@@ -64,6 +64,10 @@ defect in the layer that owns the behavior.
 - 2026-09-09: Narrowed the declared return type a `return` slot carries to
   the functions whose declaration names that value's type, and checked the
   emitted output of every shape with the repository's TypeScript.
+- 2026-09-09: Repaired three command-line defects — a banner on a
+  hand-written file, named file inputs losing their depth under `-o`, and a
+  temporary directory left behind by every typed run — and covered the
+  first two in `tests/cli.rs`.
 
 ### Decision 3: A rewritten arrow body closes where the body ends
 
@@ -78,6 +82,35 @@ defect in the layer that owns the behavior.
   body, the source walk when source follows it. A registry on the emitter
   makes the brace exactly one write, so neither path has to know whether
   the other already ran.
+
+### Decision 4: The passthrough contract decides whether a banner is written
+
+- **Context**: A hand-written `.ts` copied into the output tree arrived with
+  `// @generated from plain.ts by ttc — do not edit directly.` on top —
+  untrue of a file its author wrote, and a byte the passthrough contract
+  does not allow. TASK-336 settled where a banner goes and explicitly left
+  whether one is written out of its scope, so this is not a reversal of it.
+- **Alternatives considered**: Keep the banner and reword it; let
+  `--no-banner` be the answer (it is off by default, so the default output
+  would still break the contract).
+- **Decision and rationale**: `AGENTS.md` allows exactly one change to a
+  hand-written file — its relative tt import specifiers. The banner is
+  written for the surfaces ttc compiles, which is the same condition the
+  source map beside it already applies.
+
+### Decision 5: Named file inputs mirror under the directory they share
+
+- **Context**: `-o` promises to mirror input paths, but a named file was
+  written by file name alone, so `src/sub/helper.ts` landed at
+  `build/helper.ts` and its rewritten `../shape.js` pointed outside the
+  output tree.
+- **Alternatives considered**: Mirror every input under one common root
+  (this dissolves the two output-collision contracts TASK-321 and TASK-338
+  established for directory inputs); keep the file name and rewrite
+  specifiers to match (the output would no longer mirror the input).
+- **Decision and rationale**: Named files mirror under the deepest
+  directory they are all inside. A directory input keeps mirroring under
+  itself, so both collision contracts answer exactly as before.
 
 ## Issues and resolutions
 
@@ -128,6 +161,30 @@ defect in the layer that owns the behavior.
 - **Resolution**: One predicate in the projection decides what the
   annotation describes, and answers `None` for generators and predicates,
   which leaves the slot to be inferred from the value assigned to it.
+
+### Issue 4: A hand-written file was published as generated
+
+- **Symptom**: `ttc -o build src` wrote `// @generated from helper.ts by
+  ttc — do not edit directly.` into the copy of a hand-written `.ts`.
+- **Cause**: The banner was written for every job; only the source map
+  beside it asked whether the file was one ttc compiles.
+- **Resolution**: The banner asks the same question. A passthrough file is
+  now byte-identical to its source apart from its tt specifiers.
+
+### Issue 5: Named file inputs lost their depth under `-o`
+
+- **Symptom**: `ttc -o build src/shape.tt src/sub/helper.ts` wrote
+  `build/helper.ts`, whose `../shape.js` resolves above `build`.
+- **Cause**: A named input's output path was its file name.
+- **Resolution**: Named files mirror under the deepest directory they share.
+
+### Issue 6: Every typed run left a temporary directory behind
+
+- **Symptom**: `/tmp` held over a thousand empty `ttc-host-*` directories;
+  each `--check-types` or `--types` run added one.
+- **Cause**: The session removed the host script it wrote but not the
+  directory it created to hold it.
+- **Resolution**: The session owns that directory and removes it on drop.
 
 ## Verification
 

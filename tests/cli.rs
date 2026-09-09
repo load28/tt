@@ -1083,9 +1083,12 @@ fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
     let out_dir = dir.join("out");
     let shebang = dir.join("cli.tt");
     fs::write(&shebang, "#!/usr/bin/env node\nconsole.log(1);\n").unwrap();
-    // A hand-written `.ts` passes through, and its shebang matters too.
+    // A hand-written `.ts` passes through byte for byte, banner included:
+    // it is not generated, and the only byte ttc may change in one is a
+    // relative tt import specifier.
     let passthrough = dir.join("plain.ts");
-    fs::write(&passthrough, "#!/usr/bin/env node\nconsole.log(2);\n").unwrap();
+    let passthrough_source = "#!/usr/bin/env node\nconsole.log(2);\n";
+    fs::write(&passthrough, passthrough_source).unwrap();
     let bom = dir.join("bom.tt");
     fs::write(&bom, "\u{feff}export const a = 1;\n").unwrap();
     // A shebang that runs to the end of the file still needs a line break
@@ -1104,21 +1107,20 @@ fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    for name in ["cli.ts", "plain.ts"] {
-        let emitted = fs::read_to_string(out_dir.join(name)).unwrap();
-        let mut lines = emitted.lines();
-        assert_eq!(
-            lines.next(),
-            Some("#!/usr/bin/env node"),
-            "{name}: {emitted}"
-        );
-        assert!(
-            lines
-                .next()
-                .is_some_and(|line| line.starts_with("// @generated")),
-            "{name}: {emitted}"
-        );
-    }
+    let emitted = fs::read_to_string(out_dir.join("cli.ts")).unwrap();
+    let mut lines = emitted.lines();
+    assert_eq!(lines.next(), Some("#!/usr/bin/env node"), "{emitted}");
+    assert!(
+        lines
+            .next()
+            .is_some_and(|line| line.starts_with("// @generated")),
+        "{emitted}"
+    );
+    assert_eq!(
+        fs::read_to_string(out_dir.join("plain.ts")).unwrap(),
+        passthrough_source,
+        "a hand-written .ts is not generated and passes through unchanged"
+    );
     let bom_emitted = fs::read_to_string(out_dir.join("bom.ts")).unwrap();
     assert!(
         bom_emitted.starts_with("\u{feff}// @generated"),
@@ -1342,3 +1344,45 @@ fn a_named_file_that_is_not_a_source_is_reported() {
 
 #[path = "cli/dynamic_imports.rs"]
 mod dynamic_imports;
+
+/// `-o` mirrors input paths, and named files are inputs too: two of them
+/// under one directory keep the layout that makes a relative import between
+/// them resolve in the output tree.
+#[test]
+fn named_file_inputs_keep_their_layout_under_the_output_directory() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    fs::create_dir_all(dir.join("src/sub")).unwrap();
+    fs::write(
+        dir.join("src/shape.tt"),
+        "export const area = (n: number) => n;\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("src/sub/helper.ts"),
+        "import { area } from \"../shape.tt\";\nexport const h = area;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.join("src/shape.tt").to_str().unwrap(),
+        dir.join("src/sub/helper.ts").to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("shape.ts").is_file());
+    assert!(
+        out_dir.join("sub/helper.ts").is_file(),
+        "a named file kept its depth"
+    );
+    // The rewritten specifier resolves to the sibling output, which it
+    // cannot do when the depth is flattened away.
+    let helper = fs::read_to_string(out_dir.join("sub/helper.ts")).unwrap();
+    assert!(helper.contains("\"../shape.js\""), "{helper}");
+    assert!(out_dir.join("sub").join("../shape.ts").exists(), "{helper}");
+}
