@@ -18,6 +18,51 @@ const skip = compilerAvailable() ? false : "no ttc — none built, installed, or
 
 after(() => engine.shutdownEngineServer());
 
+test("a timed-out conversation is retired and the next request restarts", { timeout: 4000 }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-session-timeout-"));
+  const compiler = path.join(dir, "ttc");
+  const marker = path.join(dir, "first-process-started");
+  fs.writeFileSync(
+    compiler,
+    `#!/usr/bin/env node
+const fs = require("node:fs");
+const marker = ${JSON.stringify(marker)};
+if (!fs.existsSync(marker)) {
+  fs.writeFileSync(marker, "");
+  process.stdin.resume();
+} else {
+  let buffer = "";
+  process.stdin.setEncoding("utf8");
+  process.stdin.on("data", chunk => {
+    buffer += chunk;
+    let newline;
+    while ((newline = buffer.indexOf("\\n")) !== -1) {
+      const request = JSON.parse(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+      process.stdout.write(JSON.stringify({id: request.id, result: {recovered: true}}) + "\\n");
+    }
+  });
+}
+`,
+  );
+  fs.chmodSync(compiler, 0o755);
+
+  const first = engine.engineRequest(compiler, "first", {}, 1000);
+  for (let attempt = 0; attempt < 100 && !fs.existsSync(marker); attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.ok(fs.existsSync(marker), "the stalled process started");
+  const started = Date.now();
+  const queued = engine.engineRequest(compiler, "queued", {}, 2500);
+  assert.deepEqual(await Promise.all([first, queued]), [null, null]);
+  assert.ok(Date.now() - started < 1800, "queued requests settle with the timed-out session");
+
+  const recovered = await engine.engineRequest(compiler, "next", {}, 2000);
+  assert.deepEqual(recovered, { result: { recovered: true } });
+});
+
 test("an explicit compiler restart settles in-flight requests immediately", { skip, timeout: 2000 }, async () => {
   const pending = engine.engineRequest(COMPILER, "check", { text: "", filename: "a.tt" }, 15000);
   engine.shutdownEngineServer();
