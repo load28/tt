@@ -398,7 +398,7 @@ fn watching_re_checks_against_the_compiler_it_already_started() {
         .current_dir(&dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    dir.isolate_terminated_child_profile(&mut command);
+    dir.isolate_unfinalized_child_profile(&mut command);
     let mut child = command.spawn().expect("ttc runs");
 
     // Let the first pass finish, then add a case with no arm: the watch has

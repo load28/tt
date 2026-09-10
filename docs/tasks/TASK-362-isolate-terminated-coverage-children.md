@@ -43,6 +43,15 @@ incomplete LLVM profile files to the repository coverage aggregate.
   for deliberately terminated children and applied it to both watch tests.
 - 2026-09-10: Re-ran both watch tests, the complete LLVM coverage merge, and
   the repository Rust gate successfully.
+- 2026-09-10: The next Linux CI run exposed the same profile signature from a
+  second non-finalizing exit path. Tracing all child lifecycles found the
+  Broken Pipe contract test, whose compiler intentionally calls
+  `std::process::exit` after its reader closes.
+- 2026-09-10: Generalized the shared operation from killed children to every
+  child whose tested exit cannot finalize instrumentation, and applied it to
+  the closed-stdout process family.
+- 2026-09-10: Re-ran all three non-finalizing process contracts, the complete
+  LLVM coverage merge, and the Rust gate successfully.
 
 ## Issues and resolutions
 
@@ -50,17 +59,20 @@ incomplete LLVM profile files to the repository coverage aggregate.
 
 - **Symptom**: The coverage job intermittently fails after every test passes
   with `invalid instrumentation profile data` and `no profile can be merged`.
-- **Cause**: The child inherits the aggregate `LLVM_PROFILE_FILE` pattern but is
-  forcibly terminated before the profile runtime can finalize its file.
-- **Resolution**: Tests now redirect only the profiles of children they must
-  forcibly terminate into their disposable workspace. Normally exiting child
-  processes retain the aggregate profile path and remain coverage evidence.
+- **Cause**: Watch children are forcibly terminated, while the closed-stdout
+  contract intentionally reaches `std::process::exit`. Both inherit the
+  aggregate `LLVM_PROFILE_FILE` pattern despite lacking a profile-finalization
+  guarantee.
+- **Resolution**: Tests now redirect only the profiles of children whose tested
+  exit cannot finalize instrumentation into their disposable workspace.
+  Normally exiting child processes retain the aggregate profile path and remain
+  coverage evidence.
 
 ## Verification
 
-- [x] Terminated-child profile ownership: both watch tests passed
+- [x] Non-finalizing child profile ownership: watch and Broken Pipe tests passed
 - [x] `cargo llvm-cov --workspace --summary-only --fail-under-lines 86.9`:
-  88.82% line coverage
+  88.54% line coverage
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
@@ -68,6 +80,7 @@ incomplete LLVM profile files to the repository coverage aggregate.
 
 ## Result
 
-Forced termination can no longer introduce an invalid profile into the shared
-coverage aggregate. The isolation is scoped to the two non-terminating watch
-children; every normally completed subprocess remains measured.
+Non-finalizing child termination can no longer introduce an invalid profile
+into the shared coverage aggregate. The isolation is scoped to watch children
+and the explicit Broken Pipe exit contract; every normally completed subprocess
+remains measured.

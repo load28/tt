@@ -1197,6 +1197,7 @@ fn a_closed_stdout_ends_the_run_quietly() {
     use std::io::Read;
     use std::process::Stdio;
 
+    let profiles = Workspace::new("closed-stdout-profiles");
     for args in [
         vec!["--help"],
         vec!["-v"],
@@ -1204,12 +1205,13 @@ fn a_closed_stdout_ends_the_run_quietly() {
         vec!["explain"],
         vec!["--emit-std", "option"],
     ] {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+        command
             .args(&args)
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("failed to run ttc");
+            .stderr(Stdio::piped());
+        profiles.isolate_unfinalized_child_profile(&mut command);
+        let mut child = command.spawn().expect("failed to run ttc");
         // Read one byte, then drop the pipe: the next write has nowhere to go.
         let mut stdout = child.stdout.take().expect("piped stdout");
         let mut first = [0u8; 1];
@@ -1488,7 +1490,7 @@ fn watch_reports_input_failure_transitions_and_recovers() {
         .args(["--watch", "-o", "out", "src"])
         .stderr(Stdio::piped())
         .stdout(Stdio::null());
-    dir.isolate_terminated_child_profile(&mut command);
+    dir.isolate_unfinalized_child_profile(&mut command);
     let mut child = command.spawn().unwrap();
     let stderr = child.stderr.take().unwrap();
     let (send, receive) = mpsc::channel();
