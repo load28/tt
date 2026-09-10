@@ -96,8 +96,13 @@ impl<'a> Emitter<'a> {
             .compose_rewrites
             .iter()
             .filter(|rewrite| {
+                // `<=` on the left as well: when the body's last token is a
+                // tt value, the source that follows begins exactly where the
+                // body ends, and that span is the only one that can carry
+                // the brace. Writing it twice is prevented by the registry
+                // the suffix claims, not by this range.
                 rewrite.owner_kind == HostOwnerKind::ArrowExpression
-                    && span.start < rewrite.owner.end
+                    && span.start <= rewrite.owner.end
                     && rewrite.owner.end <= span.end
                     && !rewrite.actions.iter().any(|action| match action {
                         ComposeAction::Value(value) => {
@@ -464,6 +469,17 @@ impl<'a> Emitter<'a> {
                         out.push_lit(" }");
                     }
                 }
+                Statement::Decision(decision) => {
+                    self.emit_statement_decision(decision, &mut out, &|body| {
+                        self.emit_body_with_exits(
+                            body,
+                            exits,
+                            continuation,
+                            label,
+                            generated_indent,
+                        )
+                    })
+                }
                 _ => out.append(
                     self.emit_statements_with_edits(std::slice::from_ref(statement), &edits),
                 ),
@@ -546,7 +562,14 @@ impl<'a> Emitter<'a> {
                     };
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
-                Statement::Decision(decision) => self.emit_statement_decision(decision, &mut out),
+                Statement::Decision(decision) => {
+                    self.emit_statement_decision(decision, &mut out, &|body| {
+                        self.emit_statements_with_edits(
+                            &self.core.bodies[body.index()].statements,
+                            edits,
+                        )
+                    })
+                }
                 Statement::Expr(expr) if self.statement_expr_requires_lowering(*expr) => {
                     self.emit_statement_expr(*expr, &mut out);
                 }
@@ -715,9 +738,15 @@ impl<'a> Emitter<'a> {
                 out.push_lit(value.slot.clone());
             }
             match rewrite.owner_kind {
-                HostOwnerKind::ArrowExpression => {
+                // The block closes where the arrow body ends. That is here
+                // only when the value *is* the whole body; when source
+                // follows it, the walk over that source closes the block
+                // after it, so closing here would leave the rest outside
+                // the arrow.
+                HostOwnerKind::ArrowExpression if value.source.end == rewrite.owner.end => {
                     out.append(self.emit_compose_suffix(rewrite));
                 }
+                HostOwnerKind::ArrowExpression => {}
                 // The Core body retains a trailing statement/module frame
                 // (normally the authored semicolon) outside the direct
                 // expression and emits it after this value.
@@ -801,20 +830,12 @@ impl<'a> Emitter<'a> {
                 out
             }
             Expr::Propagate(propagate) => {
-                if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
-                    let span = self.span(propagate.node);
-                    let mut out = Rope::new();
-                    out.anchored(
-                        AnchorKind::Try,
-                        span.start,
-                        span.end,
-                        span.end,
-                        self.emit_propagate(propagate),
-                    );
-                    return out;
-                }
                 if !self.recovered_propagations.contains(&expr) {
-                    crate::ice::bug!("unscheduled expression try reached inline emission");
+                    crate::ice::bug!(
+                        "unscheduled expression try reached inline emission: {:?} {:?}",
+                        expr,
+                        self.span(propagate.node)
+                    );
                 }
                 let span = self.span(propagate.node);
                 let mut generated = Rope::new();

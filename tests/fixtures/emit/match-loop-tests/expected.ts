@@ -2,7 +2,7 @@ declare function next(): number;
 declare function work(value: number): void;
 
 while (true) {
-  let $tt_v0;
+  let $tt_v0: boolean;
   {
     const $tt_m = next();
     switch ($tt_m) {
@@ -20,7 +20,7 @@ while (true) {
   work(1);
 }}
 
-let $tt_v1;
+let $tt_v1: number;
 {
   const $tt_m = next();
   switch ($tt_m) {
@@ -36,7 +36,7 @@ let $tt_v1;
 }
 for (let value = $tt_v1;
      ; value++) {
-       let $tt_v2;
+       let $tt_v2: boolean;
        {
          const $tt_m = next();
          switch ($tt_m) {

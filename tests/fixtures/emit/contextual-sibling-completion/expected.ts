@@ -12,7 +12,7 @@ const State = {
 };
 declare const state: State;
 
-let $tt_v0;
+let $tt_v0: number;
 const $tt_v1 = (pair);
 const $tt_v2: Item = (make());
 {

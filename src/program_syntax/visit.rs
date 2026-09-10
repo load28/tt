@@ -3,6 +3,30 @@
 use super::*;
 
 impl ParentCollector {
+    /// The declared annotation of the value a `return` in this function
+    /// delivers, or `None` when the declaration does not name that type.
+    ///
+    /// Lowering copies the annotation onto the slot a `return match ...`
+    /// assigns through, which is sound only while the declared return type
+    /// *is* the returned value's type. A generator declares the iterator it
+    /// produces, whose returned value is one of its type arguments, and a
+    /// type predicate or assertion signature is not a type at all — both
+    /// leave the slot to be inferred from the value it is assigned.
+    fn returned_value_type(
+        &self,
+        annotation: Option<&TsTypeAnn>,
+        is_generator: bool,
+    ) -> Option<ProjectedSpan> {
+        if is_generator {
+            return None;
+        }
+        let annotation = annotation?;
+        if matches!(*annotation.type_ann, TsType::TsTypePredicate(_)) {
+            return None;
+        }
+        Some(projected_span(annotation.span, self.source_start))
+    }
+
     pub(super) fn new(
         source_start: u32,
         pending: &[PendingOverlay],
@@ -583,11 +607,8 @@ impl VisitAstPath for ParentCollector {
         self.function_depth += 1;
         self.function_targets.push(EvaluationOwner::FunctionBody);
         self.contextual_types.push(None);
-        self.function_return_types.push(
-            node.return_type
-                .as_deref()
-                .map(|annotation| projected_span(annotation.span, self.source_start)),
-        );
+        self.function_return_types
+            .push(self.returned_value_type(node.return_type.as_deref(), false));
         self.function_return_async.push(node.is_async);
         self.host_owners.push(ProjectedHostOwner {
             kind: HostOwnerKind::ArrowExpression,
@@ -611,11 +632,8 @@ impl VisitAstPath for ParentCollector {
             EvaluationOwner::FunctionBody
         });
         self.contextual_types.push(None);
-        self.function_return_types.push(
-            node.return_type
-                .as_deref()
-                .map(|annotation| projected_span(annotation.span, self.source_start)),
-        );
+        self.function_return_types
+            .push(self.returned_value_type(node.return_type.as_deref(), node.is_generator));
         self.function_return_async.push(node.is_async);
         <Function as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.function_return_types.pop();

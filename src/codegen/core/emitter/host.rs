@@ -11,13 +11,17 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("initializer rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        out.push_lit(format!("let {}", rewrite.slot));
-        self.push_contextual_type(
-            &mut out,
-            rewrite.contextual_type,
-            rewrite.contextual_type_awaited,
-        );
-        out.push_lit(";");
+        if rewrite.contextual_type.is_none() {
+            out.push_value_declaration(&rewrite.slot);
+        } else {
+            out.push_lit(format!("let {}", rewrite.slot));
+            self.push_contextual_type(
+                &mut out,
+                rewrite.contextual_type,
+                rewrite.contextual_type_awaited,
+            );
+            out.push_lit(";");
+        }
         out.push_break(0);
         out.append(anchored);
         out.push_break(0);
@@ -799,8 +803,18 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| crate::ice::bug!("conditional operation value has no slot"))
     }
 
+    /// Closes the block a compose rewrite opened for a concise arrow body.
+    ///
+    /// The block is opened once, by [`Self::emit_compose_rewrite`], and ends
+    /// where the arrow body's own source range ends. The structured-value
+    /// path reaches that point when the value *is* the whole body; otherwise
+    /// the source walk reaches it while emitting the rest of the body. Both
+    /// ask here, and the first one to arrive writes the brace.
     pub(super) fn emit_compose_suffix(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         debug_assert_eq!(rewrite.owner_kind, HostOwnerKind::ArrowExpression);
+        if !self.closed_compose_blocks.claim(rewrite.owner) {
+            return Rope::new();
+        }
         let mut out = Rope::new();
         out.push_lit(";");
         out.push_break(0);
@@ -1033,13 +1047,17 @@ impl<'a> Emitter<'a> {
             out.push_lit("{");
         }
         out.push_break(1);
-        out.push_lit(format!("let {}", rewrite.slot));
-        self.push_contextual_type(
-            &mut out,
-            rewrite.contextual_type,
-            rewrite.contextual_type_awaited,
-        );
-        out.push_lit(";");
+        if rewrite.contextual_type.is_some() {
+            out.push_lit(format!("let {}", rewrite.slot));
+            self.push_contextual_type(
+                &mut out,
+                rewrite.contextual_type,
+                rewrite.contextual_type_awaited,
+            );
+            out.push_lit(";");
+        } else {
+            out.push_value_declaration(&rewrite.slot);
+        }
         out.push_break(1);
         out.append(Rope::indented(1, anchored));
         out.push_break(1);

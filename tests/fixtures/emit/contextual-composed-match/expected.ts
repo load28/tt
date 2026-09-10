@@ -1,6 +1,6 @@
 declare const flag: boolean;
 declare function consume(item: { kind: "item"; run: (x: number) => number }): void;
-let $tt_v0;
+let $tt_v0: number;
 const $tt_v1 = (consume);
 {
   const $tt_m = flag;

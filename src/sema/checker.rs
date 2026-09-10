@@ -472,6 +472,34 @@ impl Checker {
             seen.push(&case.tag);
         }
 
+        // A case carries its tag in one fixed property, so a payload field
+        // of that name has nowhere to go: the declaration would emit the
+        // property twice, and the constructor would overwrite the tag with
+        // the payload — the variant would stop being able to say which case
+        // it is.
+        for case in &decl.cases {
+            for field in case.fields.iter().flatten() {
+                if field.name != crate::core_ir::VARIANT_TAG_FIELD {
+                    continue;
+                }
+                self.error(
+                    TtError::span(
+                        field.name_off,
+                        field.name_off + field.name.len(),
+                        format!(
+                            "variant {}: case \"{}\" cannot have a field named `{}` — \
+                             that is where the case tag lives",
+                            decl.name,
+                            case.tag,
+                            crate::core_ir::VARIANT_TAG_FIELD
+                        ),
+                    )
+                    .code(DiagnosticCode::VariantFieldShadowsTag)
+                    .help("rename the field"),
+                );
+            }
+        }
+
         if self.verify {
             for case in &decl.cases {
                 if let Some(fields) = &case.fields {

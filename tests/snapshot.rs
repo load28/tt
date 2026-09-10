@@ -32,6 +32,22 @@
 //! ```sh
 //! UPDATE_EXPECT=1 cargo test --test snapshot
 //! ```
+//!
+//! An emit fixture is the artifact a *configured* checkout produces. ttc
+//! annotates the storage it generates for a match or a `result` with the
+//! type TypeScript infers for it, so the same program emits a slot with a
+//! type where a project's TypeScript is installed and one without where it
+//! is not — the program is the same, the annotation's precision is not.
+//! The fixtures pin the annotated form, because that is what `./scripts/ci`
+//! runs against and what a user with a project gets.
+//!
+//! So these cases ask whether the checkout is configured before they
+//! compare, and say so when it is not, rather than reporting a fixture
+//! "out of date" and sending someone to regenerate one — which without a
+//! toolchain would write the *unannotated* artifact over the contract and
+//! commit it. `TTC_REQUIRE_TSGO=1` turns the skip into a failure, which is
+//! what the gate sets ([`scripts/ci`]), and regeneration refuses outright.
+//! Diagnostic fixtures do not depend on a toolchain and always run.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -40,6 +56,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use ttc::{Options, SourceKind, compile_report};
+
+mod common;
+use common::{toolchain, toolchain_installed};
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
@@ -168,6 +187,22 @@ fn diff(expected: &str, actual: &str) -> String {
 
 #[test]
 fn emitted_typescript_matches_its_fixture() {
+    // Regeneration without a toolchain would replace every annotated slot
+    // with an unannotated one — a fixture that looks updated and pins the
+    // wrong artifact. Refuse before writing anything.
+    assert!(
+        !(updating() && !toolchain_installed()),
+        "UPDATE_EXPECT would rewrite the emit fixtures without a TypeScript \
+         to infer their slot types, replacing the artifact a configured \
+         checkout produces — run `npm ci` at the repository root first"
+    );
+    if !toolchain() {
+        eprintln!(
+            "SKIP emit fixtures: no TypeScript installed, so the slot types \
+             they pin cannot be inferred — run `npm ci`"
+        );
+        return;
+    }
     for case in cases("emit") {
         let (path, source) = input(&case);
         let report = compile_report(&source, &options(&path));

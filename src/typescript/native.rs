@@ -47,8 +47,9 @@ struct Session {
     /// What the project was opened as. A question about a different project
     /// needs a different session.
     opened: (Option<PathBuf>, PathBuf),
-    /// The host script, kept until the session ends.
-    script: PathBuf,
+    /// The directory this session created for its host script. The session
+    /// owns it, so it goes away with the session.
+    dir: PathBuf,
 }
 
 impl NativeBackend {
@@ -111,7 +112,7 @@ impl NativeBackend {
             stdin,
             stdout,
             opened: (tsconfig.map(Path::to_path_buf), root.to_path_buf()),
-            script,
+            dir,
         })
     }
 }
@@ -156,7 +157,11 @@ impl Drop for Session {
         // outliving the run.
         let _ = self.child.kill();
         let _ = self.child.wait();
-        let _ = std::fs::remove_file(&self.script);
+        // The whole directory, not just the script in it: this session
+        // created it, nothing else writes there, and leaving the empty
+        // directory behind would add one per typed run for the life of the
+        // machine.
+        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 
@@ -231,6 +236,7 @@ fn job_json(query: &Query) -> serde_json::Value {
             .map(|v| json!({ "module": v.module, "declarationEnd": v.declaration_end }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
+        "inferJoinTypes": query.infer_join_types,
         "emitDeclarations": query.emit_declarations,
     })
 }

@@ -184,7 +184,7 @@ fn a_lowering_is_laid_out_from_the_line_it_replaces() {
     let out = ok(
         "variant E { A(v: number), B }\ndeclare const e: E;\nfunction f(): number {\n  if (true) {\n    const r = match (e) { A(v) => v, B => 0 };\n    return r;\n  }\n  return 0;\n}\n",
     );
-    assert!(out.contains("\n    let $tt_v0;\n    {\n"), "{out}");
+    assert!(out.contains("\n    let $tt_v0: number;\n    {\n"), "{out}");
     assert!(out.contains("\n      const $tt_m = e;"), "{out}");
     assert!(out.contains("\n      switch ($tt_m.kind) {\n"), "{out}");
     assert!(

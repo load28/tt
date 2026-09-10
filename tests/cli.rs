@@ -1083,9 +1083,12 @@ fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
     let out_dir = dir.join("out");
     let shebang = dir.join("cli.tt");
     fs::write(&shebang, "#!/usr/bin/env node\nconsole.log(1);\n").unwrap();
-    // A hand-written `.ts` passes through, and its shebang matters too.
+    // A hand-written `.ts` passes through byte for byte, banner included:
+    // it is not generated, and the only byte ttc may change in one is a
+    // relative tt import specifier.
     let passthrough = dir.join("plain.ts");
-    fs::write(&passthrough, "#!/usr/bin/env node\nconsole.log(2);\n").unwrap();
+    let passthrough_source = "#!/usr/bin/env node\nconsole.log(2);\n";
+    fs::write(&passthrough, passthrough_source).unwrap();
     let bom = dir.join("bom.tt");
     fs::write(&bom, "\u{feff}export const a = 1;\n").unwrap();
     // A shebang that runs to the end of the file still needs a line break
@@ -1104,21 +1107,20 @@ fn the_banner_never_displaces_a_shebang_or_a_byte_order_mark() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    for name in ["cli.ts", "plain.ts"] {
-        let emitted = fs::read_to_string(out_dir.join(name)).unwrap();
-        let mut lines = emitted.lines();
-        assert_eq!(
-            lines.next(),
-            Some("#!/usr/bin/env node"),
-            "{name}: {emitted}"
-        );
-        assert!(
-            lines
-                .next()
-                .is_some_and(|line| line.starts_with("// @generated")),
-            "{name}: {emitted}"
-        );
-    }
+    let emitted = fs::read_to_string(out_dir.join("cli.ts")).unwrap();
+    let mut lines = emitted.lines();
+    assert_eq!(lines.next(), Some("#!/usr/bin/env node"), "{emitted}");
+    assert!(
+        lines
+            .next()
+            .is_some_and(|line| line.starts_with("// @generated")),
+        "{emitted}"
+    );
+    assert_eq!(
+        fs::read_to_string(out_dir.join("plain.ts")).unwrap(),
+        passthrough_source,
+        "a hand-written .ts is not generated and passes through unchanged"
+    );
     let bom_emitted = fs::read_to_string(out_dir.join("bom.ts")).unwrap();
     assert!(
         bom_emitted.starts_with("\u{feff}// @generated"),
@@ -1342,3 +1344,362 @@ fn a_named_file_that_is_not_a_source_is_reported() {
 
 #[path = "cli/dynamic_imports.rs"]
 mod dynamic_imports;
+
+/// `-o` mirrors input paths, and named files are inputs too: two of them
+/// under one directory keep the layout that makes a relative import between
+/// them resolve in the output tree.
+#[test]
+fn named_file_inputs_keep_their_layout_under_the_output_directory() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    fs::create_dir_all(dir.join("src/sub")).unwrap();
+    fs::write(
+        dir.join("src/shape.tt"),
+        "export const area = (n: number) => n;\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("src/sub/helper.ts"),
+        "import { area } from \"../shape.tt\";\nexport const h = area;\n",
+    )
+    .unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.join("src/shape.tt").to_str().unwrap(),
+        dir.join("src/sub/helper.ts").to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("shape.ts").is_file());
+    assert!(
+        out_dir.join("sub/helper.ts").is_file(),
+        "a named file kept its depth"
+    );
+    // The rewritten specifier resolves to the sibling output, which it
+    // cannot do when the depth is flattened away.
+    let helper = fs::read_to_string(out_dir.join("sub/helper.ts")).unwrap();
+    assert!(helper.contains("\"../shape.js\""), "{helper}");
+    assert!(out_dir.join("sub").join("../shape.ts").exists(), "{helper}");
+}
+
+/// A build that cannot finish writing must leave the previous output where
+/// it was. Writing in place cannot do that — the open truncates — so the
+/// bytes are staged beside the target and renamed onto it.
+#[test]
+fn a_failed_write_leaves_the_previous_output_and_no_litter() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    fs::create_dir_all(&out_dir).unwrap();
+
+    // A directory where the output file belongs: the rename cannot replace
+    // it, which is a write that fails after the source compiled.
+    fs::create_dir_all(out_dir.join("a.ts")).unwrap();
+    fs::write(out_dir.join("a.ts/keep.txt"), "kept\n").unwrap();
+
+    let output = ttc(&[
+        "-o",
+        out_dir.to_str().unwrap(),
+        dir.join("src").to_str().unwrap(),
+    ]);
+    assert!(!output.status.success());
+    assert_eq!(
+        fs::read_to_string(out_dir.join("a.ts/keep.txt")).unwrap(),
+        "kept\n",
+        "the existing entry was replaced by a partial write"
+    );
+    let leftovers: Vec<_> = fs::read_dir(&out_dir)
+        .unwrap()
+        .filter_map(|entry| entry.ok().map(|entry| entry.file_name()))
+        .filter(|name| name.to_string_lossy().ends_with(".tmp"))
+        .collect();
+    assert!(
+        leftovers.is_empty(),
+        "staging files left behind: {leftovers:?}"
+    );
+}
+
+/// An entry the walk cannot read is named. It used to surface as
+/// "no such file or directory" against the directory the user named, which
+/// plainly does exist, leaving the actual dangling link unmentioned.
+#[test]
+fn an_unreadable_entry_is_named_rather_than_the_directory_holding_it() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/ok.tt"), "export const a = 1;\n").unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("/nonexistent/gone.tt", dir.join("src/dangling.tt")).unwrap();
+    #[cfg(not(unix))]
+    return;
+
+    let output = ttc(&["--check", dir.join("src").to_str().unwrap()]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success());
+    assert!(stderr.contains("dangling.tt"), "{stderr}");
+}
+
+#[test]
+fn named_inputs_with_parent_components_stay_inside_the_output_tree() {
+    let dir = tmpdir();
+    let work = dir.join("work");
+    fs::create_dir(&work).unwrap();
+    fs::write(dir.join("a.tt"), "export const a = 1;\n").unwrap();
+    fs::write(work.join("b.tt"), "export const b = 2;\n").unwrap();
+    let handwritten = "// handwritten\nexport const untouched = 42;\n";
+    fs::write(work.join("a.ts"), handwritten).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&work)
+        .args(["-o", "out", "../a.tt", "b.tt", "./b.tt"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(work.join("a.ts")).unwrap(), handwritten);
+    assert!(work.join("out/a.ts").exists());
+    assert!(work.join("out/work/b.ts").exists());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).matches('→').count(),
+        2
+    );
+}
+
+#[test]
+fn watch_reports_input_failure_transitions_and_recovers() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let dir = tmpdir();
+    let input = dir.join("src");
+    fs::create_dir(&input).unwrap();
+    fs::write(input.join("a.tt"), "export const a = 1;").unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&dir)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null())
+        .spawn()
+        .unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let result = std::panic::catch_unwind(|| {
+        loop {
+            if receive
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap()
+                .contains("Ctrl-C")
+            {
+                break;
+            }
+        }
+        fs::remove_dir_all(&input).unwrap();
+        assert!(
+            receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("no such file")
+        );
+        assert!(receive.recv_timeout(Duration::from_millis(1000)).is_err());
+        fs::create_dir(&input).unwrap();
+        fs::write(input.join("a.tt"), "export const a = 2;").unwrap();
+        loop {
+            if receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("file(s) ok")
+            {
+                break;
+            }
+        }
+        fs::remove_dir_all(&input).unwrap();
+        assert!(
+            receive
+                .recv_timeout(Duration::from_secs(5))
+                .unwrap()
+                .contains("no such file")
+        );
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
+/// A contextual annotation refines the type of a generated storage slot;
+/// the emitted program is correct without one. `--check` is documented as
+/// needing no TypeScript, and `-p` is what bundler plugins call, so a
+/// toolchain that is not installed has to remove the refinement rather than
+/// the compilation.
+#[test]
+fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
+    // Outside the repository: the toolchain is resolved by walking up from
+    // the file, and every directory inside this checkout has the
+    // repository's own `node_modules` above it.
+    let isolated = std::env::temp_dir().join(format!(
+        "tt-no-toolchain-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    let _ = fs::remove_dir_all(&isolated);
+    fs::create_dir_all(&isolated).unwrap();
+    let file = isolated.join("shape.tt");
+    fs::write(
+        &file,
+        "variant Shape { Circle(r: number), Point }\n\
+         declare const s: Shape;\n\
+         export const v = match (s) { Circle(r) => r, Point => 0 };\n",
+    )
+    .unwrap();
+
+    for mode in ["--check", "-p"] {
+        // Run from that directory too: the toolchain is looked up from the
+        // process's own location as well as the file's.
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args([mode, "shape.tt"])
+            .current_dir(&isolated)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !stderr.contains("no TypeScript compiler found"),
+            "{mode} demanded a toolchain: {stderr}"
+        );
+        assert!(output.status.success(), "{mode} failed: {stderr}");
+    }
+    let _ = fs::remove_dir_all(&isolated);
+}
+
+/// Input read failures must not be mistaken for absent type information.
+#[test]
+fn an_unreadable_sibling_is_reported_as_a_project_input_failure() {
+    if !common::toolchain() {
+        return;
+    }
+    let dir = tmpdir();
+    let main = dir.join("main.tt");
+    fs::write(&main, "declare const flag: boolean;\nexport const v = match(flag) { true => [1], false => [] };\n").unwrap();
+    fs::write(dir.join("sibling.tt"), [0xff, 0xfe]).unwrap();
+    let output = ttc(&["-p", main.to_str().unwrap()]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("sibling.tt"));
+    let source = fs::read_to_string(&main).unwrap();
+    let filename = main.to_str().unwrap();
+    let error = ttc::compile(
+        &source,
+        &ttc::Options {
+            filename: Some(filename),
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(error.message.contains("sibling.tt"), "{error}");
+}
+
+/// The standard library is the compiler's own, so typing the storage a
+/// `@tt/std` program generates cannot require the package to be installed
+/// first. It is served to the checker from the compiler's modules.
+#[test]
+fn a_std_program_is_typed_without_the_package_on_disk() {
+    if !common::toolchain() {
+        return;
+    }
+    let dir = tmpdir();
+    let file = dir.join("std.tt");
+    fs::write(&file, "import * as Result from '@tt/std/result';\ndeclare const flag: boolean;\nexport const answer = match(flag) { true => Result.Ok(1), false => Result.Ok(2) };\n").unwrap();
+    assert!(
+        !dir.join("node_modules/@tt/std").exists(),
+        "this case is about the package *not* being there"
+    );
+
+    let output = ttc(&["-p", file.to_str().unwrap()]);
+    let emitted = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        emitted.contains("let $tt_v0: "),
+        "missing inferred slot type: {emitted}"
+    );
+    assert!(
+        emitted.contains("<number>"),
+        "standard library payload was not inferred: {emitted}"
+    );
+    assert!(
+        !dir.join("node_modules").exists(),
+        "the package is served, never written: {emitted}"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn contextual_input_walk_cannot_silently_stop_before_dependencies() {
+    if !common::toolchain() {
+        return;
+    }
+    let dir = tmpdir();
+    let file = dir.join("main.tt");
+    fs::write(&file, "declare const flag: boolean;\nexport const v = match(flag) { true => [1], false => [] };\n").unwrap();
+    std::os::unix::fs::symlink(dir.join("missing"), dir.join("aaa-broken")).unwrap();
+    let output = ttc(&["-p", file.to_str().unwrap()]);
+    assert!(
+        !output.status.success(),
+        "partial input scan was accepted: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("aaa-broken"));
+}
+
+#[test]
+fn contextual_support_respects_ancestor_standard_packages() {
+    if !common::toolchain() {
+        return;
+    }
+    let dir = tmpdir();
+    let package = dir.join("node_modules/@tt/std");
+    fs::create_dir_all(&package).unwrap();
+    fs::write(
+        package.join("package.json"),
+        r#"{"name":"@tt/std","types":"index.d.ts"}"#,
+    )
+    .unwrap();
+    fs::write(
+        package.join("result.d.ts"),
+        "export declare function Ok(value: number): string;\n",
+    )
+    .unwrap();
+    let child = dir.join("child");
+    fs::create_dir(&child).unwrap();
+    let file = child.join("main.tt");
+    fs::write(&file, "import * as Result from '@tt/std/result';\ndeclare const flag: boolean;\nexport const v = match(flag) { true => Result.Ok(1), false => Result.Ok(2) };\n").unwrap();
+    // The library preserves the authored module specifier while checking.
+    let source = fs::read_to_string(&file).unwrap();
+    let filename = file.to_str().unwrap();
+    let code = ttc::compile(
+        &source,
+        &ttc::Options {
+            filename: Some(filename),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(code.contains("let $tt_v0: string;"), "{code}");
+    assert!(!child.join("node_modules").exists());
+}

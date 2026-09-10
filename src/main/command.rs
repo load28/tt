@@ -578,7 +578,10 @@ pub(super) fn run() -> ExitCode {
 
     let jobs = match build_jobs(&inputs, out_dir.as_deref(), include_ts) {
         Ok(jobs) => jobs,
-        Err(code) => return code,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::FAILURE;
+        }
     };
 
     if jobs.is_empty() {

@@ -571,12 +571,23 @@ impl Lower<'_> {
         let chunks = template
             .chunks
             .iter()
-            .map(|chunk| match chunk {
+            .enumerate()
+            .map(|(index, chunk)| match chunk {
                 ast::TemplateChunk::Interp(program) => {
                     TemplatePart::Interp(self.lower_expr_program(program, Span::new(start, end)))
                 }
                 ast::TemplateChunk::Raw(span) => {
-                    TemplatePart::Raw(self.node(Self::span(*span), AstOrigin::Verbatim))
+                    // Delimiters are source, too. Keeping them in the adjacent
+                    // raw spans lets a scheduled capture relocate/replace the
+                    // whole template without leaving synthetic `${}` behind.
+                    let mut span = Self::span(*span);
+                    if index > 0 {
+                        span.start -= 1;
+                    }
+                    if index + 1 < template.chunks.len() {
+                        span.end += 2;
+                    }
+                    TemplatePart::Raw(self.node(span, AstOrigin::Verbatim))
                 }
             })
             .collect();

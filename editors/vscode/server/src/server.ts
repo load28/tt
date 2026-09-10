@@ -61,12 +61,13 @@ import {
   TextEdit,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { isExternalChange } from "./watch";
 import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
 import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
-import { applyFolderChange, folderRoots, sidecarLocation } from "./roots";
+import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
 import * as ttc from "./ttc";
 import * as path from "node:path";
 
@@ -193,6 +194,8 @@ function rearmProject(): void {
   // Every standing notice describes something one of these could have
   // fixed, so all of them are worth saying again if they are still true.
   notices.reset();
+  // A folder may have gained, lost or changed its `tt.compilerPath`.
+  compilerByRoot.clear();
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
@@ -205,12 +208,15 @@ connection.onDidChangeConfiguration(() => {
 });
 
 connection.onDidChangeWatchedFiles((params) => {
+  // The buffers the server already holds, by the path the watcher names
+  // them with, so a save can be told apart from an edit made elsewhere.
+  const open = new Set(documents.all().map(doc => URI.parse(doc.uri).fsPath));
   const relevant = params.changes.some(change => {
     const uri = URI.parse(change.uri);
     if (uri.scheme !== "file") return false;
     // Compiler-created support modules are not user graph changes.
     if (uri.fsPath.split(path.sep).some(part => part === "node_modules" || part === ".git")) return false;
-    return true;
+    return isExternalChange({ path: uri.fsPath, type: change.type }, open);
   });
   if (!relevant) return;
   if (params.changes.some(change => /(?:^|\/)(?:ttc|ttc\.exe)$/.test(URI.parse(change.uri).path))) {
@@ -232,10 +238,14 @@ function invalidateProjectValidation(): void {
 
 function reloadProjectState(): void {
   declCache.clear();
-  engine.reloadProjects(currentCompiler());
+  // Every session the window is using, not just one: two folders may be
+  // served by different compilers.
+  for (const compiler of new Set([...compilerByRoot.values(), compilerFor(undefined)])) {
+    engine.reloadProjects(compiler);
+  }
   for (const doc of documents.all()) {
     const file = enginePath(doc);
-    if (file !== null) engine.openDocument(currentCompiler(), file, doc.getText());
+    if (file !== null) engine.openDocument(compilerFor(doc), file, doc.getText());
   }
   for (const doc of documents.all()) scheduleValidation(doc);
 }
@@ -258,7 +268,7 @@ function analyze(doc: TextDocument): Analyzed {
   const cached = analysisCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached;
   const text = doc.getText();
-  const masked = analysis.maskNonCode(text);
+  const masked = analysis.maskNonCode(text, doc.languageId === "ttx");
   const result: Analyzed = { version: doc.version, text, masked };
   analysisCache.set(doc.uri, result);
   return result;
@@ -278,15 +288,12 @@ async function declarationsOf(
 ): Promise<engine.EngineDeclarations> {
   const cached = declCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached.decls;
-  const fsPath = enginePath(doc);
-  const decls = fsPath
-    ? await engine.declarations(
-        currentCompiler(),
-        fsPath,
-        doc.getText(),
-        logEngine,
-      )
-    : { variants: [], matches: [] };
+  const decls = await engine.declarations(
+    compilerFor(doc),
+    bufferPath(doc),
+    doc.getText(),
+    logEngine,
+  );
   declCache.set(doc.uri, { version: doc.version, decls });
   return decls;
 }
@@ -310,18 +317,37 @@ function caseSignature(
  * settings. */
 let servedCompiler: string | null = null;
 
-function currentCompiler(): string {
-  return servedCompiler ?? ttc.findCompiler("", workspaceRoots);
+/** The compiler each workspace folder resolved to, by folder path.
+ *
+ * `tt.compilerPath` is a resource-scoped setting, so two folders in one
+ * window may name different compilers, and the engine keys its sessions by
+ * compiler path — it can serve both. What could not was this server, which
+ * kept a single answer: validating a file in one folder repointed every
+ * later request, for every folder, at that folder's compiler. */
+const compilerByRoot = new Map<string, string>();
+
+/** The compiler serving `doc`, or the window's last answer for a document
+ * outside every folder. The synchronous paths cannot await settings, so
+ * this reads what the last validation of that folder resolved. */
+function compilerFor(doc: TextDocument | undefined): string {
+  const uri = doc && URI.parse(doc.uri);
+  const root =
+    uri && uri.scheme === "file"
+      ? containingRoot(workspaceRoots, uri.fsPath)
+      : undefined;
+  const served = (root && compilerByRoot.get(root)) ?? servedCompiler;
+  return served ?? ttc.findCompiler("", workspaceRoots);
 }
 
 /**
- * Resolves the compiler from configuration and remembers it. One engine
- * session serves the window, so the setting is read at the first workspace
- * folder's scope; a folder that configures its own path is served the
- * moment one of its files is validated ([validate]).
+ * Resolves the window's default compiler from configuration and remembers
+ * it — the answer for a document that is in no workspace folder. A folder
+ * that configures its own `tt.compilerPath` is recorded separately, the
+ * moment one of its files is validated ([validate]), and served from there
+ * ([compilerFor]).
  *
  * The engine session is keyed by the compiler, so a change of path starts a
- * new session by itself; every open buffer is re-sent to it
+ * new session by itself; the buffers that session serves are re-sent to it
  * (`setOnSessionStart`).
  */
 async function refreshCompiler(): Promise<void> {
@@ -335,12 +361,16 @@ async function refreshCompiler(): Promise<void> {
 const logEngine = (message: string) => connection.console.warn(message);
 
 /** A fresh engine session starts with the disk's view of the world; hand it
- * every buffer the editor holds open. Runs on first spawn and on respawn
- * after a crash — recovery the old in-process pipeline never had. */
+ * the buffers it serves. Runs on first spawn and on respawn after a crash —
+ * recovery the old in-process pipeline never had.
+ *
+ * A window can be running more than one session, because two folders may
+ * name different compilers, so each is given only the documents it answers
+ * for. */
 engine.setOnSessionStart((compiler) => {
   for (const doc of documents.all()) {
     const uri = URI.parse(doc.uri);
-    if (uri.scheme === "file") {
+    if (uri.scheme === "file" && compilerFor(doc) === compiler) {
       engine.openDocument(compiler, uri.fsPath, doc.getText());
     }
   }
@@ -350,6 +380,19 @@ engine.setOnSessionStart((compiler) => {
 function enginePath(doc: TextDocument): string | null {
   const uri = URI.parse(doc.uri);
   return uri.scheme === "file" ? uri.fsPath : null;
+}
+
+/** A name for the buffer, whether or not it is a file on disk.
+ *
+ * The engine's text-only answers — the declarations in this buffer, the
+ * names it defines, the completions they allow — read the text and nothing
+ * else; the path only tells them how to resolve relative tt imports, which
+ * an unsaved buffer has none of. Refusing to answer for one leaves a new
+ * `.tt` file with no outline, no hover and no variant completions until it
+ * is saved, though the answers were available all along. Semantic tokens
+ * already name an untitled buffer this way. */
+function bufferPath(doc: TextDocument): string {
+  return enginePath(doc) ?? `buffer.${doc.languageId === "ttx" ? "ttx" : "tt"}`;
 }
 
 // ------------------------------------------------------------- diagnostics
@@ -512,6 +555,8 @@ async function validate(
   const uri = URI.parse(doc.uri);
   const docName = uri.scheme === "file" ? uri.fsPath : uri.path;
   servedCompiler = compiler;
+  const root = uri.scheme === "file" ? containingRoot(workspaceRoots, uri.fsPath) : undefined;
+  if (root) compilerByRoot.set(root, compiler);
 
   const result = await ttc.runCheck(
     compiler,
@@ -776,7 +821,7 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
 documents.onDidOpen((e) => {
   const fsPath = enginePath(e.document);
   if (fsPath !== null) {
-    engine.openDocument(currentCompiler(), fsPath, e.document.getText());
+    engine.openDocument(compilerFor(e.document), fsPath, e.document.getText());
   }
   scheduleValidation(e.document);
 });
@@ -832,7 +877,7 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
 documents.onDidChangeContent((e) => {
   const fsPath = enginePath(e.document);
   if (fsPath !== null) {
-    engine.updateDocument(currentCompiler(), fsPath, e.document.getText());
+    engine.updateDocument(compilerFor(e.document), fsPath, e.document.getText());
   }
   // Editing one file can change what its siblings import — drop their
   // cached declaration surfaces (the edited doc's own entry refreshes by
@@ -848,7 +893,7 @@ documents.onDidChangeContent((e) => {
 documents.onDidClose((e) => {
   const fsPath = enginePath(e.document);
   if (fsPath !== null) {
-    engine.closeDocument(currentCompiler(), fsPath);
+    engine.closeDocument(compilerFor(e.document), fsPath);
   }
   analysisCache.delete(e.document.uri);
   declCache.delete(e.document.uri);
@@ -877,7 +922,8 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "tt 태그드 유니언 선언. 유닛 케이스는 괄호 없이 값으로 선언할 수 있습니다.",
+        "A tt tagged-union declaration. A unit case is declared without\n" +
+        "parentheses and is a value.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "variant ${1:Name} {\n\t${2:Case}(${3:field}: ${4:number}),\n\t${5:Unit},\n}",
@@ -889,7 +935,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`kind` 태그로 분기하는 match 표현식. `_` 없는 match는 같은 파일·import한 tt variant에 대해 소진성이 검사됩니다.",
+        "A match expression, dispatching on the `kind` tag. A match without a\n" +
+        "`_` arm is checked for exhaustiveness against the tt variants this\n" +
+        "file declares or imports.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "match (${1:value}) {\n\t$0\n}",
@@ -901,7 +949,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "Rust의 `?`에 해당합니다. `Ok` 값을 풀고 `Err`이면 가장 가까운 Result 스코프(`result` 블록 또는 일반 함수)를 끝냅니다. 이 completion은 세미콜론이 필요한 문장 형태를 삽입합니다.",
+        "Rust's `?`: unwraps an `Ok` value, and on `Err` ends the nearest\n" +
+        "Result scope — a `result` block, or the enclosing function. This\n" +
+        "completion inserts the statement form, which takes a semicolon.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "try ${1:expression};",
@@ -913,7 +963,8 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "값 대신 함수를 합성해 새 함수를 만듭니다. 첫 스텝이 입력 타입을 정하며, 메서드 스텝이 될 수 없습니다.",
+        "Composes functions into a new one instead of flowing a value. The\n" +
+        "first step decides the input type and cannot be a method step.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "flow |> ${1:first} |> ${0:next}",
@@ -925,7 +976,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "`Result` 연산을 평탄하게 잇습니다. `const x = try 식;`은 `Ok` 값을 묶고 실패하면 블록을 `Err`로 끝냅니다. 명시적인 `return 값;`은 `Ok`로 감싸집니다.",
+        "Chains `Result` operations flatly. `const x = try expression;` binds\n" +
+        "the `Ok` value and ends the block with the `Err` on failure; an\n" +
+        "explicit `return value;` is wrapped as `Ok`.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText: "result {\n\tconst ${1:value} = try ${2:expression};\n\treturn ${1:value};\n}",
@@ -937,7 +990,9 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
     documentation: {
       kind: MarkupKind.Markdown,
       value:
-        "패턴이 일치하면 필드를 바인딩하고, 아니면 발산하는 else 블록을 실행합니다. 괄호와 세미콜론 필수.",
+        "Binds the pattern's fields when it matches, and otherwise runs an\n" +
+        "`else` block that must diverge. The parentheses and the semicolon\n" +
+        "are required.",
     },
     insertTextFormat: InsertTextFormat.Snippet,
     insertText:
@@ -1005,7 +1060,7 @@ async function tsCompletions(
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
   const list = await engine.completion(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     doc.positionAt(offset),
     atMember,
@@ -1064,16 +1119,13 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // declaration table, under the same shadowing the compiler resolves
   // with, and knows the positions this server never did (`if let`,
   // let-else payloads, nested patterns).
-  const fsPath = enginePath(doc);
-  const ttItemsHere = fsPath
-    ? await engine.ttCompletions(
-        currentCompiler(),
-        fsPath,
-        doc.getText(),
-        params.position,
-        logEngine,
-      )
-    : [];
+  const ttItemsHere = await engine.ttCompletions(
+    compilerFor(doc),
+    bufferPath(doc),
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
   if (ttItemsHere.length > 0) {
     return ttItemsHere.map((item) => ({
       label: item.label,
@@ -1097,7 +1149,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     kind: CompletionItemKind.Enum,
     detail:
       e.origin === "builtin"
-        ? `내장 variant ${e.name}${e.generics}`
+        ? `built-in variant ${e.name}${e.generics}`
         : e.origin === "imported"
           ? `variant ${e.name}${e.generics}${e.specifier ? ` — ${e.specifier}` : ""}`
           : `variant ${e.name}${e.generics}`,
@@ -1126,7 +1178,7 @@ connection.onCompletionResolve(
     const fsPath = enginePath(doc);
     if (fsPath === null) return item;
     const detail = await engine.completionResolve(
-      currentCompiler(),
+      compilerFor(doc),
       fsPath,
       doc.positionAt(data.offset),
       data.name,
@@ -1160,7 +1212,7 @@ connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const help = await engine.signatureHelp(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1227,9 +1279,11 @@ connection.onHover(async (params) => {
         contents: {
           kind: MarkupKind.Markdown,
           value:
-            "```tt\nmatch (값) { 패턴 => 본문, ... }\n```\n" +
-            "tt match 표현식 — 값의 `kind` 필드로 분기합니다. " +
-            "`_` 없는 match는 같은 파일·import한 tt variant(내장 `Option`/`Result` 포함)에 대해 소진성이 검사됩니다.",
+            "```tt\nmatch (value) { pattern => body, ... }\n```\n" +
+            "A tt match expression, dispatching on the value's `kind` field. " +
+            "A match without a `_` arm is checked for exhaustiveness against " +
+            "the tt variants this file declares or imports, the built-in " +
+            "`Option` and `Result` included.",
         },
         range: { start: doc.positionAt(w.start), end: doc.positionAt(w.end) },
       };
@@ -1241,16 +1295,13 @@ connection.onHover(async (params) => {
   // so the engine answers from the compiler's own declaration table. It
   // answers only where the service cannot be asked; everywhere else
   // (`Shape.Circle(1)`, `const s: Shape`) the service knows more.
-  const fsPath = enginePath(doc);
-  const sym = fsPath
-    ? await engine.ttSymbol(
-        currentCompiler(),
-        fsPath,
-        doc.getText(),
-        params.position,
-        logEngine,
-      )
-    : null;
+  const sym = await engine.ttSymbol(
+    compilerFor(doc),
+    bufferPath(doc),
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
   if (!sym) return tsHover(doc, params.position);
   return {
     contents: {
@@ -1268,7 +1319,7 @@ async function tsHover(
 ) {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
-  const info = await engine.hover(currentCompiler(), fsPath, position, logEngine);
+  const info = await engine.hover(compilerFor(doc), fsPath, position, logEngine);
   if (!info || info.signature === "") return null;
   const value =
     "```ts\n" +
@@ -1290,20 +1341,23 @@ connection.onDefinition(async (params) => {
   // A tt name first: a variant, a case tag, a payload field. The engine
   // knows where each is declared — in this file or in the `.tt` the import
   // names — because the emitted TypeScript carries none of them.
-  const ttPath = enginePath(doc);
-  if (ttPath !== null) {
+  {
     const sym = await engine.ttSymbol(
-      currentCompiler(),
-      ttPath,
+      compilerFor(doc),
+      bufferPath(doc),
       doc.getText(),
       params.position,
       logEngine,
     );
     if (sym?.definition) {
-      return Location.create(
-        URI.file(sym.definition.path).toString(),
-        sym.definition.range,
-      );
+      // An unsaved buffer is served under a synthetic name, so a
+      // declaration the engine found in it belongs to this document rather
+      // than to a file of that name.
+      const target =
+        sym.definition.path === bufferPath(doc) && enginePath(doc) === null
+          ? doc.uri
+          : URI.file(sym.definition.path).toString();
+      return Location.create(target, sym.definition.range);
     }
     // A built-in case has no declaration to open; nothing else does either
     // once the engine has claimed the position.
@@ -1316,7 +1370,7 @@ connection.onDefinition(async (params) => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const locations = await engine.definition(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1337,7 +1391,7 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   // Delegated wholesale to the engine: TypeScript resolves the passthrough
   // region exactly, and tt-specific spans degrade to an empty result.
   const references = (
-    await engine.references(currentCompiler(), fsPath, params.position, logEngine)
+    await engine.references(compilerFor(doc), fsPath, params.position, logEngine)
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);
   if (references.length === 0) return null;
   return references.map((r) =>
@@ -1357,7 +1411,7 @@ connection.onRenameRequest(async (params) => {
   // half the job. The engine decides what is a tt name; this server does
   // not keep a second opinion.
   const sym = await engine.ttSymbol(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     doc.getText(),
     params.position,
@@ -1369,7 +1423,7 @@ connection.onRenameRequest(async (params) => {
   // source would corrupt the rename, so such a rename comes back null —
   // whole or not at all.
   const edits = await engine.rename(
-    currentCompiler(),
+    compilerFor(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1509,7 +1563,7 @@ connection.languages.semanticTokens.on(async (params) => {
   // Text-based and parse-only on the engine side: it answers for unsaved
   // and untitled buffers alike, with or without a TypeScript toolchain.
   const tokens = await engine.semanticTokens(
-    currentCompiler(),
+    compilerFor(doc),
     doc.getText(),
     URI.parse(doc.uri).scheme === "file"
       ? URI.parse(doc.uri).fsPath

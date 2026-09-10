@@ -34,6 +34,7 @@ impl<'a> Checker<'a> {
     /// dropped on the way out, so an interpolation cannot leak scopes into
     /// the stream that contains it.
     pub(super) fn walk(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
+        let writes = targets::writes(self.src, tokens);
         let base = frames.len();
         // Parameter scopes, activated when the walk reaches the function
         // body they belong to: (body start, body end, bindings).
@@ -82,16 +83,8 @@ impl<'a> Checker<'a> {
                         pending.push((start, end, vars));
                     }
                 }
-                // prefix `++x.foo` / `--x.foo`
-                TokenKind::Punct(b'+' | b'-') if incdec_at(tokens, i) => {
-                    if matches!(tokens.get(i + 2).map(|t| &t.kind), Some(TokenKind::Ident))
-                        && !dotted_at(tokens, 0, i + 2)
-                    {
-                        self.check_mutation(tokens, i + 2, frames, true);
-                    }
-                }
                 TokenKind::Ident => {
-                    i = self.visit_ident(tokens, i, frames);
+                    i = self.visit_ident(tokens, i, frames, &writes);
                     continue;
                 }
                 _ => {}
@@ -104,9 +97,15 @@ impl<'a> Checker<'a> {
     /// Handles one identifier token: declarations register bindings, uses
     /// are checked for mutation and for call-site capability. Returns the
     /// index to continue from.
-    fn visit_ident(&self, tokens: &'a [Token], i: usize, frames: &mut Vec<Frame<'a>>) -> usize {
+    fn visit_ident(
+        &self,
+        tokens: &'a [Token],
+        i: usize,
+        frames: &mut Vec<Frame<'a>>,
+        writes: &std::collections::HashSet<usize>,
+    ) -> usize {
         let word = self.text(&tokens[i]);
-        if dotted_at(tokens, 0, i) {
+        if dotted_at(tokens, 0, i) && !writes.contains(&tokens[i].span.start) {
             return i + 1;
         }
 
@@ -151,18 +150,10 @@ impl<'a> Checker<'a> {
                 }
                 return i + 1;
             }
-            "delete" => {
-                if matches!(tokens.get(i + 1).map(|t| &t.kind), Some(TokenKind::Ident))
-                    && !dotted_at(tokens, 0, i + 1)
-                {
-                    self.check_mutation(tokens, i + 1, frames, true);
-                }
-                return i + 1;
-            }
             _ => {}
         }
 
-        self.check_mutation(tokens, i, frames, false);
+        self.check_mutation(tokens, i, frames, writes.contains(&tokens[i].span.start));
         if punct_at(tokens, i + 1, b'(') {
             match self.sink {
                 // Which declaration a call names is the checker's question:
@@ -325,12 +316,12 @@ impl<'a> Checker<'a> {
             return;
         }
         let path = parse_path(self.src, tokens, root);
-        if path.steps == 0 {
+        if path.steps == 0 && !mutates {
             // replacing the binding's value is `const`'s business
             return;
         }
         let offset = tokens[root].span.start;
-        if mutates || assignment_op_at(tokens, path.end).is_some() || incdec_at(tokens, path.end) {
+        if mutates {
             match self.sink {
                 Sink::Probes(sink) => sink.borrow_mut().mutations.push(Mutation {
                     root: offset,

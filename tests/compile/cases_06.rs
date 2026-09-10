@@ -267,6 +267,40 @@ fn one_element_tuple_pattern_reports_the_exact_arity() {
 }
 
 #[test]
+fn tuple_match_arity_mismatch_lowers_over_the_subjects_it_has() {
+    // A tuple element is a subject index, so an arm naming more positions
+    // than the match has scrutinees describes places that do not exist.
+    // Lowering keeps only the positions with a subject: sema still reports
+    // the arity, and every pass below stays total instead of indexing past
+    // the decision's own subjects.
+    for src in [
+        "variant V { A, B }\ndeclare const a: V;\nconst r = match (a) {\n  (A, B) => 1,\n};\n",
+        "variant V { A, B }\ndeclare const a: V;\ndeclare const b: V;\n\
+         const r = match (a, b) {\n  (A, B, A) => 1,\n  _ => 0,\n};\n",
+        "variant V { A, B }\ndeclare const a: V;\ndeclare const b: V;\n\
+         const r = match (a, b) {\n  (A, B) => 1,\n  (B) => 2,\n  _ => 0,\n};\n",
+    ] {
+        let codes: Vec<_> = ttc::analyze(src, &Options::default())
+            .into_iter()
+            .map(|d| d.code)
+            .collect();
+        assert!(
+            codes.contains(&ttc::DiagnosticCode::MatchTupleArity),
+            "{codes:?}"
+        );
+        // The tooling emit is infallible by contract and an editor drives
+        // it on every keystroke: it must answer, and answer with the
+        // TypeScript its own self-check accepts.
+        let emit = ttc::emit_mapped(src);
+        assert!(
+            ttc::compile(&emit.code, &Options::default()).is_ok(),
+            "emitted output does not re-parse:\n{}",
+            emit.code
+        );
+    }
+}
+
+#[test]
 fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
     let src = "const r = match value { A => 1, _ => 0 };\n";
     let e = err(src);
@@ -653,4 +687,105 @@ fn malformed_if_let_is_an_error_with_position() {
         "{}",
         e.message
     );
+}
+
+/* ------------------------------------------------------------------ */
+/* concise arrow bodies                                                */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn a_tt_value_anywhere_in_a_concise_arrow_body_keeps_the_block_balanced() {
+    // Lowering rewrites a concise arrow body to a block, so the block has
+    // to close where that body ends — not where the tt value ends, and not
+    // never. `compile` runs the output self-check, so an unbalanced or
+    // early brace fails here.
+    let head = "variant Shape { Circle(radius: number), Point }\ndeclare const s: Shape;\n\
+                declare function f(a: number, b: number): number;\n";
+    let matched = "match (s) { Circle(radius) => radius, Point => 0 }";
+    for body in [
+        "M",
+        "x + M",
+        "M + x",
+        "x + M + x",
+        "M + x + x",
+        "x && M",
+        "x ? M : 0",
+        "[x, M]",
+        "f(x, M)",
+    ] {
+        let src = format!(
+            "{head}export const v = [1].map((x: number) => {});\n",
+            body.replace('M', matched)
+        );
+        let out = ok(&src);
+        assert_eq!(
+            out.matches('{').count(),
+            out.matches('}').count(),
+            "unbalanced braces for `{body}`:\n{out}"
+        );
+    }
+}
+
+#[test]
+fn a_slot_carries_the_declared_type_only_when_it_is_the_returned_value_s() {
+    let head = "variant Shape { Circle(radius: number), Point }\ndeclare const s: Shape;\n";
+    let value = "match (s) { Circle(radius) => 1, Point => 0 }";
+
+    // An ordinary, async or arrow function declares the type of what its
+    // `return` delivers, so the slot carries it.
+    let out = ok(&format!(
+        "{head}export function plain(): number {{ return {value}; }}\n"
+    ));
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
+    let out = ok(&format!(
+        "{head}export async function asy(): Promise<number> {{ return {value}; }}\n"
+    ));
+    assert!(out.contains("Awaited< Promise<number>>"), "{out}");
+
+    // A generator declares the iterator it produces, not the value its
+    // `return` delivers, and a type predicate is not a type at all. Both
+    // leave the slot to be inferred, and the output has to parse.
+    let out = ok(&format!(
+        "{head}export function* gen(): Generator<number, number, void> \
+         {{ yield 1; return {value}; }}\n"
+    ));
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
+    assert!(!out.contains("$tt_v0: Generator"), "{out}");
+    let out = ok(&format!(
+        "{head}export function pred(x: unknown): x is number \
+         {{ return match (s) {{ Circle(radius) => typeof x === \"number\", Point => false }}; }}\n"
+    ));
+    assert!(out.contains("let $tt_v0: boolean;"), "{out}");
+    assert!(!out.contains("is number;"), "{out}");
+}
+
+#[test]
+fn a_payload_field_cannot_be_named_like_the_case_tag_s_property() {
+    // Every case carries its tag in one fixed property. A payload field of
+    // that name has nowhere to go: the declaration would name the property
+    // twice, and the constructor would write the payload over the tag, so
+    // the value could no longer say which case it is.
+    let e = err("variant Token { Word(kind: string) }\n");
+    assert!(e.message.contains("cannot have a field named `kind`"), "{e}");
+    assert_eq!((e.line, e.col), (1, 22));
+    let diagnostic = &ttc::analyze("variant Token { Word(kind: string) }\n", &Options::default())[0];
+    assert_eq!(diagnostic.code, ttc::DiagnosticCode::VariantFieldShadowsTag);
+
+    // Any other field name is fine, and the tag itself is untouched.
+    let out = ok("variant Token { Word(text: string) }\n");
+    assert!(out.contains("{ kind: \"Word\"; text: string }"), "{out}");
+}
+
+#[test]
+fn val_writes_follow_assignment_targets_not_neighboring_tokens() {
+    for statement in ["cfg.a = other;", "(cfg).a = other;", "((cfg.a)) = other;", "[cfg.a] = other;", "({ a: cfg.a } = other);", "({ a: [cfg.a = 1] } = other);", "[...cfg.a] = other;"] {
+        let source = format!("val const cfg = {{ a: 1 }};\n{statement}\n");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        assert_eq!(diagnostics.iter().filter(|d| d.code == ttc::DiagnosticCode::ValMutation).count(), 1, "{source}: {diagnostics:?}");
+        assert_eq!(ttc::val_probes(&source).mutations.iter().filter(|m| m.method.is_none()).count(), 1, "{source}");
+    }
+    for statement in ["const x = cfg.a in other;", "({ [cfg.a]: other.a } = value);", "[other.a = cfg.a] = value;", "function f(cfg: any) { (cfg).a = 2; }"] {
+        let source = format!("val const cfg = {{ a: 1 }};\n{statement}\n");
+        assert!(!ttc::analyze(&source, &Options::default()).iter().any(|d| d.code == ttc::DiagnosticCode::ValMutation), "{source}");
+    }
 }

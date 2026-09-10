@@ -34,8 +34,8 @@ use swc_ecma_ast::{
     ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr, CondExpr,
     Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild,
     JSXExpr, JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall,
-    Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, UnaryExpr,
-    VarDeclarator, YieldExpr,
+    Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, TsType,
+    TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
 };
 use swc_ecma_parser::lexer::Lexer;
 use swc_ecma_parser::{Parser, Syntax, TsSyntax};

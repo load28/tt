@@ -561,3 +561,64 @@ fn the_server_answers_a_failed_request_and_keeps_the_session() {
         "one report per panic: {err}"
     );
 }
+
+/// Every column the server reports is a UTF-16 one, which is what an editor
+/// counts. The compiler measures columns in code points — what its own
+/// caret lines up with — and the two differ by one per astral character
+/// earlier on the line, so an offered edit used to land on the code beside
+/// the one it names and applying it deleted user code.
+#[test]
+fn the_server_reports_positions_in_the_units_an_editor_counts() {
+    use std::io::Write;
+    let dir = tmpdir();
+    let file = dir.join("fix.tt");
+    let source = "variant Shape { Circle(r: number), Square(s: number) }\n\
+                  const e = \"🎉\"; const x = match (sh) { Circle(r) => r };\n";
+    fs::write(&file, source).unwrap();
+
+    let request = serde_json::json!({
+        "id": 1,
+        "method": "check",
+        "params": { "path": file.to_string_lossy(), "text": source },
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    drop(child.stdin.take());
+    let out = child.wait_with_output().expect("server answers");
+    let answer: serde_json::Value =
+        serde_json::from_slice(String::from_utf8_lossy(&out.stdout).trim().as_bytes())
+            .expect("one JSON line");
+
+    // The line as an editor holds it: UTF-16 code units.
+    let line: Vec<u16> = source.lines().nth(1).unwrap().encode_utf16().collect();
+    let slice = |from: usize, to: usize| String::from_utf16(&line[from - 1..to - 1]).unwrap();
+
+    let diagnostic = &answer["result"]["diagnostics"][0];
+    assert_eq!(diagnostic["code"], "match-not-exhaustive");
+    assert_eq!(
+        slice(
+            diagnostic["col"].as_u64().unwrap() as usize,
+            diagnostic["endCol"].as_u64().unwrap() as usize
+        ),
+        "match (sh)"
+    );
+
+    // The offered fix inserts arms before the closing brace. Applying it
+    // has to leave the arm that is already there alone.
+    let edit = &diagnostic["suggestions"][0]["edit"];
+    let (from, to) = (
+        edit["col"].as_u64().unwrap() as usize,
+        edit["endCol"].as_u64().unwrap() as usize,
+    );
+    let mut applied: Vec<u16> = line[..from - 1].to_vec();
+    applied.extend(edit["replacement"].as_str().unwrap().encode_utf16());
+    applied.extend_from_slice(&line[to - 1..]);
+    let applied = String::from_utf16(&applied).unwrap();
+    assert!(applied.contains("Circle(r) => r,"), "{applied}");
+    assert!(applied.contains("Square(s) => undefined,"), "{applied}");
+}

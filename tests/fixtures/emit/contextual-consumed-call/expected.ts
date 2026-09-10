@@ -12,7 +12,7 @@ const State = {
 };
 declare const state: State;
 
-let $tt_v0;
+let $tt_v0: number;
 const $tt_v1 = (consume);
 {
   const $tt_m = state;
@@ -53,7 +53,7 @@ const $tt_v3 = ($tt_v4.consume).bind($tt_v4);
 }
 
 
-let $tt_v7;
+let $tt_v7: (number) | (undefined);
 const $tt_v6 = (maybeConsume);
 if ($tt_v6 != null) {
   {
@@ -79,7 +79,7 @@ if ($tt_v6 != null) {
 
 const optional = $tt_v7;
 
-let $tt_v8;
+let $tt_v8: Item;
 const $tt_v9 = (generic);
 const $tt_v10 = $tt_v9<Item>;
 {

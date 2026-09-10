@@ -14,7 +14,7 @@ const Outer = {
 };
 declare const o: Outer;
 
-let $tt_v0;
+let $tt_v0: number;
 {
   const $tt_m = o;
   do {

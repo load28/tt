@@ -50,26 +50,35 @@ pub(super) fn std_placement(jobs: &[Job], needed: bool, out_dir: Option<&Path>) 
 
 /// The deepest directory every output shares.
 pub(super) fn common_ancestor(jobs: &[Job]) -> Option<PathBuf> {
-    let mut dirs = jobs.iter().map(|job| {
+    let shared = deepest_shared_directory(jobs.iter().map(|job| {
         job.out_path
             .parent()
             .unwrap_or(Path::new("."))
             .to_path_buf()
-    });
+    }))?;
+    Some(if shared.as_os_str().is_empty() {
+        PathBuf::from(".")
+    } else {
+        shared
+    })
+}
+
+/// The components every path in `dirs` begins with — the deepest directory
+/// all of them are inside. Empty when they share nothing, and `None` when
+/// there are no paths at all.
+fn deepest_shared_directory(dirs: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
+    let mut dirs = dirs.into_iter();
     let first = dirs.next()?;
-    Some(dirs.fold(first, |acc, dir| {
-        let shared: PathBuf = acc
+    let mut shared: Vec<_> = first.components().collect();
+    for dir in dirs {
+        let common = dir
             .components()
-            .zip(dir.components())
-            .take_while(|(a, b)| a == b)
-            .map(|(a, _)| a.as_os_str())
-            .collect();
-        if shared.as_os_str().is_empty() {
-            PathBuf::from(".")
-        } else {
-            shared
-        }
-    }))
+            .zip(&shared)
+            .take_while(|(component, kept)| component == *kept)
+            .count();
+        shared.truncate(common);
+    }
+    Some(shared.iter().collect())
 }
 
 /// How one output refers to one generated standard-library module.
@@ -108,20 +117,28 @@ pub(super) fn build_jobs(
     inputs: &[String],
     out_dir: Option<&Path>,
     include_ts: bool,
-) -> Result<Vec<Job>, ExitCode> {
+) -> Result<Vec<Job>, String> {
+    // Named files mirror under the deepest directory they are all inside,
+    // so a relative import between two of them still resolves in the output
+    // tree. A directory input keeps mirroring under itself, which is what
+    // decides whether two inputs claim one output.
+    let named_file_root = deepest_shared_directory(
+        inputs
+            .iter()
+            .map(Path::new)
+            .filter(|path| path.is_file())
+            .filter_map(|path| normalized_absolute(path).parent().map(Path::to_path_buf)),
+    );
     let mut jobs: Vec<Job> = Vec::new();
     for input in inputs {
         let input_path = Path::new(input);
         if !input_path.exists() {
-            eprintln!("ttc: no such file or directory: {input}");
-            return Err(ExitCode::FAILURE);
+            return Err(format!("ttc: no such file or directory: {input}"));
         }
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
-        if let Err(e) = collect_sources(input_path, include_ts, &mut files) {
-            eprintln!("ttc: {input}: {e}");
-            return Err(ExitCode::FAILURE);
-        }
+        collect_sources(input_path, include_ts, &mut files)
+            .map_err(|e| format!("ttc: {input}: {e}"))?;
         if is_dir && let Some(dir) = out_dir {
             files.retain(|file| !path_is_within(file, dir));
         }
@@ -133,25 +150,32 @@ pub(super) fn build_jobs(
             };
             let out_path = match out_dir {
                 Some(dir) => {
-                    let rel = if is_dir {
-                        out_name
-                            .strip_prefix(input_path)
-                            .unwrap_or(&out_name)
-                            .to_path_buf()
+                    let root = if is_dir {
+                        normalized_absolute(input_path)
                     } else {
-                        // A named input is a file, so it has a file name.
-                        // A path is still user input and this is the CLI,
-                        // so an odd shape gets the whole path rather than a
-                        // crash (TASK-221).
-                        out_name
-                            .file_name()
-                            .map_or_else(|| out_name.clone(), PathBuf::from)
+                        named_file_root
+                            .clone()
+                            .ok_or_else(|| format!("ttc: no output root for {}", file.display()))?
                     };
+                    let mirrored = normalized_absolute(&out_name);
+                    let rel = mirrored.strip_prefix(&root).map_err(|_| {
+                        format!(
+                            "ttc: {} is outside output source root {}",
+                            file.display(),
+                            root.display()
+                        )
+                    })?;
                     dir.join(rel)
                 }
                 None => out_name,
             };
-            jobs.push(Job { file, out_path });
+            // One source/output identity owns exactly one emission job.
+            if !jobs.iter().any(|job| {
+                same_file(&job.file, &file)
+                    && normalized_absolute(&job.out_path) == normalized_absolute(&out_path)
+            }) {
+                jobs.push(Job { file, out_path });
+            }
         }
     }
     Ok(jobs)
@@ -172,7 +196,7 @@ fn path_is_within(path: &Path, dir: &Path) -> bool {
 /// yet, so the parents are compared canonically and the file names
 /// literally.
 pub(super) fn same_file(a: &Path, b: &Path) -> bool {
-    if a == b {
+    if normalized_absolute(a) == normalized_absolute(b) {
         return true;
     }
     if a.file_name() != b.file_name() {
@@ -403,7 +427,13 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 };
                 let mut code = emit.code.clone();
                 let mut banner = BannerPlacement::default();
-                if opts.banner {
+                // Same contract the source map below answers to: a
+                // hand-written `.ts`/`.tsx` passes through byte for byte,
+                // save for its relative tt specifiers. A banner calling it
+                // generated, and telling its author not to edit it, is both
+                // untrue and a byte the contract does not allow. Only the
+                // surfaces ttc compiles carry one.
+                if opts.banner && ttc::SourceKind::from_tt_path(&job.file).is_some() {
                     let base = job
                         .file
                         .file_name()

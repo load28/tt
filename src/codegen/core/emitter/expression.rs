@@ -143,9 +143,7 @@ impl<'a> Emitter<'a> {
             match part {
                 TemplatePart::Raw(node) => out.append(self.source_rope(*node)),
                 TemplatePart::Interpolation(expr) => {
-                    out.push_lit("${");
                     out.append(self.emit_expr(*expr));
-                    out.push_lit("}");
                 }
             }
         }
@@ -187,14 +185,19 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub(super) fn emit_statement_decision(&self, decision: &Decision, out: &mut Rope<'a>) {
+    pub(super) fn emit_statement_decision(
+        &self,
+        decision: &Decision,
+        out: &mut Rope<'a>,
+        body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
             DecisionKind::LetElse { binding_mode, .. } => (
                 AnchorKind::LetElse,
-                self.emit_let_else(decision, *binding_mode),
+                self.emit_let_else(decision, *binding_mode, body),
             ),
-            DecisionKind::IfLet => (AnchorKind::IfLet, self.emit_if_let(decision)),
+            DecisionKind::IfLet => (AnchorKind::IfLet, self.emit_if_let(decision, body)),
             DecisionKind::Match { .. } => {
                 crate::ice::bug!("expression decision in a statement body")
             }
@@ -230,7 +233,12 @@ impl<'a> Emitter<'a> {
         out
     }
 
-    pub(super) fn emit_let_else(&self, decision: &Decision, mode: BindingMode) -> Rope<'a> {
+    pub(super) fn emit_let_else(
+        &self,
+        decision: &Decision,
+        mode: BindingMode,
+        emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) -> Rope<'a> {
         let subject = &decision.subjects[0];
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
@@ -263,7 +271,7 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("let-else has no else body")
         };
         out.push_break(1);
-        out.append(Rope::indented(1, self.emit_body(body).trim()));
+        out.append(Rope::indented(1, emit_body(body).trim()));
         out.push_break(0);
         out.push_lit("}");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
@@ -275,7 +283,11 @@ impl<'a> Emitter<'a> {
         Rope::scoped(out)
     }
 
-    pub(super) fn emit_if_let(&self, decision: &Decision) -> Rope<'a> {
+    pub(super) fn emit_if_let(
+        &self,
+        decision: &Decision,
+        emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) -> Rope<'a> {
         let subject = &decision.subjects[0];
         let temp = temp_name(subject.temporary);
         let arm = &decision.arms[0];
@@ -297,20 +309,20 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("if-let has no then body")
         };
         out.push_break(2);
-        out.append(Rope::indented(2, self.emit_body(body).trim()));
+        out.append(Rope::indented(2, emit_body(body).trim()));
         out.push_break(1);
         out.push_lit("}");
         match &decision.miss {
             MissAction::Execute(body) => {
                 out.push_lit(" else {");
                 out.push_break(2);
-                out.append(Rope::indented(2, self.emit_body(*body).trim()));
+                out.append(Rope::indented(2, emit_body(*body).trim()));
                 out.push_break(1);
                 out.push_lit("}");
             }
             MissAction::Decision(inner) => {
                 out.push_lit(" else ");
-                out.append(self.emit_if_let(inner));
+                out.append(self.emit_if_let(inner, emit_body));
             }
             MissAction::Nothing => {}
             MissAction::ThrowUnexpected(_) => {
@@ -489,7 +501,7 @@ impl<'a> Emitter<'a> {
             result_failure_test(&temp, propagate.layout)
         ));
         out.push_break(1);
-        out.push_lit(format!("return {temp};"));
+        out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
         out.push_lit("}");
         out.push_break(0);

@@ -15,7 +15,7 @@ const Speed = {
 declare const d: Dir;
 declare const s: Speed;
 
-let $tt_v0;
+let $tt_v0: number;
 {
   const $tt_m0 = d;
   const $tt_m1 = s;

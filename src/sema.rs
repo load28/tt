@@ -140,6 +140,22 @@ pub(crate) fn check_all(
 /// an unresolved name is reportable belongs to the analysis (which is what
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
+/// The coverage holes of `analyses`, answered from the declarations the file
+/// can see — what `compile` reports when no checker is available.
+///
+/// The typed pass prefers the checker's alphabet, which is narrower: it
+/// knows what an earlier guard already removed. This is what it falls back
+/// to for a file the checker holds no answer about, so that file is still
+/// told about its holes rather than passing silently.
+pub(crate) fn coverage_errors(
+    source: &str,
+    analyses: &crate::analysis::PatternAnalyses,
+) -> Vec<TtError> {
+    let mut errors = Vec::new();
+    coverage::report_coverage(source, analyses, &[], &mut errors);
+    errors
+}
+
 pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> Vec<TtError> {
     let mut errors = Vec::with_capacity(analyses.unresolved.len());
     for unresolved in &analyses.unresolved {

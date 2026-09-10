@@ -3,6 +3,46 @@
 use super::*;
 
 impl<'a> Emitter<'a> {
+    fn enter_result_failure(
+        &self,
+        id: ResultRegionId,
+        continuation: &ValueContinuation<'_>,
+        label: Option<&str>,
+    ) -> ResultFailureScope<'_> {
+        let previous = self.result_failures.borrow_mut().insert(
+            id,
+            ResultFailure {
+                prefix: continuation.assignment_prefix(false),
+                suffix: continuation.assignment_suffix(false),
+                label: label.map(str::to_owned),
+                assigns: continuation.assigns(),
+            },
+        );
+        ResultFailureScope {
+            registry: &self.result_failures,
+            id,
+            previous,
+        }
+    }
+
+    pub(super) fn emit_failure_exit(&self, propagate: &Propagate, temp: &str) -> Rope<'a> {
+        let mut out = Rope::new();
+        match propagate.exit {
+            ExitTarget::EnclosingFunction => out.push_lit(format!("return {temp};")),
+            ExitTarget::ResultRegion(id) => {
+                let failures = self.result_failures.borrow();
+                let failure = failures
+                    .get(&id)
+                    .unwrap_or_else(|| crate::ice::bug!("Result failure has no active owner"));
+                out.push_lit(format!("{}{temp}{};", failure.prefix, failure.suffix));
+                if failure.assigns {
+                    push_control_break(&mut out, 1, failure.label.as_deref());
+                }
+            }
+        }
+        out
+    }
+
     /// The lowering of one `try`. It opens its own layout scope: a
     /// structured propagation value writes block structure into it.
     pub(super) fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
@@ -14,7 +54,7 @@ impl<'a> Emitter<'a> {
             result_failure_test(&temp, propagate.layout)
         ));
         out.push_break(1);
-        out.push_lit(format!("return {temp};"));
+        out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
         out.push_lit("}");
         if let Some(binding) = propagate.binding {
@@ -52,6 +92,8 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
+        let failure = ValueContinuation::returning();
+        let _failure_scope = self.enter_result_failure(region.id, &failure, None);
         let mut out = Rope::new();
         self.used_expression_boundary.set(true);
         out.push_lit(if region.is_async {
@@ -446,146 +488,9 @@ impl<'a> Emitter<'a> {
         exit_label: Option<&str>,
         out: &mut Rope<'a>,
     ) {
-        let span = self.span(decision.head);
-        let (kind, inner) = match &decision.kind {
-            DecisionKind::LetElse { binding_mode, .. } => (
-                AnchorKind::LetElse,
-                self.emit_result_let_else(
-                    decision,
-                    *binding_mode,
-                    exits,
-                    failure,
-                    success,
-                    exit_label,
-                ),
-            ),
-            DecisionKind::IfLet => (
-                AnchorKind::IfLet,
-                self.emit_result_if_let(decision, exits, failure, success, exit_label),
-            ),
-            DecisionKind::Match { .. } => {
-                crate::ice::bug!("expression decision in a result statement body")
-            }
-        };
-        out.anchored(kind, span.start, span.end, span.end, inner);
-    }
-
-    pub(super) fn emit_result_let_else(
-        &self,
-        decision: &Decision,
-        mode: BindingMode,
-        exits: &[HostExit],
-        failure: &ValueContinuation<'_>,
-        success: &ValueContinuation<'_>,
-        exit_label: Option<&str>,
-    ) -> Rope<'a> {
-        let subject = &decision.subjects[0];
-        let temp = temp_name(subject.temporary);
-        let arm = &decision.arms[0];
-        let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
-        out.push_break(0);
-        out.push_lit("if (");
-        let DecisionKind::LetElse {
-            direct_variants, ..
-        } = &decision.kind
-        else {
-            crate::ice::bug!("let-else has wrong Core decision kind")
-        };
-        if let Some(variants) = direct_variants {
-            for (index, constructor) in variants.iter().enumerate() {
-                if index > 0 {
-                    out.push_lit(" && ");
-                }
-                out.push_lit(format!(
-                    "{temp}.kind !== \"{}\"",
-                    self.constructor_name(constructor)
-                ));
-            }
-        } else {
-            out.push_lit("!(");
-            out.append(self.emit_condition(&arm.pattern, decision));
-            out.push_lit(")");
-        }
-        out.push_lit(") {");
-        let MissAction::Execute(body) = decision.miss else {
-            crate::ice::bug!("let-else has no else body")
-        };
-        let body = self
-            .emit_result_body_with_exits(body, exits, failure, success, exit_label)
-            .trim();
-        out.push_break(1);
-        out.append(Rope::indented(1, body));
-        out.push_break(0);
-        out.push_lit("}");
-        let mut recovery = BindingRecovery::new(self, &arm.pattern);
-        out.push_break(0);
-        out.append(
-            self.emit_bindings(&arm.pattern, decision, Some(mode), &mut recovery, Some(0))
-                .trim(),
-        );
-        Rope::scoped(out)
-    }
-
-    pub(super) fn emit_result_if_let(
-        &self,
-        decision: &Decision,
-        exits: &[HostExit],
-        failure: &ValueContinuation<'_>,
-        success: &ValueContinuation<'_>,
-        exit_label: Option<&str>,
-    ) -> Rope<'a> {
-        let subject = &decision.subjects[0];
-        let temp = temp_name(subject.temporary);
-        let arm = &decision.arms[0];
-        let mut out = Rope::new();
-        out.push_lit("{");
-        out.push_break(1);
-        out.append(self.emit_subject_initialization(subject, &temp, decision.head));
-        out.push_break(1);
-        out.push_lit("if (");
-        out.append(self.emit_condition(&arm.pattern, decision));
-        out.push_lit(") {");
-        let mut recovery = BindingRecovery::new(self, &arm.pattern);
-        let bindings = self.emit_bindings(&arm.pattern, decision, None, &mut recovery, Some(2));
-        if !bindings.is_empty() {
-            out.push_break(2);
-            out.append(bindings.trim());
-        }
-        let ArmAction::Execute(body) = arm.action else {
-            crate::ice::bug!("if-let has no then body")
-        };
-        out.push_break(2);
-        out.append(Rope::indented(
-            2,
+        self.emit_statement_decision(decision, out, &|body| {
             self.emit_result_body_with_exits(body, exits, failure, success, exit_label)
-                .trim(),
-        ));
-        out.push_break(1);
-        out.push_lit("}");
-        match &decision.miss {
-            MissAction::Execute(body) => {
-                out.push_lit(" else {");
-                out.push_break(2);
-                out.append(Rope::indented(
-                    2,
-                    self.emit_result_body_with_exits(*body, exits, failure, success, exit_label)
-                        .trim(),
-                ));
-                out.push_break(1);
-                out.push_lit("}");
-            }
-            MissAction::Decision(inner) => {
-                out.push_lit(" else ");
-                out.append(self.emit_result_if_let(inner, exits, failure, success, exit_label));
-            }
-            MissAction::Nothing => {}
-            MissAction::ThrowUnexpected(_) => {
-                crate::ice::bug!("if-let has match miss action")
-            }
-        }
-        out.push_break(0);
-        out.push_lit("}");
-        Rope::scoped(out)
+        });
     }
 
     pub(super) fn emit_result_region_continued(
@@ -603,6 +508,7 @@ impl<'a> Emitter<'a> {
             (slot != target).then(|| exit_label(slot))
         });
         let exit_label = distinct_label.as_deref().or(assignment_target);
+        let _failure_scope = self.enter_result_failure(region.id, continuation, exit_label);
         if let Some(label) = exit_label {
             out.push_lit(format!("{label}: {{"));
         } else {

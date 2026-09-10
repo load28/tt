@@ -19,6 +19,17 @@ facts are available; successful rounds strictly reduce the unresolved set.
 Type errors are reported by the subsequent TypeScript check, not used to drive
 this process. Context-only rounds do not compute diagnostics.
 
+## Inferred joins
+
+After contextual propagation reaches a fixed point, an uninitialized generated
+slot without a contextual type uses its assignments
+supply the incoming types. TypeScript computes and widens each right-hand side
+in its branch scope. Its assignability relation removes subsumed constituents
+before the remaining union is serialized at the declaration. For example,
+`number[]` and `never[]` join as `number[]`, preserving empty-array expression
+inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
+`unknown` inputs do not provide a definite annotation in that round.
+
 ## Project and output coordinates
 
 Project snapshots include lowered tt files, TypeScript sources and unsaved host
@@ -26,6 +37,17 @@ overlays. Editor service projections use the same contextualized snapshot.
 Standalone file compilation discovers its configuration and candidate tt files,
 while the invoking working directory supplies the installed TypeScript client.
 An unnamed buffer uses that working directory as its inferred project.
+
+Toolchain absence is decided before collecting contextual project inputs.
+When a checker is available, input enumeration/read failures are reported with
+paths rather than producing types from a partial snapshot. Standalone input
+failures and backend failures are separate error categories.
+
+Compiler support packages are supplied in memory only when no package exists
+in the project's ancestor `node_modules` chain. Analysis retains authored
+support-module specifiers; output-adapter rewrites are applied only to the final
+artifact, including import types synthesized in annotations. Output files do
+not need to exist for their source to be analyzed.
 
 Analysis retains relative tt import names and distinct virtual `.tt.ts` and
 `.ttx.tsx` paths. This avoids collisions with authored `.ts` and `.tsx` files.

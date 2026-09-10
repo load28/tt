@@ -170,3 +170,30 @@ pub(crate) fn line_col(src: &str, offset: usize) -> (usize, usize) {
     let col = before[line_start..].chars().count() + 1;
     (line, col)
 }
+
+/// The same column as [`line_col`]'s, counted the way an editor counts it.
+///
+/// ttc measures a column in code points, which is what a rendered caret
+/// lines up with. The editor protocol measures UTF-16 code units, and the
+/// two differ by one for every astral character earlier on the line — an
+/// emoji in a string literal is enough to move a reported span onto the
+/// code beside it. A protocol surface converts here rather than counting
+/// its own way, so one file's positions cannot mean two things.
+///
+/// A line or column the text does not have answers with the column it was
+/// given: an unmeasurable position is better left as it arrived than
+/// silently moved.
+pub(crate) fn utf16_column(src: &str, line: usize, column: usize) -> usize {
+    let Some(text) = src.split('\n').nth(line.saturating_sub(1)) else {
+        return column;
+    };
+    let Some((prefix, _)) = text.char_indices().nth(column.saturating_sub(1)) else {
+        // The end of the line is a position; past it is not.
+        return if column == text.chars().count() + 1 {
+            text.encode_utf16().count() + 1
+        } else {
+            column
+        };
+    };
+    text[..prefix].encode_utf16().count() + 1
+}

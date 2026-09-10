@@ -31,7 +31,7 @@ fn every_rule_is_listed_once_and_explained() {
     // `as_str` and `explanation` are exhaustive matches, so the
     // compiler catches a new variant in both. `ALL` it cannot check:
     // this count is the prompt to list a new rule there too.
-    assert_eq!(DiagnosticCode::ALL.len(), 44);
+    assert_eq!(DiagnosticCode::ALL.len(), 45);
     let mut seen = std::collections::HashSet::new();
     for code in DiagnosticCode::ALL {
         let wire = code.as_str();

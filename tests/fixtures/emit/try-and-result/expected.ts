@@ -5,7 +5,13 @@ declare function getUser(id: string): TResult<{ name: string; companyId: string 
 declare function getCompany(id: string): TResult<{ title: string }, string>;
 
 export function load(id: string): TResult<{ name: string; title: string }, string> {
-  let $tt_v0;
+  let $tt_v0: (Result.TErr<string>) | ({
+    kind: "Ok";
+    value: {
+        name: string;
+        title: string;
+    };
+});
   $tt_v0: {
     const $tt_t0 = getUser(id);
     if (!("value" in $tt_t0)) {

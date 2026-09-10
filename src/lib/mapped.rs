@@ -299,3 +299,34 @@ pub fn val_probes_with_kind(source: &str, source_kind: SourceKind) -> ValProbes 
 pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
     error::line_col(source, offset)
 }
+
+/// A [`line_col`] column, counted in UTF-16 code units instead of code
+/// points — what an editor protocol means by a character.
+///
+/// The two differ by one for every astral character earlier on the line, so
+/// a surface that speaks to an editor converts here rather than passing a
+/// code-point column off as a protocol one. A position the text does not
+/// have answers with the column it was given.
+///
+/// ```
+/// // An emoji is one code point and two UTF-16 code units.
+/// let source = "const e = \"🎉\"; const x = 1;\n";
+/// let at = source.find("x").unwrap();
+/// let (line, column) = ttc::line_col(source, at);
+/// assert_eq!((line, column), (1, 22));
+/// assert_eq!(ttc::utf16_column(source, line, column), 23);
+/// ```
+pub fn utf16_column(source: &str, line: usize, column: usize) -> usize {
+    error::utf16_column(source, line, column)
+}
+
+/// A byte offset into `source` as a UTF-16 code-unit offset — the offset an
+/// editor protocol addresses a buffer with.
+///
+/// ```
+/// let source = "🎉ab";
+/// assert_eq!(ttc::utf16_offset(source, source.find('a').unwrap()), 2);
+/// ```
+pub fn utf16_offset(source: &str, offset: usize) -> usize {
+    crate::typescript::mapper::to_utf16(source, offset)
+}

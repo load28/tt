@@ -53,8 +53,13 @@ const REGEX_PRECEDING_KEYWORDS = new Set([
  * template-literal text and regex literals replaced by spaces (newlines are
  * preserved so offsets and line/column mapping stay identical). Code inside
  * template interpolations `${ ... }` is kept.
+ *
+ * `jsx` says the buffer is a `.ttx`, where `</` closes an element. Without
+ * it that slash reads as the start of a regex — `<` is a position a regex
+ * may follow — and the mask swallows the rest of the line, so the cursor
+ * context after a closing tag is whatever the imagined literal left behind.
  */
-export function maskNonCode(src: string): string {
+export function maskNonCode(src: string, jsx = false): string {
   const out = src.split("");
   const n = src.length;
   const blank = (from: number, to: number): void => {
@@ -68,6 +73,10 @@ export function maskNonCode(src: string): string {
   let lastWord = ""; // last identifier/keyword seen (for the regex heuristic)
 
   const regexAllowed = (): boolean => {
+    // `</` closes a JSX element. In TypeScript a regex may follow `<`, so
+    // only the JSX surface can tell the two apart, and only when the slash
+    // is the very next character: `a < /re/` is still a comparison.
+    if (jsx && lastSig === "<" && src[i - 1] === "<") return false;
     if (lastSig === "") return true;
     if ("([{,;=:!&|?+-*/%<>~^".includes(lastSig)) return true;
     if (ID_CHAR.test(lastSig)) return REGEX_PRECEDING_KEYWORDS.has(lastWord);

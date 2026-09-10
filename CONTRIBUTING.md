@@ -37,11 +37,13 @@ launcher(`npm/tt-lang/bin/ttc.js`)는 이 저장소의 `target/release/ttc`를
 
 ## 절대 불변 원칙
 
-어떤 변경도 이 두 계약을 깨뜨릴 수 없습니다 (자세한 내용은 [`AGENTS.md`](./AGENTS.md)):
+어떤 변경도 이 세 계약을 깨뜨릴 수 없습니다 (자세한 내용은 [`AGENTS.md`](./AGENTS.md)):
 
 1. 모든 유효한 TypeScript 파일은 그대로 유효한 `.tt` 파일이다 (바이트 단위 통과).
 2. tt 수준 에러는 ttc가 직접 보고하고, 방출 코드는 타입 트릭 없는 순수
    TypeScript다 — ttc가 방출한 코드가 tsc 에러를 만들면 안 된다.
+3. 해결은 책임 있는 컴파일러 계층에 일반화해 구현한다 — 특정 테스트나 문자열
+   모양을 겨냥한 분기·휴리스틱·진단 억제·폴백으로 덮지 않는다.
 
 ## 작업 절차 (필수)
 
@@ -67,7 +69,8 @@ PR을 열기 전에 먼저 실행해야 합니다.
 | --- | --- |
 | `agents` | 에이전트 진입점 계약(`CLAUDE.md`, `scripts/doctor`) |
 | `rust` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
-| `npm` | npm 릴리스 도구와 프로젝트 초기화기 테스트 |
+| `npm` | npm 릴리스 도구, 프로젝트 초기화기, unplugin 어댑터, 심의 도구 테스트 |
+| `website` | 공개 사이트의 타입 검사와 정적 렌더 (Bun 필요) |
 | `native` | TypeScript 7을 실제로 구동하는 타입 검사 모드 |
 | `extension` | VS Code 확장 빌드와 서버 테스트 |
 
@@ -97,6 +100,15 @@ TypeScript 7 경로를 실제로 도는 것이기 때문입니다.
   `UPDATE_EXPECT=1 cargo test --test snapshot`으로 기대 파일을 만든 뒤 **그 diff를
   읽으세요** — 그 diff가 리뷰 대상입니다. 부분 문자열 어서션은 여분의 문장이나
   어긋난 들여쓰기를 잡지 못합니다.
+
+  Generate and check emit fixtures in a checkout configured with `npm ci`.
+  TypeScript supplies annotations for generated match/result storage, so these
+  fixtures pin the annotated artifact. Without a toolchain, emit comparisons
+  skip and `UPDATE_EXPECT=1` refuses to overwrite the configured expectations.
+  The gate sets `TTC_REQUIRE_TSGO=1` so a missing prerequisite is a failure.
+  Compiler-owned standard-library modules are provided to contextual analysis
+  in memory; running an editor or installing a generated `@tt/std` package is
+  not a fixture prerequisite.
 
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가

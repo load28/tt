@@ -364,7 +364,14 @@
 | TASK-350 | Manually promote a published Nightly to latest | Complete | 2026-09-09 | 2026-09-09 | [TASK-350](./TASK-350-manual-nightly-latest.md) |
 
 | TASK-351 | Tolerate registry propagation during latest verification | Complete | 2026-09-09 | 2026-09-09 | [TASK-351](./TASK-351-nightly-tag-verification.md) |
+| TASK-352 | Repair the developer-facing surfaces of tt | Complete | 2026-09-09 | 2026-09-09 | [TASK-352](./TASK-352-developer-surface-structural-fixes.md) |
+| TASK-353 | Correct PR 115 at the owning compiler and tooling layers | Complete | 2026-09-10 | 2026-09-10 | [TASK-353](./TASK-353-pr115-structural-corrections.md) |
+| TASK-354 | A missing toolchain removes the refinement, not the compilation | Complete | 2026-09-10 | 2026-09-10 | [TASK-354](./TASK-354-contextual-refinement-degrades.md) |
+| TASK-355 | Say which artifact an emit fixture pins | Complete | 2026-09-10 | 2026-09-10 | [TASK-355](./TASK-355-emit-fixture-toolchain-contract.md) |
+| TASK-356 | Separate a missing toolchain from a project the pass cannot read | Complete | 2026-09-10 | 2026-09-10 | [TASK-356](./TASK-356-contextual-inputs-and-std-support.md) |
+
+| TASK-357 | Preserve contextual project inputs and package resolution | Complete | 2026-09-10 | 2026-09-10 | [TASK-357](./TASK-357-contextual-project-boundaries.md) |
 
 ## Next task number
 
-**TASK-352**
+**TASK-358**

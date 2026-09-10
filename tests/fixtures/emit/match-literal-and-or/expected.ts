@@ -1,6 +1,6 @@
 declare const code: 200 | 201 | 404;
 
-let $tt_v0;
+let $tt_v0: string;
 {
   const $tt_m = code;
   switch ($tt_m) {

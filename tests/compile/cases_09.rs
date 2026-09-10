@@ -595,7 +595,7 @@ fn a_loop_header_value_is_not_hoisted_out_of_the_loop() {
 fn a_loop_body_value_still_lowers_to_owner_statements() {
     let out =
         ok("let n = 0;\nwhile (n < 3) { const v = match (n) { 0 => 1, _ => 0 }; n = n + v; }\n");
-    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
 }
 
@@ -645,7 +645,7 @@ fn an_initializer_inside_a_callback_still_lowers_to_statements() {
     let out = ok(
         "declare function f(cb: () => number): void;\nf(() => { const x = match (1) { 1 => 1, _ => 0 }; return x; });\n",
     );
-    assert!(out.contains("let $tt_v0;"), "{out}");
+    assert!(out.contains("let $tt_v0: number;"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
 }
 

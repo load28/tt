@@ -16,48 +16,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Whether the repository has a TypeScript for these cases to run against,
-/// resolved the way ttc resolves it: `node_modules` from here upwards.
-fn toolchain() -> bool {
-    if installed() {
-        return true;
-    }
-    // A caller that asked for no skipping gets an error, not a pass.
-    assert!(
-        !required(),
-        "TTC_REQUIRE_TSGO is set but this repository has no TypeScript \
-         installed — run `npm ci` at the repository root"
-    );
-    false
-}
-
-/// True when the caller has declared that a toolchain must be present.
-fn required() -> bool {
-    std::env::var_os("TTC_REQUIRE_TSGO").is_some_and(|v| !v.is_empty() && v != "0")
-}
-
-/// The API client of an installed TypeScript, searched for the way
-/// `toolchain.rs` searches — a guard that mirrors only part of the
-/// compiler's rules reports "no toolchain" where the compiler finds one
-/// (TASK-217).
-fn installed() -> bool {
-    const CLIENTS: [&str; 2] = ["typescript", "@typescript/native-preview"];
-    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    while let Some(current) = dir {
-        for client in CLIENTS {
-            if current
-                .join("node_modules")
-                .join(client)
-                .join("dist/api/sync/api.js")
-                .exists()
-            {
-                return true;
-            }
-        }
-        dir = current.parent().map(Path::to_path_buf);
-    }
-    false
-}
+/// The one answer to "is this checkout configured" — shared with the emit
+/// fixtures, whose artifact carries what a checker infers ([`common`]).
+use common::{toolchain, toolchain_required as required};
 
 /// Any resolvable compiler — enough to check.
 macro_rules! require_tsgo {

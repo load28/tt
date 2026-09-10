@@ -164,9 +164,11 @@ async function main() {
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
+  let isBinaryExpression;
+  let SyntaxKind;
   try {
     ({ API, TypeFlags } = await import(open.apiModule));
-    ({ isExpression, isIdentifier, isVariableDeclaration } = await import(
+    ({ isExpression, isIdentifier, isVariableDeclaration, isBinaryExpression, SyntaxKind } = await import(
       path.resolve(path.dirname(open.apiModule), "../../ast/index.js")
     ));
   } catch (e) {
@@ -269,10 +271,12 @@ async function main() {
       if (!source) continue;
       let declaration;
       const identifiers = [];
+      const assignments = [];
       const visit = (node) => {
         if (isVariableDeclaration(node) && isIdentifier(node.name) &&
             node.name.end === slot.declarationEnd && !node.type) declaration = node;
         if (isIdentifier(node)) identifiers.push(node);
+        if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) assignments.push(node);
         node.forEachChild(visit);
       };
       visit(source);
@@ -292,6 +296,32 @@ async function main() {
         if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
         if (expected && expected.id !== context.id) { ambiguous = true; break; }
         expected = context;
+      }
+      if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
+        // A statement join must have the union of its incoming value types.
+        // In particular, TS's evolving-array inference at assignment sites is
+        // not expression inference. Ask for each RHS type in its branch scope
+        // and serialize it at the declaration; never infer from diagnostic text.
+        const incoming = assignments.filter(assignment =>
+          assignment.left.text === declaration.name.text &&
+          checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+        const types = incoming.map(assignment =>
+          checker.getWidenedType(checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(assignment.right))));
+        if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
+        // Remove constituents subsumed by another incoming type. This is the
+        // checker's assignability relation, including never[] <: number[].
+        const joined = types.filter((type, index) => !types.some((other, otherIndex) =>
+          index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
+          (!checker.isTypeAssignableTo(other, type) || otherIndex < index)));
+        const annotations = joined.map(type => {
+          const node = checker.typeToTypeNode(type, declaration);
+          return node && project.emitter.printNode(node);
+        });
+        if (annotations.length && annotations.every(Boolean)) {
+          out.contextualSlots.push({ index, annotation: annotations.length === 1
+            ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
+        }
+        continue;
       }
       if (!expected || ambiguous) continue;
       const node = checker.typeToTypeNode(expected, declaration);

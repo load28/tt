@@ -217,9 +217,12 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     if options.defer_to_checker {
         return Ok(emit);
     }
+    // A missing toolchain is answered inside the pass, which is the only
+    // place that can tell it from a project it could not read; what
+    // reaches here is a failure either way.
     crate::typescript::contextual::standalone(emit, source, options).map_err(|failure| {
         CompileError {
-            message: failure.message,
+            message: failure.to_string(),
             filename: options.filename.map(str::to_owned),
             line: 0,
             col: 0,
@@ -688,7 +691,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     {
         match crate::typescript::contextual::standalone(lowered, source, options) {
             Ok(typed) => emit = Some(typed),
-            Err(failure) => errors.push(TtError::positionless(failure.message)),
+            Err(failure) => errors.push(TtError::positionless(failure.to_string())),
         }
     }
     if options.verify
