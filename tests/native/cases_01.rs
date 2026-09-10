@@ -31,6 +31,80 @@ fn a_declaration_carries_a_map_back_to_the_tt_source() {
 }
 
 #[test]
+fn a_new_editor_file_has_project_types_before_its_first_save() {
+    require_tsgo!();
+    use std::io::Write;
+
+    let dir = project(&[]);
+    let file = dir.join("src/new-file.tt");
+    assert!(!file.exists());
+    let source = "export const value = 1;\nexport const wrong: string = value;\n";
+    let requests = [
+        serde_json::json!({
+            "id": 1,
+            "method": "openDocument",
+            "params": { "path": file, "text": source },
+        }),
+        serde_json::json!({
+            "id": 2,
+            "method": "hover",
+            "params": {
+                "path": file,
+                "position": { "line": 0, "character": 13 },
+            },
+        }),
+        serde_json::json!({
+            "id": 3,
+            "method": "typedCheck",
+            "params": { "path": file, "text": source, "includeTypes": true },
+        }),
+    ];
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    for request in requests {
+        writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    }
+    drop(child.stdin.take());
+    let output = child.wait_with_output().expect("server answers");
+    let answers: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("JSON response"))
+        .collect();
+
+    assert_eq!(answers.len(), 3, "{answers:?}");
+    assert!(answers.iter().all(|answer| answer.get("error").is_none()));
+    let hover = answers
+        .iter()
+        .find(|answer| answer["id"] == 2)
+        .expect("hover response");
+    assert!(
+        hover["result"]["signature"]
+            .as_str()
+            .is_some_and(|signature| signature.contains("value")),
+        "{hover}"
+    );
+    let typed = answers
+        .iter()
+        .find(|answer| answer["id"] == 3)
+        .expect("typed response");
+    assert!(
+        typed["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|diagnostic| {
+                diagnostic["code"] == "ts2322" || diagnostic["code"] == 2322
+            })),
+        "{typed}"
+    );
+    assert!(!file.exists(), "the overlay must not write the user's file");
+}
+
+#[test]
 fn declarations_are_emitted_by_the_compiler_itself() {
     require_emit!();
     let dir = project(&[(

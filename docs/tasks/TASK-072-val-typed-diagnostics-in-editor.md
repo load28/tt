@@ -1,5 +1,9 @@
 # TASK-072: 에디터에 타입 기반 `val` 진단 노출
 
+> **Superseded by TASK-360:** The requirement that an overlay leaf already
+> exist on disk no longer applies. The engine now canonicalizes the existing
+> parent directory and treats a new document's file URI as its project identity.
+
 - **상태**: 완료
 - **시작일**: 2026-08-19
 - **완료일**: 2026-08-19

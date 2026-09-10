@@ -186,7 +186,7 @@ impl Project {
     /// be reached: the file is read as the editor sees it (overlay first)
     /// and only tt's own analysis answers.
     fn declared_hover_unserved(&mut self, path: &Path, position: Position) -> Option<HoverInfo> {
-        let canonical = path.canonicalize().ok()?;
+        let canonical = crate::engine::normalize_document_path(path).ok()?;
         let source = match self.overlays.get(&canonical) {
             Some(text) => text.clone(),
             None => std::fs::read_to_string(&canonical).ok()?,
@@ -725,9 +725,7 @@ impl Project {
     /// transitive `.tt` imports as the TypeScript they lower to. Returns the
     /// file's projection and its canonical path; the session is then live.
     fn serve(&mut self, path: &Path) -> Result<(Arc<ServiceDoc>, PathBuf), String> {
-        let canonical = path
-            .canonicalize()
-            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let canonical = crate::engine::normalize_document_path(path)?;
         if !self.service.as_ref().is_some_and(|s| s.client.alive()) {
             // (Re)start: the previous conversation, if any, is gone — served
             // state with it. The next questions rebuild both.

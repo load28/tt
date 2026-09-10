@@ -328,13 +328,19 @@ fn semantic(
 
 /// The live project `path` belongs to, opened on first use.
 fn project_for<'a>(sessions: &'a mut Sessions, path: &str) -> Result<&'a mut Project, String> {
-    let inputs = vec![path.to_string()];
+    let document = ttc::engine::normalize_document_path(Path::new(path))?;
+    if let Some(identity) = sessions.docs.get(&document).cloned() {
+        return sessions
+            .projects
+            .get_mut(&identity)
+            .ok_or_else(|| format!("the project for {} is not open", document.display()));
+    }
     let options = ProjectOptions::default();
-    let identity = Engine::project_identity(&inputs, &options)?;
+    let identity = Engine::document_project_identity(&document, &options)?;
     match sessions.projects.entry(identity) {
         std::collections::hash_map::Entry::Occupied(entry) => Ok(entry.into_mut()),
         std::collections::hash_map::Entry::Vacant(entry) => {
-            Ok(entry.insert(sessions.engine.open_project(&inputs, &options)?))
+            Ok(entry.insert(sessions.engine.open_document_project(&document, &options)?))
         }
     }
 }
@@ -350,9 +356,7 @@ fn open_document(
         .ok_or_else(|| "the request needs a \"path\"".to_string())?
         .to_string();
     let text = text_param(params)?.to_string();
-    let canonical = PathBuf::from(&path)
-        .canonicalize()
-        .map_err(|e| format!("{path}: {e}"))?;
+    let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
     let options = ProjectOptions::default();
     let identity = Engine::document_project_identity(&canonical, &options)?;
     let project = match sessions.projects.entry(identity.clone()) {
@@ -376,8 +380,7 @@ fn close_document(
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let canonical = PathBuf::from(path)
-        .canonicalize()
+    let canonical = ttc::engine::normalize_document_path(Path::new(path))
         .unwrap_or_else(|_| PathBuf::from(path));
     if let Some(identity) = sessions.docs.remove(&canonical)
         && let Some(project) = sessions.projects.get_mut(&identity)
@@ -703,12 +706,7 @@ fn typed_check(
         .to_string();
     let text = text_param(params)?.to_string();
     let include_types = params["includeTypes"].as_bool().unwrap_or(false);
-    let canonical = PathBuf::from(&path)
-        // The buffer is checked as the file it stands for, so that file has
-        // to exist. The protocol has no flags — name the path the request
-        // sent, not a command line the caller never wrote.
-        .canonicalize()
-        .map_err(|e| format!("{path}: {e}"))?;
+    let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
     // stays stateless while the projection cache keeps the incremental win.
@@ -717,12 +715,11 @@ fn typed_check(
 
     project.open_document(canonical.clone(), text);
     let files = {
-        let scanned = project.scan().map_err(|e| e.to_string())?;
-        if scanned.is_empty() {
-            vec![canonical.clone()]
-        } else {
-            scanned
-        }
+        let mut scanned = project.scan().map_err(|e| e.to_string())?;
+        scanned.push(canonical.clone());
+        scanned.sort();
+        scanned.dedup();
+        scanned
     };
     let outcome = project.update(&files);
     let response = match outcome {

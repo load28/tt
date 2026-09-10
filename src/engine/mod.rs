@@ -133,7 +133,7 @@ impl Engine {
         path: &std::path::Path,
         options: &ProjectOptions,
     ) -> Result<(Option<PathBuf>, PathBuf), String> {
-        let canonical = path.canonicalize().map_err(|error| error.to_string())?;
+        let canonical = normalize_document_path(path)?;
         Ok(identity_of(&[canonical], options))
     }
 
@@ -144,10 +144,18 @@ impl Engine {
         path: &std::path::Path,
         options: &ProjectOptions,
     ) -> Result<Project, String> {
-        let (tsconfig, root) = Self::document_project_identity(path, options)?;
-        let collected = project::project_sources(&root, options.out_dir.as_deref(), &["tt", "ttx"])
-            .map_err(|error| error.to_string())?;
-        self.open_collected(collected, tsconfig, root, options)
+        let document = normalize_document_path(path)?;
+        let (tsconfig, root) = Self::document_project_identity(&document, options)?;
+        // Candidate discovery belongs to `open_collected`; `collected` is
+        // only what the caller explicitly requested. Keeping those sets
+        // distinct prevents an editor question from reporting tt errors in
+        // unrelated files that the project's tsconfig excludes.
+        let requested = crate::SourceKind::from_tt_path(&document)
+            .is_some()
+            .then_some(document)
+            .into_iter()
+            .collect();
+        self.open_collected(requested, tsconfig, root, options)
     }
 
     fn open_collected(
@@ -215,6 +223,30 @@ impl Engine {
         };
         Ok(identity_of(&collected, options))
     }
+}
+
+/// Gives an editor document a stable absolute identity whether or not its
+/// leaf has reached disk yet.
+///
+/// Existing files keep their fully canonical identity. For a new file, the
+/// existing parent directory is canonicalized and the unsaved leaf is joined
+/// back onto it. The overlay can then participate in the same project as its
+/// saved neighbours without a temporary disk write.
+pub fn normalize_document_path(path: &std::path::Path) -> Result<PathBuf, String> {
+    if let Ok(canonical) = path.canonicalize() {
+        return Ok(canonical);
+    }
+    let name = path
+        .file_name()
+        .ok_or_else(|| format!("{} has no document name", path.display()))?;
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(std::path::Path::new("."));
+    let parent = parent
+        .canonicalize()
+        .map_err(|error| format!("{}: {error}", path.display()))?;
+    Ok(parent.join(name))
 }
 
 /// The `(tsconfig, root)` the collected inputs belong to.

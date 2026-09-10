@@ -31,15 +31,17 @@ function tmpProject(): string {
   return dir;
 }
 
-test("a buffer that was never saved has no place in the project", async () => {
+test("a new file is type-checked before its first save", { skip: skipTyped, timeout }, async () => {
   const dir = tmpProject();
   const result = await runTypedCheck(
     COMPILER,
-    "val const xs: number[] = [];\nxs.push(1);\n",
+    "export const value: number = \"wrong\";\n",
     path.join(dir, "never-saved.tt"),
+    true,
   );
-  // Not "ok with no diagnostics": that would render as a clean file.
-  assert.equal(result.kind, "unavailable");
+  assert.equal(result.kind, "ok", JSON.stringify(result));
+  if (result.kind !== "ok") return;
+  assert.ok(result.diagnostics.some(diagnostic => diagnostic.code === "ts2322"));
 });
 
 test(
