@@ -499,6 +499,11 @@ pub(crate) fn project_sources(
 /// The nearest `tsconfig.json` at or above the inputs' common directory.
 pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
     let mut dir = files.first()?.parent()?.to_path_buf();
+    while !files.iter().all(|file| file.starts_with(&dir)) {
+        if !dir.pop() {
+            return None;
+        }
+    }
     loop {
         let candidate = dir.join("tsconfig.json");
         if candidate.is_file() {
