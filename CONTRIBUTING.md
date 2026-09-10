@@ -10,6 +10,7 @@
 
 - Rust 버전: `rust-toolchain.toml`
 - Node.js 의존성: `npm ci`
+- Bun: required by the npm integration and website gates
 - 전체 상태 확인: `./scripts/doctor`
 
 ## 로컬 개발 환경 (`scripts/setup`)

@@ -1,7 +1,16 @@
 import assert from 'node:assert/strict'
-import { readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
+
+test('compile and watch begin from the same exact source projection', async () => {
+  const manifest = JSON.parse(
+    await readFile(join(__dirname, '../../../package.json'), 'utf8'),
+  ) as { scripts: Record<string, string> }
+
+  assert.match(manifest.scripts.compile, /^npm run clean && /)
+  assert.match(manifest.scripts.watch, /^npm run clean && /)
+})
 
 test('compiled tests are an exact projection of current test sources', async () => {
   const sourceDirectory = join(__dirname, '../../src/test')

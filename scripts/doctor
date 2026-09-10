@@ -50,6 +50,7 @@ check_command cargo
 check_command rustc
 check_command node
 check_command npm
+check_command bun
 
 if have rustc; then
   RUST_VERSION="$(rustc --version 2> /dev/null | awk '{print $2}')"

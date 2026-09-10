@@ -34,7 +34,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// How long any one request may take before the client gives up on it. A
-/// hung request must not hang the editor; the feature simply has no answer.
+/// hung request must not hang the editor, but it is still a failed request —
+/// never a successful request whose result happened to be empty.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 
 /// A running `tsgo --lsp`, and the conversation with it.
@@ -56,6 +57,13 @@ struct Response {
     id: i64,
     result: serde_json::Value,
     error: Option<String>,
+}
+
+#[derive(Debug)]
+enum ResponseFailure {
+    Protocol(String),
+    Timeout(String),
+    Disconnected,
 }
 
 impl std::fmt::Debug for Service {
@@ -174,12 +182,12 @@ impl Service {
 
     /// Asks the server something.
     ///
-    /// `Ok(Null)` covers every "no answer" that leaves the conversation
-    /// intact — the server answered with an error, or the request timed out
-    /// — so a feature simply has no result, exactly as the editor's old
-    /// client behaved. `Err` means the conversation itself broke (the
-    /// process died): the caller treats the service as gone, and the next
-    /// question starts a fresh one.
+    /// `Ok(Null)` means the server successfully answered that the feature has
+    /// no result. Protocol errors and timeouts remain `Err`: callers already
+    /// carry that distinction through the engine and editor boundaries, and
+    /// collapsing it here would make a broken type service look like valid
+    /// negative type information. A disconnected process also marks the
+    /// conversation dead so the next question can start a fresh one.
     pub(crate) fn request(
         &mut self,
         method: &str,
@@ -194,23 +202,21 @@ impl Service {
             "jsonrpc": "2.0", "id": id, "method": method, "params": params,
         }))?;
 
-        let deadline = Instant::now() + REQUEST_TIMEOUT;
-        loop {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            match self.responses.recv_timeout(remaining) {
-                Ok(response) if response.id == id => {
-                    return match response.error {
-                        Some(_) => Ok(serde_json::Value::Null),
-                        None => Ok(response.result),
-                    };
-                }
-                Ok(_) => continue, // a stale answer to a request we gave up on
-                Err(RecvTimeoutError::Timeout) => return Ok(serde_json::Value::Null),
-                Err(RecvTimeoutError::Disconnected) => {
-                    self.alive = false;
-                    return Err("the TypeScript server exited".to_string());
-                }
+        match wait_for_response(&self.responses, id, method, REQUEST_TIMEOUT) {
+            Ok(result) => Ok(result),
+            Err(ResponseFailure::Disconnected) => {
+                self.alive = false;
+                Err("the TypeScript server exited".to_string())
             }
+            Err(ResponseFailure::Timeout(error)) => {
+                // A request that exceeded the deadline leaves no evidence
+                // that this conversation can make progress. Retiring it is
+                // what lets the next editor action start a fresh service
+                // instead of queuing behind the same hung process forever.
+                self.alive = false;
+                Err(error)
+            }
+            Err(ResponseFailure::Protocol(error)) => Err(error),
         }
     }
 
@@ -231,6 +237,40 @@ impl Service {
                 self.alive = false;
                 format!("the TypeScript server is gone: {e}")
             })
+    }
+}
+
+/// Waits for one response while discarding replies to requests that already
+/// timed out. Kept separate from process ownership so the three protocol
+/// outcomes — value, server error, and no response — stay directly testable.
+fn wait_for_response(
+    responses: &Receiver<Response>,
+    id: i64,
+    method: &str,
+    timeout: Duration,
+) -> Result<serde_json::Value, ResponseFailure> {
+    let deadline = Instant::now() + timeout;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        match responses.recv_timeout(remaining) {
+            Ok(response) if response.id == id => {
+                return match response.error {
+                    Some(error) => Err(ResponseFailure::Protocol(format!(
+                        "TypeScript language service request `{method}` failed: {error}"
+                    ))),
+                    None => Ok(response.result),
+                };
+            }
+            Ok(_) => continue,
+            Err(RecvTimeoutError::Timeout) => {
+                return Err(ResponseFailure::Timeout(format!(
+                    "TypeScript language service request `{method}` timed out after {timeout:?}"
+                )));
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(ResponseFailure::Disconnected);
+            }
+        }
     }
 }
 
@@ -296,11 +336,13 @@ fn read_loop(
                         .get("result")
                         .cloned()
                         .unwrap_or(serde_json::Value::Null),
-                    error: message
-                        .get("error")
-                        .and_then(|e| e.get("message"))
-                        .and_then(|m| m.as_str())
-                        .map(String::from),
+                    error: message.get("error").map(|error| {
+                        error
+                            .get("message")
+                            .and_then(|message| message.as_str())
+                            .map(String::from)
+                            .unwrap_or_else(|| error.to_string())
+                    }),
                 };
                 if responses.send(response).is_err() {
                     return;
@@ -382,7 +424,10 @@ pub(crate) use super::toolchain::service_binary;
 
 #[cfg(test)]
 mod tests {
-    use super::language_id;
+    use std::sync::mpsc::channel;
+    use std::time::Duration;
+
+    use super::{Response, ResponseFailure, language_id, wait_for_response};
 
     #[test]
     fn projected_ttx_documents_open_as_typescript_react() {
@@ -391,5 +436,57 @@ mod tests {
             "typescriptreact"
         );
         assert_eq!(language_id("file:///project/model.tt.ts"), "typescript");
+    }
+
+    #[test]
+    fn a_protocol_error_is_not_an_empty_type_answer() {
+        let (tx, rx) = channel();
+        tx.send(Response {
+            id: 7,
+            result: serde_json::Value::Null,
+            error: Some("project graph could not be loaded".to_string()),
+        })
+        .expect("response receiver is alive");
+
+        let error = wait_for_response(&rx, 7, "textDocument/hover", Duration::from_secs(1))
+            .expect_err("the protocol error must remain an error");
+        let ResponseFailure::Protocol(error) = error else {
+            panic!("the service is still connected");
+        };
+        assert_eq!(
+            error,
+            "TypeScript language service request `textDocument/hover` failed: project graph could not be loaded"
+        );
+    }
+
+    #[test]
+    fn a_timeout_is_not_an_empty_type_answer() {
+        let (_tx, rx) = channel();
+        let error = wait_for_response(&rx, 11, "textDocument/completion", Duration::from_millis(1))
+            .expect_err("the timeout must remain an error");
+        let ResponseFailure::Timeout(error) = error else {
+            panic!("the service is still connected");
+        };
+        assert_eq!(
+            error,
+            "TypeScript language service request `textDocument/completion` timed out after 1ms"
+        );
+    }
+
+    #[test]
+    fn a_successful_null_remains_an_empty_type_answer() {
+        let (tx, rx) = channel();
+        tx.send(Response {
+            id: 13,
+            result: serde_json::Value::Null,
+            error: None,
+        })
+        .expect("response receiver is alive");
+
+        assert_eq!(
+            wait_for_response(&rx, 13, "textDocument/hover", Duration::from_secs(1))
+                .expect("null is a successful answer"),
+            serde_json::Value::Null
+        );
     }
 }

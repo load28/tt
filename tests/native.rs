@@ -108,6 +108,53 @@ fn project(files: &[(&str, &str)]) -> Workspace {
     dir
 }
 
+#[test]
+fn multiple_package_inputs_use_their_common_project_configuration() {
+    require_tsgo!();
+    let dir = tmpdir();
+    write(
+        &dir,
+        "tsconfig.json",
+        r#"{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true
+  },
+  "include": ["packages"]
+}
+"#,
+    );
+    fs::create_dir_all(dir.join("packages/a/src")).unwrap();
+    fs::create_dir_all(dir.join("packages/b/src")).unwrap();
+    write(
+        &dir,
+        "packages/a/tsconfig.json",
+        r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+    );
+    write(
+        &dir,
+        "packages/a/src/a.tt",
+        "export const value: number = 1;\n",
+    );
+    write(
+        &dir,
+        "packages/b/src/b.tt",
+        "export const broken: number = 'text';\n",
+    );
+
+    let output = run(&dir, &["--check-types", "packages"]);
+    assert!(
+        !output.status.success(),
+        "the second package's error was missed"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("packages/b/src/b.tt"), "{stderr}");
+    assert!(stderr.contains("ts2322"), "{stderr}");
+}
+
 /// Runs ttc in `dir`. Nothing about the toolchain is passed: ttc resolves
 /// the project's own TypeScript, which is the whole contract.
 fn run(dir: &Path, args: &[&str]) -> std::process::Output {
