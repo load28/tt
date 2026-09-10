@@ -1584,3 +1584,73 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     }
     let _ = fs::remove_dir_all(&isolated);
 }
+
+/// The contextual pass widens what the checker can see by projecting the
+/// file's siblings. That is enrichment, not this file's compilation: a
+/// sibling ttc cannot read leaves the scan one module short, and must not
+/// cost the file the annotations its own storage needs. Silently dropping
+/// them emits code that no longer type-checks.
+#[test]
+fn an_unreadable_sibling_does_not_cost_a_file_its_slot_types() {
+    let dir = tmpdir();
+    let main = dir.join("main.tt");
+    fs::write(
+        &main,
+        "variant Shape { Circle(radius: number), Point }\n\
+         declare const s: Shape;\n\
+         export const spread = match (s) { Circle(radius) => [radius], Point => [] };\n",
+    )
+    .unwrap();
+
+    let annotated = ttc(&["-p", main.to_str().unwrap()]);
+    let before = String::from_utf8_lossy(&annotated.stdout).into_owned();
+    if !before.contains("let $tt_v0: ") {
+        // No TypeScript to infer with; there is nothing to lose here.
+        return;
+    }
+
+    fs::write(dir.join("sibling.tt"), [0xff, 0xfe]).unwrap();
+    let output = ttc(&["-p", main.to_str().unwrap()]);
+    let after = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(after, before, "an unreadable sibling changed the emission");
+}
+
+/// The standard library is the compiler's own, so typing the storage a
+/// `@tt/std` program generates cannot require the package to be installed
+/// first. It is served to the checker from the compiler's modules.
+#[test]
+fn a_std_program_is_typed_without_the_package_on_disk() {
+    let dir = tmpdir();
+    let file = dir.join("std.tt");
+    fs::write(
+        &file,
+        "import * as Result from \"@tt/std/result\";\n\
+         declare function load(id: string): Result.TResult<number, string>;\n\
+         export function run(id: string): Result.TResult<number, string> {\n\
+         \x20 const value = try load(id);\n\
+         \x20 return Result.Ok(value);\n\
+         }\n",
+    )
+    .unwrap();
+    assert!(
+        !dir.join("node_modules/@tt/std").exists(),
+        "this case is about the package *not* being there"
+    );
+
+    let output = ttc(&["-p", file.to_str().unwrap()]);
+    let emitted = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        !dir.join("node_modules").exists(),
+        "the package is served, never written: {emitted}"
+    );
+}
