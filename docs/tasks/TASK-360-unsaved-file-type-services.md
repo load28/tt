@@ -45,6 +45,8 @@ file participate in its project before its first disk write.
   exclusion regression.
 - 2026-09-10: Added native server and VS Code client regressions, updated the
   editor contract, and ran the complete local CI gate.
+- 2026-09-11: Merged the latest `main`, preserved TASK-360 through TASK-362 in
+  the task index, and reran the complete local CI gate.
 
 ## Issues and resolutions
 

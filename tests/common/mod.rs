@@ -97,6 +97,20 @@ impl Workspace {
     pub fn path(&self) -> &Path {
         &self.path
     }
+
+    /// Gives a child whose exit cannot finalize instrumentation its own
+    /// disposable coverage profile. LLVM instrumentation is inherited by
+    /// subprocesses, but a process killed by the test or ended from a
+    /// non-unwinding error path cannot contribute a complete aggregate file.
+    /// Normally exiting children keep the inherited path and remain measured.
+    pub fn isolate_unfinalized_child_profile(&self, command: &mut std::process::Command) {
+        if std::env::var_os("LLVM_PROFILE_FILE").is_some() {
+            command.env(
+                "LLVM_PROFILE_FILE",
+                self.path.join("unfinalized-child-%p-%m.profraw"),
+            );
+        }
+    }
 }
 
 impl std::ops::Deref for Workspace {

@@ -92,6 +92,10 @@ creation/deletion without requiring an edit in each consumer. The replay does
 not save user buffers. Support files under `node_modules` and Git metadata are
 not treated as user source events.
 
+A compiler request that exceeds its deadline retires that ordered server
+conversation. Requests already queued on it settle as unavailable, and the next
+editor action starts a fresh process with open buffers replayed.
+
 The tt adapter currently revalidates all open tt documents conservatively. This
 is a correctness policy, not a measured large-project latency guarantee.
 

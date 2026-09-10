@@ -174,6 +174,35 @@ function strikeOut(compiler: string): void {
   engineServerStrikes.set(compiler, (engineServerStrikes.get(compiler) ?? 0) + 1);
 }
 
+/** Ends one ordered compiler conversation and settles everything queued on
+ * it. A process failure before any answer counts as evidence that this path
+ * does not support `--server`; a timeout does not — the next request gets a
+ * fresh process and an independent chance to make progress. */
+function retireEngineServer(
+  compiler: string,
+  server: EngineServer,
+  strikeIfUnanswered: boolean,
+): void {
+  if (!server.alive) return;
+  server.alive = false;
+  if (engineServers.get(compiler) === server) {
+    engineServers.delete(compiler);
+  }
+  if (strikeIfUnanswered && !server.answered) {
+    strikeOut(compiler);
+  }
+  for (const entry of server.pending.values()) {
+    clearTimeout(entry.timer);
+    entry.resolve(null);
+  }
+  server.pending.clear();
+  try {
+    server.child.kill();
+  } catch {
+    // already gone
+  }
+}
+
 function engineServerFor(compiler: string): EngineServer | null {
   if ((engineServerStrikes.get(compiler) ?? 0) >= 2) return null;
   const running = engineServers.get(compiler);
@@ -199,19 +228,7 @@ function engineServerFor(compiler: string): EngineServer | null {
     answered: false,
   };
   const fail = () => {
-    if (!server.alive) return;
-    server.alive = false;
-    if (engineServers.get(compiler) === server) {
-      engineServers.delete(compiler);
-    }
-    if (!server.answered) {
-      strikeOut(compiler);
-    }
-    for (const [, entry] of server.pending) {
-      clearTimeout(entry.timer);
-      entry.resolve(null);
-    }
-    server.pending.clear();
+    retireEngineServer(compiler, server, true);
   };
   child.on("error", fail);
   child.on("exit", fail);
@@ -279,20 +296,17 @@ export function engineRequest(
     // is the one handle keeping the event loop alive (the child and its
     // pipes are unref'd so an *idle* server never holds the process open).
     const timer = setTimeout(() => {
-      server.pending.delete(id);
-      resolve(null);
+      // Requests share one ordered stream. Once one cannot finish within its
+      // contract, nothing queued behind it has evidence that this process can
+      // advance; retire the conversation and let the next action restart it.
+      retireEngineServer(compiler, server, false);
     }, timeoutMs);
     server.pending.set(id, { resolve, timer });
     server.child.stdin?.write(
       JSON.stringify({ id, method, params }) + "\n",
       (err) => {
         if (err) {
-          const entry = server.pending.get(id);
-          if (entry) {
-            server.pending.delete(id);
-            clearTimeout(entry.timer);
-            resolve(null);
-          }
+          retireEngineServer(compiler, server, true);
         }
       },
     );
@@ -312,20 +326,9 @@ export function retryEngineServer(): void {
 /** Ends the engine server, if one is running. Tests call this so the
  * process can exit; the language server just dies with its client. */
 export function shutdownEngineServer(): void {
-  for (const server of engineServers.values()) {
-    for (const entry of server.pending.values()) {
-      clearTimeout(entry.timer);
-      entry.resolve(null);
-    }
-    server.pending.clear();
-    try {
-      server.child.kill();
-    } catch {
-      // already gone
-    }
-    server.alive = false;
+  for (const [compiler, server] of [...engineServers]) {
+    retireEngineServer(compiler, server, false);
   }
-  engineServers.clear();
 }
 
 /* ------------------------------------------------------------ documents --
