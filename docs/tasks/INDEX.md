@@ -372,6 +372,8 @@
 
 | TASK-357 | Preserve contextual project inputs and package resolution | Complete | 2026-09-10 | 2026-09-10 | [TASK-357](./TASK-357-contextual-project-boundaries.md) |
 
+| TASK-358 | Audit developer workflows across every product surface | Complete | 2026-09-10 | 2026-09-10 | [TASK-358](./TASK-358-developer-workflow-audit.md) |
+
 ## Next task number
 
-**TASK-358**
+**TASK-359**
