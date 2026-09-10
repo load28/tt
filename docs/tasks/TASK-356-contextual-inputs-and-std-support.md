@@ -1,5 +1,8 @@
 # TASK-356: Separate a missing toolchain from a project the pass cannot read
 
+> TASK-357 supersedes the partial-scan and unreadable-input skipping policy.
+> It also extends support-package lookup to respect ancestor installations.
+
 - **Status**: Complete
 - **Started**: 2026-09-10
 - **Completed**: 2026-09-10

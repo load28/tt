@@ -101,13 +101,14 @@ TypeScript 7 경로를 실제로 도는 것이기 때문입니다.
   읽으세요** — 그 diff가 리뷰 대상입니다. 부분 문자열 어서션은 여분의 문장이나
   어긋난 들여쓰기를 잡지 못합니다.
 
-  방출 픽스처는 **`npm ci`를 마친 체크아웃**에서만 만들고 검사합니다. ttc는
-  match·`result`가 쓰는 저장 슬롯에 TypeScript가 추론한 타입을 붙이므로, 같은
-  프로그램이라도 프로젝트 TypeScript가 없으면 주석 없는 슬롯이 나옵니다. 픽스처는
-  주석이 붙은 쪽 — CI와 사용자가 실제로 얻는 산출물 — 을 고정합니다. 툴체인이
-  없으면 이 케이스들은 건너뛰고, `UPDATE_EXPECT=1`은 아예 거부합니다(주석 없는
-  산출물이 계약을 덮어쓰는 것을 막습니다). 게이트는 `TTC_REQUIRE_TSGO=1`로 그
-  건너뜀을 실패로 바꿉니다.
+  Generate and check emit fixtures in a checkout configured with `npm ci`.
+  TypeScript supplies annotations for generated match/result storage, so these
+  fixtures pin the annotated artifact. Without a toolchain, emit comparisons
+  skip and `UPDATE_EXPECT=1` refuses to overwrite the configured expectations.
+  The gate sets `TTC_REQUIRE_TSGO=1` so a missing prerequisite is a failure.
+  Compiler-owned standard-library modules are provided to contextual analysis
+  in memory; running an editor or installing a generated `@tt/std` package is
+  not a fixture prerequisite.
 
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가

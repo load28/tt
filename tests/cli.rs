@@ -1585,39 +1585,30 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     let _ = fs::remove_dir_all(&isolated);
 }
 
-/// The contextual pass widens what the checker can see by projecting the
-/// file's siblings. That is enrichment, not this file's compilation: a
-/// sibling ttc cannot read leaves the scan one module short, and must not
-/// cost the file the annotations its own storage needs. Silently dropping
-/// them emits code that no longer type-checks.
+/// Input read failures must not be mistaken for absent type information.
 #[test]
-fn an_unreadable_sibling_does_not_cost_a_file_its_slot_types() {
-    let dir = tmpdir();
-    let main = dir.join("main.tt");
-    fs::write(
-        &main,
-        "variant Shape { Circle(radius: number), Point }\n\
-         declare const s: Shape;\n\
-         export const spread = match (s) { Circle(radius) => [radius], Point => [] };\n",
-    )
-    .unwrap();
-
-    let annotated = ttc(&["-p", main.to_str().unwrap()]);
-    let before = String::from_utf8_lossy(&annotated.stdout).into_owned();
-    if !before.contains("let $tt_v0: ") {
-        // No TypeScript to infer with; there is nothing to lose here.
+fn an_unreadable_sibling_is_reported_as_a_project_input_failure() {
+    if !common::toolchain() {
         return;
     }
-
+    let dir = tmpdir();
+    let main = dir.join("main.tt");
+    fs::write(&main, "declare const flag: boolean;\nexport const v = match(flag) { true => [1], false => [] };\n").unwrap();
     fs::write(dir.join("sibling.tt"), [0xff, 0xfe]).unwrap();
     let output = ttc(&["-p", main.to_str().unwrap()]);
-    let after = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(after, before, "an unreadable sibling changed the emission");
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("sibling.tt"));
+    let source = fs::read_to_string(&main).unwrap();
+    let filename = main.to_str().unwrap();
+    let error = ttc::compile(
+        &source,
+        &ttc::Options {
+            filename: Some(filename),
+            ..Default::default()
+        },
+    )
+    .unwrap_err();
+    assert!(error.message.contains("sibling.tt"), "{error}");
 }
 
 /// The standard library is the compiler's own, so typing the storage a
@@ -1625,18 +1616,12 @@ fn an_unreadable_sibling_does_not_cost_a_file_its_slot_types() {
 /// first. It is served to the checker from the compiler's modules.
 #[test]
 fn a_std_program_is_typed_without_the_package_on_disk() {
+    if !common::toolchain() {
+        return;
+    }
     let dir = tmpdir();
     let file = dir.join("std.tt");
-    fs::write(
-        &file,
-        "import * as Result from \"@tt/std/result\";\n\
-         declare function load(id: string): Result.TResult<number, string>;\n\
-         export function run(id: string): Result.TResult<number, string> {\n\
-         \x20 const value = try load(id);\n\
-         \x20 return Result.Ok(value);\n\
-         }\n",
-    )
-    .unwrap();
+    fs::write(&file, "import * as Result from '@tt/std/result';\ndeclare const flag: boolean;\nexport const answer = match(flag) { true => Result.Ok(1), false => Result.Ok(2) };\n").unwrap();
     assert!(
         !dir.join("node_modules/@tt/std").exists(),
         "this case is about the package *not* being there"
@@ -1650,7 +1635,71 @@ fn a_std_program_is_typed_without_the_package_on_disk() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(
+        emitted.contains("let $tt_v0: "),
+        "missing inferred slot type: {emitted}"
+    );
+    assert!(
+        emitted.contains("<number>"),
+        "standard library payload was not inferred: {emitted}"
+    );
+    assert!(
         !dir.join("node_modules").exists(),
         "the package is served, never written: {emitted}"
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn contextual_input_walk_cannot_silently_stop_before_dependencies() {
+    if !common::toolchain() {
+        return;
+    }
+    let dir = tmpdir();
+    let file = dir.join("main.tt");
+    fs::write(&file, "declare const flag: boolean;\nexport const v = match(flag) { true => [1], false => [] };\n").unwrap();
+    std::os::unix::fs::symlink(dir.join("missing"), dir.join("aaa-broken")).unwrap();
+    let output = ttc(&["-p", file.to_str().unwrap()]);
+    assert!(
+        !output.status.success(),
+        "partial input scan was accepted: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("aaa-broken"));
+}
+
+#[test]
+fn contextual_support_respects_ancestor_standard_packages() {
+    if !common::toolchain() {
+        return;
+    }
+    let dir = tmpdir();
+    let package = dir.join("node_modules/@tt/std");
+    fs::create_dir_all(&package).unwrap();
+    fs::write(
+        package.join("package.json"),
+        r#"{"name":"@tt/std","types":"index.d.ts"}"#,
+    )
+    .unwrap();
+    fs::write(
+        package.join("result.d.ts"),
+        "export declare function Ok(value: number): string;\n",
+    )
+    .unwrap();
+    let child = dir.join("child");
+    fs::create_dir(&child).unwrap();
+    let file = child.join("main.tt");
+    fs::write(&file, "import * as Result from '@tt/std/result';\ndeclare const flag: boolean;\nexport const v = match(flag) { true => Result.Ok(1), false => Result.Ok(2) };\n").unwrap();
+    // The library preserves the authored module specifier while checking.
+    let source = fs::read_to_string(&file).unwrap();
+    let filename = file.to_str().unwrap();
+    let code = ttc::compile(
+        &source,
+        &ttc::Options {
+            filename: Some(filename),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(code.contains("let $tt_v0: string;"), "{code}");
+    assert!(!child.join("node_modules").exists());
 }

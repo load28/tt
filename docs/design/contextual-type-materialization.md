@@ -38,6 +38,17 @@ Standalone file compilation discovers its configuration and candidate tt files,
 while the invoking working directory supplies the installed TypeScript client.
 An unnamed buffer uses that working directory as its inferred project.
 
+Toolchain absence is decided before collecting contextual project inputs.
+When a checker is available, input enumeration/read failures are reported with
+paths rather than producing types from a partial snapshot. Standalone input
+failures and backend failures are separate error categories.
+
+Compiler support packages are supplied in memory only when no package exists
+in the project's ancestor `node_modules` chain. Analysis retains authored
+support-module specifiers; output-adapter rewrites are applied only to the final
+artifact, including import types synthesized in annotations. Output files do
+not need to exist for their source to be analyzed.
+
 Analysis retains relative tt import names and distinct virtual `.tt.ts` and
 `.ttx.tsx` paths. This avoids collisions with authored `.ts` and `.tsx` files.
 Value declaration identities transfer the resulting annotations to the requested

@@ -84,9 +84,6 @@ pub(crate) fn materialize(
     }
 }
 
-/// Compile a file against its project graph, or an unnamed buffer against
-/// the caller's working directory. Project consumers use `materialize` with
-/// their authoritative in-memory overlays instead.
 /// The standard-library package, served from the compiler's own modules.
 ///
 /// ttc holds these sources; a project only ever gets a *copy* of them, and
@@ -102,7 +99,7 @@ pub(crate) fn materialize(
 fn std_support(root: &Path) -> Vec<Module> {
     let mut out = Vec::new();
     let mut package = |dir: PathBuf, name: &str, modules: &[crate::StdModule]| {
-        if dir.exists() {
+        if package_exists(root, name) {
             return;
         }
         for module in modules {
@@ -130,7 +127,7 @@ fn std_support(root: &Path) -> Vec<Module> {
     // The runtime's own file is `runtime.ts` inside a build's `tt/`
     // directory, but as a package its entry point is `index.ts`.
     let runtime = node_modules.join("@tt/runtime");
-    if !runtime.exists() {
+    if !package_exists(root, "@tt/runtime") {
         out.push(Module {
             path: runtime.join("index.ts"),
             text: format!(
@@ -147,27 +144,56 @@ fn std_support(root: &Path) -> Vec<Module> {
     out
 }
 
+fn package_exists(root: &Path, name: &str) -> bool {
+    root.ancestors()
+        .any(|ancestor| ancestor.join("node_modules").join(name).exists())
+}
+
+/// Standalone project-input errors are distinct from backend availability.
+#[derive(Debug)]
+pub(crate) enum StandaloneFailure {
+    Input(String),
+    Backend(Failure),
+}
+
+impl From<Failure> for StandaloneFailure {
+    fn from(failure: Failure) -> Self {
+        Self::Backend(failure)
+    }
+}
+
+impl std::fmt::Display for StandaloneFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Input(message) => f.write_str(message),
+            Self::Backend(failure) => f.write_str(&failure.message),
+        }
+    }
+}
+
+/// Compile a file against its project graph, or an unnamed buffer against
+/// the caller's working directory. Project consumers use `materialize` with
+/// their authoritative in-memory overlays instead.
 pub(crate) fn standalone(
     mut emit: MappedEmit,
     source: &str,
     options: &crate::Options<'_>,
-) -> Result<MappedEmit, Failure> {
+) -> Result<MappedEmit, StandaloneFailure> {
     if emit.contextual_slots.is_empty() {
         return Ok(emit);
     }
-    // What this pass answers with when there is no checker to ask.
-    let unrefined = emit.clone();
     thread_local! {
         static BACKEND: std::cell::RefCell<Option<(PathBuf, super::native::NativeBackend)>> = const { std::cell::RefCell::new(None) };
     }
-    let cwd = std::env::current_dir().map_err(|error| Failure::unavailable(error.to_string()))?;
+    let cwd =
+        std::env::current_dir().map_err(|error| StandaloneFailure::Input(error.to_string()))?;
     let file = options
         .filename
         .map(|name| cwd.join(name))
         .filter(|path| path.is_file())
         .map(|path| {
             path.canonicalize()
-                .map_err(|error| Failure::unavailable(error.to_string()))
+                .map_err(|error| StandaloneFailure::Input(error.to_string()))
         })
         .transpose()?;
     let config = file
@@ -185,6 +211,21 @@ pub(crate) fn standalone(
         .or_else(|| file.as_ref().and_then(|path| path.parent()))
         .unwrap_or(&cwd)
         .to_path_buf();
+    // Availability is decided before reading project inputs. Once a backend
+    // exists, project and backend failures must reach the caller unchanged.
+    let available = BACKEND.with(|cell| {
+        let mut state = cell.borrow_mut();
+        if state.as_ref().is_none_or(|(previous, _)| previous != &root) {
+            let Ok(backend) = super::native::NativeBackend::new(None, &cwd) else {
+                return false;
+            };
+            *state = Some((root.clone(), backend));
+        }
+        true
+    });
+    if !available {
+        return Ok(emit);
+    }
     let path = file
         .as_ref()
         .map(|path| module_path(path))
@@ -198,6 +239,9 @@ pub(crate) fn standalone(
     let projection_options = crate::Options {
         defer_to_checker: true,
         rewrite_imports: crate::ImportRewrite::Off,
+        // Analysis resolves compiler-owned modules in the source project.
+        // Adapter output paths need not exist until after compilation.
+        std_imports: crate::StdImports::default(),
         ..options.clone()
     };
     let analysis = crate::compile_projection_report(source, &projection_options)
@@ -206,30 +250,24 @@ pub(crate) fn standalone(
             Failure::internal("contextual projection lost a successfully lowered module")
         })?;
     if analysis.contextual_slots.len() != emit.contextual_slots.len() {
-        return Err(Failure::internal(
-            "contextual projection changed value slot identity",
-        ));
+        return Err(Failure::internal("contextual projection changed value slot identity").into());
     }
     let mut modules = vec![(path, analysis)];
     // The checker admits modules through the user's configuration and imports;
     // the scan only makes tt projections available to its filesystem.
     if let Some(file) = &file {
-        // The sibling scan is enrichment: it widens what the checker can
-        // see, and it is not this file's compilation. A tree with an entry
-        // the walk cannot read — a dangling symlink, a permission — leaves
-        // the scan with fewer modules, not the file without an answer.
+        // A failed walk is not a complete snapshot: its prefix can omit
+        // readable dependencies after the failing entry.
         let mut candidates = Vec::new();
-        let _ = crate::engine::collect_sources(&root, false, &mut candidates);
+        crate::engine::collect_sources(&root, false, &mut candidates)
+            .map_err(|error| StandaloneFailure::Input(error.to_string()))?;
         for candidate in candidates {
             if candidate == *file {
                 continue;
             }
-            // Likewise a sibling whose bytes are not a source ttc can read.
-            // Compiling it would report that in its own right; refusing to
-            // type *this* file over it would not.
-            let Ok(source) = std::fs::read_to_string(&candidate) else {
-                continue;
-            };
+            let source = std::fs::read_to_string(&candidate).map_err(|error| {
+                StandaloneFailure::Input(format!("{}: {error}", candidate.display()))
+            })?;
             let report = crate::compile_projection_report(
                 &source,
                 &crate::Options {
@@ -245,20 +283,7 @@ pub(crate) fn standalone(
         }
     }
     BACKEND.with(|cell| {
-        let mut state = cell.borrow_mut();
-        if state.as_ref().is_none_or(|(previous, _)| previous != &root) {
-            // No toolchain is the one failure that is not a failure: a
-            // contextual annotation refines the type of generated storage,
-            // and the emitted program is correct without one. `--check` and
-            // `-p` are documented as needing no TypeScript, so the policy
-            // for that lives here, at the boundary that knows the cause —
-            // never at a caller, which cannot tell it from a project it
-            // could not read.
-            let Ok(backend) = super::native::NativeBackend::new(None, &cwd) else {
-                return Ok(unrefined);
-            };
-            *state = Some((root.clone(), backend));
-        }
+        let state = cell.borrow();
         let (_, backend) = state.as_ref().expect("backend initialized above");
         // An unnamed or unconfigured source must retain nullability when its
         // generated annotations are later checked in a strict project.
@@ -284,6 +309,7 @@ pub(crate) fn standalone(
                 &wrapper,
                 &crate::Options {
                     rewrite_imports: options.rewrite_imports,
+                    std_imports: options.std_imports,
                     defer_to_checker: true,
                     ..crate::Options::default()
                 },

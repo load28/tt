@@ -540,8 +540,9 @@ pub fn collect_sources(
     if meta.is_dir() {
         let mut children: Vec<PathBuf> = std::fs::read_dir(entry)
             .map_err(|e| named(entry, e))?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .collect();
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<std::io::Result<_>>()
+            .map_err(|e| named(entry, e))?;
         children.sort();
         for child in children {
             // A directory holds entries the walk cannot read — a dangling

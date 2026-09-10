@@ -370,6 +370,8 @@
 | TASK-355 | Say which artifact an emit fixture pins | Complete | 2026-09-10 | 2026-09-10 | [TASK-355](./TASK-355-emit-fixture-toolchain-contract.md) |
 | TASK-356 | Separate a missing toolchain from a project the pass cannot read | Complete | 2026-09-10 | 2026-09-10 | [TASK-356](./TASK-356-contextual-inputs-and-std-support.md) |
 
+| TASK-357 | Preserve contextual project inputs and package resolution | Complete | 2026-09-10 | 2026-09-10 | [TASK-357](./TASK-357-contextual-project-boundaries.md) |
+
 ## Next task number
 
-**TASK-357**
+**TASK-358**
