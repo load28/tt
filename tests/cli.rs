@@ -1482,13 +1482,14 @@ fn watch_reports_input_failure_transitions_and_recovers() {
     let input = dir.join("src");
     fs::create_dir(&input).unwrap();
     fs::write(input.join("a.tt"), "export const a = 1;").unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
         .current_dir(&dir)
         .args(["--watch", "-o", "out", "src"])
         .stderr(Stdio::piped())
-        .stdout(Stdio::null())
-        .spawn()
-        .unwrap();
+        .stdout(Stdio::null());
+    dir.isolate_terminated_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
     let stderr = child.stderr.take().unwrap();
     let (send, receive) = mpsc::channel();
     let reader = std::thread::spawn(move || {
