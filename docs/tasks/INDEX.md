@@ -374,7 +374,8 @@
 
 | TASK-358 | Audit developer workflows across every product surface | Complete | 2026-09-10 | 2026-09-10 | [TASK-358](./TASK-358-developer-workflow-audit.md) |
 | TASK-359 | Preserve type-service failures across compiler and editor boundaries | Complete | 2026-09-10 | 2026-09-10 | [TASK-359](./TASK-359-type-service-failures.md) |
+| TASK-360 | Give unsaved files full project type services | Complete | 2026-09-10 | 2026-09-10 | [TASK-360](./TASK-360-unsaved-file-type-services.md) |
 
 ## Next task number
 
-**TASK-360**
+**TASK-361**

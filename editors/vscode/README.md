@@ -82,6 +82,9 @@ Open `.tt`, `.ttx`, `.ts`, and `.tsx` buffers are synchronized into the tt engin
 TypeScript retains ownership of `.ts`/`.tsx` editor providers. A dependency edit
 or close schedules revalidation of open tt consumers. Host overlays are frozen
 with typed snapshots and served at their authored paths for language queries.
+A new `.tt` or `.ttx` file under an existing directory receives project-aware
+type diagnostics and language features before its first save; the engine uses
+the file URI as its overlay identity and does not write the buffer to disk.
 
 Source/configuration filesystem events reload cached projects and replay open
 buffers before subsequent checks. This covers external edits and module

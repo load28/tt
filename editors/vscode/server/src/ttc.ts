@@ -389,15 +389,9 @@ export async function runTypedCheck(
   fsPath: string,
   includeTypes = false,
 ): Promise<ValCheckResult> {
-  // The overlay stands in for a file of the project, so there has to be one:
-  // a buffer that was never saved has no place in the project graph yet.
-  if (!exists(fsPath)) {
-    return {
-      kind: "unavailable",
-      detail: "the document is not on disk yet",
-      cause: "availability",
-    };
-  }
+  // The file URI is the overlay's project identity; the leaf does not have
+  // to be on disk yet. The engine canonicalizes its existing parent and
+  // includes the overlay as a root of the configured program.
   // The engine session keeps the project — and the TypeScript compiler
   // behind it — alive between checks, so this answers in milliseconds
   // where the one-shot pays a project open every time. Same diagnostics
