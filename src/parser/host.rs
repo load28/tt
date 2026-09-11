@@ -26,15 +26,9 @@ pub(super) fn owned_match_names_in_mixed(
     source_kind: crate::SourceKind,
     program: &Program,
 ) -> HashSet<usize> {
-    let root = program as *const Program;
     let mut owned = HashSet::new();
     super::parse::visit_programs(program, &mut |region| {
-        // Nested Programs deliberately contain no duplicated host AST. Probe
-        // them under each syntactic capability set that an ancestor may grant;
-        // an environment blocked outside the candidate contributes no evidence.
-        // Every accepted result still comes from a complete SWC parse and an
-        // explicit host declaration node at the original byte position.
-        let wrappers: &[Wrapper] = if std::ptr::eq(region, root) {
+        let wrappers: &[Wrapper] = if std::ptr::eq(region, program) {
             &[Wrapper::Module]
         } else if region.expression_root {
             &[
@@ -108,26 +102,43 @@ fn probe_region(
         let mut restored = Vec::new();
         for _ in 0..=candidates.len() {
             let projection = projected_region(src, program.span, &masks, &candidates, &restored);
-            match parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
-                Ok(names) => {
-                    owned.extend(names);
-                    return;
-                }
+            let parsed = match parse_wrapped(&projection, source_kind, program.span.start, wrapper)
+            {
+                Ok(parsed) => parsed,
                 Err(error) => {
-                    let next = candidates
-                        .iter()
-                        .filter(|candidate| !restored.contains(candidate))
-                        .filter(|candidate| candidate.start <= error && error <= candidate.end)
-                        .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
-                        .copied();
-                    let Some(next) = next else {
+                    let Some(next) = candidate_at_error(&candidates, &restored, error) else {
                         break;
                     };
                     restored.push(next);
+                    continue;
                 }
+            };
+            // Recoverable diagnostics outside an unresolved candidate describe
+            // context omitted by this recursive projection, not ownership. A
+            // candidate is restored only when its own bytes caused an error;
+            // the final name still has to be owned by a host AST declaration.
+            let next = parsed
+                .errors
+                .iter()
+                .filter_map(|error| candidate_at_error(&candidates, &restored, *error))
+                .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start));
+            if let Some(next) = next {
+                restored.push(next);
+                continue;
             }
+            owned.extend(parsed.names);
+            return;
         }
     }
+}
+
+fn candidate_at_error(candidates: &[Span], restored: &[Span], error: usize) -> Option<Span> {
+    candidates
+        .iter()
+        .filter(|candidate| !restored.contains(candidate))
+        .filter(|candidate| candidate.start <= error && error <= candidate.end)
+        .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
+        .copied()
 }
 
 fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &mut Vec<Span>) {
@@ -278,7 +289,7 @@ fn parse_wrapped(
     source_kind: crate::SourceKind,
     source_offset: usize,
     wrapper: Wrapper,
-) -> Result<HashSet<usize>, usize> {
+) -> Result<HostParse, usize> {
     let (prefix, suffix) = match wrapper {
         Wrapper::Module => ("", ""),
         Wrapper::Expression => ("const __tt_host_probe = (", ");"),
@@ -287,12 +298,10 @@ fn parse_wrapped(
         Wrapper::AsyncGeneratorExpression => {
             ("async function* __tt_host_probe() { return (", ");}")
         }
-        Wrapper::Statements => ("function __tt_host_probe() { while (true) {", "}}"),
-        Wrapper::AsyncStatements => ("async function __tt_host_probe() { while (true) {", "}}"),
-        Wrapper::GeneratorStatements => ("function* __tt_host_probe() { while (true) {", "}}"),
-        Wrapper::AsyncGeneratorStatements => {
-            ("async function* __tt_host_probe() { while (true) {", "}}")
-        }
+        Wrapper::Statements => ("function __tt_host_probe() {", "}"),
+        Wrapper::AsyncStatements => ("async function __tt_host_probe() {", "}"),
+        Wrapper::GeneratorStatements => ("function* __tt_host_probe() {", "}"),
+        Wrapper::AsyncGeneratorStatements => ("async function* __tt_host_probe() {", "}"),
     };
     let mut projection = String::with_capacity(prefix.len() + source.len() + suffix.len());
     projection.push_str(prefix);
@@ -313,7 +322,7 @@ fn parse_owned(
     prefix_len: usize,
     source_offset: usize,
     source_len: usize,
-) -> Result<HashSet<usize>, usize> {
+) -> Result<HostParse, usize> {
     let source_map: Lrc<SourceMap> = Default::default();
     let file = source_map.new_source_file(Lrc::new(FileName::Anon), src.to_owned());
     let source_start = file.start_pos.0;
@@ -331,14 +340,11 @@ fn parse_owned(
     let module = parser.parse_module().map_err(|error| {
         source_error_offset(error.span(), source_start, prefix_len, source_offset)
     })?;
-    if let Some(error) = parser.take_errors().into_iter().next() {
-        return Err(source_error_offset(
-            error.span(),
-            source_start,
-            prefix_len,
-            source_offset,
-        ));
-    }
+    let errors = parser
+        .take_errors()
+        .into_iter()
+        .map(|error| source_error_offset(error.span(), source_start, prefix_len, source_offset))
+        .collect();
 
     let mut collector = MatchNameCollector {
         source_start,
@@ -348,7 +354,15 @@ fn parse_owned(
         offsets: HashSet::new(),
     };
     module.visit_with(&mut collector);
-    Ok(collector.offsets)
+    Ok(HostParse {
+        names: collector.offsets,
+        errors,
+    })
+}
+
+struct HostParse {
+    names: HashSet<usize>,
+    errors: Vec<usize>,
 }
 
 fn source_error_offset(

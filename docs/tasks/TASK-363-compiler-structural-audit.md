@@ -59,21 +59,22 @@ the layer that owns each contract.
   AST name spans then prove host ownership. This terminates within the ambiguous
   candidate count and introduces no TypeScript modifier lists.
 
-### Decision 4: Make recursive host probes capability-parametric
+### Decision 4: Separate parser modes from omitted ancestor diagnostics
 
 - **Context**: A nested parser `Program` keeps its source range but deliberately
   does not duplicate the TypeScript ancestor AST. A single ordinary-function
   wrapper therefore rejects valid `break`, `await`, or `yield` before reaching
   an ambiguous `match` declaration.
-- **Alternatives considered**: Reconstruct host ancestors with token heuristics,
-  suppress individual SWC diagnostics, or classify under complete syntactic
-  capability environments.
+- **Alternatives considered**: Reconstruct host ancestors and labels with token
+  heuristics, synthesize every ancestor capability in wrappers, or separate
+  candidate errors from diagnostics caused by an isolated projection.
 - **Decision and rationale**: Expression and statement regions are probed under
-  plain, async, generator, and async-generator environments. Statement probes
-  also supply a loop boundary. An environment blocked outside a candidate
-  contributes no evidence; ownership still requires a complete SWC parse and a
-  host declaration AST node at the original span. This represents ancestor
-  capabilities without duplicating TypeScript grammar or ignoring diagnostics.
+  plain, async, generator, and async-generator parser modes because those modes
+  determine whether SWC can build an AST. Recoverable diagnostics restore only
+  the candidate whose own span they intersect; diagnostics outside every
+  candidate do not invalidate AST ownership evidence. This keeps arbitrary
+  ancestor labels out of synthetic wrappers while ownership still requires an
+  explicit host declaration node at the original span.
 
 ## Work log
 
@@ -119,6 +120,12 @@ the layer that owns each contract.
   ancestors in one mixed-source regression.
 - 2026-09-11: Ran the complete Rust CI gate and repeated the main-relative
   benchmark comparison; all correctness and performance gates passed.
+- 2026-09-11: Reopened the task after review showed that a synthetic loop cannot
+  preserve arbitrary ancestor labels for recursive statement probes.
+- 2026-09-11: Restricted recovery errors to candidate restoration, removed the
+  synthetic loop, and covered both labeled `break` and labeled `continue`.
+- 2026-09-11: Ran the complete Rust CI gate and main-relative benchmark
+  comparison; all correctness and performance budgets passed.
 
 ## Issues and resolutions
 
@@ -197,9 +204,19 @@ the layer that owns each contract.
   blocks ownership discovery inside a nested tt statement body.
 - **Cause**: Every recursive statement region was parsed as the body of an
   ordinary function, regardless of the capabilities supplied by its ancestor.
-- **Resolution**: Recursive probes now select among complete capability
-  environments. Statement environments include a loop, and async/generator
-  variants preserve contextual keyword parsing without suppressing SWC errors.
+- **Resolution**: Recursive probes select the parser modes required to build an
+  AST. Recoverable errors outside candidates no longer discard valid ownership
+  evidence, so no synthetic loop context is required.
+
+### Issue 9: Synthetic loops do not preserve ancestor labels
+
+- **Symptom**: A labeled `break` or `continue` before a host method named
+  `match` blocks ownership discovery inside a nested tt statement body.
+- **Cause**: The recursive statement wrapper supplied an anonymous loop but had
+  no structural representation of arbitrary labels from omitted ancestors.
+- **Resolution**: Candidate restoration consumes only errors that intersect the
+  candidate. Unknown-label diagnostics remain TypeScript concerns and cannot
+  erase a declaration node that SWC successfully built at the candidate span.
 
 ## Verification
 
@@ -210,7 +227,8 @@ the layer that owns each contract.
 ## Result
 
 Mixed TypeScript and tt files now converge on candidate-level ownership. Parser
-spans build byte-preserving host projections, SWC errors reject only their
-smallest tt candidate, and the successful SWC AST proves host function and
-method names. The token grammar fallback remains removed, nested tt matches stay
-lowered, and the complete Rust CI gate passes.
+spans build byte-preserving host projections, candidate-local SWC errors restore
+only their smallest tt candidate, and the resulting SWC AST proves host function
+and method names. Omitted ancestor diagnostics do not participate in ownership,
+the token grammar fallback remains removed, and the complete Rust CI gate
+passes.

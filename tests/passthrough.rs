@@ -180,6 +180,16 @@ fn host_match_ownership_survives_statement_capability_boundaries() {
 }
 
 #[test]
+fn host_match_ownership_survives_labeled_statement_boundaries() {
+    let source = "variant Choice { Yes, No }\n\
+        declare const choice: Choice;\n\
+        outer: while (true) { if let Yes() = choice { break outer; const a = { match(x: number) { (foo: number) => foo + x } }; } }\n\
+        retry: while (true) { if let Yes() = choice { continue retry; const b = { match(x: number) { (foo: number) => foo + x } }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert_eq!(output.matches("match(x: number)").count(), 2, "{output}");
+}
+
+#[test]
 fn class_method_named_match() {
     assert_passthrough(
         r#"
