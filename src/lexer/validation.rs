@@ -24,7 +24,50 @@ pub(crate) fn host_syntax_error(src: &str, kind: SourceKind) -> Option<(Span, &'
             "a JSX namespace name cannot be followed by member access",
         ));
     }
+    if let Some(span) = unbalanced_delimiter(src, kind) {
+        return Some((span, "unbalanced TypeScript delimiter"));
+    }
     None
+}
+
+/// Finds an unmatched `()`, `[]`, or `{}` delimiter without interpreting
+/// delimiters inside strings, comments, templates, regexes, or JSX text.
+fn unbalanced_delimiter(src: &str, kind: SourceKind) -> Option<Span> {
+    fn walk(tokens: &[Token], stack: &mut Vec<(u8, Span)>) -> Option<Span> {
+        for token in tokens {
+            match &token.kind {
+                TokenKind::Punct(byte @ (b'(' | b'[' | b'{')) => stack.push((*byte, token.span)),
+                TokenKind::Punct(byte @ (b')' | b']' | b'}')) => {
+                    let expected = match byte {
+                        b')' => b'(',
+                        b']' => b'[',
+                        b'}' => b'{',
+                        _ => unreachable!(),
+                    };
+                    if stack.pop().is_none_or(|(open, _)| open != expected) {
+                        return Some(token.span);
+                    }
+                }
+                TokenKind::Template(parts) => {
+                    for part in parts.iter() {
+                        if let TplPart::Interp { tokens, .. } = part
+                            && let Some(span) = walk(tokens, stack)
+                        {
+                            return Some(span);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        None
+    }
+
+    let mut stack = Vec::new();
+    if let Some(span) = walk(&lex_with_kind(src, 0, src.len(), kind), &mut stack) {
+        return Some(span);
+    }
+    stack.last().map(|(_, span)| *span)
 }
 
 /// Finds numeric JSX character references that are malformed enough to reach

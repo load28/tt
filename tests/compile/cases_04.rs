@@ -399,6 +399,13 @@ fn verify_rejects_invalid_passthrough_typescript() {
 }
 
 #[test]
+fn verify_preflights_unbalanced_delimiters_before_swc() {
+    let source = "\tK<-[(\tK<\tK<[({[( -[(\t(\tK<\tK<[({[(\tK<[({[(\tK<[({[<[({[(\tK<[({[(.....z.........\tK<[K<[({[(\tK<[({[<[({[(\tK<[({[(.....z.........\tK<[({[<0";
+    let e = err(source);
+    assert!(e.message.contains("unbalanced TypeScript delimiter"), "{}", e.message);
+}
+
+#[test]
 fn verify_does_not_invent_tt_intent_from_strings_or_comments() {
     for source in [
         "const note = 'try'; const = 5;\n",
