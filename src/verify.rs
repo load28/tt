@@ -310,16 +310,12 @@ mod tests {
     }
 
     #[test]
-    fn a_panicking_jsx_entity_is_a_validation_error() {
+    fn malformed_jsx_is_a_validation_error() {
         let source = "<>&>&w=<>&>&w=2&(&#;;\\w\u{1}";
         let result = verify_output(source, crate::SourceKind::Tsx);
         let failure = result.expect_err("malformed JSX must be reported");
         assert_eq!(failure.line, 1);
         assert!(failure.col > 1);
-        assert!(
-            failure
-                .message
-                .contains("malformed JSX character reference")
-        );
+        assert!(failure.message.contains("unbalanced TypeScript delimiter"));
     }
 }
