@@ -26,7 +26,7 @@ pub(crate) fn lex_and_parse_with_kind(
     let parser = Parser {
         src,
         bytes: src.as_bytes(),
-        host_owned_matches: std::collections::HashSet::new(),
+        host_owned_matches: Vec::new(),
         flow_queries: crate::flow::FlowBodyQueries::default(),
     };
     let mut program = parser.parse_tokens(&tokens, 0, src.len());
@@ -156,11 +156,21 @@ pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidat
 pub(crate) struct Parser<'a> {
     pub src: &'a str,
     pub bytes: &'a [u8],
-    host_owned_matches: std::collections::HashSet<usize>,
+    host_owned_matches: Vec<Span>,
     flow_queries: crate::flow::FlowBodyQueries,
 }
 
 impl Parser<'_> {
+    fn host_owns_match_name(&self, candidate: Span) -> bool {
+        let preceding = self
+            .host_owned_matches
+            .partition_point(|owned| owned.start <= candidate.start);
+        preceding.checked_sub(1).is_some_and(|index| {
+            let owned = self.host_owned_matches[index];
+            candidate.end <= owned.end
+        })
+    }
+
     pub(super) fn body_diverges(&self, span: Span, tokens: &[Token], program: &Program) -> bool {
         self.flow_queries.diverges(self.src, span, tokens, program)
     }
@@ -625,7 +635,7 @@ impl Parser<'_> {
             // `try` so every spread-capable host can own a match operand.
             if (!dotted || follows_spread_operator(tokens, i))
                 && word == "match"
-                && !self.host_owned_matches.contains(&tok.span.start)
+                && !self.host_owns_match_name(tok.span)
             {
                 let host_ambiguous = match_may_be_host_owned(self.src, tokens, i, expr);
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
