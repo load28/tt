@@ -115,6 +115,27 @@ fn function_and_method_named_match_with_an_arrow_in_the_body() {
 }
 
 #[test]
+fn private_method_named_match_with_an_arrow_in_the_body() {
+    assert_passthrough(
+        "class C1 { #match(x: number) { (foo: number) => foo + x } }\n\
+         class C2 { static #match(x: number) { (foo: number) => foo + x } }\n\
+         class C3 { async #match(x: number) { (foo: number) => foo + x } }\n\
+         class C4 { *#match(x: number) { (foo: number) => foo + x } }\n\
+         class C5 { get #match() { (foo: number) => foo } }\n\
+         class C6 { set #match(x: number) { (foo: number) => foo + x } }\n",
+    );
+
+    let source = "variant Choice { Yes, No }\n\
+        class C { #match(value: Choice) { return match (value) { Yes => 1, No => 0 }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(
+        output.contains("class C { #match(value: Choice)"),
+        "{output}"
+    );
+    assert_eq!(output.matches("switch (").count(), 1, "{output}");
+}
+
+#[test]
 fn tt_match_inside_a_method_body_is_not_a_host_member_key() {
     let source = "variant Choice { Yes, No }\n\
         class C { choose(value: Choice) { return match (value) { Yes => 1, No => 0 }; } }\n";

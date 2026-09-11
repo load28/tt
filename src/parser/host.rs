@@ -7,8 +7,6 @@
 //! retried, and ownership is accepted only when the converged SWC AST contains a
 //! host declaration node for the original identifier span.
 
-use std::collections::HashSet;
-
 use swc_common::input::StringInput;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, SourceMap, Span as SwcSpan, Spanned};
@@ -25,8 +23,8 @@ pub(super) fn owned_match_names_in_mixed(
     src: &str,
     source_kind: crate::SourceKind,
     program: &Program,
-) -> HashSet<usize> {
-    let mut owned = HashSet::new();
+) -> Vec<Span> {
+    let mut owned = Vec::new();
     super::parse::visit_programs(program, &mut |region| {
         let wrappers: &[Wrapper] = if std::ptr::eq(region, program) {
             &[Wrapper::Module]
@@ -47,6 +45,8 @@ pub(super) fn owned_match_names_in_mixed(
         };
         probe_region(src, source_kind, region, wrappers, &mut owned);
     });
+    owned.sort_by_key(|span| (span.start, span.end));
+    owned.dedup();
     owned
 }
 
@@ -83,7 +83,7 @@ fn probe_region(
     source_kind: crate::SourceKind,
     program: &Program,
     wrappers: &[Wrapper],
-    owned: &mut HashSet<usize>,
+    owned: &mut Vec<Span>,
 ) {
     if program.span.start >= program.span.end || program.span.end > src.len() {
         return;
@@ -351,17 +351,17 @@ fn parse_owned(
         prefix_len,
         source_offset,
         source_end: source_offset + source_len,
-        offsets: HashSet::new(),
+        spans: Vec::new(),
     };
     module.visit_with(&mut collector);
     Ok(HostParse {
-        names: collector.offsets,
+        names: collector.spans,
         errors,
     })
 }
 
 struct HostParse {
-    names: HashSet<usize>,
+    names: Vec<Span>,
     errors: Vec<usize>,
 }
 
@@ -380,7 +380,7 @@ struct MatchNameCollector {
     prefix_len: usize,
     source_offset: usize,
     source_end: usize,
-    offsets: HashSet<usize>,
+    spans: Vec<Span>,
 }
 
 impl MatchNameCollector {
@@ -388,15 +388,25 @@ impl MatchNameCollector {
         if name != "match" {
             return;
         }
-        let Ok(projected) = usize::try_from(span.lo.0.saturating_sub(self.source_start)) else {
+        let Ok(projected_start) = usize::try_from(span.lo.0.saturating_sub(self.source_start))
+        else {
             return;
         };
-        let Some(relative) = projected.checked_sub(self.prefix_len) else {
+        let Ok(projected_end) = usize::try_from(span.hi.0.saturating_sub(self.source_start)) else {
             return;
         };
-        let offset = self.source_offset + relative;
-        if offset < self.source_end {
-            self.offsets.insert(offset);
+        let Some(relative_start) = projected_start.checked_sub(self.prefix_len) else {
+            return;
+        };
+        let Some(relative_end) = projected_end.checked_sub(self.prefix_len) else {
+            return;
+        };
+        let span = Span {
+            start: self.source_offset + relative_start,
+            end: self.source_offset + relative_end,
+        };
+        if span.start < span.end && span.end <= self.source_end {
+            self.spans.push(span);
         }
     }
 
