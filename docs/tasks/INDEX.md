@@ -382,6 +382,7 @@
 | TASK-365 | Audit enterprise mixed-source compatibility | Complete | 2026-09-11 | 2026-09-12 | [TASK-365](./TASK-365-enterprise-compatibility-audit.md) |
 | TASK-366 | Preflight unbalanced delimiters before host verification | Complete | 2026-09-12 | 2026-09-12 | [TASK-366](./TASK-366-preflight-unbalanced-delimiters.md) |
 | TASK-367 | Type-check mixed imports from TSX consumers | Complete | 2026-09-12 | 2026-09-12 | [TASK-367](./TASK-367-tsx-consumer-mixed-imports.md) |
+| TASK-368 | Normalize diagnostic byte offsets at UTF-8 boundaries | Complete | 2026-09-12 | 2026-09-12 | [TASK-368](./TASK-368-normalize-diagnostic-byte-offsets.md) |
 
 ## Next task number
 
