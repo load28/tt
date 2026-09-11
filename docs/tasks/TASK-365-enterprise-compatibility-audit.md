@@ -69,6 +69,10 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
   and no crash, then completed the full Rust test suite.
 - 2026-09-12: Replayed the archived `generated_tt_compiles` crash artifact;
   the current target completed it without a failure.
+- 2026-09-12: Release tests exposed two debug-only panic-injection tests that
+  were incorrectly running without their injection hook.
+- 2026-09-12: Gated the panic-injection helper and tests with
+  `debug_assertions`; optimized CLI tests now pass without dead-code warnings.
 
 ## Issues and resolutions
 
@@ -93,6 +97,14 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
   the nested parser also owned a suffix of that span.
 - **Resolution**: Unterminated `${` sequences remain one opaque raw template
   chunk, so codegen receives non-overlapping source spans.
+
+### Issue 3: Release test suite ran debug-only panic injection tests
+
+- **Symptom**: `cargo test --release` failed because `TTC_PANIC_FOR_TEST` was
+  intentionally inactive in optimized builds.
+- **Cause**: The two panic-safety tests lacked the `debug_assertions` gate that
+  documents their test-only injection contract.
+- **Resolution**: Both tests are compiled only for debug test binaries.
 
 ## Verification
 
