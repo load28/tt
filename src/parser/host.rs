@@ -29,14 +29,29 @@ pub(super) fn owned_match_names_in_mixed(
     let root = program as *const Program;
     let mut owned = HashSet::new();
     super::parse::visit_programs(program, &mut |region| {
-        let wrapper = if std::ptr::eq(region, root) {
-            Wrapper::Module
+        // Nested Programs deliberately contain no duplicated host AST. Probe
+        // them under each syntactic capability set that an ancestor may grant;
+        // an environment blocked outside the candidate contributes no evidence.
+        // Every accepted result still comes from a complete SWC parse and an
+        // explicit host declaration node at the original byte position.
+        let wrappers: &[Wrapper] = if std::ptr::eq(region, root) {
+            &[Wrapper::Module]
         } else if region.expression_root {
-            Wrapper::Expression
+            &[
+                Wrapper::Expression,
+                Wrapper::AsyncExpression,
+                Wrapper::GeneratorExpression,
+                Wrapper::AsyncGeneratorExpression,
+            ]
         } else {
-            Wrapper::Statements
+            &[
+                Wrapper::Statements,
+                Wrapper::AsyncStatements,
+                Wrapper::GeneratorStatements,
+                Wrapper::AsyncGeneratorStatements,
+            ]
         };
-        probe_region(src, source_kind, region, wrapper, &mut owned);
+        probe_region(src, source_kind, region, wrappers, &mut owned);
     });
     owned
 }
@@ -45,7 +60,13 @@ pub(super) fn owned_match_names_in_mixed(
 enum Wrapper {
     Module,
     Expression,
+    AsyncExpression,
+    GeneratorExpression,
+    AsyncGeneratorExpression,
     Statements,
+    AsyncStatements,
+    GeneratorStatements,
+    AsyncGeneratorStatements,
 }
 
 #[derive(Clone, Copy)]
@@ -67,7 +88,7 @@ fn probe_region(
     src: &str,
     source_kind: crate::SourceKind,
     program: &Program,
-    wrapper: Wrapper,
+    wrappers: &[Wrapper],
     owned: &mut HashSet<usize>,
 ) {
     if program.span.start >= program.span.end || program.span.end > src.len() {
@@ -83,25 +104,27 @@ fn probe_region(
         return;
     }
 
-    let mut restored = Vec::new();
-    for _ in 0..=candidates.len() {
-        let projection = projected_region(src, program.span, &masks, &candidates, &restored);
-        match parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
-            Ok(names) => {
-                owned.extend(names);
-                break;
-            }
-            Err(error) => {
-                let next = candidates
-                    .iter()
-                    .filter(|candidate| !restored.contains(candidate))
-                    .filter(|candidate| candidate.start <= error && error <= candidate.end)
-                    .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
-                    .copied();
-                let Some(next) = next else {
-                    break;
-                };
-                restored.push(next);
+    for &wrapper in wrappers {
+        let mut restored = Vec::new();
+        for _ in 0..=candidates.len() {
+            let projection = projected_region(src, program.span, &masks, &candidates, &restored);
+            match parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
+                Ok(names) => {
+                    owned.extend(names);
+                    return;
+                }
+                Err(error) => {
+                    let next = candidates
+                        .iter()
+                        .filter(|candidate| !restored.contains(candidate))
+                        .filter(|candidate| candidate.start <= error && error <= candidate.end)
+                        .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
+                        .copied();
+                    let Some(next) = next else {
+                        break;
+                    };
+                    restored.push(next);
+                }
             }
         }
     }
@@ -259,7 +282,17 @@ fn parse_wrapped(
     let (prefix, suffix) = match wrapper {
         Wrapper::Module => ("", ""),
         Wrapper::Expression => ("const __tt_host_probe = (", ");"),
-        Wrapper::Statements => ("function __tt_host_probe() {", "}"),
+        Wrapper::AsyncExpression => ("async function __tt_host_probe() { return (", ");}"),
+        Wrapper::GeneratorExpression => ("function* __tt_host_probe() { return (", ");}"),
+        Wrapper::AsyncGeneratorExpression => {
+            ("async function* __tt_host_probe() { return (", ");}")
+        }
+        Wrapper::Statements => ("function __tt_host_probe() { while (true) {", "}}"),
+        Wrapper::AsyncStatements => ("async function __tt_host_probe() { while (true) {", "}}"),
+        Wrapper::GeneratorStatements => ("function* __tt_host_probe() { while (true) {", "}}"),
+        Wrapper::AsyncGeneratorStatements => {
+            ("async function* __tt_host_probe() { while (true) {", "}}")
+        }
     };
     let mut projection = String::with_capacity(prefix.len() + source.len() + suffix.len());
     projection.push_str(prefix);

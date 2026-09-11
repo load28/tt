@@ -169,6 +169,17 @@ fn host_match_ownership_is_found_in_a_nested_parser_region() {
 }
 
 #[test]
+fn host_match_ownership_survives_statement_capability_boundaries() {
+    let source = "variant Choice { Yes, No }\n\
+        declare const choice: Choice;\n\
+        while (true) { if let Yes() = choice { break; const o = { match(x: number) { (foo: number) => foo + x } }; } }\n\
+        async function asyncOwner() { if let Yes() = choice { await Promise.resolve(); const o = { match(x: number) { (foo: number) => foo + x } }; } }\n\
+        function* generatorOwner() { if let Yes() = choice { yield 1; const o = { match(x: number) { (foo: number) => foo + x } }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert_eq!(output.matches("match(x: number)").count(), 3, "{output}");
+}
+
+#[test]
 fn class_method_named_match() {
     assert_passthrough(
         r#"

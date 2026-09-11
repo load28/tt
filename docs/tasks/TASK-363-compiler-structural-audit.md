@@ -59,6 +59,22 @@ the layer that owns each contract.
   AST name spans then prove host ownership. This terminates within the ambiguous
   candidate count and introduces no TypeScript modifier lists.
 
+### Decision 4: Make recursive host probes capability-parametric
+
+- **Context**: A nested parser `Program` keeps its source range but deliberately
+  does not duplicate the TypeScript ancestor AST. A single ordinary-function
+  wrapper therefore rejects valid `break`, `await`, or `yield` before reaching
+  an ambiguous `match` declaration.
+- **Alternatives considered**: Reconstruct host ancestors with token heuristics,
+  suppress individual SWC diagnostics, or classify under complete syntactic
+  capability environments.
+- **Decision and rationale**: Expression and statement regions are probed under
+  plain, async, generator, and async-generator environments. Statement probes
+  also supply a loop boundary. An environment blocked outside a candidate
+  contributes no evidence; ownership still requires a complete SWC parse and a
+  host declaration AST node at the original span. This represents ancestor
+  capabilities without duplicating TypeScript grammar or ignoring diagnostics.
+
 ## Work log
 
 - 2026-09-11: Fast-forwarded `main` to `fcaf2a0`, ran `./scripts/doctor`, and
@@ -95,6 +111,14 @@ the layer that owns each contract.
   `main` passed all performance budgets.
 - 2026-09-11: Added a nested template-interpolation regression and removed the
   root-token shortcut so recursive parser regions participate independently.
+- 2026-09-11: Reopened the task after review showed that isolated statement
+  wrappers discard ancestor control capabilities such as loop, async, and
+  generator context.
+- 2026-09-11: Replaced the single recursive wrapper with capability-parametric
+  expression and statement probes, then covered loop, async, and generator
+  ancestors in one mixed-source regression.
+- 2026-09-11: Ran the complete Rust CI gate and repeated the main-relative
+  benchmark comparison; all correctness and performance gates passed.
 
 ## Issues and resolutions
 
@@ -166,6 +190,16 @@ the layer that owns each contract.
   ambiguous positions, and every unresolved candidate starts as an
   expression-safe probe. Ordinary tt-heavy files need no host parse; mixed files
   perform one parse plus one retry per actual host declaration.
+
+### Issue 8: Recursive probes lose ancestor control capabilities
+
+- **Symptom**: A `break`, `await`, or `yield` before a host method named `match`
+  blocks ownership discovery inside a nested tt statement body.
+- **Cause**: Every recursive statement region was parsed as the body of an
+  ordinary function, regardless of the capabilities supplied by its ancestor.
+- **Resolution**: Recursive probes now select among complete capability
+  environments. Statement environments include a loop, and async/generator
+  variants preserve contextual keyword parsing without suppressing SWC errors.
 
 ## Verification
 
