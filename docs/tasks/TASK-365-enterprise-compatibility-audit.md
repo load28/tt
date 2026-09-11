@@ -111,6 +111,7 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test`
+- [x] `cargo test --release`
 - [x] `./scripts/ci npm website`
 - [x] `env TTC_CORPUS_FULL=1 TTC_REQUIRE_CORPUS=1 cargo test --test corpus --release`
 - [x] `cargo +nightly fuzz run generated_tt_compiles -- -max_total_time=120 -rss_limit_mb=4096`
