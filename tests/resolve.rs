@@ -221,6 +221,30 @@ fn a_hand_written_union_resolves_to_silence() {
 }
 
 #[test]
+fn repeated_case_occurrences_do_not_weight_subject_identification() {
+    let guarded = "variant Left { Alpha }\n\
+        variant Right { Alphx }\n\
+        const v = match (u) {\n\
+        \x20 Alpha if first => 1,\n\
+        \x20 Alpha => 2,\n\
+        \x20 Alphx => 3,\n\
+        \x20 _ => 4,\n\
+        };\n";
+    let (hir, resolution) = resolved(guarded, &[]);
+    let site_id = hir.sites.iter().next().expect("match site").0;
+    assert_eq!(resolution.sites[&site_id].subjects[0], None);
+    assert!(resolution.unresolved.is_empty());
+
+    let or_pattern = "variant Left { Alpha }\n\
+        variant Right { Alphx }\n\
+        const v = match (u) { Alpha | Alpha | Alphx => 1, _ => 2 };\n";
+    let (hir, resolution) = resolved(or_pattern, &[]);
+    let site_id = hir.sites.iter().next().expect("match site").0;
+    assert_eq!(resolution.sites[&site_id].subjects[0], None);
+    assert!(resolution.unresolved.is_empty());
+}
+
+#[test]
 fn nested_patterns_resolve_against_the_fields_declared_type() {
     let src = "variant Inner { Leaf(v: number), Nil }\n\
         variant Outer { Wrap(inner: Inner), Bare }\n\

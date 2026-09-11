@@ -191,12 +191,10 @@ impl Engine {
         // be listed or a `.ts` nothing imports is never checked.
         let sources = match tsconfig {
             Some(_) => Vec::new(),
-            None => project::project_sources(
-                &root,
-                options.out_dir.as_deref(),
-                &["ts", "tsx", "mts", "cts"],
-            )
-            .unwrap_or_default(),
+            None => {
+                project::project_sources(&root, options.out_dir.as_deref(), project::TS_EXTENSIONS)
+                    .unwrap_or_default()
+            }
         };
         Ok(Project::new(
             root,

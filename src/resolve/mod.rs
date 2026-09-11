@@ -492,8 +492,10 @@ impl Resolver {
         let positions = site.subjects.len();
         let mut subjects: Vec<Option<DefId>> = Vec::with_capacity(positions);
         for position in 0..positions {
-            // The evidence: every tag the site's arms use at this position
-            // (all alternatives of an or-pattern, guarded arms included).
+            // The evidence: every distinct tag the site's arms use at this
+            // position (all alternatives of an or-pattern, guarded arms
+            // included). Repeating one case is control-flow information, not
+            // stronger evidence that the subject belongs to its declaration.
             let mut tags: Vec<&str> = Vec::new();
             for arm in &site.arms {
                 collect_position_tags(hir, arm.pattern, position, positions, &mut tags);
@@ -794,7 +796,11 @@ fn collect_position_tags<'h>(
         // Top-level tags only: a nested pattern's tag is evidence about
         // the *payload*'s variant, not the subject's — same rule as the
         // analysis.
-        Pat::Constructor { path, .. } => out.push(&path.name),
+        Pat::Constructor { path, .. } => {
+            if !out.contains(&path.name.as_str()) {
+                out.push(&path.name);
+            }
+        }
     }
 }
 

@@ -105,6 +105,81 @@ fn a_new_editor_file_has_project_types_before_its_first_save() {
 }
 
 #[test]
+fn unsaved_node_format_host_modules_join_the_typed_snapshot() {
+    require_tsgo!();
+    use std::io::Write;
+
+    for (extension, specifier) in [("mts", "mjs"), ("cts", "cjs")] {
+        let source = format!(
+            "import {{ expected }} from \"./provider.{specifier}\";\n\
+             export const actual: typeof expected = 2;\n"
+        );
+        let dir = project(&[("src/consumer.tt", &source)]);
+        let provider = dir.join(format!("src/provider.{extension}"));
+        assert!(!provider.exists());
+        let consumer = dir.join("src/consumer.tt").canonicalize().unwrap();
+        let requests = [
+            serde_json::json!({
+                "id": 1,
+                "method": "openDocument",
+                "params": {
+                    "path": provider,
+                    "text": "export const expected = 1 as const;\n",
+                },
+            }),
+            serde_json::json!({
+                "id": 2,
+                "method": "typedCheck",
+                "params": {
+                    "path": consumer,
+                    "text": source,
+                    "includeTypes": true,
+                },
+            }),
+        ];
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--server")
+            .current_dir(&dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("server starts");
+        for request in requests {
+            writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+        }
+        drop(child.stdin.take());
+        let output = child.wait_with_output().expect("server answers");
+        let answers: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("JSON response"))
+            .collect();
+
+        assert_eq!(answers.len(), 2, "{extension}: {answers:?}");
+        assert!(
+            answers.iter().all(|answer| answer.get("error").is_none()),
+            "{extension}: {answers:?}"
+        );
+        let diagnostics = answers[1]["result"]["diagnostics"]
+            .as_array()
+            .expect("typed diagnostics");
+        assert!(
+            diagnostics.iter().any(|diagnostic| {
+                diagnostic["code"] == "ts2322" || diagnostic["code"] == 2322
+            }),
+            "{extension}: the consumer must observe the overlay's literal type: {answers:?}"
+        );
+        assert!(
+            diagnostics.iter().all(|diagnostic| {
+                diagnostic["code"] != "ts2307" && diagnostic["code"] != 2307
+            }),
+            "{extension}: the unsaved host module must resolve: {answers:?}"
+        );
+        assert!(!provider.exists(), "the overlay must not write the user's file");
+    }
+}
+
+#[test]
 fn declarations_are_emitted_by_the_compiler_itself() {
     require_emit!();
     let dir = project(&[(

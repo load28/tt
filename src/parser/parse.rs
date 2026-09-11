@@ -415,6 +415,238 @@ fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
             .all(|token| matches!(token.kind, TokenKind::Punct(b'.')))
 }
 
+/// Whether an undotted identifier at `idx` occupies a TypeScript member-key
+/// position inside a class or object literal. A method named `match` has the
+/// same local token silhouette as a tt match expression, including an arrow
+/// expression statement in its body, so construct ownership has to come from
+/// the enclosing host grammar rather than from the method body's spelling.
+fn at_host_member_key(src: &str, tokens: &[Token], idx: usize) -> bool {
+    let Some((open, class_body)) = enclosing_member_container(src, tokens, idx) else {
+        return false;
+    };
+
+    let mut member_start = open + 1;
+    let mut depth = 0usize;
+    for (k, token) in tokens.iter().enumerate().take(idx).skip(open + 1) {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') if depth > 0 => {
+                depth -= 1;
+                if class_body && depth == 0 && matches!(token.kind, TokenKind::Punct(b'}')) {
+                    member_start = k + 1;
+                }
+            }
+            TokenKind::Punct(b';') if class_body && depth == 0 => member_start = k + 1,
+            TokenKind::Punct(b',') if !class_body && depth == 0 => member_start = k + 1,
+            _ => {}
+        }
+    }
+
+    member_prefix(src, tokens, member_start, idx, class_body)
+}
+
+/// Returns the directly enclosing member container and whether it is a class
+/// body. Other braces are statement/function bodies and do not make their
+/// first identifier a member key.
+fn enclosing_member_container(src: &str, tokens: &[Token], idx: usize) -> Option<(usize, bool)> {
+    let open = directly_enclosing_open(tokens, idx)?;
+    if !matches!(tokens[open].kind, TokenKind::Punct(b'{')) {
+        return None;
+    }
+    if class_body_open(src, tokens, open) {
+        return Some((open, true));
+    }
+    object_literal_open(src, tokens, open).then_some((open, false))
+}
+
+fn directly_enclosing_open(tokens: &[Token], idx: usize) -> Option<usize> {
+    let mut stack = Vec::new();
+    for (k, token) in tokens.iter().enumerate().take(idx) {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => stack.push(k),
+            TokenKind::Punct(b')' | b']' | b'}') => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    stack.last().copied()
+}
+
+/// A class body is introduced by the nearest top-level `class` in the current
+/// declaration/expression phrase. Balanced heritage expressions are skipped
+/// as units by the reverse depth walk.
+fn class_body_open(src: &str, tokens: &[Token], open: usize) -> bool {
+    let mut depth = 0usize;
+    for k in (0..open).rev() {
+        match tokens[k].kind {
+            TokenKind::Punct(b'}') if depth == 0 => return false,
+            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') if depth > 0 => depth -= 1,
+            _ if depth > 0 => {}
+            TokenKind::Ident if &src[tokens[k].span.start..tokens[k].span.end] == "class" => {
+                return true;
+            }
+            TokenKind::Punct(b';' | b',' | b'{' | b'=') => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// Object literals begin where the host grammar expects a value. Braces after
+/// a control/function head are excluded because `)` and `=>` are deliberately
+/// absent from these introducers.
+fn object_literal_open(src: &str, tokens: &[Token], open: usize) -> bool {
+    if jsx_expression_container_open(src, tokens, open) {
+        return false;
+    }
+    let Some(previous) = open.checked_sub(1).and_then(|k| tokens.get(k)) else {
+        return false;
+    };
+    match previous.kind {
+        TokenKind::Punct(
+            b'=' | b'(' | b'[' | b',' | b'?' | b'!' | b'~' | b'+' | b'-' | b'*' | b'/' | b'%'
+            | b'&' | b'|' | b'^' | b'<' | b'>',
+        )
+        | TokenKind::OrOr
+        | TokenKind::Coalesce => true,
+        TokenKind::Punct(b':') => colon_starts_expression(src, tokens, open - 1),
+        TokenKind::Ident => matches!(
+            &src[previous.span.start..previous.span.end],
+            "return" | "throw" | "yield" | "await" | "case" | "delete" | "void" | "typeof"
+        ),
+        _ => false,
+    }
+}
+
+/// JSX expression-container braces are lexical delimiters, not object
+/// literals. The TypeScript-default parser entry is also used by syntax-layer
+/// tests before their target source kind is known, so recognize the host
+/// opening-tag grammar from tokens instead of relying on a TSX-only lexer bit.
+fn jsx_expression_container_open(src: &str, tokens: &[Token], open: usize) -> bool {
+    if !matches!(
+        tokens.get(open.wrapping_sub(1)).map(|token| &token.kind),
+        Some(TokenKind::Punct(b'=' | b'>'))
+    ) {
+        return false;
+    }
+
+    let mut depth = 0usize;
+    for less in (0..open).rev() {
+        match tokens[less].kind {
+            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') if depth > 0 => depth -= 1,
+            _ if depth > 0 => {}
+            TokenKind::Punct(b'<') => {
+                let tag = tokens.get(less + 1);
+                return matches!(tag.map(|token| &token.kind), Some(TokenKind::Ident))
+                    && expression_starts_before(src, tokens, less);
+            }
+            TokenKind::Punct(b';' | b'{') => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+fn expression_starts_before(src: &str, tokens: &[Token], at: usize) -> bool {
+    let Some(previous) = at.checked_sub(1).and_then(|index| tokens.get(index)) else {
+        return true;
+    };
+    match previous.kind {
+        TokenKind::Punct(
+            b'=' | b'(' | b'[' | b'{' | b',' | b':' | b'?' | b'!' | b'~' | b'+' | b'-' | b'*'
+            | b'/' | b'%' | b'&' | b'|' | b'^',
+        )
+        | TokenKind::Arrow
+        | TokenKind::OrOr
+        | TokenKind::Coalesce => true,
+        TokenKind::Ident => matches!(
+            &src[previous.span.start..previous.span.end],
+            "return" | "throw" | "yield" | "await" | "case" | "delete" | "void" | "typeof"
+        ),
+        _ => false,
+    }
+}
+
+/// A colon expects an expression when it is an object-property separator or
+/// the unmatched separator of a conditional expression. A label or `case`
+/// colon instead starts a statement, so its following brace remains a block.
+fn colon_starts_expression(src: &str, tokens: &[Token], colon: usize) -> bool {
+    if let Some(parent) = directly_enclosing_open(tokens, colon)
+        && matches!(tokens[parent].kind, TokenKind::Punct(b'{'))
+        && object_literal_open(src, tokens, parent)
+    {
+        return true;
+    }
+
+    let mut depth = 0usize;
+    for token in tokens[..colon].iter().rev() {
+        match token.kind {
+            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') if depth > 0 => depth -= 1,
+            _ if depth > 0 => {}
+            TokenKind::Punct(b'?') => return true,
+            TokenKind::Punct(b':' | b';' | b',' | b'{') => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+/// A function declaration/expression name is another host-owned position
+/// where the identifier `match` is followed by a parameter list and body.
+fn at_host_function_name(src: &str, tokens: &[Token], idx: usize) -> bool {
+    let word = |at: usize| match tokens.get(at) {
+        Some(token) if matches!(token.kind, TokenKind::Ident) => {
+            Some(&src[token.span.start..token.span.end])
+        }
+        _ => None,
+    };
+    idx.checked_sub(1).is_some_and(|before| {
+        word(before) == Some("function")
+            || matches!(tokens[before].kind, TokenKind::Punct(b'*'))
+                && before
+                    .checked_sub(1)
+                    .is_some_and(|function| word(function) == Some("function"))
+    })
+}
+
+/// Accepts only grammar-level prefixes which may precede a method name in a
+/// member list. An initializer such as `value = match (...)` therefore cannot
+/// be mistaken for a member key even though it shares the same container.
+fn member_prefix(src: &str, tokens: &[Token], mut at: usize, end: usize, class_body: bool) -> bool {
+    while at < end {
+        match tokens[at].kind {
+            TokenKind::Punct(b'*' | b'#') => at += 1,
+            TokenKind::Ident => {
+                let word = &src[tokens[at].span.start..tokens[at].span.end];
+                let modifier = matches!(word, "async" | "get" | "set")
+                    || class_body
+                        && matches!(
+                            word,
+                            "public"
+                                | "private"
+                                | "protected"
+                                | "static"
+                                | "abstract"
+                                | "declare"
+                                | "readonly"
+                                | "override"
+                                | "accessor"
+                        );
+                if !modifier {
+                    return false;
+                }
+                at += 1;
+            }
+            _ => return false,
+        }
+    }
+    true
+}
+
 impl Parser<'_> {
     /// Parses a lexed token range covering `bytes[start..end]` into a
     /// [`Program`] whose segments cover the byte range exactly, in source
@@ -597,7 +829,11 @@ impl Parser<'_> {
             // A spread's third dot is punctuation in the host grammar, not
             // member access. Keep the same structural distinction used for
             // `try` so every spread-capable host can own a match operand.
-            if (!dotted || follows_spread_operator(tokens, i)) && word == "match" {
+            if (!dotted || follows_spread_operator(tokens, i))
+                && word == "match"
+                && !at_host_member_key(self.src, tokens, i)
+                && !at_host_function_name(self.src, tokens, i)
+            {
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
                         flush_verbatim(&mut segments, seg_start, tok.span.start);

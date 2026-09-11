@@ -29,7 +29,7 @@ use crate::typescript::native::NativeBackend;
 
 /// What counts as a tt source, and what counts as hand-written TypeScript.
 const TT_EXTENSIONS: &[&str] = &["tt", "ttx"];
-const TS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts"];
+pub(super) const TS_EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts"];
 
 /// A snapshot could not be taken because a source could not be read.
 /// Lowering failures are recoverable snapshot data; an I/O failure has no
@@ -449,7 +449,8 @@ impl Project {
 /// Host files retain their original paths and syntax in backend overlays.
 pub(super) fn is_host_source(path: &Path) -> bool {
     path.extension()
-        .is_some_and(|extension| extension == "ts" || extension == "tsx")
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| TS_EXTENSIONS.contains(&extension))
 }
 
 /// One cached [`FileSemantics`] with the half of its key the value does

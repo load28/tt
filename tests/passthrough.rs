@@ -81,6 +81,37 @@ fn function_and_method_named_match_with_an_arrow_in_the_body() {
         "declare const xs: number[];\n\
          class C { match(x: number) { const f = (y: number) => y; return f(x); } }\n",
     );
+    // A top-level arrow expression is itself a valid method-body statement.
+    // Its `=>` is not evidence that the surrounding braces are tt match arms.
+    assert_passthrough("class C { match(x: number) { (foo: number) => foo + x } }\n");
+    assert_passthrough("const o = { match(x: number) { (foo: number) => foo + x } };\n");
+    assert_passthrough(
+        "const o = { nested: { match(x: number) { (foo: number) => foo + x } } };\n",
+    );
+    assert_passthrough(
+        "declare const flag: boolean;\n\
+         const o = flag ? {} : { match(x: number) { (foo: number) => foo + x } };\n",
+    );
+    assert_passthrough("function match(x: number) { (foo: number) => foo + x }\n");
+    assert_passthrough(
+        "namespace N {\n\
+           export function match(x: number) { (foo: number) => foo + x }\n\
+           export interface I { match(x: number): (foo: number) => number; }\n\
+         }\n",
+    );
+    assert_passthrough(
+        "interface I { match(x: number): (foo: number) => number; }\n\
+         type T = { match(x: number): (foo: number) => number };\n",
+    );
+}
+
+#[test]
+fn tt_match_inside_a_method_body_is_not_a_host_member_key() {
+    let source = "variant Choice { Yes, No }\n\
+        class C { choose(value: Choice) { return match (value) { Yes => 1, No => 0 }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(output.contains("switch ("), "{output}");
+    assert!(!output.contains("return match (value)"), "{output}");
 }
 
 #[test]
