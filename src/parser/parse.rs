@@ -22,13 +22,24 @@ pub(crate) fn lex_and_parse_with_kind(
     src: &str,
     source_kind: crate::SourceKind,
 ) -> (Program, Vec<Token>) {
+    let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
     let parser = Parser {
         src,
         bytes: src.as_bytes(),
+        host_owned_matches: std::collections::HashSet::new(),
         flow_queries: crate::flow::FlowBodyQueries::default(),
     };
-    let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
-    let program = parser.parse_tokens(&tokens, 0, src.len());
+    let mut program = parser.parse_tokens(&tokens, 0, src.len());
+    let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
+    if !host_owned_matches.is_empty() {
+        program = Parser {
+            src,
+            bytes: src.as_bytes(),
+            host_owned_matches,
+            flow_queries: crate::flow::FlowBodyQueries::default(),
+        }
+        .parse_tokens(&tokens, 0, src.len());
+    }
     (program, tokens)
 }
 
@@ -145,6 +156,7 @@ pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidat
 pub(crate) struct Parser<'a> {
     pub src: &'a str,
     pub bytes: &'a [u8],
+    host_owned_matches: std::collections::HashSet<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
 }
 
@@ -415,6 +427,19 @@ fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
             .all(|token| matches!(token.kind, TokenKind::Punct(b'.')))
 }
 
+/// Whether a parsed `match (...) { ... }` still overlaps a possible host
+/// declaration position. The expression tracker already models where a host
+/// operator or delimiter requires an operand; those positions need no second
+/// parser. A preceding prefix, statement boundary, or comma remains ambiguous
+/// and is delegated to the host AST without enumerating TypeScript modifiers.
+fn match_may_be_host_owned(src: &str, tokens: &[Token], idx: usize, expr: (usize, bool)) -> bool {
+    expr.0 < idx
+        || starts_statement(src, tokens, idx, expr.1)
+        || idx
+            .checked_sub(1)
+            .is_some_and(|previous| matches!(tokens[previous].kind, TokenKind::Punct(b',')))
+}
+
 impl Parser<'_> {
     /// Parses a lexed token range covering `bytes[start..end]` into a
     /// [`Program`] whose segments cover the byte range exactly, in source
@@ -444,6 +469,7 @@ impl Parser<'_> {
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
+        let mut host_match_candidates = Vec::new();
         let mut stray_pipes: Vec<usize> = Vec::new();
         let mut stray_if_lets: Vec<usize> = Vec::new();
         let stray_results: Vec<usize> = Vec::new();
@@ -597,9 +623,19 @@ impl Parser<'_> {
             // A spread's third dot is punctuation in the host grammar, not
             // member access. Keep the same structural distinction used for
             // `try` so every spread-capable host can own a match operand.
-            if (!dotted || follows_spread_operator(tokens, i)) && word == "match" {
+            if (!dotted || follows_spread_operator(tokens, i))
+                && word == "match"
+                && !self.host_owned_matches.contains(&tok.span.start)
+            {
+                let host_ambiguous = match_may_be_host_owned(self.src, tokens, i, expr);
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
+                        if host_ambiguous {
+                            host_match_candidates.push(Span {
+                                start: tok.span.start,
+                                end: byte_end,
+                            });
+                        }
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(match parsed {
                             matches::ParsedMatch::Single(expr) => Segment::Match(expr),
@@ -610,6 +646,9 @@ impl Parser<'_> {
                         continue;
                     }
                     Claim::Malformed { error, recovery } => {
+                        if host_ambiguous {
+                            host_match_candidates.push(recovery.span);
+                        }
                         malformed.push(error);
                         recoveries.push(recovery);
                     }
@@ -763,7 +802,10 @@ impl Parser<'_> {
 
         flush_verbatim(&mut segments, seg_start, end);
         Program {
+            span: Span { start, end },
+            expression_root,
             segments,
+            host_match_candidates,
             unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),
             recoveries,
             malformed,

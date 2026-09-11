@@ -110,6 +110,10 @@ pub(super) fn parse_let_else<'t>(
         cur,
         semi.end,
         LetElseStmt {
+            owner_span: Span {
+                start: kw_span.start,
+                end: semi.end,
+            },
             keyword_off: kw_span.start,
             head_span: Span {
                 start: kw_span.start,

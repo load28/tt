@@ -81,6 +81,112 @@ fn function_and_method_named_match_with_an_arrow_in_the_body() {
         "declare const xs: number[];\n\
          class C { match(x: number) { const f = (y: number) => y; return f(x); } }\n",
     );
+    // A top-level arrow expression is itself a valid method-body statement.
+    // Its `=>` is not evidence that the surrounding braces are tt match arms.
+    assert_passthrough("class C { match(x: number) { (foo: number) => foo + x } }\n");
+    assert_passthrough("const o = { match(x: number) { (foo: number) => foo + x } };\n");
+    assert_passthrough(
+        "const o = { nested: { match(x: number) { (foo: number) => foo + x } } };\n",
+    );
+    assert_passthrough(
+        "declare const flag: boolean;\n\
+         const o = flag ? {} : { match(x: number) { (foo: number) => foo + x } };\n",
+    );
+    assert_passthrough("function match(x: number) { (foo: number) => foo + x }\n");
+    assert_passthrough(
+        "namespace N {\n\
+           export function match(x: number) { (foo: number) => foo + x }\n\
+           export interface I { match(x: number): (foo: number) => number; }\n\
+         }\n",
+    );
+    assert_passthrough(
+        "interface I { match(x: number): (foo: number) => number; }\n\
+         type T = { match(x: number): (foo: number) => number };\n",
+    );
+    assert_passthrough("export default { match(x: number) { (foo: number) => foo + x } };\n");
+    assert_passthrough(
+        "type T = unknown;\n\
+         const o = <T>{ match(x: number) { (foo: number) => foo + x } };\n",
+    );
+    assert_passthrough(
+        "declare function dec(value: unknown, context: unknown): void;\n\
+         class C { @dec match(x: number) { (foo: number) => foo + x } }\n",
+    );
+}
+
+#[test]
+fn tt_match_inside_a_method_body_is_not_a_host_member_key() {
+    let source = "variant Choice { Yes, No }\n\
+        class C { choose(value: Choice) { return match (value) { Yes => 1, No => 0 }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(output.contains("switch ("), "{output}");
+    assert!(!output.contains("return match (value)"), "{output}");
+}
+
+#[test]
+fn host_match_declarations_survive_beside_tt_syntax() {
+    let source = "variant Choice { Yes, No }\n\
+        class C { match(x: number) { (foo: number) => foo + x } }\n\
+        class D { match(x) { Foo => x } }\n\
+        function match(x: number) { (foo: number) => foo + x }\n\
+        const value = match (Choice.Yes) { Yes => 1, No => 0 };\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(
+        output.contains("class C { match(x: number) { (foo: number) => foo + x } }"),
+        "{output}"
+    );
+    assert!(
+        output.contains("function match(x: number) { (foo: number) => foo + x }"),
+        "{output}"
+    );
+    assert!(
+        output.contains("class D { match(x) { Foo => x } }"),
+        "{output}"
+    );
+    assert_eq!(output.matches("switch (").count(), 1, "{output}");
+}
+
+#[test]
+fn host_match_method_body_may_contain_a_tt_match() {
+    let source = "variant Choice { Yes, No }\n\
+        class C { match(value: Choice) { return match (value) { Yes => 1, No => 0 }; } }\n\
+        const o = { match(value: Choice) { return match (value) { Yes => 2, No => 3 }; } };\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(
+        output.contains("class C { match(value: Choice)"),
+        "{output}"
+    );
+    assert!(
+        output.contains("const o = { match(value: Choice)"),
+        "{output}"
+    );
+    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+}
+
+#[test]
+fn host_match_ownership_is_found_in_a_nested_parser_region() {
+    assert_passthrough("const rendered = `${({ match(value) { value => value } }).match(1)}`;\n");
+}
+
+#[test]
+fn host_match_ownership_survives_statement_capability_boundaries() {
+    let source = "variant Choice { Yes, No }\n\
+        declare const choice: Choice;\n\
+        while (true) { if let Yes() = choice { break; const o = { match(x: number) { (foo: number) => foo + x } }; } }\n\
+        async function asyncOwner() { if let Yes() = choice { await Promise.resolve(); const o = { match(x: number) { (foo: number) => foo + x } }; } }\n\
+        function* generatorOwner() { if let Yes() = choice { yield 1; const o = { match(x: number) { (foo: number) => foo + x } }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert_eq!(output.matches("match(x: number)").count(), 3, "{output}");
+}
+
+#[test]
+fn host_match_ownership_survives_labeled_statement_boundaries() {
+    let source = "variant Choice { Yes, No }\n\
+        declare const choice: Choice;\n\
+        outer: while (true) { if let Yes() = choice { break outer; const a = { match(x: number) { (foo: number) => foo + x } }; } }\n\
+        retry: while (true) { if let Yes() = choice { continue retry; const b = { match(x: number) { (foo: number) => foo + x } }; } }\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert_eq!(output.matches("match(x: number)").count(), 2, "{output}");
 }
 
 #[test]

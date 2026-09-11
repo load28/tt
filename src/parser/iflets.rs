@@ -140,6 +140,10 @@ pub(super) fn parse_if_let<'t>(
         cur,
         byte_end,
         IfLetStmt {
+            owner_span: Span {
+                start: kw_span.start,
+                end: byte_end,
+            },
             keyword_off: kw_span.start,
             head_span: Span {
                 start: kw_span.start,

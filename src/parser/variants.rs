@@ -78,6 +78,13 @@ fn parse_variant_complete<'t>(
     mut cur: Cursor<'t>,
     exported: bool,
 ) -> Option<(Cursor<'t>, usize, VariantDecl)> {
+    let keyword_index = cur.idx.checked_sub(1)?;
+    let owner_start = if exported {
+        cur.idx.checked_sub(2)?
+    } else {
+        keyword_index
+    };
+    let owner_start = cur.tokens.get(owner_start)?.span.start;
     let (name, name_span) = cur.eat_ident()?;
     if is_reserved(name) {
         return None;
@@ -108,6 +115,10 @@ fn parse_variant_complete<'t>(
         cur,
         byte_end,
         VariantDecl {
+            span: Span {
+                start: owner_start,
+                end: byte_end,
+            },
             name: name.to_string(),
             name_off: name_span.start,
             exported,

@@ -299,6 +299,20 @@ function f(val b: Box) {
 /* ------------------------------------------------------------------ */
 
 #[test]
+fn repeated_guarded_case_does_not_weight_subject_identification() {
+    let src = "variant Left { Alpha }\n\
+        variant Right { Alphx }\n\
+        const v = match (u) {\n\
+        \x20 Alpha if first => 1,\n\
+        \x20 Alpha => 2,\n\
+        \x20 Alphx => 3,\n\
+        \x20 _ => 4,\n\
+        };\n";
+    let output = ok(src);
+    assert!(output.contains("kind === \"Alphx\""), "{output}");
+}
+
+#[test]
 fn misspelled_case_in_a_match_arm_names_the_case_meant() {
     let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) {
