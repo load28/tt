@@ -460,6 +460,30 @@ fn a_ttx_file_serves_as_tsx() {
     );
 }
 
+#[test]
+fn a_tsx_consumer_typechecks_tt_and_ttx_imports_together() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(true);
+    fs::write(
+        project.path().join("src/plain.tt"),
+        "export const fromTt: string = \"tt\";\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/view.ttx"),
+        "export const fromTtx: string = \"ttx\";\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.tsx"),
+        "import { fromTt } from \"./plain.tt\";\nimport { fromTtx } from \"./view.ttx\";\ndeclare global { namespace JSX { interface IntrinsicElements { section: { children?: unknown }; } } }\nexport const view = <section>{fromTt}{fromTtx}</section>;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, project.path());
+    assert!(ok, "expected a clean .tsx mixed-import check, got:\n{text}");
+}
+
 /// The protocol end to end without TypeScript: this test is the peer,
 /// speaking Content-Length-framed JSON-RPC to `ttc --content-mapper`
 /// directly. It needs no toolchain, so the wire contract stays covered

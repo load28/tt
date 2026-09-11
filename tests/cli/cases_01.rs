@@ -467,6 +467,7 @@ fn the_rendered_code_is_the_one_explain_answers_to() {
 /// `ttc` with the environment a test needs. `TTC_PANIC_FOR_TEST` makes a
 /// debug build fail at a named point, which is the only way to observe
 /// what the compiler does when the compiler itself is wrong.
+#[cfg(debug_assertions)]
 fn ttc_failing_at(point: &str, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_ttc"))
         .args(args)
@@ -478,6 +479,7 @@ fn ttc_failing_at(point: &str, args: &[&str]) -> std::process::Output {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn a_compiler_bug_is_reported_as_a_bug_and_names_the_file() {
     let dir = tmpdir();
     let source = dir.join("main.tt");
@@ -508,6 +510,7 @@ fn a_compiler_bug_is_reported_as_a_bug_and_names_the_file() {
 }
 
 #[test]
+#[cfg(debug_assertions)]
 fn the_server_answers_a_failed_request_and_keeps_the_session() {
     // The protocol promises a failed request never ends the session. A
     // panic is a failed request, so it may not be the exception.

@@ -163,7 +163,10 @@ impl TtError {
 
 /// Convert a byte offset to (1-based line, 1-based column in UTF-8 code points).
 pub(crate) fn line_col(src: &str, offset: usize) -> (usize, usize) {
-    let offset = offset.min(src.len());
+    let mut offset = offset.min(src.len());
+    while offset > 0 && !src.is_char_boundary(offset) {
+        offset -= 1;
+    }
     let before = &src[..offset];
     let line = before.bytes().filter(|&b| b == b'\n').count() + 1;
     let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
@@ -196,4 +199,17 @@ pub(crate) fn utf16_column(src: &str, line: usize, column: usize) -> usize {
         };
     };
     text[..prefix].encode_utf16().count() + 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::line_col;
+
+    #[test]
+    fn line_col_normalizes_offsets_inside_multibyte_characters() {
+        let source = "aĳb";
+        assert_eq!(line_col(source, 2), (1, 2));
+        assert_eq!(line_col(source, 3), (1, 3));
+        assert_eq!(line_col(source, 4), (1, 4));
+    }
 }

@@ -379,7 +379,15 @@
 | TASK-362 | Isolate terminated coverage children | Complete | 2026-09-10 | 2026-09-10 | [TASK-362](./TASK-362-isolate-terminated-coverage-children.md) |
 | TASK-363 | Repair compiler boundary defects found by a parallel audit | Complete | 2026-09-11 | 2026-09-11 | [TASK-363](./TASK-363-compiler-structural-audit.md) |
 | TASK-364 | Audit and repair a structural compiler defect | Complete | 2026-09-11 | 2026-09-11 | [TASK-364](./TASK-364-compiler-structural-repair.md) |
+| TASK-365 | Audit enterprise mixed-source compatibility | Complete | 2026-09-11 | 2026-09-12 | [TASK-365](./TASK-365-enterprise-compatibility-audit.md) |
+| TASK-366 | Preflight unbalanced delimiters before host verification | Complete | 2026-09-12 | 2026-09-12 | [TASK-366](./TASK-366-preflight-unbalanced-delimiters.md) |
+| TASK-367 | Type-check mixed imports from TSX consumers | Complete | 2026-09-12 | 2026-09-12 | [TASK-367](./TASK-367-tsx-consumer-mixed-imports.md) |
+| TASK-368 | Normalize diagnostic byte offsets at UTF-8 boundaries | Complete | 2026-09-12 | 2026-09-12 | [TASK-368](./TASK-368-normalize-diagnostic-byte-offsets.md) |
+| TASK-369 | Remove the duplicated JSX preflight heuristic | Complete | 2026-09-12 | 2026-09-12 | [TASK-369](./TASK-369-remove-jsx-preflight-heuristic.md) |
+
+| TASK-370 | Preserve unrecognized JSX numeric references | Complete | 2026-09-12 | 2026-09-12 | [TASK-370](./TASK-370-jsx-entity-parser-errors.md) |
 
 ## Next task number
 
-**TASK-365**
+
+**TASK-371**
