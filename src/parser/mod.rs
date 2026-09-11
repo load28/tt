@@ -31,6 +31,7 @@
 //! here too, through the shared structural rule in [`crate::val`].
 
 mod cursor;
+mod host;
 mod iflets;
 mod imports;
 mod keywords;

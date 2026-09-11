@@ -103,6 +103,15 @@ fn function_and_method_named_match_with_an_arrow_in_the_body() {
         "interface I { match(x: number): (foo: number) => number; }\n\
          type T = { match(x: number): (foo: number) => number };\n",
     );
+    assert_passthrough("export default { match(x: number) { (foo: number) => foo + x } };\n");
+    assert_passthrough(
+        "type T = unknown;\n\
+         const o = <T>{ match(x: number) { (foo: number) => foo + x } };\n",
+    );
+    assert_passthrough(
+        "declare function dec(value: unknown, context: unknown): void;\n\
+         class C { @dec match(x: number) { (foo: number) => foo + x } }\n",
+    );
 }
 
 #[test]

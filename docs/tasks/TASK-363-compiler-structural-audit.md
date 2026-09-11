@@ -31,6 +31,19 @@ the layer that owns each contract.
   set the single source of truth. Each choice applies to the structural class of
   inputs rather than the observed reproducer.
 
+### Decision 2: Delegate valid-TypeScript ownership to the host AST
+
+- **Context**: Review found that reconstructing TypeScript member context from
+  tt lexer tokens missed export-default expressions, angle-bracket assertions,
+  and decorators.
+- **Alternatives considered**: Add those introducers and prefixes to the token
+  classifier, or let the existing TypeScript syntax substrate identify host
+  declaration names.
+- **Decision and rationale**: Parse a file with SWC when it contains a `match`
+  candidate and record only identifier spans owned as function or method names.
+  The tt parser excludes those exact spans and otherwise keeps its normal
+  expression parsing. This removes the duplicated partial TypeScript grammar.
+
 ## Work log
 
 - 2026-09-11: Fast-forwarded `main` to `fcaf2a0`, ran `./scripts/doctor`, and
@@ -45,6 +58,12 @@ the layer that owns each contract.
   discovery and host-overlay classification.
 - 2026-09-11: Added pass-through, compile, resolve, and native server regression
   coverage and ran the full Rust formatting, lint, test, and doctest gates.
+- 2026-09-11: Reopened the task after PR #119 review identified three additional
+  valid-TypeScript pass-through counterexamples in parser ownership.
+- 2026-09-11: Replaced the token-context member classifier with SWC AST ownership
+  and removed the duplicated class, object, JSX, and modifier grammar helpers.
+- 2026-09-11: Ran the complete Rust CI gate after the review repair; formatting,
+  clippy, unit, integration, snapshot, doctest, and fuzz compilation all passed.
 
 ## Issues and resolutions
 
@@ -52,11 +71,11 @@ the layer that owns each contract.
 
 - **Symptom**: A valid class or object method named `match` whose body starts with
   an arrow expression fails with `malformed-match` or is lowered as tt syntax.
-- **Cause**: Match intent uses a top-level `=>` in the body as ownership evidence
-  without excluding host member-key positions.
-- **Resolution**: The parser now recognizes host member-key and function-name
-  positions from enclosing grammar and leaves those constructs verbatim. JSX
-  expression containers remain tt expression hosts.
+- **Cause**: Match intent used a top-level `=>` in the body as ownership evidence,
+  while a token helper independently approximated TypeScript member contexts.
+- **Resolution**: SWC now records exact function-name and method-key spans from
+  valid TypeScript ASTs. The tt parser excludes those spans from match-expression
+  ownership without reproducing the surrounding TypeScript grammar.
 
 ### Issue 2: Repeated pattern occurrences bias variant ownership
 
@@ -81,8 +100,18 @@ the layer that owns each contract.
   JSX attributes and children remained in the projected TypeScript.
 - **Cause**: The first object-literal classifier treated braces after `=` and `>`
   as object literals without recognizing JSX opening-tag context.
-- **Resolution**: JSX expression-container ownership is now identified by a
-  balanced reverse walk to the opening tag and excluded from member containers.
+- **Resolution**: The token classifier was removed. TypeScript and TSX source
+  kinds now use their respective SWC grammar directly.
+
+### Issue 5: Review exposed open-ended host grammar omissions
+
+- **Symptom**: Export-default object methods, object methods after a TypeScript
+  angle-bracket assertion, and decorated class methods named `match` failed with
+  `malformed-match`.
+- **Cause**: The token classifier depended on a closed list of expression
+  introducers, JSX lookalikes, and member prefixes.
+- **Resolution**: All three inputs are classified by the same host AST roles, and
+  regression coverage fixes their byte-identical pass-through contract.
 
 ## Verification
 
@@ -92,9 +121,7 @@ the layer that owns each contract.
 
 ## Result
 
-Changed `src/parser/parse.rs`, `src/resolve/mod.rs`, `src/engine/mod.rs`, and
-`src/engine/project.rs` at their owning boundaries. Added regressions in
-`tests/passthrough.rs`, `tests/resolve.rs`, `tests/compile/cases_08.rs`, and
-`tests/native/cases_01.rs`. Valid TypeScript host declarations pass through,
-variant ownership is stable under repeated cases, and unsaved Node-format host
-modules participate in typed snapshots.
+The compiler now asks its TypeScript syntax substrate which `match` identifiers
+are host function or method names and keeps those spans verbatim. The former
+partial TypeScript grammar in `src/parser/parse.rs` is removed, the three review
+counterexamples are covered, and the complete Rust CI gate passes.
