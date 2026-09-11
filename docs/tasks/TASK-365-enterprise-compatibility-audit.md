@@ -1,8 +1,8 @@
 # TASK-365: Audit enterprise mixed-source compatibility
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-09-11
-- **Completed**: —
+- **Completed**: 2026-09-12
 - **Commit**: `289351e`
 
 ## Purpose
@@ -65,6 +65,8 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
   the CLI and traced it to template recovery spans.
 - 2026-09-12: Changed template lexing to keep unterminated interpolations raw
   and added a regression covering the malformed editor buffer.
+- 2026-09-12: Ran a 60-second `compile_any_bytes` campaign with 64,739 runs
+  and no crash, then completed the full Rust test suite.
 
 ## Issues and resolutions
 
@@ -99,6 +101,7 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
 - [x] `env TTC_CORPUS_FULL=1 TTC_REQUIRE_CORPUS=1 cargo test --test corpus --release`
 - [x] `cargo +nightly fuzz run generated_tt_compiles -- -max_total_time=120 -rss_limit_mb=4096`
 - [x] Archived `compile_any_bytes` crash replay after repair
+- [x] `cargo +nightly fuzz run compile_any_bytes -- -max_total_time=60 -rss_limit_mb=4096`
 - [x] `git diff --check`
 
 ## Result
