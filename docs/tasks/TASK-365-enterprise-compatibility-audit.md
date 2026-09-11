@@ -1,8 +1,8 @@
 # TASK-365: Audit enterprise mixed-source compatibility
 
-- **Status**: Complete
+- **Status**: In progress
 - **Started**: 2026-09-11
-- **Completed**: 2026-09-11
+- **Completed**: —
 - **Commit**: `289351e`
 
 ## Purpose
@@ -34,6 +34,16 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
   safety net. The shared boundary is used by compile, editor projection, and
   server paths, while quoted TypeScript text remains opaque and byte-preserved.
 
+### Decision 2: Keep unterminated template interpolations opaque
+
+- **Context**: Recovery for an unfinished `${` created overlapping raw and
+  interpolation spans, which violated the source-preservation contract.
+- **Alternatives considered**: Relax the rope validator or special-case the
+  resulting byte sequence in codegen.
+- **Decision and rationale**: The lexer leaves an unterminated interpolation in
+  the template's raw chunk, preserving the editor buffer without overlapping
+  HIR spans.
+
 ## Work log
 
 - 2026-09-11: Fast-forwarded `main` from `09243c6` to `67173eb`, preserved the
@@ -50,6 +60,11 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
   sequence inside a valid string literal.
 - 2026-09-11: Replayed the crash input successfully after the repair and ran
   Clippy plus the complete Rust test suite.
+- 2026-09-12: A second `compile_any_bytes` fuzz campaign found a source-span
+  reorder for an unterminated template interpolation; reproduced it through
+  the CLI and traced it to template recovery spans.
+- 2026-09-12: Changed template lexing to keep unterminated interpolations raw
+  and added a regression covering the malformed editor buffer.
 
 ## Issues and resolutions
 
@@ -65,6 +80,15 @@ from combining `.tt`, `.ttx`, `.ts`, and `.tsx` sources safely.
   in JSX text, including incomplete JSX recovery, while skipping strings,
   comments, and template literals. `verify::parse_ts_module` catches any
   remaining SWC unwind and returns a normal validation error.
+
+### Issue 2: Unterminated template interpolation reorders source spans
+
+- **Symptom**: An unfinished template interpolation caused
+  `validate_source_preservation` to report `SourceReordered` and panic.
+- **Cause**: Lexer recovery emitted an interpolation through end-of-file while
+  the nested parser also owned a suffix of that span.
+- **Resolution**: Unterminated `${` sequences remain one opaque raw template
+  chunk, so codegen receives non-overlapping source spans.
 
 ## Verification
 

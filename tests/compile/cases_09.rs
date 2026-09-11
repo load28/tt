@@ -87,6 +87,26 @@ fn malformed_namespaced_jsx_member_is_reported_without_panicking() {
 }
 
 #[test]
+fn unterminated_template_interpolation_never_overlaps_source_spans() {
+    // This is an incomplete editor buffer: the `${` has no closing brace.
+    // Template recovery must keep it as opaque text so codegen can preserve
+    // every byte exactly once.
+    let source = String::from_utf8(vec![60, 96, 0, 0, 0, 123, 36, 123, 10, 0]).unwrap();
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let result = std::panic::catch_unwind(|| {
+            compile(
+                &source,
+                &Options {
+                    source_kind,
+                    ..Options::default()
+                },
+            )
+        });
+        assert!(result.is_ok(), "{source_kind:?} panicked");
+    }
+}
+
+#[test]
 fn result_body_uses_the_planned_slot_for_a_jsx_child_match() {
     let output = ok_tsx(
         r#"import type { TResult } from "@tt/std";

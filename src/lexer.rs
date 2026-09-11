@@ -306,8 +306,14 @@ fn lex_template(
             return (i, parts);
         }
         if c == b'$' && at(src, i + 1, end) == Some(b'{') {
+            // An unterminated interpolation is still template text while the
+            // user is editing. Treating the remainder as an interpolation
+            // would give the parser an overlapping span when recovery finds a
+            // nested expression, violating source-preservation in codegen.
+            let Some(close) = find_matching(src, i + 1, end) else {
+                break;
+            };
             push_raw(&mut parts, raw_start, i);
-            let close = find_matching(src, i + 1, end).unwrap_or(end);
             parts.push(TplPart::Interp {
                 span: Span {
                     start: i + 2,
