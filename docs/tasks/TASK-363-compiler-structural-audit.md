@@ -44,6 +44,20 @@ the layer that owns each contract.
   The tt parser excludes those exact spans and otherwise keeps its normal
   expression parsing. This removes the duplicated partial TypeScript grammar.
 
+### Decision 3: Resolve mixed syntax through a host-compatible fixed point
+
+- **Context**: Whole-file TypeScript parsing cannot provide AST ownership when
+  the same file contains valid tt-only syntax.
+- **Alternatives considered**: Restore token heuristics for mixed files, call the
+  post-HIR program-syntax projection from the parser, or build a parser-owned
+  byte-preserving projection.
+- **Decision and rationale**: Bootstrap parsing records complete tt owner spans.
+  Each recursive region replaces confirmed tt nodes with category-safe,
+  equal-length placeholders and leaves ambiguous match candidates unchanged. A
+  SWC syntax error rejects only its smallest owning candidate; successful SWC AST
+  name spans then prove host ownership. This terminates within the candidate
+  count and introduces no TypeScript introducer or modifier lists.
+
 ## Work log
 
 - 2026-09-11: Fast-forwarded `main` to `fcaf2a0`, ran `./scripts/doctor`, and
@@ -64,6 +78,14 @@ the layer that owns each contract.
   and removed the duplicated class, object, JSX, and modifier grammar helpers.
 - 2026-09-11: Ran the complete Rust CI gate after the review repair; formatting,
   clippy, unit, integration, snapshot, doctest, and fuzz compilation all passed.
+- 2026-09-11: Reopened the task after follow-up review showed that whole-file
+  host parsing loses ownership evidence as soon as a file contains tt syntax.
+- 2026-09-11: Added recursive parser-region spans and complete owner spans for
+  item and statement constructs used by the host-compatible projection.
+- 2026-09-11: Implemented an error-guided match ownership fixed point and added
+  mixed class, object, function, nested-match, and fully ambiguous regressions.
+- 2026-09-11: Ran the complete Rust CI gate after the mixed-source repair;
+  formatting, clippy, all tests, doctests, and fuzz compilation passed.
 
 ## Issues and resolutions
 
@@ -113,6 +135,17 @@ the layer that owns each contract.
 - **Resolution**: All three inputs are classified by the same host AST roles, and
   regression coverage fixes their byte-identical pass-through contract.
 
+### Issue 6: Whole-file host parsing loses evidence in mixed files
+
+- **Symptom**: A valid tt variant or match elsewhere in the file makes host
+  methods and functions named `match` fail with `malformed-match` again.
+- **Cause**: Host ownership was all-or-nothing: any SWC parse failure discarded
+  every AST name span in the file.
+- **Resolution**: The parser now projects each recursive source region, removes
+  only candidates to which SWC assigns a syntax error, and accepts host ownership
+  only from the converged AST. Host declarations remain source text while nested
+  real tt matches become expression placeholders during classification.
+
 ## Verification
 
 - [x] `cargo fmt --check`
@@ -121,7 +154,8 @@ the layer that owns each contract.
 
 ## Result
 
-The compiler now asks its TypeScript syntax substrate which `match` identifiers
-are host function or method names and keeps those spans verbatim. The former
-partial TypeScript grammar in `src/parser/parse.rs` is removed, the three review
-counterexamples are covered, and the complete Rust CI gate passes.
+Mixed TypeScript and tt files now converge on candidate-level ownership. Parser
+spans build byte-preserving host projections, SWC errors reject only their
+smallest tt candidate, and the successful SWC AST proves host function and
+method names. The token grammar fallback remains removed, nested tt matches stay
+lowered, and the complete Rust CI gate passes.

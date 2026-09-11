@@ -1,23 +1,271 @@
 //! TypeScript-owned identifier positions used by the lossless tt parser.
 //!
-//! Some TypeScript declarations have the same local token shape as tt syntax.
-//! SWC is the compiler's TypeScript syntax substrate, so it identifies those
-//! declaration names from the host AST instead of duplicating TypeScript's
-//! surrounding grammar in token heuristics.
+//! A valid TypeScript file is parsed directly. Mixed files use byte-preserving
+//! projections of each recursive parser region: confirmed tt nodes become
+//! category-safe placeholders, while ambiguous `match` candidates remain source
+//! text. A SWC syntax error rejects the smallest candidate that owns it, and the
+//! projection is retried. Ownership is accepted only when the converged SWC AST
+//! contains a host declaration node for the original identifier span.
 
 use std::collections::HashSet;
 
 use swc_common::input::StringInput;
 use swc_common::sync::Lrc;
-use swc_common::{FileName, SourceMap, Span};
+use swc_common::{FileName, SourceMap, Span as SwcSpan, Spanned};
 use swc_ecma_ast::{
     ClassMethod, FnDecl, FnExpr, GetterProp, MethodProp, PrivateMethod, PropName, SetterProp,
 };
 use swc_ecma_parser::lexer::Lexer;
-use swc_ecma_parser::{Parser, Syntax, TsSyntax};
+use swc_ecma_parser::{Parser as SwcParser, Syntax, TsSyntax};
 use swc_ecma_visit::{Visit, VisitWith};
 
-pub(super) fn owned_match_names(src: &str, source_kind: crate::SourceKind) -> HashSet<usize> {
+use crate::ast::{Program, RecoveryKind, Segment, Span, TemplateChunk};
+
+pub(super) fn owned_match_names(
+    src: &str,
+    source_kind: crate::SourceKind,
+) -> Option<HashSet<usize>> {
+    parse_owned(src, source_kind, 0, 0, src.len()).ok()
+}
+
+pub(super) fn owned_match_names_in_mixed(
+    src: &str,
+    source_kind: crate::SourceKind,
+    program: &Program,
+) -> HashSet<usize> {
+    let root = program as *const Program;
+    let mut owned = HashSet::new();
+    super::parse::visit_programs(program, &mut |region| {
+        let wrapper = if std::ptr::eq(region, root) {
+            Wrapper::Module
+        } else if region.expression_root {
+            Wrapper::Expression
+        } else {
+            Wrapper::Statements
+        };
+        probe_region(src, source_kind, region, wrapper, &mut owned);
+    });
+    owned
+}
+
+#[derive(Clone, Copy)]
+enum Wrapper {
+    Module,
+    Expression,
+    Statements,
+}
+
+#[derive(Clone, Copy)]
+enum Placeholder {
+    Expression,
+    Statement,
+    Type,
+    Erase,
+}
+
+#[derive(Clone, Copy)]
+struct Mask {
+    span: Span,
+    placeholder: Placeholder,
+}
+
+fn probe_region(
+    src: &str,
+    source_kind: crate::SourceKind,
+    program: &Program,
+    wrapper: Wrapper,
+    owned: &mut HashSet<usize>,
+) {
+    if program.span.start >= program.span.end || program.span.end > src.len() {
+        return;
+    }
+
+    let mut masks = Vec::new();
+    let mut candidates = Vec::new();
+    collect_region_facts(src, program, &mut masks, &mut candidates);
+    candidates.sort_by_key(|span| (span.start, span.end));
+    candidates.dedup();
+
+    let mut rejected = Vec::new();
+    for _ in 0..=candidates.len() {
+        let projection = projected_region(src, program.span, &masks, &rejected);
+        match parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
+            Ok(names) => {
+                owned.extend(names);
+                break;
+            }
+            Err(error) => {
+                let next = candidates
+                    .iter()
+                    .filter(|candidate| !rejected.contains(candidate))
+                    .filter(|candidate| candidate.start <= error && error <= candidate.end)
+                    .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
+                    .copied();
+                let Some(next) = next else {
+                    break;
+                };
+                rejected.push(next);
+            }
+        }
+    }
+}
+
+fn collect_region_facts(
+    src: &str,
+    program: &Program,
+    masks: &mut Vec<Mask>,
+    candidates: &mut Vec<Span>,
+) {
+    for segment in &program.segments {
+        match segment {
+            Segment::Verbatim(_) | Segment::TtImport(_) => {}
+            Segment::Variant(decl) => masks.push(Mask {
+                span: decl.span,
+                placeholder: Placeholder::Statement,
+            }),
+            Segment::Match(expr) => {
+                let span = Span {
+                    start: expr.keyword_off,
+                    end: expr.body_close + 1,
+                };
+                candidates.push(span);
+            }
+            Segment::TupleMatch(expr) => {
+                let span = Span {
+                    start: expr.keyword_off,
+                    end: expr.body_close + 1,
+                };
+                candidates.push(span);
+            }
+            Segment::Try(stmt) => masks.push(Mask {
+                span: stmt.owner_span,
+                placeholder: Placeholder::Statement,
+            }),
+            Segment::TryExpr(expr) => masks.push(Mask {
+                span: expr.span,
+                placeholder: Placeholder::Expression,
+            }),
+            Segment::LetElse(stmt) => masks.push(Mask {
+                span: stmt.owner_span,
+                placeholder: Placeholder::Statement,
+            }),
+            Segment::IfLet(stmt) => masks.push(Mask {
+                span: stmt.owner_span,
+                placeholder: Placeholder::Statement,
+            }),
+            Segment::ValModifier(span) => masks.push(Mask {
+                span: *span,
+                placeholder: Placeholder::Erase,
+            }),
+            Segment::Template(template) => {
+                for chunk in &template.chunks {
+                    if let TemplateChunk::Interp(interp) = chunk {
+                        collect_region_facts(src, interp, masks, candidates);
+                    }
+                }
+            }
+            Segment::Pipe(pipe) => masks.push(Mask {
+                span: Span {
+                    start: pipe.head_span.start,
+                    end: pipe
+                        .steps
+                        .last()
+                        .map_or(pipe.head_span.end, |step| step.span.end),
+                },
+                placeholder: Placeholder::Expression,
+            }),
+            Segment::ResultBlock(block) => masks.push(Mask {
+                span: block.span,
+                placeholder: Placeholder::Expression,
+            }),
+        }
+    }
+
+    for recovery in &program.recoveries {
+        let placeholder = match recovery.kind {
+            RecoveryKind::Expression => Placeholder::Expression,
+            RecoveryKind::Statement | RecoveryKind::VariantDecl { .. } => Placeholder::Statement,
+            RecoveryKind::Type => Placeholder::Type,
+        };
+        if src.get(recovery.span.start..recovery.span.start.saturating_add(5)) == Some("match") {
+            candidates.push(recovery.span);
+        } else {
+            masks.push(Mask {
+                span: recovery.span,
+                placeholder,
+            });
+        }
+    }
+}
+
+fn projected_region(src: &str, region: Span, masks: &[Mask], rejected: &[Span]) -> String {
+    let mut bytes = src.as_bytes()[region.start..region.end].to_vec();
+    for mask in masks {
+        overwrite(&mut bytes, region.start, *mask);
+    }
+    for span in rejected {
+        overwrite(
+            &mut bytes,
+            region.start,
+            Mask {
+                span: *span,
+                placeholder: Placeholder::Expression,
+            },
+        );
+    }
+    String::from_utf8(bytes).expect("parser spans preserve UTF-8 boundaries")
+}
+
+fn overwrite(bytes: &mut [u8], base: usize, mask: Mask) {
+    let start = mask.span.start.saturating_sub(base).min(bytes.len());
+    let end = mask.span.end.saturating_sub(base).min(bytes.len());
+    if start >= end {
+        return;
+    }
+    bytes[start..end].fill(b' ');
+    match mask.placeholder {
+        Placeholder::Expression => bytes[start] = b'0',
+        Placeholder::Statement => bytes[start] = b';',
+        Placeholder::Type => {
+            let replacement = b"any";
+            let count = replacement.len().min(end - start);
+            bytes[start..start + count].copy_from_slice(&replacement[..count]);
+        }
+        Placeholder::Erase => {}
+    }
+}
+
+fn parse_wrapped(
+    source: &str,
+    source_kind: crate::SourceKind,
+    source_offset: usize,
+    wrapper: Wrapper,
+) -> Result<HashSet<usize>, usize> {
+    let (prefix, suffix) = match wrapper {
+        Wrapper::Module => ("", ""),
+        Wrapper::Expression => ("const __tt_host_probe = (", ");"),
+        Wrapper::Statements => ("function __tt_host_probe() {", "}"),
+    };
+    let mut projection = String::with_capacity(prefix.len() + source.len() + suffix.len());
+    projection.push_str(prefix);
+    projection.push_str(source);
+    projection.push_str(suffix);
+    parse_owned(
+        &projection,
+        source_kind,
+        prefix.len(),
+        source_offset,
+        source.len(),
+    )
+}
+
+fn parse_owned(
+    src: &str,
+    source_kind: crate::SourceKind,
+    prefix_len: usize,
+    source_offset: usize,
+    source_len: usize,
+) -> Result<HashSet<usize>, usize> {
     let source_map: Lrc<SourceMap> = Default::default();
     let file = source_map.new_source_file(Lrc::new(FileName::Anon), src.to_owned());
     let source_start = file.start_pos.0;
@@ -31,32 +279,61 @@ pub(super) fn owned_match_names(src: &str, source_kind: crate::SourceKind) -> Ha
         StringInput::from(&*file),
         None,
     );
-    let mut parser = Parser::new_from(lexer);
-    let Ok(module) = parser.parse_module() else {
-        return HashSet::new();
-    };
-    if !parser.take_errors().is_empty() {
-        return HashSet::new();
+    let mut parser = SwcParser::new_from(lexer);
+    let module = parser.parse_module().map_err(|error| {
+        source_error_offset(error.span(), source_start, prefix_len, source_offset)
+    })?;
+    if let Some(error) = parser.take_errors().into_iter().next() {
+        return Err(source_error_offset(
+            error.span(),
+            source_start,
+            prefix_len,
+            source_offset,
+        ));
     }
 
     let mut collector = MatchNameCollector {
         source_start,
+        prefix_len,
+        source_offset,
+        source_end: source_offset + source_len,
         offsets: HashSet::new(),
     };
     module.visit_with(&mut collector);
-    collector.offsets
+    Ok(collector.offsets)
+}
+
+fn source_error_offset(
+    span: SwcSpan,
+    source_start: u32,
+    prefix_len: usize,
+    source_offset: usize,
+) -> usize {
+    let projected = usize::try_from(span.lo.0.saturating_sub(source_start)).unwrap_or(0);
+    source_offset + projected.saturating_sub(prefix_len)
 }
 
 struct MatchNameCollector {
     source_start: u32,
+    prefix_len: usize,
+    source_offset: usize,
+    source_end: usize,
     offsets: HashSet<usize>,
 }
 
 impl MatchNameCollector {
-    fn insert(&mut self, name: &str, span: Span) {
-        if name == "match"
-            && let Ok(offset) = usize::try_from(span.lo.0.saturating_sub(self.source_start))
-        {
+    fn insert(&mut self, name: &str, span: SwcSpan) {
+        if name != "match" {
+            return;
+        }
+        let Ok(projected) = usize::try_from(span.lo.0.saturating_sub(self.source_start)) else {
+            return;
+        };
+        let Some(relative) = projected.checked_sub(self.prefix_len) else {
+            return;
+        };
+        let offset = self.source_offset + relative;
+        if offset < self.source_end {
             self.offsets.insert(offset);
         }
     }

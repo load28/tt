@@ -124,6 +124,46 @@ fn tt_match_inside_a_method_body_is_not_a_host_member_key() {
 }
 
 #[test]
+fn host_match_declarations_survive_beside_tt_syntax() {
+    let source = "variant Choice { Yes, No }\n\
+        class C { match(x: number) { (foo: number) => foo + x } }\n\
+        class D { match(x) { Foo => x } }\n\
+        function match(x: number) { (foo: number) => foo + x }\n\
+        const value = match (Choice.Yes) { Yes => 1, No => 0 };\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(
+        output.contains("class C { match(x: number) { (foo: number) => foo + x } }"),
+        "{output}"
+    );
+    assert!(
+        output.contains("function match(x: number) { (foo: number) => foo + x }"),
+        "{output}"
+    );
+    assert!(
+        output.contains("class D { match(x) { Foo => x } }"),
+        "{output}"
+    );
+    assert_eq!(output.matches("switch (").count(), 1, "{output}");
+}
+
+#[test]
+fn host_match_method_body_may_contain_a_tt_match() {
+    let source = "variant Choice { Yes, No }\n\
+        class C { match(value: Choice) { return match (value) { Yes => 1, No => 0 }; } }\n\
+        const o = { match(value: Choice) { return match (value) { Yes => 2, No => 3 }; } };\n";
+    let output = compile(source, &Options::default()).expect("compile failed");
+    assert!(
+        output.contains("class C { match(value: Choice)"),
+        "{output}"
+    );
+    assert!(
+        output.contains("const o = { match(value: Choice)"),
+        "{output}"
+    );
+    assert_eq!(output.matches("switch (").count(), 2, "{output}");
+}
+
+#[test]
 fn class_method_named_match() {
     assert_passthrough(
         r#"

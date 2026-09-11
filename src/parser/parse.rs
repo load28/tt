@@ -27,17 +27,30 @@ pub(crate) fn lex_and_parse_with_kind(
         matches!(token.kind, TokenKind::Ident)
             && src.get(token.span.start..token.span.end) == Some("match")
     });
+    let direct_host_ownership = if has_match_candidate {
+        host::owned_match_names(src, source_kind)
+    } else {
+        Some(std::collections::HashSet::new())
+    };
     let parser = Parser {
         src,
         bytes: src.as_bytes(),
-        host_owned_matches: if has_match_candidate {
-            host::owned_match_names(src, source_kind)
-        } else {
-            std::collections::HashSet::new()
-        },
+        host_owned_matches: direct_host_ownership.clone().unwrap_or_default(),
         flow_queries: crate::flow::FlowBodyQueries::default(),
     };
-    let program = parser.parse_tokens(&tokens, 0, src.len());
+    let mut program = parser.parse_tokens(&tokens, 0, src.len());
+    if direct_host_ownership.is_none() && has_match_candidate {
+        let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
+        if !host_owned_matches.is_empty() {
+            program = Parser {
+                src,
+                bytes: src.as_bytes(),
+                host_owned_matches,
+                flow_queries: crate::flow::FlowBodyQueries::default(),
+            }
+            .parse_tokens(&tokens, 0, src.len());
+        }
+    }
     (program, tokens)
 }
 
@@ -775,6 +788,8 @@ impl Parser<'_> {
 
         flush_verbatim(&mut segments, seg_start, end);
         Program {
+            span: Span { start, end },
+            expression_root,
             segments,
             unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),
             recoveries,

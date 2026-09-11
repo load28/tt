@@ -23,6 +23,11 @@ pub(crate) struct Span {
 /// A parsed source range: tt constructs plus untouched byte ranges.
 #[derive(Debug)]
 pub(crate) struct Program {
+    /// Complete source range represented by this recursive parse region.
+    pub span: Span,
+    /// Whether the region is parsed as one host expression rather than a
+    /// statement stream.
+    pub expression_root: bool,
     pub segments: Vec<Segment>,
     /// Structurally recognized tt intent that did not fully parse and was
     /// therefore left verbatim. Unlike [`Self::malformed`], these facts do
@@ -267,6 +272,8 @@ pub(crate) enum TtImportNames {
 /// (field, name) set, exactly as in a match or-arm).
 #[derive(Debug)]
 pub(crate) struct LetElseStmt {
+    /// Complete source owner, including the terminating semicolon.
+    pub owner_span: Span,
     /// Byte offset of the declaration keyword, for error reporting.
     pub keyword_off: usize,
     /// The statement's head: the declaration keyword through the last byte
@@ -309,6 +316,8 @@ pub(crate) struct LetElseStmt {
 /// narrowed types inside closures.
 #[derive(Debug)]
 pub(crate) struct IfLetStmt {
+    /// Complete source owner, including any `else` continuation.
+    pub owner_span: Span,
     /// Byte offset of the `if` keyword, for error reporting.
     pub keyword_off: usize,
     /// The statement's head: `if` through the last byte of the scrutinee
@@ -402,6 +411,9 @@ pub(crate) struct TryExpr {
 /// A structurally parsed tt `variant` declaration.
 #[derive(Debug)]
 pub(crate) struct VariantDecl {
+    /// Complete source owner from `variant` or `export` through the closing
+    /// brace.
+    pub span: Span,
     pub name: String,
     /// Byte offset of the name, for error reporting and the symbol API.
     pub name_off: usize,
