@@ -51,12 +51,13 @@ the layer that owns each contract.
 - **Alternatives considered**: Restore token heuristics for mixed files, call the
   post-HIR program-syntax projection from the parser, or build a parser-owned
   byte-preserving projection.
-- **Decision and rationale**: Bootstrap parsing records complete tt owner spans.
-  Each recursive region replaces confirmed tt nodes with category-safe,
-  equal-length placeholders and leaves ambiguous match candidates unchanged. A
-  SWC syntax error rejects only its smallest owning candidate; successful SWC AST
-  name spans then prove host ownership. This terminates within the candidate
-  count and introduces no TypeScript introducer or modifier lists.
+- **Decision and rationale**: Bootstrap parsing records complete tt owner spans
+  and delegates only positions that the existing expression-boundary model
+  cannot prove to be operands. Each recursive region replaces confirmed tt
+  nodes and unresolved candidates with category-safe, equal-length placeholders.
+  A SWC syntax error restores only its smallest owning candidate; successful SWC
+  AST name spans then prove host ownership. This terminates within the ambiguous
+  candidate count and introduces no TypeScript modifier lists.
 
 ## Work log
 
@@ -86,6 +87,14 @@ the layer that owns each contract.
   mixed class, object, function, nested-match, and fully ambiguous regressions.
 - 2026-09-11: Ran the complete Rust CI gate after the mixed-source repair;
   formatting, clippy, all tests, doctests, and fuzz compilation passed.
+- 2026-09-11: Reversed the fixed point after CI measured repeated host parses at
+  +24% to +94%; unresolved candidates now start as expression-safe probes and
+  only declaration-position failures restore source text.
+- 2026-09-11: Limited host delegation to positions not already proven as
+  operands by the parser's expression-boundary model. Local comparison against
+  `main` passed all performance budgets.
+- 2026-09-11: Added a nested template-interpolation regression and removed the
+  root-token shortcut so recursive parser regions participate independently.
 
 ## Issues and resolutions
 
@@ -142,9 +151,21 @@ the layer that owns each contract.
 - **Cause**: Host ownership was all-or-nothing: any SWC parse failure discarded
   every AST name span in the file.
 - **Resolution**: The parser now projects each recursive source region, removes
-  only candidates to which SWC assigns a syntax error, and accepts host ownership
-  only from the converged AST. Host declarations remain source text while nested
-  real tt matches become expression placeholders during classification.
+  confirmed tt syntax, restores only probe candidates to which SWC assigns a
+  syntax error, and accepts host ownership only from the converged AST. Host
+  declarations remain source text while nested real tt matches become expression
+  placeholders during classification.
+
+### Issue 7: Candidate-by-candidate rejection regresses compilation latency
+
+- **Symptom**: Remote performance CI measured 24% slower single-file compilation,
+  94% slower first snapshots, and 77% slower one-file rechecks.
+- **Cause**: The first fixed point parsed the whole file before bootstrap and
+  reparsed it once for every genuine tt match candidate.
+- **Resolution**: The parser now requests host proof only for structurally
+  ambiguous positions, and every unresolved candidate starts as an
+  expression-safe probe. Ordinary tt-heavy files need no host parse; mixed files
+  perform one parse plus one retry per actual host declaration.
 
 ## Verification
 

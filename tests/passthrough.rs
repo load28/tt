@@ -164,6 +164,11 @@ fn host_match_method_body_may_contain_a_tt_match() {
 }
 
 #[test]
+fn host_match_ownership_is_found_in_a_nested_parser_region() {
+    assert_passthrough("const rendered = `${({ match(value) { value => value } }).match(1)}`;\n");
+}
+
+#[test]
 fn class_method_named_match() {
     assert_passthrough(
         r#"

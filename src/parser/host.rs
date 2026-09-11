@@ -1,11 +1,11 @@
 //! TypeScript-owned identifier positions used by the lossless tt parser.
 //!
-//! A valid TypeScript file is parsed directly. Mixed files use byte-preserving
-//! projections of each recursive parser region: confirmed tt nodes become
-//! category-safe placeholders, while ambiguous `match` candidates remain source
-//! text. A SWC syntax error rejects the smallest candidate that owns it, and the
-//! projection is retried. Ownership is accepted only when the converged SWC AST
-//! contains a host declaration node for the original identifier span.
+//! Files with ambiguous `match` positions use byte-preserving projections of
+//! each recursive parser region. Confirmed tt nodes become category-safe
+//! placeholders, while an ambiguous candidate remains source text only after an
+//! expression-safe probe is rejected at that position. The projection is
+//! retried, and ownership is accepted only when the converged SWC AST contains a
+//! host declaration node for the original identifier span.
 
 use std::collections::HashSet;
 
@@ -20,13 +20,6 @@ use swc_ecma_parser::{Parser as SwcParser, Syntax, TsSyntax};
 use swc_ecma_visit::{Visit, VisitWith};
 
 use crate::ast::{Program, RecoveryKind, Segment, Span, TemplateChunk};
-
-pub(super) fn owned_match_names(
-    src: &str,
-    source_kind: crate::SourceKind,
-) -> Option<HashSet<usize>> {
-    parse_owned(src, source_kind, 0, 0, src.len()).ok()
-}
 
 pub(super) fn owned_match_names_in_mixed(
     src: &str,
@@ -58,6 +51,7 @@ enum Wrapper {
 #[derive(Clone, Copy)]
 enum Placeholder {
     Expression,
+    ProbeExpression,
     Statement,
     Type,
     Erase,
@@ -82,13 +76,16 @@ fn probe_region(
 
     let mut masks = Vec::new();
     let mut candidates = Vec::new();
-    collect_region_facts(src, program, &mut masks, &mut candidates);
+    collect_region_facts(program, &mut masks, &mut candidates);
     candidates.sort_by_key(|span| (span.start, span.end));
     candidates.dedup();
+    if candidates.is_empty() {
+        return;
+    }
 
-    let mut rejected = Vec::new();
+    let mut restored = Vec::new();
     for _ in 0..=candidates.len() {
-        let projection = projected_region(src, program.span, &masks, &rejected);
+        let projection = projected_region(src, program.span, &masks, &candidates, &restored);
         match parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
             Ok(names) => {
                 owned.extend(names);
@@ -97,25 +94,21 @@ fn probe_region(
             Err(error) => {
                 let next = candidates
                     .iter()
-                    .filter(|candidate| !rejected.contains(candidate))
+                    .filter(|candidate| !restored.contains(candidate))
                     .filter(|candidate| candidate.start <= error && error <= candidate.end)
                     .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
                     .copied();
                 let Some(next) = next else {
                     break;
                 };
-                rejected.push(next);
+                restored.push(next);
             }
         }
     }
 }
 
-fn collect_region_facts(
-    src: &str,
-    program: &Program,
-    masks: &mut Vec<Mask>,
-    candidates: &mut Vec<Span>,
-) {
+fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &mut Vec<Span>) {
+    candidates.extend(program.host_match_candidates.iter().copied());
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_) | Segment::TtImport(_) => {}
@@ -128,14 +121,24 @@ fn collect_region_facts(
                     start: expr.keyword_off,
                     end: expr.body_close + 1,
                 };
-                candidates.push(span);
+                if !program.host_match_candidates.contains(&span) {
+                    masks.push(Mask {
+                        span,
+                        placeholder: Placeholder::Expression,
+                    });
+                }
             }
             Segment::TupleMatch(expr) => {
                 let span = Span {
                     start: expr.keyword_off,
                     end: expr.body_close + 1,
                 };
-                candidates.push(span);
+                if !program.host_match_candidates.contains(&span) {
+                    masks.push(Mask {
+                        span,
+                        placeholder: Placeholder::Expression,
+                    });
+                }
             }
             Segment::Try(stmt) => masks.push(Mask {
                 span: stmt.owner_span,
@@ -160,7 +163,7 @@ fn collect_region_facts(
             Segment::Template(template) => {
                 for chunk in &template.chunks {
                     if let TemplateChunk::Interp(interp) = chunk {
-                        collect_region_facts(src, interp, masks, candidates);
+                        collect_region_facts(interp, masks, candidates);
                     }
                 }
             }
@@ -187,9 +190,7 @@ fn collect_region_facts(
             RecoveryKind::Statement | RecoveryKind::VariantDecl { .. } => Placeholder::Statement,
             RecoveryKind::Type => Placeholder::Type,
         };
-        if src.get(recovery.span.start..recovery.span.start.saturating_add(5)) == Some("match") {
-            candidates.push(recovery.span);
-        } else {
+        if !program.host_match_candidates.contains(&recovery.span) {
             masks.push(Mask {
                 span: recovery.span,
                 placeholder,
@@ -198,18 +199,27 @@ fn collect_region_facts(
     }
 }
 
-fn projected_region(src: &str, region: Span, masks: &[Mask], rejected: &[Span]) -> String {
+fn projected_region(
+    src: &str,
+    region: Span,
+    masks: &[Mask],
+    candidates: &[Span],
+    restored: &[Span],
+) -> String {
     let mut bytes = src.as_bytes()[region.start..region.end].to_vec();
     for mask in masks {
         overwrite(&mut bytes, region.start, *mask);
     }
-    for span in rejected {
+    for span in candidates {
+        if restored.contains(span) {
+            continue;
+        }
         overwrite(
             &mut bytes,
             region.start,
             Mask {
                 span: *span,
-                placeholder: Placeholder::Expression,
+                placeholder: Placeholder::ProbeExpression,
             },
         );
     }
@@ -225,6 +235,11 @@ fn overwrite(bytes: &mut [u8], base: usize, mask: Mask) {
     bytes[start..end].fill(b' ');
     match mask.placeholder {
         Placeholder::Expression => bytes[start] = b'0',
+        Placeholder::ProbeExpression => {
+            let replacement = b"void 0";
+            let count = replacement.len().min(end - start);
+            bytes[start..start + count].copy_from_slice(&replacement[..count]);
+        }
         Placeholder::Statement => bytes[start] = b';',
         Placeholder::Type => {
             let replacement = b"any";

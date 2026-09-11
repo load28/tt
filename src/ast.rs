@@ -29,6 +29,9 @@ pub(crate) struct Program {
     /// statement stream.
     pub expression_root: bool,
     pub segments: Vec<Segment>,
+    /// `match` constructs whose parser position can also be a host declaration.
+    /// Only these spans require ownership proof from the TypeScript AST.
+    pub host_match_candidates: Vec<Span>,
     /// Structurally recognized tt intent that did not fully parse and was
     /// therefore left verbatim. Unlike [`Self::malformed`], these facts do
     /// not diagnose by themselves: output verification consumes them only
