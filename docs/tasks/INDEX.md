@@ -385,6 +385,9 @@
 | TASK-368 | Normalize diagnostic byte offsets at UTF-8 boundaries | Complete | 2026-09-12 | 2026-09-12 | [TASK-368](./TASK-368-normalize-diagnostic-byte-offsets.md) |
 | TASK-369 | Remove the duplicated JSX preflight heuristic | Complete | 2026-09-12 | 2026-09-12 | [TASK-369](./TASK-369-remove-jsx-preflight-heuristic.md) |
 
+| TASK-370 | Preserve unrecognized JSX numeric references | Complete | 2026-09-12 | 2026-09-12 | [TASK-370](./TASK-370-jsx-entity-parser-errors.md) |
+
 ## Next task number
 
-**TASK-370**
+
+**TASK-371**

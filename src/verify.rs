@@ -27,7 +27,6 @@
 //! reproduce and fix at this boundary, not evidence that syntax verification
 //! belongs to the type backend.
 
-use std::panic::{AssertUnwindSafe, catch_unwind};
 use swc_common::input::StringInput;
 use swc_common::sync::Lrc;
 use swc_common::{FileName, SourceMap, Spanned};
@@ -57,41 +56,28 @@ fn parse_ts_module(
             .map_or(1, |line| line.chars().count() + 1);
         return Err((message.to_string(), line, col));
     }
-    // SWC's lexer is an external syntax dependency. A malformed JSX entity
-    // has historically reached an internal `unwrap()` in that dependency;
-    // a user buffer must become a compiler diagnostic, never unwind through
-    // the library, fuzz target, CLI, or server boundary.
-    catch_unwind(AssertUnwindSafe(|| {
-        let cm: Lrc<SourceMap> = Default::default();
-        let fm = cm.new_source_file(Lrc::new(FileName::Anon), code.to_string());
-        let lexer = Lexer::new(
-            ts_syntax(source_kind),
-            Default::default(),
-            StringInput::from(&*fm),
-            None,
-        );
-        let mut parser = Parser::new_from(lexer);
-        let result = parser.parse_module();
-        let mut errors = parser.take_errors();
-        if let Err(e) = result {
-            errors.push(e);
+    let cm: Lrc<SourceMap> = Default::default();
+    let fm = cm.new_source_file(Lrc::new(FileName::Anon), code.to_string());
+    let lexer = Lexer::new(
+        ts_syntax(source_kind),
+        Default::default(),
+        StringInput::from(&*fm),
+        None,
+    );
+    let mut parser = Parser::new_from(lexer);
+    let result = parser.parse_module();
+    let mut errors = parser.take_errors();
+    if let Err(e) = result {
+        errors.push(e);
+    }
+    match errors.into_iter().next() {
+        None => Ok(()),
+        Some(e) => {
+            let pos = cm.lookup_char_pos(e.span().lo());
+            let msg = e.into_kind().msg().to_string();
+            Err((msg, pos.line, pos.col_display + 1))
         }
-        match errors.into_iter().next() {
-            None => Ok(()),
-            Some(e) => {
-                let pos = cm.lookup_char_pos(e.span().lo());
-                let msg = e.into_kind().msg().to_string();
-                Err((msg, pos.line, pos.col_display + 1))
-            }
-        }
-    }))
-    .unwrap_or_else(|_| {
-        Err((
-            "TypeScript parser panicked while validating this source".to_string(),
-            1,
-            1,
-        ))
-    })
+    }
 }
 
 /// Validates a variant field's type annotation. Returns a plain message on error.

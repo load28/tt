@@ -1,5 +1,8 @@
 # TASK-369: Remove the duplicated JSX preflight heuristic
 
+> Superseded by TASK-370: scanner removal did not fix the dependency's panic;
+> TASK-370 repairs numeric decoding and removes panic-to-syntax-error masking.
+
 - **Status**: Complete
 - **Started**: 2026-09-12
 - **Completed**: 2026-09-12
