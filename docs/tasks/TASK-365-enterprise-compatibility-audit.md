@@ -127,5 +127,6 @@ shared lexical boundary reports it as a source diagnostic, the verifier has a
 dependency panic safety net, valid TSX strings remain byte-identical, and the
 full available product gates pass.
 
-Changed files: `src/lexer/validation.rs`, `src/verify.rs`,
-`tests/passthrough.rs`, `docs/tasks/INDEX.md`, and this record.
+Changed files: `src/lexer.rs`, `src/lexer/validation.rs`, `src/verify.rs`,
+`tests/cli/cases_01.rs`, `tests/compile/cases_09.rs`, `tests/passthrough.rs`,
+`docs/tasks/INDEX.md`, and this record.
