@@ -35,6 +35,11 @@ const Item = <T,>({ value, render }: Props<T>) => (
 }
 
 #[test]
+fn malformed_entity_text_inside_a_string_is_still_valid_tsx() {
+    assert_tsx_passthrough("const text = \"<>&#;;\\\\w\";\n");
+}
+
+#[test]
 fn string_prototype_match() {
     assert_passthrough("const m = \"abc\".match(/b/);\n");
 }

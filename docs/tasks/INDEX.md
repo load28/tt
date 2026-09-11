@@ -379,7 +379,8 @@
 | TASK-362 | Isolate terminated coverage children | Complete | 2026-09-10 | 2026-09-10 | [TASK-362](./TASK-362-isolate-terminated-coverage-children.md) |
 | TASK-363 | Repair compiler boundary defects found by a parallel audit | Complete | 2026-09-11 | 2026-09-11 | [TASK-363](./TASK-363-compiler-structural-audit.md) |
 | TASK-364 | Audit and repair a structural compiler defect | Complete | 2026-09-11 | 2026-09-11 | [TASK-364](./TASK-364-compiler-structural-repair.md) |
+| TASK-365 | Audit enterprise mixed-source compatibility | Complete | 2026-09-11 | 2026-09-11 | [TASK-365](./TASK-365-enterprise-compatibility-audit.md) |
 
 ## Next task number
 
-**TASK-365**
+**TASK-366**
