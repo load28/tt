@@ -11,8 +11,8 @@ const run = mkdtempSync(join(base, 'run-'))
 const workspace = join(run, 'workspace')
 const nativeExtension = process.env.VSCODE_TYPESCRIPT_EXTENSION
 const suite = process.env.TT_EDITOR_TEST_SUITE || 'editor'
-if (!['editor', 'filesystem', 'ownership'].includes(suite)) throw new Error(`Unknown editor suite: ${suite}`)
-if (suite === 'ownership' && !nativeExtension) throw new Error('Ownership tests require VSCODE_TYPESCRIPT_EXTENSION')
+if (!['editor', 'filesystem', 'ownership', 'diagnostics'].includes(suite)) throw new Error(`Unknown editor suite: ${suite}`)
+if (['ownership', 'diagnostics'].includes(suite) && !nativeExtension) throw new Error(`${suite} tests require VSCODE_TYPESCRIPT_EXTENSION`)
 mkdirSync(join(workspace, '.vscode'), { recursive: true })
 writeFileSync(join(workspace, '.vscode', 'settings.json'), JSON.stringify({
   'tt.compilerPath': join(repo, 'target', 'debug', process.platform === 'win32' ? 'ttc.exe' : 'ttc'),
@@ -43,7 +43,7 @@ child.on('exit', code => {
   try {
     const results = JSON.parse(readFileSync(join(run, 'results.json'), 'utf8'))
     console.log(JSON.stringify(results, null, 2))
-    const expected = suite === 'ownership' ? 6 : suite === 'filesystem' ? 11 : nativeExtension ? 71 : 39
+    const expected = suite === 'diagnostics' ? 4 : suite === 'ownership' ? 6 : suite === 'filesystem' ? 11 : nativeExtension ? 71 : 39
     process.exitCode = code === 0 && results.length === expected && results.every(result => result.passed) ? 0 : 1
   } catch (error) {
     console.error('Extension host did not produce a complete test report:', error.message)

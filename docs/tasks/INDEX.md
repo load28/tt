@@ -393,7 +393,9 @@
 
 | TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
 
+| TASK-374 | Refresh native diagnostics across focus transitions | Complete | 2026-09-12 | 2026-09-12 | [TASK-374](./TASK-374-editor-discard-synchronization.md) |
+
 ## Next task number
 
 
-**TASK-374**
+**TASK-375**
