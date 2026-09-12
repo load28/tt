@@ -10,9 +10,10 @@
  *
  *   1. read the pin from the repository's package.json
  *   2. `npm view` its gitHead, sparse-clone microsoft/TypeScript there
- *   3. build `packages/vscode-typescript` (tsc + esbuild, upstream scripts)
- *   4. rename the identity to `load28.tt-typescript-preview` — Apache-2.0
- *      redistribution with LICENSE/NOTICE kept, never Microsoft's publisher
+ *   3. apply the reviewed content-mapper feature ownership contract, then
+ *      build and test `packages/vscode-typescript` with upstream scripts
+ *   4. keep the identity required by VS Code's built-in service handoff,
+ *      with explicit modification provenance and LICENSE/NOTICE retained
  *   5. for each supported platform: copy the same-version platform npm
  *      package's `lib/` (tsgo executable + default libs — the extension
  *      activates from its packaged executable, TASK-257 issue log) and
@@ -86,6 +87,20 @@ function run(command, args, options = {}) {
   return execFileSync(command, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], ...options });
 }
 
+/** The patch is reviewed against this exact source; a pin update must review
+ * the ownership API again instead of silently losing the editor contract. */
+export const OWNERSHIP_PATCH_BASE = "5739027c9a7df24e27123f453a50c011b37717b6";
+
+export function applyEditorOwnershipPatch(checkout, gitHead) {
+  if (gitHead !== OWNERSHIP_PATCH_BASE) {
+    throw new Error(`review the content-mapper ownership patch for TypeScript ${gitHead}; expected ${OWNERSHIP_PATCH_BASE}`);
+  }
+  const patch = fileURLToPath(new URL("../patches/typescript-content-mapper-ownership.patch", import.meta.url));
+  // The repository stores LF patches; upstream source uses CRLF.
+  run("git", ["apply", "--check", "--ignore-space-change", patch], { cwd: checkout });
+  run("git", ["apply", "--ignore-space-change", "--whitespace=nowarn", patch], { cwd: checkout });
+}
+
 function main() {
   const outDir = process.argv[2];
   if (!outDir) {
@@ -109,10 +124,12 @@ function main() {
     run("git", ["clone", "--filter=blob:none", "--no-checkout", "https://github.com/microsoft/TypeScript", checkout]);
     run("git", ["-C", checkout, "checkout", gitHead]);
 
-    // Upstream's own build, from upstream's own lockfile.
+    applyEditorOwnershipPatch(checkout, gitHead);
+    // Upstream's own build and tests, from upstream's own lockfile.
     run("npm", ["ci"], { cwd: checkout });
     const extensionDir = path.join(checkout, "packages/vscode-typescript");
     run("npm", ["run", "build"], { cwd: extensionDir });
+    run("npm", ["test"], { cwd: extensionDir });
 
     // Our identity, upstream's provenance. LICENSE/NOTICE ship as-is.
     const manifestPath = path.join(extensionDir, "package.json");
@@ -120,7 +137,7 @@ function main() {
     manifest.publisher = EXTENSION_IDENTITY.publisher;
     manifest.name = EXTENSION_IDENTITY.name;
     manifest.displayName = EXTENSION_IDENTITY.displayName;
-    manifest.description = `TypeScript ${pin} language server with content mapper support, packaged by tt until the marketplace preview catches up. Built unmodified from microsoft/TypeScript@${gitHead.slice(0, 12)}.`;
+    manifest.description = `TypeScript ${pin} language server with content mapper support, packaged by tt. Based on microsoft/TypeScript@${gitHead.slice(0, 12)} with tt's content-mapper feature ownership patch.`;
     manifest.version = version;
     manifest.bundledTypeScriptVersion = pin;
     writeFileSync(manifestPath, JSON.stringify(manifest, undefined, 4));

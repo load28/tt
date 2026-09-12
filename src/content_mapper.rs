@@ -320,7 +320,7 @@ fn transform(
         extern_variants: &extern_variants,
         ..Options::default()
     };
-    let report = ttc::compile_report(&content, &options);
+    let report = ttc::compile_projection_report(&content, &options);
 
     let diagnostics: Vec<serde_json::Value> = report
         .diagnostics

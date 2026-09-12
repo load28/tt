@@ -91,6 +91,10 @@ pub(crate) struct RecoveryNode {
 
 #[derive(Debug, Clone)]
 pub(crate) enum RecoveryKind {
+    /// Invalid elements of a committed match; valid sibling arms stay intact.
+    MatchArms(Vec<Span>),
+    /// A malformed list element, including its separator, omitted in projection.
+    ListElement,
     /// Replace an invalid expression with `undefined`.
     Expression,
     /// Replace an invalid statement with an empty statement.

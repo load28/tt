@@ -503,9 +503,12 @@ pub struct CompileReport {
 /// intentionally not part of normal compilation: only the typed projection
 /// may substitute parser-owned error nodes so later independent code remains
 /// checkable.
-pub(crate) struct ProjectionReport {
+pub struct ProjectionReport {
+    /// Editor projection, including valid siblings of malformed syntax nodes.
     pub emit: Option<MappedEmit>,
+    /// Original-source diagnostics, independent of recovery substitutions.
     pub diagnostics: Vec<Diagnostic>,
+    /// Source byte ranges occupied by parser recovery nodes.
     pub recovered: Vec<(usize, usize)>,
 }
 
@@ -522,7 +525,7 @@ fn overwrite_recovery(source: &mut [u8], start: usize, end: usize, replacement: 
 /// error nodes. Replacements are byte-length preserving, so every mapping
 /// outside the recovered node remains in the original source coordinate
 /// space.
-pub(crate) fn compile_projection_report(source: &str, options: &Options) -> ProjectionReport {
+pub fn compile_projection_report(source: &str, options: &Options) -> ProjectionReport {
     let ordinary = compile_report(source, options);
     if ordinary.emit.is_some() {
         return ProjectionReport {
@@ -587,6 +590,10 @@ pub(crate) fn compile_projection_report(source: &str, options: &Options) -> Proj
                     };
                 overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
                 continue;
+            }
+            ast::RecoveryKind::ListElement => "",
+            ast::RecoveryKind::MatchArms(_) => {
+                unreachable!("match recovery is flattened by the parser")
             }
             ast::RecoveryKind::Statement => ";",
             ast::RecoveryKind::Type => "any",

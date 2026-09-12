@@ -147,7 +147,7 @@ impl Project {
         byte: usize,
         range: Range,
     ) -> Option<HoverInfo> {
-        let (code, offset) = isolate_alternative(&doc.source, binding, byte)?;
+        let (code, offset) = isolate_alternative(path, &doc.source, binding, byte)?;
 
         let uri = served_uri(path);
         let session = self.session();

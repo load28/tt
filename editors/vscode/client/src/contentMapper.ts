@@ -35,7 +35,8 @@ interface ContentMapperManifest {
  * `ContentMapperContribution`, structurally). */
 interface ContentMapperContribution {
   readonly extensions: readonly string[];
-  readonly inferredProject?: {
+  readonly languageFeatures?: readonly string[];
+  readonly inferredProjectContribution?: {
     readonly options?: Readonly<Record<string, unknown>>;
     readonly manifest: ContentMapperManifest;
   };
@@ -43,6 +44,7 @@ interface ContentMapperContribution {
 
 /** The slice of the TypeScript extension's exported API this module uses. */
 interface TypeScriptExtensionApi {
+  readonly contentMapperFeatureOwnership?: number;
   registerContentMappers?(
     contributorId: string,
     contributions: readonly ContentMapperContribution[],
@@ -57,6 +59,21 @@ const TYPESCRIPT_EXTENSION_IDS = [
   "typescript.native-preview",
 ];
 
+/** Own complete overlapping providers only. Code actions are complementary:
+ * tt supplies compiler quick fixes; native also supplies organize imports and
+ * refactorings. Its code-action provider therefore remains registered. */
+const TT_OWNED_FEATURES = [
+  "textDocument/completion",
+  "textDocument/hover",
+  "textDocument/signatureHelp",
+  "textDocument/definition",
+  "textDocument/references",
+  "textDocument/rename",
+  "textDocument/documentSymbol",
+  "textDocument/semanticTokens",
+  "textDocument/diagnostic",
+];
+
 /**
  * Registers `.tt`/`.ttx` with the TypeScript extension, when it is
  * installed and exports the hook. Quietly does nothing otherwise — a
@@ -69,7 +86,7 @@ export async function registerContentMappers(context: ExtensionContext): Promise
     if (api?.registerContentMappers === undefined) return;
     const registration = api.registerContentMappers(
       "tt-lang.tt-language",
-      [contribution()],
+      [{ ...contribution(), ...(api.contentMapperFeatureOwnership === 2 ? { languageFeatures: TT_OWNED_FEATURES } : {}) }],
     );
     context.subscriptions.push(registration);
   } catch {
@@ -102,7 +119,7 @@ function contribution(): ContentMapperContribution {
   }
   return {
     extensions: [".tt", ".ttx"],
-    inferredProject: { manifest: resolved },
+    inferredProjectContribution: { manifest: resolved },
   };
 }
 

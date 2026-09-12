@@ -326,7 +326,11 @@ impl Project {
                 .set(self.pattern_analysis_cache_hits.get() + 1);
             return cached.value.clone();
         }
-        let analyses = crate::pattern_analyses(source, &externs);
+        let analyses = crate::analysis::pattern_analyses_with_kind(
+            source,
+            &externs,
+            crate::SourceKind::from_path(path).unwrap_or_default(),
+        );
         let value = Arc::new(FileSemantics { externs, analyses });
         cache.insert(
             path.to_path_buf(),

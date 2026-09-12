@@ -1,5 +1,7 @@
 # TASK-258: TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉
 
+> Update (TASK-372): the release builder now applies a reviewed content-mapper feature ownership patch before building and testing the pinned upstream extension. The former unmodified-source assumption no longer applies; TASK-259 still governs extension identity.
+
 - **상태**: 완료
 - **시작일**: 2026-08-27
 - **완료일**: 2026-08-27

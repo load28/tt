@@ -89,7 +89,7 @@ exports.run = async () => {
         assert.equal(doc.getText(diagnostic.range), ext === 'ts' || ext === 'tsx' ? 'result' : 'value');
       });
       await replace(doc, source);
-      await eventually('error clears', () => assert.equal(errors(doc).length, 0));
+      await eventually('error clears', () => assert.equal(errors(doc).length, 0, JSON.stringify(errors(doc))));
     });
     await check(`${label}: dependency edits refresh untouched consumer`, async () => {
       const provider = await vscode.workspace.openTextDocument(providerPath);
@@ -102,14 +102,68 @@ exports.run = async () => {
         assert.ok(labels.includes('toFixed') && !labels.includes('toUpperCase'), JSON.stringify(labels));
       });
       await replace(provider, 'export const value: string = "hello";\n');
-      await eventually('dependent error clears', () => assert.equal(errors(doc).length, 0));
+      await eventually('dependent error clears', () => assert.equal(errors(doc).length, 0, JSON.stringify(errors(doc))));
       await replace(provider, 'export const value: number = 42;\n');
       await eventually('dependent error returns', () => assert.ok(errors(doc).some(isTypeMismatch)));
       await vscode.window.showTextDocument(provider);
       await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
-      await eventually('discarded dependency error clears', () => assert.equal(errors(doc).length, 0));
+      await eventually('discarded dependency error clears', () => assert.equal(errors(doc).length, 0, JSON.stringify(errors(doc))));
     });
     }
+  }
+  for (const ext of ['tt', 'ttx']) {
+    const domainFile = path.join(root, `domain-context.${ext}`);
+    const domainSource = 'export {};\nvariant User { Admin(name: string), Guest }\ndeclare const user: User;\nconst result = match (user) { Admin(name) => name.toUpperCase(), Guest => "guest" };\nconst created = User.Admin("hello");\n' + (ext === 'ttx' ? 'declare global { namespace JSX { interface IntrinsicElements { div: { children?: unknown } } } }\nconst view = <div>{result}</div>;\n' : '');
+    fs.writeFileSync(domainFile, domainSource);
+    const domain = await vscode.workspace.openTextDocument(domainFile);
+    await vscode.window.showTextDocument(domain);
+    await check(`${ext}: match payload completion and inferred result hover`, async () => {
+      await eventually('payload completion', async () => {
+        const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', domain.uri, domain.positionAt(domainSource.indexOf('name.to') + 5));
+        assert.ok(list?.items.some(item => (typeof item.label === 'string' ? item.label : item.label.label) === 'toUpperCase'));
+      });
+      await eventually('inferred hover', async () => {
+        const hovers = await vscode.commands.executeCommand('vscode.executeHoverProvider', domain.uri, domain.positionAt(domainSource.indexOf('result =')));
+        const text = hovers?.flatMap(hover => hover.contents.map(content => typeof content === 'string' ? content : content.value)).join('\n') || '';
+        assert.match(text, /string/);
+      });
+    });
+    await check(`${ext}: match payload errors map and clear`, async () => {
+      const broken = domainSource.replace('name.toUpperCase()', 'name.nonexistent()');
+      await replace(domain, broken);
+      await eventually('payload error', () => {
+        const diagnostics = errors(domain);
+        assert.ok(diagnostics.some(d => domain.getText(d.range).includes('nonexistent')), JSON.stringify(diagnostics));
+      });
+      await replace(domain, domainSource);
+      await eventually('payload error clears', () => assert.equal(errors(domain).length, 0, JSON.stringify(errors(domain))));
+    });
+    if (ext === 'ttx') {
+      await check('ttx: JSX text does not offer pattern cases', async () => {
+        const source = 'variant User { Admin(name: string), Guest }\nconst view = <div>if let </div>;\n';
+        await replace(domain, source);
+        await eventually('JSX text completion', async () => {
+          const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', domain.uri, domain.positionAt(source.indexOf('if let ') + 7));
+          const labels = list?.items.map(item => typeof item.label === 'string' ? item.label : item.label.label) || [];
+          assert.ok(!labels.includes('Admin') && !labels.includes('Guest'), JSON.stringify(labels));
+        });
+        await replace(domain, domainSource);
+      });
+    }
+    await check(`${ext}: pipeline completion in source-kind context`, async () => {
+      const file = path.join(root, `pipeline-context.${ext}`);
+      const source = ext === 'ttx'
+        ? 'const view = <div>문자 let x = try value; {"hello" |> .}</div>;\n'
+        : 'const title = "문자";\nconst result = "hello" |> .;\n';
+      fs.writeFileSync(file, source);
+      const doc = await vscode.workspace.openTextDocument(file);
+      await vscode.window.showTextDocument(doc);
+      await eventually('pipeline completion', async () => {
+        const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(source.lastIndexOf('|> .') + 4));
+        const labels = list?.items.map(item => typeof item.label === 'string' ? item.label : item.label.label) || [];
+        assert.ok(labels.includes('toUpperCase'), JSON.stringify(labels));
+      });
+    });
   }
   assert.equal(results.filter(r => !r.passed).length, 0, JSON.stringify(results));
 };

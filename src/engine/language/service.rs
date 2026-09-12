@@ -95,6 +95,9 @@ pub(super) fn ts_completions(
         entries.push(CompletionItem {
             kind: completion_kind(item["kind"].as_u64()),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
+            insert_text: item["insertText"].as_str().map(str::to_owned),
+            filter_text: item["filterText"].as_str().map(str::to_owned),
+            snippet: item["insertTextFormat"].as_u64() == Some(2),
             label,
         });
     }
@@ -121,7 +124,11 @@ pub(in super::super) fn source_byte(source: &str, position: Position) -> usize {
 /// and shares the typed pass's cross-snapshot cache.
 pub(in super::super) fn analyses_for(path: &Path, source: &str) -> crate::PatternAnalyses {
     let externs = externs_of(path, source, &|target| std::fs::read_to_string(target).ok());
-    crate::pattern_analyses(source, &externs)
+    crate::analysis::pattern_analyses_with_kind(
+        source,
+        &externs,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    )
 }
 
 /// A byte span of `text` as a [`Range`] — the byte↔UTF-16 conversion every
@@ -219,6 +226,7 @@ pub(in super::super) fn externs_from(
 /// offset is that alternative's own payload type. `None` when the spans do
 /// not line up (a stale analysis) or the byte lands in glue anyway.
 pub(super) fn isolate_alternative(
+    path: &Path,
     source: &str,
     binding: &crate::PatternBinding,
     byte: usize,
@@ -236,7 +244,10 @@ pub(super) fn isolate_alternative(
     synthetic.push_str(&source[..binding.group_start]);
     synthetic.push_str(&source[binding.alt_start..binding.alt_end]);
     synthetic.push_str(&source[binding.group_end..]);
-    let emit = crate::emit_mapped(&synthetic);
+    let emit = crate::emit_mapped_with_kind(
+        &synthetic,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
     // The hovered byte, relocated into the isolated pattern.
     let at = binding.group_start + (byte.clamp(binding.start, binding.end) - binding.alt_start);
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
@@ -271,7 +282,17 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         return None;
     }
     let spliced = format!("{}{}{}", &source[..at], PROBE_NAME, &source[at..]);
-    let emit = crate::emit_mapped(&spliced);
+    let report = crate::compile_projection_report(
+        &spliced,
+        &crate::Options {
+            filename: path.to_str(),
+            source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+            defer_to_checker: true,
+            rewrite_imports: crate::ImportRewrite::Off,
+            ..crate::Options::default()
+        },
+    );
+    let emit = report.emit?;
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
     Some(ProbeDoc {
         path: path.to_path_buf(),

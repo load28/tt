@@ -1071,6 +1071,9 @@ async function tsCompletions(
     label: entry.label,
     kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
     sortText: `2${entry.sortText}`,
+    insertText: entry.insertText ?? undefined,
+    filterText: entry.filterText ?? undefined,
+    insertTextFormat: entry.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
     data: {
       uri: doc.uri,
       offset,

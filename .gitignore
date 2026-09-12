@@ -4,6 +4,8 @@ npm/
 npm/*
 !npm/scripts/
 !npm/scripts/**
+!npm/patches/
+!npm/patches/**
 !npm/tt-lang/
 !npm/tt-lang/**
 *.tsbuildinfo

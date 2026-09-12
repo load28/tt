@@ -220,7 +220,8 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
 
     for recovery in &program.recoveries {
         let placeholder = match recovery.kind {
-            RecoveryKind::Expression => Placeholder::Expression,
+            RecoveryKind::Expression | RecoveryKind::MatchArms(_) => Placeholder::Expression,
+            RecoveryKind::ListElement => Placeholder::Statement,
             RecoveryKind::Statement | RecoveryKind::VariantDecl { .. } => Placeholder::Statement,
             RecoveryKind::Type => Placeholder::Type,
         };

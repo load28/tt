@@ -568,7 +568,15 @@ impl PatternAnalyses {
 /// assert_eq!(analyses.sites[0].pattern_bindings[0].ty.as_deref(), Some("string"));
 /// ```
 pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnalyses {
-    let program = crate::parser::parse(source);
+    pattern_analyses_with_kind(source, externs, crate::SourceKind::TypeScript)
+}
+
+pub(crate) fn pattern_analyses_with_kind(
+    source: &str,
+    externs: &[VariantSymbol],
+    source_kind: crate::SourceKind,
+) -> PatternAnalyses {
+    let program = crate::parser::parse_with_kind(source, source_kind);
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
     semantics_over(source, &program, &decls, Depth::Full).patterns
 }

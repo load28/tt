@@ -22,7 +22,7 @@
 use std::path::Path;
 
 use crate::analysis::DeclaredVariant;
-use crate::lexer::{Token, TokenKind, lex};
+use crate::lexer::{Token, TokenKind, lex_with_kind};
 
 use super::language::Position;
 
@@ -59,7 +59,12 @@ pub struct TtCompletion {
 /// service's, and a consumer merges the two lists.
 pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<TtCompletion> {
     let offset = super::language::source_byte(source, position);
-    let tokens = lex(source, 0, source.len());
+    let tokens = lex_with_kind(
+        source,
+        0,
+        source.len(),
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
     let declarations = super::language::analyses_for(path, source).declarations;
     match context(source, &tokens, offset) {
         Some(Context::Case { of: Some(tags) }) => {
@@ -404,6 +409,13 @@ mod tests {
             .into_iter()
             .map(|item| item.label)
             .collect()
+    }
+
+    #[test]
+    fn jsx_text_is_not_a_pattern_completion_context() {
+        let source = format!("{DECL}const view = <div>if let </div>;");
+        let items = tt_completions_at(Path::new("/p/a.ttx"), &source, at(&source, "if let "));
+        assert!(items.is_empty(), "{items:?}");
     }
 
     const DECL: &str =

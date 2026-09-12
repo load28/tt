@@ -531,11 +531,11 @@ fn wildcard_with_guard_is_not_tt_syntax() {
     // committed the construct to tt.
     let e = err("const r = match (x) { A => 1, _ if c => 0 };");
     assert!(
-        e.message.contains("tt `match` could not be parsed"),
+        e.message.contains("invalid match arm"),
         "{}",
         e.message
     );
-    assert_eq!((e.line, e.col), (1, 11));
+    assert_eq!((e.line, e.col), (1, 31));
 }
 
 #[test]

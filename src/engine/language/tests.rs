@@ -111,7 +111,7 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
     let analyses = crate::pattern_analyses(src, &[]);
     let b_x = src.find("B(x)").unwrap() + 2;
     let binding = analyses.binding_at(b_x).unwrap().clone();
-    let (code, offset) = isolate_alternative(src, &binding, b_x).unwrap();
+    let (code, offset) = isolate_alternative(Path::new("/p/a.tt"), src, &binding, b_x).unwrap();
     // The or-arm became a single `B(x)` arm — the emitted switch
     // narrows to `B` alone...
     assert!(code.contains("case \"B\""), "{code}");
@@ -124,7 +124,7 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
     // The A occurrence isolates to the A arm the same way.
     let a_x = src.find("A(x)").unwrap() + 2;
     let binding = analyses.binding_at(a_x).unwrap().clone();
-    let (code, _) = isolate_alternative(src, &binding, a_x).unwrap();
+    let (code, _) = isolate_alternative(Path::new("/p/a.tt"), src, &binding, a_x).unwrap();
     assert!(code.contains("case \"A\""), "{code}");
     assert!(!code.contains("case \"B\""), "{code}");
 }
@@ -243,4 +243,144 @@ fn member_context_walks_back_over_the_identifier() {
     assert!(is_member_context("value.", 6));
     assert!(!is_member_context("value", 5));
     assert!(!is_member_context("a . b", 1));
+}
+
+#[test]
+fn completion_probe_preserves_source_kind_and_cursor() {
+    for (path, prefix, kind) in [
+        (
+            "/p/a.tt",
+            "const title = \"문자\";\n",
+            crate::SourceKind::TypeScript,
+        ),
+        (
+            "/p/a.ttx",
+            "const view = <div>문자 let x = try value;</div>;\n",
+            crate::SourceKind::Tsx,
+        ),
+    ] {
+        let source = format!("{prefix}const result = \"hello\" |> .;\n");
+        let at = source.rfind("|> .").unwrap() + 4;
+        let probe = build_probe(Path::new(path), &source, at, 1).unwrap();
+        assert!(
+            projection_accepts_diagnostics(&probe.code, kind),
+            "{}",
+            probe.code
+        );
+        let byte = mapper::from_utf16(&probe.code, probe.offset);
+        assert!(probe.code[byte..].starts_with(PROBE_NAME), "{}", probe.code);
+        assert!(is_member_context(&probe.code, probe.offset));
+        assert!(probe.code.starts_with(prefix), "{}", probe.code);
+    }
+}
+
+#[test]
+fn ttx_pattern_analysis_does_not_parse_jsx_text() {
+    let source = "variant Real { A }\nconst view = <div>variant Fake { A }</div>;\n";
+    let analyses = analyses_for(Path::new("/p/a.ttx"), source);
+    assert!(analyses.declarations.iter().any(|d| d.name == "Real"));
+    assert!(!analyses.declarations.iter().any(|d| d.name == "Fake"));
+
+    let dir = std::env::temp_dir().join(format!("tt-tsx-pattern-kind-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("a.ttx");
+    std::fs::write(&path, source).unwrap();
+    let project = crate::engine::Engine::new(None)
+        .open_project(
+            &[dir.to_string_lossy().to_string()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let semantics = project.semantic_analyses(&path, source);
+    assert!(
+        semantics
+            .analyses
+            .declarations
+            .iter()
+            .any(|d| d.name == "Real")
+    );
+    assert!(
+        !semantics
+            .analyses
+            .declarations
+            .iter()
+            .any(|d| d.name == "Fake")
+    );
+    project.semantic_analyses(&path, source);
+    assert_eq!(project.semantic_cache_hits(), 1);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn isolated_pattern_hover_preserves_jsx_text() {
+    let source = "variant E { A(x: string), B(x: number) }\nconst view = <div>let x = try value;</div>;\nconst v = match (e) { A(x) | B(x) => x };\n";
+    let path = Path::new("/p/a.ttx");
+    let analyses = analyses_for(path, source);
+    let byte = source.find("B(x)").unwrap() + 2;
+    let binding = analyses.binding_at(byte).unwrap();
+    let (code, offset) = isolate_alternative(path, source, binding, byte).unwrap();
+    assert!(code.contains("<div>let x = try value;</div>"), "{code}");
+    assert!(
+        projection_accepts_diagnostics(&code, crate::SourceKind::Tsx),
+        "{code}"
+    );
+    assert!(code[mapper::from_utf16(&code, offset)..].starts_with('x'));
+}
+
+#[test]
+fn incomplete_match_arms_preserve_sibling_projections() {
+    for arms in [
+        "Gue, Admin(name) => name",
+        "Admin(name) => name, Gue, Guest => 'guest'",
+        "Admin(name) => name, Gue",
+        "Admin(name) => name, Gue, _ => 'other'",
+        "(Admin(name), _) => name, (Gue, _)",
+        "(Admin(name), _) => name, (Gue, _), _ => 'other'",
+    ] {
+        let source = format!(
+            "variant User {{ Admin(name: string), Guest }}\ndeclare const user: User;\nconst label = match (user, user) {{ {arms} }};\n"
+        );
+        let doc = service_doc(Path::new("/p/a.tt"), source.clone());
+        assert!(!doc.code.contains("match ("), "{}", doc.code);
+        assert!(doc.code.contains("name"), "{}", doc.code);
+        assert!(!doc.code.contains("Gue,"), "{}", doc.code);
+        let byte = source.find("=> name").unwrap() + 3;
+        let offset = to_service(&doc, u16_position(&source, mapper::to_utf16(&source, byte)))
+            .expect("the valid arm body must retain a source mapping");
+        let output_byte = mapper::from_utf16(&doc.code, offset);
+        assert!(doc.code[output_byte..].starts_with("name"), "{}", doc.code);
+        assert_eq!(
+            mapper::to_source_inclusive(&doc.mappings, output_byte),
+            Some(byte)
+        );
+        assert_eq!(doc.recovered.len(), 1);
+        let (start, end) = doc.recovered[0];
+        assert_eq!(
+            source[start..end].trim().trim_end_matches(',').trim(),
+            if arms.starts_with('(') {
+                "(Gue, _)"
+            } else {
+                "Gue"
+            }
+        );
+        assert!(
+            doc.tt_diagnostics
+                .iter()
+                .any(|d| d.code == crate::DiagnosticCode::MalformedMatch
+                    && d.start == Some(start)
+                    && d.end == Some(end)),
+            "{:?}",
+            doc.tt_diagnostics
+        );
+    }
+}
+
+#[test]
+fn completion_probe_uses_the_same_arm_recovery_as_hover() {
+    let source = "variant User { Admin(name: string), Guest }\ndeclare const user: User;\nconst label = match (user) { Admin(name) => name., Gue };\n";
+    let at = source.find("name.,").unwrap() + 5;
+    let probe = build_probe(Path::new("/p/a.tt"), source, at, 1).unwrap();
+    assert!(!probe.code.contains("match ("), "{}", probe.code);
+    let byte = mapper::from_utf16(&probe.code, probe.offset);
+    assert!(probe.code[..byte].ends_with("name."), "{}", probe.code);
 }
