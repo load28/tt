@@ -135,16 +135,20 @@ fn mapper_project(jsx: bool) -> Workspace {
 }
 
 /// One `tsc -p <project> --runExternalCode` run.
-fn check(tsc: &Path, project: &Path) -> (bool, String) {
-    let output = Command::new("node")
-        .args([
-            tsc.as_os_str().to_str().unwrap(),
-            "-p",
-            project.to_str().unwrap(),
-            "--runExternalCode",
-        ])
-        .output()
-        .expect("tsc runs");
+fn check(tsc: &Path, project: &Workspace) -> (bool, String) {
+    let mut command = Command::new("node");
+    command.args([
+        tsc.as_os_str().to_str().unwrap(),
+        "-p",
+        project.to_str().unwrap(),
+        "--runExternalCode",
+    ]);
+    // TypeScript closes mapper stdin and immediately kills the process. EOF
+    // can start LLVM finalization before that kill arrives, so these descendants
+    // have the same non-finalizing lifecycle as directly terminated watch tests.
+    // The direct protocol test below still measures a normally exiting mapper.
+    project.isolate_unfinalized_child_profile(&mut command);
+    let output = command.output().expect("tsc runs");
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -166,7 +170,7 @@ fn a_ts_file_imports_a_tt_file_with_no_sidecar_on_disk() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(ok, "expected a clean check, got:\n{text}");
     // The check held the transform virtually: nothing was written next to
     // the sources, which is the point of the mapper over the sidecar.
@@ -185,7 +189,7 @@ fn a_consumer_type_error_reports_at_the_consumer() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(!ok);
     assert!(
         text.contains("main.ts(2,7): error TS2322"),
@@ -211,7 +215,7 @@ fn a_tt_diagnostic_reports_at_its_source_with_the_tt_source() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(!ok);
     // The diagnostic is the mapper's own: tt's source name, tt's stable
     // code number, at the match's position in the original file.
@@ -240,7 +244,7 @@ fn a_deep_expression_try_typechecks_through_the_content_mapper() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(ok, "content mapper rejected expression try:\n{text}");
 }
 
@@ -267,7 +271,7 @@ fn an_imported_field_error_is_checker_owned_at_the_field_token() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(!ok);
     assert!(
         text.contains("payment.tt(4,32): error TS2339")
@@ -300,7 +304,7 @@ fn an_imported_case_error_with_a_wildcard_is_checker_owned() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(!ok);
     assert!(
         text.contains("payment.tt(4,10): error TS2678")
@@ -338,7 +342,7 @@ fn a_nested_imported_field_error_is_reported_at_its_token() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(!ok);
     assert!(
         text.contains("nested.tt(6,20): error TS2339")
@@ -370,7 +374,7 @@ fn a_type_error_inside_glue_reports_at_the_construct() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(!ok);
     assert!(
         text.contains("wrong.tt(4,10): error TS2322"),
@@ -405,7 +409,7 @@ fn generated_slots_preserve_contextual_literal_types_for_the_checker() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(
         ok,
         "expected contextual literals to type-check, got:\n{text}"
@@ -427,7 +431,7 @@ fn std_imports_resolve_through_materialization() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(ok, "expected a clean check, got:\n{text}");
     // The mapper put the standard library where module resolution looks.
     assert!(
@@ -453,7 +457,7 @@ fn a_ttx_file_serves_as_tsx() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(
         ok,
         "expected a clean check of the .ttx project, got:\n{text}"
@@ -480,7 +484,7 @@ fn a_tsx_consumer_typechecks_tt_and_ttx_imports_together() {
     )
     .unwrap();
 
-    let (ok, text) = check(&tsc, project.path());
+    let (ok, text) = check(&tsc, &project);
     assert!(ok, "expected a clean .tsx mixed-import check, got:\n{text}");
 }
 

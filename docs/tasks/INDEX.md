@@ -393,9 +393,11 @@
 
 | TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
 
-| TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | — | [TASK-375](./TASK-375-match-pattern-completions.md) |
+| TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | 2026-09-12 | [TASK-375](./TASK-375-match-pattern-completions.md) |
+
+| TASK-376 | Isolate externally terminated mapper profiles | Complete | 2026-09-12 | 2026-09-12 | [TASK-376](./TASK-376-mapper-coverage-lifecycle.md) |
 
 ## Next task number
 
 
-**TASK-376**
+**TASK-377**
