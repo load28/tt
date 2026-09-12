@@ -393,7 +393,9 @@
 
 | TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
 
+| TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | — | [TASK-375](./TASK-375-match-pattern-completions.md) |
+
 ## Next task number
 
 
-**TASK-374**
+**TASK-376**
