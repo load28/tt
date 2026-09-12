@@ -35,7 +35,7 @@ exports.run = async () => {
   };
   const native = await vscode.extensions.getExtension('TypeScriptTeam.native-preview').activate();
   await check('native exposes explicit content-mapper feature ownership', () => {
-    assert.equal(native.contentMapperFeatureOwnership, true);
+    assert.equal(native.contentMapperFeatureOwnership, 2);
   });
   await check('inferred native projects receive the registered mapper manifest', async () => {
     await vscode.extensions.getExtension('tt-lang.tt-language').activate();
@@ -61,7 +61,7 @@ exports.run = async () => {
       const hovers = await vscode.commands.executeCommand('vscode.executeHoverProvider', doc.uri, doc.positionAt(source.indexOf('greeting')));
       assert.equal(hovers.length, 1, JSON.stringify(hovers));
       assert.match(hovers[0].contents.map(c => c.value || c).join('\n'), /string/);
-      const partial = source.replace('Guest => "guest"', 'Gue').replace('=> name,', '=> name.,');
+      const partial = source.replace('Guest => "guest"', 'Gue').replace('=> name,', '=> name.,').replace('Gue }', 'Gue, _ => "other" }');
       await replace(doc, partial);
       await eventually('one String completion', async () => {
         const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', doc.uri, doc.positionAt(partial.indexOf('name.,') + 5));
@@ -72,6 +72,21 @@ exports.run = async () => {
       await eventually('type error clears', () => assert.deepEqual(errors(doc), []));
     });
   }
+  await check('native organize imports remains available while tt owns overlapping providers', async () => {
+    fs.writeFileSync(path.join(root, 'dep.ts'), 'export const unused = 1;\n');
+    for (const extension of ['tt', 'ttx']) {
+      const doc = await open(`imports.${extension}`, 'import { unused } from "./dep.ts";\nexport const value = 1;\n');
+      let organize;
+      await eventually('native organize imports', async () => {
+        const actions = await vscode.commands.executeCommand('vscode.executeCodeActionProvider', doc.uri,
+          new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), 'source.organizeImports', 10);
+        organize = actions.find(action => action.kind?.value === 'source.organizeImports' && action.edit);
+        assert.ok(organize, JSON.stringify(actions));
+      });
+      assert.equal(await vscode.workspace.applyEdit(organize.edit), true);
+      assert.equal(doc.getText(), 'export const value = 1;\n');
+    }
+  });
   await check('late ownership preserves native consumer synchronization and release restores UI', async () => {
     const registration = native.registerContentMappers('tt-test.native', [{ extensions: ['.owned'] }]);
     let external;
@@ -84,7 +99,7 @@ exports.run = async () => {
         assert.equal(errors(consumer).length, 1, JSON.stringify(vscode.languages.getDiagnostics()));
         assert.equal(errors(provider)[0].source, 'ts');
       });
-      external = native.registerContentMappers('tt-test.external', [{ extensions: ['.owned'], languageFeatures: 'external' }]);
+      external = native.registerContentMappers('tt-test.external', [{ extensions: ['.owned'], languageFeatures: ['textDocument/diagnostic'] }]);
       await eventually('late delegation removes native UI', () => assert.deepEqual(errors(provider), []));
       await replace(provider, 'export const value: string = 123;\n');
       await eventually('unsaved provider changes still reach native consumer', () => assert.deepEqual(errors(consumer), []));

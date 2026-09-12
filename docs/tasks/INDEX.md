@@ -391,7 +391,9 @@
 
 | TASK-372 | Audit live typing and editor feedback latency | Complete | 2026-09-12 | 2026-09-12 | [TASK-372](./TASK-372-live-typing-feedback.md) |
 
+| TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
+
 ## Next task number
 
 
-**TASK-373**
+**TASK-374**

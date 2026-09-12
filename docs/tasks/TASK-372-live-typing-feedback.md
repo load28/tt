@@ -1,5 +1,7 @@
 # TASK-372: Audit live typing and editor feedback latency
 
+> Superseded in part by TASK-373: blanket external UI ownership is replaced by method-scoped ownership, and match recognition defers recursive body construction until grammar commitment. The original wildcard recovery and nested-fallback validation were incomplete; TASK-373 records the review reproductions and corrected contracts.
+
 - **Status**: Complete
 - **Started**: 2026-09-12
 - **Completed**: 2026-09-12

@@ -333,7 +333,9 @@ fn incomplete_match_arms_preserve_sibling_projections() {
         "Gue, Admin(name) => name",
         "Admin(name) => name, Gue, Guest => 'guest'",
         "Admin(name) => name, Gue",
+        "Admin(name) => name, Gue, _ => 'other'",
         "(Admin(name), _) => name, (Gue, _)",
+        "(Admin(name), _) => name, (Gue, _), _ => 'other'",
     ] {
         let source = format!(
             "variant User {{ Admin(name: string), Guest }}\ndeclare const user: User;\nconst label = match (user, user) {{ {arms} }};\n"

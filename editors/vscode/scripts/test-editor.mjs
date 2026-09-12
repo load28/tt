@@ -43,7 +43,7 @@ child.on('exit', code => {
   try {
     const results = JSON.parse(readFileSync(join(run, 'results.json'), 'utf8'))
     console.log(JSON.stringify(results, null, 2))
-    const expected = suite === 'ownership' ? 5 : suite === 'filesystem' ? 11 : nativeExtension ? 71 : 39
+    const expected = suite === 'ownership' ? 6 : suite === 'filesystem' ? 11 : nativeExtension ? 71 : 39
     process.exitCode = code === 0 && results.length === expected && results.every(result => result.passed) ? 0 : 1
   } catch (error) {
     console.error('Extension host did not produce a complete test report:', error.message)

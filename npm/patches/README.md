@@ -10,10 +10,13 @@ platform VSIX assets. A different source commit fails the build until the patch
 is reviewed for that version. The compiler executable remains the pinned npm
 artifact; this patch changes the VS Code client only.
 
-The API advertises `contentMapperFeatureOwnership: true`. A registered content
-mapper may specify `languageFeatures: "external"`. Native TypeScript retains
-document open/change/close synchronization and module resolution, while the
-companion owns UI features for those extensions. The same policy handles initial
+The API advertises `contentMapperFeatureOwnership: 2`. A registered content
+mapper may list fully replaced LSP methods in `languageFeatures`, for example
+`["textDocument/completion", "textDocument/hover"]`. Ownership is keyed by method
+and extension. Native TypeScript retains document open/change/close synchronization,
+module resolution, and all unclaimed features. tt deliberately leaves native
+code actions registered: compiler quick fixes do not replace organize imports
+or native refactorings. The same policy handles initial
 capabilities, already registered capabilities, custom hover providers, and lease
 disposal. Releasing the registration restores native features. Other extensions
 and ordinary TypeScript files retain their native providers.
@@ -34,6 +37,6 @@ VSCODE_TYPESCRIPT_EXTENSION=/absolute/path/to/TypeScript/packages/vscode-typescr
 ```
 
 The ownership suite covers a single completion/hover/diagnostic provider for tt
-and ttx, incomplete-arm inference, late delegation, unsaved native consumer
+and ttx, wildcard-arm inference, organize-import edits, late delegation, unsaved native consumer
 updates, and restoration after disposal. Direct desktop typing evidence is
-recorded in [TASK-372](../../docs/tasks/TASK-372-live-typing-feedback.md).
+recorded in [TASK-373](../../docs/tasks/TASK-373-editor-review-regressions.md).

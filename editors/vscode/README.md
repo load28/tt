@@ -21,7 +21,9 @@ release; an older installed extension does not pick up edits to this checkout.
 The paired TypeScript VSIX includes an explicit content-mapper feature ownership
 contract. Once the tt server is ready, it owns completion, hover, and diagnostics
 for `.tt`/`.ttx`; native TypeScript continues synchronizing those documents for
-`.ts`/`.tsx` consumers. Older TypeScript extensions without this contract can
+`.ts`/`.tsx` consumers. Native-only features, including Organize Imports and
+refactorings, remain available through capability-specific ownership. Older
+TypeScript extensions without this contract can
 still display duplicate suggestions or diagnostics. See the
 [patch contract](../../npm/patches/README.md) for build and verification details.
 
