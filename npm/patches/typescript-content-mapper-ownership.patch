@@ -65,7 +65,17 @@
                      await next(params, CancellationToken.None);
                      if (this.trackContentMapperUnregistrations(params.unregisterations)) {
                          this.registerSelectorScopedFeatures();
-@@ -355,11 +385,12 @@
+@@ -148,6 +178,9 @@
+                 onChange: true,
+                 onSave: true,
+                 onTabs: true,
++                // The active document leaves the dependency background queue.
++                // Pull on focus so a revert/close cannot strand its old diagnostics.
++                onFocus: true,
+                 match(documentSelector, resource) {
+                     // This function is called when diagnostics are requested but
+                     // only the URI itself is known (e.g. open but not yet focused tabs),
+@@ -355,11 +388,12 @@
 
      // selectorScopedDocumentSelector is the static jsTs selector plus every active content-mapper filter,
      // deduplicated. The custom providers are registered against it so they also cover content-mapped files.
@@ -79,7 +89,7 @@
                  const key = typeof filter.pattern === "string" ? filter.pattern : JSON.stringify(filter.pattern);
                  if (!seen.has(key)) {
                      seen.add(key);
-@@ -379,10 +410,9 @@
+@@ -379,10 +413,9 @@
          if (!this.client || this.isStopping || this.isDisposed) {
              return;
          }
@@ -92,7 +102,7 @@
          );
      }
 
-@@ -396,6 +426,7 @@
+@@ -396,6 +429,7 @@
              disposable.dispose();
          }
          this.contentMapperFiltersById.clear();
@@ -100,7 +110,7 @@
          const disposables = this.disposables.splice(0);
          await Promise.all(disposables.map(d => d.dispose()));
          await this.client?.stop();
-@@ -412,6 +443,7 @@
+@@ -412,6 +446,7 @@
              disposable.dispose();
          }
          this.contentMapperFiltersById.clear();
