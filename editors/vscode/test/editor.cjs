@@ -107,6 +107,9 @@ exports.run = async () => {
       await eventually('dependent error returns', () => assert.ok(errors(doc).some(isTypeMismatch)));
       await vscode.window.showTextDocument(provider);
       await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      assert.equal(provider.getText(), fs.readFileSync(providerPath, 'utf8'), 'discard restores the provider buffer');
+      assert.equal(provider.isDirty, false);
+      assert.equal(vscode.window.activeTextEditor?.document.uri.toString(), doc.uri.toString(), 'closing the provider focuses its consumer');
       await eventually('discarded dependency error clears', () => assert.equal(errors(doc).length, 0, JSON.stringify(errors(doc))));
     });
     }

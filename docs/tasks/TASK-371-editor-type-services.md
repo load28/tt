@@ -1,5 +1,7 @@
 # TASK-371: Audit and repair editor type services
 
+> Follow-up: [TASK-374](./TASK-374-editor-discard-synchronization.md) resolves the dependency-discard diagnostic scheduling gap investigated in Issue 2. The observations below are the historical audit results.
+
 - **Status**: Complete
 - **Started**: 2026-09-12
 - **Completed**: 2026-09-12
