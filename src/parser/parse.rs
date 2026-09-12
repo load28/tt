@@ -131,7 +131,15 @@ pub(super) fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)
 pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
     let mut out = Vec::new();
     visit_programs(program, &mut |program| {
-        out.extend(program.recoveries.iter().cloned());
+        for node in &program.recoveries {
+            match &node.kind {
+                RecoveryKind::MatchArms(arms) => out.extend(arms.iter().map(|span| RecoveryNode {
+                    span: *span,
+                    kind: RecoveryKind::ListElement,
+                })),
+                _ => out.push(node.clone()),
+            }
+        }
     });
     out.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end)));
     out

@@ -52,6 +52,9 @@ export interface EngineCompletionItem {
   /** The element-kind string the editor has always mapped. */
   kind: string;
   sortText: string;
+  insertText?: string | null;
+  filterText?: string | null;
+  snippet?: boolean;
 }
 
 export interface EngineCompletionList {

@@ -1300,3 +1300,45 @@ test("LSP client reports process exit instead of hanging pending operations", { 
     await assert.rejects(client.waitFor("future", () => true), /code=7/);
   } finally { client.stop(); }
 });
+
+test("JSX optional attribute completion preserves insertion text through resolve", { skip: skipTyped, timeout }, async () => {
+  const source = 'export {}; declare global { namespace JSX { interface IntrinsicElements { div: { title?: string } } } }\nconst view = <div ti/>;\n';
+  const { completion, stop } = await open(source, "ttx");
+  try {
+    const result = await completion("<div ti");
+    const item = result.items.find((entry) => entry.label === "title?");
+    assert.ok(item, "expected the optional JSX attribute");
+    assert.equal(item.insertText, "title");
+    assert.equal(item.filterText, "title");
+    assert.equal(item.insertTextFormat, 1);
+    const resolved = await result.resolve("title?");
+    assert.equal(resolved.insertText, "title");
+    assert.equal(resolved.filterText, "title");
+  } finally {
+    stop();
+  }
+});
+
+test("incomplete match siblings retain hover and member completions", { skip: skipTyped, timeout }, async () => {
+  for (const language of ["tt", "ttx"] as const) {
+    const source = 'variant User { Admin(name: string), Guest }\ndeclare const user: User;\nconst label = match (user) { Admin(name) => name, Gue };\n';
+    const { client, uri, stop } = await open(source, language);
+    try {
+      const offset = source.indexOf("=> name") + 3;
+      const before = source.slice(0, offset);
+      const position = { line: 2, character: before.length - before.lastIndexOf("\n") - 1 };
+      const hover = await client.request("textDocument/hover", { textDocument: { uri }, position });
+      assert.match(JSON.stringify(hover.result), /string/);
+      const changed = source.slice(0, offset + 4) + "." + source.slice(offset + 4);
+      client.notify("textDocument/didChange", {
+        textDocument: { uri, version: 2 }, contentChanges: [{ text: changed }],
+      });
+      const response = await client.request("textDocument/completion", {
+        textDocument: { uri }, position: { ...position, character: position.character + 5 },
+        context: { triggerKind: 2, triggerCharacter: "." },
+      });
+      const items = response.result?.items ?? response.result ?? [];
+      assert.ok(items.some((item: any) => item.label === "toUpperCase"), JSON.stringify(items));
+    } finally { stop(); }
+  }
+});

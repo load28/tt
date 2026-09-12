@@ -95,6 +95,12 @@ pub struct CompletionItem {
     pub kind: String,
     /// The service's own sort text (the adapter adds its layer prefix).
     pub sort_text: String,
+    /// Insertion text, independent of the decorated display label.
+    pub insert_text: Option<String>,
+    /// Text used to match the typed prefix.
+    pub filter_text: Option<String>,
+    /// Whether insertion text uses snippet syntax.
+    pub snippet: bool,
 }
 
 /// A completion answer.

@@ -346,7 +346,7 @@ fn namespace_imports_qualify_their_extern_variants() {
 }
 
 #[test]
-fn a_blocked_projection_serves_an_empty_module_with_the_cause() {
+fn a_recoverable_field_type_preserves_the_declaration_and_original_error() {
     let mut session = session();
     let result = respond(
         &mut session,
@@ -360,14 +360,48 @@ fn a_blocked_projection_serves_an_empty_module_with_the_cause() {
         ),
     )
     .unwrap();
-    assert_eq!(result["text"], "");
-    assert_eq!(result["mappings"], serde_json::json!([]));
+    assert!(
+        result["text"]
+            .as_str()
+            .unwrap()
+            .contains("export type Broken")
+    );
+    assert!(!result["mappings"].as_array().unwrap().is_empty());
     let diagnostics = result["diagnostics"].as_array().unwrap();
     assert!(!diagnostics.is_empty());
     assert_eq!(
         diagnostics[0]["code"],
         code_number("variant-invalid-field-type")
     );
+}
+
+#[test]
+fn incomplete_match_arms_preserve_mapped_siblings_in_both_source_kinds() {
+    for extension in ["tt", "ttx"] {
+        let source = "variant User { Admin(name: string), Guest }\ndeclare const user: User;\nconst greeting = match (user) { Admin(name) => name, Gue };\n";
+        let result = respond(
+            &mut session(),
+            &request(
+                "transform",
+                serde_json::json!({
+                    "fileName": format!("/nonexistent/partial.{extension}"),
+                    "content": source,
+                    "projectHandle": "p:0",
+                }),
+            ),
+        )
+        .unwrap();
+        let text = result["text"].as_str().unwrap();
+        assert!(text.contains("const { name } = $tt_m;"), "{text}");
+        assert!(text.contains("$tt_v0 = name;"), "{text}");
+        assert!(!result["mappings"].as_array().unwrap().is_empty());
+        let diagnostics = result["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == code_number("malformed-match"))
+        );
+    }
 }
 
 #[test]

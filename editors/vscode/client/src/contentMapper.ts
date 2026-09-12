@@ -35,7 +35,8 @@ interface ContentMapperManifest {
  * `ContentMapperContribution`, structurally). */
 interface ContentMapperContribution {
   readonly extensions: readonly string[];
-  readonly inferredProject?: {
+  readonly languageFeatures?: "native" | "external";
+  readonly inferredProjectContribution?: {
     readonly options?: Readonly<Record<string, unknown>>;
     readonly manifest: ContentMapperManifest;
   };
@@ -43,6 +44,7 @@ interface ContentMapperContribution {
 
 /** The slice of the TypeScript extension's exported API this module uses. */
 interface TypeScriptExtensionApi {
+  readonly contentMapperFeatureOwnership?: boolean;
   registerContentMappers?(
     contributorId: string,
     contributions: readonly ContentMapperContribution[],
@@ -69,7 +71,7 @@ export async function registerContentMappers(context: ExtensionContext): Promise
     if (api?.registerContentMappers === undefined) return;
     const registration = api.registerContentMappers(
       "tt-lang.tt-language",
-      [contribution()],
+      [{ ...contribution(), ...(api.contentMapperFeatureOwnership ? { languageFeatures: "external" as const } : {}) }],
     );
     context.subscriptions.push(registration);
   } catch {
@@ -102,7 +104,7 @@ function contribution(): ContentMapperContribution {
   }
   return {
     extensions: [".tt", ".ttx"],
-    inferredProject: { manifest: resolved },
+    inferredProjectContribution: { manifest: resolved },
   };
 }
 

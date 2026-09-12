@@ -17,10 +17,6 @@ import { ttClientOptions } from "./options";
 let client: LanguageClient | undefined;
 
 export function activate(context: ExtensionContext): void {
-  // TypeScript 7.1+ holds `.tt`/`.ttx` virtually through a content mapper;
-  // registering is fire-and-forget and never blocks the language client.
-  void registerContentMappers(context);
-
   const serverModule = context.asAbsolutePath(
     path.join("server", "out", "server.js"),
   );
@@ -46,7 +42,9 @@ export function activate(context: ExtensionContext): void {
     ttClientOptions(watchers),
   );
   synchronizeHostDocuments(context, client);
-  client.start();
+  // Claim UI ownership only once this language client can serve requests.
+  // The native client continues synchronizing mapped documents for TS consumers.
+  void client.start().then(() => registerContentMappers(context));
 }
 
 export function deactivate(): Thenable<void> | undefined {

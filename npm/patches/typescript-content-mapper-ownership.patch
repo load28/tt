@@ -1,0 +1,211 @@
+--- a/packages/vscode-typescript/src/client.ts
++++ b/packages/vscode-typescript/src/client.ts
+@@ -3,6 +3,8 @@
+ import { CancellationToken } from "vscode-languageclient";
+ import {
+     ClientCapabilities,
++    Registration,
++    DynamicFeature,
+     CloseAction,
+     CloseHandlerResult,
+     ErrorAction,
+@@ -44,6 +46,8 @@
+ // Registration IDs the server uses for content mapper capabilities all share this prefix (see
+ // RegisterContentMapperExtensions in internal/lsp/server.go). The extension watches for these dynamic
+ // registrations to learn which file extensions are content-mapped.
++import { ContentMapperOwnership } from "./contentMapperOwnership";
++
+ const contentMapperRegistrationPrefix = "content-mapper-";
+
+ // ContentMapperRegisterOptions is the subset of a dynamic registration's options that our server sends
+@@ -60,6 +64,25 @@
+ }
+
+ export class Client implements vscode.Disposable {
++    private readonly featureOwnership = new ContentMapperOwnership();
++    private readonly mapperFeatureRegistrations = new Map<string, Registration>();
++
++    setExternalLanguageFeatures(extensions: readonly string[]): void {
++        if (!this.featureOwnership.setExtensions(extensions)) return;
++        for (const registration of this.mapperFeatureRegistrations.values()) {
++            if (["textDocument/didOpen", "textDocument/didChange", "textDocument/didClose"].includes(registration.method)) continue;
++            // Dynamic registration names arrive as strings on the LSP wire.
++            // LanguageClient exposes getFeature with literal overloads for each method.
++            const getFeature = this.client?.getFeature as ((method: string) => DynamicFeature<any> | undefined) | undefined;
++            const feature = getFeature?.call(this.client, registration.method);
++            if (!feature || !("unregister" in feature)) continue;
++            feature.unregister(registration.id);
++            const owned = this.featureOwnership.filter(registration);
++            if (owned) feature.register({ id: owned.id, registerOptions: owned.registerOptions });
++        }
++        this.registerSelectorScopedFeatures();
++    }
++
+     private outputChannel: vscode.LogOutputChannel;
+     private initializedEventEmitter: vscode.EventEmitter<void>;
+     private telemetryReporter: tr.TelemetryReporter;
+@@ -131,12 +154,20 @@
+                 sendRequest: workspaceSymbolSendRequestMiddleware,
+                 provideHover: () => undefined,
+                 handleRegisterCapability: async (params, next) => {
+-                    await next(params, CancellationToken.None);
++                    for (const registration of params.registrations) {
++                        if (registration.id.startsWith(contentMapperRegistrationPrefix)) this.mapperFeatureRegistrations.set(registration.id, registration);
++                    }
++                    const registrations = params.registrations.flatMap(registration => {
++                        const owned = this.featureOwnership.filter(registration);
++                        return owned ? [owned] : [];
++                    });
++                    await next({ registrations }, CancellationToken.None);
+                     if (this.trackContentMapperRegistrations(params.registrations)) {
+                         this.registerSelectorScopedFeatures();
+                     }
+                 },
+                 handleUnregisterCapability: async (params, next) => {
++                    for (const registration of params.unregisterations) this.mapperFeatureRegistrations.delete(registration.id);
+                     await next(params, CancellationToken.None);
+                     if (this.trackContentMapperUnregistrations(params.unregisterations)) {
+                         this.registerSelectorScopedFeatures();
+@@ -360,6 +391,7 @@
+         const filters: vscode.DocumentFilter[] = [];
+         for (const list of this.contentMapperFiltersById.values()) {
+             for (const filter of list) {
++                if (typeof filter.pattern === "string" && this.featureOwnership.ownsPattern(filter.pattern)) continue;
+                 const key = typeof filter.pattern === "string" ? filter.pattern : JSON.stringify(filter.pattern);
+                 if (!seen.has(key)) {
+                     seen.add(key);
+@@ -396,6 +428,7 @@
+             disposable.dispose();
+         }
+         this.contentMapperFiltersById.clear();
++        this.mapperFeatureRegistrations.clear();
+         const disposables = this.disposables.splice(0);
+         await Promise.all(disposables.map(d => d.dispose()));
+         await this.client?.stop();
+@@ -412,6 +445,7 @@
+             disposable.dispose();
+         }
+         this.contentMapperFiltersById.clear();
++        this.mapperFeatureRegistrations.clear();
+         const disposables = this.disposables.splice(0);
+         await Promise.all(disposables.map(d => d.dispose()));
+         await this.client?.dispose();
+--- a/packages/vscode-typescript/src/session.ts
++++ b/packages/vscode-typescript/src/session.ts
+@@ -139,6 +139,10 @@
+     private async syncContentMapperContributionsNow(): Promise<void> {
+         try {
+             if (!this.currentSession?.client.isInitialized) return;
++            this.currentSession.client.setExternalLanguageFeatures(
++                [...this.contentMapperRegistrations.values()].flatMap(contributions =>
++                    contributions.flatMap(contribution => contribution.languageFeatures === "external" ? [...contribution.extensions] : [])),
++            );
+             const openDocuments = vscode.workspace.textDocuments
+                 .filter(document => documentMatchesContentMapperContributions(document, this.contentMapperRegistrations))
+                 .map(document => document.uri);
+--- a/packages/vscode-typescript/src/extension.ts
++++ b/packages/vscode-typescript/src/extension.ts
+@@ -25,6 +25,7 @@
+ import assert from "node:assert";
+
+ export interface ExtensionAPI {
++    readonly contentMapperFeatureOwnership: true;
+     onLanguageServerInitialized: vscode.Event<void>;
+     initializeAPIConnection(pipe?: string): Promise<string>;
+     registerContentMappers(contributorId: string, contributions: readonly ContentMapperContribution[]): vscode.Disposable;
+@@ -78,6 +79,7 @@
+     }
+
+     const api: ExtensionAPI = {
++        contentMapperFeatureOwnership: true,
+         onLanguageServerInitialized: onLanguageServerInitialized,
+         async initializeAPIConnection(pipe?: string): Promise<string> {
+             return sessionManager.initializeAPIConnection(pipe);
+--- a/packages/vscode-typescript/src/contentMapperContributions.ts
++++ b/packages/vscode-typescript/src/contentMapperContributions.ts
+@@ -10,6 +10,8 @@
+ }
+
+ export interface ContentMapperContribution {
++    /** A registered companion owns UI features; native retains document synchronization. */
++    readonly languageFeatures?: "native" | "external";
+     readonly extensions: readonly string[];
+     readonly inferredProjectContribution?: {
+         readonly options?: Readonly<Record<string, unknown>>;
+--- /dev/null
++++ b/packages/vscode-typescript/src/contentMapperOwnership.ts
+@@ -0,0 +1,26 @@
++/** Content-mapped documents stay synchronized even when a companion language
++ * server owns their UI features. Ownership is scoped to a registration's lifetime. */
++export class ContentMapperOwnership {
++    private patterns = new Set<string>();
++
++    setExtensions(extensions: readonly string[]): boolean {
++        const patterns = new Set(extensions.map(extension => `**/*${extension}`));
++        if (patterns.size === this.patterns.size && [...patterns].every(pattern => this.patterns.has(pattern))) return false;
++        this.patterns = patterns;
++        return true;
++    }
++
++    ownsPattern(pattern: string): boolean {
++        return this.patterns.has(pattern);
++    }
++
++    filter<T extends { id: string; method: string; registerOptions?: any; }>(registration: T): T | undefined {
++        if (!registration.id.startsWith("content-mapper-") ||
++            ["textDocument/didOpen", "textDocument/didChange", "textDocument/didClose"].includes(registration.method)) return registration;
++        const options = registration.registerOptions;
++        if (!Array.isArray(options?.documentSelector)) return registration;
++        const documentSelector = options.documentSelector.filter((selector: { pattern?: string; }) =>
++            !selector.pattern || !this.ownsPattern(selector.pattern));
++        return documentSelector.length ? { ...registration, registerOptions: { ...options, documentSelector } } : undefined;
++    }
++}
+--- /dev/null
++++ b/packages/vscode-typescript/test/contentMapperOwnership.test.ts
+@@ -0,0 +1,39 @@
++import { strict as assert } from "node:assert";
++import { test } from "node:test";
++import { ContentMapperOwnership } from "../src/contentMapperOwnership";
++
++const registration = (method: string) => ({
++    id: "content-mapper-test", method,
++    registerOptions: { documentSelector: [{ pattern: "**/*.tt" }, { pattern: "**/*.vue" }] },
++});
++
++test("external ownership preserves synchronization and unrelated language features", () => {
++    const owner = new ContentMapperOwnership();
++    owner.setExtensions([".tt"]);
++    for (const method of ["textDocument/didOpen", "textDocument/didChange", "textDocument/didClose"]) {
++        const original = registration(method);
++        assert.equal(owner.filter(original), original);
++    }
++    for (const method of ["textDocument/hover", "textDocument/completion", "textDocument/diagnostic"]) {
++        const original = registration(method);
++        assert.deepEqual(owner.filter(original)?.registerOptions.documentSelector, [{ pattern: "**/*.vue" }]);
++        assert.equal(original.registerOptions.documentSelector.length, 2);
++    }
++});
++
++test("releasing a lease restores native features without changing synchronization", () => {
++    const owner = new ContentMapperOwnership();
++    const original = registration("textDocument/hover");
++    owner.setExtensions([".tt", ".vue"]);
++    assert.equal(owner.filter(original), undefined);
++    assert.equal(owner.setExtensions([".vue", ".tt"]), false);
++    assert.equal(owner.setExtensions([]), true);
++    assert.deepEqual(owner.filter(original), original);
++});
++
++test("non-mapper registrations are not affected", () => {
++    const owner = new ContentMapperOwnership();
++    owner.setExtensions([".tt"]);
++    const original = { ...registration("textDocument/completion"), id: "ordinary-typescript" };
++    assert.equal(owner.filter(original), original);
++});
+--- a/packages/vscode-typescript/test/index.test.ts
++++ b/packages/vscode-typescript/test/index.test.ts
+@@ -1,2 +1,3 @@
+ import "./contentMapperContributions.test";
++import "./contentMapperOwnership.test";
+ import "./tsdkPackage.test";

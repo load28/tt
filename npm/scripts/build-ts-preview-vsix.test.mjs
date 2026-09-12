@@ -4,11 +4,18 @@ import test from "node:test";
 
 import {
   EXTENSION_IDENTITY,
+  OWNERSHIP_PATCH_BASE,
   PLATFORMS,
+  applyEditorOwnershipPatch,
   extensionVersionFor,
   pinnedTypeScript,
   vsixName,
 } from "./build-ts-preview-vsix.mjs";
+
+test("an unreviewed TypeScript source cannot silently drop editor ownership", () => {
+  assert.match(OWNERSHIP_PATCH_BASE, /^[0-9a-f]{40}$/);
+  assert.throws(() => applyEditorOwnershipPatch('/unused', '0'.repeat(40)), /review the content-mapper ownership patch/);
+});
 
 test("the extension version derives from the pin and only from the pin", () => {
   assert.equal(extensionVersionFor("7.1.0-dev.20260826.1"), "0.20260826.1");

@@ -60,6 +60,24 @@ pub(super) fn parse_match<'t>(
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
             .map_or(cur.range_end, |token| token.span.end);
+        if let Some(arms) = recover_match_arms(cur).filter(|arms| !arms.is_empty()) {
+            let first = arms[0];
+            return Claim::Malformed {
+                error: crate::error::TtError::span(
+                    first.start,
+                    first.end,
+                    "invalid match arm: expected `<pattern> => <body>`".to_string(),
+                )
+                .code(crate::DiagnosticCode::MalformedMatch),
+                recovery: RecoveryNode {
+                    span: Span {
+                        start: kw_span.start,
+                        end,
+                    },
+                    kind: RecoveryKind::MatchArms(arms),
+                },
+            };
+        }
         let mut error = crate::error::TtError::span(
             kw_span.start,
             kw_span.end,
@@ -348,50 +366,113 @@ fn generic_angle_close(tokens: &[Token], open: usize, limit: usize) -> Option<us
     None
 }
 
-fn parse_arms(mut cur: Cursor) -> Option<Vec<Arm>> {
+/// Parse independently recoverable list elements. A failed arm owns bytes up
+/// to the next comma at this list's delimiter depth, including that separator.
+/// Valid arms use their grammar's expression scanner, so generic argument and
+/// nested expression commas are never mistaken for arm separators.
+fn parse_arm_list<T>(mut cur: Cursor, parse: fn(&mut Cursor) -> Option<T>) -> (Vec<T>, Vec<Span>) {
     let mut arms = Vec::new();
+    let mut errors = Vec::new();
     while let Some(first) = cur.peek() {
-        let pattern_start = first.span.start;
-
-        // pattern
-        let pattern = match first.kind {
-            TokenKind::Ident if cur.text(first) == "_" => {
-                cur.bump();
-                Pattern::Wildcard
-            }
-            _ if at_literal(&cur) => Pattern::Literals(parse_literal_alternatives(&mut cur)?),
-            TokenKind::Ident if cur.text(first) == "is" => {
-                Pattern::Instances(parse_instance_alternatives(&mut cur)?)
-            }
-            TokenKind::Ident => Pattern::Tags(parse_tag_alternatives(&mut cur)?),
-            _ => return None,
-        };
-        let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
-
-        // Only tag and literal patterns take a guard — `_ if` never parses,
-        // so it passes through.
-        let allow_guard = !matches!(pattern, Pattern::Wildcard);
-        let tail = parse_arm_tail(&mut cur, allow_guard)?;
-
-        arms.push(Arm {
-            pattern,
-            pattern_span: Span {
-                start: pattern_start,
-                end: pattern_end,
-            },
-            guard: tail.guard,
-            body_span: tail.body_span,
-            body: tail.body,
-            block: tail.block,
-            diverges: tail.diverges,
-        });
-
-        if cur.peek().is_none() {
-            break;
+        let start = first.span.start;
+        let before = cur;
+        if let Some(arm) = parse(&mut cur)
+            && (cur.peek().is_none() || cur.at_punct(b','))
+        {
+            arms.push(arm);
+            cur.eat_punct(b',');
+            continue;
         }
-        cur.eat_punct(b',')?;
+        cur = before;
+        while let Some(token) = cur.peek() {
+            if cur.at_punct(b',') {
+                cur.bump();
+                break;
+            }
+            if matches!(token.kind, TokenKind::Punct(b'(' | b'[' | b'{'))
+                && let Some(close) = cur.find_close()
+            {
+                cur.idx = close + 1;
+            } else {
+                cur.bump();
+            }
+        }
+        errors.push(Span {
+            start,
+            end: cur.stop_byte_at(cur.idx),
+        });
     }
-    Some(arms)
+    (arms, errors)
+}
+
+/// Recovery is admitted only inside a structurally committed match with a
+/// complete scrutinee and body, and only when at least one arm fully parses.
+fn recover_match_arms(mut cur: Cursor) -> Option<Vec<Span>> {
+    if !cur.at_punct(b'(') {
+        return None;
+    }
+    let close = cur.find_close()?;
+    if close == cur.idx + 1 {
+        return None;
+    }
+    cur.idx = close + 1;
+    if !cur.at_punct(b'{') {
+        return None;
+    }
+    let close = cur.find_close()?;
+    let body = cur.sub(cur.idx + 1, close, cur.tokens[close].span.start);
+    let (single, single_errors) = parse_arm_list(body, parse_arm);
+    let (tuple, tuple_errors) = parse_arm_list(body, parse_tuple_arm);
+    if !single.is_empty() && tuple.is_empty() {
+        Some(single_errors)
+    } else if !tuple.is_empty() && single.is_empty() {
+        Some(tuple_errors)
+    } else {
+        None
+    }
+}
+
+fn parse_arms(cur: Cursor) -> Option<Vec<Arm>> {
+    let (arms, errors) = parse_arm_list(cur, parse_arm);
+    errors.is_empty().then_some(arms)
+}
+
+fn parse_arm(cur: &mut Cursor) -> Option<Arm> {
+    let first = cur.peek()?;
+    let pattern_start = first.span.start;
+
+    // pattern
+    let pattern = match first.kind {
+        TokenKind::Ident if cur.text(first) == "_" => {
+            cur.bump();
+            Pattern::Wildcard
+        }
+        _ if at_literal(cur) => Pattern::Literals(parse_literal_alternatives(cur)?),
+        TokenKind::Ident if cur.text(first) == "is" => {
+            Pattern::Instances(parse_instance_alternatives(cur)?)
+        }
+        TokenKind::Ident => Pattern::Tags(parse_tag_alternatives(cur)?),
+        _ => return None,
+    };
+    let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
+
+    // Only tag and literal patterns take a guard — `_ if` never parses,
+    // so it passes through.
+    let allow_guard = !matches!(pattern, Pattern::Wildcard);
+    let tail = parse_arm_tail(cur, allow_guard)?;
+
+    Some(Arm {
+        pattern,
+        pattern_span: Span {
+            start: pattern_start,
+            end: pattern_end,
+        },
+        guard: tail.guard,
+        body_span: tail.body_span,
+        body: tail.body,
+        block: tail.block,
+        diverges: tail.diverges,
+    })
 }
 
 /// Parses `is Type (| is Type)*`. A constructor is an identifier or dotted
@@ -459,50 +540,46 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
 /// Parses tuple arms: `(elem, elem, ...) (if guard)? => body` with an
 /// optional final bare `_` arm. `None` unless *every* arm has that shape —
 /// the caller then falls back to single-match arms.
-fn parse_tuple_arms(mut cur: Cursor) -> Option<Vec<TupleArm>> {
-    let mut arms = Vec::new();
-    while let Some(first) = cur.peek() {
-        let pattern_start = first.span.start;
+fn parse_tuple_arms(cur: Cursor) -> Option<Vec<TupleArm>> {
+    let (arms, errors) = parse_arm_list(cur, parse_tuple_arm);
+    errors.is_empty().then_some(arms)
+}
 
-        let pattern = match first.kind {
-            TokenKind::Ident if cur.text(first) == "_" => {
-                cur.bump();
-                TuplePattern::Wildcard
-            }
-            TokenKind::Punct(b'(') => {
-                let open = cur.idx;
-                let close = cur.find_close()?;
-                let elems =
-                    parse_tuple_elems(cur.sub(open + 1, close, cur.tokens[close].span.start))?;
-                cur.idx = close + 1;
-                TuplePattern::Elems(elems)
-            }
-            _ => return None,
-        };
-        let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
+fn parse_tuple_arm(cur: &mut Cursor) -> Option<TupleArm> {
+    let first = cur.peek()?;
+    let pattern_start = first.span.start;
 
-        let allow_guard = matches!(pattern, TuplePattern::Elems(_));
-        let tail = parse_arm_tail(&mut cur, allow_guard)?;
-
-        arms.push(TupleArm {
-            pattern_span: Span {
-                start: pattern_start,
-                end: pattern_end,
-            },
-            pattern,
-            guard: tail.guard,
-            body_span: tail.body_span,
-            body: tail.body,
-            block: tail.block,
-            diverges: tail.diverges,
-        });
-
-        if cur.peek().is_none() {
-            break;
+    let pattern = match first.kind {
+        TokenKind::Ident if cur.text(first) == "_" => {
+            cur.bump();
+            TuplePattern::Wildcard
         }
-        cur.eat_punct(b',')?;
-    }
-    Some(arms)
+        TokenKind::Punct(b'(') => {
+            let open = cur.idx;
+            let close = cur.find_close()?;
+            let elems = parse_tuple_elems(cur.sub(open + 1, close, cur.tokens[close].span.start))?;
+            cur.idx = close + 1;
+            TuplePattern::Elems(elems)
+        }
+        _ => return None,
+    };
+    let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
+
+    let allow_guard = matches!(pattern, TuplePattern::Elems(_));
+    let tail = parse_arm_tail(cur, allow_guard)?;
+
+    Some(TupleArm {
+        pattern_span: Span {
+            start: pattern_start,
+            end: pattern_end,
+        },
+        pattern,
+        guard: tail.guard,
+        body_span: tail.body_span,
+        body: tail.body,
+        block: tail.block,
+        diverges: tail.diverges,
+    })
 }
 
 /// Parses the comma-separated element patterns between a tuple pattern's

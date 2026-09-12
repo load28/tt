@@ -387,7 +387,11 @@
 
 | TASK-370 | Preserve unrecognized JSX numeric references | Complete | 2026-09-12 | 2026-09-12 | [TASK-370](./TASK-370-jsx-entity-parser-errors.md) |
 
+| TASK-371 | Audit and repair editor type services | Complete | 2026-09-12 | 2026-09-12 | [TASK-371](./TASK-371-editor-type-services.md) |
+
+| TASK-372 | Audit live typing and editor feedback latency | Complete | 2026-09-12 | 2026-09-12 | [TASK-372](./TASK-372-live-typing-feedback.md) |
+
 ## Next task number
 
 
-**TASK-371**
+**TASK-373**
