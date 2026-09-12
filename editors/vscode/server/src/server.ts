@@ -110,7 +110,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         save: { includeText: false },
       },
       completionProvider: {
-        triggerCharacters: [".", "(", "|"],
+        triggerCharacters: [".", "(", "|", "{", ","],
         // Signatures and documentation are fetched per entry, when the
         // editor asks for the one the user highlighted (onCompletionResolve).
         resolveProvider: true,
@@ -1143,6 +1143,13 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
       // tag — but sorts after the ones still missing.
       sortText: `${item.covered ? 1 : 0}${item.label}`,
     }));
+  }
+
+  // Delimiters invoke pattern completion without a word prefix. Outside a
+  // pattern they must not open the general keyword/global suggestion list.
+  if (params.context?.triggerKind === 2 &&
+      (params.context.triggerCharacter === "{" || params.context.triggerCharacter === ",")) {
+    return [];
   }
 
   // General position → variant names + tt keyword snippets, then everything

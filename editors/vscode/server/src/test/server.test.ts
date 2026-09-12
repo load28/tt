@@ -1342,3 +1342,37 @@ test("incomplete match siblings retain hover and member completions", { skip: sk
     } finally { stop(); }
   }
 });
+
+test("pattern completion handles delimiter triggers and incomplete prefixes", { skip, timeout }, async () => {
+  const prefix = 'variant Other { Wrong }\nvariant User { Admin(name: string, level: number), Guest }\n';
+  for (const language of ["tt", "ttx"] as const) {
+    const { client, uri, stop } = await open(prefix, language);
+    try {
+      let version = 1;
+      for (const [pattern, trigger, expected] of [
+        ['const r = match (user) {# };', '{', ['Admin', 'Guest']],
+        ['const r = match (user) { Ad# };', undefined, ['Admin', 'Guest']],
+        ['const r = match (user) { Admin(name) => name,# };', ',', ['Admin', 'Guest']],
+        ['const r = match (user) { Admin(name) => name, Gu#, _ => 0 };', undefined, ['Admin', 'Guest']],
+        ['const r = match (user) { Admin(name,#) => name };', ',', ['name', 'level']],
+        ['const r = match (user) { Admin(na#) => name };', undefined, ['name', 'level']],
+        ['const r = match (a, b) { (Admin(name), G#) => name };', undefined, ['Admin', 'Guest']],
+        ['const object = {# };', '{', []],
+      ] as const) {
+        const source = prefix + pattern.replace('#', '');
+        const offset = prefix.length + pattern.indexOf('#');
+        const before = source.slice(0, offset);
+        client.notify("textDocument/didChange", { textDocument: { uri, version: ++version }, contentChanges: [{ text: source }] });
+        const response = await client.request("textDocument/completion", {
+          textDocument: { uri },
+          position: { line: before.split('\n').length - 1, character: offset - before.lastIndexOf('\n') - 1 },
+          context: trigger ? { triggerKind: 2, triggerCharacter: trigger } : { triggerKind: 1 },
+        });
+        const items = response.result?.items ?? response.result ?? [];
+        const labels = items.map((item: any) => item.label);
+        for (const label of expected) assert.ok(labels.includes(label), `${pattern}: ${JSON.stringify(labels)}`);
+        if (expected.length === 0) assert.deepEqual(labels, []);
+      }
+    } finally { stop(); }
+  }
+});

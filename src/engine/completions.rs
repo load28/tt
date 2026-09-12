@@ -66,12 +66,11 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let declarations = super::language::analyses_for(path, source).declarations;
-    match context(source, &tokens, offset) {
+    let items = match context(source, &tokens, offset) {
         Some(Context::Case { of: Some(tags) }) => {
-            let mut items = match resolve(&declarations, &tags) {
-                Some(declared) => cases(declared, &tags),
-                None => Vec::new(),
-            };
+            let mut items = resolve_all(&declarations, &tags)
+                .flat_map(|declared| cases(declared, &tags))
+                .collect::<Vec<_>>();
             // An arm position always admits the wildcard, whether or not
             // the subject resolved.
             items.push(TtCompletion {
@@ -89,30 +88,46 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
             .iter()
             .flat_map(|declared| cases(declared, &[]))
             .collect(),
-        Some(Context::Field { tag }) => {
-            let Some(declared) = resolve(&declarations, std::slice::from_ref(&tag)) else {
-                return Vec::new();
-            };
-            fields(declared, &tag)
-        }
+        Some(Context::Field { tag }) => resolve_all(&declarations, std::slice::from_ref(&tag))
+            .flat_map(|declared| fields(declared, &tag))
+            .collect(),
         Some(Context::Nested { tag, field }) => {
-            let Some(declared) = resolve(&declarations, std::slice::from_ref(&tag)) else {
-                return Vec::new();
-            };
-            let Some(inner) = declared
-                .constructors
-                .iter()
-                .find(|c| c.tag == tag)
-                .and_then(|c| c.fields.as_deref())
-                .and_then(|fields| fields.iter().find(|f| f.name == field))
-                .and_then(|f| type_variant(&declarations, &f.ty))
-            else {
-                return Vec::new();
-            };
-            cases(inner, &[])
+            resolve_all(&declarations, std::slice::from_ref(&tag))
+                .filter_map(|declared| {
+                    declared
+                        .constructors
+                        .iter()
+                        .find(|c| c.tag == tag)
+                        .and_then(|c| c.fields.as_deref())
+                        .and_then(|fields| fields.iter().find(|f| f.name == field))
+                        .and_then(|f| type_variant(&declarations, &f.ty))
+                })
+                .flat_map(|inner| cases(inner, &[]))
+                .collect()
         }
         None => Vec::new(),
+    };
+    merge_candidates(items)
+}
+
+/// Ambiguous declarations can share a tag or field. Present one insertion
+/// candidate while preserving each possible declaration in its detail.
+fn merge_candidates(items: Vec<TtCompletion>) -> Vec<TtCompletion> {
+    let mut merged: Vec<TtCompletion> = Vec::new();
+    for item in items {
+        if let Some(existing) = merged
+            .iter_mut()
+            .find(|other| other.label == item.label && other.kind == item.kind)
+        {
+            if !existing.detail.lines().any(|line| line == item.detail) {
+                existing.detail.push('\n');
+                existing.detail.push_str(&item.detail);
+            }
+        } else {
+            merged.push(item);
+        }
     }
+    merged
 }
 
 /// The pattern position the cursor is in.
@@ -146,6 +161,22 @@ fn context(source: &str, tokens: &[Token], offset: usize) -> Option<Context> {
     let before = prefix.unwrap_or(cursor);
     if before == 0 {
         return None;
+    }
+
+    // Tuple pattern slots are case positions, not payload fields. The tuple
+    // opener itself must occupy an arm slot directly inside a match body.
+    if let Some(open) = innermost_open(tokens, before)
+        && open > 0
+        && matches!(tokens[open - 1].kind, TokenKind::Punct(b'{' | b','))
+        && enclosing_match_body(source, tokens, open).is_some()
+        && matches!(
+            tokens[before - 1].kind,
+            TokenKind::Punct(b'(' | b',' | b'|')
+        )
+    {
+        return Some(Context::Case {
+            of: Some(Vec::new()),
+        });
     }
 
     // Inside a pattern's parens? The innermost unclosed `(` decides.
@@ -291,39 +322,52 @@ fn enclosing_match_body(source: &str, tokens: &[Token], before: usize) -> Option
     Some((open, close))
 }
 
-/// The tags the arms of a match body already write, in source order.
-///
-/// Read off the token stream at the body's own nesting level: the first
-/// identifier after `{`, `,` or `|` is a tag, and anything deeper (an arm
-/// body, a pattern's payload) is skipped.
+/// Completed arm headers provide variant evidence. An unfinished sibling and
+/// a wildcard do not identify a variant; expression-body identifiers and pipes
+/// are outside the pattern grammar and must never constrain its candidates.
 fn arm_tags(
     source: &str,
     tokens: &[Token],
     (open, close): (usize, usize),
     prefix: Option<usize>,
 ) -> Vec<String> {
-    let mut tags: Vec<String> = Vec::new();
+    let mut tags = Vec::new();
+    let mut pending = Vec::new();
     let mut depth = 0usize;
+    let mut pattern = true;
+    let mut alternatives = true;
     let mut expect = true;
-    let end = close.min(tokens.len());
-    for (index, token) in tokens.iter().enumerate().take(end).skip(open + 1) {
+    for (index, token) in tokens.iter().enumerate().take(close).skip(open + 1) {
         match token.kind {
-            TokenKind::Punct(b'(') | TokenKind::Punct(b'{') | TokenKind::Punct(b'[') => {
+            TokenKind::Punct(b'(' | b'{' | b'[') => {
                 depth += 1;
                 expect = false;
             }
-            TokenKind::Punct(b')') | TokenKind::Punct(b'}') | TokenKind::Punct(b']') => {
-                depth = depth.saturating_sub(1);
+            TokenKind::Punct(b')' | b'}' | b']') => depth = depth.saturating_sub(1),
+            TokenKind::Punct(b',') if depth == 0 => {
+                pending.clear();
+                pattern = true;
+                alternatives = true;
+                expect = true;
             }
-            TokenKind::Punct(b',') | TokenKind::Punct(b'|') if depth == 0 => expect = true,
-            TokenKind::Ident if depth == 0 && expect => {
-                if prefix == Some(index) {
-                    expect = false;
-                    continue;
+            TokenKind::Arrow if depth == 0 && pattern => {
+                for tag in pending.drain(..) {
+                    if !tags.contains(&tag) {
+                        tags.push(tag);
+                    }
                 }
+                pattern = false;
+                expect = false;
+            }
+            TokenKind::Ident if depth == 0 && pattern && text(source, token) == "if" => {
+                alternatives = false;
+                expect = false;
+            }
+            TokenKind::Punct(b'|') if depth == 0 && pattern && alternatives => expect = true,
+            TokenKind::Ident if depth == 0 && pattern && alternatives && expect => {
                 let tag = text(source, token);
-                if !tags.iter().any(|t| t == tag) {
-                    tags.push(tag.to_string());
+                if prefix != Some(index) && tag != "_" {
+                    pending.push(tag.to_string());
                 }
                 expect = false;
             }
@@ -334,14 +378,13 @@ fn arm_tags(
     tags
 }
 
-/// The variant the table resolves a tag set to: the first declaration holding
-/// every one of them — the shadowing order the table is already in, and the
-/// same rule pattern resolution uses.
-fn resolve<'a>(
+/// Keep every declaration consistent with the known tags. With no evidence,
+/// choosing the first table entry would arbitrarily hide other visible cases.
+fn resolve_all<'a>(
     declarations: &'a [DeclaredVariant],
-    tags: &[String],
-) -> Option<&'a DeclaredVariant> {
-    declarations.iter().find(|declared| {
+    tags: &'a [String],
+) -> impl Iterator<Item = &'a DeclaredVariant> {
+    declarations.iter().filter(|declared| {
         tags.iter()
             .all(|tag| declared.constructors.iter().any(|c| c.tag == *tag))
     })
@@ -490,6 +533,64 @@ mod tests {
         assert!(labels(&src, "match (s) { ").contains(&"_".to_string()));
         let src = format!("{DECL}if let  = s {{ }}\n");
         assert!(!labels(&src, "if let ").contains(&"_".to_string()));
+    }
+
+    #[test]
+    fn every_prefix_retains_cases_without_arbitrary_variant_selection() {
+        let prefix =
+            "variant Other { Wrong }\nvariant User { Admin(name: string, level: number), Guest }\n";
+        for arm in ["", "A", "Ad", "Admin", "G", "Gu", "Guest"] {
+            let source = format!("{prefix}const r = match (user) {{ {arm}");
+            let found = labels(&source, &format!("match (user) {{ {arm}"));
+            assert!(found.contains(&"Admin".into()), "{arm}: {found:?}");
+            assert!(found.contains(&"Guest".into()), "{arm}: {found:?}");
+        }
+    }
+
+    #[test]
+    fn wildcard_and_unfinished_siblings_do_not_remove_case_candidates() {
+        for sibling in ["_ => 0", "Unfin", "Guest => 0"] {
+            let source = format!(
+                "{DECL}variant User {{ Admin(name: string), Guest }}\nconst r = match (user) {{ Admin(name) => name, Gu, {sibling} }};"
+            );
+            let found = labels(&source, "name, Gu");
+            assert_eq!(found, ["Admin", "Guest", "_"], "{sibling}");
+        }
+    }
+
+    #[test]
+    fn expression_pipes_do_not_become_pattern_evidence() {
+        let source = format!("{DECL}const r = match (s) {{ Circle(r) => r | mask, Po }};");
+        assert_eq!(
+            labels(&source, "mask, Po"),
+            ["Circle", "Rect", "Point", "_"]
+        );
+        let source = format!("{DECL}const r = match (s) {{ Circle(r) if r | mask => r, Po }};");
+        assert_eq!(labels(&source, "r, Po"), ["Circle", "Rect", "Point", "_"]);
+    }
+
+    #[test]
+    fn ambiguous_tags_preserve_fields_and_deduplicate_insertions() {
+        let source = "variant Left { Shared(common: string, left: number) }\nvariant Right { Shared(common: number, right: boolean) }\nconst r = match (x) { Shared( }";
+        assert_eq!(labels(source, "Shared( }"), Vec::<String>::new());
+        assert_eq!(labels(source, "{ Shared("), ["common", "left", "right"]);
+    }
+
+    #[test]
+    fn tuple_slots_and_partial_payload_fields_are_completable() {
+        for pattern in ["(", "(Ci", "(Circle(r), ", "(Circle(r), Po"] {
+            let source = format!("{DECL}const r = match (a, b) {{ {pattern}");
+            let found = labels(&source, &format!("match (a, b) {{ {pattern}"));
+            assert!(found.contains(&"Circle".into()), "{pattern}: {found:?}");
+            assert!(found.contains(&"Point".into()), "{pattern}: {found:?}");
+        }
+        for pattern in ["Rect(", "Rect(w", "Rect(w, ", "Rect(w, h"] {
+            let source = format!("{DECL}const r = match (s) {{ {pattern}");
+            assert_eq!(
+                labels(&source, &format!("match (s) {{ {pattern}")),
+                ["w", "h"]
+            );
+        }
     }
 
     #[test]

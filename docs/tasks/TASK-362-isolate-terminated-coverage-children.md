@@ -1,5 +1,7 @@
 # TASK-362: Isolate terminated coverage children
 
+> TASK-376 extends this lifecycle rule to TypeScript-owned mapper descendants; the original audit covered only directly controlled children.
+
 - **Status**: Complete
 - **Started**: 2026-09-10
 - **Completed**: 2026-09-10

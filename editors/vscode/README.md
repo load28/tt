@@ -74,6 +74,14 @@ for the content-mapper setup.
   TypeScript rename semantics; a local rename need not rename the exported symbol.
   Unsafe or unsupported rename targets can be rejected.
 
+Pattern completion is available while typing the first arm, later arms,
+tuple slots, and payload fields. `{`, `(`, `,`, and `|` can trigger pattern
+suggestions before a word is complete. Completed arm headers narrow visible
+variant candidates; wildcard arms and unfinished siblings do not remove them.
+When no header identifies a variant, all compatible visible cases remain
+available rather than selecting an arbitrary declaration. Ambiguous field/tag
+names share one insertion candidate with their declaration details retained.
+
 Incomplete member expressions can use a compiler-owned completion probe. Such
 probes answer completion requests; they are not the source used for diagnostics.
 Recovery and source mappings belong to the compiler, not to a second parser in
@@ -185,3 +193,9 @@ Known contextual-typing failures for scoped/sibling match continuations remain
 tracked in [TASK-324](../../docs/tasks/TASK-324-scoped-contextual-continuations.md).
 Editor diagnostics can expose those compiler limitations; they are not hidden
 to make the editor appear clean.
+
+Pattern-entry editor regressions, including imported variants in tt and ttx:
+
+```sh
+TT_EDITOR_TEST_SUITE=patterns node editors/vscode/scripts/test-editor.mjs
+```
