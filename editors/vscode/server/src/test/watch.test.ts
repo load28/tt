@@ -24,3 +24,14 @@ test("with nothing open every change is news", () => {
     assert.equal(isExternalChange({ path: "/w/open.tt", type }, none), true);
   }
 });
+
+test("a file this server wrote itself is not news while the disk still holds it", () => {
+  const written = new Set(["/w/open.tt.d.ts"]);
+  const ownWrites = { owns: (path: string) => written.has(path) };
+  assert.equal(isExternalChange({ path: "/w/open.tt.d.ts", type: CHANGED }, open, ownWrites), false);
+  assert.equal(isExternalChange({ path: "/w/open.tt.d.ts", type: CREATED }, open, ownWrites), false);
+  assert.equal(isExternalChange({ path: "/w/open.tt.d.ts", type: DELETED }, open, ownWrites), true);
+  assert.equal(isExternalChange({ path: "/w/other.tt.d.ts", type: CHANGED }, open, ownWrites), true);
+  written.clear();
+  assert.equal(isExternalChange({ path: "/w/open.tt.d.ts", type: CHANGED }, open, ownWrites), true);
+});

@@ -60,3 +60,62 @@ test("a JSX closing tag is not a regex in a .ttx buffer", () => {
   assert.equal(maskNonCode(compared, true), "const b = a <         ;");
   assert.equal(maskNonCode(compared, false), "const b = a <         ;");
 });
+
+test("an apostrophe in JSX text does not start a string", () => {
+  const src = "const el = <p>Don't {user.}</p>;";
+  const masked = maskNonCode(src, true);
+  assert.equal(masked.length, src.length);
+  assert.ok(!masked.includes("Don't"));
+  assert.equal(memberAccessAt(masked, src.indexOf("user.") + 5), "user");
+  assert.equal(maskNonCode("const el = <p>Don't {user.}</p>;", false).includes("user"), false);
+});
+
+test("quotes in JSX attributes are attribute text, not code strings", () => {
+  const src = `const el = <a title="it's" href='say "hi"' onClick={() => go(x.)}>{y.}</a>;`;
+  const masked = maskNonCode(src, true);
+  assert.equal(masked.length, src.length);
+  assert.ok(!masked.includes("it's"));
+  assert.ok(!masked.includes('"hi"'));
+  assert.equal(memberAccessAt(masked, src.indexOf("x.") + 2), "x");
+  assert.equal(memberAccessAt(masked, src.indexOf("y.") + 2), "y");
+});
+
+test("nested elements and expression containers return to code", () => {
+  const src = [
+    "const list = (",
+    "  <ul>",
+    "    {items.map(item => <li key={item.id}>{item.name} isn't {other.}</li>)}",
+    "  </ul>",
+    ");",
+    "const after = a / b;",
+  ].join("\n");
+  const masked = maskNonCode(src, true);
+  assert.equal(masked.length, src.length);
+  assert.ok(!masked.includes("isn't"));
+  assert.ok(masked.includes("item.id"));
+  assert.ok(masked.includes("item.name"));
+  assert.equal(memberAccessAt(masked, src.indexOf("other.") + 6), "other");
+  assert.ok(masked.includes("a / b"));
+  assert.equal(memberAccessAt(masked, src.indexOf("item.name") + 5), "item");
+});
+
+test("a generic arrow function in a .ttx buffer is code, not an element", () => {
+  const src = [
+    "const id = <T,>(x: T) => x;",
+    "const pick = <T extends object>(x: T) => x;",
+    "const keep = <const T,>(x: T) => x;",
+    "const v = q.",
+  ].join("\n");
+  const masked = maskNonCode(src, true);
+  assert.equal(masked, src);
+  assert.equal(memberAccessAt(masked, src.length), "q");
+});
+
+test("a fragment and a self-closing element are elements", () => {
+  const src = "const el = <><img src='a.png' />{'literal'}{v.}</>;";
+  const masked = maskNonCode(src, true);
+  assert.equal(masked.length, src.length);
+  assert.ok(!masked.includes("a.png"));
+  assert.ok(!masked.includes("literal"));
+  assert.equal(memberAccessAt(masked, src.indexOf("v.") + 2), "v");
+});

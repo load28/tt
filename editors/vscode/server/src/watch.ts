@@ -14,6 +14,8 @@
  *
  * Creation and deletion still count for an open document: those change what
  * the project contains, whoever is holding the file.
+ * A write this server made itself (a sidecar rebuilt on save) is not news
+ * either, for as long as the disk still holds what it wrote.
  */
 
 /** The `FileChangeType` values the protocol defines. */
@@ -28,12 +30,23 @@ export interface WatchedChange {
   type: number;
 }
 
+export interface WriteOwnership {
+  owns(path: string): boolean;
+}
+
 /**
  * Whether `change` tells the server something it does not already have.
  *
- * `openPaths` are the buffers the server holds, by filesystem path.
+ * `openPaths` are the buffers the server holds, by filesystem path;
+ * `ownWrites` answers for the files the server wrote itself.
  */
-export function isExternalChange(change: WatchedChange, openPaths: ReadonlySet<string>): boolean {
+export function isExternalChange(
+  change: WatchedChange,
+  openPaths: ReadonlySet<string>,
+  ownWrites?: WriteOwnership,
+): boolean {
+  if (change.type === DELETED) return true;
   if (change.type === CHANGED && openPaths.has(change.path)) return false;
+  if (ownWrites?.owns(change.path)) return false;
   return true;
 }

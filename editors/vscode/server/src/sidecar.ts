@@ -13,6 +13,7 @@
  * when that API changes.
  * ----------------------------------------------------------------------- */
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -25,6 +26,50 @@ export type SidecarResult =
   | { kind: "written"; files: string[] }
   | { kind: "skipped"; reason: string }
   | { kind: "failed"; detail: string };
+
+export class WriteLedger {
+  private readonly entries = new Map<
+    string,
+    { generation: number; fingerprint: string | null }
+  >();
+  private generation = 0;
+
+  expect(files: string[]): number {
+    this.generation += 1;
+    for (const file of files) {
+      this.entries.set(file, { generation: this.generation, fingerprint: null });
+    }
+    return this.generation;
+  }
+
+  settle(generation: number, written: boolean): void {
+    for (const [file, entry] of this.entries) {
+      if (entry.generation !== generation) continue;
+      const fingerprint = written ? fingerprintOf(file) : null;
+      if (fingerprint === null) this.entries.delete(file);
+      else entry.fingerprint = fingerprint;
+    }
+  }
+
+  owns(file: string): boolean {
+    const entry = this.entries.get(file);
+    if (entry === undefined) return false;
+    if (entry.fingerprint === null) return true;
+    if (fingerprintOf(file) === entry.fingerprint) return true;
+    this.entries.delete(file);
+    return false;
+  }
+}
+
+export const selfWrites = new WriteLedger();
+
+function fingerprintOf(file: string): string | null {
+  try {
+    return createHash("sha1").update(fs.readFileSync(file)).digest("hex");
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Rebuilds the sidecar for one `.tt` file.
@@ -59,7 +104,11 @@ export async function refreshSidecar(
   // directory a project opts into, and the editor's sidecar goes wherever
   // the settings say — beside the source by default.
   const args = ["--types", ttPath, "-o", outDir ?? path.dirname(ttPath)];
-  return run(compiler, args, [declarationTarget, `${base}.d.ts.map`]);
+  const files = [declarationTarget, `${base}.d.ts.map`];
+  const generation = selfWrites.expect(files);
+  const result = await run(compiler, args, files);
+  selfWrites.settle(generation, result.kind === "written");
+  return result;
 }
 
 function exists(file: string): boolean {

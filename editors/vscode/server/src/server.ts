@@ -216,7 +216,7 @@ connection.onDidChangeWatchedFiles((params) => {
     if (uri.scheme !== "file") return false;
     // Compiler-created support modules are not user graph changes.
     if (uri.fsPath.split(path.sep).some(part => part === "node_modules" || part === ".git")) return false;
-    return isExternalChange({ path: uri.fsPath, type: change.type }, open);
+    return isExternalChange({ path: uri.fsPath, type: change.type }, open, sidecar.selfWrites);
   });
   if (!relevant) return;
   if (params.changes.some(change => /(?:^|\/)(?:ttc|ttc\.exe)$/.test(URI.parse(change.uri).path))) {
@@ -237,7 +237,7 @@ function invalidateProjectValidation(): void {
 }
 
 function reloadProjectState(): void {
-  declCache.clear();
+  invalidateDeclarations();
   // Every session the window is using, not just one: two folders may be
   // served by different compilers.
   for (const compiler of new Set([...compilerByRoot.values(), compilerFor(undefined)])) {
@@ -278,23 +278,41 @@ const declCache = new Map<
   string,
   { version: number; decls: engine.EngineDeclarations }
 >();
+let declGeneration = 0;
+
+function invalidateDeclarations(except?: string): void {
+  declGeneration += 1;
+  for (const uri of [...declCache.keys()]) {
+    if (uri !== except) declCache.delete(uri);
+  }
+}
 
 /** The compiler's declaration surface for the buffer: visible variants
  * (local, imported, built-in — the compiler's shadowing) and match sites.
  * One implementation of the rules, the compiler's; empty when the engine
- * cannot answer, and every consumer degrades quietly. */
+ * cannot answer, and every consumer degrades quietly. Cached only while the
+ * buffer version and cache generation it was asked for are still current
+ * when the answer arrives. */
 async function declarationsOf(
   doc: TextDocument,
 ): Promise<engine.EngineDeclarations> {
   const cached = declCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached.decls;
+  const version = doc.version;
+  const generation = declGeneration;
+  const text = doc.getText();
   const decls = await engine.declarations(
     compilerFor(doc),
     bufferPath(doc),
-    doc.getText(),
+    text,
     logEngine,
   );
-  declCache.set(doc.uri, { version: doc.version, decls });
+  if (
+    documents.get(doc.uri)?.version === version &&
+    declGeneration === generation
+  ) {
+    declCache.set(doc.uri, { version, decls });
+  }
   return decls;
 }
 
@@ -389,8 +407,9 @@ function enginePath(doc: TextDocument): string | null {
  * else; the path only tells them how to resolve relative tt imports, which
  * an unsaved buffer has none of. Refusing to answer for one leaves a new
  * `.tt` file with no outline, no hover and no variant completions until it
- * is saved, though the answers were available all along. Semantic tokens
- * already name an untitled buffer this way. */
+ * is saved, though the answers were available all along. Every request
+ * path names the buffer through here, validation included, so the source
+ * kind an untitled buffer is checked as follows its language. */
 function bufferPath(doc: TextDocument): string {
   return enginePath(doc) ?? `buffer.${doc.languageId === "ttx" ? "ttx" : "tt"}`;
 }
@@ -553,7 +572,7 @@ async function validate(
   const settings = await getSettings(doc.uri);
   const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
   const uri = URI.parse(doc.uri);
-  const docName = uri.scheme === "file" ? uri.fsPath : uri.path;
+  const docName = bufferPath(doc);
   servedCompiler = compiler;
   const root = uri.scheme === "file" ? containingRoot(workspaceRoots, uri.fsPath) : undefined;
   if (root) compilerByRoot.set(root, compiler);
@@ -882,9 +901,7 @@ documents.onDidChangeContent((e) => {
   // Editing one file can change what its siblings import — drop their
   // cached declaration surfaces (the edited doc's own entry refreshes by
   // version).
-  for (const uri of declCache.keys()) {
-    if (uri !== e.document.uri) declCache.delete(uri);
-  }
+  invalidateDeclarations(e.document.uri);
   // A dependency edit invalidates answers for unchanged consumers as well.
   // The engine owns dependency semantics; until it exposes affected files,
   // conservatively refresh every open tt document with a new generation.
@@ -908,7 +925,7 @@ documents.onDidClose((e) => {
     version: e.document.version,
     diagnostics: [],
   });
-  declCache.clear();
+  invalidateDeclarations();
   for (const doc of documents.all()) scheduleValidation(doc);
 });
 
@@ -1575,9 +1592,7 @@ connection.languages.semanticTokens.on(async (params) => {
   const tokens = await engine.semanticTokens(
     compilerFor(doc),
     doc.getText(),
-    URI.parse(doc.uri).scheme === "file"
-      ? URI.parse(doc.uri).fsPath
-      : `buffer.${doc.languageId === "ttx" ? "ttx" : "tt"}`,
+    bufferPath(doc),
     logEngine,
   );
   // Engine unavailable: no answer beats a wrong empty one — the grammar's
