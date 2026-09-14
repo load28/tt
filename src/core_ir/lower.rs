@@ -269,23 +269,28 @@ impl Lowering<'_> {
         file_unique_temps: bool,
         kind: DecisionKind,
     ) -> Decision {
-        let subjects =
-            site.subjects
-                .iter()
-                .enumerate()
-                .map(|(index, value)| Subject {
-                    value: *value,
-                    temporary: if file_unique_temps {
-                        self.temp(extent, false)
-                    } else if site.subjects.len() == 1 {
-                        TempId::Decision
-                    } else {
-                        TempId::DecisionElement(u32::try_from(index).unwrap_or_else(|_| {
+        let subjects = site
+            .subjects
+            .iter()
+            .enumerate()
+            .map(|(index, value)| Subject {
+                value: *value,
+                temporary: if file_unique_temps {
+                    self.temp(extent, false)
+                } else if site.subjects.len() == 1 {
+                    TempId::Decision {
+                        depth: self.subject_depth(site),
+                    }
+                } else {
+                    TempId::DecisionElement {
+                        index: u32::try_from(index).unwrap_or_else(|_| {
                             crate::ice::bug!("decision subject index overflow")
-                        }))
-                    },
-                })
-                .collect();
+                        }),
+                        depth: self.subject_depth(site),
+                    }
+                },
+            })
+            .collect();
         let arms = site
             .arms
             .iter()
@@ -463,6 +468,32 @@ impl Lowering<'_> {
                 }
                 PatternPlan::AllOf(parts)
             }
+        }
+    }
+
+    fn subject_depth(&self, site: &hir::PatternSite) -> u32 {
+        site.subjects
+            .iter()
+            .map(|subject| self.expr_subject_depth(*subject))
+            .max()
+            .unwrap_or(0)
+    }
+
+    fn expr_subject_depth(&self, expr: ExprId) -> u32 {
+        match &self.semantic.hir.exprs[expr] {
+            hir::Expr::Match { site, .. } => {
+                1 + self.subject_depth(&self.semantic.hir.sites[*site])
+            }
+            hir::Expr::Seq { body, .. } => self.semantic.hir.bodies[*body]
+                .stmts
+                .iter()
+                .map(|stmt| match stmt {
+                    hir::Stmt::Expr(expr) => self.expr_subject_depth(*expr),
+                    _ => 0,
+                })
+                .max()
+                .unwrap_or(0),
+            _ => 0,
         }
     }
 
@@ -935,6 +966,6 @@ fn validate_temp(temp: TempId, file: &CoreFile) {
             sequence < file.temporary_count,
             "Core IR temporary ID is invalid"
         ),
-        TempId::Decision | TempId::DecisionElement(_) => {}
+        TempId::Decision { .. } | TempId::DecisionElement { .. } => {}
     }
 }

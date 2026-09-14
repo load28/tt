@@ -358,27 +358,26 @@ impl<'a> Emitter<'a> {
                     // the return being rebuilt below; every surrounding byte
                     // remains pass-through.
                     let mut opaque_edits = edits.to_vec();
-                    opaque_edits.extend(propagating_returns.iter().map(
-                        |(return_span, _, _, _)| LocalSourceEdit {
-                            span: SourceSpan {
-                                start: return_span.start.max(self.span(*node).start),
-                                end: return_span.end.min(self.span(*node).end),
-                            },
+                    let node_span = self.span(*node);
+                    let erased = propagating_returns
+                        .iter()
+                        .map(|(return_span, _, _, _)| *return_span)
+                        .chain(
+                            structured_returns
+                                .iter()
+                                .map(|(return_span, _, _)| *return_span),
+                        )
+                        .map(|return_span| SourceSpan {
+                            start: return_span.start.max(node_span.start),
+                            end: return_span.end.min(node_span.end),
+                        })
+                        .filter(|span| span.start < span.end)
+                        .map(|span| LocalSourceEdit {
+                            span,
                             text: String::new(),
                             result_return_mark: None,
-                        },
-                    ));
-                    opaque_edits.extend(structured_returns.iter().map(|(return_span, _, _)| {
-                        LocalSourceEdit {
-                            span: SourceSpan {
-                                start: return_span.start.max(self.span(*node).start),
-                                end: return_span.end.min(self.span(*node).end),
-                            },
-                            text: String::new(),
-                            result_return_mark: None,
-                        }
-                    }));
-                    opaque_edits.retain(|edit| edit.span.start < edit.span.end);
+                        });
+                    opaque_edits.extend(erased);
                     opaque_edits.sort_unstable_by_key(|edit| edit.span.start);
                     out.append(self.source_rope_with_edits(*node, &opaque_edits));
                 }

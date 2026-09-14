@@ -18,7 +18,7 @@
 //!           "suggestions": [{ "message", "edit": { "line", "col",
 //!             "endLine", "endCol", "replacement" } | null }] }] } }
 //!
-//! → { "id": 2, "method": "emitMap", "params": { "text" } }
+//! → { "id": 2, "method": "emitMap", "params": { "text", "filename"? } }
 //! ← { "id": 2, "result": { "code", "mappings": [{ "src", "out", "len" }] } }
 //!
 //! → { "id": 3, "method": "typedCheck", "params": { "path", "text" } }
@@ -96,10 +96,30 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
-    for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(line) => line,
-            Err(_) => break,
+    let mut input = stdin.lock();
+    let mut bytes = Vec::new();
+    loop {
+        bytes.clear();
+        match input.read_until(b'\n', &mut bytes) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {}
+        }
+        let line = match std::str::from_utf8(&bytes) {
+            Ok(line) => line.trim_end_matches(['\n', '\r']),
+            Err(error) => {
+                let response = serde_json::json!({
+                    "id": null,
+                    "error": format!("malformed request: the line is not UTF-8: {error}"),
+                });
+                let mut out = stdout.lock();
+                if writeln!(out, "{response}")
+                    .and_then(|_| out.flush())
+                    .is_err()
+                {
+                    break;
+                }
+                continue;
+            }
         };
         if line.trim().is_empty() {
             continue;
@@ -114,10 +134,10 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         // of one request, and what that work builds — a snapshot — is
         // immutable and installed whole or not at all, so the projects the
         // map holds are the ones the last successful request left.
-        let response = match ttc::ice::catching(|| respond(&mut sessions, &line)) {
+        let response = match ttc::ice::catching(|| respond(&mut sessions, line)) {
             Ok(response) => response,
             Err(message) => serde_json::json!({
-                "id": request_id(&line),
+                "id": request_id(line),
                 "error": ttc::ice::bug_message(&message),
             }),
         };
@@ -686,7 +706,11 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.
 fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let emit = ttc::emit_mapped(text_param(params)?);
+    let source_kind = params["filename"]
+        .as_str()
+        .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
+        .unwrap_or_default();
+    let emit = ttc::emit_mapped_with_kind(text_param(params)?, source_kind);
     let mappings: Vec<_> = emit
         .mappings
         .iter()

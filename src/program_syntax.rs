@@ -27,9 +27,7 @@ mod tests;
 
 use std::collections::{HashMap, HashSet};
 
-use swc_common::input::StringInput;
-use swc_common::sync::Lrc;
-use swc_common::{FileName, SourceMap, Spanned};
+use swc_common::Spanned;
 use swc_ecma_ast::{
     ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr, CondExpr,
     Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild,
@@ -37,8 +35,6 @@ use swc_ecma_ast::{
     Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, TsType,
     TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
 };
-use swc_ecma_parser::lexer::Lexer;
-use swc_ecma_parser::{Parser, Syntax, TsSyntax};
 use swc_ecma_visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithAstPath, fields};
 
 use crate::analysis::SemanticFile;
@@ -48,6 +44,7 @@ use crate::core_ir::{
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
+use crate::host_input::{HostInput, HostOrigin};
 use crate::lexer::Token;
 
 use collector::*;
@@ -411,19 +408,8 @@ pub(crate) fn source_expression_effects(
     if crate::lexer::host_syntax_error(text, source_kind).is_some() {
         return Effects::ANY;
     }
-    let source_map: Lrc<SourceMap> = Default::default();
-    let file = source_map.new_source_file(Lrc::new(FileName::Anon), text.to_owned());
-    let lexer = Lexer::new(
-        Syntax::Typescript(TsSyntax {
-            tsx: source_kind.is_tsx(),
-            decorators: true,
-            ..Default::default()
-        }),
-        Default::default(),
-        StringInput::from(&*file),
-        None,
-    );
-    let mut parser = Parser::new_from(lexer);
+    let input = HostInput::new(text);
+    let mut parser = input.parser(source_kind);
     let expression = match parser.parse_expr() {
         Ok(expression) if parser.take_errors().is_empty() => expression,
         Ok(_) | Err(_) => return Effects::ANY,

@@ -70,21 +70,25 @@ function probe() {
 }
 
 #[test]
-fn an_incomplete_try_keeps_a_structural_rollback_fact() {
+fn a_declaration_try_without_a_semicolon_is_claimed_as_the_value_form() {
     let source = "function f() {\n  const n = try g()\n  return n;\n}\n";
+    let program = parse(source);
+    assert!(unclaimed_candidates(&program).is_empty());
+    assert!(
+        program
+            .segments
+            .iter()
+            .any(|segment| matches!(segment, Segment::TryExpr(_)))
+    );
+}
+
+#[test]
+fn an_incomplete_try_statement_keeps_a_structural_rollback_fact() {
+    let source = "function f() {\n  try g()\n  return n;\n}\n";
     let program = parse(source);
     let candidates = unclaimed_candidates(&program);
     assert_eq!(candidates.len(), 1, "{candidates:#?}");
-    let candidate = candidates[0];
-    assert_eq!(candidate.kind, UnclaimedTtKind::Try);
-    assert_eq!(
-        &source[candidate.keyword.start..candidate.keyword.end],
-        "try"
-    );
-    assert_eq!(
-        &source[candidate.extent.start..candidate.extent.end],
-        "try g()"
-    );
+    assert_eq!(candidates[0].kind, UnclaimedTtKind::Try);
 }
 
 #[test]

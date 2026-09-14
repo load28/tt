@@ -101,12 +101,13 @@ pub(crate) fn lowering_plan(
                 source: primary_source(),
             }
         })?;
-    let plan = evaluation
+    let mut plan = evaluation
         .lowering_plan(core)
         .map_err(|error| LoweringFailure::Evaluation {
             error,
             source: evaluation.primary_source(),
         })?;
+    reject_conditional_guard_values(semantic, core, source, &mut plan);
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts
     // (`docs/design/program-lowering.md` §11).
@@ -117,6 +118,36 @@ pub(crate) fn lowering_plan(
         error.raise();
     }
     Ok(plan)
+}
+
+fn reject_conditional_guard_values(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    plan: &mut LoweringPlan,
+) {
+    let opaque_text = |node| {
+        semantic
+            .hir
+            .source_map
+            .node_span(node)
+            .map(|span| source[span.start..span.end].to_owned())
+            .unwrap_or_default()
+    };
+    for decision in core.match_decisions() {
+        for guard in decision.arms.iter().filter_map(|arm| arm.guard) {
+            let crate::core_ir::GuardShape::Conditional(values) =
+                core.guard_shape(guard, &opaque_text)
+            else {
+                continue;
+            };
+            for value in values {
+                if let Some(span) = planning::structured_expr_span(semantic, core, value) {
+                    plan.reject_conditional_guard_value(value, span);
+                }
+            }
+        }
+    }
 }
 
 pub(crate) fn emit_with_map<'a>(

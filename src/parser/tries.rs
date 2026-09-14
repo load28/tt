@@ -92,42 +92,7 @@ pub(super) fn parse_try_expr(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, T
         return None;
     }
 
-    let mut depth = 0usize;
-    let mut k = cur.idx;
-    let mut operand_end = None;
-    let mut operand_token_end = cur.idx;
-    while let Some(token) = cur.tokens.get(k) {
-        if depth == 0
-            && matches!(
-                token.kind,
-                TokenKind::Punct(b')' | b']' | b'}' | b',' | b';')
-            )
-        {
-            break;
-        }
-        if depth == 0
-            && k > cur.idx
-            && matches!(token.kind, TokenKind::Ident)
-            && !dotted_at(cur.tokens, cur.idx, k)
-            && STMT_ONLY_WORDS.contains(&cur.text(token))
-        {
-            break;
-        }
-
-        match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
-            _ => {}
-        }
-        k += 1;
-        if is_primary_expression(cur.parser.src.as_bytes(), first.span.start, token.span.end) {
-            operand_end = Some(token.span.end);
-            operand_token_end = k;
-        }
-    }
-
-    let end = operand_end?;
-    let k = operand_token_end;
+    let (k, end) = scan_primary_operand(&cur)?;
     let expr_span = Span {
         start: first.span.start,
         end,
@@ -146,6 +111,68 @@ pub(super) fn parse_try_expr(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, T
             expr,
         },
     ))
+}
+
+fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
+    let first = cur.peek()?;
+    let mut depth = 0usize;
+    let mut k = cur.idx;
+    if matches!(first.kind, TokenKind::Ident) && cur.text(first) == "await" {
+        k += 1;
+    }
+    let head = cur.tokens.get(k)?;
+    let operand_start = head.span.start;
+    let mut operand_end = None;
+    let mut operand_token_end = cur.idx;
+    if matches!(head.kind, TokenKind::Ident)
+        && let Some(past) = skip_braced_construct(cur.tokens, cur.text(head), k)
+    {
+        operand_end = Some(cur.tokens[past - 1].span.end);
+        operand_token_end = past;
+        k = past;
+    }
+    let mut piped = false;
+    while let Some(token) = cur.tokens.get(k) {
+        if depth == 0
+            && matches!(
+                token.kind,
+                TokenKind::Punct(b')' | b']' | b'}' | b',' | b';')
+            )
+        {
+            break;
+        }
+        if depth == 0
+            && k > cur.idx
+            && matches!(token.kind, TokenKind::Ident)
+            && !dotted_at(cur.tokens, cur.idx, k)
+            && STMT_ONLY_WORDS.contains(&cur.text(token))
+        {
+            break;
+        }
+        if depth == 0 && matches!(token.kind, TokenKind::PipeOp) {
+            if operand_token_end != k {
+                break;
+            }
+            piped = true;
+        }
+
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        k += 1;
+        if piped {
+            if depth == 0 && !matches!(token.kind, TokenKind::PipeOp) {
+                operand_end = Some(token.span.end);
+                operand_token_end = k;
+            }
+        } else if is_primary_expression(cur.parser.src.as_bytes(), operand_start, token.span.end) {
+            operand_end = Some(token.span.end);
+            operand_token_end = k;
+        }
+    }
+    operand_end.map(|end| (operand_token_end, end))
 }
 
 /// Bounds a `try <expr>` candidate that rolled back before its required
@@ -284,6 +311,10 @@ fn parse_try_tail<'t>(
         end: semi_byte,
     };
     if cur.parser.src[span.start..span.end].trim().is_empty() {
+        return None;
+    }
+    let (operand_token_end, operand_end) = scan_primary_operand(&cur)?;
+    if operand_token_end != semi_idx || !cur.parser.src[operand_end..semi_byte].trim().is_empty() {
         return None;
     }
     let expr_tokens = &cur.tokens[cur.idx..semi_idx];

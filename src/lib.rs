@@ -66,6 +66,7 @@ mod error;
 mod evaluation_ir;
 pub mod flow;
 pub mod hir;
+mod host_input;
 pub mod ice;
 mod lexer;
 #[path = "lib/mapped.rs"]
@@ -79,6 +80,7 @@ mod scanner;
 mod sema;
 mod sidecar;
 pub mod source_map;
+pub mod stack;
 mod stdlib;
 pub(crate) mod typescript;
 mod val;

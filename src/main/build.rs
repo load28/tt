@@ -439,10 +439,11 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                         .file_name()
                         .unwrap_or(job.file.as_os_str())
                         .to_string_lossy();
-                    banner = write_banner(
-                        &mut code,
-                        &format!("// @generated from {base} by ttc — do not edit directly.\n"),
+                    let banner_text = format!(
+                        "// @generated from {base} by ttc — do not edit directly.{}",
+                        ttc::line_ending(&code)
                     );
+                    banner = write_banner(&mut code, &banner_text);
                 }
                 // A map describes a translation. A hand-written `.ts` is not
                 // translated — it passes through byte for byte by contract — so
@@ -557,7 +558,7 @@ pub(super) fn write_banner(code: &mut String, banner: &str) -> BannerPlacement {
     let mut written = String::with_capacity(code.len() + banner.len() + 1);
     written.push_str(&code[..at]);
     if prefix_newline {
-        written.push('\n');
+        written.push_str(ttc::line_ending(code));
     }
     written.push_str(banner);
     written.push_str(&code[at..]);

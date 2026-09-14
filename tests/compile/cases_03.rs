@@ -1,18 +1,3 @@
-#[test]
-fn try_without_semicolon_is_not_recognized() {
-    // No terminating `;` → not tt syntax; the (invalid-TS) source passes
-    // through and the output self-check reports it.
-    let e = err("function f(): X {\n  const n = try g()\n  return h(n);\n}\n");
-    // The `try` that did not parse is the thing to look at, and the
-    // message says why the output no longer parses.
-    assert!(
-        e.message.contains("`try` here did not parse as a tt `try`"),
-        "{}",
-        e.message
-    );
-    assert_eq!((e.line, e.col), (2, 13));
-    assert_eq!((e.end_line, e.end_col), (2, 16));
-}
 
 #[test]
 fn try_inside_match_arm_is_an_error() {

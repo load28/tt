@@ -524,7 +524,13 @@ impl<'a> Emitter<'a> {
             }
         }
         if let Some(guard) = arm.guard {
-            let guard = self.emit_expr(guard).trim();
+            let guard = match self.emit_guard_prelude(guard, depth) {
+                Some((prelude, test)) => {
+                    out.append(prelude);
+                    test
+                }
+                None => self.emit_expr(guard).trim(),
+            };
             let guarded = guard.last_line_has_line_comment(self.source_kind);
             out.push_lit("if (");
             out.append(guard);
@@ -539,6 +545,41 @@ impl<'a> Emitter<'a> {
             out.push_break(depth);
             out.push_lit("}");
         }
+    }
+
+    fn emit_guard_prelude(&self, guard: ExprId, depth: u16) -> Option<(Rope<'a>, Rope<'a>)> {
+        let opaque_text = |node| {
+            let span = self.span(node);
+            self.source[span.start..span.end].to_owned()
+        };
+        let crate::core_ir::GuardShape::Grouped(value) = self.core.guard_shape(guard, &opaque_text)
+        else {
+            return None;
+        };
+        let slot = self.structured_value_slot(value)?.clone();
+        let _active = self.active_scheduled_exprs.enter(value);
+        let lowered = self.emit_continued_expr(value, &ValueContinuation::assign(&slot))?;
+        let mut out = Rope::new();
+        out.push_value_declaration(&slot);
+        out.push_break(depth);
+        out.append(lowered);
+        out.push_break(depth);
+        let test = match &self.core.exprs[guard.index()] {
+            Expr::Sequence(body) => {
+                let node = self
+                    .core
+                    .sequence_node(*body)
+                    .unwrap_or_else(|| crate::ice::bug!("guard sequence has no source extent"));
+                self.source_range_with_value_slots(SourceSpan::from(self.span(node)), &[value])
+                    .trim()
+            }
+            _ => {
+                let mut test = Rope::new();
+                test.push_lit(slot);
+                test
+            }
+        };
+        Some((out, test))
     }
 
     /// Delivers one value to its continuation. `close` breaks the line

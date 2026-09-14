@@ -45,6 +45,14 @@ impl<'a> Rope<'a> {
     /// different questions, so each emitter that writes breaks opens its
     /// own scope — and [`TargetError::BreakOutsideScope`] catches one that
     /// forgets rather than letting the break fall back to column 0.
+    pub(crate) fn push_scope_open(&mut self) {
+        self.pieces.push(Piece::ScopeOpen);
+    }
+
+    pub(crate) fn push_scope_close(&mut self) {
+        self.pieces.push(Piece::ScopeClose);
+    }
+
     pub(crate) fn scoped(inner: Rope<'a>) -> Rope<'a> {
         let mut out = Rope::new();
         out.pieces.push(Piece::ScopeOpen);
@@ -427,7 +435,7 @@ impl<'a> Rope<'a> {
         if let Err(error) = target.validate_source_preservation(preservation) {
             error.raise();
         }
-        target.print()
+        target.print(crate::line_ending(source))
     }
 }
 

@@ -502,7 +502,7 @@ impl<'a> TargetFile<'a> {
         Ok(())
     }
 
-    fn print(self) -> Flat {
+    fn print(self, newline: &str) -> Flat {
         let mut out = String::with_capacity(self.len + self.len / 8);
         let mut scopes: Vec<String> = Vec::new();
         let mut mappings: Vec<EmitMapping> = Vec::new();
@@ -594,7 +594,7 @@ impl<'a> TargetFile<'a> {
                     scopes.pop();
                 }
                 TargetPiece::Break { depth } => {
-                    out.push('\n');
+                    out.push_str(newline);
                     if let Some(base) = scopes.last() {
                         out.push_str(base);
                     }
@@ -602,7 +602,7 @@ impl<'a> TargetFile<'a> {
                         out.push_str(INDENT);
                     }
                 }
-                TargetPiece::Generated { text, .. } => out.push_str(text),
+                TargetPiece::Generated { text, .. } => push_generated(&mut out, text, newline),
                 TargetPiece::Source {
                     text,
                     origin: ExactOrigin { start, .. },
@@ -655,6 +655,21 @@ struct OpenAnchor {
 
 /// One level of generated indentation.
 const INDENT: &str = "  ";
+
+fn push_generated(out: &mut String, text: &str, newline: &str) {
+    if newline == "\n" {
+        out.push_str(text);
+        return;
+    }
+    let mut rest = text;
+    while let Some(at) = rest.find('\n') {
+        let line = &rest[..at];
+        out.push_str(line.strip_suffix('\r').unwrap_or(line));
+        out.push_str(newline);
+        rest = &rest[at + 1..];
+    }
+    out.push_str(rest);
+}
 
 /// The whitespace a line starts with — the base a lowering's generated
 /// block structure is laid out from.

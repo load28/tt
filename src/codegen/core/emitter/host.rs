@@ -97,9 +97,10 @@ impl<'a> Emitter<'a> {
 
     pub(super) fn emit_compose_rewrite(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         let mut out = Rope::new();
-        if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
+        let depth = u16::from(rewrite.owner_kind == HostOwnerKind::ArrowExpression);
+        if depth > 0 {
             out.push_lit("{");
-            out.push_break(0);
+            out.push_break(depth);
         }
         for action in &rewrite.actions {
             let slot = match action {
@@ -122,7 +123,7 @@ impl<'a> Emitter<'a> {
                             continue;
                         }
                         out.push_lit(format!("let {name};"));
-                        out.push_break(0);
+                        out.push_break(depth);
                     }
                     continue;
                 }
@@ -136,9 +137,10 @@ impl<'a> Emitter<'a> {
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
             out.push_value_declaration(slot);
-            out.push_break(0);
+            out.push_break(depth);
         }
         let mut captured = HashSet::new();
+        let mut regions = 0usize;
         for action in &rewrite.actions {
             match action {
                 ComposeAction::Value(value) => {
@@ -195,20 +197,32 @@ impl<'a> Emitter<'a> {
                     for step in &value.steps {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }
-                    out.append(lowered);
+                    if regions > 0 {
+                        out.push_break(depth);
+                    }
+                    regions += 1;
+                    out.append(Rope::indented(depth, lowered));
                 }
                 ComposeAction::Operation(operation) => {
                     let mut lowered = self.emit_conditional_operation(operation, &mut captured);
                     for step in &operation.outer {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }
-                    out.append(lowered);
+                    if regions > 0 {
+                        out.push_break(depth);
+                    }
+                    regions += 1;
+                    out.append(Rope::indented(depth, lowered));
                 }
             }
         }
-        out.push_break(0);
-        if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
+        out.push_break(depth);
+        if depth > 0 {
             out.push_lit("return ");
+            let mut open = Rope::new();
+            open.push_scope_open();
+            open.append(out);
+            return open;
         }
         Rope::scoped(out)
     }
@@ -819,7 +833,8 @@ impl<'a> Emitter<'a> {
         out.push_lit(";");
         out.push_break(0);
         out.push_lit("}");
-        Rope::scoped(out)
+        out.push_scope_close();
+        out
     }
 
     pub(super) fn emit_scheduled_step(

@@ -7,14 +7,10 @@
 //! retried, and ownership is accepted only when the converged SWC AST contains a
 //! host declaration node for the original identifier span.
 
-use swc_common::input::StringInput;
-use swc_common::sync::Lrc;
-use swc_common::{FileName, SourceMap, Span as SwcSpan, Spanned};
+use swc_common::{Span as SwcSpan, Spanned};
 use swc_ecma_ast::{
     ClassMethod, FnDecl, FnExpr, GetterProp, MethodProp, PrivateMethod, PropName, SetterProp,
 };
-use swc_ecma_parser::lexer::Lexer;
-use swc_ecma_parser::{Parser as SwcParser, Syntax, TsSyntax};
 use swc_ecma_visit::{Visit, VisitWith};
 
 use crate::ast::{Program, RecoveryKind, Segment, Span, TemplateChunk};
@@ -324,20 +320,9 @@ fn parse_owned(
     source_offset: usize,
     source_len: usize,
 ) -> Result<HostParse, usize> {
-    let source_map: Lrc<SourceMap> = Default::default();
-    let file = source_map.new_source_file(Lrc::new(FileName::Anon), src.to_owned());
-    let source_start = file.start_pos.0;
-    let lexer = Lexer::new(
-        Syntax::Typescript(TsSyntax {
-            tsx: source_kind.is_tsx(),
-            decorators: true,
-            ..Default::default()
-        }),
-        Default::default(),
-        StringInput::from(&*file),
-        None,
-    );
-    let mut parser = SwcParser::new_from(lexer);
+    let input = crate::host_input::HostInput::new(src);
+    let source_start = input.origin();
+    let mut parser = input.parser(source_kind);
     let module = parser.parse_module().map_err(|error| {
         source_error_offset(error.span(), source_start, prefix_len, source_offset)
     })?;
@@ -368,16 +353,16 @@ struct HostParse {
 
 fn source_error_offset(
     span: SwcSpan,
-    source_start: u32,
+    source_start: crate::host_input::HostOrigin,
     prefix_len: usize,
     source_offset: usize,
 ) -> usize {
-    let projected = usize::try_from(span.lo.0.saturating_sub(source_start)).unwrap_or(0);
+    let projected = source_start.byte(span.lo);
     source_offset + projected.saturating_sub(prefix_len)
 }
 
 struct MatchNameCollector {
-    source_start: u32,
+    source_start: crate::host_input::HostOrigin,
     prefix_len: usize,
     source_offset: usize,
     source_end: usize,
@@ -389,13 +374,8 @@ impl MatchNameCollector {
         if name != "match" {
             return;
         }
-        let Ok(projected_start) = usize::try_from(span.lo.0.saturating_sub(self.source_start))
-        else {
-            return;
-        };
-        let Ok(projected_end) = usize::try_from(span.hi.0.saturating_sub(self.source_start)) else {
-            return;
-        };
+        let projected_start = self.source_start.byte(span.lo);
+        let projected_end = self.source_start.byte(span.hi);
         let Some(relative_start) = projected_start.checked_sub(self.prefix_len) else {
             return;
         };

@@ -397,44 +397,6 @@ fn follows_object_member_colon(src: &str, tokens: &[Token], idx: usize) -> bool 
     false
 }
 
-/// Returns true for the `= try` portion of a declaration. A declaration try
-/// without its required semicolon is an incomplete tt statement, not a
-/// misplaced expression, and must retain its rollback candidate.
-fn follows_declaration_equals(src: &str, tokens: &[Token], idx: usize) -> bool {
-    if !idx
-        .checked_sub(1)
-        .and_then(|previous| tokens.get(previous))
-        .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'=')))
-    {
-        return false;
-    }
-
-    let mut depth = 0usize;
-    for at in (0..idx - 1).rev() {
-        match tokens[at].kind {
-            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
-            TokenKind::Punct(b'(' | b'[' | b'{') if depth > 0 => depth -= 1,
-            // This `=` belongs to a destructuring default, not the
-            // declaration initializer. Its `try` must therefore use the
-            // expression-placement path below rather than declaration
-            // recovery.
-            TokenKind::Punct(b'(' | b'[' | b'{') => return false,
-            TokenKind::Punct(b';') if depth == 0 => return false,
-            TokenKind::Ident
-                if depth == 0
-                    && matches!(
-                        &src[tokens[at].span.start..tokens[at].span.end],
-                        "const" | "let" | "var"
-                    ) =>
-            {
-                return true;
-            }
-            _ => {}
-        }
-    }
-    false
-}
-
 /// A spread operand begins with three adjacent dot tokens. The last dot is
 /// not member access, even though the generic property-name test sees it
 /// immediately before the operand keyword.
@@ -683,14 +645,7 @@ impl Parser<'_> {
                     || !starts_statement(self.src, tokens, i, expr.1)
                     || in_for_update(self.src, tokens, i)
                     || follows_object_member_colon(self.src, tokens, i);
-                let parenthesized_declaration_operand =
-                    follows_declaration_equals(self.src, tokens, i)
-                        && tokens
-                            .get(i + 1)
-                            .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'(')));
                 if misplaced
-                    && (!follows_declaration_equals(self.src, tokens, i)
-                        || parenthesized_declaration_operand)
                     && let Some((next_i, parsed)) =
                         tries::parse_try_expr(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
@@ -711,7 +666,21 @@ impl Parser<'_> {
                         continue;
                     }
                     Claim::Unclaimed(candidate) => unclaimed.push(candidate),
-                    Claim::NotTt => {}
+                    Claim::NotTt => {
+                        if !misplaced
+                            && let Some((next_i, parsed)) = tries::parse_try_expr(
+                                Cursor::new(self, tokens, i + 1, end),
+                                tok.span,
+                            )
+                        {
+                            flush_verbatim(&mut segments, seg_start, tok.span.start);
+                            let span = parsed.span;
+                            segments.push(Segment::TryExpr(parsed));
+                            seg_start = span.end;
+                            i = next_i;
+                            continue;
+                        }
+                    }
                     Claim::Malformed { .. } => unreachable!("try rollback is not malformed"),
                 }
             }

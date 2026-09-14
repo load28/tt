@@ -630,10 +630,10 @@ pub(super) fn reference_value_span(expression: &swc_ecma_ast::Expr) -> swc_commo
     }
 }
 
-pub(super) fn projected_span(span: swc_common::Span, source_start: u32) -> ProjectedSpan {
+pub(super) fn projected_span(span: swc_common::Span, source_start: HostOrigin) -> ProjectedSpan {
     ProjectedSpan {
-        start: ProjectedByte(span.lo.0.saturating_sub(source_start) as usize),
-        end: ProjectedByte(span.hi.0.saturating_sub(source_start) as usize),
+        start: ProjectedByte(source_start.byte(span.lo)),
+        end: ProjectedByte(source_start.byte(span.hi)),
     }
 }
 

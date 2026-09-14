@@ -28,7 +28,7 @@ impl ParentCollector {
     }
 
     pub(super) fn new(
-        source_start: u32,
+        source_start: HostOrigin,
         pending: &[PendingOverlay],
         source_segments: &[ProjectionSourceSegment],
         projection_only_protocol_parents: &[ProjectedSpan],
@@ -928,8 +928,8 @@ impl VisitAstPath for ParentCollector {
 
     fn visit_ident<'ast: 'r, 'r>(&mut self, ident: &'ast Ident, path: &mut AstNodePath<'r>) {
         self.occupied_names.insert(ident.sym.to_string());
-        let start = ident.span.lo.0.saturating_sub(self.source_start) as usize;
-        let end = ident.span.hi.0.saturating_sub(self.source_start) as usize;
+        let start = self.source_start.byte(ident.span.lo);
+        let end = self.source_start.byte(ident.span.hi);
         let projected = ProjectedSpan {
             start: ProjectedByte(start),
             end: ProjectedByte(end),

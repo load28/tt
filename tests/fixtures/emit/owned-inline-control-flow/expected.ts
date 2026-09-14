@@ -55,26 +55,26 @@ export function read(o: Opt) {
   return $tt_v1;
 }
 export const strings = [1].map(x => {
-let $tt_v3: number;
-const $tt_v4 = (`${x}`);
-{
-  const $tt_m = Opt.Some(x);
-  switch ($tt_m.kind) {
-    case "Some": {
-      const { value } = $tt_m;
-      $tt_v3 = value;
-      break;
-    }
-    case "None": {
-      $tt_v3 = 0;
-      break;
-    }
-    default: {
-      throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+  let $tt_v3: number;
+  const $tt_v4 = (`${x}`);
+  {
+    const $tt_m = Opt.Some(x);
+    switch ($tt_m.kind) {
+      case "Some": {
+        const { value } = $tt_m;
+        $tt_v3 = value;
+        break;
+      }
+      case "None": {
+        $tt_v3 = 0;
+        break;
+      }
+      default: {
+        throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+      }
     }
   }
-}
-return $tt_v4 + $tt_v3;
+  return $tt_v4 + $tt_v3;
 });
 let $tt_v5: number[];
 {

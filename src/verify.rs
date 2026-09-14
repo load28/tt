@@ -27,44 +27,16 @@
 //! reproduce and fix at this boundary, not evidence that syntax verification
 //! belongs to the type backend.
 
-use swc_common::input::StringInput;
-use swc_common::sync::Lrc;
-use swc_common::{FileName, SourceMap, Spanned};
-use swc_ecma_parser::lexer::Lexer;
-use swc_ecma_parser::{Parser, Syntax, TsSyntax};
+use swc_common::Spanned;
 
-fn ts_syntax(source_kind: crate::SourceKind) -> Syntax {
-    Syntax::Typescript(TsSyntax {
-        tsx: source_kind.is_tsx(),
-        decorators: true,
-        ..Default::default()
-    })
-}
+use crate::host_input::HostInput;
 
-/// Parses `code` as a TypeScript module; returns the first syntax error as
-/// `(message, line, col)` (1-based, positions in `code`).
-fn parse_ts_module(
-    code: &str,
-    source_kind: crate::SourceKind,
-) -> Result<(), (String, usize, usize)> {
+fn parse_ts_module(code: &str, source_kind: crate::SourceKind) -> Result<(), (String, usize)> {
     if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
-        let before = &code[..span.start];
-        let line = before.bytes().filter(|byte| *byte == b'\n').count() + 1;
-        let col = before
-            .rsplit('\n')
-            .next()
-            .map_or(1, |line| line.chars().count() + 1);
-        return Err((message.to_string(), line, col));
+        return Err((message.to_string(), span.start));
     }
-    let cm: Lrc<SourceMap> = Default::default();
-    let fm = cm.new_source_file(Lrc::new(FileName::Anon), code.to_string());
-    let lexer = Lexer::new(
-        ts_syntax(source_kind),
-        Default::default(),
-        StringInput::from(&*fm),
-        None,
-    );
-    let mut parser = Parser::new_from(lexer);
+    let input = HostInput::new(code);
+    let mut parser = input.parser(source_kind);
     let result = parser.parse_module();
     let mut errors = parser.take_errors();
     if let Err(e) = result {
@@ -73,9 +45,9 @@ fn parse_ts_module(
     match errors.into_iter().next() {
         None => Ok(()),
         Some(e) => {
-            let pos = cm.lookup_char_pos(e.span().lo());
+            let at = input.byte(e.span().lo());
             let msg = e.into_kind().msg().to_string();
-            Err((msg, pos.line, pos.col_display + 1))
+            Err((msg, at))
         }
     }
 }
@@ -83,24 +55,19 @@ fn parse_ts_module(
 /// Validates a variant field's type annotation. Returns a plain message on error.
 pub(crate) fn check_type_fragment(ty: &str) -> Result<(), String> {
     let wrapped = format!("type __Tt = {};", ty);
-    parse_ts_module(&wrapped, crate::SourceKind::TypeScript).map_err(|(msg, _, _)| msg)
+    parse_ts_module(&wrapped, crate::SourceKind::TypeScript).map_err(|(msg, _)| msg)
 }
 
-/// A failed self-check: swc's message and where it stopped in the
-/// *generated* module (1-based line and column).
+/// A failed self-check: swc's message and the byte of the *generated*
+/// module it stopped at.
 pub(crate) struct Failure {
     pub message: String,
-    pub line: usize,
-    pub col: usize,
+    pub at: usize,
 }
 
 /// Validates the final generated TypeScript.
 pub(crate) fn verify_output(code: &str, source_kind: crate::SourceKind) -> Result<(), Failure> {
-    parse_ts_module(code, source_kind).map_err(|(message, line, col)| Failure {
-        message,
-        line,
-        col,
-    })
+    parse_ts_module(code, source_kind).map_err(|(message, at)| Failure { message, at })
 }
 
 /// The self-check's failure as an error in the `.tt` file the user has
@@ -125,7 +92,7 @@ pub(crate) fn at_source(
     code: &str,
     failure: &Failure,
 ) -> crate::error::TtError {
-    let out = byte_of(code, failure.line, failure.col);
+    let out = failure.at.min(code.len());
     let generic = || {
         format!(
             "generated TypeScript failed to parse: {}. This is either invalid TypeScript passed \
@@ -170,23 +137,6 @@ pub(crate) fn at_source(
         Some((start, _)) => crate::error::TtError::at(start, message).code(code),
         None => crate::error::TtError::positionless(message).code(code),
     }
-}
-
-/// The byte offset of a 1-based line/column pair in `text`. swc counts
-/// columns in characters, so the walk does too.
-fn byte_of(text: &str, line: usize, col: usize) -> usize {
-    let mut at = 0;
-    for (n, text) in text.split_inclusive('\n').enumerate() {
-        if n + 1 == line {
-            return at
-                + text
-                    .char_indices()
-                    .nth(col.saturating_sub(1))
-                    .map_or(text.len(), |(byte, _)| byte);
-        }
-        at += text.len();
-    }
-    text.len()
 }
 
 /// The file's TypeScript, at byte `at`, is not TypeScript — established
@@ -236,7 +186,7 @@ pub(crate) fn in_source(
             _ => crate::error::TtError::span(
                 span.start.min(source.len()),
                 span.end.min(source.len()),
-                format!("tt host lowering could not plan this construct: {error:?}"),
+                format!("tt host lowering could not plan this construct: {error}"),
             )
             .code(crate::DiagnosticCode::LoweringPlanFailed),
         },
@@ -246,7 +196,7 @@ pub(crate) fn in_source(
         } => crate::error::TtError::span(
             span.start.min(source.len()),
             span.end.min(source.len()),
-            format!("tt host lowering could not plan this construct: {error:?}"),
+            format!("tt host lowering could not plan this construct: {error}"),
         )
         .code(crate::DiagnosticCode::LoweringPlanFailed),
     }
@@ -267,14 +217,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_line_column_pair_becomes_the_byte_it_names() {
-        let text = "const a = 1;\nconst 한글 = 2;\nconst c = 3;\n";
-        assert_eq!(byte_of(text, 1, 1), 0);
-        assert_eq!(byte_of(text, 2, 7), text.find('한').unwrap());
-        // Columns are counted in characters, as swc reports them.
-        assert_eq!(byte_of(text, 2, 10), text.find("= 2").unwrap());
-        // Past the end clamps rather than panicking.
-        assert_eq!(byte_of(text, 99, 1), text.len());
+    fn a_failure_after_a_wide_character_is_at_the_byte_swc_stopped_on() {
+        let code = "const e = \"한글\"; const x = ;\n";
+        let failure =
+            verify_output(code, crate::SourceKind::TypeScript).expect_err("does not parse");
+        assert_eq!(failure.at, code.find(" ;").unwrap() + 1);
     }
 
     #[test]
@@ -300,8 +247,7 @@ mod tests {
         let source = "<>&>&w=<>&>&w=2&(&#;;\\w\u{1}";
         let result = verify_output(source, crate::SourceKind::Tsx);
         let failure = result.expect_err("malformed JSX must be reported");
-        assert_eq!(failure.line, 1);
-        assert!(failure.col > 1);
+        assert!(failure.at > 0);
         assert!(failure.message.contains("unbalanced TypeScript delimiter"));
     }
 }

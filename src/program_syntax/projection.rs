@@ -62,6 +62,51 @@ pub(crate) enum ProgramSyntaxError {
     },
 }
 
+impl std::fmt::Display for ProgramSyntaxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProgramSyntaxError::MissingSourceSpan { .. } => {
+                write!(f, "a tt node has no source span")
+            }
+            ProgramSyntaxError::InvalidSourceSpan { start, end } => {
+                write!(
+                    f,
+                    "a tt node's source span {}..{} is invalid",
+                    start.0, end.0
+                )
+            }
+            ProgramSyntaxError::NodeCountOverflow => write!(f, "too many tt nodes in one file"),
+            ProgramSyntaxError::SourceNotTypeScript { message, .. } => {
+                write!(f, "the TypeScript here does not parse: {message}")
+            }
+            ProgramSyntaxError::Parse { message, .. } => {
+                write!(
+                    f,
+                    "the generated TypeScript for it does not parse: {message}"
+                )
+            }
+            ProgramSyntaxError::MissingOverlay { .. } => {
+                write!(
+                    f,
+                    "the construct has no place in the TypeScript syntax tree"
+                )
+            }
+            ProgramSyntaxError::DuplicateOverlay { .. } => {
+                write!(
+                    f,
+                    "the construct has two places in the TypeScript syntax tree"
+                )
+            }
+            ProgramSyntaxError::UnmappedEvaluationSpan { start, end } => {
+                write!(
+                    f,
+                    "the evaluation position {start}..{end} maps to no source"
+                )
+            }
+        }
+    }
+}
+
 impl ProgramSyntax {
     /// Builds and validates the shadow program model.
     pub(crate) fn build(
@@ -755,6 +800,7 @@ impl<'a> ProjectionBuilder<'a> {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
             }
         }
+        self.code.push('\n');
         let synthetic_return_start = ProjectedByte(self.code.len());
         self.code.push_str("return ");
         if let Some(value) = region.value {

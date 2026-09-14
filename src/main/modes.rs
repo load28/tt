@@ -78,7 +78,8 @@ pub(super) fn emit_map_mode(jobs: &[Job]) -> ExitCode {
                 continue;
             }
         };
-        let mapped = ttc::emit_mapped(&source);
+        let source_kind = ttc::SourceKind::from_path(&job.file).unwrap_or_default();
+        let mapped = ttc::emit_mapped_with_kind(&source, source_kind);
         let mappings = mapped
             .mappings
             .iter()

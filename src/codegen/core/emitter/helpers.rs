@@ -79,8 +79,10 @@ pub(super) fn temp_name(temp: TempId) -> String {
     match temp {
         TempId::Statement(sequence) => format!("$tt_t{sequence}"),
         TempId::Result(sequence) => format!("$tt_r{sequence}"),
-        TempId::Decision => "$tt_m".to_owned(),
-        TempId::DecisionElement(sequence) => format!("$tt_m{sequence}"),
+        TempId::Decision { depth: 0 } => "$tt_m".to_owned(),
+        TempId::Decision { depth } => format!("$tt_m_{depth}"),
+        TempId::DecisionElement { index, depth: 0 } => format!("$tt_m{index}"),
+        TempId::DecisionElement { index, depth } => format!("$tt_m{index}_{depth}"),
     }
 }
 

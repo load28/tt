@@ -396,8 +396,10 @@
 | TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | 2026-09-12 | [TASK-375](./TASK-375-match-pattern-completions.md) |
 
 | TASK-376 | Isolate externally terminated mapper profiles | Complete | 2026-09-12 | 2026-09-12 | [TASK-376](./TASK-376-mapper-coverage-lifecycle.md) |
+| TASK-377 | Repair compiler boundary and lowering defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-377](./TASK-377-compiler-boundary-defects.md) |
+| TASK-378 | Repair editor session and document ownership defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-378](./TASK-378-editor-session-defects.md) |
 
 ## Next task number
 
 
-**TASK-377**
+**TASK-379**
