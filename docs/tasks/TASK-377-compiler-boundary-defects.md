@@ -25,8 +25,8 @@ An audit of the compiler surfaced defects at the input boundary (byte-order mark
 ### Decision 2: The compiler runs on a thread with a declared stack
 
 - **Context**: the vendored swc parser grows the stack only around statement bodies; expression nesting (`(((...)))`, about 3,400 levels) overflowed the 8 MiB main thread and aborted the process, which `ice::catching` cannot intercept and which ended a `--server` session.
-- **Alternatives considered**: adding `stacker::maybe_grow` calls to the vendored expression parser (widens the vendor patch); a nesting-depth limit (invents a language limit TypeScript does not have).
-- **Decision and rationale**: `ttc::stack::on_compiler_stack` runs the CLI, server, and content mapper on a 256 MiB stack, and `par_map` workers reserve the same size. The reservation is virtual; only touched pages are committed. This is the approach rustc and rust-analyzer take for the same problem.
+- **Alternatives considered**: a larger thread stack alone (a bound, not a fix: the hosted CI's debug build overflowed a 256 MiB stack at 20,000 levels because debug frames are an order of magnitude larger); a nesting-depth limit (invents a language limit TypeScript does not have).
+- **Decision and rationale**: two layers, each owning one recursion. The vendored parser's `parse_assignment_expr` grows the stack through the `maybe_grow` hook the parser already uses for statement bodies (`vendor/swc_ecma_parser/TT-PATCH.md` records the patch), so expression nesting is bounded by memory. `ttc::stack::on_compiler_stack` runs the CLI, server, and content mapper on a 256 MiB stack, and `par_map` workers reserve the same size, for the compiler's own AST walks (the program-syntax visitor recurses once per nesting level). The reservation is virtual; only touched pages are committed. This is the approach rustc and rust-analyzer take for the same problem.
 
 ### Decision 3: `try` binds to the following primary expression in every form
 
@@ -63,9 +63,9 @@ An audit of the compiler surfaced defects at the input boundary (byte-order mark
 
 ### Issue 2: Deep nesting aborted the process and the server session
 
-- **Symptom**: SIGABRT (exit 134) on 3,500 nested parentheses; `--server` died without answering.
-- **Cause**: unbounded expression recursion on the default thread stack.
-- **Resolution**: Decision 2.
+- **Symptom**: SIGABRT (exit 134) on 3,500 nested parentheses; `--server` died without answering. After the first push, the hosted `fmt / clippy / test` and `coverage` jobs aborted the same way in the new 20,000-level unit test, because their debug build's parser frames exceeded the 256 MiB thread stack.
+- **Cause**: unbounded expression recursion in the parser, and a stack policy that only raised the bound.
+- **Resolution**: Decision 2; verified at 50,000 levels in a debug build.
 
 ### Issue 3: A non-UTF-8 stdin line ended the server session
 

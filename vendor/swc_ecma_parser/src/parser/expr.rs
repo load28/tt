@@ -74,6 +74,10 @@ impl<I: Tokens> Parser<I> {
         tracing::instrument(level = "debug", skip_all)
     )]
     pub(crate) fn parse_assignment_expr(&mut self) -> PResult<Box<Expr>> {
+        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_assignment_expr_grown())
+    }
+
+    fn parse_assignment_expr_grown(&mut self) -> PResult<Box<Expr>> {
         trace_cur!(self, parse_assignment_expr);
 
         if self.input().is(Token::JSXTagStart) && self.input().syntax().typescript() {

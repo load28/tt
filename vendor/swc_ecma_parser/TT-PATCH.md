@@ -14,6 +14,12 @@ accepts these sources; inventing a syntax error would break compatibility.
 The entity scanner stops at non-entity characters before
 advancing, preserving JSX delimiters and UTF-8 text for the enclosing scanner.
 
+Local change: `src/parser/expr.rs`, `parse_assignment_expr` grows the stack
+through `maybe_grow` the way `parse_stmt` already does, so expression nesting
+(parentheses, arguments, array and object elements) is bounded by memory
+rather than by the calling thread's stack. `tests/cli.rs` in the parent
+repository covers deeply nested input end to end.
+
 `tests/jsx_entities.rs` in the parent repository tests the dependency directly.
 The direct path dependency also applies when ttc is built by the standalone
 fuzz workspace. Remove this vendored copy only after an upstream version
