@@ -507,3 +507,19 @@ test("a block arm body is a statement position, not an object literal", async ()
     "a parenthesized object arm is still an object literal",
   );
 });
+
+test("a plain match(...) call is not the tt keyword; the construct shape is", async () => {
+  const lines = await tokenize(
+    "source.tt",
+    'const m = match("/a");\nconst n = match(value).with(1);\nconst k = match (s) { A => 1, _ => 0 };\nconst deep = match (f(g(h(1)))) { _ => 0 };\n',
+  );
+  for (const line of [1, 2]) {
+    const token = tokenAt(lines, line, "match");
+    assert.ok(
+      !token.scopes.includes("keyword.control.match.tt"),
+      `line ${line}: ${token.scopes.join(" ")}`,
+    );
+  }
+  assertScope(lines, 3, "match", "keyword.control.match.tt");
+  assertScope(lines, 4, "match", "keyword.control.match.tt");
+});
