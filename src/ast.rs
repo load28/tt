@@ -425,6 +425,8 @@ pub(crate) struct VariantDecl {
     /// Byte offset of the name, for error reporting and the symbol API.
     pub name_off: usize,
     pub exported: bool,
+    /// Whether the declaration carries a `declare` modifier.
+    pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
     pub cases: Vec<VariantCase>,

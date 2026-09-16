@@ -104,71 +104,6 @@ impl CoreFile {
 }
 
 /// The index and expression of the value a statement sequence delivers.
-pub(crate) enum GuardShape {
-    Plain,
-    Grouped(ExprId),
-    Conditional(Vec<ExprId>),
-}
-
-impl CoreFile {
-    pub(crate) fn guard_shape(
-        &self,
-        guard: ExprId,
-        opaque_text: &dyn Fn(NodeId) -> String,
-    ) -> GuardShape {
-        let Expr::Sequence(body) = &self.exprs[guard.index()] else {
-            return if self.has_statement_form(guard) {
-                GuardShape::Grouped(guard)
-            } else {
-                GuardShape::Plain
-            };
-        };
-        let statements = &self.bodies[body.index()].statements;
-        let values: Vec<ExprId> = statements
-            .iter()
-            .filter_map(|statement| match statement {
-                Statement::Expr(expr) if self.has_statement_form(*expr) => Some(*expr),
-                _ => None,
-            })
-            .collect();
-        if values.is_empty() {
-            return GuardShape::Plain;
-        }
-        let grouping_only = values.len() == 1
-            && statements.iter().all(|statement| match statement {
-                Statement::Expr(_) => true,
-                Statement::Opaque(node) => opaque_text(*node)
-                    .bytes()
-                    .all(|byte| byte == b'(' || byte == b')' || crate::scanner::is_ws(byte)),
-                _ => false,
-            });
-        if !grouping_only {
-            return GuardShape::Conditional(values);
-        }
-        match self.guard_shape(values[0], opaque_text) {
-            GuardShape::Plain => GuardShape::Plain,
-            GuardShape::Grouped(inner) => GuardShape::Grouped(inner),
-            GuardShape::Conditional(inner) => GuardShape::Conditional(inner),
-        }
-    }
-
-    pub(crate) fn match_decisions(&self) -> impl Iterator<Item = &Decision> {
-        let statement_decisions = self.bodies.iter().flat_map(|body| {
-            body.statements
-                .iter()
-                .filter_map(|statement| match statement {
-                    Statement::Decision(decision) => Some(decision),
-                    _ => None,
-                })
-        });
-        let expression_decisions = self.exprs.iter().filter_map(|expr| match expr {
-            Expr::Decision(decision) => Some(decision),
-            _ => None,
-        });
-        statement_decisions.chain(expression_decisions)
-    }
-}
-
 pub(crate) fn sequence_value(statements: &[Statement]) -> Option<(usize, ExprId)> {
     let (index, expr) = statements
         .iter()
@@ -309,6 +244,7 @@ pub(crate) struct Adt {
     pub node: NodeId,
     pub name: String,
     pub exported: bool,
+    pub declared: bool,
     pub generics: String,
     pub variants: Vec<AdtVariant>,
 }

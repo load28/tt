@@ -109,11 +109,22 @@ impl std::fmt::Display for ProgramSyntaxError {
 
 impl ProgramSyntax {
     /// Builds and validates the shadow program model.
+    #[cfg(test)]
     pub(crate) fn build(
         semantic: &SemanticFile,
         core: &CoreFile,
         source: &str,
         source_kind: crate::SourceKind,
+    ) -> Result<Self, ProgramSyntaxError> {
+        Self::build_with(semantic, core, source, source_kind, false)
+    }
+
+    pub(crate) fn build_with(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        source: &str,
+        source_kind: crate::SourceKind,
+        tolerant: bool,
     ) -> Result<Self, ProgramSyntaxError> {
         if let Some((span, message)) = crate::lexer::host_syntax_error(source, source_kind) {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
@@ -122,7 +133,12 @@ impl ProgramSyntax {
             });
         }
         let projection = ProjectionBuilder::new(semantic, core, source).build()?;
-        let parsed = parse_module(&projection.code, &projection.source_segments, source_kind)?;
+        let parsed = parse_module(
+            &projection.code,
+            &projection.source_segments,
+            source_kind,
+            tolerant,
+        )?;
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,

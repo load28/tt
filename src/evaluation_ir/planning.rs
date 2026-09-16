@@ -534,7 +534,11 @@ pub(super) fn target_capability(
             // An enclosing tt root is different: its structured lowering
             // owns this schedule and composes the captured source into it.
             if tt_spans.iter().any(|span| {
-                overlaps(*capture, *span) && !(span.start <= source.start && source.end <= span.end)
+                overlaps(*capture, *span)
+                    && !(span.start <= source.start && source.end <= span.end)
+                    && !(span.end <= source.start
+                        && capture.start <= span.start
+                        && span.end <= capture.end)
             }) || captured.iter().any(|span| overlaps(*capture, *span))
             {
                 return TargetCapability::ExpressionBoundary(Reason::CaptureOverlapsValue);

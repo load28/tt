@@ -66,6 +66,16 @@ pub(crate) fn lowering_plan(
     source: &str,
     source_kind: SourceKind,
 ) -> Result<LoweringPlan, LoweringFailure> {
+    lowering_plan_with(semantic, core, source, source_kind, false)
+}
+
+pub(crate) fn lowering_plan_with(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+    tolerant: bool,
+) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() {
         return Ok(LoweringPlan::default());
     }
@@ -80,20 +90,24 @@ pub(crate) fn lowering_plan(
                 end: source.len(),
             })
     };
-    let syntax =
-        match crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind) {
-            Ok(syntax) => syntax,
-            Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript {
-                message,
-                source,
-            }) => return Err(LoweringFailure::SourceNotTypeScript { message, source }),
-            Err(error) => {
-                return Err(LoweringFailure::HostProjection {
-                    error,
-                    source: primary_source(),
-                });
-            }
-        };
+    let syntax = match crate::program_syntax::ProgramSyntax::build_with(
+        semantic,
+        core,
+        source,
+        source_kind,
+        tolerant,
+    ) {
+        Ok(syntax) => syntax,
+        Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript { message, source }) => {
+            return Err(LoweringFailure::SourceNotTypeScript { message, source });
+        }
+        Err(error) => {
+            return Err(LoweringFailure::HostProjection {
+                error,
+                source: primary_source(),
+            });
+        }
+    };
     let evaluation =
         crate::evaluation_ir::EvaluationFile::build(&syntax, core).map_err(|error| {
             LoweringFailure::Evaluation {
@@ -101,13 +115,12 @@ pub(crate) fn lowering_plan(
                 source: primary_source(),
             }
         })?;
-    let mut plan = evaluation
+    let plan = evaluation
         .lowering_plan(core)
         .map_err(|error| LoweringFailure::Evaluation {
             error,
             source: evaluation.primary_source(),
         })?;
-    reject_conditional_guard_values(semantic, core, source, &mut plan);
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts
     // (`docs/design/program-lowering.md` §11).
@@ -118,36 +131,6 @@ pub(crate) fn lowering_plan(
         error.raise();
     }
     Ok(plan)
-}
-
-fn reject_conditional_guard_values(
-    semantic: &SemanticFile,
-    core: &CoreFile,
-    source: &str,
-    plan: &mut LoweringPlan,
-) {
-    let opaque_text = |node| {
-        semantic
-            .hir
-            .source_map
-            .node_span(node)
-            .map(|span| source[span.start..span.end].to_owned())
-            .unwrap_or_default()
-    };
-    for decision in core.match_decisions() {
-        for guard in decision.arms.iter().filter_map(|arm| arm.guard) {
-            let crate::core_ir::GuardShape::Conditional(values) =
-                core.guard_shape(guard, &opaque_text)
-            else {
-                continue;
-            };
-            for value in values {
-                if let Some(span) = planning::structured_expr_span(semantic, core, value) {
-                    plan.reject_conditional_guard_value(value, span);
-                }
-            }
-        }
-    }
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -221,12 +204,15 @@ pub(crate) fn emit_with_map<'a>(
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
         inline_subjects: target.inline_subjects,
+        block_required_propagations: target.block_required_propagations,
+        ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
         active_scheduled_exprs: ActiveExprStack::default(),
         emitted_owner_rewrites: EmittedOwnerRewrites::default(),
         closed_compose_blocks: ClosedComposeBlocks::default(),
+        emitted_compose_rewrites: ClosedComposeBlocks::default(),
         loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),

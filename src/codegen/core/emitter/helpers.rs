@@ -226,8 +226,14 @@ impl BindingRecovery {
 
 /// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
-pub(super) fn emit_adt<'a>(adt: &Adt) -> Rope<'a> {
-    let export = if adt.exported { "export " } else { "" };
+pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool) -> Rope<'a> {
+    let export = match (adt.exported, adt.declared) {
+        (true, true) => "export declare ",
+        (true, false) => "export ",
+        (false, true) => "declare ",
+        (false, false) => "",
+    };
+    let ambient = ambient || adt.declared;
     let arms = adt
         .variants
         .iter()
@@ -260,6 +266,32 @@ pub(super) fn emit_adt<'a>(adt: &Adt) -> Rope<'a> {
         .filter_map(|variant| {
             if !variant.emit_constructor {
                 return None;
+            }
+            if ambient {
+                return Some(match &variant.fields {
+                    None => format!(
+                        "readonly {}: {{ readonly kind: \"{}\" }};",
+                        variant.name, variant.name
+                    ),
+                    Some(fields) => {
+                        let params = fields
+                            .iter()
+                            .map(|field| {
+                                format!(
+                                    "{}{}: {}",
+                                    field.name,
+                                    if field.optional { "?" } else { "" },
+                                    field.ty_text
+                                )
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        format!(
+                            "readonly {}: {}({params}) => {}{type_args};",
+                            variant.name, adt.generics, adt.name
+                        )
+                    }
+                });
             }
             Some(match &variant.fields {
                 None => format!(
@@ -299,7 +331,11 @@ pub(super) fn emit_adt<'a>(adt: &Adt) -> Rope<'a> {
     }
     out.push_lit(";");
     out.push_break(0);
-    out.push_lit(format!("{export}const {} = {{", adt.name));
+    if ambient {
+        out.push_lit(format!("{export}const {}: {{", adt.name));
+    } else {
+        out.push_lit(format!("{export}const {} = {{", adt.name));
+    }
     for constructor in constructors {
         out.push_break(1);
         out.push_lit(constructor);

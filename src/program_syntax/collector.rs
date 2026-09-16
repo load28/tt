@@ -11,6 +11,7 @@ pub(super) fn parse_module(
     code: &str,
     segments: &[ProjectionSourceSegment],
     source_kind: crate::SourceKind,
+    tolerant: bool,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
     if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
         return Err(parse_failure_at(
@@ -32,7 +33,9 @@ pub(super) fn parse_module(
             return Err(parse_failure(code, segments, start, &errors[0]));
         }
     };
-    if let Some(error) = errors.into_iter().next() {
+    if let Some(error) = errors.into_iter().next()
+        && !tolerant
+    {
         return Err(parse_failure(code, segments, start, &error));
     }
     Ok(ParsedModule { module, start })
@@ -74,6 +77,7 @@ fn parse_failure_at(
 }
 
 pub(super) struct ParentCollector {
+    pub(super) placeholders: HashSet<ProjectedSpan>,
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
     pub(super) source_start: HostOrigin,
@@ -112,6 +116,7 @@ pub(super) struct CollectedProgramSyntax {
 }
 
 pub(super) struct FoundOverlay {
+    pub(super) ambient: bool,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
@@ -251,13 +256,15 @@ pub(super) struct ProjectedHostOwner {
 pub(super) fn object_evaluation_positions(
     node: &ObjectLit,
     source_start: HostOrigin,
+    placeholders: &HashSet<ProjectedSpan>,
+    segments: &[ProjectionSourceSegment],
 ) -> Vec<(ProjectedSpan, Effects)> {
     let mut positions = Vec::new();
     for property in &node.props {
         match property {
             PropOrSpread::Spread(spread) => {
                 positions.push((
-                    projected_span(spread.expr.span(), source_start),
+                    operand_span(&spread.expr, source_start, placeholders, segments),
                     expression_effects(&spread.expr),
                 ));
             }
@@ -268,13 +275,13 @@ pub(super) fn object_evaluation_positions(
                 Prop::KeyValue(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
                     positions.push((
-                        projected_span(property.value.span(), source_start),
+                        operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
                     ));
                 }
                 Prop::Assign(property) => {
                     positions.push((
-                        projected_span(property.value.span(), source_start),
+                        operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
                     ));
                 }
@@ -313,12 +320,14 @@ pub(super) fn push_computed_property(
 pub(super) fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
     source_start: HostOrigin,
+    placeholders: &HashSet<ProjectedSpan>,
+    segments: &[ProjectionSourceSegment],
 ) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments
         .iter()
         .map(|argument| {
             (
-                projected_span(argument.expr.span(), source_start),
+                operand_span(&argument.expr, source_start, placeholders, segments),
                 argument.spread.is_some(),
                 expression_effects(&argument.expr),
             )

@@ -495,22 +495,20 @@ pub(super) fn protocol_step(
             })
         })
         .collect::<Result<Vec<_>, ProgramSyntaxError>>()?;
+    let map_operand = |span| map_evaluation_span(segments, span);
     let conditional = conditional
         .map(|facts| {
             Ok(ConditionalFacts {
                 // The branch holds the tt value, so it has no contiguous
                 // source mapping; its bounds map endpoint-by-endpoint.
-                branch: map_evaluation_span(segments, facts.branch)?,
-                skipped: facts
-                    .skipped
-                    .map(|span| map_evaluation_span(segments, span))
-                    .transpose()?,
+                branch: map_operand(facts.branch)?,
+                skipped: facts.skipped.map(map_operand).transpose()?,
                 operands: facts
                     .operands
                     .into_iter()
                     .map(|(span, spread)| {
                         Ok(ConditionalOperand {
-                            span: map_evaluation_span(segments, span)?,
+                            span: map_operand(span)?,
                             spread,
                         })
                     })
@@ -614,6 +612,26 @@ pub(super) fn call_callee_mode(
         SwcExpr::TsSatisfies(expression) => call_callee_mode(&expression.expr),
         _ => (EvaluationInputMode::DirectReference, None),
     }
+}
+
+pub(super) fn operand_span(
+    expression: &swc_ecma_ast::Expr,
+    source_start: HostOrigin,
+    placeholders: &HashSet<ProjectedSpan>,
+    segments: &[ProjectionSourceSegment],
+) -> ProjectedSpan {
+    let mut inner = expression;
+    while let swc_ecma_ast::Expr::Paren(paren) = inner {
+        let within = projected_span(paren.expr.span(), source_start);
+        if placeholders.contains(&projected_span(paren.span, source_start))
+            || placeholders.contains(&within)
+            || source_span_for_projection(segments, within).is_none()
+        {
+            break;
+        }
+        inner = &paren.expr;
+    }
+    projected_span(inner.span(), source_start)
 }
 
 pub(super) fn reference_value_span(expression: &swc_ecma_ast::Expr) -> swc_common::Span {

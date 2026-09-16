@@ -579,6 +579,20 @@ pub(crate) struct EvaluationContext {
     /// Async functions contextually type their returned expression with the
     /// awaited form of the authored Promise return type.
     pub(crate) contextual_type_awaited: bool,
+    /// The owning statement is the unbraced body of an `if`, loop, label, or
+    /// `with`, so a statement lowering has to open its own block there.
+    pub(crate) requires_block: bool,
+    /// The construct sits inside an ambient (`declare`) module, where only
+    /// declarations without initializers are TypeScript.
+    pub(crate) ambient: bool,
+}
+
+pub(crate) struct OverlayFacts {
+    pub(crate) function_target: Option<EvaluationOwner>,
+    pub(crate) contextual_type: Option<SourceSpan>,
+    pub(crate) function_return_type: Option<SourceSpan>,
+    pub(crate) function_return_awaited: bool,
+    pub(crate) ambient: bool,
 }
 
 impl EvaluationContext {
@@ -589,11 +603,16 @@ impl EvaluationContext {
         category: SyntaxCategory,
         parents: &[AstParentKind],
         host_owner_edge: usize,
-        function_target: Option<EvaluationOwner>,
-        contextual_type: Option<SourceSpan>,
-        function_return_type: Option<SourceSpan>,
-        function_return_awaited: bool,
+        facts: OverlayFacts,
     ) -> Self {
+        let OverlayFacts {
+            function_target,
+            contextual_type,
+            function_return_type,
+            function_return_awaited,
+            ambient,
+        } = facts;
+        let requires_block = statement_requires_block(parents);
         let (mut owner, owner_edge) = evaluation_owner(parents);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
@@ -618,6 +637,8 @@ impl EvaluationContext {
                 continuation: HostContinuation::Discard,
                 contextual_type,
                 contextual_type_awaited: false,
+                requires_block,
+                ambient,
             };
         }
 
@@ -644,8 +665,36 @@ impl EvaluationContext {
             contextual_type_awaited: uses_function_return
                 && function_return_type.is_some()
                 && function_return_awaited,
+            requires_block,
+            ambient,
         }
     }
+}
+
+fn statement_requires_block(parents: &[AstParentKind]) -> bool {
+    let Some(statement) = parents
+        .iter()
+        .rposition(|parent| matches!(parent, AstParentKind::ExprStmt(_) | AstParentKind::Stmt(_)))
+    else {
+        return false;
+    };
+    let parent = parents[..statement]
+        .iter()
+        .rev()
+        .find(|parent| !matches!(parent, AstParentKind::Stmt(_) | AstParentKind::ExprStmt(_)));
+    parent.is_some_and(|parent| {
+        matches!(
+            parent,
+            AstParentKind::IfStmt(fields::IfStmtField::Cons | fields::IfStmtField::Alt)
+                | AstParentKind::ForStmt(fields::ForStmtField::Body)
+                | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
+                | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
+                | AstParentKind::WhileStmt(fields::WhileStmtField::Body)
+                | AstParentKind::DoWhileStmt(fields::DoWhileStmtField::Body)
+                | AstParentKind::LabeledStmt(fields::LabeledStmtField::Body)
+                | AstParentKind::WithStmt(fields::WithStmtField::Body)
+        )
+    })
 }
 
 /// The evaluation regions between a value's host owner and the value.

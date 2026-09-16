@@ -163,6 +163,7 @@ impl EvaluationFile {
         let mut value_slots = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
+        let mut owned_child_schedules = Vec::new();
         for (owner, values) in owners {
             let assigned = values
                 .into_iter()
@@ -238,6 +239,44 @@ impl EvaluationFile {
                 .map(|child| child.expr)
                 .collect();
             structurally_owned_children.extend(owned_children.iter().copied());
+            for child in values
+                .iter()
+                .filter(|value| owned_children.contains(&value.expr))
+            {
+                let Some(outer) = values
+                    .iter()
+                    .filter(|outer| {
+                        outer.expr != child.expr
+                            && outer.capability == TargetCapability::StatementRegion
+                            && outer.source.start <= child.source.start
+                            && child.source.end <= outer.source.end
+                    })
+                    .min_by_key(|outer| outer.source.end - outer.source.start)
+                else {
+                    continue;
+                };
+                let steps: Vec<_> = child
+                    .schedule
+                    .steps()
+                    .iter()
+                    .take_while(|step| {
+                        outer.source.start <= step.parent.start
+                            && step.parent.end <= outer.source.end
+                            && step.parent != outer.source
+                    })
+                    .cloned()
+                    .collect();
+                if steps.is_empty() {
+                    continue;
+                }
+                owned_child_schedules.push((
+                    child.expr,
+                    EvaluationSchedule {
+                        steps,
+                        call_completion: None,
+                    },
+                ));
+            }
             values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
                 &mut values,
@@ -323,7 +362,7 @@ impl EvaluationFile {
             })
             .collect();
         let mut nested_source_slots = HashMap::new();
-        let mut nested_schedules = HashMap::new();
+        let mut nested_schedules: HashMap<_, _> = owned_child_schedules.into_iter().collect();
         let planned_sources: HashMap<_, _> = rewrites
             .iter()
             .flat_map(|owner| owner.values.iter().map(|value| (value.expr, value.source)))
@@ -699,6 +738,30 @@ impl EvaluationFile {
             expression_boundary_name,
             unsupported_expression_propagations,
             unsupported_matches,
+            block_required_propagations: self
+                .regions
+                .iter()
+                .filter_map(|region| match (region.root, &region.placement) {
+                    (Some(CoreRoot::Propagate(node)), RegionPlacement::Host { context, .. })
+                        if context.requires_block =>
+                    {
+                        Some(node)
+                    }
+                    _ => None,
+                })
+                .collect(),
+            ambient_items: self
+                .regions
+                .iter()
+                .filter_map(|region| match (region.root, &region.placement) {
+                    (Some(CoreRoot::Adt(node)), RegionPlacement::Host { context, .. })
+                        if context.ambient =>
+                    {
+                        Some(node)
+                    }
+                    _ => None,
+                })
+                .collect(),
         })
     }
 }

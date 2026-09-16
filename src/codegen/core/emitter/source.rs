@@ -81,6 +81,7 @@ impl<'a> Emitter<'a> {
             .filter(|rewrite| {
                 span.start <= rewrite.owner.start
                     && rewrite.owner.start < span.end
+                    && !self.emitted_compose_rewrites.contains(rewrite.owner)
                     && !rewrite.actions.iter().any(|action| match action {
                         ComposeAction::Value(value) => {
                             self.active_structured_exprs.contains(value.expr)
@@ -207,7 +208,9 @@ impl<'a> Emitter<'a> {
                         && replacement.source.start <= cursor
                         && cursor < replacement.source.end
                 } else {
-                    replacement.source.start <= cursor && cursor < replacement.source.end
+                    replacement.source.start <= cursor
+                        && cursor < replacement.source.end
+                        && !self.inside_captured_value(replacement.source, span.start, span.end)
                 }
             }) {
                 if cursor == replacement.source.start {
@@ -541,7 +544,7 @@ impl<'a> Emitter<'a> {
                         span.start,
                         span.end,
                         span.end,
-                        emit_adt(adt),
+                        emit_adt(adt, self.ambient_items.contains(&adt.node)),
                     );
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
@@ -555,11 +558,20 @@ impl<'a> Emitter<'a> {
                         out.append(self.emit_compose_rewrite(rewrite));
                     }
                     let span = self.span(propagate.node);
-                    let emitted = if self.is_for_initializer_propagation(propagate.node) {
+                    let mut emitted = if self.is_for_initializer_propagation(propagate.node) {
                         self.emit_for_initializer_payload(propagate)
                     } else {
                         self.emit_propagate(propagate)
                     };
+                    if self.block_required_propagations.contains(&propagate.node) {
+                        let mut block = Rope::new();
+                        block.push_lit("{");
+                        block.push_break(1);
+                        block.append(Rope::indented(1, emitted.trim()));
+                        block.push_break(0);
+                        block.push_lit("}");
+                        emitted = Rope::scoped(block);
+                    }
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => {
@@ -762,6 +774,10 @@ impl<'a> Emitter<'a> {
             return self.emit_arrow_return_rewrite(rewrite);
         }
         if let Some(slot) = self.slot_exprs.get(&expr) {
+            let (_, anchor_start, _, anchor_end) = self.value_anchor(expr);
+            if self.carried_by_capture(anchor_start, anchor_end) {
+                return Rope::new();
+            }
             if let Expr::Decision(decision) = &self.core.exprs[expr.index()]
                 && self.inline_subjects.contains_key(&decision.extent)
             {

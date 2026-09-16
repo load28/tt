@@ -547,24 +547,30 @@ impl Parser<'_> {
             // property access like `str.match(...)` never starts a construct
             let dotted = cursor::dotted_at(tokens, 0, i);
 
-            if !dotted && (word == "variant" || word == "export") {
-                let (kw_idx, exported) = if word == "variant" {
-                    (Some(i), false)
-                } else {
-                    match tokens.get(i + 1) {
-                        Some(t)
-                            if matches!(t.kind, TokenKind::Ident)
-                                && &self.src[t.span.start..t.span.end] == "variant" =>
-                        {
-                            (Some(i + 1), true)
-                        }
-                        _ => (None, false),
+            if !dotted && (word == "variant" || word == "export" || word == "declare") {
+                let word_at = |k: usize| {
+                    tokens
+                        .get(k)
+                        .filter(|t| matches!(t.kind, TokenKind::Ident))
+                        .map(|t| &self.src[t.span.start..t.span.end])
+                };
+                let (kw_idx, exported, declared) = match word {
+                    "variant" => (Some(i), false, false),
+                    "declare" if word_at(i + 1) == Some("variant") => (Some(i + 1), false, true),
+                    "export" if word_at(i + 1) == Some("variant") => (Some(i + 1), true, false),
+                    "export"
+                        if word_at(i + 1) == Some("declare")
+                            && word_at(i + 2) == Some("variant") =>
+                    {
+                        (Some(i + 2), true, true)
                     }
+                    _ => (None, false, false),
                 };
                 if let Some(kw_idx) = kw_idx {
                     match variants::parse_variant(
                         Cursor::new(self, tokens, kw_idx + 1, end),
                         exported,
+                        declared,
                     ) {
                         Claim::Parsed((cur, byte_end, decl)) => {
                             flush_verbatim(&mut segments, seg_start, tok.span.start);

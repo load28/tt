@@ -94,6 +94,7 @@ impl Lowering<'_> {
                         node: item.node,
                         name: item.name.clone(),
                         exported: item.exported,
+                        declared: item.declared,
                         generics: item.generics.clone(),
                         variants: item
                             .variants

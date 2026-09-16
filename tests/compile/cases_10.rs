@@ -63,17 +63,6 @@ fn a_parenthesized_match_in_a_guard_keeps_its_parentheses() {
     assert!(out.contains("if (($tt_v1)) {"), "{out}");
 }
 
-#[test]
-fn a_match_under_a_conditional_operation_in_a_guard_is_a_placement_error() {
-    let source = "variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\nconst x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };\n";
-    let codes: Vec<_> = ttc::analyze(source, &Options::default())
-        .iter()
-        .map(|d| d.code)
-        .collect();
-    assert_eq!(codes, [DiagnosticCode::MatchPlacement]);
-    let e = err(source);
-    assert_eq!((e.line, e.col), (3, 40), "{e}");
-}
 
 #[test]
 fn a_declaration_try_binds_to_the_primary_expression_like_the_value_form() {

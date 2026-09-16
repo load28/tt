@@ -241,8 +241,9 @@ impl<'a> Checker<'a> {
                 let mut names = Vec::new();
                 let mut k = start;
                 while k < end
-                    && matches!(&tokens[k].kind, TokenKind::Ident
+                    && (matches!(&tokens[k].kind, TokenKind::Ident
                         if self.text(&tokens[k]) == "val" || is_param_modifier(self.text(&tokens[k])))
+                        || matches!(tokens[k].kind, TokenKind::Punct(b'.')))
                 {
                     k += 1;
                 }

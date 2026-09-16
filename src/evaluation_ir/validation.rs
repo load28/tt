@@ -234,6 +234,9 @@ impl EvaluationFile {
                             if overlaps(*source, *span)
                                 && !(span.start <= value.source.start
                                     && value.source.end <= span.end)
+                                && !(span.end <= value.source.start
+                                    && source.start <= span.start
+                                    && span.end <= source.end)
                             {
                                 return Err(InternalCompilerError::new(
                                     stage,

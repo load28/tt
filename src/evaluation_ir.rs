@@ -135,6 +135,8 @@ pub(crate) struct LoweringPlan {
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
+    block_required_propagations: HashSet<NodeId>,
+    ambient_items: HashSet<NodeId>,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -510,13 +512,12 @@ impl LoweringPlan {
         self.unsupported_expression_propagations.clone()
     }
 
-    pub(crate) fn reject_conditional_guard_value(&mut self, expr: ExprId, source: SourceSpan) {
-        self.unsupported_matches.push(UnsupportedMatch {
-            expr,
-            source,
-            owner: EvaluationOwner::FunctionBody,
-            reason: ExpressionBoundaryReason::ConditionalInOwner,
-        });
+    pub(crate) fn block_required_propagations(&self) -> &HashSet<NodeId> {
+        &self.block_required_propagations
+    }
+
+    pub(crate) fn ambient_items(&self) -> &HashSet<NodeId> {
+        &self.ambient_items
     }
 
     pub(crate) fn unsupported_matches(&self) -> Vec<UnsupportedMatch> {

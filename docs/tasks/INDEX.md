@@ -398,8 +398,10 @@
 | TASK-376 | Isolate externally terminated mapper profiles | Complete | 2026-09-12 | 2026-09-12 | [TASK-376](./TASK-376-mapper-coverage-lifecycle.md) |
 | TASK-377 | Repair compiler boundary and lowering defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-377](./TASK-377-compiler-boundary-defects.md) |
 | TASK-378 | Repair editor session and document ownership defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-378](./TASK-378-editor-session-defects.md) |
+| TASK-379 | Complete structurally owned lowering and the remaining audit defects | Complete | 2026-09-15 | 2026-09-16 | [TASK-379](./TASK-379-complete-lowering-ownership.md) |
+| TASK-380 | Color match by the construct shape in the TextMate grammar | Complete | 2026-09-15 | 2026-09-16 | [TASK-380](./TASK-380-grammar-construct-shape.md) |
 
 ## Next task number
 
 
-**TASK-379**
+**TASK-381**

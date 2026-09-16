@@ -452,7 +452,7 @@ impl<'a> Emitter<'a> {
                         span.start,
                         span.end,
                         span.end,
-                        emit_adt(adt),
+                        emit_adt(adt, self.ambient_items.contains(&adt.node)),
                     );
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),

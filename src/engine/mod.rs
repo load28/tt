@@ -44,6 +44,7 @@ mod declarations;
 mod hints;
 mod language;
 mod names;
+pub(crate) mod paths;
 mod project;
 mod projection;
 mod semantics;
@@ -231,7 +232,7 @@ impl Engine {
 /// back onto it. The overlay can then participate in the same project as its
 /// saved neighbours without a temporary disk write.
 pub fn normalize_document_path(path: &std::path::Path) -> Result<PathBuf, String> {
-    if let Ok(canonical) = path.canonicalize() {
+    if let Ok(canonical) = paths::canonical(path) {
         return Ok(canonical);
     }
     let name = path
@@ -241,9 +242,8 @@ pub fn normalize_document_path(path: &std::path::Path) -> Result<PathBuf, String
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or(std::path::Path::new("."));
-    let parent = parent
-        .canonicalize()
-        .map_err(|error| format!("{}: {error}", path.display()))?;
+    let parent =
+        paths::canonical(parent).map_err(|error| format!("{}: {error}", path.display()))?;
     Ok(parent.join(name))
 }
 
@@ -253,7 +253,7 @@ fn identity_of(collected: &[PathBuf], options: &ProjectOptions) -> (Option<PathB
         .tsconfig
         .clone()
         .or_else(|| project::find_tsconfig(collected))
-        .map(|path| path.canonicalize().unwrap_or(path));
+        .map(|path| paths::canonical(&path).unwrap_or(path));
     let root = match &tsconfig {
         Some(path) => path
             .parent()
