@@ -672,21 +672,9 @@ impl Parser<'_> {
                         continue;
                     }
                     Claim::Unclaimed(candidate) => unclaimed.push(candidate),
-                    Claim::NotTt => {
-                        if !misplaced
-                            && let Some((next_i, parsed)) = tries::parse_try_expr(
-                                Cursor::new(self, tokens, i + 1, end),
-                                tok.span,
-                            )
-                        {
-                            flush_verbatim(&mut segments, seg_start, tok.span.start);
-                            let span = parsed.span;
-                            segments.push(Segment::TryExpr(parsed));
-                            seg_start = span.end;
-                            i = next_i;
-                            continue;
-                        }
-                    }
+                    // A statement-position rejection also protects host member
+                    // signatures. Only expression positions may claim TryExpr.
+                    Claim::NotTt => {}
                     Claim::Malformed { .. } => unreachable!("try rollback is not malformed"),
                 }
             }

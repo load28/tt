@@ -284,6 +284,18 @@ impl ParentCollector {
 }
 
 impl VisitAstPath for ParentCollector {
+    fn visit_expr<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::Expr,
+        path: &mut AstNodePath<'r>,
+    ) {
+        crate::stack::grow(|| {
+            <swc_ecma_ast::Expr as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+                node, self, path,
+            );
+        });
+    }
+
     fn visit_var_declarator<'ast: 'r, 'r>(
         &mut self,
         node: &'ast VarDeclarator,

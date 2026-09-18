@@ -919,10 +919,26 @@ impl<'a> ProjectionBuilder<'a> {
         }
         for arm in &decision.arms {
             if let Some(guard) = arm.guard {
+                // A guard is evaluated only after its pattern bindings exist.
+                // Map its projected statement as a complete owner so all of
+                // its values share one evaluation plan, separate from the match.
+                let start = ProjectedByte(self.code.len());
                 self.code.push('(');
                 let segments_since = self.source_segments.len();
                 self.emit_expr(guard)?;
                 self.push_source_boundary(");", segments_since);
+                if let Expr::Sequence(body) = &self.core.exprs[guard.index()]
+                    && let Some(node) = self.core.sequence_node(*body)
+                {
+                    self.source_segments.push(ProjectionSourceSegment {
+                        projected: ProjectedSpan {
+                            start,
+                            end: ProjectedByte(self.code.len()),
+                        },
+                        source: self.source_span(node)?,
+                        kind: ProjectionSegmentKind::Placeholder,
+                    });
+                }
             }
             let crate::core_ir::ArmAction::Yield { body, kind } = arm.action else {
                 continue;

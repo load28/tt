@@ -1,0 +1,8 @@
+declare function mark(n: number): number;
+export function guarded(left: boolean, right: boolean) {
+  return match (1) {
+    1 if (match (mark(1)) { 1 => { const value = left; return value; }, _ => false }) &&
+         (match (mark(2)) { 2 => { const value = right; return value; }, _ => false }) => true,
+    _ => false
+  };
+}

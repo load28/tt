@@ -644,3 +644,8 @@ fn val_as_a_call_argument_or_element() {
     assert_passthrough("const m = new Map([[val, 1]]);\n");
     assert_passthrough("arr.reduce((acc, val) => acc + val, 0);\n");
 }
+
+#[test]
+fn untyped_try_method_signatures_remain_host_members() {
+    assert_passthrough("interface X { try(x); }\ntype Y = { try(x); };\n");
+}

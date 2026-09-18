@@ -891,6 +891,7 @@ name = "ttc"
 version = "1.0.0"
 dependencies = [
  "serde_json",
+ "stacker",
  "swc_common",
  "swc_ecma_ast",
  "swc_ecma_parser",

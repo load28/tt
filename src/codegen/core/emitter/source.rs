@@ -63,6 +63,20 @@ impl<'a> Emitter<'a> {
         self.source_range_rope(span)
     }
 
+    // A host replacement consumes the authored occurrence, never the source
+    // used to emit a value inside that occurrence. In particular a logical
+    // operation also contains its separately evaluated condition value.
+    fn replacement_contains_active_value(&self, source: SourceSpan) -> bool {
+        self.active_structured_exprs
+            .exprs
+            .borrow()
+            .iter()
+            .any(|expr| {
+                let (_, start, _, end) = self.value_anchor(*expr);
+                source.start <= start && end <= source.end
+            })
+    }
+
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
         let mut rope = Rope::new();
         let mut insertions = self
@@ -146,7 +160,9 @@ impl<'a> Emitter<'a> {
             while let Some(rewrite) =
                 compose_insertions.next_if(|rewrite| rewrite.owner.start == cursor)
             {
-                rope.append(self.emit_compose_rewrite(rewrite));
+                if self.emitted_compose_rewrites.claim(rewrite.owner) {
+                    rope.append(self.emit_compose_rewrite(rewrite));
+                }
             }
             if let Some(rewrite) = self.loop_test_rewrites.iter().find(|rewrite| {
                 rewrite.kind == LoopTestKind::While
@@ -197,9 +213,7 @@ impl<'a> Emitter<'a> {
                 if replacement.anchor.is_some() {
                     self.conditional_region_depth.get() == 0
                         && self.loop_region_depth.get() == 0
-                        && !replacement
-                            .anchor
-                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                        && !self.replacement_contains_active_value(replacement.source)
                         // A claimed call frame erases source only from the
                         // remaining statement walk; a sibling's structural
                         // emission still reads its own subject and arm text
@@ -267,9 +281,7 @@ impl<'a> Emitter<'a> {
                     (replacement.anchor.is_none()
                         || (self.conditional_region_depth.get() == 0
                             && self.loop_region_depth.get() == 0
-                            && !replacement
-                                .anchor
-                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                            && !self.replacement_contains_active_value(replacement.source)
                             && (!replacement.claim || self.active_structured_exprs.is_empty())))
                         && cursor < replacement.source.start
                         && replacement.source.start < span.end
@@ -732,7 +744,9 @@ impl<'a> Emitter<'a> {
         // reconstruct only the host frame outside the value.
         if !self.active_structured_exprs.contains(expr)
             && let Some((rewrite, value)) = self.compose_rewrites.iter().find_map(|rewrite| {
-                if rewrite.actions.len() != 1 {
+                if rewrite.actions.len() != 1
+                    || self.emitted_compose_rewrites.contains(rewrite.owner)
+                {
                     return None;
                 }
                 let ComposeAction::Value(value) = &rewrite.actions[0] else {
@@ -742,6 +756,7 @@ impl<'a> Emitter<'a> {
                     .then_some((rewrite, value))
             })
         {
+            self.emitted_compose_rewrites.claim(rewrite.owner);
             let _active = self.active_structured_exprs.enter(expr);
             let mut out = self.emit_compose_rewrite(rewrite);
             if value.defer_arm_values {

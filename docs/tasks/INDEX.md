@@ -401,7 +401,8 @@
 | TASK-379 | Complete structurally owned lowering and the remaining audit defects | Complete | 2026-09-15 | 2026-09-16 | [TASK-379](./TASK-379-complete-lowering-ownership.md) |
 | TASK-380 | Color match by the construct shape in the TextMate grammar | Complete | 2026-09-15 | 2026-09-16 | [TASK-380](./TASK-380-grammar-construct-shape.md) |
 
+| TASK-381 | Resolve PR 125 structural review findings | Complete | 2026-09-18 | 2026-09-18 | [TASK-381](./TASK-381-structural-review.md) |
+
 ## Next task number
 
-
-**TASK-381**
+**TASK-382**

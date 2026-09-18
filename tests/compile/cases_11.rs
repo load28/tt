@@ -7,8 +7,9 @@ fn a_match_under_a_conditional_operation_in_a_guard_keeps_the_short_circuit() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\nconst x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };\n");
     assert!(out.contains("const $tt_v2 = (v > 0);"), "{out}");
     assert!(out.contains("if ($tt_v2) {"), "{out}");
-    assert!(out.contains("$tt_v1 = $tt_v2 && $tt_v1;"), "{out}");
-    assert!(out.contains("if ($tt_v1) {"), "{out}");
+    assert!(out.contains("$tt_v3 = $tt_v1;"), "{out}");
+    assert!(out.contains("$tt_v3 = $tt_v2;"), "{out}");
+    assert!(out.contains("if ($tt_v3) {"), "{out}");
 }
 
 #[test]
@@ -91,4 +92,16 @@ fn a_recoverable_syntax_error_still_reports_plan_diagnostics() {
         [DiagnosticCode::MatchPlacement, DiagnosticCode::SourceNotTypeScript],
         "{diagnostics:#?}"
     );
+}
+
+#[test]
+fn untyped_try_methods_survive_next_to_tt_constructs() {
+    let out = ok("variant V { A }\ninterface X { try(x); }\n");
+    assert!(out.contains("interface X { try(x); }"), "{out}");
+}
+
+#[test]
+fn sibling_matches_in_a_guard_have_one_complete_evaluation_owner() {
+    let out = ok("const x = match (1) { 1 if (match (2) { 2 => true, _ => false }) && (match (3) { 3 => true, _ => false }) => 10, _ => 20 };\n");
+    assert!(!out.contains("match ("), "{out}");
 }

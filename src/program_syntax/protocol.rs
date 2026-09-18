@@ -624,12 +624,14 @@ pub(super) fn operand_span(
     while let swc_ecma_ast::Expr::Paren(paren) = inner {
         let within = projected_span(paren.expr.span(), source_start);
         if placeholders.contains(&projected_span(paren.span, source_start))
-            || placeholders.contains(&within)
             || source_span_for_projection(segments, within).is_none()
         {
             break;
         }
         inner = &paren.expr;
+        if placeholders.contains(&within) {
+            break;
+        }
     }
     projected_span(inner.span(), source_start)
 }

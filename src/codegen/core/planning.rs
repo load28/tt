@@ -1306,6 +1306,18 @@ impl TargetRewritePlan {
         let consumed_exprs: HashSet<ExprId> = compose_operations()
             .flat_map(|operation| operation.values.iter().copied())
             .chain(loop_operations().flat_map(|operation| operation.values.iter().copied()))
+            // The replacement covers the entire operation, including values
+            // evaluated before its conditional branch (for example its left
+            // operand). Their actions still run, but their authored inline
+            // occurrences must not be appended after the operation's join slot.
+            .chain(compose_values().filter_map(|value| {
+                compose_operations()
+                    .any(|operation| {
+                        operation.parent.start <= value.source.start
+                            && value.source.end <= operation.parent.end
+                    })
+                    .then_some(value.expr)
+            }))
             .chain(
                 compose_values()
                     .filter(|value| {

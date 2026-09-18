@@ -1,5 +1,7 @@
 # TASK-377: Repair compiler boundary and lowering defects
 
+> TASK-381 replaces the fixed-stack-only protection of host AST traversal with stack growth at recursive expression visits.
+
 - **Status**: Complete
 - **Started**: 2026-09-14
 - **Completed**: 2026-09-14

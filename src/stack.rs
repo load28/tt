@@ -2,9 +2,9 @@
 
 use std::thread;
 
-/// Stack reserved for every thread that runs the compiler's recursive
-/// descent, so nesting depth is bounded by this policy rather than by the
-/// platform default of the thread that happened to call in.
+/// Initial stack reserved for compiler threads. Recursive parser and host
+/// expression traversal boundaries grow their stack as needed; this
+/// reservation is not a supported syntax-depth limit.
 pub const COMPILER_STACK_SIZE: usize = 256 * 1024 * 1024;
 
 /// Runs `work` on a thread whose stack is [`COMPILER_STACK_SIZE`]; a panic
@@ -19,6 +19,12 @@ pub fn on_compiler_stack<T: Send>(work: impl FnOnce() -> T + Send) -> T {
             .join()
             .unwrap_or_else(|payload| std::panic::resume_unwind(payload))
     })
+}
+
+/// Grow at recursive compiler traversal boundaries rather than imposing a
+/// syntax-depth limit or relying on the caller's remaining stack.
+pub(crate) fn grow<T>(work: impl FnOnce() -> T) -> T {
+    stacker::maybe_grow(128 * 1024, 2 * 1024 * 1024, work)
 }
 
 #[cfg(test)]

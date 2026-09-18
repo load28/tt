@@ -1,5 +1,7 @@
 # TASK-379: Complete structurally owned lowering and the remaining audit defects
 
+> TASK-381 supersedes Decision 1 for guards: a complete guard owns its evaluation plan; selecting one nested child schedule does not cover sibling values.
+
 - **Status**: Complete
 - **Started**: 2026-09-15
 - **Completed**: 2026-09-16

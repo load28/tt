@@ -543,68 +543,35 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_guard(&self, guard: ExprId, depth: u16) -> (Rope<'a>, Rope<'a>) {
-        let Some((span, value)) = self.guard_value(guard) else {
-            return (Rope::new(), self.emit_expr(guard).trim());
-        };
-        let Some(slot) = self.structured_value_slot(value).cloned() else {
-            return (Rope::new(), self.emit_expr(guard).trim());
-        };
-        let Some(lowered) = self.emit_continued_expr(value, &ValueContinuation::assign(&slot))
-        else {
-            return (Rope::new(), self.emit_expr(guard).trim());
-        };
-        let delivered = self
-            .nested_schedules
-            .get(&value)
-            .and_then(|schedule| schedule.steps().last())
-            .map(|step| step.parent);
-        let mut prelude = Rope::new();
-        if delivered.is_none() {
-            prelude.push_value_declaration(&slot);
-            prelude.push_break(depth);
-        }
-        prelude.append(lowered);
-        prelude.push_break(depth);
-        let test = match delivered {
-            Some(parent) => {
-                let mut out = Rope::new();
-                if span.start < parent.start {
-                    out.append(self.source_range_rope(hir::Span::new(span.start, parent.start)));
-                }
-                out.push_lit(slot);
-                if parent.end < span.end {
-                    out.append(self.source_range_rope(hir::Span::new(parent.end, span.end)));
-                }
-                out.trim()
-            }
-            None => self
-                .source_range_with_value_slots(SourceSpan::from(span), &[value])
-                .trim(),
-        };
-        (prelude, test)
-    }
-
-    fn guard_value(&self, guard: ExprId) -> Option<(hir::Span, ExprId)> {
         let Expr::Sequence(body) = &self.core.exprs[guard.index()] else {
-            return None;
+            return (Rope::new(), self.emit_expr(guard).trim());
         };
-        let span = self.span(self.core.sequence_node(*body)?);
-        let statements = &self.core.bodies[body.index()].statements;
-        let (_, value) = crate::core_ir::sequence_value(statements)?;
-        let value = self.innermost_structured_value(value);
-        self.core.has_statement_form(value).then_some((span, value))
-    }
-
-    fn innermost_structured_value(&self, expr: ExprId) -> ExprId {
-        match &self.core.exprs[expr.index()] {
-            Expr::Sequence(body) => {
-                match crate::core_ir::sequence_value(&self.core.bodies[body.index()].statements) {
-                    Some((_, inner)) => self.innermost_structured_value(inner),
-                    None => expr,
+        let Some(node) = self.core.sequence_node(*body) else {
+            return (Rope::new(), self.emit_expr(guard).trim());
+        };
+        let span = self.span(node);
+        let mut prelude = Rope::new();
+        for rewrite in &self.owner_slot_rewrites {
+            if rewrite.owner == SourceSpan::from(span)
+                && !self.emitted_owner_rewrites.contains(rewrite.expr)
+            {
+                self.emitted_owner_rewrites.mark(rewrite.expr);
+                prelude.append(self.emit_owner_slot_rewrite(rewrite).trim_end());
+                prelude.push_break(depth);
+            }
+        }
+        for rewrite in &self.compose_rewrites {
+            if rewrite.owner == SourceSpan::from(span)
+                && self.emitted_compose_rewrites.claim(rewrite.owner)
+            {
+                let lowered = self.emit_compose_rewrite(rewrite).trim_end();
+                if !lowered.is_empty() {
+                    prelude.append(lowered);
+                    prelude.push_break(depth);
                 }
             }
-            _ => expr,
         }
+        (prelude, self.emit_expr(guard).trim())
     }
 
     /// Delivers one value to its continuation. `close` breaks the line

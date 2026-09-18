@@ -1843,3 +1843,28 @@ fn a_crlf_file_is_written_with_crlf_throughout() {
         );
     }
 }
+
+#[test]
+fn deeply_nested_host_expressions_with_tt_keep_the_server_alive() {
+    let depth = 100_000;
+    let text = format!(
+        "variant X {{ A }}\nconst x = {}1{};\n",
+        "(".repeat(depth),
+        ")".repeat(depth)
+    );
+    let deep =
+        serde_json::json!({"id":1,"method":"check","params":{"text":text,"filename":"deep.tt"}});
+    let next = serde_json::json!({"id":2,"method":"check","params":{"text":"const x = 1;","filename":"next.tt"}});
+    let (lines, status) = server_lines(format!("{deep}\n{next}\n").as_bytes());
+    assert!(status.success(), "{status}: {lines:?}");
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    for (line, id) in lines.iter().zip([1, 2]) {
+        let reply: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(reply["id"], id);
+        assert_eq!(
+            reply["result"]["diagnostics"],
+            serde_json::json!([]),
+            "{reply}"
+        );
+    }
+}
