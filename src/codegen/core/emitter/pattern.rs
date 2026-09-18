@@ -423,7 +423,14 @@ impl<'a> Emitter<'a> {
         let ArmAction::Yield { body, kind } = arm.action else {
             crate::ice::bug!("match arm does not yield")
         };
-        let body_expr = self.core.body_value_expr(body);
+        let body_expr = self.core.body_value_expr(body).or_else(|| {
+            // A nested schedule delivers its complete host expression, including
+            // surrounding calls and conditional operators. A child with its own
+            // function owner cannot stand in for this arm's value.
+            self.core
+                .body_tail_expr(body)
+                .filter(|expr| self.nested_schedules.contains_key(expr))
+        });
         let structured_body = matches!(kind, ArmBodyKind::Expression)
             .then(|| {
                 body_expr.and_then(|expr| {

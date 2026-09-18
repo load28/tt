@@ -186,6 +186,7 @@ pub(crate) fn emit_with_map<'a>(
         compose_rewrites: target.composes,
         loop_test_rewrites: target.loop_tests,
         source_replacements: target.source_replacements,
+        active_capture_sources: RefCell::new(Vec::new()),
         consumed_exprs: target.consumed_exprs,
         arrow_return_rewrites: target.arrow_returns,
         slot_exprs: target.slot_exprs,

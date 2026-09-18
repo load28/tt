@@ -226,7 +226,7 @@ impl BindingRecovery {
 
 /// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
-pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool) -> Rope<'a> {
+pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceKind) -> Rope<'a> {
     let export = match (adt.exported, adt.declared) {
         (true, true) => "export declare ",
         (true, false) => "export ",
@@ -259,6 +259,20 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool) -> Rope<'a> {
         String::new()
     } else {
         format!("<{}>", generic_param_names(&adt.generics).join(", "))
+    };
+    let arrow_generics = if source_kind == crate::SourceKind::Tsx && !adt.generics.is_empty() {
+        let inner = &adt.generics[..adt.generics.len() - 1];
+        let tokens = crate::lexer::lex(inner, 0, inner.len());
+        if tokens
+            .last()
+            .is_some_and(|token| &inner[token.span.start..token.span.end] == ",")
+        {
+            adt.generics.clone()
+        } else {
+            format!("{inner},>")
+        }
+    } else {
+        adt.generics.clone()
     };
     let constructors = adt
         .variants
@@ -317,7 +331,7 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool) -> Rope<'a> {
                         .join(", ");
                     format!(
                         "{}: {}({params}): {}{type_args} => ({{ {object} }}),",
-                        variant.name, adt.generics, adt.name
+                        variant.name, arrow_generics, adt.name
                     )
                 }
             })

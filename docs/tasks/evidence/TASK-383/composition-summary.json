@@ -1,0 +1,11 @@
+{
+  "baseline": "069a5fb",
+  "cases": 1815,
+  "accepted": 776,
+  "failures": {
+    "error: internal compiler error: internal compiler error: validate_order broke the contract that a value is produced before the evaluation that reads it (ValueReadBeforeItIsProduced)": 679,
+    "error[other]: contextual projection lost a successfully lowered module": 256,
+    "error: internal compiler error: internal compiler error: validate_order broke the contract that a source expression evaluated once is evaluated once (EvaluationCountChanged)": 32,
+    "error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch": 72
+  }
+}

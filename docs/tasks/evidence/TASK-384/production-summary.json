@@ -1,0 +1,225 @@
+[
+  {
+    "name": "async-order-service",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: std \u2192 out/tt\nttc: src/main.tt \u2192 out/main.ts\nttc: src/service.tt \u2192 out/service.ts\n",
+    "runExit": 0,
+    "matches": true,
+    "runtimeError": "",
+    "actual": "{\"values\":[{\"kind\":\"Ok\",\"value\":{\"id\":1,\"amount\":10,\"name\":\"user 1\"}},{\"kind\":\"Err\",\"error\":\"missing\"},{\"kind\":\"Err\",\"error\":\"credit\"}],\"events\":[\"find:1\",\"charge:1\",\"dispose:1\",\"find:0\",\"dispose:0\",\"find:2\",\"charge:2\",\"dispose:2\"]}\n"
+  },
+  {
+    "name": "async-parallel-service",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: std \u2192 out/tt\nttc: src/main.tt \u2192 out/main.ts\nttc: src/service.tt \u2192 out/service.ts\n",
+    "runExit": 0,
+    "matches": true,
+    "runtimeError": "",
+    "actual": "[{\"kind\":\"Ok\",\"value\":{\"id\":1,\"total\":10}},{\"kind\":\"Err\",\"error\":\"missing\"},{\"kind\":\"Err\",\"error\":\"credit\"}]\n"
+  },
+  {
+    "name": "transaction-finally-override",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: std \u2192 out/tt\nttc: src/main.tt \u2192 out/main.ts\n",
+    "runExit": 0,
+    "matches": true,
+    "runtimeError": "",
+    "actual": "{\"values\":[{\"kind\":\"Ok\",\"value\":2},{\"kind\":\"Ok\",\"value\":7}],\"events\":[\"work\",\"cleanup\",\"cleanup\"]}\n"
+  },
+  {
+    "name": "async-short-circuit",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n",
+    "runExit": 0,
+    "matches": true,
+    "runtimeError": "",
+    "actual": "{\"values\":[false,10],\"events\":[\"flag\",\"flag\",\"load\",\"arm\"]}\n"
+  },
+  {
+    "name": "result-in-generator-batch",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: std \u2192 out/tt\nttc: src/main.tt \u2192 out/main.ts\n",
+    "runExit": 0,
+    "matches": true,
+    "runtimeError": "",
+    "actual": "{\"values\":[{\"kind\":\"Ok\",\"value\":10},{\"kind\":\"Err\",\"error\":\"skip\"},{\"kind\":\"Ok\",\"value\":20}],\"events\":[1,2]}\n"
+  },
+  {
+    "name": "inference-satisfies-registry-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-satisfies-registry-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-generic-call-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-generic-call-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-generic-inferred-key-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-generic-inferred-key-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-promise-all-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-promise-all-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-mapped-callback-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-mapped-callback-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-readonly-tuple-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-readonly-tuple-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-computed-assignment-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-computed-assignment-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-async-return-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-async-return-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-closure-return-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-closure-return-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-nullish-context-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-nullish-context-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-nested-map-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-nested-map-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-destructured-context-oracle",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  },
+  {
+    "name": "inference-destructured-context-tt",
+    "typeExit": 0,
+    "typeError": "",
+    "buildExit": 0,
+    "buildError": "ttc: src/main.tt \u2192 out/main.ts\n"
+  }
+]

@@ -87,6 +87,7 @@ pub struct HirFile {
 #[derive(Debug, Default)]
 pub struct HirSourceMap {
     node_spans: HashMap<NodeId, Span>,
+    owner_spans: HashMap<NodeId, Span>,
     def_spans: HashMap<DefId, Span>,
     pattern_spans: HashMap<PatternId, Span>,
     ast_origins: HashMap<NodeId, AstOrigin>,
@@ -105,6 +106,19 @@ impl HirSourceMap {
     /// The byte span a node was lowered from.
     pub fn node_span(&self, node: NodeId) -> Option<Span> {
         self.node_spans.get(&node).copied()
+    }
+
+    /// Complete authored extent consumed when relocating a construct. Diagnostic
+    /// spans may name only its head; ownership includes its bodies and delimiters.
+    pub fn node_extent(&self, node: NodeId) -> Option<Span> {
+        self.owner_spans
+            .get(&node)
+            .copied()
+            .or_else(|| self.node_span(node))
+    }
+
+    pub(crate) fn record_owner(&mut self, node: NodeId, span: Span) {
+        self.owner_spans.insert(node, span);
     }
 
     /// The byte span a definition's name sits at (resolver-filled, Phase 2).

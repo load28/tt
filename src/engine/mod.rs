@@ -126,7 +126,14 @@ impl Engine {
             Err(e) => return Err(e.to_string()),
         };
         let (tsconfig, root) = identity_of(&collected, options);
-        self.open_collected(collected, tsconfig, root, options)
+        let mut project = self.open_collected(collected, tsconfig, root, options)?;
+        project.input_roots = inputs
+            .iter()
+            .map(PathBuf::from)
+            .filter(|path| path.is_dir())
+            .filter_map(|path| path.canonicalize().ok())
+            .collect();
+        Ok(project)
     }
 
     /// Resolve an editor buffer's project without filtering out host sources.

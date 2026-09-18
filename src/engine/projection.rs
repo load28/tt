@@ -64,9 +64,9 @@ pub struct ProjectedDocument {
     /// that did not change is never re-parsed for its exports
     /// (`docs/design/compiler-core.md` §11).
     variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
-    /// The file's relative `.tt` imports, parsed once per content version —
-    /// the dependency edges the semantic cache keys off.
-    imports: std::sync::OnceLock<Vec<crate::TtImport>>,
+    /// Relative `.tt` imports collected while projecting this content version.
+    /// Shared by snapshot graph discovery and semantic cache dependencies.
+    imports: Vec<crate::TtImport>,
 }
 
 impl ProjectedDocument {
@@ -81,15 +81,9 @@ impl ProjectedDocument {
         })
     }
 
-    /// The file's relative `.tt` imports, computed on first use.
+    /// The dependency edges of this projected content version.
     pub(crate) fn tt_imports(&self) -> &[crate::TtImport] {
-        self.imports.get_or_init(|| {
-            crate::scan_module_with_kind(
-                &self.source,
-                crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
-            )
-            .imports
-        })
+        &self.imports
     }
 }
 
@@ -158,7 +152,7 @@ impl ProjectedDocument {
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
             variant_symbols: std::sync::OnceLock::new(),
-            imports: std::sync::OnceLock::new(),
+            imports: scan.imports,
         })
     }
 }

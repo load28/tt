@@ -132,7 +132,7 @@ impl ProgramSyntax {
                 source: span.start,
             });
         }
-        let projection = ProjectionBuilder::new(semantic, core, source).build()?;
+        let projection = ProjectionBuilder::new(semantic, core, source, source_kind).build()?;
         let parsed = parse_module(
             &projection.code,
             &projection.source_segments,
@@ -307,7 +307,12 @@ pub(super) struct ProjectionBuilder<'a> {
 }
 
 impl<'a> ProjectionBuilder<'a> {
-    pub(super) fn new(semantic: &'a SemanticFile, core: &'a CoreFile, source: &'a str) -> Self {
+    pub(super) fn new(
+        semantic: &'a SemanticFile,
+        core: &'a CoreFile,
+        source: &'a str,
+        source_kind: crate::SourceKind,
+    ) -> Self {
         Self {
             arm_blocks: HashMap::new(),
             semantic,
@@ -317,7 +322,7 @@ impl<'a> ProjectionBuilder<'a> {
             pending: Vec::new(),
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
-            tokens: crate::lexer::lex(source, 0, source.len()),
+            tokens: crate::lexer::lex_with_kind(source, 0, source.len(), source_kind),
         }
     }
 

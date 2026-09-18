@@ -1,0 +1,11 @@
+declare global { namespace JSX { interface IntrinsicElements { [name: string]: {children?: unknown; [prop: string]: unknown} } } }
+variant Load<T> { Loading, Failed(message: string), Loaded(value: T) }
+type Item = {id: string; title: string; quantity: number; price: number};
+export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>void}) {
+ const filter=''; const setFilter=(value: string) => value;
+ return <section><input value={filter} onChange={(event: {currentTarget: {value: string}})=>setFilter(event.currentTarget.value)}/>{match(state){
+ Loading=><p>Loading</p>,Failed(message)=><p role="alert">{message}</p>,Loaded(value)=>{
+ const items=value.filter(item=>item.title.includes(filter));
+ return <ul>{items.map(item=><li key={item.id}><button onClick={()=>onSelect(item)}>{item.title |> .trim()}</button><strong>{Number(match(item.quantity){0=>0,_=>item.quantity}) + Number(match(item.price){0=>0,_=>item.price})}</strong></li>)}</ul>;
+ }}}<footer>{match(state){Loaded(value)=>value.length,_=>0}} items</footer></section>;
+}

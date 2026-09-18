@@ -144,6 +144,9 @@ impl Lower<'_> {
             Span::new(decl.name_off, decl.name_off + decl.name.len()),
             AstOrigin::VariantDecl,
         );
+        self.hir
+            .source_map
+            .record_owner(node, Self::span(decl.span));
         let mut variants = Vec::with_capacity(decl.cases.len());
         for case in &decl.cases {
             let case_node = self.node(
@@ -471,6 +474,9 @@ impl Lower<'_> {
 
     fn lower_let_else(&mut self, stmt: &ast::LetElseStmt) -> LetElseStmt {
         let node = self.node(Self::span(stmt.head_span), AstOrigin::LetElse);
+        self.hir
+            .source_map
+            .record_owner(node, Self::span(stmt.owner_span));
         // The let-else pattern's alternatives are lowered through the same
         // path as a match arm's ([`Pat::Or`] for several), so it is the
         // same shape to every analysis.
@@ -514,6 +520,9 @@ impl Lower<'_> {
 
     fn lower_if_let(&mut self, stmt: &ast::IfLetStmt) -> IfLetStmt {
         let node = self.node(Self::span(stmt.head_span), AstOrigin::IfLet);
+        self.hir
+            .source_map
+            .record_owner(node, Self::span(stmt.owner_span));
         let lowered: Vec<PatternId> = stmt
             .alternatives
             .iter()

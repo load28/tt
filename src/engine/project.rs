@@ -64,6 +64,8 @@ pub struct Project {
     /// The inputs' `.tt` files — what a `--types` run writes. The TypeScript
     /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
+    pub(super) input_roots: Vec<PathBuf>,
+    dependencies: RefCell<HashSet<PathBuf>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
     /// configured TypeScript program filters these to actual members.
@@ -112,6 +114,8 @@ impl Project {
             tsconfig,
             out_dir,
             requested: collected.into_iter().collect(),
+            input_roots: Vec::new(),
+            dependencies: RefCell::new(HashSet::new()),
             initial,
             sources,
             overlays: HashMap::new(),
@@ -158,7 +162,30 @@ impl Project {
     /// paths. TypeScript later decides which candidates are configured or
     /// reachable. Scanned fresh so a newly created file is seen.
     pub fn scan(&self) -> std::io::Result<Vec<PathBuf>> {
-        project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)
+        let mut candidates = project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)?;
+        candidates.extend(self.requested.iter().filter(|file| file.exists()).cloned());
+        candidates.sort();
+        candidates.dedup();
+        Ok(candidates)
+    }
+
+    /// Source, configuration, and compiler-resolved dependency paths whose
+    /// changes invalidate a project check. Directory membership is rescanned.
+    pub fn watch_paths(&self) -> std::io::Result<Vec<PathBuf>> {
+        let mut paths = project_sources(
+            &self.root,
+            self.out_dir.as_deref(),
+            &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
+        )?;
+        paths.extend(self.dependencies.borrow().iter().cloned());
+        paths.extend(self.requested.iter().cloned());
+        paths.extend(self.cache.keys().cloned());
+        if let Some(config) = &self.tsconfig {
+            paths.push(config.clone());
+        }
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
     }
 
     /// The candidate set the first pass layers, decided when the project was
@@ -169,7 +196,7 @@ impl Project {
         self.initial.clone()
     }
 
-    /// Takes a snapshot of `files` as they are now: overlay text where a
+    /// Takes a snapshot of `files` and their reachable tt imports: overlay text where a
     /// document is open, disk text otherwise. A file whose text is unchanged
     /// since the last snapshot keeps its projection; the rest are
     /// re-projected. A file that cannot lower remains in the snapshot as a
@@ -177,10 +204,41 @@ impl Project {
     /// An I/O failure still blocks the snapshot because no source state is
     /// available to preserve.
     pub fn update(&mut self, files: &[PathBuf]) -> Result<Snapshot, Box<Blocked>> {
+        self.requested.extend(
+            files
+                .iter()
+                .filter(|file| self.input_roots.iter().any(|root| file.starts_with(root)))
+                .cloned(),
+        );
+        if self.tsconfig.is_none() {
+            self.sources = project_sources(&self.root, self.out_dir.as_deref(), TS_EXTENSIONS)
+                .map_err(|error| {
+                    Box::new(Blocked {
+                        path: self.root.clone(),
+                        error: CompileError {
+                            message: error.to_string(),
+                            filename: None,
+                            line: 0,
+                            col: 0,
+                            end_line: 0,
+                            end_col: 0,
+                        },
+                    })
+                })?;
+        }
         let mut projected = Vec::with_capacity(files.len());
         let mut blocked_files = Vec::new();
         let mut cache = HashMap::with_capacity(files.len());
-        for file in files {
+        // Projection already owns each content version's import metadata.
+        // Follow those edges here instead of reading and parsing every input
+        // once for discovery and again for projection.
+        let mut pending = files.to_vec();
+        let mut seen: HashSet<_> = files.iter().cloned().collect();
+        let mut cursor = 0;
+        while cursor < pending.len() {
+            let file = pending[cursor].clone();
+            cursor += 1;
+            let file = &file;
             let text = match self.overlays.get(file) {
                 Some(text) => text.clone(),
                 None => std::fs::read_to_string(file).map_err(|e| {
@@ -202,12 +260,26 @@ impl Project {
                 _ => match ProjectedDocument::project_for_snapshot(file, text) {
                     Ok(doc) => Some(Arc::new(doc)),
                     Err(blocked) => {
+                        discover_imports(
+                            file,
+                            blocked.tt_imports(),
+                            &self.overlays,
+                            &mut pending,
+                            &mut seen,
+                        );
                         blocked_files.push(Arc::new(blocked));
                         None
                     }
                 },
             };
             if let Some(doc) = doc {
+                discover_imports(
+                    file,
+                    doc.tt_imports(),
+                    &self.overlays,
+                    &mut pending,
+                    &mut seen,
+                );
                 cache.insert(file.clone(), doc.clone());
                 projected.push(doc);
             }
@@ -430,6 +502,9 @@ impl Project {
                 }),
             ),
         };
+        self.dependencies
+            .borrow_mut()
+            .extend(answers.dependencies.iter().cloned());
         let declarations = if request.emit_declarations && backend_error.is_none() {
             semantics::match_declarations(snapshot, &answers, &self.root, &self.requested)
         } else {
@@ -481,12 +556,16 @@ pub(crate) fn project_sources(
             continue;
         }
         for entry in std::fs::read_dir(&dir)? {
-            let path = entry?.path();
+            let entry = entry?;
+            let path = entry.path();
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             if name.starts_with('.') || name == "node_modules" {
                 continue;
             }
-            if path.is_dir() {
+            // Directory entries already carry the file type on supported
+            // filesystems. Only symlinks need a target metadata lookup.
+            let kind = entry.file_type()?;
+            if kind.is_dir() || (kind.is_symlink() && path.is_dir()) {
                 stack.push(path);
             } else if path
                 .extension()
@@ -615,4 +694,34 @@ fn source_extensions(include_ts: bool) -> String {
         names.extend(TS_EXTENSIONS.iter().map(|e| format!(".{e}")));
     }
     names.join(", ")
+}
+
+/// Follow explicit tt edges from the projection's content-version metadata.
+/// TypeScript still owns admission; discovery only supplies candidate modules.
+fn discover_imports(
+    file: &Path,
+    imports: &[crate::TtImport],
+    overlays: &HashMap<PathBuf, String>,
+    pending: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+) {
+    for import in imports {
+        if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
+            continue;
+        }
+        let target = file
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(&import.specifier);
+        let target = super::paths::canonical(&target).ok().or_else(|| {
+            super::normalize_document_path(&target)
+                .ok()
+                .filter(|path| overlays.contains_key(path))
+        });
+        if let Some(target) = target
+            && seen.insert(target.clone())
+        {
+            pending.push(target);
+        }
+    }
 }

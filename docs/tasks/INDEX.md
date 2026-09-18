@@ -407,6 +407,12 @@
 
 | TASK-382 | Review and rebase native diagnostic focus scheduling | Complete | 2026-09-18 | 2026-09-18 | [TASK-382](./TASK-382-native-diagnostic-review.md) |
 
+| TASK-383 | Audit tt and ttx developer workflows | Complete | 2026-09-18 | 2026-09-18 | [TASK-383](./TASK-383-developer-workflow-audit.md) |
+
+| TASK-384 | Repair developer workflow contracts | Complete | 2026-09-18 | 2026-09-18 | [TASK-384](./TASK-384-developer-workflow-repairs.md) |
+
+| TASK-385 | Reuse projection imports during graph discovery | Complete | 2026-09-18 | 2026-09-18 | [TASK-385](./TASK-385-projection-import-discovery.md) |
+
 ## Next task number
 
-**TASK-383**
+**TASK-386**

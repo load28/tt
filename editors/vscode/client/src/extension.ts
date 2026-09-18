@@ -32,7 +32,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 
   const watchers = [
     workspace.createFileSystemWatcher("**/target/{debug,release}/{ttc,ttc.exe}"),
-    workspace.createFileSystemWatcher("**/*.{tt,ttx,ts,tsx,json}"),
+    workspace.createFileSystemWatcher("**/*.{tt,ttx,ts,tsx,mts,cts,json}"),
   ];
   context.subscriptions.push(...watchers);
   client = new LanguageClient(

@@ -115,11 +115,20 @@ function lineReader() {
  * takes its place, including in directory listings, so a `tsconfig.json`
  * that globs a directory picks it up exactly as it would a hand-written file.
  */
-function layeredFileSystem(files, dirs) {
+function diskVersion(file) {
+  try { const stat = fs.statSync(file); return `${stat.mtimeMs}:${stat.size}`; }
+  catch { return null; }
+}
+
+function layeredFileSystem(files, dirs, configFiles, dependencies, listings) {
   return {
     fileExists: (f) => (files.has(f) ? true : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
-    readFile: (f) => (files.has(f) ? files.get(f) : undefined),
+    readFile: (f) => {
+      if (files.has(f)) return files.get(f);
+      if (!dependencies.has(f)) dependencies.set(f, diskVersion(f));
+      return configFiles.get(f);
+    },
     directoryExists: (d) => (dirs.has(d) ? true : undefined),
     getAccessibleEntries: (d) => {
       let real = { files: [], directories: [] };
@@ -131,6 +140,7 @@ function layeredFileSystem(files, dirs) {
       } catch {
         if (!dirs.has(d)) return undefined;
       }
+      listings.set(d, new Set([...real.files, ...real.directories]));
       const here = [...files.keys()].filter((f) => path.dirname(f) === d);
       const names = new Set(real.files.map((f) => f));
       for (const f of here) {
@@ -180,11 +190,14 @@ async function main() {
   // soon as the snapshot is told the file changed.
   const files = new Map();
   const dirs = new Set();
+  const configFiles = new Map();
+  const dependencies = new Map();
+  const listings = new Map();
   const api = new API({
     cwd: open.cwd,
     // The client runs the executable shipped beside it — the one it was
     // built against, and the same one ttc drives as a language server.
-    fs: layeredFileSystem(files, dirs),
+    fs: layeredFileSystem(files, dirs, configFiles, dependencies, listings),
   });
   writeLine(JSON.stringify({ ok: true }));
 
@@ -226,6 +239,47 @@ async function main() {
       contextualSlots: [],
     };
     const changes = serve(files, dirs, job.modules ?? []);
+    for (const [file, previous] of dependencies) {
+      const current = diskVersion(file);
+      if (current !== previous) {
+        (current === null ? changes.deleted : previous === null ? changes.created : changes.changed).push(file);
+        dependencies.set(file, current);
+      }
+    }
+    for (const [directory, previous] of listings) {
+      let current;
+      try { current = new Set(fs.readdirSync(directory)); } catch { current = new Set(); }
+      for (const name of current) if (!previous.has(name)) changes.created.push(path.join(directory, name));
+      for (const name of previous) if (!current.has(name)) changes.deleted.push(path.join(directory, name));
+      listings.set(directory, current);
+    }
+    if (open.tsconfig) {
+      // Parse JSONC and discover extended configurations through TypeScript.
+      // Translate the schema's file patterns through the same path projection
+      // as modules; never alter source strings or infer membership from a scan.
+      const previous = new Map(configFiles);
+      configFiles.clear();
+      api.parseConfigFile(open.tsconfig);
+      for (const file of [...dependencies.keys()]) {
+        if (!file.endsWith(".json") || !fs.existsSync(file)) continue;
+        const { config, error } = api.readConfigFile(file);
+        if (error || !config || typeof config !== "object") continue;
+        let changed = false;
+        for (const key of ["files", "include", "exclude"]) {
+          if (!Array.isArray(config[key])) continue;
+          config[key] = config[key].map(entry => {
+            if (typeof entry !== "string") return entry;
+            const suffix = entry.endsWith(".ttx") ? ".tsx" : entry.endsWith(".tt") ? ".ts" : "";
+            changed ||= suffix !== "";
+            return entry + suffix;
+          });
+        }
+        if (changed) configFiles.set(file, JSON.stringify(config));
+      }
+      for (const file of new Set([...previous.keys(), ...configFiles.keys()])) {
+        if (previous.get(file) !== configFiles.get(file)) changes.changed.push(file);
+      }
+    }
     // With a `tsconfig.json` the project is the user's own. Without one —
     // a workspace that never configured TypeScript — the modules are opened
     // directly and the compiler infers a project for them, which is what an
@@ -327,7 +381,7 @@ async function main() {
       const node = checker.typeToTypeNode(expected, declaration);
       if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
     }
-    if (job.contextualOnly) return out;
+    if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return out; }
     for (const d of project.program.getSemanticDiagnostics()) {
       if (!d.fileName) continue;
       const mismatch = contextualMismatch(project, checker, d, isExpression);
@@ -518,6 +572,7 @@ async function main() {
         out.declarations.push({ path, text: file.text });
       }
     }
+    out.dependencies = [...dependencies.keys(), ...listings.keys()];
     return out;
   }
 }

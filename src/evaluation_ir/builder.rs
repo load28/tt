@@ -272,7 +272,12 @@ impl EvaluationBuilder<'_> {
                 RegionPlacement::Host { exits, .. } | RegionPlacement::Nested { exits, .. } => {
                     exits.iter().any(|exit| {
                         exit.argument.is_some_and(|argument| {
-                            argument.start <= binding.source.start
+                            // Lexical containment alone crosses callbacks inside a
+                            // returned value. Only the host owning the whole return
+                            // argument can transfer evaluation to this exit.
+                            binding.owner.span.start <= argument.start
+                                && argument.end <= binding.owner.span.end
+                                && argument.start <= binding.source.start
                                 && binding.source.end <= argument.end
                         })
                     })

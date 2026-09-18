@@ -114,6 +114,8 @@ export const unpluginFactory = (options = {}) => {
   const compiler = options.compiler ?? defaultCompiler();
   const verify = options.verify ?? true;
   const sourcemap = options.sourcemap ?? true;
+  const dependenciesByModule = new Map();
+  let devServer;
 
   return {
     name: "@openload28/unplugin-tt",
@@ -136,6 +138,14 @@ export const unpluginFactory = (options = {}) => {
       }
       if (!source.endsWith(".tt") && !source.endsWith(".ttx")) return null;
 
+      if (!path.isAbsolute(source) && !source.startsWith(".")) {
+        // Package exports and aliases belong to the host resolver.
+        if (typeof this.resolve !== "function") return null;
+        return this.resolve(source, importer, { skipSelf: true }).then(resolved => {
+          if (!resolved || resolved.external || !/\.ttx?$/.test(resolved.id)) return resolved;
+          return { ...resolved, id: `${resolved.id}${sourceSuffix(resolved.id)}` };
+        });
+      }
       const file = path.isAbsolute(source)
         ? source
         : importer === undefined || importer === null
@@ -163,9 +173,15 @@ export const unpluginFactory = (options = {}) => {
       if (sourcemap) args.push("--source-map", "inline");
       args.push(file);
 
+      this.addWatchFile(file);
+      // Compiler metadata includes erased type imports and configuration reads.
+      // Register dependencies before loading so a failed build can recover too.
       try {
+        const metadata = await run(compiler, ["--dependencies", file], { maxBuffer: 16 * 1024 * 1024 });
+        const dependencies = JSON.parse(metadata.stdout);
+        dependenciesByModule.set(id, new Set(dependencies));
+        for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
         const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
-        this.addWatchFile(file);
         return detachInlineSourceMap(stdout);
       } catch (error) {
         // ttc reports `file:line:col: message` on stderr; surface that as
@@ -176,7 +192,40 @@ export const unpluginFactory = (options = {}) => {
       }
     },
 
+    watchChange(file) {
+      if (!devServer) return;
+      for (const environment of Object.values(devServer.environments ?? { client: devServer })) {
+        for (const [id, dependencies] of dependenciesByModule) {
+          if (!dependencies.has(file)) continue;
+          const module = environment.moduleGraph.getModuleById(id);
+          if (module) environment.moduleGraph.invalidateModule(module);
+        }
+      }
+    },
+    vite: {
+      configureServer(server) { devServer = server; },
+      handleHotUpdate(context) {
+        const modules = new Set(context.modules);
+        for (const [id, dependencies] of dependenciesByModule) {
+          if (!dependencies.has(context.file)) continue;
+          const module = context.server.moduleGraph.getModuleById(id);
+          if (module) {
+            context.server.moduleGraph.invalidateModule(module);
+            modules.add(module);
+          }
+        }
+        return [...modules];
+      },
+    },
     esbuild: {
+      setup(build) {
+        build.onResolve({ filter: /\.ttx?$/ }, async args => {
+          if (args.pluginData?.ttResolving || path.isAbsolute(args.path) || args.path.startsWith(".")) return;
+          const resolved = await build.resolve(args.path, { importer: args.importer, resolveDir: args.resolveDir, kind: args.kind, pluginData: { ttResolving: true } });
+          if (resolved.errors.length || resolved.external || !/\.ttx?$/.test(resolved.path)) return resolved;
+          return { path: `${resolved.path}${sourceSuffix(resolved.path)}`, namespace: "@openload28/unplugin-tt" };
+        });
+      },
       // esbuild resolves and loads through its own filters, and its `load`
       // may only return JavaScript — so narrow the filters to our ids and
       // name the loader for the TypeScript ttc emits.

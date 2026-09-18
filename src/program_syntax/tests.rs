@@ -229,9 +229,10 @@ fn a_projected_byte_maps_only_through_copied_segments() {
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
     let core = crate::core_ir::lower_semantic(&semantic, source);
-    let projection = ProjectionBuilder::new(&semantic, &core, source)
-        .build()
-        .expect("projection");
+    let projection =
+        ProjectionBuilder::new(&semantic, &core, source, crate::SourceKind::TypeScript)
+            .build()
+            .expect("projection");
     let segments = &projection.source_segments;
     let placeholder = segments
         .iter()
