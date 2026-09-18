@@ -64,7 +64,7 @@ impl CoreFile {
             Expr::ResultRegion(_) => true,
             Expr::Propagate(_) => true,
             Expr::Sequence(body) => self
-                .body_value_expr(*body)
+                .body_tail_expr(*body)
                 .is_some_and(|inner| self.has_statement_form(inner)),
             // An optional postfix owns the conditional reach of every value
             // in its tail. Those values must stay at an expression boundary
@@ -84,10 +84,29 @@ impl CoreFile {
         }
     }
 
-    /// The value a sequence body delivers: its last value statement, when
-    /// nothing but source trivia follows it.
+    /// The value of the entire sequence: one expression surrounded only by
+    /// source trivia, with no enclosing host expression or statement frame.
     pub(crate) fn body_value_expr(&self, body: BodyId) -> Option<ExprId> {
-        sequence_value(&self.bodies[body.index()].statements).map(|(_, expr)| expr)
+        self.bodies[body.index()].value.map(|(_, expr)| expr)
+    }
+
+    /// The last tt child in a source sequence. This is a scheduling anchor,
+    /// not necessarily the value of the entire enclosing host expression.
+    pub(crate) fn body_tail_expr(&self, body: BodyId) -> Option<ExprId> {
+        let statements = &self.bodies[body.index()].statements;
+        let (index, expr) =
+            statements
+                .iter()
+                .enumerate()
+                .rev()
+                .find_map(|(index, statement)| match statement {
+                    Statement::Expr(expr) => Some((index, *expr)),
+                    _ => None,
+                })?;
+        statements[index + 1..]
+            .iter()
+            .all(|statement| matches!(statement, Statement::Opaque(_)))
+            .then_some(expr)
     }
 
     fn expr_requires_host(&self, expr: ExprId) -> bool {
@@ -103,24 +122,11 @@ impl CoreFile {
     }
 }
 
-/// The index and expression of the value a statement sequence delivers.
-pub(crate) fn sequence_value(statements: &[Statement]) -> Option<(usize, ExprId)> {
-    let (index, expr) = statements
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(index, statement)| match statement {
-            Statement::Expr(expr) => Some((index, *expr)),
-            _ => None,
-        })?;
-    statements[index + 1..]
-        .iter()
-        .all(|statement| matches!(statement, Statement::Opaque(_)))
-        .then_some((index, expr))
-}
-
 #[derive(Debug)]
 pub(crate) struct Body {
+    /// A complete Core value, surrounded only by lexical trivia. Opaque host
+    /// expressions containing tt children do not deliver one of those children.
+    pub value: Option<(usize, ExprId)>,
     pub statements: Vec<Statement>,
 }
 

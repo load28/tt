@@ -90,7 +90,20 @@ pub(crate) fn lex_with_kind(
     end: usize,
     source_kind: SourceKind,
 ) -> Vec<Token> {
+    lex_region(src_str, start, end, source_kind, false).0
+}
+
+/// Lex a JavaScript expression container in the same lexical mode as its file.
+/// Nested JSX, templates, strings and regexes own their delimiters.
+fn lex_region(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+    braced: bool,
+) -> (Vec<Token>, usize) {
     let src = src_str.as_bytes();
+    let mut brace_depth = 0usize;
     // Significant tokens run about one per six source bytes across real
     // TypeScript, so sizing up front spares the repeated doubling that
     // dominated lexing on large files.
@@ -105,6 +118,9 @@ pub(crate) fn lex_with_kind(
 
     while i < end {
         let c = src[i];
+        if braced && c == b'}' && brace_depth == 0 {
+            return (tokens, i);
+        }
 
         if is_ws(c) {
             i += 1;
@@ -186,6 +202,14 @@ pub(crate) fn lex_with_kind(
             continue;
         }
 
+        if braced {
+            if c == b'{' {
+                brace_depth += 1;
+            }
+            if c == b'}' {
+                brace_depth -= 1;
+            }
+        }
         let (kind, len) = match (c, at(src, i + 1, end)) {
             (b'=', Some(b'>')) => (TokenKind::Arrow, 2),
             (b'|', Some(b'|')) => (TokenKind::OrOr, 2),
@@ -202,7 +226,22 @@ pub(crate) fn lex_with_kind(
         prev_word = "";
         i += len;
     }
-    tokens
+    (tokens, end)
+}
+
+struct JsxExpression {
+    open: usize,
+    close: usize,
+    tokens: Vec<Token>,
+}
+
+fn jsx_expression(src: &str, open: usize, end: usize, kind: SourceKind) -> Option<JsxExpression> {
+    let (tokens, close) = lex_region(src, open + 1, end, kind, true);
+    (close < end).then_some(JsxExpression {
+        open,
+        close,
+        tokens,
+    })
 }
 
 /// Finds a JSX namespace name followed by member access (`<ns:name.member`).
@@ -310,16 +349,17 @@ fn lex_template(
             // user is editing. Treating the remainder as an interpolation
             // would give the parser an overlapping span when recovery finds a
             // nested expression, violating source-preservation in codegen.
-            let Some(close) = find_matching(src, i + 1, end) else {
+            let (tokens, close) = lex_region(src_str, i + 2, end, source_kind, true);
+            if close == end {
                 break;
-            };
+            }
             push_raw(&mut parts, raw_start, i);
             parts.push(TplPart::Interp {
                 span: Span {
                     start: i + 2,
                     end: close,
                 },
-                tokens: lex_with_kind(src_str, i + 2, close, source_kind),
+                tokens,
             });
             i = (close + 1).min(end);
             raw_start = i;
@@ -357,14 +397,8 @@ fn scan_jsx(
     source_kind: SourceKind,
 ) -> Option<ScannedJsx> {
     let src = src_str.as_bytes();
-    let opening = scan_jsx_opening(src, start, end)?;
-    let mut tokens = jsx_region_tokens(
-        src_str,
-        start,
-        opening.end,
-        &opening.expressions,
-        source_kind,
-    );
+    let opening = scan_jsx_opening(src_str, start, end, source_kind)?;
+    let mut tokens = jsx_region_tokens(start, opening.end, opening.expressions);
     let mut i = opening.end;
     if opening.self_closing {
         return Some(ScannedJsx { end: i, tokens });
@@ -406,7 +440,8 @@ fn scan_jsx(
             continue;
         }
         if src[i] == b'{' {
-            let close = find_matching(src, i, end)?;
+            let expression = jsx_expression(src_str, i, end, source_kind)?;
+            let close = expression.close;
             if raw_start < i + 1 {
                 tokens.push(Token {
                     kind: TokenKind::JsxRaw,
@@ -416,7 +451,7 @@ fn scan_jsx(
                     },
                 });
             }
-            tokens.extend(lex_with_kind(src_str, i + 1, close, source_kind));
+            tokens.extend(expression.tokens);
             tokens.push(Token {
                 kind: TokenKind::JsxRaw,
                 span: Span {
@@ -432,16 +467,15 @@ fn scan_jsx(
     }
 }
 
-fn jsx_region_tokens(
-    src_str: &str,
-    start: usize,
-    end: usize,
-    expressions: &[(usize, usize)],
-    source_kind: SourceKind,
-) -> Vec<Token> {
+fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) -> Vec<Token> {
     let mut tokens = Vec::new();
     let mut raw_start = start;
-    for &(open, close) in expressions {
+    for JsxExpression {
+        open,
+        close,
+        tokens: expression_tokens,
+    } in expressions
+    {
         tokens.push(Token {
             kind: TokenKind::JsxRaw,
             span: Span {
@@ -449,7 +483,7 @@ fn jsx_region_tokens(
                 end: open + 1,
             },
         });
-        tokens.extend(lex_with_kind(src_str, open + 1, close, source_kind));
+        tokens.extend(expression_tokens);
         tokens.push(Token {
             kind: TokenKind::JsxRaw,
             span: Span {
@@ -475,12 +509,18 @@ struct JsxOpening {
     end: usize,
     name: Option<String>,
     self_closing: bool,
-    expressions: Vec<(usize, usize)>,
+    expressions: Vec<JsxExpression>,
 }
 
 /// Returns `(end, opening_name, self_closing)`. `None` means the `<` starts
 /// ordinary TypeScript syntax, not a complete JSX opening construct.
-fn scan_jsx_opening(src: &[u8], start: usize, end: usize) -> Option<JsxOpening> {
+fn scan_jsx_opening(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+) -> Option<JsxOpening> {
+    let src = src_str.as_bytes();
     let mut i = start + 1;
     if at(src, i, end) == Some(b'>') {
         return Some(JsxOpening {
@@ -519,8 +559,9 @@ fn scan_jsx_opening(src: &[u8], start: usize, end: usize) -> Option<JsxOpening> 
                 });
             }
             (Some(b'{'), _) => {
-                let close = find_matching(src, i, end)?;
-                expressions.push((i, close));
+                let expression = jsx_expression(src_str, i, end, source_kind)?;
+                let close = expression.close;
+                expressions.push(expression);
                 i = close + 1;
             }
             (Some(b), _) if b == b'"' || b == b'\'' => i = scan_string(src, i, end),
@@ -537,8 +578,9 @@ fn scan_jsx_opening(src: &[u8], start: usize, end: usize) -> Option<JsxOpening> 
                     match at(src, i, end)? {
                         b'"' | b'\'' => i = scan_string(src, i, end),
                         b'{' => {
-                            let close = find_matching(src, i, end)?;
-                            expressions.push((i, close));
+                            let expression = jsx_expression(src_str, i, end, source_kind)?;
+                            let close = expression.close;
+                            expressions.push(expression);
                             i = close + 1;
                         }
                         _ => return None,

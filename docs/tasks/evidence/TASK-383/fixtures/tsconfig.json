@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "noEmit": true
+  },
+  "include": [
+    "jsx-coverage.*"
+  ]
+}

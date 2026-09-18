@@ -124,6 +124,8 @@ pub(crate) struct LoweringPlan {
     owners: Vec<HostRewrite>,
     for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
+    /// Earlier materializations substituted when an enclosing source is captured.
+    capture_dependencies: HashMap<ValueSlotId, Vec<(SourceSpan, ValueSlotId)>>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,

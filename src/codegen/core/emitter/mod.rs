@@ -22,6 +22,7 @@ pub(super) struct Emitter<'a> {
     pub(super) for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     pub(super) compose_rewrites: Vec<ComposeRewrite>,
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
+    pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     pub(super) consumed_exprs: HashSet<ExprId>,
     pub(super) arrow_return_rewrites: Vec<ArrowReturnRewrite>,
@@ -81,10 +82,6 @@ pub(super) struct ActiveExprStack {
 impl ActiveExprStack {
     fn contains(&self, expr: ExprId) -> bool {
         self.exprs.borrow().contains(&expr)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.exprs.borrow().is_empty()
     }
 
     fn enter(&self, expr: ExprId) -> ActiveExprGuard<'_> {

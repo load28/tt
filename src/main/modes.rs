@@ -289,3 +289,42 @@ pub(super) fn json_str(s: &str) -> String {
     out.push('"');
     out
 }
+
+/// Report the project dependencies consumed by compilation, including type-only
+/// modules, configuration inheritance and module-resolution directories.
+pub(super) fn dependencies_mode(
+    inputs: &[String],
+    config: Option<&Path>,
+    node: Option<&Path>,
+) -> ExitCode {
+    let result = (|| -> Result<Vec<PathBuf>, String> {
+        let engine = ttc::engine::Engine::new(node.map(Path::to_path_buf));
+        let mut project = engine.open_project(
+            inputs,
+            &ttc::engine::ProjectOptions {
+                tsconfig: config.map(Path::to_path_buf),
+                out_dir: None,
+            },
+        )?;
+        let snapshot = project
+            .update(&project.initial_files())
+            .map_err(|error| error.error.message.clone())?;
+        let checked = project.check(&snapshot, &ttc::engine::CheckRequest::default())?;
+        if let Some(error) = checked.backend_error
+            && error.kind == ttc::engine::BackendErrorKind::Internal
+        {
+            return Err(error.message);
+        }
+        project.watch_paths().map_err(|error| error.to_string())
+    })();
+    match result {
+        Ok(paths) => {
+            crate::out::line(&serde_json::json!(paths).to_string());
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("ttc: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}

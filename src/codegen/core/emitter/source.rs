@@ -66,7 +66,7 @@ impl<'a> Emitter<'a> {
     // A host replacement consumes the authored occurrence, never the source
     // used to emit a value inside that occurrence. In particular a logical
     // operation also contains its separately evaluated condition value.
-    fn replacement_contains_active_value(&self, source: SourceSpan) -> bool {
+    pub(super) fn replacement_contains_active_value(&self, source: SourceSpan) -> bool {
         self.active_structured_exprs
             .exprs
             .borrow()
@@ -75,6 +75,13 @@ impl<'a> Emitter<'a> {
                 let (_, start, _, end) = self.value_anchor(*expr);
                 source.start <= start && end <= source.end
             })
+    }
+
+    fn capture_is_active(&self, replacement: SourceSpan) -> bool {
+        self.active_capture_sources
+            .borrow()
+            .iter()
+            .any(|active| replacement.start <= active.start && active.end <= replacement.end)
     }
 
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
@@ -211,19 +218,19 @@ impl<'a> Emitter<'a> {
             }
             if let Some(replacement) = self.source_replacements.iter().find(|replacement| {
                 if replacement.anchor.is_some() {
-                    self.conditional_region_depth.get() == 0
+                    !replacement
+                        .anchor
+                        .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                        && self.conditional_region_depth.get() == 0
                         && self.loop_region_depth.get() == 0
                         && !self.replacement_contains_active_value(replacement.source)
-                        // A claimed call frame erases source only from the
-                        // remaining statement walk; a sibling's structural
-                        // emission still reads its own subject and arm text
-                        // inside the frame.
-                        && (!replacement.claim || self.active_structured_exprs.is_empty())
                         && replacement.source.start <= cursor
                         && cursor < replacement.source.end
                 } else {
-                    replacement.source.start <= cursor
+                    !self.capture_is_active(replacement.source)
+                        && replacement.source.start <= cursor
                         && cursor < replacement.source.end
+                        && !self.replacement_contains_active_value(replacement.source)
                         && !self.inside_captured_value(replacement.source, span.start, span.end)
                 }
             }) {
@@ -281,8 +288,7 @@ impl<'a> Emitter<'a> {
                     (replacement.anchor.is_none()
                         || (self.conditional_region_depth.get() == 0
                             && self.loop_region_depth.get() == 0
-                            && !self.replacement_contains_active_value(replacement.source)
-                            && (!replacement.claim || self.active_structured_exprs.is_empty())))
+                            && !self.replacement_contains_active_value(replacement.source)))
                         && cursor < replacement.source.start
                         && replacement.source.start < span.end
                 })
@@ -544,6 +550,35 @@ impl<'a> Emitter<'a> {
     ) -> Rope<'a> {
         let mut out = Rope::new();
         for statement in statements {
+            let relocated_node = match statement {
+                Statement::Decision(decision) => Some(decision.extent),
+                Statement::Propagate(propagate) => Some(propagate.owner),
+                Statement::Adt(adt) => Some(adt.node),
+                _ => None,
+            };
+            if let Some(node) = relocated_node {
+                let span = self
+                    .semantic
+                    .hir
+                    .source_map
+                    .node_extent(node)
+                    .expect("statement extent");
+                if self.source_replacements.iter().any(|capture| {
+                    (capture.anchor.is_none()
+                        || (!capture.claim
+                            && self.conditional_region_depth.get() == 0
+                            && self.loop_region_depth.get() == 0))
+                        && capture.source.start <= span.start
+                        && span.end <= capture.source.end
+                        && !self.capture_is_active(capture.source)
+                        && !self.replacement_contains_active_value(capture.source)
+                        && !capture
+                            .anchor
+                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                }) {
+                    continue;
+                }
+            }
             match statement {
                 Statement::Opaque(node) => out.append(self.source_rope_with_edits(*node, edits)),
                 Statement::Adt(adt) => {
@@ -556,7 +591,11 @@ impl<'a> Emitter<'a> {
                         span.start,
                         span.end,
                         span.end,
-                        emit_adt(adt, self.ambient_items.contains(&adt.node)),
+                        emit_adt(
+                            adt,
+                            self.ambient_items.contains(&adt.node),
+                            self.source_kind,
+                        ),
                     );
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
@@ -670,7 +709,7 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
         let statements = &self.core.bodies[body.index()].statements;
-        if let Some((value_index, value)) = crate::core_ir::sequence_value(statements)
+        if let Some((value_index, value)) = self.core.bodies[body.index()].value
             && statements
                 .iter()
                 .enumerate()
@@ -731,6 +770,58 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
+        // A structured expression can own the first byte of a host region.
+        // Enter that region before substituting any captured source inside it,
+        // just as the opaque-source traversal does at the same boundary.
+        if let Some(span) = structured_expr_span(self.semantic, self.core, expr)
+            && let Some(rewrite) = self.compose_rewrites.iter().find(|rewrite| {
+                rewrite.owner.start == span.start
+                    && !self.emitted_compose_rewrites.contains(rewrite.owner)
+                    && !rewrite.actions.iter().any(|action| match action {
+                        ComposeAction::Value(value) => {
+                            self.active_structured_exprs.contains(value.expr)
+                        }
+                        ComposeAction::Operation(operation) => operation
+                            .values
+                            .iter()
+                            .any(|value| self.active_structured_exprs.contains(*value)),
+                    })
+            })
+        {
+            self.emitted_compose_rewrites.claim(rewrite.owner);
+            let mut out = self.emit_compose_rewrite(rewrite);
+            out.append(self.emit_expr(expr));
+            if rewrite.owner_kind == HostOwnerKind::ArrowExpression && span.end == rewrite.owner.end
+            {
+                out.append(self.emit_compose_suffix(rewrite));
+            }
+            return out;
+        }
+        // A source capture owns complete tt expressions as well as opaque
+        // chunks. Substitute the value at its authored occurrence, rather
+        // than reconstructing its operators around already captured children.
+        if !matches!(
+            self.core.exprs[expr.index()],
+            Expr::Opaque(_) | Expr::Sequence(_)
+        ) && !self.active_structured_exprs.contains(expr)
+            && let Some(span) = structured_expr_span(self.semantic, self.core, expr)
+            && let Some(capture) = self.source_replacements.iter().find(|capture| {
+                (capture.anchor.is_none()
+                    || (!capture.claim
+                        && self.conditional_region_depth.get() == 0
+                        && self.loop_region_depth.get() == 0))
+                    && capture.source.start <= span.start
+                    && span.end <= capture.source.end
+                    && !self.capture_is_active(capture.source)
+                    && !self.replacement_contains_active_value(capture.source)
+            })
+        {
+            let mut out = Rope::new();
+            if span.start == capture.source.start {
+                out.push_lit(capture.slot.clone());
+            }
+            return out;
+        }
         // A value a conditional operation consumed is emitted by the
         // operation's region; its inline position sits inside the replaced
         // operation span and prints nothing.

@@ -1,0 +1,53 @@
+[
+  {
+    "name": "react-cart-safe",
+    "typed": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "bundled": {
+      "passed": true,
+      "run": {
+        "exit": 0,
+        "stdout": "<section><input value=\"\"/><ul><li><button>Apple</button><strong>10</strong></li></ul><footer>1 items</footer></section>\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "name": "react-cart-summary",
+    "typed": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "bundled": {
+      "passed": true,
+      "run": {
+        "exit": 0,
+        "stdout": "<section><input value=\"\"/><ul><li><button>Apple</button><strong>7</strong></li></ul><footer>1 items</footer></section>\n",
+        "stderr": ""
+      }
+    }
+  },
+  {
+    "name": "relocatable-library",
+    "typed": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    "built": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": "ttc: src/api.tt \u2192 out/api.ts\nttc: src/main.tt \u2192 out/main.ts\n"
+    },
+    "emitted": "// @generated from main.tt by ttc \u2014 do not edit directly.\nimport {register} from './api.js';declare const flag:boolean;let $tt_v0: number;\nconst $tt_v1 = (register);\n{\n  const $tt_m = flag;\n  switch ($tt_m) {\n    case true: $tt_v0 = 0; break;\n    case false: $tt_v0 = 1; break;\n    default: throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));\n  }\n}\nexport const handler=$tt_v1(($tt_v0 === 0 ? ({kind:'handler',run:user=>user.id}) : ({kind:'handler',run:user=>user.id.toUpperCase()})));\n",
+    "standalone": {
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    }
+  }
+]

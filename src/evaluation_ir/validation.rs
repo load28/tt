@@ -248,6 +248,17 @@ impl EvaluationFile {
                             }
                         }
                         for earlier in &materialized {
+                            // A completed child capture is a dependency of a later
+                            // enclosing capture: emission reads its slot, not its source.
+                            if plan
+                                .capture_dependencies
+                                .get(target)
+                                .is_some_and(|dependencies| {
+                                    dependencies.iter().any(|(span, _)| span == earlier)
+                                })
+                            {
+                                continue;
+                            }
                             if overlaps(*source, *earlier) {
                                 return Err(InternalCompilerError::new(
                                     stage,

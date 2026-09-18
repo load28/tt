@@ -1,0 +1,35 @@
+[
+  {
+    "name": "workspace-package-tt-import",
+    "passed": true
+  },
+  {
+    "name": "workspace-package-ts-control",
+    "passed": true
+  },
+  {
+    "name": "type-only-variant-hmr",
+    "noticed": true,
+    "watched": {
+      "/Users/seominyong/Downloads/source/tt/target/audit-383/bundler": [
+        "type-only-hmr"
+      ],
+      "/Users/seominyong/Downloads/source/tt/target/audit-383/bundler/type-only-hmr": [
+        "package.json",
+        "src",
+        "tsconfig.json"
+      ],
+      "/Users/seominyong/Downloads/source/tt/target/audit-383/bundler/type-only-hmr/src": [
+        "main.tt",
+        "model.tt"
+      ]
+    },
+    "changed": {
+      "error": "error[match-not-exhaustive]: match on variant State (imported from \"./model.tt\") is not exhaustive: missing \"Loading\"\n --> /Users/seominyong/Downloads/source/tt/target/audit-383/bundler/type-only-hmr/src/main.tt:1:79\n  |\n1 | import type {State} from \"./model.tt\"; export function render(s:State){return match(s){Ready(value)=>value,Empty=>0};}\n  |                                                                               ^^^^^^^^\n  |\n  = help: add the missing arms: `, Loading => undefined,`\n  = help: or add a final `_` arm: `, _ => undefined,`"
+    },
+    "fresh": {
+      "exit": 1,
+      "stderr": "error[match-not-exhaustive]: match on variant State (imported from \"./model.tt\") is not exhaustive: missing \"Loading\"\n --> src/main.tt:1:79\n  |\n1 | import type {State} from \"./model.tt\"; export function render(s:State){return match(s){Ready(value)=>value,Empty=>0};}\n  |                                                                               ^^^^^^^^\n  |\n  = help: add the missing arms: `, Loading => undefined,`\n  = help: or add a final `_` arm: `, _ => undefined,`\n\n"
+    }
+  }
+]

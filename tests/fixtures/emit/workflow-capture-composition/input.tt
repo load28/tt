@@ -1,0 +1,4 @@
+declare function observe(value: number): number;
+export const values = [(observe(1) |> ((x: number) => x + 1)), match (2) { 2 => 2, _ => 0 }];
+export const calls = Number(match (1) { 1 => 1, _ => 0 }) + Number(match (2) { 2 => 2, _ => 0 });
+export const flows = [(flow |> ((x: number) => x + 1))(1), match (2) { 2 => 2, _ => 0 }];

@@ -67,12 +67,35 @@ impl Lowering<'_> {
     }
 
     fn lower_body(&mut self, body: &hir::Body) -> Body {
+        let statements: Vec<_> = body
+            .stmts
+            .iter()
+            .filter_map(|stmt| self.lower_stmt(stmt))
+            .collect();
+        let mut value = None;
+        let mut complete = true;
+        for (index, statement) in statements.iter().enumerate() {
+            match statement {
+                Statement::Expr(expr) if value.is_none() => value = Some((index, *expr)),
+                Statement::Opaque(node) => {
+                    let span = self
+                        .semantic
+                        .hir
+                        .source_map
+                        .node_span(*node)
+                        .expect("opaque node span");
+                    complete &= crate::scanner::skip_ws_comments(
+                        self.source.as_bytes(),
+                        span.start,
+                        span.end,
+                    ) == span.end;
+                }
+                _ => complete = false,
+            }
+        }
         Body {
-            statements: body
-                .stmts
-                .iter()
-                .filter_map(|stmt| self.lower_stmt(stmt))
-                .collect(),
+            statements,
+            value: complete.then_some(value).flatten(),
         }
     }
 

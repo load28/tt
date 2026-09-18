@@ -161,6 +161,7 @@ impl EvaluationFile {
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
         let mut value_slots = HashMap::new();
+        let mut capture_dependencies = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
@@ -182,6 +183,7 @@ impl EvaluationFile {
                 .collect::<Result<Vec<_>, EvaluationError>>()?;
             let slots: HashMap<_, _> = assigned
                 .iter()
+                .filter(|(value, _)| core.has_statement_form(value.expr))
                 .map(|(value, target)| match target {
                     ValueTarget::Slot(slot) => (value.source, *slot),
                 })
@@ -217,6 +219,21 @@ impl EvaluationFile {
                     })
                 })
                 .collect::<Result<Vec<_>, EvaluationError>>()?;
+            for (source, slot) in &source_slots {
+                capture_dependencies.insert(
+                    slot.target,
+                    source_slots
+                        .iter()
+                        .filter(|(child, dependency)| {
+                            **child != *source
+                                && source.start <= child.start
+                                && child.end <= source.end
+                                && dependency.target.0 < slot.target.0
+                        })
+                        .map(|(child, dependency)| (*child, dependency.target))
+                        .collect(),
+                );
+            }
             let mut values = values;
             // A statement-capable outer Core value owns same-host tt values
             // lexically nested inside it. Its structural emitter evaluates
@@ -688,6 +705,7 @@ impl EvaluationFile {
             owners: rewrites,
             for_initializer_propagations,
             slot_names,
+            capture_dependencies,
             value_slots,
             nested_schedules,
             nested_values: self

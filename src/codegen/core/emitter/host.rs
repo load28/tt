@@ -584,34 +584,115 @@ impl<'a> Emitter<'a> {
         })
     }
 
-    fn captured_source(&self, source: SourceSpan) -> Rope<'a> {
-        let mut inner: Vec<_> = self
-            .slot_exprs
-            .keys()
-            .map(|expr| {
-                let (kind, start, head_end, extent) = self.value_anchor(*expr);
-                (*expr, kind, start, head_end, extent)
-            })
-            .filter(|(_, _, start, _, extent)| source.start <= *start && *extent <= source.end)
-            .collect();
-        inner.sort_unstable_by_key(|(_, _, start, _, _)| *start);
+    fn captured_source(
+        &self,
+        source: SourceSpan,
+        captured: &HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        // Compose the capture from already materialized dependencies and Core
+        // expressions. Source bytes belonging to a dependency are never evaluated
+        // again; expression-only tt nodes are lowered at this evaluation site.
+        enum Part<'b> {
+            Captured(&'b str),
+            Value(ExprId),
+            Statement(&'b Statement),
+        }
+        let mut parts = Vec::new();
+        for replacement in &self.source_replacements {
+            if replacement.anchor.is_none()
+                && source.start <= replacement.source.start
+                && replacement.source.end <= source.end
+                && replacement.source != source
+                && !self.source_replacements.iter().any(|frame| {
+                    frame.claim
+                        && frame.source.start <= replacement.source.start
+                        && replacement.source.end <= frame.source.end
+                        && !frame
+                            .anchor
+                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                })
+                && captured
+                    .iter()
+                    .any(|slot| self.value_slot_name(*slot) == replacement.slot)
+            {
+                parts.push((
+                    replacement.source,
+                    Part::Captured(replacement.slot.as_str()),
+                ));
+            }
+        }
+        for expr in self.value_slots.keys() {
+            let (_, start, _, extent) = self.value_anchor(*expr);
+            if source.start <= start && extent <= source.end {
+                parts.push((SourceSpan { start, end: extent }, Part::Value(*expr)));
+            }
+        }
+        for body in &self.core.bodies {
+            for statement in &body.statements {
+                let node = match statement {
+                    Statement::Decision(decision) => decision.extent,
+                    Statement::Propagate(propagate) => propagate.owner,
+                    Statement::Adt(adt) => adt.node,
+                    _ => continue,
+                };
+                let span = SourceSpan::from(
+                    self.semantic
+                        .hir
+                        .source_map
+                        .node_extent(node)
+                        .expect("statement extent"),
+                );
+                if source.start <= span.start && span.end <= source.end {
+                    parts.push((span, Part::Statement(statement)));
+                }
+            }
+        }
+        parts.sort_by_key(|(span, part)| {
+            (
+                span.start,
+                std::cmp::Reverse(span.end),
+                !matches!(part, Part::Captured(_)),
+            )
+        });
+        self.active_capture_sources.borrow_mut().push(source);
         let mut out = Rope::new();
         let mut cursor = source.start;
-        for (expr, kind, start, head_end, extent) in inner {
-            if start < cursor {
+        for (span, part) in parts {
+            if span.start < cursor {
                 continue;
             }
-            if cursor < start {
-                out.push_src(&self.source[cursor..start], cursor);
+            if cursor < span.start {
+                out.append(self.source_range_rope(hir::Span {
+                    start: cursor,
+                    end: span.start,
+                }));
             }
-            let mut slot = Rope::new();
-            slot.push_lit(self.slot_exprs[&expr].clone());
-            out.anchored(kind, start, head_end, extent, slot);
-            cursor = extent;
+            match part {
+                Part::Captured(name) => out.push_lit(name.to_owned()),
+                Part::Statement(statement) => {
+                    out.append(self.emit_statements(std::slice::from_ref(statement)))
+                }
+                Part::Value(expr) => {
+                    let (kind, start, head_end, extent) = self.value_anchor(expr);
+                    if let Some(name) = self.slot_exprs.get(&expr) {
+                        let mut slot = Rope::new();
+                        slot.push_lit(name.clone());
+                        out.anchored(kind, start, head_end, extent, slot);
+                    } else {
+                        let _active = self.active_structured_exprs.enter(expr);
+                        out.append(self.emit_expr(expr));
+                    }
+                }
+            }
+            cursor = span.end;
         }
         if cursor < source.end {
-            out.push_src(&self.source[cursor..source.end], cursor);
+            out.append(self.source_range_rope(hir::Span {
+                start: cursor,
+                end: source.end,
+            }));
         }
+        self.active_capture_sources.borrow_mut().pop();
         out
     }
 
@@ -788,7 +869,7 @@ impl<'a> Emitter<'a> {
             PlannedEvaluationInput::Source { source, target, .. } => {
                 if captured.insert(*target) {
                     out.push_value_capture(self.value_slot_name(*target));
-                    out.push_src(&self.source[source.start..source.end], source.start);
+                    out.append(self.captured_source(*source, captured));
                     out.push_lit(");");
                     out.push_break(0);
                 }
@@ -809,7 +890,7 @@ impl<'a> Emitter<'a> {
                     // A receiver retains its inferred members. The `this`
                     // parameter at a later bind is not its contextual type.
                     out.push_lit(format!("const {} = (", self.value_slot_name(slot)));
-                    out.append(self.captured_source(source));
+                    out.append(self.captured_source(source, captured));
                     out.push_lit(");");
                     out.push_break(0);
                 }
@@ -948,17 +1029,23 @@ impl<'a> Emitter<'a> {
                     self.value_slot_name(*target)
                 ));
                 if source.start < receiver_source.start {
-                    prefix.append(self.captured_source(SourceSpan {
-                        start: source.start,
-                        end: receiver_source.start,
-                    }));
+                    prefix.append(self.captured_source(
+                        SourceSpan {
+                            start: source.start,
+                            end: receiver_source.start,
+                        },
+                        captured,
+                    ));
                 }
                 self.push_planned_receiver(&receiver, true, &mut prefix);
                 if receiver_source.end < source.end {
-                    prefix.append(self.captured_source(SourceSpan {
-                        start: receiver_source.end,
-                        end: source.end,
-                    }));
+                    prefix.append(self.captured_source(
+                        SourceSpan {
+                            start: receiver_source.end,
+                            end: source.end,
+                        },
+                        captured,
+                    ));
                 }
                 if optional_reference {
                     let target_name = self.value_slot_name(*target);
@@ -980,7 +1067,7 @@ impl<'a> Emitter<'a> {
                 }
             } else {
                 prefix.push_value_capture(self.value_slot_name(*target));
-                prefix.append(self.captured_source(*source));
+                prefix.append(self.captured_source(*source, captured));
                 prefix.push_lit(");");
                 prefix.push_break(0);
             }
@@ -1051,7 +1138,7 @@ impl<'a> Emitter<'a> {
                 return None;
             };
             self.core
-                .body_value_expr(*body)
+                .body_tail_expr(*body)
                 .and_then(|value| self.structured_value_slot(value))
         })
     }
@@ -1070,7 +1157,7 @@ impl<'a> Emitter<'a> {
             return None;
         };
         self.core
-            .body_value_expr(*body)
+            .body_tail_expr(*body)
             .and_then(|value| self.nested_structured_value_slot(value))
     }
 
@@ -1092,7 +1179,7 @@ impl<'a> Emitter<'a> {
             Expr::Sequence(body) => {
                 let value = self
                     .core
-                    .body_value_expr(*body)
+                    .body_tail_expr(*body)
                     .unwrap_or_else(|| crate::ice::bug!("slotted sequence has no value"));
                 self.value_anchor(value)
             }

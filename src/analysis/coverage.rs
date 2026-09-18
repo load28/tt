@@ -43,11 +43,12 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
 /// oracle for the one column the checker can speak about.
 pub(crate) fn checked_coverage(
     source: &str,
+    source_kind: crate::SourceKind,
     externs: &[VariantSymbol],
     members: &[(usize, Vec<Vec<String>>)],
     payloads: &[PayloadAlphabet],
 ) -> Vec<(usize, Coverage)> {
-    let program = crate::parser::parse(source);
+    let program = crate::parser::parse_with_kind(source, source_kind);
     let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
     let mut hir = crate::hir::lower_program(crate::hir::FileId(0), source, &program);
     let resolution = crate::resolve::resolve_file(&mut hir, &decls);

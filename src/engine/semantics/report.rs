@@ -518,9 +518,13 @@ pub(crate) fn report(
         let asked_payloads = payloads
             .get(&file.source_path)
             .map_or(&[][..], Vec::as_slice);
-        for (offset, coverage) in
-            crate::analysis::checked_coverage(&file.source, externs, asked, asked_payloads)
-        {
+        for (offset, coverage) in crate::analysis::checked_coverage(
+            &file.source,
+            crate::SourceKind::from_path(&file.source_path).unwrap_or_default(),
+            externs,
+            asked,
+            asked_payloads,
+        ) {
             if semantics
                 .get(&file.source_path)
                 .is_some_and(|semantics| semantics.analyses.match_has_resolution_error(offset))

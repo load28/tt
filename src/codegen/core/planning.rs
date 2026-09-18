@@ -756,10 +756,8 @@ pub(super) struct SourceReplacement {
     /// name carries — a conditional operation's result stands for the whole
     /// operation, so diagnostics on it belong to its primary tt value.
     pub(super) anchor: Option<ExprId>,
-    /// A completed call's claimed frame. It erases the frame only from the
-    /// remaining statement walk; while any value emits structurally (a
-    /// sibling's dispatch reading its subject or arm source inside the
-    /// frame), the authored text still passes through.
+    /// A completed call's claimed frame. Its own active value retains the
+    /// authored source; unrelated enclosing values do not inhibit the claim.
     pub(super) claim: bool,
 }
 
@@ -1303,6 +1301,12 @@ impl TargetRewritePlan {
                 claim: true,
             }),
         );
+        source_replacements.sort_by_key(|replacement| {
+            (
+                replacement.source.start,
+                std::cmp::Reverse(replacement.source.end),
+            )
+        });
         let consumed_exprs: HashSet<ExprId> = compose_operations()
             .flat_map(|operation| operation.values.iter().copied())
             .chain(loop_operations().flat_map(|operation| operation.values.iter().copied()))

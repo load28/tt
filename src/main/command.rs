@@ -16,6 +16,7 @@ enum CliOption {
     Project,
     Symbols,
     EmitMap,
+    Dependencies,
     NoBanner,
     NoVerify,
     EmitStd,
@@ -42,6 +43,7 @@ impl CliOption {
             Self::Project => "--project",
             Self::Symbols => "--symbols",
             Self::EmitMap => "--emit-map",
+            Self::Dependencies => "--dependencies",
             Self::NoBanner => "--no-banner",
             Self::NoVerify => "--no-verify",
             Self::EmitStd => "--emit-std",
@@ -141,6 +143,7 @@ pub(super) fn run() -> ExitCode {
     let mut verify = true;
     let mut symbols = false;
     let mut emit_map = false;
+    let mut dependencies = false;
     let mut sidecar_dir: Option<PathBuf> = None;
     let mut server = false;
     let mut content_mapper = false;
@@ -213,6 +216,10 @@ pub(super) fn run() -> ExitCode {
             "--symbols" => {
                 seen.push(CliOption::Symbols);
                 symbols = true;
+            }
+            "--dependencies" => {
+                seen.push(CliOption::Dependencies);
+                dependencies = true;
             }
             "--emit-map" => {
                 seen.push(CliOption::EmitMap);
@@ -430,6 +437,8 @@ pub(super) fn run() -> ExitCode {
             CliOption::Project,
             CliOption::Node,
         ][..]
+    } else if dependencies {
+        &[CliOption::Dependencies, CliOption::Project, CliOption::Node][..]
     } else if symbols {
         &[CliOption::Symbols][..]
     } else if emit_map {
@@ -468,6 +477,8 @@ pub(super) fn run() -> ExitCode {
         "--types"
     } else if check_types {
         "--check-types"
+    } else if dependencies {
+        "--dependencies"
     } else if symbols {
         "--symbols"
     } else if emit_map {
@@ -528,6 +539,9 @@ pub(super) fn run() -> ExitCode {
 
     // Tooling modes stay .tt-only; the compile modes carry hand-written
     // TypeScript along so the output tree is complete.
+    if dependencies {
+        return dependencies_mode(&inputs, project.as_deref(), node.as_deref());
+    }
     let include_ts = !symbols && !emit_map && sidecar_dir.is_none();
 
     if check_types {

@@ -64,6 +64,8 @@ pub struct Project {
     /// The inputs' `.tt` files — what a `--types` run writes. The TypeScript
     /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
+    pub(super) input_roots: Vec<PathBuf>,
+    dependencies: RefCell<HashSet<PathBuf>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
     /// configured TypeScript program filters these to actual members.
@@ -112,6 +114,8 @@ impl Project {
             tsconfig,
             out_dir,
             requested: collected.into_iter().collect(),
+            input_roots: Vec::new(),
+            dependencies: RefCell::new(HashSet::new()),
             initial,
             sources,
             overlays: HashMap::new(),
@@ -158,7 +162,31 @@ impl Project {
     /// paths. TypeScript later decides which candidates are configured or
     /// reachable. Scanned fresh so a newly created file is seen.
     pub fn scan(&self) -> std::io::Result<Vec<PathBuf>> {
-        project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)
+        let mut candidates = project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)?;
+        candidates.extend(self.requested.iter().filter(|file| file.exists()).cloned());
+        discover_imports(&mut candidates, &self.overlays)?;
+        candidates.sort();
+        candidates.dedup();
+        Ok(candidates)
+    }
+
+    /// Source, configuration, and compiler-resolved dependency paths whose
+    /// changes invalidate a project check. Directory membership is rescanned.
+    pub fn watch_paths(&self) -> std::io::Result<Vec<PathBuf>> {
+        let mut paths = project_sources(
+            &self.root,
+            self.out_dir.as_deref(),
+            &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
+        )?;
+        paths.extend(self.dependencies.borrow().iter().cloned());
+        paths.extend(self.requested.iter().cloned());
+        paths.extend(self.cache.keys().cloned());
+        if let Some(config) = &self.tsconfig {
+            paths.push(config.clone());
+        }
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
     }
 
     /// The candidate set the first pass layers, decided when the project was
@@ -177,6 +205,28 @@ impl Project {
     /// An I/O failure still blocks the snapshot because no source state is
     /// available to preserve.
     pub fn update(&mut self, files: &[PathBuf]) -> Result<Snapshot, Box<Blocked>> {
+        self.requested.extend(
+            files
+                .iter()
+                .filter(|file| self.input_roots.iter().any(|root| file.starts_with(root)))
+                .cloned(),
+        );
+        if self.tsconfig.is_none() {
+            self.sources = project_sources(&self.root, self.out_dir.as_deref(), TS_EXTENSIONS)
+                .map_err(|error| {
+                    Box::new(Blocked {
+                        path: self.root.clone(),
+                        error: CompileError {
+                            message: error.to_string(),
+                            filename: None,
+                            line: 0,
+                            col: 0,
+                            end_line: 0,
+                            end_col: 0,
+                        },
+                    })
+                })?;
+        }
         let mut projected = Vec::with_capacity(files.len());
         let mut blocked_files = Vec::new();
         let mut cache = HashMap::with_capacity(files.len());
@@ -430,6 +480,9 @@ impl Project {
                 }),
             ),
         };
+        self.dependencies
+            .borrow_mut()
+            .extend(answers.dependencies.iter().cloned());
         let declarations = if request.emit_declarations && backend_error.is_none() {
             semantics::match_declarations(snapshot, &answers, &self.root, &self.requested)
         } else {
@@ -615,4 +668,47 @@ fn source_extensions(include_ts: bool) -> String {
         names.extend(TS_EXTENSIONS.iter().map(|e| format!(".{e}")));
     }
     names.join(", ")
+}
+
+/// Follow explicitly named relative tt modules beyond the configuration root.
+/// The TypeScript program still owns admission; this only supplies candidates.
+pub(super) fn discover_imports(
+    files: &mut Vec<PathBuf>,
+    overlays: &HashMap<PathBuf, String>,
+) -> std::io::Result<()> {
+    let mut seen: HashSet<_> = files.iter().cloned().collect();
+    let mut index = 0;
+    while index < files.len() {
+        let file = files[index].clone();
+        let source = match overlays.get(&file) {
+            Some(text) => text.clone(),
+            None => match std::fs::read_to_string(&file) {
+                Ok(text) => text,
+                // An editor may request a document before its first save.
+                // The overlay is installed after the project is opened.
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    index += 1;
+                    continue;
+                }
+                Err(error) => return Err(error),
+            },
+        };
+        let kind = crate::SourceKind::from_path(&file).unwrap_or_default();
+        for import in crate::scan_module_with_kind(&source, kind).imports {
+            if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
+                continue;
+            }
+            let target = file
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join(import.specifier);
+            if let Ok(target) = target.canonicalize()
+                && seen.insert(target.clone())
+            {
+                files.push(target);
+            }
+        }
+        index += 1;
+    }
+    Ok(())
 }

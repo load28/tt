@@ -724,3 +724,53 @@ mod contextual;
 
 #[path = "integration/pr115.rs"]
 mod pr115;
+
+#[test]
+fn captured_tt_expressions_and_statement_bodies_evaluate_once_in_order() {
+    require_toolchain!();
+    let lines = run(r#"
+variant E { A(value: number), B }
+const events: string[] = [];
+function note(n: number) { events.push(`n:${n}`); return n; }
+function callable() { events.push("callee"); return (n: number) => { events.push(`call:${n}`); return n; }; }
+const values = [(note(1) |> ((n: number) => note(n + 1))), match(note(3)) { 3 => 3, _ => 0 }];
+const calls = callable()(match(note(4)){4=>4,_=>0}) + callable()(match(note(5)){5=>5,_=>0});
+const statements = [(() => { if let A(value) = E.A(note(6)) { return value; } return 0; })(), match(note(7)){7=>7,_=>0}];
+const bindings = [(() => { const A(value) = E.A(note(8)) else { return 0; }; return value; })(), match(note(9)){9=>9,_=>0}];
+console.log(JSON.stringify([values, calls, statements, bindings]));
+console.log(events.join(","));
+"#);
+    assert_eq!(
+        lines,
+        [
+            "[[2,3],9,[6,7],[8,9]]",
+            "n:1,n:2,n:3,callee,n:4,call:4,callee,n:5,call:5,n:6,n:7,n:8,n:9"
+        ]
+    );
+}
+
+#[test]
+fn nested_callback_returns_and_overlapping_call_captures_preserve_effects() {
+    require_toolchain!();
+    let lines = run(r#"
+variant State { Ready(values: number[]), Empty }
+const events: string[] = [];
+const convert = (n: number) => { events.push(`convert:${n}`); return n + 10; };
+const answer = match(State.Ready([2, 5])) {
+    Ready(values) => { return values.map(n => convert(match(n){0=>0,_=>n}) + convert(match(n){0=>0,_=>n})); },
+    Empty => [],
+};
+const keyed = { [String(match(1){1=>1,_=>0})]: match(2){2=>2,_=>0} };
+const truthy = (1 |> ((n: number) => n + 1)) && match(3){3=>3,_=>0};
+const fromBody = (() => { if let Ready(values) = State.Ready([4]) { return values[0]; } return 0; })() && match(4){4=>4,_=>0};
+console.log(JSON.stringify([answer, keyed, truthy, fromBody]));
+console.log(events.join(","));
+"#);
+    assert_eq!(
+        lines,
+        [
+            "[[24,30],{\"1\":2},3,4]",
+            "convert:2,convert:2,convert:5,convert:5"
+        ]
+    );
+}

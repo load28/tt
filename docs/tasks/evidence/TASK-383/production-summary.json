@@ -1,0 +1,30 @@
+{
+  "baseline": "069a5fb",
+  "serviceScenarios": 5,
+  "positiveInferenceChecks": 24,
+  "negativeInferenceChecks": 24,
+  "negativeInferenceChecksCaught": 24,
+  "relocatedLibraryTypecheck": true,
+  "release": [
+    {
+      "case": "jsx-coverage",
+      "exit": 1,
+      "stderr": "error[match-not-exhaustive]: match is not exhaustive: missing \"B\"\n --> target/audit-383/production-minimal/jsx-coverage/main.ttx:3:12\n  |\n3 | const view=match(state){A=><p>A</p>,B=><p>B</p>,C=><p>C</p>};\n  |            ^^^^^^^^^^^^\n  |\n  = help: add the missing arms: `, B => undefined,`\n  = help: or add a final `_` arm: `, _ => undefined,`\n"
+    },
+    {
+      "case": "jsx-generic",
+      "exit": 1,
+      "stderr": "error[verify-failed]: generated TypeScript failed to parse: Unexpected token. Did you mean `{'>'}` or `&gt;`?. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.\n --> target/audit-383/production-minimal/jsx-generic/main.ttx:1:16\n  |\n1 | export variant Box<T> { Value(value:T), Empty }\n  |                ^^^\n\n"
+    },
+    {
+      "case": "nested-cart",
+      "exit": 101,
+      "stderr": "error: internal compiler error: internal compiler error: validate_source_preservation broke the contract that every non-whitespace source byte outside tt-owned ranges reaches the target (SourceOmitted)\n  at source bytes 603..604\n  from source bytes 603..616\n\n  while compiling: target/audit-383/apps/react-cart-summary/src/Cart.ttx\n  at: src/ice.rs:240:9\n  ttc 1.0.0\n\nThis is a bug in ttc, not in the code it was given. Please report it at\nhttps://github.com/load28/tt/issues \u2014 include what you ran and, if you can\nshare it, the file named above.\n\nRe-run with RUST_BACKTRACE=1 for a backtrace to attach.\n"
+    },
+    {
+      "case": "nested-jsx-arrow",
+      "exit": 1,
+      "stderr": "error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).\n --> target/audit-383/production-minimal/jsx-nested-captures/no-inner-matches.ttx:3:114\n  |\n3 | const view=match(ready){true=><p>{items.map(item=><p>{Number(item.quantity)+Number(item.price)}</p>)}</p>,false=><p>Empty</p>};\n  |                                                                                                                  ^\n\n"
+    }
+  ]
+}

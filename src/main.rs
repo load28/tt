@@ -36,6 +36,8 @@ mod modes;
 mod out;
 #[path = "main/output.rs"]
 mod output;
+#[path = "main/ownership.rs"]
+mod ownership;
 mod server;
 #[path = "main/typed.rs"]
 mod typed;
@@ -55,6 +57,7 @@ use build::*;
 use loading::*;
 use modes::*;
 use output::*;
+use ownership::*;
 use typed::*;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -115,6 +118,7 @@ Tooling options (bundler plugins, editors):
   --symbols             print tt variant declarations (with positions) and the
                         direct .tt imports of each input as JSON; compiles
                         nothing (for language tooling)
+  --dependencies        print compiler dependency paths as JSON (including types)
   --emit-map            print each input's emitted TypeScript plus source<->
                         output byte mappings as JSON; parse + emit only (no
                         tt-level checks, .tt specifiers untouched) — the

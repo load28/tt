@@ -256,11 +256,21 @@ pub(super) const TYPES_DIR: &str = ".tt-types";
 /// The file's path relative to whichever input directory contains it, so
 /// the sidecar tree mirrors the source tree rather than the whole cwd.
 pub(super) fn input_relative(file: &Path, inputs: &[String]) -> PathBuf {
-    for input in inputs {
-        let root = Path::new(input);
-        if root.is_dir()
-            && let Ok(relative) = file.strip_prefix(root)
-        {
+    let file = normalized_absolute(file);
+    let directory_roots = inputs
+        .iter()
+        .map(Path::new)
+        .filter(|path| path.is_dir())
+        .map(normalized_absolute);
+    let named_root = deepest_shared_directory(
+        inputs
+            .iter()
+            .map(Path::new)
+            .filter(|path| path.is_file())
+            .filter_map(|path| normalized_absolute(path).parent().map(Path::to_path_buf)),
+    );
+    for root in directory_roots.chain(named_root) {
+        if let Ok(relative) = file.strip_prefix(root) {
             return relative.to_path_buf();
         }
     }

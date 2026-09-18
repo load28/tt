@@ -94,3 +94,14 @@ load content mappers.
 - `enforce: "pre"`는 Rollup·esbuild에서 무시됩니다 (unplugin 문서의 지원 훅
   표). 그 두 곳에서는 플러그인 순서를 직접 앞에 두세요.
 - `resolveId`는 Rspack·Rsbuild에서 최신 버전을 요구합니다.
+
+## Resolution and dependency invalidation
+
+Bare package imports ending in `.tt` or `.ttx` use the bundler's resolver, including
+package exports and external decisions. Vite/Rollup-compatible hooks use
+`this.resolve`; esbuild uses `build.resolve`.
+
+The plugin asks `ttc --dependencies` for the project's dependency graph and registers
+those paths with the bundler. Vite invalidates consuming modules when a type-only
+import or compiler configuration changes, including when HMR is disabled. Use a
+compiler version that supports `--dependencies` when overriding `compiler`.

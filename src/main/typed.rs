@@ -174,7 +174,8 @@ pub(super) fn typed_watch(
                 continue;
             }
         };
-        let current: std::collections::HashMap<PathBuf, std::time::SystemTime> = files
+        let watch_paths = project.watch_paths().unwrap_or_else(|_| files.clone());
+        let mut current: std::collections::HashMap<PathBuf, std::time::SystemTime> = watch_paths
             .iter()
             .map(|file| {
                 let stamp = fs::metadata(file)
@@ -194,6 +195,18 @@ pub(super) fn typed_watch(
                     started.elapsed().as_millis()
                 ),
                 Err(e) => eprintln!("ttc: {e}"),
+            }
+        }
+        // Establish baselines for dependencies discovered by this check.
+        // Retain pre-check stamps for existing inputs so edits during checking
+        // still trigger the next pass.
+        if let Ok(paths) = project.watch_paths() {
+            for file in paths {
+                current.entry(file.clone()).or_insert_with(|| {
+                    fs::metadata(file)
+                        .and_then(|meta| meta.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+                });
             }
         }
         if first {
@@ -219,6 +232,39 @@ pub(super) fn write_declarations(
     out_dir: Option<&Path>,
     root: &Path,
 ) -> std::io::Result<()> {
+    let targets: Vec<_> = declarations
+        .modules
+        .iter()
+        .map(|declaration| {
+            let source = &declaration.file.source_path;
+            let name = format!(
+                "{}.d.ts",
+                source.file_name().unwrap_or_default().to_string_lossy()
+            );
+            match out_dir {
+                Some(dir) => dir
+                    .join(input_relative(source, inputs))
+                    .with_file_name(name),
+                None => source.with_file_name(name),
+            }
+        })
+        .collect();
+    let mut claims = HashMap::new();
+    for (declaration, target) in declarations.modules.iter().zip(&targets) {
+        if let Some(previous) =
+            claims.insert(normalized_absolute(target), &declaration.file.source_path)
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!(
+                    "{}: multiple declaration inputs claim this output: {} and {}",
+                    target.display(),
+                    previous.display(),
+                    declaration.file.source_path.display()
+                ),
+            ));
+        }
+    }
     // Standard-library declarations mirror the generated `tt/` package, so
     // plain tsc can map the root and wildcard `@tt/std` entries to them.
     if !declarations.std.is_empty() {
@@ -234,23 +280,8 @@ pub(super) fn write_declarations(
             )?;
         }
     }
-    for declaration in &declarations.modules {
+    for (declaration, target) in declarations.modules.iter().zip(targets) {
         let file = &declaration.file;
-        // The same placement `--types` and `--sidecar` use: beside the
-        // source, or mirroring the input layout under `-o`.
-        let name = format!(
-            "{}.d.ts",
-            file.source_path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-        );
-        let target = match out_dir {
-            Some(dir) => dir
-                .join(input_relative(&file.source_path, inputs))
-                .with_file_name(name),
-            None => file.source_path.with_file_name(name),
-        };
         let dir = target.parent().unwrap_or(Path::new(".")).to_path_buf();
         fs::create_dir_all(&dir)?;
 
