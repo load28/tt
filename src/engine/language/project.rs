@@ -784,12 +784,12 @@ impl Project {
         let mut stack = vec![(canonical.clone(), doc.clone())];
         while let Some((file, doc)) = stack.pop() {
             for import in crate::tt_imports(&doc.source) {
-                let target = match file
-                    .parent()
-                    .unwrap_or(Path::new("."))
-                    .join(&import.specifier)
-                    .canonicalize()
-                {
+                let target = match crate::engine::paths::canonical(
+                    &file
+                        .parent()
+                        .unwrap_or(Path::new("."))
+                        .join(&import.specifier),
+                ) {
                     Ok(target) => target,
                     Err(_) => continue, // unresolvable — tsc's TS2307, not ours
                 };

@@ -151,10 +151,11 @@ pub(crate) enum TempId {
     Statement(u32),
     /// File-unique `$tt_rN`, sharing the same ordinal space.
     Result(u32),
-    /// A single-subject decision's local (`$tt_m`).
-    Decision,
-    /// One position of a tuple decision (`$tt_mN`).
-    DecisionElement(u32),
+    /// A single-subject decision's local (`$tt_m`), distinguished by how
+    /// deeply its subject nests inside another decision's subject.
+    Decision { depth: u32 },
+    /// One position of a tuple decision (`$tt_mN`), distinguished the same way.
+    DecisionElement { index: u32, depth: u32 },
 }
 
 #[derive(Debug)]
@@ -243,6 +244,7 @@ pub(crate) struct Adt {
     pub node: NodeId,
     pub name: String,
     pub exported: bool,
+    pub declared: bool,
     pub generics: String,
     pub variants: Vec<AdtVariant>,
 }

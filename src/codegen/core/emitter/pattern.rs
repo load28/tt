@@ -524,7 +524,8 @@ impl<'a> Emitter<'a> {
             }
         }
         if let Some(guard) = arm.guard {
-            let guard = self.emit_expr(guard).trim();
+            let (prelude, guard) = self.emit_guard(guard, depth);
+            out.append(prelude);
             let guarded = guard.last_line_has_line_comment(self.source_kind);
             out.push_lit("if (");
             out.append(guard);
@@ -539,6 +540,38 @@ impl<'a> Emitter<'a> {
             out.push_break(depth);
             out.push_lit("}");
         }
+    }
+
+    fn emit_guard(&self, guard: ExprId, depth: u16) -> (Rope<'a>, Rope<'a>) {
+        let Expr::Sequence(body) = &self.core.exprs[guard.index()] else {
+            return (Rope::new(), self.emit_expr(guard).trim());
+        };
+        let Some(node) = self.core.sequence_node(*body) else {
+            return (Rope::new(), self.emit_expr(guard).trim());
+        };
+        let span = self.span(node);
+        let mut prelude = Rope::new();
+        for rewrite in &self.owner_slot_rewrites {
+            if rewrite.owner == SourceSpan::from(span)
+                && !self.emitted_owner_rewrites.contains(rewrite.expr)
+            {
+                self.emitted_owner_rewrites.mark(rewrite.expr);
+                prelude.append(self.emit_owner_slot_rewrite(rewrite).trim_end());
+                prelude.push_break(depth);
+            }
+        }
+        for rewrite in &self.compose_rewrites {
+            if rewrite.owner == SourceSpan::from(span)
+                && self.emitted_compose_rewrites.claim(rewrite.owner)
+            {
+                let lowered = self.emit_compose_rewrite(rewrite).trim_end();
+                if !lowered.is_empty() {
+                    prelude.append(lowered);
+                    prelude.push_break(depth);
+                }
+            }
+        }
+        (prelude, self.emit_expr(guard).trim())
     }
 
     /// Delivers one value to its continuation. `close` breaks the line

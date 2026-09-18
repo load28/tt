@@ -27,9 +27,7 @@ mod tests;
 
 use std::collections::{HashMap, HashSet};
 
-use swc_common::input::StringInput;
-use swc_common::sync::Lrc;
-use swc_common::{FileName, SourceMap, Spanned};
+use swc_common::Spanned;
 use swc_ecma_ast::{
     ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr, CondExpr,
     Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild,
@@ -37,8 +35,6 @@ use swc_ecma_ast::{
     Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, TsType,
     TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
 };
-use swc_ecma_parser::lexer::Lexer;
-use swc_ecma_parser::{Parser, Syntax, TsSyntax};
 use swc_ecma_visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithAstPath, fields};
 
 use crate::analysis::SemanticFile;
@@ -48,6 +44,7 @@ use crate::core_ir::{
 };
 use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
+use crate::host_input::{HostInput, HostOrigin};
 use crate::lexer::Token;
 
 use collector::*;
@@ -411,19 +408,8 @@ pub(crate) fn source_expression_effects(
     if crate::lexer::host_syntax_error(text, source_kind).is_some() {
         return Effects::ANY;
     }
-    let source_map: Lrc<SourceMap> = Default::default();
-    let file = source_map.new_source_file(Lrc::new(FileName::Anon), text.to_owned());
-    let lexer = Lexer::new(
-        Syntax::Typescript(TsSyntax {
-            tsx: source_kind.is_tsx(),
-            decorators: true,
-            ..Default::default()
-        }),
-        Default::default(),
-        StringInput::from(&*file),
-        None,
-    );
-    let mut parser = Parser::new_from(lexer);
+    let input = HostInput::new(text);
+    let mut parser = input.parser(source_kind);
     let expression = match parser.parse_expr() {
         Ok(expression) if parser.take_errors().is_empty() => expression,
         Ok(_) | Err(_) => return Effects::ANY,
@@ -593,6 +579,20 @@ pub(crate) struct EvaluationContext {
     /// Async functions contextually type their returned expression with the
     /// awaited form of the authored Promise return type.
     pub(crate) contextual_type_awaited: bool,
+    /// The owning statement is the unbraced body of an `if`, loop, label, or
+    /// `with`, so a statement lowering has to open its own block there.
+    pub(crate) requires_block: bool,
+    /// The construct sits inside an ambient (`declare`) module, where only
+    /// declarations without initializers are TypeScript.
+    pub(crate) ambient: bool,
+}
+
+pub(crate) struct OverlayFacts {
+    pub(crate) function_target: Option<EvaluationOwner>,
+    pub(crate) contextual_type: Option<SourceSpan>,
+    pub(crate) function_return_type: Option<SourceSpan>,
+    pub(crate) function_return_awaited: bool,
+    pub(crate) ambient: bool,
 }
 
 impl EvaluationContext {
@@ -603,11 +603,16 @@ impl EvaluationContext {
         category: SyntaxCategory,
         parents: &[AstParentKind],
         host_owner_edge: usize,
-        function_target: Option<EvaluationOwner>,
-        contextual_type: Option<SourceSpan>,
-        function_return_type: Option<SourceSpan>,
-        function_return_awaited: bool,
+        facts: OverlayFacts,
     ) -> Self {
+        let OverlayFacts {
+            function_target,
+            contextual_type,
+            function_return_type,
+            function_return_awaited,
+            ambient,
+        } = facts;
+        let requires_block = statement_requires_block(parents);
         let (mut owner, owner_edge) = evaluation_owner(parents);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
@@ -632,6 +637,8 @@ impl EvaluationContext {
                 continuation: HostContinuation::Discard,
                 contextual_type,
                 contextual_type_awaited: false,
+                requires_block,
+                ambient,
             };
         }
 
@@ -658,8 +665,36 @@ impl EvaluationContext {
             contextual_type_awaited: uses_function_return
                 && function_return_type.is_some()
                 && function_return_awaited,
+            requires_block,
+            ambient,
         }
     }
+}
+
+fn statement_requires_block(parents: &[AstParentKind]) -> bool {
+    let Some(statement) = parents
+        .iter()
+        .rposition(|parent| matches!(parent, AstParentKind::ExprStmt(_) | AstParentKind::Stmt(_)))
+    else {
+        return false;
+    };
+    let parent = parents[..statement]
+        .iter()
+        .rev()
+        .find(|parent| !matches!(parent, AstParentKind::Stmt(_) | AstParentKind::ExprStmt(_)));
+    parent.is_some_and(|parent| {
+        matches!(
+            parent,
+            AstParentKind::IfStmt(fields::IfStmtField::Cons | fields::IfStmtField::Alt)
+                | AstParentKind::ForStmt(fields::ForStmtField::Body)
+                | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
+                | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
+                | AstParentKind::WhileStmt(fields::WhileStmtField::Body)
+                | AstParentKind::DoWhileStmt(fields::DoWhileStmtField::Body)
+                | AstParentKind::LabeledStmt(fields::LabeledStmtField::Body)
+                | AstParentKind::WithStmt(fields::WithStmtField::Body)
+        )
+    })
 }
 
 /// The evaluation regions between a value's host owner and the value.

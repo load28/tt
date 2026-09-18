@@ -317,7 +317,7 @@ fn imported_declaration(
         &source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     ) {
-        let target = dir.join(&import.specifier).canonicalize().ok()?;
+        let target = super::paths::canonical(&dir.join(&import.specifier)).ok()?;
         let Ok(text) = std::fs::read_to_string(&target) else {
             continue;
         };

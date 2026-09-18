@@ -19,6 +19,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { refreshSidecar } from "../sidecar";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 import { caseDir } from "./workspace";
 
@@ -1375,4 +1376,78 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
       }
     } finally { stop(); }
   }
+});
+
+test("an untitled ttx buffer is checked as ttx", { skip, timeout }, async () => {
+  const client = connect();
+  const uri = "untitled:Untitled-2";
+  const source = "export const el = <div title=\"t\">Don't panic</div>;\n";
+  try {
+    await client.request("initialize", { processId: process.pid, rootUri: null, capabilities: {} });
+    client.notify("initialized", {});
+    const published = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "ttx", version: 1, text: source } });
+    assert.deepEqual((await published).diagnostics, []);
+  } finally { client.stop(); }
+});
+
+test("a declaration answer that lands after an edit is not cached for the edited version", { skip, timeout }, async () => {
+  const dir = caseDir("tt-declaration-race-");
+  const file = path.join(dir, "race.tt");
+  const before = "variant First { A }\n";
+  const after = "variant Second { B }\n";
+  fs.writeFileSync(file, before);
+  const uri = pathToFileURL(file).toString();
+  const client = connect();
+  try {
+    await client.request("initialize", {
+      processId: process.pid, rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {},
+    });
+    client.notify("initialized", {});
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: before } });
+    const stale = client.request("textDocument/documentSymbol", { textDocument: { uri } });
+    client.notify("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text: after }] });
+    const names = (answer: any) => (answer.result ?? []).map((s: any) => s.name);
+    assert.deepEqual(names(await stale), ["First"]);
+    assert.deepEqual(names(await client.request("textDocument/documentSymbol", { textDocument: { uri } })), ["Second"]);
+  } finally { client.stop(); }
+});
+
+test("the server's own sidecar writes do not re-arm the project, a hand-written declaration does", { skip: skipTyped, timeout }, async (t) => {
+  const dir = caseDir("tt-own-sidecar-");
+  const file = path.join(dir, "notice.tt");
+  const source = "export variant Notice { Info(text: string), Warn }\n";
+  fs.writeFileSync(file, source);
+  if ((await refreshSidecar(COMPILER, file, "always")).kind !== "written") {
+    t.skip("no TypeScript declaration emit for ttc to drive");
+    return;
+  }
+  const uri = pathToFileURL(file).toString();
+  const client = connect();
+  const changed = (target: string) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(target).toString(), type: 2 }] });
+  const republished = () => Promise.race([
+    client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri).then(() => true),
+    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 2000)),
+  ]);
+  try {
+    await client.request("initialize", {
+      processId: process.pid, rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {},
+    });
+    client.notify("initialized", {});
+    const opened = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+    await opened;
+
+    client.notify("textDocument/didSave", { textDocument: { uri } });
+    changed(`${file}.d.ts`);
+    changed(`${file}.d.ts.map`);
+    assert.equal(await republished(), false, "the server's own sidecar write is not an external change");
+
+    const byHand = path.join(dir, "extra.d.ts");
+    fs.writeFileSync(byHand, "export declare const byHand: number;\n");
+    changed(byHand);
+    assert.equal(await republished(), true, "a declaration written by somebody else still is");
+  } finally { client.stop(); }
 });

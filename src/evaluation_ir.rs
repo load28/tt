@@ -135,6 +135,8 @@ pub(crate) struct LoweringPlan {
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
+    block_required_propagations: HashSet<NodeId>,
+    ambient_items: HashSet<NodeId>,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -510,8 +512,50 @@ impl LoweringPlan {
         self.unsupported_expression_propagations.clone()
     }
 
+    pub(crate) fn block_required_propagations(&self) -> &HashSet<NodeId> {
+        &self.block_required_propagations
+    }
+
+    pub(crate) fn ambient_items(&self) -> &HashSet<NodeId> {
+        &self.ambient_items
+    }
+
     pub(crate) fn unsupported_matches(&self) -> Vec<UnsupportedMatch> {
         self.unsupported_matches.clone()
+    }
+}
+
+impl std::fmt::Display for EvaluationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let reason = match self {
+            EvaluationError::DuplicateHost { .. } => "the construct has two TypeScript hosts",
+            EvaluationError::MissingHost { .. } => "the construct has no TypeScript host",
+            EvaluationError::OrphanHost { .. } => "a TypeScript host has no construct",
+            EvaluationError::DuplicateOperation { .. } => "the construct is planned twice",
+            EvaluationError::IdOverflow => "too many evaluation regions in one file",
+            EvaluationError::GeneratedNameOverflow => "no free generated name remains",
+            EvaluationError::InvalidEntry { .. } => "an evaluation region has no entry",
+            EvaluationError::InvalidTarget { .. } => "an evaluation edge has no target",
+            EvaluationError::UnreachableBlock { .. } => "an evaluation block is unreachable",
+            EvaluationError::CoreOperationMismatch { .. } => {
+                "an evaluation region disagrees with its construct"
+            }
+            EvaluationError::MissingResultDefinition { .. } => {
+                "an evaluation path delivers no value"
+            }
+            EvaluationError::UnexpectedResultDefinition { .. } => {
+                "an evaluation path delivers a value it does not own"
+            }
+            EvaluationError::InvalidHostOwner { .. } => "the construct's host owner is unknown",
+            EvaluationError::DiscardedResult { .. } => "a Result value is discarded",
+            EvaluationError::RepeatedPropagation { .. } => {
+                "a propagation would repeat in its loop header"
+            }
+            EvaluationError::UnsupportedForInitializer { .. } => {
+                "a `for` initializer assignment has no statement-safe rewrite"
+            }
+        };
+        f.write_str(reason)
     }
 }
 

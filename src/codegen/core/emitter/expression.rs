@@ -429,11 +429,10 @@ impl<'a> Emitter<'a> {
             let mut out = Rope::new();
             out.push_value_declaration(slot);
             out.push_break(0);
-            out.append(action);
+            out.append(action.trim_end());
             out.push_break(0);
-            out.append(self.emit_value_delivery(
+            out.append(self.emit_value_delivery_without_region_exit(
                 self.source_range_with_nested_schedule(parent, expr, schedule),
-                None,
                 continuation,
             ));
             return Some(Rope::scoped(out));

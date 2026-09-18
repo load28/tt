@@ -187,7 +187,10 @@ pub(crate) fn line_col(src: &str, offset: usize) -> (usize, usize) {
 /// given: an unmeasurable position is better left as it arrived than
 /// silently moved.
 pub(crate) fn utf16_column(src: &str, line: usize, column: usize) -> usize {
-    let Some(text) = src.split('\n').nth(line.saturating_sub(1)) else {
+    let Some(text) = line
+        .checked_sub(1)
+        .and_then(|line| src.split('\n').nth(line))
+    else {
         return column;
     };
     let Some((prefix, _)) = text.char_indices().nth(column.saturating_sub(1)) else {
@@ -203,7 +206,13 @@ pub(crate) fn utf16_column(src: &str, line: usize, column: usize) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::line_col;
+    use super::{line_col, utf16_column};
+
+    #[test]
+    fn a_position_only_end_stays_the_sentinel() {
+        assert_eq!(utf16_column("한글\n", 0, 0), 0);
+        assert_eq!(utf16_column("한글\n", 1, 2), 2);
+    }
 
     #[test]
     fn line_col_normalizes_offsets_inside_multibyte_characters() {

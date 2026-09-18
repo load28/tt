@@ -183,6 +183,7 @@ impl Lower<'_> {
             node,
             name: decl.name.clone(),
             exported: decl.exported,
+            declared: decl.declared,
             generics: decl.generics.clone(),
             variants,
         }));

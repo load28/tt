@@ -16,8 +16,9 @@ use crate::lexer::TokenKind;
 pub(super) fn parse_variant<'t>(
     cur: Cursor<'t>,
     exported: bool,
+    declared: bool,
 ) -> Claim<(Cursor<'t>, usize, VariantDecl)> {
-    if let Some(parsed) = parse_variant_complete(cur, exported) {
+    if let Some(parsed) = parse_variant_complete(cur, exported, declared) {
         return Claim::Parsed(parsed);
     }
     if variant_committed(cur) {
@@ -77,13 +78,10 @@ fn variant_committed(cur: Cursor<'_>) -> bool {
 fn parse_variant_complete<'t>(
     mut cur: Cursor<'t>,
     exported: bool,
+    declared: bool,
 ) -> Option<(Cursor<'t>, usize, VariantDecl)> {
     let keyword_index = cur.idx.checked_sub(1)?;
-    let owner_start = if exported {
-        cur.idx.checked_sub(2)?
-    } else {
-        keyword_index
-    };
+    let owner_start = keyword_index.checked_sub(usize::from(exported) + usize::from(declared))?;
     let owner_start = cur.tokens.get(owner_start)?.span.start;
     let (name, name_span) = cur.eat_ident()?;
     if is_reserved(name) {
@@ -122,6 +120,7 @@ fn parse_variant_complete<'t>(
             name: name.to_string(),
             name_off: name_span.start,
             exported,
+            declared,
             generics: generics.to_string(),
             cases,
         },

@@ -66,6 +66,16 @@ pub(crate) fn lowering_plan(
     source: &str,
     source_kind: SourceKind,
 ) -> Result<LoweringPlan, LoweringFailure> {
+    lowering_plan_with(semantic, core, source, source_kind, false)
+}
+
+pub(crate) fn lowering_plan_with(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+    tolerant: bool,
+) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() {
         return Ok(LoweringPlan::default());
     }
@@ -80,20 +90,24 @@ pub(crate) fn lowering_plan(
                 end: source.len(),
             })
     };
-    let syntax =
-        match crate::program_syntax::ProgramSyntax::build(semantic, core, source, source_kind) {
-            Ok(syntax) => syntax,
-            Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript {
-                message,
-                source,
-            }) => return Err(LoweringFailure::SourceNotTypeScript { message, source }),
-            Err(error) => {
-                return Err(LoweringFailure::HostProjection {
-                    error,
-                    source: primary_source(),
-                });
-            }
-        };
+    let syntax = match crate::program_syntax::ProgramSyntax::build_with(
+        semantic,
+        core,
+        source,
+        source_kind,
+        tolerant,
+    ) {
+        Ok(syntax) => syntax,
+        Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript { message, source }) => {
+            return Err(LoweringFailure::SourceNotTypeScript { message, source });
+        }
+        Err(error) => {
+            return Err(LoweringFailure::HostProjection {
+                error,
+                source: primary_source(),
+            });
+        }
+    };
     let evaluation =
         crate::evaluation_ir::EvaluationFile::build(&syntax, core).map_err(|error| {
             LoweringFailure::Evaluation {
@@ -190,12 +204,15 @@ pub(crate) fn emit_with_map<'a>(
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
         inline_subjects: target.inline_subjects,
+        block_required_propagations: target.block_required_propagations,
+        ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
         active_scheduled_exprs: ActiveExprStack::default(),
         emitted_owner_rewrites: EmittedOwnerRewrites::default(),
         closed_compose_blocks: ClosedComposeBlocks::default(),
+        emitted_compose_rewrites: ClosedComposeBlocks::default(),
         loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),

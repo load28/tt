@@ -189,7 +189,7 @@ pub(in super::super) fn externs_from(
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
         }
-        let target = match dir.join(&import.specifier).canonicalize() {
+        let target = match crate::engine::paths::canonical(&dir.join(&import.specifier)) {
             Ok(target) => target,
             Err(_) => continue, // unresolvable — tsc's TS2307, not ours
         };

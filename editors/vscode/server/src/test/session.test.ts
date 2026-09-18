@@ -161,3 +161,120 @@ test("a session start that opens documents elsewhere cannot kill its own session
     engine.setOnSessionStart(null);
   }
 });
+
+function fakeCompiler(prefix: string, handle: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const compiler = path.join(dir, "ttc");
+  fs.writeFileSync(
+    compiler,
+    `#!/usr/bin/env node
+let buffer = "";
+const queue = [];
+let busy = false;
+const reply = message => process.stdout.write(JSON.stringify(message) + "\\n");
+const next = () => {
+  if (busy || queue.length === 0) return;
+  busy = true;
+  const request = queue.shift();
+  const done = () => { busy = false; next(); };
+  (${handle})(request, reply, done);
+};
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", chunk => {
+  buffer += chunk;
+  let newline;
+  while ((newline = buffer.indexOf("\\n")) !== -1) {
+    queue.push(JSON.parse(buffer.slice(0, newline)));
+    buffer = buffer.slice(newline + 1);
+  }
+  next();
+});
+`,
+  );
+  fs.chmodSync(compiler, 0o755);
+  return compiler;
+}
+
+test("a queued request's timeout starts when it reaches the head of the line", { timeout: 5000 }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const compiler = fakeCompiler("tt-session-head-", `(request, reply, done) => {
+    const delay = request.method === "slow" ? 600 : 0;
+    setTimeout(() => { reply({ id: request.id, result: { method: request.method } }); done(); }, delay);
+  }`);
+
+  const slow = engine.engineRequest(compiler, "slow", {}, 2000);
+  const queued = engine.engineRequest(compiler, "queued", {}, 400);
+  assert.deepEqual(await Promise.all([slow, queued]), [
+    { result: { method: "slow" } },
+    { result: { method: "queued" } },
+  ]);
+  assert.deepEqual(await engine.engineRequest(compiler, "after", {}, 400), { result: { method: "after" } });
+  engine.shutdownEngineServer();
+});
+
+test("an error reply without an id settles the request at the head of the line", { timeout: 5000 }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const compiler = fakeCompiler("tt-session-null-id-", `(request, reply, done) => {
+    if (request.method === "bad") reply({ id: null, error: "malformed request: boom" });
+    else reply({ id: request.id, result: { method: request.method } });
+    done();
+  }`);
+
+  const answers = await Promise.all([
+    engine.engineRequest(compiler, "first", {}, 1000),
+    engine.engineRequest(compiler, "bad", {}, 1000),
+    engine.engineRequest(compiler, "second", {}, 1000),
+  ]);
+  assert.deepEqual(answers, [
+    { result: { method: "first" } },
+    { error: "malformed request: boom" },
+    { result: { method: "second" } },
+  ]);
+  assert.deepEqual(await engine.engineRequest(compiler, "third", {}, 1000), { result: { method: "third" } });
+  engine.shutdownEngineServer();
+});
+
+test("every string a request carries reaches the engine as well-formed Unicode", { timeout: 5000 }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const compiler = fakeCompiler("tt-session-well-formed-", `(request, reply, done) => {
+    const lone = /[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]/;
+    reply({ id: request.id, result: {
+      text: request.params.text,
+      path: request.params.path,
+      wellFormed: !lone.test(request.params.text) && !lone.test(request.params.path),
+    } });
+    done();
+  }`);
+
+  const answer = await engine.engineRequest(
+    compiler,
+    "echo",
+    { text: "const s = \"a\ud800b\";\n😀", path: "/w/\udc00.tt" },
+    1000,
+  );
+  assert.deepEqual(answer, {
+    result: {
+      text: "const s = \"a�b\";\n😀",
+      path: "/w/�.tt",
+      wellFormed: true,
+    },
+  });
+  engine.shutdownEngineServer();
+});
+
+test("a buffer with a lone surrogate is checked instead of ending the session", { skip, timeout: 10000 }, async () => {
+  engine.retryEngineServer();
+  engine.shutdownEngineServer();
+  const answer = await engine.engineRequest(
+    COMPILER,
+    "check",
+    { text: "const s = \"\ud800\";\nvariant S { A }\nconst v = match (S.A) { A => 1 };\n", filename: "a.tt", verify: true },
+    5000,
+  );
+  assert.ok(answer && "result" in answer, `the compiler answered: ${JSON.stringify(answer)}`);
+  const following = await check(COMPILER);
+  assert.ok(following && "result" in following, "the session is still serving");
+});

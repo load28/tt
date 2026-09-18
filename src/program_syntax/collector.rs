@@ -4,13 +4,14 @@ use super::*;
 
 pub(super) struct ParsedModule {
     pub(super) module: Module,
-    pub(super) start: u32,
+    pub(super) start: HostOrigin,
 }
 
 pub(super) fn parse_module(
     code: &str,
     segments: &[ProjectionSourceSegment],
     source_kind: crate::SourceKind,
+    tolerant: bool,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
     if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
         return Err(parse_failure_at(
@@ -20,20 +21,9 @@ pub(super) fn parse_module(
             message.to_string(),
         ));
     }
-    let source_map: Lrc<SourceMap> = Default::default();
-    let file = source_map.new_source_file(Lrc::new(FileName::Anon), code.to_string());
-    let start = file.start_pos.0;
-    let lexer = Lexer::new(
-        Syntax::Typescript(TsSyntax {
-            tsx: source_kind.is_tsx(),
-            decorators: true,
-            ..Default::default()
-        }),
-        Default::default(),
-        StringInput::from(&*file),
-        None,
-    );
-    let mut parser = Parser::new_from(lexer);
+    let input = HostInput::new(code);
+    let start = input.origin();
+    let mut parser = input.parser(source_kind);
     let result = parser.parse_module();
     let mut errors = parser.take_errors();
     let module = match result {
@@ -43,7 +33,9 @@ pub(super) fn parse_module(
             return Err(parse_failure(code, segments, start, &errors[0]));
         }
     };
-    if let Some(error) = errors.into_iter().next() {
+    if let Some(error) = errors.into_iter().next()
+        && !tolerant
+    {
         return Err(parse_failure(code, segments, start, &error));
     }
     Ok(ParsedModule { module, start })
@@ -58,13 +50,13 @@ pub(super) fn parse_module(
 pub(super) fn parse_failure(
     code: &str,
     segments: &[ProjectionSourceSegment],
-    start: u32,
+    start: HostOrigin,
     error: &swc_ecma_parser::error::Error,
 ) -> ProgramSyntaxError {
     let message = error.kind().msg().to_string();
     // A parser can stop one byte past the end (`<eof>` expectations); that
     // byte belongs to the segment it ends.
-    let at = usize::try_from(error.span().lo().0.saturating_sub(start)).unwrap_or(0);
+    let at = start.byte(error.span().lo());
     parse_failure_at(code, segments, at, message)
 }
 
@@ -85,9 +77,10 @@ fn parse_failure_at(
 }
 
 pub(super) struct ParentCollector {
+    pub(super) placeholders: HashSet<ProjectedSpan>,
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
-    pub(super) source_start: u32,
+    pub(super) source_start: HostOrigin,
     pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_calls: HashMap<ProjectedSpan, TtNodeId>,
     pub(super) expected_exit_calls: HashSet<TtNodeId>,
@@ -123,6 +116,7 @@ pub(super) struct CollectedProgramSyntax {
 }
 
 pub(super) struct FoundOverlay {
+    pub(super) ambient: bool,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
@@ -261,14 +255,16 @@ pub(super) struct ProjectedHostOwner {
 
 pub(super) fn object_evaluation_positions(
     node: &ObjectLit,
-    source_start: u32,
+    source_start: HostOrigin,
+    placeholders: &HashSet<ProjectedSpan>,
+    segments: &[ProjectionSourceSegment],
 ) -> Vec<(ProjectedSpan, Effects)> {
     let mut positions = Vec::new();
     for property in &node.props {
         match property {
             PropOrSpread::Spread(spread) => {
                 positions.push((
-                    projected_span(spread.expr.span(), source_start),
+                    operand_span(&spread.expr, source_start, placeholders, segments),
                     expression_effects(&spread.expr),
                 ));
             }
@@ -279,13 +275,13 @@ pub(super) fn object_evaluation_positions(
                 Prop::KeyValue(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
                     positions.push((
-                        projected_span(property.value.span(), source_start),
+                        operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
                     ));
                 }
                 Prop::Assign(property) => {
                     positions.push((
-                        projected_span(property.value.span(), source_start),
+                        operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
                     ));
                 }
@@ -307,7 +303,7 @@ pub(super) fn object_evaluation_positions(
 pub(super) fn push_computed_property(
     positions: &mut Vec<(ProjectedSpan, Effects)>,
     name: &PropName,
-    source_start: u32,
+    source_start: HostOrigin,
 ) {
     if let PropName::Computed(computed) = name {
         positions.push((
@@ -323,13 +319,15 @@ pub(super) fn push_computed_property(
 /// call spreads each.
 pub(super) fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
-    source_start: u32,
+    source_start: HostOrigin,
+    placeholders: &HashSet<ProjectedSpan>,
+    segments: &[ProjectionSourceSegment],
 ) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments
         .iter()
         .map(|argument| {
             (
-                projected_span(argument.expr.span(), source_start),
+                operand_span(&argument.expr, source_start, placeholders, segments),
                 argument.spread.is_some(),
                 expression_effects(&argument.expr),
             )
@@ -339,7 +337,7 @@ pub(super) fn argument_positions(
 
 pub(super) fn jsx_expression_span(
     expression: &JSXExpr,
-    source_start: u32,
+    source_start: HostOrigin,
 ) -> Option<ProjectedSpan> {
     match expression {
         JSXExpr::Expr(expression) => Some(projected_span(expression.span(), source_start)),
@@ -349,7 +347,7 @@ pub(super) fn jsx_expression_span(
 
 pub(super) fn jsx_evaluation_positions(
     node: &JSXElement,
-    source_start: u32,
+    source_start: HostOrigin,
 ) -> Vec<(ProjectedSpan, bool)> {
     let attributes = node
         .opening
@@ -392,7 +390,7 @@ pub(super) fn jsx_evaluation_positions(
 
 pub(super) fn jsx_fragment_positions(
     node: &JSXFragment,
-    source_start: u32,
+    source_start: HostOrigin,
 ) -> Vec<(ProjectedSpan, bool)> {
     node.children
         .iter()

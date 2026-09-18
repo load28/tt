@@ -311,3 +311,41 @@ fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
     // Line 3 is `return match (e) {` — the construct the guard belongs to.
     assert!(trace.contains("app.tt:3:"), "{trace}");
 }
+
+#[test]
+fn run_guard_regions_preserve_all_values_and_short_circuit_effects() {
+    if !have("tsc") || !have("node") { return; }
+    let out = run(r#"
+const events: number[] = [];
+function mark(n: number) { events.push(n); return n; }
+function both(a: boolean, b: boolean) {
+  return match (1) {
+    1 if (match (mark(1)) { 1 => { const value = a; return value; }, _ => false }) &&
+         (match (mark(2)) { 2 => { const value = b; return value; }, _ => false }) => true,
+    _ => false
+  };
+}
+function either(a: boolean, b: boolean) {
+  return match (1) {
+    1 if (match (mark(3)) { 3 => { const value = a; return value; }, _ => false }) ||
+         (match (mark(4)) { 4 => { const value = b; return value; }, _ => false }) => true,
+    _ => false
+  };
+}
+function choose(a: boolean) {
+  return match (1) {
+    1 if a ? (match (mark(5)) { 5 => { const value = true; return value; }, _ => false }) :
+             (match (mark(6)) { 6 => { const value = false; return value; }, _ => false }) => true,
+    _ => false
+  };
+}
+console.log(both(false, true), events.splice(0).join(","));
+console.log(both(true, false), events.splice(0).join(","));
+console.log(both(true, true), events.splice(0).join(","));
+console.log(either(true, false), events.splice(0).join(","));
+console.log(either(false, true), events.splice(0).join(","));
+console.log(choose(true), events.splice(0).join(","));
+console.log(choose(false), events.splice(0).join(","));
+"#);
+    assert_eq!(out, ["false 1", "false 1,2", "true 1,2", "true 3", "true 3,4", "true 5", "false 6"]);
+}

@@ -135,12 +135,15 @@ export interface EngineSemanticToken {
  * fine, the request failed), or null — the server itself is unavailable. */
 export type EngineAnswer = { result: unknown } | { error: string } | null;
 
+interface PendingRequest {
+  resolve: (v: EngineAnswer) => void;
+  timeoutMs: number;
+  timer: NodeJS.Timeout | null;
+}
+
 interface EngineServer {
   child: ChildProcess;
-  pending: Map<
-    number,
-    { resolve: (v: EngineAnswer) => void; timer: NodeJS.Timeout }
-  >;
+  pending: Map<number, PendingRequest>;
   nextId: number;
   buffer: string;
   alive: boolean;
@@ -195,7 +198,7 @@ function retireEngineServer(
     strikeOut(compiler);
   }
   for (const entry of server.pending.values()) {
-    clearTimeout(entry.timer);
+    if (entry.timer !== null) clearTimeout(entry.timer);
     entry.resolve(null);
   }
   server.pending.clear();
@@ -248,26 +251,27 @@ function engineServerFor(compiler: string): EngineServer | null {
     while ((newline = server.buffer.indexOf("\n")) !== -1) {
       const line = server.buffer.slice(0, newline);
       server.buffer = server.buffer.slice(newline + 1);
-      let message: { id?: number; result?: unknown; error?: string };
+      let message: { id?: number | null; result?: unknown; error?: string };
       try {
         message = JSON.parse(line);
       } catch {
         continue;
       }
-      const entry =
+      const answered = settleRequest(
+        server,
         typeof message.id === "number"
-          ? server.pending.get(message.id)
-          : undefined;
-      if (!entry) continue;
-      server.pending.delete(message.id as number);
-      clearTimeout(entry.timer);
-      server.answered = true;
-      engineServerStrikes.delete(compiler);
-      entry.resolve(
+          ? message.id
+          : message.id === null && typeof message.error === "string"
+            ? headRequestId(server)
+            : undefined,
         typeof message.error === "string"
           ? { error: message.error }
           : { result: message.result },
       );
+      if (!answered) continue;
+      server.answered = true;
+      engineServerStrikes.delete(compiler);
+      armHeadRequest(compiler, server);
     }
   });
   // The server must never keep the host process alive: it exits on its own
@@ -295,18 +299,10 @@ export function engineRequest(
   }
   const id = server.nextId++;
   return new Promise((resolve) => {
-    // The timeout stays ref'd on purpose: while a request is in flight it
-    // is the one handle keeping the event loop alive (the child and its
-    // pipes are unref'd so an *idle* server never holds the process open).
-    const timer = setTimeout(() => {
-      // Requests share one ordered stream. Once one cannot finish within its
-      // contract, nothing queued behind it has evidence that this process can
-      // advance; retire the conversation and let the next action restart it.
-      retireEngineServer(compiler, server, false);
-    }, timeoutMs);
-    server.pending.set(id, { resolve, timer });
+    server.pending.set(id, { resolve, timeoutMs, timer: null });
+    armHeadRequest(compiler, server);
     server.child.stdin?.write(
-      JSON.stringify({ id, method, params }) + "\n",
+      JSON.stringify({ id, method, params }, wellFormedStrings) + "\n",
       (err) => {
         if (err) {
           retireEngineServer(compiler, server, true);
@@ -314,6 +310,47 @@ export function engineRequest(
       },
     );
   });
+}
+
+function headRequestId(server: EngineServer): number | undefined {
+  return server.pending.keys().next().value;
+}
+
+function armHeadRequest(compiler: string, server: EngineServer): void {
+  const id = headRequestId(server);
+  if (id === undefined) return;
+  const head = server.pending.get(id)!;
+  if (head.timer !== null) return;
+  // The timeout stays ref'd on purpose: while a request is in flight it
+  // is the one handle keeping the event loop alive (the child and its
+  // pipes are unref'd so an *idle* server never holds the process open).
+  head.timer = setTimeout(() => {
+    // Requests share one ordered stream. Once one cannot finish within its
+    // contract, nothing queued behind it has evidence that this process can
+    // advance; retire the conversation and let the next action restart it.
+    retireEngineServer(compiler, server, false);
+  }, head.timeoutMs);
+}
+
+function settleRequest(
+  server: EngineServer,
+  id: number | undefined,
+  answer: EngineAnswer,
+): boolean {
+  const entry = id === undefined ? undefined : server.pending.get(id);
+  if (entry === undefined || id === undefined) return false;
+  server.pending.delete(id);
+  if (entry.timer !== null) clearTimeout(entry.timer);
+  entry.resolve(answer);
+  return true;
+}
+
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+function wellFormedStrings(_key: string, value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const native = (String.prototype as { toWellFormed?: () => string }).toWellFormed;
+  return native ? native.call(value) : value.replace(LONE_SURROGATE, "\uFFFD");
 }
 
 /**

@@ -330,6 +330,26 @@ fn match_placement_message(
     }
 }
 
+fn recovered_target_errors(
+    failure: &codegen::LoweringFailure,
+    semantics: &analysis::SemanticFile,
+    core: &core_ir::CoreFile,
+    source: &str,
+    options: &Options,
+    existing: &[TtError],
+) -> Vec<TtError> {
+    if !matches!(
+        failure,
+        codegen::LoweringFailure::SourceNotTypeScript { .. }
+    ) {
+        return Vec::new();
+    }
+    match codegen::lowering_plan_with(semantics, core, source, options.source_kind, true) {
+        Ok(plan) => nonredundant_target_errors(&plan, existing),
+        Err(_) => Vec::new(),
+    }
+}
+
 fn target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
     let mut errors = try_target_errors(plan);
     errors.extend(match_target_errors(plan));
@@ -450,7 +470,12 @@ pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     if !errors.iter().any(|error| error.code.blocks_projection()) {
         match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
             Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
-            Err(failure) => errors.push(verify::in_source(source, &failure)),
+            Err(failure) => {
+                errors.push(verify::in_source(source, &failure));
+                errors.extend(recovered_target_errors(
+                    &failure, &semantics, &core, source, options, &errors,
+                ));
+            }
         }
     }
     suppress_discarded_result_fallthrough(&mut errors);
@@ -654,6 +679,10 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         // else already found.
         Err(failure) => {
             errors.push(verify::in_source(source, &failure));
+            errors.extend(recovered_target_errors(
+                &failure, &semantics, &core, source, options, &errors,
+            ));
+            errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
             return CompileReport {
                 emit: None,
                 diagnostics: errors

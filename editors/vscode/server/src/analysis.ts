@@ -72,15 +72,116 @@ export function maskNonCode(src: string, jsx = false): string {
   let lastSig = ""; // last significant code character seen
   let lastWord = ""; // last identifier/keyword seen (for the regex heuristic)
 
+  const expressionStart = (): boolean => {
+    if (lastSig === "") return true;
+    if ("([{,;=:!&|?+-*/%<>~^".includes(lastSig)) return true;
+    if (ID_CHAR.test(lastSig)) return REGEX_PRECEDING_KEYWORDS.has(lastWord);
+    return false;
+  };
+
   const regexAllowed = (): boolean => {
     // `</` closes a JSX element. In TypeScript a regex may follow `<`, so
     // only the JSX surface can tell the two apart, and only when the slash
     // is the very next character: `a < /re/` is still a comparison.
     if (jsx && lastSig === "<" && src[i - 1] === "<") return false;
-    if (lastSig === "") return true;
-    if ("([{,;=:!&|?+-*/%<>~^".includes(lastSig)) return true;
-    if (ID_CHAR.test(lastSig)) return REGEX_PRECEDING_KEYWORDS.has(lastWord);
-    return false;
+    return expressionStart();
+  };
+
+  const skipSpace = (k: number): number => {
+    while (k < n && /\s/.test(src[k])) k++;
+    return k;
+  };
+
+  const wordFrom = (k: number): string => {
+    let end = k;
+    while (end < n && ID_CHAR.test(src[end])) end++;
+    return src.slice(k, end);
+  };
+
+  const jsxStarts = (): boolean => {
+    if (!jsx || !expressionStart()) return false;
+    let k = skipSpace(i + 1);
+    if (src[k] === ">") return true;
+    if (!ID_START.test(src[k] ?? "")) return false;
+    if (wordFrom(k) === "const") k = skipSpace(k + "const".length);
+    const name = wordFrom(k);
+    if (name === "") return false;
+    k = skipSpace(k + name.length);
+    if (src[k] === "," || src[k] === "=") return false;
+    if (wordFrom(k) === "extends") {
+      const after = src[skipSpace(k + "extends".length)];
+      return after === "=" || after === ">" || after === "/";
+    }
+    return true;
+  };
+
+  const scanJsxString = (quote: string): void => {
+    const start = i;
+    i++;
+    while (i < n && src[i] !== quote) i++;
+    i = Math.min(n, i + 1);
+    blank(start, i);
+  };
+
+  const scanJsxContainer = (): void => {
+    i++;
+    lastSig = "{";
+    lastWord = "";
+    scanCode("}", true);
+  };
+
+  const scanJsxTag = (): void => {
+    i = skipSpace(i + 1);
+    if (src[i] === ">") {
+      i++;
+      scanJsxChildren();
+      return;
+    }
+    while (i < n) {
+      const c = src[i];
+      if (c === '"' || c === "'") {
+        scanJsxString(c);
+        continue;
+      }
+      if (c === "{") {
+        scanJsxContainer();
+        continue;
+      }
+      if (c === "/" && src[i + 1] === ">") {
+        i += 2;
+        return;
+      }
+      if (c === ">") {
+        i++;
+        scanJsxChildren();
+        return;
+      }
+      i++;
+    }
+  };
+
+  const scanJsxChildren = (): void => {
+    while (i < n) {
+      const c = src[i];
+      if (c === "{") {
+        scanJsxContainer();
+        continue;
+      }
+      if (c === "<") {
+        if (src[i + 1] === "/") {
+          while (i < n && src[i] !== ">") i++;
+          i = Math.min(n, i + 1);
+          return;
+        }
+        const k = skipSpace(i + 1);
+        if (src[k] === ">" || ID_START.test(src[k] ?? "")) {
+          scanJsxTag();
+          continue;
+        }
+      }
+      blank(i, i + 1);
+      i++;
+    }
   };
 
   const scanString = (quote: string): void => {
@@ -165,15 +266,22 @@ export function maskNonCode(src: string, jsx = false): string {
   };
 
   // Scan code, blanking non-code regions, until `until` appears at brace
-  // depth 0 (the terminator itself is blanked) or the input ends.
-  const scanCode = (until: string | null): void => {
+  // depth 0 (the terminator itself is blanked unless `keepUntil`) or the
+  // input ends.
+  const scanCode = (until: string | null, keepUntil = false): void => {
     let depth = 0;
     while (i < n) {
       const c = src[i];
       if (until !== null && depth === 0 && c === until) {
-        blank(i, i + 1);
+        if (!keepUntil) blank(i, i + 1);
         i++;
         return;
+      }
+      if (c === "<" && jsxStarts()) {
+        scanJsxTag();
+        lastSig = ")";
+        lastWord = "";
+        continue;
       }
       if (c === "'" || c === '"') {
         scanString(c);

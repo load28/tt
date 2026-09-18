@@ -391,3 +391,19 @@ pub fn variant_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<V
         })
         .collect()
 }
+
+/// The line terminator a file is written with: `"\r\n"` when its first line
+/// break is one, `"\n"` otherwise. Generated text joins a file with the
+/// terminator the file already uses.
+///
+/// ```
+/// assert_eq!(ttc::line_ending("a\r\nb\n"), "\r\n");
+/// assert_eq!(ttc::line_ending("a\nb\r\n"), "\n");
+/// assert_eq!(ttc::line_ending("a"), "\n");
+/// ```
+pub fn line_ending(source: &str) -> &'static str {
+    match source.find('\n') {
+        Some(at) if at > 0 && source.as_bytes()[at - 1] == b'\r' => "\r\n",
+        _ => "\n",
+    }
+}

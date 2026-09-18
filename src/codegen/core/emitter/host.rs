@@ -97,9 +97,10 @@ impl<'a> Emitter<'a> {
 
     pub(super) fn emit_compose_rewrite(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         let mut out = Rope::new();
-        if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
+        let depth = u16::from(rewrite.owner_kind == HostOwnerKind::ArrowExpression);
+        if depth > 0 {
             out.push_lit("{");
-            out.push_break(0);
+            out.push_break(depth);
         }
         for action in &rewrite.actions {
             let slot = match action {
@@ -122,7 +123,7 @@ impl<'a> Emitter<'a> {
                             continue;
                         }
                         out.push_lit(format!("let {name};"));
-                        out.push_break(0);
+                        out.push_break(depth);
                     }
                     continue;
                 }
@@ -136,9 +137,10 @@ impl<'a> Emitter<'a> {
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
             out.push_value_declaration(slot);
-            out.push_break(0);
+            out.push_break(depth);
         }
         let mut captured = HashSet::new();
+        let mut regions = 0usize;
         for action in &rewrite.actions {
             match action {
                 ComposeAction::Value(value) => {
@@ -195,20 +197,32 @@ impl<'a> Emitter<'a> {
                     for step in &value.steps {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }
-                    out.append(lowered);
+                    if regions > 0 {
+                        out.push_break(depth);
+                    }
+                    regions += 1;
+                    out.append(Rope::indented(depth, lowered));
                 }
                 ComposeAction::Operation(operation) => {
                     let mut lowered = self.emit_conditional_operation(operation, &mut captured);
                     for step in &operation.outer {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }
-                    out.append(lowered);
+                    if regions > 0 {
+                        out.push_break(depth);
+                    }
+                    regions += 1;
+                    out.append(Rope::indented(depth, lowered));
                 }
             }
         }
-        out.push_break(0);
-        if rewrite.owner_kind == HostOwnerKind::ArrowExpression {
+        out.push_break(depth);
+        if depth > 0 {
             out.push_lit("return ");
+            let mut open = Rope::new();
+            open.push_scope_open();
+            open.append(out);
+            return open;
         }
         Rope::scoped(out)
     }
@@ -539,6 +553,68 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    pub(super) fn carried_by_capture(&self, start: usize, end: usize) -> bool {
+        self.source_replacements.iter().any(|captured| {
+            captured.anchor.is_none()
+                && captured.source.start <= start
+                && end <= captured.source.end
+                && (captured.source.start < start || end < captured.source.end)
+                && self.slot_exprs.keys().any(|expr| {
+                    let (_, value_start, _, extent) = self.value_anchor(*expr);
+                    captured.source.start <= value_start
+                        && extent <= captured.source.end
+                        && value_start <= start
+                        && end <= extent
+                })
+        })
+    }
+
+    pub(super) fn inside_captured_value(
+        &self,
+        captured: SourceSpan,
+        start: usize,
+        end: usize,
+    ) -> bool {
+        self.slot_exprs.keys().any(|expr| {
+            let (_, value_start, _, extent) = self.value_anchor(*expr);
+            captured.start <= value_start
+                && extent <= captured.end
+                && value_start <= start
+                && end <= extent
+        })
+    }
+
+    fn captured_source(&self, source: SourceSpan) -> Rope<'a> {
+        let mut inner: Vec<_> = self
+            .slot_exprs
+            .keys()
+            .map(|expr| {
+                let (kind, start, head_end, extent) = self.value_anchor(*expr);
+                (*expr, kind, start, head_end, extent)
+            })
+            .filter(|(_, _, start, _, extent)| source.start <= *start && *extent <= source.end)
+            .collect();
+        inner.sort_unstable_by_key(|(_, _, start, _, _)| *start);
+        let mut out = Rope::new();
+        let mut cursor = source.start;
+        for (expr, kind, start, head_end, extent) in inner {
+            if start < cursor {
+                continue;
+            }
+            if cursor < start {
+                out.push_src(&self.source[cursor..start], cursor);
+            }
+            let mut slot = Rope::new();
+            slot.push_lit(self.slot_exprs[&expr].clone());
+            out.anchored(kind, start, head_end, extent, slot);
+            cursor = extent;
+        }
+        if cursor < source.end {
+            out.push_src(&self.source[cursor..source.end], cursor);
+        }
+        out
+    }
+
     pub(super) fn source_range_with_value_slots(
         &self,
         span: SourceSpan,
@@ -551,11 +627,23 @@ impl<'a> Emitter<'a> {
                 (*expr, kind, SourceSpan { start, end: extent }, head_end)
             })
             .filter(|(_, _, value, _)| span.start <= value.start && value.end <= span.end)
+            .filter(|(_, _, value, _)| {
+                !self.source_replacements.iter().any(|captured| {
+                    captured.anchor.is_none()
+                        && span.start <= captured.source.start
+                        && captured.source.start <= value.start
+                        && value.end <= captured.source.end
+                        && captured.source != *value
+                })
+            })
             .collect();
         replacements.sort_unstable_by_key(|(_, _, value, _)| value.start);
         let mut out = Rope::new();
         let mut cursor = span.start;
         for (expr, kind, value, head_end) in replacements {
+            if value.start < cursor {
+                continue;
+            }
             if cursor < value.start {
                 out.append(self.source_range_rope(hir::Span {
                     start: cursor,
@@ -721,7 +809,7 @@ impl<'a> Emitter<'a> {
                     // A receiver retains its inferred members. The `this`
                     // parameter at a later bind is not its contextual type.
                     out.push_lit(format!("const {} = (", self.value_slot_name(slot)));
-                    out.push_src(&self.source[source.start..source.end], source.start);
+                    out.append(self.captured_source(source));
                     out.push_lit(");");
                     out.push_break(0);
                 }
@@ -819,7 +907,8 @@ impl<'a> Emitter<'a> {
         out.push_lit(";");
         out.push_break(0);
         out.push_lit("}");
-        Rope::scoped(out)
+        out.push_scope_close();
+        out
     }
 
     pub(super) fn emit_scheduled_step(
@@ -859,17 +948,17 @@ impl<'a> Emitter<'a> {
                     self.value_slot_name(*target)
                 ));
                 if source.start < receiver_source.start {
-                    prefix.push_src(
-                        &self.source[source.start..receiver_source.start],
-                        source.start,
-                    );
+                    prefix.append(self.captured_source(SourceSpan {
+                        start: source.start,
+                        end: receiver_source.start,
+                    }));
                 }
                 self.push_planned_receiver(&receiver, true, &mut prefix);
                 if receiver_source.end < source.end {
-                    prefix.push_src(
-                        &self.source[receiver_source.end..source.end],
-                        receiver_source.end,
-                    );
+                    prefix.append(self.captured_source(SourceSpan {
+                        start: receiver_source.end,
+                        end: source.end,
+                    }));
                 }
                 if optional_reference {
                     let target_name = self.value_slot_name(*target);
@@ -891,7 +980,7 @@ impl<'a> Emitter<'a> {
                 }
             } else {
                 prefix.push_value_capture(self.value_slot_name(*target));
-                prefix.push_src(&self.source[source.start..source.end], source.start);
+                prefix.append(self.captured_source(*source));
                 prefix.push_lit(");");
                 prefix.push_break(0);
             }

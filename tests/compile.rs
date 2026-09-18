@@ -872,3 +872,5 @@ include!("compile/cases_06.rs");
 include!("compile/cases_07.rs");
 include!("compile/cases_08.rs");
 include!("compile/cases_09.rs");
+include!("compile/cases_10.rs");
+include!("compile/cases_11.rs");

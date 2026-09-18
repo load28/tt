@@ -211,6 +211,8 @@ pub struct VariantItem {
     pub name: String,
     /// Whether the declaration has an `export` modifier.
     pub exported: bool,
+    /// Whether the declaration has a `declare` modifier.
+    pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
     /// The declaration's variants, in order.

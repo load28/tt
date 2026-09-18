@@ -62,13 +62,69 @@ pub(crate) enum ProgramSyntaxError {
     },
 }
 
+impl std::fmt::Display for ProgramSyntaxError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProgramSyntaxError::MissingSourceSpan { .. } => {
+                write!(f, "a tt node has no source span")
+            }
+            ProgramSyntaxError::InvalidSourceSpan { start, end } => {
+                write!(
+                    f,
+                    "a tt node's source span {}..{} is invalid",
+                    start.0, end.0
+                )
+            }
+            ProgramSyntaxError::NodeCountOverflow => write!(f, "too many tt nodes in one file"),
+            ProgramSyntaxError::SourceNotTypeScript { message, .. } => {
+                write!(f, "the TypeScript here does not parse: {message}")
+            }
+            ProgramSyntaxError::Parse { message, .. } => {
+                write!(
+                    f,
+                    "the generated TypeScript for it does not parse: {message}"
+                )
+            }
+            ProgramSyntaxError::MissingOverlay { .. } => {
+                write!(
+                    f,
+                    "the construct has no place in the TypeScript syntax tree"
+                )
+            }
+            ProgramSyntaxError::DuplicateOverlay { .. } => {
+                write!(
+                    f,
+                    "the construct has two places in the TypeScript syntax tree"
+                )
+            }
+            ProgramSyntaxError::UnmappedEvaluationSpan { start, end } => {
+                write!(
+                    f,
+                    "the evaluation position {start}..{end} maps to no source"
+                )
+            }
+        }
+    }
+}
+
 impl ProgramSyntax {
     /// Builds and validates the shadow program model.
+    #[cfg(test)]
     pub(crate) fn build(
         semantic: &SemanticFile,
         core: &CoreFile,
         source: &str,
         source_kind: crate::SourceKind,
+    ) -> Result<Self, ProgramSyntaxError> {
+        Self::build_with(semantic, core, source, source_kind, false)
+    }
+
+    pub(crate) fn build_with(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        source: &str,
+        source_kind: crate::SourceKind,
+        tolerant: bool,
     ) -> Result<Self, ProgramSyntaxError> {
         if let Some((span, message)) = crate::lexer::host_syntax_error(source, source_kind) {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
@@ -77,7 +133,12 @@ impl ProgramSyntax {
             });
         }
         let projection = ProjectionBuilder::new(semantic, core, source).build()?;
-        let parsed = parse_module(&projection.code, &projection.source_segments, source_kind)?;
+        let parsed = parse_module(
+            &projection.code,
+            &projection.source_segments,
+            source_kind,
+            tolerant,
+        )?;
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -755,6 +816,7 @@ impl<'a> ProjectionBuilder<'a> {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
             }
         }
+        self.code.push('\n');
         let synthetic_return_start = ProjectedByte(self.code.len());
         self.code.push_str("return ");
         if let Some(value) = region.value {
@@ -857,10 +919,26 @@ impl<'a> ProjectionBuilder<'a> {
         }
         for arm in &decision.arms {
             if let Some(guard) = arm.guard {
+                // A guard is evaluated only after its pattern bindings exist.
+                // Map its projected statement as a complete owner so all of
+                // its values share one evaluation plan, separate from the match.
+                let start = ProjectedByte(self.code.len());
                 self.code.push('(');
                 let segments_since = self.source_segments.len();
                 self.emit_expr(guard)?;
                 self.push_source_boundary(");", segments_since);
+                if let Expr::Sequence(body) = &self.core.exprs[guard.index()]
+                    && let Some(node) = self.core.sequence_node(*body)
+                {
+                    self.source_segments.push(ProjectionSourceSegment {
+                        projected: ProjectedSpan {
+                            start,
+                            end: ProjectedByte(self.code.len()),
+                        },
+                        source: self.source_span(node)?,
+                        kind: ProjectionSegmentKind::Placeholder,
+                    });
+                }
             }
             let crate::core_ir::ArmAction::Yield { body, kind } = arm.action else {
                 continue;

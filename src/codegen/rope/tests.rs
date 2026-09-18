@@ -38,7 +38,7 @@ fn target_assigns_exact_construct_and_file_origins() {
             ..
         }
     ));
-    let flat = target.print();
+    let flat = target.print("\n");
     assert_eq!(flat.code, "const value;\n");
     assert_eq!(
         flat.mappings,

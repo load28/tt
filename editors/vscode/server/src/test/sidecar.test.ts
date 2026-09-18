@@ -10,7 +10,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { refreshSidecar } from "../sidecar";
+import { WriteLedger, refreshSidecar, selfWrites } from "../sidecar";
 import { COMPILER, compilerAvailable } from "./toolchain";
 import { caseDir } from "./workspace";
 
@@ -234,6 +234,62 @@ test("off mode does nothing", { skip }, async () => {
   const result = await refreshSidecar(COMPILER, tt, "off");
   assert.equal(result.kind, "skipped");
   assert.equal(fs.existsSync(`${tt}.d.ts`), false);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("the write ledger owns a file while the disk holds what it wrote", () => {
+  const dir = caseDir("tt-write-ledger-");
+  const file = path.join(dir, "x.tt.d.ts");
+  const ledger = new WriteLedger();
+
+  const generation = ledger.expect([file]);
+  assert.equal(ledger.owns(file), true, "a write in flight is its own");
+  fs.writeFileSync(file, "export {};\n");
+  ledger.settle(generation, true);
+  assert.equal(ledger.owns(file), true, "what it wrote is its own");
+
+  fs.writeFileSync(file, "export const edited = 1;\n");
+  assert.equal(ledger.owns(file), false, "a hand edit is somebody else's");
+  assert.equal(ledger.owns(file), false, "and stays so");
+  assert.equal(ledger.owns(path.join(dir, "never.tt.d.ts")), false);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a failed write and a superseded generation own nothing", () => {
+  const dir = caseDir("tt-write-ledger-");
+  const file = path.join(dir, "x.tt.d.ts");
+  const ledger = new WriteLedger();
+
+  const failed = ledger.expect([file]);
+  ledger.settle(failed, false);
+  assert.equal(ledger.owns(file), false, "nothing was written");
+
+  const older = ledger.expect([file]);
+  const newer = ledger.expect([file]);
+  fs.writeFileSync(file, "export {};\n");
+  ledger.settle(older, true);
+  assert.equal(ledger.owns(file), true, "the newer write is still in flight");
+  ledger.settle(newer, false);
+  assert.equal(ledger.owns(file), false);
+
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("a refresh records its sidecar files as the server's own writes", { skip }, async () => {
+  const dir = workspace();
+  const tt = path.join(dir, "notice.tt");
+
+  const result = await refreshSidecar(COMPILER, tt, "always");
+  assert.equal(result.kind, "written", JSON.stringify(result));
+  assert.equal(selfWrites.owns(`${tt}.d.ts`), true);
+  assert.equal(selfWrites.owns(`${tt}.d.ts.map`), true);
+  assert.equal(selfWrites.owns(tt), false, "the source is the user's");
+
+  fs.appendFileSync(`${tt}.d.ts`, "export declare const byHand: number;\n");
+  assert.equal(selfWrites.owns(`${tt}.d.ts`), false, "a hand-edited declaration is external");
+  assert.equal(selfWrites.owns(`${tt}.d.ts.map`), true);
 
   fs.rmSync(dir, { recursive: true, force: true });
 });

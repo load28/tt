@@ -125,6 +125,20 @@ pub(crate) fn modifier_at(src: &str, tokens: &[Token], idx: usize) -> Option<Val
     let binding_follows = match &next.kind {
         TokenKind::Ident => !is_operator_word(&src[next.span.start..next.span.end]),
         TokenKind::Punct(b'{' | b'[') => true,
+        TokenKind::Punct(b'.') => {
+            tokens.get(idx + 1..idx + 4).is_some_and(|dots| {
+                dots.iter()
+                    .all(|dot| matches!(dot.kind, TokenKind::Punct(b'.')))
+            }) && tokens
+                .get(idx + 4)
+                .is_some_and(|binding| match &binding.kind {
+                    TokenKind::Ident => {
+                        !is_operator_word(&src[binding.span.start..binding.span.end])
+                    }
+                    TokenKind::Punct(b'{' | b'[') => true,
+                    _ => false,
+                })
+        }
         _ => false,
     };
     if !binding_follows {

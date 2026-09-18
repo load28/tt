@@ -1706,3 +1706,165 @@ fn contextual_support_respects_ancestor_standard_packages() {
     assert!(code.contains("let $tt_v0: string;"), "{code}");
     assert!(!child.join("node_modules").exists());
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-377 boundary contracts                                         */
+/* ------------------------------------------------------------------ */
+
+fn server_lines(input: &[u8]) -> (Vec<String>, std::process::ExitStatus) {
+    use std::io::Write;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to run ttc");
+    child
+        .stdin
+        .take()
+        .expect("stdin piped")
+        .write_all(input)
+        .unwrap();
+    let out = child.wait_with_output().expect("failed to run ttc");
+    let lines = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    (lines, out.status)
+}
+
+#[test]
+fn a_server_line_that_is_not_utf8_is_answered_and_the_session_continues() {
+    let mut input = Vec::new();
+    input.extend_from_slice(
+        b"{\"id\":1,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n",
+    );
+    input
+        .extend_from_slice(b"{\"id\":2,\"method\":\"check\",\"params\":{\"text\":\"\xff\xfe\"}}\n");
+    input.extend_from_slice(
+        b"{\"id\":3,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n",
+    );
+    let (lines, status) = server_lines(&input);
+    assert!(status.success());
+    assert_eq!(lines.len(), 3, "{lines:#?}");
+    assert!(lines[0].contains("\"id\":1"), "{}", lines[0]);
+    assert!(
+        lines[1].contains("\"id\":null") && lines[1].contains("malformed request"),
+        "{}",
+        lines[1]
+    );
+    assert!(lines[2].contains("\"id\":3"), "{}", lines[2]);
+}
+
+#[test]
+fn a_position_only_diagnostic_keeps_a_zero_end_over_the_protocol() {
+    let (lines, _) = server_lines(b"{\"id\":3,\"method\":\"check\",\"params\":{\"text\":\"variant A { X }\\nconst v = match (A.X) { }\\n\",\"filename\":\"x.tt\"}}\n");
+    assert_eq!(lines.len(), 1, "{lines:#?}");
+    assert!(
+        lines[0].contains("\"endLine\":0") && lines[0].contains("\"endCol\":0"),
+        "{}",
+        lines[0]
+    );
+}
+
+#[test]
+fn emit_map_lowers_a_ttx_buffer_as_tsx() {
+    let (lines, _) = server_lines(b"{\"id\":1,\"method\":\"emitMap\",\"params\":{\"text\":\"variant S { A, B }\\nexport const el = (s: S) => <div>{match (s) { A => 1, B => 2 }}</div>;\\n\",\"filename\":\"v.ttx\"}}\n");
+    assert_eq!(lines.len(), 1, "{lines:#?}");
+    assert!(!lines[0].contains("$tt_recovery"), "{}", lines[0]);
+    assert!(lines[0].contains("switch ($tt_m.kind)"), "{}", lines[0]);
+
+    let dir = tmpdir();
+    let file = dir.join("v.ttx");
+    fs::write(&file, "variant S { A, B }\nexport const el = (s: S) => <div>{match (s) { A => 1, B => 2 }}</div>;\n").unwrap();
+    let out = ttc(&["--emit-map", file.to_str().unwrap()]);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!stdout.contains("$tt_recovery"), "{stdout}");
+}
+
+#[test]
+fn deeply_nested_typescript_is_checked_rather_than_aborting() {
+    let dir = tmpdir();
+    let file = dir.join("deep.tt");
+    let depth = 20_000;
+    fs::write(
+        &file,
+        format!(
+            "variant Q {{ A }}\nconst x = {}1{};\n",
+            "(".repeat(depth),
+            ")".repeat(depth)
+        ),
+    )
+    .unwrap();
+    let out = ttc(&["--check", file.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+
+    let mut input = Vec::new();
+    input.extend_from_slice(b"{\"id\":1,\"method\":\"check\",\"params\":{\"text\":\"");
+    input.extend_from_slice(b"const x = ");
+    input.extend(std::iter::repeat_n(b'(', depth));
+    input.push(b'1');
+    input.extend(std::iter::repeat_n(b')', depth));
+    input.extend_from_slice(
+        b";\\n\"}}\n{\"id\":2,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n",
+    );
+    let (lines, status) = server_lines(&input);
+    assert!(status.success());
+    assert_eq!(lines.len(), 2, "{lines:#?}");
+}
+
+#[test]
+fn a_crlf_file_is_written_with_crlf_throughout() {
+    let dir = tmpdir();
+    let src = dir.join("src");
+    fs::create_dir_all(&src).unwrap();
+    fs::write(
+        src.join("crlf.tt"),
+        "variant O { Some(value: number), None }\r\nexport const f = (o: O) => match (o) {\r\n  Some(value) => value,\r\n  None => 0,\r\n};\r\n",
+    )
+    .unwrap();
+    let out_dir = dir.join("out");
+    let out = ttc(&["-o", out_dir.to_str().unwrap(), src.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let emitted = fs::read_to_string(out_dir.join("crlf.ts")).unwrap();
+    for line in emitted.split_inclusive('\n') {
+        assert!(
+            line.ends_with("\r\n"),
+            "line without CRLF: {line:?}\n{emitted}"
+        );
+    }
+}
+
+#[test]
+fn deeply_nested_host_expressions_with_tt_keep_the_server_alive() {
+    let depth = 100_000;
+    let text = format!(
+        "variant X {{ A }}\nconst x = {}1{};\n",
+        "(".repeat(depth),
+        ")".repeat(depth)
+    );
+    let deep =
+        serde_json::json!({"id":1,"method":"check","params":{"text":text,"filename":"deep.tt"}});
+    let next = serde_json::json!({"id":2,"method":"check","params":{"text":"const x = 1;","filename":"next.tt"}});
+    let (lines, status) = server_lines(format!("{deep}\n{next}\n").as_bytes());
+    assert!(status.success(), "{status}: {lines:?}");
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    for (line, id) in lines.iter().zip([1, 2]) {
+        let reply: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(reply["id"], id);
+        assert_eq!(
+            reply["result"]["diagnostics"],
+            serde_json::json!([]),
+            "{reply}"
+        );
+    }
+}

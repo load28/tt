@@ -473,7 +473,7 @@ pub(crate) fn project_sources(
     out_dir: Option<&Path>,
     extensions: &[&str],
 ) -> std::io::Result<Vec<PathBuf>> {
-    let out = out_dir.and_then(|d| d.canonicalize().ok());
+    let out = out_dir.and_then(|d| super::paths::canonical(d).ok());
     let mut files = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
@@ -493,7 +493,7 @@ pub(crate) fn project_sources(
                 .and_then(|e| e.to_str())
                 .is_some_and(|e| extensions.contains(&e))
             {
-                files.push(path.canonicalize()?);
+                files.push(super::paths::canonical(&path)?);
             }
         }
     }
@@ -595,7 +595,7 @@ pub(crate) fn collect_tt(inputs: &[String]) -> std::io::Result<Vec<PathBuf>> {
     files
         .into_iter()
         .filter(|f| crate::SourceKind::from_tt_path(f).is_some())
-        .map(|f| f.canonicalize())
+        .map(|f| super::paths::canonical(&f))
         .collect()
 }
 

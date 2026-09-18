@@ -95,7 +95,7 @@ pub(super) fn entry() -> ExitCode {
     // compiler — rather than as a Rust backtrace the reader has to
     // interpret (TASK-214).
     ttc::ice::install_reporter();
-    match ttc::ice::catching(run) {
+    match ttc::stack::on_compiler_stack(|| ttc::ice::catching(run)) {
         Ok(code) => code,
         // The report is already on stderr, printed where the panic
         // happened. All that is left is to fail deliberately: 101 is the

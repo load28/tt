@@ -165,16 +165,21 @@ where
         let handles: Vec<_> = (0..workers)
             .map(|_| {
                 let next = &next;
-                scope.spawn(move || {
-                    let mut done: Vec<(usize, R)> = Vec::new();
-                    loop {
-                        let i = next.fetch_add(1, Ordering::Relaxed);
-                        match items.get(i) {
-                            Some(item) => done.push((i, f(item))),
-                            None => return done,
+                std::thread::Builder::new()
+                    .stack_size(ttc::stack::COMPILER_STACK_SIZE)
+                    .spawn_scoped(scope, move || {
+                        let mut done: Vec<(usize, R)> = Vec::new();
+                        loop {
+                            let i = next.fetch_add(1, Ordering::Relaxed);
+                            match items.get(i) {
+                                Some(item) => done.push((i, f(item))),
+                                None => return done,
+                            }
                         }
-                    }
-                })
+                    })
+                    .unwrap_or_else(|error| {
+                        panic!("a compiler worker could not be created: {error}")
+                    })
             })
             .collect();
         handles
