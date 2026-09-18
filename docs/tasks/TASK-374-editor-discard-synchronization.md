@@ -55,4 +55,3 @@ Investigate actual buffer and protocol transitions before changing production sy
 Resolved the remaining attributed editor failure after PR #122 through native focus-pull scheduling. TASK-373's parser phase separation, wildcard recovery, and method-scoped feature ownership remain intact and covered by the passing gates. The new native-only suite and strengthened paired suite retain real unsaved overlays and do not force diagnostic refreshes on behalf of the implementation.
 
 Changed files: the native extension patch and its README, `editors/vscode/scripts/test-editor.mjs`, `editors/vscode/test/{editor,diagnostics}.cjs`, the historical TASK-371 follow-up note, this record, and the task index. No installed global extension was modified.
-

@@ -16,7 +16,7 @@ import { ttClientOptions } from "./options";
 
 let client: LanguageClient | undefined;
 
-export function activate(context: ExtensionContext): void {
+export async function activate(context: ExtensionContext): Promise<void> {
   const serverModule = context.asAbsolutePath(
     path.join("server", "out", "server.js"),
   );
@@ -44,7 +44,8 @@ export function activate(context: ExtensionContext): void {
   synchronizeHostDocuments(context, client);
   // Claim UI ownership only once this language client can serve requests.
   // The native client continues synchronizing mapped documents for TS consumers.
-  void client.start().then(() => registerContentMappers(context));
+  await client.start();
+  await registerContentMappers(context);
 }
 
 export function deactivate(): Thenable<void> | undefined {

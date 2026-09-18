@@ -405,6 +405,8 @@
 
 | TASK-381 | Resolve PR 125 structural review findings | Complete | 2026-09-18 | 2026-09-18 | [TASK-381](./TASK-381-structural-review.md) |
 
+| TASK-382 | Review and rebase native diagnostic focus scheduling | Complete | 2026-09-18 | 2026-09-18 | [TASK-382](./TASK-382-native-diagnostic-review.md) |
+
 ## Next task number
 
-**TASK-382**
+**TASK-383**
