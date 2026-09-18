@@ -1,5 +1,7 @@
 # TASK-384: Repair developer workflow contracts
 
+> TASK-385 moves external-import discovery into snapshot projection to remove a duplicate parse found by PR #126 performance CI. The correctness repairs below remain in effect.
+
 - **Status**: Complete
 - **Started**: 2026-09-18
 - **Completed**: 2026-09-18

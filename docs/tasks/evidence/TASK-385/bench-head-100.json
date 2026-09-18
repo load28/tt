@@ -1,0 +1,1 @@
+{"benchmarks":[{"name":"single_file","samples":100,"median_ns":611916,"min_ns":584583,"p90_ns":767208,"noise":0.027986},{"name":"project_first_snapshot","samples":100,"median_ns":34268250,"min_ns":32251416,"p90_ns":35338000,"noise":0.017973},{"name":"project_recheck_one_file","samples":100,"median_ns":1281041,"min_ns":1222625,"p90_ns":1494042,"noise":0.026280}]}

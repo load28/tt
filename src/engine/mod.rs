@@ -188,8 +188,6 @@ impl Engine {
                 Err(e) => return Err(e.to_string()),
             };
         initial.extend(collected.iter().cloned());
-        project::discover_imports(&mut initial, &std::collections::HashMap::new())
-            .map_err(|error| error.to_string())?;
         initial.sort();
         initial.dedup();
         // No toolchain is not "no project": the tt layer answers without

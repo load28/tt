@@ -163,3 +163,92 @@ fn an_error_node_keeps_its_file_and_other_files_checkable() {
     assert!(checked.diagnostics.iter().any(|d| d.path == valid));
     fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn snapshot_discovers_transitive_imports_and_reuses_unchanged_documents() {
+    let dir = ttc::engine::normalize_document_path(&tmpdir("snapshot-import-graph")).unwrap();
+    fs::create_dir_all(dir.join("app")).unwrap();
+    fs::create_dir_all(dir.join("domain")).unwrap();
+    let entry = dir.join("app/main.tt");
+    let model = dir.join("domain/model.tt");
+    let leaf = dir.join("domain/leaf.tt");
+    fs::write(
+        &entry,
+        "import {value} from '../domain/model.tt'; export const answer = value;",
+    )
+    .unwrap();
+    fs::write(&model, "export {value} from './leaf.tt';").unwrap();
+    fs::write(
+        &leaf,
+        "import type {answer} from '../app/main.tt'; export const value = 1;",
+    )
+    .unwrap();
+    let mut project = Engine::new(None)
+        .open_project(
+            &[dir.join("app").to_string_lossy().into_owned()],
+            &ProjectOptions::default(),
+        )
+        .unwrap();
+    let roots = project.initial_files();
+    assert_eq!(roots.as_slice(), std::slice::from_ref(&entry));
+    let first = project.update(&roots).unwrap();
+    assert_eq!(
+        first.files().len(),
+        3,
+        "follow a re-export and terminate a cycle"
+    );
+    let second = project.update(&roots).unwrap();
+    for old in first.files() {
+        let new = second
+            .files()
+            .iter()
+            .find(|doc| doc.source_path == old.source_path)
+            .unwrap();
+        assert!(std::sync::Arc::ptr_eq(old, new));
+    }
+    // A held import edit changes the reachable graph without changing disk.
+    project.open_document(entry.clone(), "export const answer = 2;".into());
+    let third = project.update(&roots).unwrap();
+    assert_eq!(third.files().len(), 1);
+    assert_eq!(
+        first.files().len(),
+        3,
+        "previous snapshots remain immutable"
+    );
+    let unsaved = dir.join("domain/unsaved.tt");
+    project.open_document(unsaved.clone(), "export const fresh = 3;".into());
+    project.open_document(
+        entry.clone(),
+        "export {fresh} from '../domain/unsaved.tt';".into(),
+    );
+    let fourth = project.update(&roots).unwrap();
+    assert_eq!(fourth.files().len(), 2);
+    assert!(fourth.files().iter().any(|doc| doc.source_path == unsaved));
+    assert!(!unsaved.exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn project_scan_follows_directory_symlinks() {
+    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-symlink")).unwrap();
+    fs::create_dir_all(dir.join("app/nested")).unwrap();
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    let entry = dir.join("app/main.tt");
+    let nested = dir.join("app/nested/model.tt");
+    let linked = dir.join("shared/linked.tt");
+    for file in [&entry, &nested, &linked] {
+        fs::write(file, "export const value = 1;").unwrap();
+    }
+    std::os::unix::fs::symlink(dir.join("shared"), dir.join("app/shared")).unwrap();
+    let project = Engine::new(None)
+        .open_project(
+            &[entry.to_string_lossy().into_owned()],
+            &ProjectOptions::default(),
+        )
+        .unwrap();
+    let mut expected = vec![entry, nested, linked];
+    expected.sort();
+    assert_eq!(project.scan().unwrap(), expected);
+    fs::remove_dir_all(dir).unwrap();
+}

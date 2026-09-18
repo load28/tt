@@ -164,7 +164,6 @@ impl Project {
     pub fn scan(&self) -> std::io::Result<Vec<PathBuf>> {
         let mut candidates = project_sources(&self.root, self.out_dir.as_deref(), TT_EXTENSIONS)?;
         candidates.extend(self.requested.iter().filter(|file| file.exists()).cloned());
-        discover_imports(&mut candidates, &self.overlays)?;
         candidates.sort();
         candidates.dedup();
         Ok(candidates)
@@ -197,7 +196,7 @@ impl Project {
         self.initial.clone()
     }
 
-    /// Takes a snapshot of `files` as they are now: overlay text where a
+    /// Takes a snapshot of `files` and their reachable tt imports: overlay text where a
     /// document is open, disk text otherwise. A file whose text is unchanged
     /// since the last snapshot keeps its projection; the rest are
     /// re-projected. A file that cannot lower remains in the snapshot as a
@@ -230,7 +229,16 @@ impl Project {
         let mut projected = Vec::with_capacity(files.len());
         let mut blocked_files = Vec::new();
         let mut cache = HashMap::with_capacity(files.len());
-        for file in files {
+        // Projection already owns each content version's import metadata.
+        // Follow those edges here instead of reading and parsing every input
+        // once for discovery and again for projection.
+        let mut pending = files.to_vec();
+        let mut seen: HashSet<_> = files.iter().cloned().collect();
+        let mut cursor = 0;
+        while cursor < pending.len() {
+            let file = pending[cursor].clone();
+            cursor += 1;
+            let file = &file;
             let text = match self.overlays.get(file) {
                 Some(text) => text.clone(),
                 None => std::fs::read_to_string(file).map_err(|e| {
@@ -252,12 +260,26 @@ impl Project {
                 _ => match ProjectedDocument::project_for_snapshot(file, text) {
                     Ok(doc) => Some(Arc::new(doc)),
                     Err(blocked) => {
+                        discover_imports(
+                            file,
+                            blocked.tt_imports(),
+                            &self.overlays,
+                            &mut pending,
+                            &mut seen,
+                        );
                         blocked_files.push(Arc::new(blocked));
                         None
                     }
                 },
             };
             if let Some(doc) = doc {
+                discover_imports(
+                    file,
+                    doc.tt_imports(),
+                    &self.overlays,
+                    &mut pending,
+                    &mut seen,
+                );
                 cache.insert(file.clone(), doc.clone());
                 projected.push(doc);
             }
@@ -534,12 +556,16 @@ pub(crate) fn project_sources(
             continue;
         }
         for entry in std::fs::read_dir(&dir)? {
-            let path = entry?.path();
+            let entry = entry?;
+            let path = entry.path();
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             if name.starts_with('.') || name == "node_modules" {
                 continue;
             }
-            if path.is_dir() {
+            // Directory entries already carry the file type on supported
+            // filesystems. Only symlinks need a target metadata lookup.
+            let kind = entry.file_type()?;
+            if kind.is_dir() || (kind.is_symlink() && path.is_dir()) {
                 stack.push(path);
             } else if path
                 .extension()
@@ -670,45 +696,32 @@ fn source_extensions(include_ts: bool) -> String {
     names.join(", ")
 }
 
-/// Follow explicitly named relative tt modules beyond the configuration root.
-/// The TypeScript program still owns admission; this only supplies candidates.
-pub(super) fn discover_imports(
-    files: &mut Vec<PathBuf>,
+/// Follow explicit tt edges from the projection's content-version metadata.
+/// TypeScript still owns admission; discovery only supplies candidate modules.
+fn discover_imports(
+    file: &Path,
+    imports: &[crate::TtImport],
     overlays: &HashMap<PathBuf, String>,
-) -> std::io::Result<()> {
-    let mut seen: HashSet<_> = files.iter().cloned().collect();
-    let mut index = 0;
-    while index < files.len() {
-        let file = files[index].clone();
-        let source = match overlays.get(&file) {
-            Some(text) => text.clone(),
-            None => match std::fs::read_to_string(&file) {
-                Ok(text) => text,
-                // An editor may request a document before its first save.
-                // The overlay is installed after the project is opened.
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    index += 1;
-                    continue;
-                }
-                Err(error) => return Err(error),
-            },
-        };
-        let kind = crate::SourceKind::from_path(&file).unwrap_or_default();
-        for import in crate::scan_module_with_kind(&source, kind).imports {
-            if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
-                continue;
-            }
-            let target = file
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join(import.specifier);
-            if let Ok(target) = target.canonicalize()
-                && seen.insert(target.clone())
-            {
-                files.push(target);
-            }
+    pending: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+) {
+    for import in imports {
+        if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
+            continue;
         }
-        index += 1;
+        let target = file
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join(&import.specifier);
+        let target = super::paths::canonical(&target).ok().or_else(|| {
+            super::normalize_document_path(&target)
+                .ok()
+                .filter(|path| overlays.contains_key(path))
+        });
+        if let Some(target) = target
+            && seen.insert(target.clone())
+        {
+            pending.push(target);
+        }
     }
-    Ok(())
 }
