@@ -40,3 +40,15 @@ The ownership suite covers a single completion/hover/diagnostic provider for tt
 and ttx, wildcard-arm inference, organize-import edits, late delegation, unsaved native consumer
 updates, and restoration after disposal. Direct desktop typing evidence is
 recorded in [TASK-373](../../docs/tasks/TASK-373-editor-review-regressions.md).
+
+The native client also enables diagnostic pulls when a document becomes active.
+The language client's inter-file background scheduler excludes the active document;
+without the corresponding focus pull, reverting and closing a dependency can
+leave its newly active consumer with diagnostics from the unsaved dependency.
+This uses the client's native scheduling contract, without clearing diagnostics
+or introducing polling. The native-only lifecycle regression runs with:
+
+```sh
+VSCODE_TYPESCRIPT_EXTENSION=/absolute/path/to/TypeScript/packages/vscode-typescript \
+  TT_EDITOR_TEST_SUITE=diagnostics node editors/vscode/scripts/test-editor.mjs
+```

@@ -6,6 +6,9 @@ const vscode = require('vscode');
 exports.run = async () => {
   const root = process.env.TT_EDITOR_TEST_WORKSPACE;
   const results = [];
+  const extension = vscode.extensions.getExtension('tt-lang.tt-language');
+  assert.ok(extension, 'tt extension is available');
+  await extension.activate();
   fs.writeFileSync(path.join(root, 'model.tt'), 'export variant User { Admin(name: string, level: number), Guest }\n');
   const prefix = 'import { User } from "./model.tt";\nvariant Other { Wrong }\ndeclare const user: User;\n';
   for (const extension of ['tt', 'ttx']) {

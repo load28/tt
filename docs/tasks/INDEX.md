@@ -393,6 +393,8 @@
 
 | TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
 
+| TASK-374 | Refresh native diagnostics across focus transitions | Complete | 2026-09-12 | 2026-09-12 | [TASK-374](./TASK-374-editor-discard-synchronization.md) |
+
 | TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | 2026-09-12 | [TASK-375](./TASK-375-match-pattern-completions.md) |
 
 | TASK-376 | Isolate externally terminated mapper profiles | Complete | 2026-09-12 | 2026-09-12 | [TASK-376](./TASK-376-mapper-coverage-lifecycle.md) |
@@ -403,6 +405,8 @@
 
 | TASK-381 | Resolve PR 125 structural review findings | Complete | 2026-09-18 | 2026-09-18 | [TASK-381](./TASK-381-structural-review.md) |
 
+| TASK-382 | Review and rebase native diagnostic focus scheduling | Complete | 2026-09-18 | 2026-09-18 | [TASK-382](./TASK-382-native-diagnostic-review.md) |
+
 ## Next task number
 
-**TASK-382**
+**TASK-383**
