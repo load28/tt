@@ -1,0 +1,10 @@
+{
+  "cases": 1815,
+  "compiled": 1743,
+  "expected_placement_rejections": 72,
+  "unexpected_compile_rejections": 0,
+  "typescript_runtime_passed": 1259,
+  "tsx_runtime_passed": 484,
+  "wrong": 0,
+  "examples": []
+}

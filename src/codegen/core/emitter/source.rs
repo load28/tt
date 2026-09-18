@@ -797,6 +797,24 @@ impl<'a> Emitter<'a> {
             }
             return out;
         }
+        // A completed call owns its entire authored frame, including tt
+        // expressions in earlier arguments. Those arguments are emitted at
+        // their capture sites, not again beside the completed call's result.
+        if !self.active_structured_exprs.contains(expr)
+            && let Some(span) = structured_expr_span(self.semantic, self.core, expr)
+            && self.source_replacements.iter().any(|frame| {
+                frame.claim
+                    && frame.source.start <= span.start
+                    && span.end <= frame.source.end
+                    && !frame
+                        .anchor
+                        .is_some_and(|value| self.active_structured_exprs.contains(value))
+                    && !self.capture_is_active(frame.source)
+                    && !self.replacement_contains_active_value(frame.source)
+            })
+        {
+            return Rope::new();
+        }
         // A source capture owns complete tt expressions as well as opaque
         // chunks. Substitute the value at its authored occurrence, rather
         // than reconstructing its operators around already captured children.

@@ -763,13 +763,15 @@ const answer = match(State.Ready([2, 5])) {
 const keyed = { [String(match(1){1=>1,_=>0})]: match(2){2=>2,_=>0} };
 const truthy = (1 |> ((n: number) => n + 1)) && match(3){3=>3,_=>0};
 const fromBody = (() => { if let Ready(values) = State.Ready([4]) { return values[0]; } return 0; })() && match(4){4=>4,_=>0};
-console.log(JSON.stringify([answer, keyed, truthy, fromBody]));
+const take = (...values: number[]) => values;
+const callArgs = take((1 |> ((n: number) => n + 1)), match(3){3=>3,_=>0});
+console.log(JSON.stringify([answer, keyed, truthy, fromBody, callArgs]));
 console.log(events.join(","));
 "#);
     assert_eq!(
         lines,
         [
-            "[[24,30],{\"1\":2},3,4]",
+            "[[24,30],{\"1\":2},3,4,[2,3]]",
             "convert:2,convert:2,convert:5,convert:5"
         ]
     );

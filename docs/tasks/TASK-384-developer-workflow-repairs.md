@@ -1,9 +1,9 @@
 # TASK-384: Repair developer workflow contracts
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-09-18
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-09-18
+- **Commit**: 157b859 and the final verification update in PR #126
 
 ## Purpose
 
@@ -25,6 +25,11 @@ Repair the structural compiler, project, CLI, editor, and bundler defects reprod
 ## Work log
 
 - 2026-09-18: Doctor passed; origin/main remains at 069a5fb. Preserved the audit artifacts and unrelated .task-agent-disabled.
+- 2026-09-18: Repaired evaluation, project, output, editor, and bundler contracts, then added complete output snapshots and workflow regressions.
+- 2026-09-18: Full gates exposed unsaved-document discovery and redundant watch-startup regressions; both were repaired and their existing native/editor tests passed.
+- 2026-09-18: Runtime traces caught six call-argument cases where a captured pipeline was printed beside an already completed call. Claimed call frames now own structured earlier arguments too; the regression asserts the resulting argument array.
+- 2026-09-18: Corrected the runtime probe's shared generic arrow to be valid TSX and made unexpected compile rejections explicit. Reran the expanded matrix in four independent shards.
+- 2026-09-18: Created draft PR https://github.com/load28/tt/pull/126 after verifying the configured public origin and ADMIN permission. Source and test changes are committed as 157b859; final verification evidence is attached.
 
 ## Issues and resolutions
 
@@ -59,10 +64,14 @@ Additional regressions found during the full gate were fixed in the same owning 
 - Final gate coverage: `./scripts/ci` passed agents, npm, website, native, and extension; after repairing four source-ownership regressions, `./scripts/ci rust` passed formatting, clippy, all Rust tests, doctests, and fuzz-target compilation. Initial npm/website attempts needed network/listen access unavailable in the sandbox.
 - Composition matrix: 1,815 cases; 1,743 accepted, 72 existing unsupported-placement diagnostics, zero unexpected failures (baseline: 711 internal errors plus 256 projection failures).
 - Production probes: 29 typed/build cases passed; all five runtime scenarios matched expected values and resource-disposal/effect traces.
-- Runtime composition matrix is still running; its final trace counts will be attached before completing the PR.
+- Final runtime matrix: 1,743 accepted programs executed with the expected effect trace (1,259 TypeScript and 484 TSX), zero mismatches; 72 expected unsupported-placement rejections and zero unexpected compile rejections. The runner uses Bun's classic JSX runtime explicitly; an intermediate automatic-runtime configuration was excluded because it lacked React.
+- Final `./scripts/ci rust`: 1,244 tests passed, including 154 integration tests, 69 native tests, seven workflow tests, and 31 doctests. Formatting, clippy with warnings denied, and fuzz-target compilation passed.
+- Source review confirmed all ownership/ordering invariants remain enabled. Complete output snapshots were read, including the React block/callback output. `node scripts/check-task-index` passed.
 
 ## Result
 
 Compiler invariants and diagnostics remain enabled. No installed extension or release artifact was replaced. The supported scope is the reproduced failure families and their structural regressions, not an exhaustive proof for all programs or platforms.
 
 Changed areas: Evaluation/Core/HIR ownership, source-preserving emission, lexer and coverage, project/backend invalidation, CLI output ownership and declaration paths, editor filesystem events, bundler resolution/cache invalidation, regression tests, snapshots, and user-facing documentation.
+
+PR: https://github.com/load28/tt/pull/126. Remote CI runs independently; no merge or release was requested.

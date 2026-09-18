@@ -409,7 +409,7 @@
 
 | TASK-383 | Audit tt and ttx developer workflows | Complete | 2026-09-18 | 2026-09-18 | [TASK-383](./TASK-383-developer-workflow-audit.md) |
 
-| TASK-384 | Repair developer workflow contracts | In progress | 2026-09-18 | — | [TASK-384](./TASK-384-developer-workflow-repairs.md) |
+| TASK-384 | Repair developer workflow contracts | Complete | 2026-09-18 | 2026-09-18 | [TASK-384](./TASK-384-developer-workflow-repairs.md) |
 
 ## Next task number
 

@@ -8,6 +8,7 @@ From the repository root, build `target/debug/ttc` and run:
 ```sh
 mkdir -p target/task384
 node docs/tasks/evidence/TASK-384/composition.mjs
+node docs/tasks/evidence/TASK-384/runtime.mjs
 TTC_BINARY="$PWD/target/debug/ttc" npm test --prefix integrations/unplugin
 node docs/tasks/evidence/TASK-383/run-editor.mjs
 ```
@@ -29,3 +30,9 @@ backend checks are covered by the repository native suite and the local CI gate.
 
 The results are macOS arm64 observations. They do not claim exhaustive language
 coverage or verification of every bundler adapter and operating system.
+
+The runtime runner uses a TSX-valid generic arrow in its shared prelude. Unlike
+the earlier audit runner, it records unexpected compile rejections as well as
+runtime failures, so JSX cases cannot silently disappear from the result. Set
+`TT_AUDIT_SHARDS=4` with `TT_AUDIT_SHARD=0` through `3` for independent shards;
+sum their counts and concatenate their failure lists.
