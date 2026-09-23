@@ -252,3 +252,79 @@ fn project_scan_follows_directory_symlinks() {
     assert_eq!(project.scan().unwrap(), expected);
     fs::remove_dir_all(dir).unwrap();
 }
+
+#[cfg(unix)]
+#[test]
+fn source_discovery_visits_directory_identities_once() {
+    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-identities")).unwrap();
+    fs::create_dir_all(dir.join("app/nested")).unwrap();
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    let entry = dir.join("app/main.tt");
+    let linked = dir.join("shared/linked.tt");
+    for file in [&entry, &linked] {
+        fs::write(file, "export const value = 1;").unwrap();
+    }
+    // A self edge, an ancestor edge, and two aliases of an external source
+    // directory must all use the same directory identity admission rule.
+    std::os::unix::fs::symlink(dir.join("app"), dir.join("app/self")).unwrap();
+    std::os::unix::fs::symlink(dir.join("app"), dir.join("app/nested/back")).unwrap();
+    std::os::unix::fs::symlink(dir.join("shared"), dir.join("app/shared-a")).unwrap();
+    std::os::unix::fs::symlink(dir.join("shared"), dir.join("app/shared-b")).unwrap();
+    let mut collected = Vec::new();
+    ttc::engine::collect_sources(&dir.join("app"), false, &mut collected).unwrap();
+    let mut identities: Vec<_> = collected
+        .iter()
+        .map(|file| fs::canonicalize(file).unwrap())
+        .collect();
+    identities.sort();
+    let mut expected = vec![entry.clone(), linked];
+    expected.sort();
+    assert_eq!(identities, expected);
+    // CLI output ownership still uses logical input paths.
+    assert!(
+        collected
+            .iter()
+            .all(|file| file.starts_with(dir.join("app")))
+    );
+    let project = Engine::new(None)
+        .open_project(
+            &[entry.to_string_lossy().into_owned()],
+            &ProjectOptions::default(),
+        )
+        .unwrap();
+    assert_eq!(project.scan().unwrap(), expected);
+    assert_eq!(project.scan().unwrap(), expected, "visits are per scan");
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn project_scan_excludes_output_directory_aliases_and_descendants() {
+    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-output-alias")).unwrap();
+    fs::create_dir_all(dir.join("app/build/nested")).unwrap();
+    let entry = dir.join("app/main.tt");
+    fs::write(&entry, "export const value = 1;").unwrap();
+    fs::write(dir.join("app/build/generated.tt"), "export const x = 1;").unwrap();
+    fs::write(dir.join("app/build/nested/deep.tt"), "export const x = 2;").unwrap();
+    std::os::unix::fs::symlink(dir.join("app/build"), dir.join("app/alias")).unwrap();
+    std::os::unix::fs::symlink(dir.join("app/build/nested"), dir.join("app/deep")).unwrap();
+    let project = Engine::new(None)
+        .open_project(
+            &[entry.to_string_lossy().into_owned()],
+            &ProjectOptions {
+                out_dir: Some(dir.join("app/build")),
+                ..ProjectOptions::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(project.initial_files(), vec![entry.clone()]);
+    assert_eq!(project.scan().unwrap(), vec![entry]);
+    assert!(
+        project
+            .watch_paths()
+            .unwrap()
+            .iter()
+            .all(|path| { !path.starts_with(dir.join("app/build")) })
+    );
+    fs::remove_dir_all(dir).unwrap();
+}

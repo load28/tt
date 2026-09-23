@@ -548,11 +548,11 @@ pub(crate) fn project_sources(
     out_dir: Option<&Path>,
     extensions: &[&str],
 ) -> std::io::Result<Vec<PathBuf>> {
-    let out = out_dir.and_then(|d| super::paths::canonical(d).ok());
+    let mut directories = SourceDirectories::new(out_dir);
     let mut files = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
-        if Some(&dir) == out.as_ref() {
+        if !directories.enter(&dir)? {
             continue;
         }
         for entry in std::fs::read_dir(&dir)? {
@@ -577,6 +577,7 @@ pub(crate) fn project_sources(
         }
     }
     files.sort();
+    files.dedup();
     Ok(files)
 }
 
@@ -608,6 +609,15 @@ pub fn collect_sources(
     include_ts: bool,
     out: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
+    collect_sources_in(entry, include_ts, out, &mut SourceDirectories::new(None))
+}
+
+fn collect_sources_in(
+    entry: &Path,
+    include_ts: bool,
+    out: &mut Vec<PathBuf>,
+    directories: &mut SourceDirectories,
+) -> std::io::Result<()> {
     let meta = std::fs::metadata(entry).map_err(|e| named(entry, e))?;
     if meta.is_file() {
         // A named file is filtered the same way the walk filters one: the
@@ -627,6 +637,9 @@ pub fn collect_sources(
         return Ok(());
     }
     if meta.is_dir() {
+        if !directories.enter(entry)? {
+            return Ok(());
+        }
         let mut children: Vec<PathBuf> = std::fs::read_dir(entry)
             .map_err(|e| named(entry, e))?
             .map(|entry| entry.map(|entry| entry.path()))
@@ -650,7 +663,7 @@ pub fn collect_sources(
                     name.starts_with('.') || name == "node_modules"
                 });
                 if !skip {
-                    collect_sources(&child, include_ts, out)?;
+                    collect_sources_in(&child, include_ts, out, directories)?;
                 }
             } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
@@ -658,6 +671,35 @@ pub fn collect_sources(
         }
     }
     Ok(())
+}
+
+/// Directory admission is about filesystem identity, not the spelling of
+/// the path used to reach it. Both collectors follow links, so their input
+/// is a graph: visit each directory once and exclude output aliases too.
+struct SourceDirectories {
+    visited: HashSet<PathBuf>,
+    excluded: Option<PathBuf>,
+}
+
+impl SourceDirectories {
+    fn new(out_dir: Option<&Path>) -> Self {
+        Self {
+            visited: HashSet::new(),
+            excluded: out_dir.and_then(|path| super::paths::canonical(path).ok()),
+        }
+    }
+
+    fn enter(&mut self, path: &Path) -> std::io::Result<bool> {
+        let identity = super::paths::canonical(path).map_err(|error| named(path, error))?;
+        if self
+            .excluded
+            .as_ref()
+            .is_some_and(|excluded| identity.starts_with(excluded))
+        {
+            return Ok(false);
+        }
+        Ok(self.visited.insert(identity))
+    }
 }
 
 /// An I/O error that says which entry it is about.
