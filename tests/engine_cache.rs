@@ -27,12 +27,14 @@ fn source_walk_skips_excluded_names_before_following_links() {
     let dir = tmpdir("excluded-dangling-links");
     let source = dir.join("ok.tt");
     fs::write(&source, "export const ok = 1;\n").unwrap();
+    let hidden_source = dir.join(".hidden.tt");
+    fs::write(&hidden_source, "export const hidden = 1;\n").unwrap();
     std::os::unix::fs::symlink(dir.join("absent-vendor"), dir.join("node_modules")).unwrap();
     std::os::unix::fs::symlink(dir.join("absent-cache"), dir.join(".cache")).unwrap();
 
     let mut collected = Vec::new();
     ttc::engine::collect_sources(&dir, false, &mut collected).unwrap();
-    assert_eq!(collected, vec![source.clone()]);
+    assert_eq!(collected, vec![hidden_source.clone(), source.clone()]);
 
     let engine = Engine::new(None);
     let project = engine
@@ -41,7 +43,7 @@ fn source_walk_skips_excluded_names_before_following_links() {
             &ProjectOptions::default(),
         )
         .unwrap();
-    assert_eq!(project.scan().unwrap(), vec![source]);
+    assert_eq!(project.scan().unwrap(), vec![hidden_source, source]);
     fs::remove_dir_all(dir).unwrap();
 }
 

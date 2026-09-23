@@ -20,13 +20,15 @@ The CLI collector reads metadata for entries it promises to exclude. A dangling 
 
 - **Context**: The project scan already skips excluded names before target metadata, while the CLI scan does it afterward.
 - **Alternatives considered**: Ignoring all metadata failures would silently omit real inputs. Special-casing dangling links would make exclusion depend on the link target's state.
-- **Decision and rationale**: Share one name predicate and apply it before file-type or metadata access in both scanners. Keep errors for admitted entries.
+- **Decision and rationale**: Share one name predicate and apply it before file-type or metadata access in both scanners. The CLI retains its existing inclusion of hidden source files, so a source extension still requires metadata to distinguish a file from a directory. Keep errors for admitted entries.
 
 ## Work log
 
 - 2026-09-23: Read the discovery contract and ran `./scripts/doctor`; Rust is pinned and present, while Bun and project TypeScript are absent. Created this task before modifying implementation.
 - 2026-09-23: Added a Unix regression for dangling excluded directory aliases. Against the original collector it failed with `NotFound` on `.cache`; after sharing the admission predicate and checking before metadata, it passed.
 - 2026-09-23: Installed repository TypeScript with `npm ci --ignore-scripts` and temporary TypeScript 6/rolldown executables outside the repository. An initial gate passed formatting and Clippy but encountered a `rust-lld` undefined-hidden-symbol error when linking the existing target's test binary. Re-ran `./scripts/ci rust` in a fresh target directory with incremental compilation disabled; all stages passed.
+- 2026-09-23: Review of the first PR diff revealed that an early exclusion also skipped hidden `.tt` files that the CLI previously collected. Restricted early exclusion to non-source names, retained the metadata-based directory exclusion for source-shaped hidden names, and extended the regression to assert this contract.
+- 2026-09-23: The first extended assertion expected `Project::scan` to omit the hidden file, but `open_project` registers all collected inputs as requested roots. Corrected that assertion to preserve the requested-input contract. Re-ran the full Rust gate successfully: 1,250 tests, formatting, Clippy, and fuzz target check passed.
 
 ## Issues and resolutions
 
@@ -34,7 +36,7 @@ The CLI collector reads metadata for entries it promises to exclude. A dangling 
 
 - **Symptom**: A source tree with a dangling `node_modules` or dot-directory link fails discovery even though those names are excluded.
 - **Cause**: `collect_sources_in` calls `metadata` before checking the child name.
-- **Resolution**: Both scanners now use `excluded_source_entry` before probing child metadata. Non-excluded unreadable entries still report their paths.
+- **Resolution**: Both scanners now use `excluded_source_entry` for directory admission. The CLI skips excluded non-source names before metadata while still probing hidden source-shaped names so valid files remain inputs. Non-excluded unreadable entries still report their paths.
 
 ## Verification
 

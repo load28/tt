@@ -653,7 +653,7 @@ fn collect_sources_in(
         for child in children {
             // Exclusion is a property of the entry name, even when its
             // target is missing or unreadable. Inspect only admitted entries.
-            if excluded_source_entry(&child) {
+            if excluded_source_entry(&child) && !is_source(&child, include_ts) {
                 continue;
             }
             // A directory holds entries the walk cannot read — a dangling
@@ -663,7 +663,9 @@ fn collect_sources_in(
             // about a directory that plainly does.
             let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
             if meta.is_dir() {
-                collect_sources_in(&child, include_ts, out, directories)?;
+                if !excluded_source_entry(&child) {
+                    collect_sources_in(&child, include_ts, out, directories)?;
+                }
             } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
             }
