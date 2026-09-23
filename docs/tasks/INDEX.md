@@ -414,7 +414,8 @@
 | TASK-385 | Reuse projection imports during graph discovery | Complete | 2026-09-18 | 2026-09-18 | [TASK-385](./TASK-385-projection-import-discovery.md) |
 
 | TASK-386 | Track canonical directory identity during source discovery | Complete | 2026-09-23 | 2026-09-23 | [TASK-386](./TASK-386-source-directory-identity.md) |
+| TASK-387 | Classify excluded source entries before reading metadata | Complete | 2026-09-23 | 2026-09-23 | [TASK-387](./TASK-387-source-entry-admission.md) |
 
 ## Next task number
 
-**TASK-387**
+**TASK-388**
