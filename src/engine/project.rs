@@ -577,6 +577,7 @@ pub(crate) fn project_sources(
         }
     }
     files.sort();
+    // File symlinks can share an identity even when directories were visited once.
     files.dedup();
     Ok(files)
 }
@@ -604,6 +605,10 @@ pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
 /// taken as it is; a directory is walked recursively, skipping
 /// dot-directories and `node_modules`, taking `.tt` — and, when
 /// `include_ts` is set, hand-written TypeScript (`.ts`/`.mts`/`.cts`) too.
+/// This enumerator preserves caller-selected roots; output filtering belongs
+/// to the build driver. Typed callers collect tt roots only, so emitted
+/// `.tt.d.ts`/`.ttx.d.ts` sidecars are not inputs. Project candidate scans
+/// independently exclude their configured output tree.
 pub fn collect_sources(
     entry: &Path,
     include_ts: bool,
@@ -690,6 +695,9 @@ impl SourceDirectories {
     }
 
     fn enter(&mut self, path: &Path) -> std::io::Result<bool> {
+        // An unreadable input must fail the scan, not silently produce a
+        // successful partial build. Optional output identity is different:
+        // the output directory may not exist before the first build.
         let identity = super::paths::canonical(path).map_err(|error| named(path, error))?;
         if self
             .excluded

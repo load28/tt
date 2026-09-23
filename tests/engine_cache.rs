@@ -318,13 +318,37 @@ fn project_scan_excludes_output_directory_aliases_and_descendants() {
         )
         .unwrap();
     assert_eq!(project.initial_files(), vec![entry.clone()]);
+    let scanned = project.scan().unwrap();
+    assert_eq!(scanned, vec![entry.clone()]);
+    let watched = project.watch_paths().unwrap();
+    assert!(watched.contains(&entry));
+    for alias in ["app/alias/generated.tt", "app/deep/deep.tt"] {
+        let logical = dir.join(alias);
+        let identity = fs::canonicalize(&logical).unwrap();
+        for paths in [&scanned, &watched] {
+            assert!(!paths.contains(&logical), "output alias leaked: {alias}");
+            assert!(
+                !paths.contains(&identity),
+                "output identity leaked: {alias}"
+            );
+        }
+    }
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn project_scan_deduplicates_file_symlinks() {
+    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-file-alias")).unwrap();
+    let entry = dir.join("main.tt");
+    fs::write(&entry, "export const value = 1;").unwrap();
+    std::os::unix::fs::symlink(&entry, dir.join("alias.tt")).unwrap();
+    let project = Engine::new(None)
+        .open_project(
+            &[entry.to_string_lossy().into_owned()],
+            &ProjectOptions::default(),
+        )
+        .unwrap();
     assert_eq!(project.scan().unwrap(), vec![entry]);
-    assert!(
-        project
-            .watch_paths()
-            .unwrap()
-            .iter()
-            .all(|path| { !path.starts_with(dir.join("app/build")) })
-    );
     fs::remove_dir_all(dir).unwrap();
 }

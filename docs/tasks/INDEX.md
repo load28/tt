@@ -413,7 +413,7 @@
 
 | TASK-385 | Reuse projection imports during graph discovery | Complete | 2026-09-18 | 2026-09-18 | [TASK-385](./TASK-385-projection-import-discovery.md) |
 
-| TASK-386 | Track canonical directory identity during source discovery | Blocked | 2026-09-23 | — | [TASK-386](./TASK-386-source-directory-identity.md) |
+| TASK-386 | Track canonical directory identity during source discovery | Complete | 2026-09-23 | 2026-09-23 | [TASK-386](./TASK-386-source-directory-identity.md) |
 
 ## Next task number
 

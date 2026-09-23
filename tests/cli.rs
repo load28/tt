@@ -221,6 +221,8 @@ fn an_output_directory_inside_the_input_is_not_recompiled() {
         "export const stale = \"previous output\";\n",
     )
     .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&out_dir, source.join("alias")).unwrap();
 
     let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
     assert!(
@@ -231,6 +233,7 @@ fn an_output_directory_inside_the_input_is_not_recompiled() {
     assert!(out_dir.join("main.ts").is_file());
     assert!(out_dir.join("stale.ts").is_file());
     assert!(!out_dir.join("generated/stale.ts").exists());
+    assert!(!out_dir.join("alias/stale.ts").exists());
 }
 
 #[test]
