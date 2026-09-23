@@ -558,8 +558,7 @@ pub(crate) fn project_sources(
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if name.starts_with('.') || name == "node_modules" {
+            if excluded_source_entry(&path) {
                 continue;
             }
             // Directory entries already carry the file type on supported
@@ -652,6 +651,11 @@ fn collect_sources_in(
             .map_err(|e| named(entry, e))?;
         children.sort();
         for child in children {
+            // Exclusion is a property of the entry name, even when its
+            // target is missing or unreadable. Inspect only admitted entries.
+            if excluded_source_entry(&child) {
+                continue;
+            }
             // A directory holds entries the walk cannot read — a dangling
             // symlink, a loop, a permission. Naming the one that failed is
             // the difference between a fixable report and "the directory
@@ -659,23 +663,22 @@ fn collect_sources_in(
             // about a directory that plainly does.
             let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
             if meta.is_dir() {
-                // Dot-directories (.git, .tt-build, .tt-types, ...) and
-                // node_modules are never sources; descending into them
-                // would pull generated or vendored TypeScript into the
-                // build — or the cache tree into itself.
-                let skip = child.file_name().is_some_and(|name| {
-                    let name = name.to_string_lossy();
-                    name.starts_with('.') || name == "node_modules"
-                });
-                if !skip {
-                    collect_sources_in(&child, include_ts, out, directories)?;
-                }
+                collect_sources_in(&child, include_ts, out, directories)?;
             } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
             }
         }
     }
     Ok(())
+}
+
+/// Exclude generated and vendored entries before probing their targets.
+/// Both source walks use the same admission rule for directory children.
+fn excluded_source_entry(path: &Path) -> bool {
+    path.file_name().is_some_and(|name| {
+        let name = name.to_string_lossy();
+        name.starts_with('.') || name == "node_modules"
+    })
 }
 
 /// Directory admission is about filesystem identity, not the spelling of
