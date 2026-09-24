@@ -238,6 +238,21 @@ test("off mode does nothing", { skip }, async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("a compiler terminated by a signal does not report sidecars as written", async () => {
+  const dir = caseDir("tt-sidecar-signal-");
+  try {
+    const tt = path.join(dir, "source.tt");
+    const compiler = path.join(dir, "terminated-compiler");
+    fs.writeFileSync(tt, "export const value = 1;\n");
+    fs.writeFileSync(compiler, "#!/bin/sh\nkill -TERM $$\n", { mode: 0o755 });
+    const result = await refreshSidecar(compiler, tt, "always");
+    assert.equal(result.kind, "failed", JSON.stringify(result));
+    assert.equal(fs.existsSync(`${tt}.d.ts`), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the write ledger owns a file while the disk holds what it wrote", () => {
   const dir = caseDir("tt-write-ledger-");
   const file = path.join(dir, "x.tt.d.ts");

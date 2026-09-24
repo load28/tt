@@ -17,6 +17,7 @@
  * A write this server made itself (a sidecar rebuilt on save) is not news
  * either, for as long as the disk still holds what it wrote.
  */
+import * as fs from "node:fs";
 
 /** The `FileChangeType` values the protocol defines. */
 export const CREATED = 1;
@@ -37,16 +38,28 @@ export interface WriteOwnership {
 /**
  * Whether `change` tells the server something it does not already have.
  *
- * `openPaths` are the buffers the server holds, by filesystem path;
+ * `openBuffers` are the buffers the server holds, by filesystem path;
  * `ownWrites` answers for the files the server wrote itself.
  */
 export function isExternalChange(
   change: WatchedChange,
-  openPaths: ReadonlySet<string>,
+  openBuffers: ReadonlyMap<string, string>,
   ownWrites?: WriteOwnership,
 ): boolean {
   if (change.type === DELETED) return true;
-  if (change.type === CHANGED && openPaths.has(change.path)) return false;
+  if (change.type === CHANGED) {
+    const heldText = openBuffers.get(change.path);
+    if (heldText !== undefined) {
+      try {
+        // A save publishes the text already held by the server. A write by
+        // another process may change the disk without changing that buffer.
+        if (fs.readFileSync(change.path, "utf8") === heldText) return false;
+      } catch {
+        // The path disappeared between the watcher event and this read.
+        return true;
+      }
+    }
+  }
   if (ownWrites?.owns(change.path)) return false;
   return true;
 }

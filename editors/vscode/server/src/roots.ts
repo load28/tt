@@ -72,7 +72,14 @@ export function containingRoot(
   filePath: string,
 ): string | undefined {
   return roots
-    .filter((candidate) => filePath.startsWith(`${candidate}${path.sep}`))
+    .filter((candidate) => {
+      const relative = path.relative(candidate, filePath);
+      return relative === "" || (
+        relative !== ".." &&
+        !relative.startsWith(`..${path.sep}`) &&
+        !path.isAbsolute(relative)
+      );
+    })
     .sort((a, b) => b.length - a.length)[0];
 }
 
