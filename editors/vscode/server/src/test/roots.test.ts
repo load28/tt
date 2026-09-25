@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { applyFolderChange, folderRoots, sidecarLocation } from "../roots";
+import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "../roots";
 
 const first = path.join(os.tmpdir(), "tt-roots-first");
 const second = path.join(os.tmpdir(), "tt-roots-second");
@@ -94,6 +94,16 @@ test("nested folders resolve against the deepest one that contains the file", ()
     sidecarLocation(".tt-types", path.join(inner, "a.tt"), [first, inner]),
     { kind: "directory", path: path.join(inner, ".tt-types") },
   );
+});
+
+test("a filesystem root contains descendants without a doubled separator", () => {
+  const root = path.parse(first).root;
+  assert.equal(containingRoot([root], first), root);
+  assert.deepEqual(sidecarLocation(".tt-types", first, [root]), {
+    kind: "directory",
+    path: path.join(root, ".tt-types"),
+  });
+  assert.equal(containingRoot([first], first), first);
 });
 
 test("an absolute setting needs no root", () => {

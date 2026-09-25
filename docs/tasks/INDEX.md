@@ -415,7 +415,8 @@
 
 | TASK-386 | Track canonical directory identity during source discovery | Complete | 2026-09-23 | 2026-09-23 | [TASK-386](./TASK-386-source-directory-identity.md) |
 | TASK-387 | Classify excluded source entries before reading metadata | Complete | 2026-09-23 | 2026-09-23 | [TASK-387](./TASK-387-source-entry-admission.md) |
+| TASK-388 | Repair compiler and editor defects structurally | Complete | 2026-09-24 | 2026-09-24 | [TASK-388](./TASK-388-compiler-editor-structural-repairs.md) |
 
 ## Next task number
 
-**TASK-388**
+**TASK-389**

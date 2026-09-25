@@ -139,7 +139,7 @@ function run(compiler: string, args: string[], files: string[]): Promise<Sidecar
       args,
       { timeout: 30000, maxBuffer: 8 * 1024 * 1024 },
       (err, _stdout, stderr) => {
-        const code = err === null ? 0 : ((err as { code?: number }).code ?? 1);
+        const code = err === null ? 0 : err.code;
         if (code === 0 || code === 1) {
           resolve({ kind: "written", files });
           return;

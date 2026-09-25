@@ -43,7 +43,13 @@ fn source_walk_skips_excluded_names_before_following_links() {
             &ProjectOptions::default(),
         )
         .unwrap();
-    assert_eq!(project.scan().unwrap(), vec![hidden_source, source]);
+    assert_eq!(
+        project.scan().unwrap(),
+        vec![
+            fs::canonicalize(hidden_source).unwrap(),
+            fs::canonicalize(source).unwrap(),
+        ]
+    );
     fs::remove_dir_all(dir).unwrap();
 }
 
