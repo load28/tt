@@ -210,11 +210,7 @@ connection.onDidChangeConfiguration(() => {
 connection.onDidChangeWatchedFiles((params) => {
   // The buffers the server already holds, by the path the watcher names
   // them with, so a save can be told apart from an edit made elsewhere.
-  const open = new Map<string, string>();
-  for (const doc of documents.all()) {
-    const uri = URI.parse(doc.uri);
-    if (uri.scheme === "file") open.set(uri.fsPath, doc.getText());
-  }
+  const open = new Set(documents.all().map(doc => URI.parse(doc.uri).fsPath));
   const relevant = params.changes.some(change => {
     const uri = URI.parse(change.uri);
     if (uri.scheme !== "file") return false;
