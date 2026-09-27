@@ -51,7 +51,10 @@ use collector::*;
 #[cfg(test)]
 use projection::ProjectionBuilder;
 pub(crate) use projection::{HostOwnerSyntax, ProgramSyntax, ProgramSyntaxError};
-use projection::{OverlayMarker, PendingOverlay, ProjectionSegmentKind, ProjectionSourceSegment};
+use projection::{
+    OverlayMarker, PendingOverlay, ProjectionSegmentKind, ProjectionSegments,
+    ProjectionSourceSegment,
+};
 use protocol::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

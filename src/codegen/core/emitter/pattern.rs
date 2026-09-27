@@ -559,7 +559,12 @@ impl<'a> Emitter<'a> {
         };
         let span = self.span(node);
         let mut prelude = Rope::new();
-        for rewrite in &self.owner_slot_rewrites {
+        for rewrite in self
+            .owner_slot_index
+            .starting_in(span.start, span.start.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.owner_slot_rewrites[index])
+        {
             if rewrite.owner == SourceSpan::from(span)
                 && !self.emitted_owner_rewrites.contains(rewrite.expr)
             {
@@ -568,7 +573,12 @@ impl<'a> Emitter<'a> {
                 prelude.push_break(depth);
             }
         }
-        for rewrite in &self.compose_rewrites {
+        for rewrite in self
+            .compose_index
+            .starting_in(span.start, span.start.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.compose_rewrites[index])
+        {
             if rewrite.owner == SourceSpan::from(span)
                 && self.emitted_compose_rewrites.claim(rewrite.owner)
             {

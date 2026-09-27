@@ -331,6 +331,42 @@ pub(super) struct ProjectionSourceSegment {
     pub(super) kind: ProjectionSegmentKind,
 }
 
+pub(super) struct ProjectionSegments {
+    segments: Vec<ProjectionSourceSegment>,
+    index: crate::span_index::SpanIndex,
+}
+
+impl ProjectionSegments {
+    pub(super) fn new(segments: Vec<ProjectionSourceSegment>) -> Self {
+        let index = crate::span_index::SpanIndex::new(
+            segments
+                .iter()
+                .map(|segment| (segment.projected.start.0, segment.projected.end.0)),
+        );
+        Self { segments, index }
+    }
+
+    pub(super) fn starting_at(&self, at: ProjectedByte) -> Vec<usize> {
+        self.index.starting_in(at.0, at.0.saturating_add(1))
+    }
+
+    pub(super) fn ending_at(&self, at: ProjectedByte) -> Vec<usize> {
+        self.index.ending_in(at.0, at.0.saturating_add(1))
+    }
+
+    pub(super) fn containing(&self, at: ProjectedByte) -> Vec<usize> {
+        self.index.containing(at.0)
+    }
+}
+
+impl std::ops::Deref for ProjectionSegments {
+    type Target = [ProjectionSourceSegment];
+
+    fn deref(&self) -> &Self::Target {
+        &self.segments
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ProjectionSegmentKind {
     Copied,
@@ -370,6 +406,7 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
     pub(super) tokens: Vec<Token>,
+    arrow_boundaries: std::cell::OnceCell<crate::flow::ConciseArrowBoundaries>,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -389,6 +426,7 @@ impl<'a> ProjectionBuilder<'a> {
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
             tokens: crate::lexer::lex_with_kind(source, 0, source.len(), source_kind),
+            arrow_boundaries: std::cell::OnceCell::new(),
         }
     }
 
@@ -599,7 +637,10 @@ impl<'a> ProjectionBuilder<'a> {
             .tokens
             .get(at)
             .is_some_and(|token| token.span.start == source_start)
-            && (crate::flow::concise_arrow_boundary_before(self.source, &self.tokens, at)
+            && (self
+                .arrow_boundaries
+                .get_or_init(|| crate::flow::ConciseArrowBoundaries::new(self.source, &self.tokens))
+                .before(at)
                 || crate::flow::asi_boundary_at(self.source, &self.tokens, at))
         {
             let start = ProjectedByte(self.code.len());

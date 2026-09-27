@@ -697,13 +697,21 @@ impl EvaluationFile {
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
         let mut match_subject_names = HashMap::new();
+        let mut taken_subject_names = 0;
         for rewrite in &rewrites {
             for value in &rewrite.values {
                 if let Expr::Decision(decision) = &core.exprs[value.expr.index()] {
                     let names = decision
                         .subjects
                         .iter()
-                        .map(|_| allocate_generated_name("$tt_subject", &mut occupied_names))
+                        .map(|_| {
+                            crate::generated_names::allocate_after(
+                                "$tt_subject",
+                                &mut occupied_names,
+                                &mut taken_subject_names,
+                            )
+                            .ok_or(EvaluationError::GeneratedNameOverflow)
+                        })
                         .collect::<Result<Vec<_>, _>>()?;
                     match_subject_names.insert(value.expr, names);
                 }

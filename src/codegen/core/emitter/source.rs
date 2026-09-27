@@ -58,6 +58,25 @@ impl<'a> Emitter<'a> {
         (&self.source[span.start..span.end], span.start)
     }
 
+    pub(super) fn replacements_covering(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> impl Iterator<Item = &SourceReplacement> {
+        self.replacement_index
+            .covering(start, end)
+            .into_iter()
+            .map(|index| &self.source_replacements[index])
+    }
+
+    pub(super) fn owner_slots_of(&self, expr: ExprId) -> impl Iterator<Item = &OwnerSlotRewrite> {
+        self.owner_slots_by_expr
+            .get(&expr)
+            .into_iter()
+            .flatten()
+            .map(|&index| &self.owner_slot_rewrites[index])
+    }
+
     pub(super) fn source_rope(&self, node: NodeId) -> Rope<'a> {
         let span = self.span(node);
         self.source_range_rope(span)
@@ -87,18 +106,22 @@ impl<'a> Emitter<'a> {
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
         let mut rope = Rope::new();
         let mut insertions = self
-            .owner_slot_rewrites
-            .iter()
-            .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
+            .owner_slot_index
+            .starting_in(span.start, span.end)
+            .into_iter()
+            .map(|index| &self.owner_slot_rewrites[index])
             .peekable();
         let mut propagation_insertions = self
-            .for_initializer_propagations
-            .iter()
-            .filter(|rewrite| span.start <= rewrite.owner.start && rewrite.owner.start < span.end)
+            .propagation_index
+            .starting_in(span.start, span.end)
+            .into_iter()
+            .map(|index| &self.for_initializer_propagations[index])
             .peekable();
         let mut compose_insertions = self
-            .compose_rewrites
-            .iter()
+            .compose_index
+            .starting_in(span.start, span.end)
+            .into_iter()
+            .map(|index| &self.compose_rewrites[index])
             .filter(|rewrite| {
                 span.start <= rewrite.owner.start
                     && rewrite.owner.start < span.end
@@ -115,8 +138,10 @@ impl<'a> Emitter<'a> {
             })
             .peekable();
         let mut compose_endings = self
-            .compose_rewrites
-            .iter()
+            .compose_index
+            .ending_in(span.start, span.end.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.compose_rewrites[index])
             .filter(|rewrite| {
                 // `<=` on the left as well: when the body's last token is a
                 // tt value, the source that follows begins exactly where the
@@ -138,9 +163,10 @@ impl<'a> Emitter<'a> {
             })
             .peekable();
         let mut loop_endings: Vec<_> = self
-            .loop_test_rewrites
-            .iter()
-            .filter(|rewrite| span.start < rewrite.body.end && rewrite.body.end <= span.end)
+            .loop_body_index
+            .ending_in(span.start.saturating_add(1), span.end.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.loop_test_rewrites[index])
             .collect();
         loop_endings.sort_unstable_by_key(|rewrite| rewrite.body.end);
         let mut loop_endings = loop_endings.into_iter().peekable();
@@ -218,24 +244,30 @@ impl<'a> Emitter<'a> {
                 cursor = rewrite.body.start.min(span.end);
                 continue;
             }
-            if let Some(replacement) = self.source_replacements.iter().find(|replacement| {
-                if replacement.anchor.is_some() {
-                    !replacement
-                        .anchor
-                        .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                        && self.conditional_region_depth.get() == 0
-                        && self.loop_region_depth.get() == 0
-                        && !self.replacement_contains_active_value(replacement.source)
-                        && replacement.source.start <= cursor
-                        && cursor < replacement.source.end
-                } else {
-                    !self.capture_is_active(replacement.source)
-                        && replacement.source.start <= cursor
-                        && cursor < replacement.source.end
-                        && !self.replacement_contains_active_value(replacement.source)
-                        && !self.inside_captured_value(replacement.source, span.start, span.end)
-                }
-            }) {
+            if let Some(replacement) = self
+                .replacement_index
+                .containing(cursor)
+                .into_iter()
+                .map(|index| &self.source_replacements[index])
+                .find(|replacement| {
+                    if replacement.anchor.is_some() {
+                        !replacement
+                            .anchor
+                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                            && self.conditional_region_depth.get() == 0
+                            && self.loop_region_depth.get() == 0
+                            && !self.replacement_contains_active_value(replacement.source)
+                            && replacement.source.start <= cursor
+                            && cursor < replacement.source.end
+                    } else {
+                        !self.capture_is_active(replacement.source)
+                            && replacement.source.start <= cursor
+                            && cursor < replacement.source.end
+                            && !self.replacement_contains_active_value(replacement.source)
+                            && !self.inside_captured_value(replacement.source, span.start, span.end)
+                    }
+                })
+            {
                 if cursor == replacement.source.start {
                     if replacement.jsx_child {
                         rope.push_lit("{");
@@ -284,26 +316,22 @@ impl<'a> Emitter<'a> {
                 .min()
                 .unwrap_or(span.end);
             let next_replacement = self
-                .source_replacements
-                .iter()
-                .filter(|replacement| {
-                    (replacement.anchor.is_none()
+                .replacement_index
+                .starting_after(cursor)
+                .map(|index| &self.source_replacements[index])
+                .take_while(|replacement| replacement.source.start < span.end)
+                .find(|replacement| {
+                    replacement.anchor.is_none()
                         || (self.conditional_region_depth.get() == 0
                             && self.loop_region_depth.get() == 0
-                            && !self.replacement_contains_active_value(replacement.source)))
-                        && cursor < replacement.source.start
-                        && replacement.source.start < span.end
+                            && !self.replacement_contains_active_value(replacement.source))
                 })
-                .map(|replacement| replacement.source.start)
-                .min()
-                .unwrap_or(span.end);
+                .map_or(span.end, |replacement| replacement.source.start);
             let next_owner_end = self
-                .block_required_owners
-                .iter()
-                .map(|owner| owner.end)
-                .filter(|end| cursor < *end && *end < span.end)
-                .min()
-                .unwrap_or(span.end);
+                .block_required_by_end
+                .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
+                .next()
+                .map_or(span.end, |(end, _)| *end);
             let next = next_insertion
                 .min(next_owner_end)
                 .min(next_compose)
@@ -574,19 +602,22 @@ impl<'a> Emitter<'a> {
                     .source_map
                     .node_extent(node)
                     .expect("statement extent");
-                if self.source_replacements.iter().any(|capture| {
-                    (capture.anchor.is_none()
-                        || (!capture.claim
-                            && self.conditional_region_depth.get() == 0
-                            && self.loop_region_depth.get() == 0))
-                        && capture.source.start <= span.start
-                        && span.end <= capture.source.end
-                        && !self.capture_is_active(capture.source)
-                        && !self.replacement_contains_active_value(capture.source)
-                        && !capture
-                            .anchor
-                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                }) {
+                if self
+                    .replacements_covering(span.start, span.end)
+                    .any(|capture| {
+                        (capture.anchor.is_none()
+                            || (!capture.claim
+                                && self.conditional_region_depth.get() == 0
+                                && self.loop_region_depth.get() == 0))
+                            && capture.source.start <= span.start
+                            && span.end <= capture.source.end
+                            && !self.capture_is_active(capture.source)
+                            && !self.replacement_contains_active_value(capture.source)
+                            && !capture
+                                .anchor
+                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                    })
+                {
                     continue;
                 }
             }
@@ -655,12 +686,11 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn statement_expr_requires_lowering(&self, expr: ExprId) -> bool {
-        self.owner_slot_rewrites.iter().any(|rewrite| {
+        self.owner_slots_of(expr).any(|rewrite| {
             rewrite.expr == expr && rewrite.continuation == HostContinuation::Discard
         }) || (matches!(self.core.exprs[expr.index()], Expr::Decision(_))
             && !self
-                .owner_slot_rewrites
-                .iter()
+                .owner_slots_of(expr)
                 .any(|rewrite| rewrite.expr == expr)
             && !self.value_slots.contains_key(&expr))
     }
@@ -670,7 +700,7 @@ impl<'a> Emitter<'a> {
         // source owner around it where `source_range_rope` could insert the
         // planned statement region. Consume that plan here before the inline
         // occurrence is replaced by its join slot.
-        if let Some(rewrite) = self.owner_slot_rewrites.iter().find(|rewrite| {
+        if let Some(rewrite) = self.owner_slots_of(expr).find(|rewrite| {
             rewrite.expr == expr && rewrite.continuation == HostContinuation::Discard
         }) {
             if self.emitted_owner_rewrites.contains(expr) {
@@ -815,16 +845,18 @@ impl<'a> Emitter<'a> {
         // their capture sites, not again beside the completed call's result.
         if !self.active_structured_exprs.contains(expr)
             && let Some(span) = structured_expr_span(self.semantic, self.core, expr)
-            && self.source_replacements.iter().any(|frame| {
-                frame.claim
-                    && frame.source.start <= span.start
-                    && span.end <= frame.source.end
-                    && !frame
-                        .anchor
-                        .is_some_and(|value| self.active_structured_exprs.contains(value))
-                    && !self.capture_is_active(frame.source)
-                    && !self.replacement_contains_active_value(frame.source)
-            })
+            && self
+                .replacements_covering(span.start, span.end)
+                .any(|frame| {
+                    frame.claim
+                        && frame.source.start <= span.start
+                        && span.end <= frame.source.end
+                        && !frame
+                            .anchor
+                            .is_some_and(|value| self.active_structured_exprs.contains(value))
+                        && !self.capture_is_active(frame.source)
+                        && !self.replacement_contains_active_value(frame.source)
+                })
         {
             return Rope::new();
         }
@@ -836,16 +868,18 @@ impl<'a> Emitter<'a> {
             Expr::Opaque(_) | Expr::Sequence(_)
         ) && !self.active_structured_exprs.contains(expr)
             && let Some(span) = structured_expr_span(self.semantic, self.core, expr)
-            && let Some(capture) = self.source_replacements.iter().find(|capture| {
-                (capture.anchor.is_none()
-                    || (!capture.claim
-                        && self.conditional_region_depth.get() == 0
-                        && self.loop_region_depth.get() == 0))
-                    && capture.source.start <= span.start
-                    && span.end <= capture.source.end
-                    && !self.capture_is_active(capture.source)
-                    && !self.replacement_contains_active_value(capture.source)
-            })
+            && let Some(capture) =
+                self.replacements_covering(span.start, span.end)
+                    .find(|capture| {
+                        (capture.anchor.is_none()
+                            || (!capture.claim
+                                && self.conditional_region_depth.get() == 0
+                                && self.loop_region_depth.get() == 0))
+                            && capture.source.start <= span.start
+                            && span.end <= capture.source.end
+                            && !self.capture_is_active(capture.source)
+                            && !self.replacement_contains_active_value(capture.source)
+                    })
         {
             let mut out = Rope::new();
             if span.start == capture.source.start {
@@ -904,9 +938,9 @@ impl<'a> Emitter<'a> {
             return out;
         }
         if let Some(rewrite) = self
-            .arrow_return_rewrites
-            .iter()
-            .find(|rewrite| rewrite.expr == expr)
+            .arrow_returns_by_expr
+            .get(&expr)
+            .map(|&index| &self.arrow_return_rewrites[index])
         {
             return self.emit_arrow_return_rewrite(rewrite);
         }

@@ -7,6 +7,8 @@
 //! retried, and ownership is accepted only when the converged SWC AST contains a
 //! host declaration node for the original identifier span.
 
+use std::collections::HashSet;
+
 use swc_common::{Span as SwcSpan, Spanned};
 use swc_ecma_ast::{
     ClassMethod, FnDecl, FnExpr, GetterProp, MethodProp, PrivateMethod, PropName, SetterProp,
@@ -139,6 +141,11 @@ fn candidate_at_error(candidates: &[Span], restored: &[Span], error: usize) -> O
 
 fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &mut Vec<Span>) {
     candidates.extend(program.host_match_candidates.iter().copied());
+    let region_candidates: HashSet<(usize, usize)> = program
+        .host_match_candidates
+        .iter()
+        .map(|span| (span.start, span.end))
+        .collect();
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_) | Segment::TtImport(_) => {}
@@ -151,7 +158,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
                     start: expr.keyword_off,
                     end: expr.body_close + 1,
                 };
-                if !program.host_match_candidates.contains(&span) {
+                if !region_candidates.contains(&(span.start, span.end)) {
                     masks.push(Mask {
                         span,
                         placeholder: Placeholder::Expression,
@@ -163,7 +170,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
                     start: expr.keyword_off,
                     end: expr.body_close + 1,
                 };
-                if !program.host_match_candidates.contains(&span) {
+                if !region_candidates.contains(&(span.start, span.end)) {
                     masks.push(Mask {
                         span,
                         placeholder: Placeholder::Expression,
@@ -221,7 +228,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
             RecoveryKind::Statement | RecoveryKind::VariantDecl { .. } => Placeholder::Statement,
             RecoveryKind::Type => Placeholder::Type,
         };
-        if !program.host_match_candidates.contains(&recovery.span) {
+        if !region_candidates.contains(&(recovery.span.start, recovery.span.end)) {
             masks.push(Mask {
                 span: recovery.span,
                 placeholder,
@@ -287,6 +294,7 @@ fn parse_wrapped(
     source_offset: usize,
     wrapper: Wrapper,
 ) -> Result<HostParse, usize> {
+    crate::work::tick("host parses");
     let (prefix, suffix) = match wrapper {
         Wrapper::Module => ("", ""),
         Wrapper::Expression => ("const __tt_host_probe = (", ");"),

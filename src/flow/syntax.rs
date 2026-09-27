@@ -279,6 +279,7 @@ pub(crate) fn user_function_target_at(
 /// braced arrow. Balanced groups are one expression atom; a top-level
 /// comma, semicolon, or enclosing closer ends the body.
 pub(super) fn concise_arrow_end(src: &str, tokens: &[Token], from: usize) -> usize {
+    crate::work::tick("concise arrow scans");
     if matches!(
         tokens.get(from).map(|token| &token.kind),
         Some(TokenKind::Punct(b'{'))
@@ -311,19 +312,25 @@ pub(super) fn concise_arrow_end(src: &str, tokens: &[Token], from: usize) -> usi
 /// `at - 1` still belonged to. This is the lexical fact needed by both the
 /// tt parser and the TypeScript projection to preserve an authored automatic
 /// semicolon boundary when the following tt statement becomes a placeholder.
-pub(crate) fn concise_arrow_boundary_before(src: &str, tokens: &[Token], at: usize) -> bool {
-    let Some(previous) = at.checked_sub(1) else {
-        return false;
-    };
-    tokens
-        .iter()
-        .enumerate()
-        .take(at)
-        .filter(|(_, token)| matches!(token.kind, TokenKind::Arrow))
-        .any(|(arrow, _)| {
-            let end = concise_arrow_end(src, tokens, arrow + 1);
-            previous < end && end <= at
-        })
+#[derive(Debug)]
+pub(crate) struct ConciseArrowBoundaries {
+    before: Vec<bool>,
+}
+
+impl ConciseArrowBoundaries {
+    pub(crate) fn new(src: &str, tokens: &[Token]) -> Self {
+        let mut before = vec![false; tokens.len() + 1];
+        for (arrow, token) in tokens.iter().enumerate() {
+            if matches!(token.kind, TokenKind::Arrow) {
+                before[concise_arrow_end(src, tokens, arrow + 1)] = true;
+            }
+        }
+        Self { before }
+    }
+
+    pub(crate) fn before(&self, at: usize) -> bool {
+        at > 0 && self.before.get(at).copied().unwrap_or(false)
+    }
 }
 
 /// Whether automatic semicolon insertion ends an expression before token

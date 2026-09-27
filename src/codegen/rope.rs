@@ -207,22 +207,8 @@ pub(crate) struct SourcePreservation {
 }
 
 impl SourcePreservation {
-    fn owns(&self, at: usize) -> bool {
-        self.owned
-            .iter()
-            .any(|span| span.start <= at && at < span.end)
-    }
-
-    fn relocates(&self, at: usize) -> bool {
-        self.relocated
-            .iter()
-            .any(|span| span.start <= at && at < span.end)
-    }
-
-    fn rewrites(&self, at: usize) -> bool {
-        self.rewritten
-            .iter()
-            .any(|span| span.start <= at && at < span.end)
+    fn index(spans: &[SourceSpan]) -> crate::span_index::SpanIndex {
+        crate::span_index::SpanIndex::new(spans.iter().map(|span| (span.start, span.end)))
     }
 }
 
@@ -419,6 +405,9 @@ impl<'a> TargetFile<'a> {
     ) -> Result<(), InternalCompilerError> {
         let stage = LoweringStage::TargetSourcePreservation;
         let subject = LoweringSubject::default();
+        let owned = SourcePreservation::index(&preservation.owned);
+        let relocated = SourcePreservation::index(&preservation.relocated);
+        let rewritten = SourcePreservation::index(&preservation.rewritten);
         let mut printed = vec![0u16; self.source_len];
         let mut last_ordered: Option<(usize, usize)> = None;
         for piece in &self.pieces {
@@ -435,7 +424,7 @@ impl<'a> TargetFile<'a> {
             // Order applies to the pass-through stream only: pieces inside
             // a construct's own text are its lowering's to arrange, and
             // pieces inside a relocated range were moved on purpose.
-            if !preservation.owns(*start) || preservation.relocates(*start) {
+            if !owned.any_containing(*start) || relocated.any_containing(*start) {
                 continue;
             }
             if let Some((previous_start, previous_end)) = last_ordered
@@ -475,7 +464,7 @@ impl<'a> TargetFile<'a> {
         for span in &preservation.owned {
             let clipped = span.start..span.end.min(self.source_len);
             for (at, &count) in clipped.clone().zip(&printed[clipped]) {
-                if preservation.rewrites(at) {
+                if rewritten.any_containing(at) {
                     continue;
                 }
                 let byte = SourceSpan {

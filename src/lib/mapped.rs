@@ -346,3 +346,45 @@ pub fn utf16_column(source: &str, line: usize, column: usize) -> usize {
 pub fn utf16_offset(source: &str, offset: usize) -> usize {
     crate::typescript::mapper::to_utf16(source, offset)
 }
+
+/// [`utf16_offset`] for many offsets into one measured source.
+pub struct Utf16Offsets<'a> {
+    source: &'a str,
+    signature: usize,
+    multibyte: Vec<(usize, usize)>,
+    total: usize,
+}
+
+impl<'a> Utf16Offsets<'a> {
+    /// Measures `source` once.
+    pub fn new(source: &'a str) -> Self {
+        let signature = error::signature_len(source);
+        let source = error::decoded(source);
+        let mut multibyte = Vec::new();
+        let mut surplus = 0;
+        for (byte, ch) in source.char_indices() {
+            if !ch.is_ascii() {
+                surplus += ch.len_utf8() - ch.len_utf16();
+                multibyte.push((byte + ch.len_utf8(), surplus));
+            }
+        }
+        Self {
+            source,
+            signature,
+            multibyte,
+            total: source.len() - surplus,
+        }
+    }
+
+    /// The answer [`utf16_offset`] gives for `offset`.
+    pub fn offset(&self, offset: usize) -> usize {
+        let byte = offset.saturating_sub(self.signature);
+        if !self.source.is_char_boundary(byte) {
+            return self.total;
+        }
+        let before = self.multibyte.partition_point(|&(end, _)| end <= byte);
+        byte - before
+            .checked_sub(1)
+            .map_or(0, |last| self.multibyte[last].1)
+    }
+}

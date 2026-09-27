@@ -20,13 +20,20 @@ pub(super) struct Emitter<'a> {
     pub(super) rewrite_imports: ImportRewrite,
     pub(super) std_imports: StdImports<'a>,
     pub(super) owner_slot_rewrites: Vec<OwnerSlotRewrite>,
+    pub(super) owner_slot_index: crate::span_index::SpanIndex,
+    pub(super) owner_slots_by_expr: HashMap<ExprId, Vec<usize>>,
     pub(super) for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
+    pub(super) propagation_index: crate::span_index::SpanIndex,
     pub(super) compose_rewrites: Vec<ComposeRewrite>,
+    pub(super) compose_index: crate::span_index::SpanIndex,
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
+    pub(super) loop_body_index: crate::span_index::SpanIndex,
     pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
+    pub(super) replacement_index: crate::span_index::SpanIndex,
     pub(super) consumed_exprs: HashSet<ExprId>,
     pub(super) arrow_return_rewrites: Vec<ArrowReturnRewrite>,
+    pub(super) arrow_returns_by_expr: HashMap<ExprId, usize>,
     pub(super) slot_exprs: HashMap<ExprId, String>,
     pub(super) value_slots: HashMap<ExprId, String>,
     pub(super) scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
@@ -50,6 +57,7 @@ pub(super) struct Emitter<'a> {
     /// write a prelude, and the owner's end can be reached by more than one
     /// source walk, so both braces are claimed exactly once.
     pub(super) block_required_owners: HashSet<SourceSpan>,
+    pub(super) block_required_by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>,
     pub(super) opened_owner_blocks: ClosedComposeBlocks,
     pub(super) closed_owner_blocks: ClosedComposeBlocks,
     /// Owners whose prelude is being written right now. A prelude re-emits

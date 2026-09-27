@@ -81,11 +81,13 @@ mod scanner;
 mod sema;
 mod sidecar;
 pub mod source_map;
+mod span_index;
 pub mod stack;
 mod stdlib;
 pub(crate) mod typescript;
 mod val;
 mod verify;
+mod work;
 
 pub use analysis::{
     AnalyzedArm, BodyBinding, Coverage, CoveredVariant, MatchAnalysis, MatchConstructor,
@@ -112,5 +114,9 @@ pub use mapped::*;
 #[cfg(test)]
 #[path = "lib/mapped_result_tests.rs"]
 mod mapped_result_tests;
+
+#[cfg(test)]
+#[path = "lib/scaling_tests.rs"]
+mod scaling_tests;
 
 use error::TtError;

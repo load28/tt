@@ -315,10 +315,12 @@ fn deny_in(
     (start, end): (usize, usize),
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
-    for (i, token) in tokens.iter().enumerate() {
-        if token.span.end <= start || end <= token.span.start {
-            continue;
+    let first = tokens.partition_point(|token| token.span.end <= start);
+    for (i, token) in tokens.iter().enumerate().skip(first) {
+        if end <= token.span.start {
+            break;
         }
+        crate::work::tick("denied token visits");
         match &token.kind {
             Lex::Template(parts) => {
                 for part in parts.iter() {

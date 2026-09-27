@@ -33,8 +33,10 @@ impl<'a> Emitter<'a> {
     /// `at`, unless that owner's own prelude is the one reaching its end.
     pub(super) fn close_owner_blocks_at(&self, at: usize, out: &mut Rope<'a>) {
         let mut ending: Vec<_> = self
-            .block_required_owners
-            .iter()
+            .block_required_by_end
+            .get(&at)
+            .into_iter()
+            .flatten()
             .filter(|owner| {
                 owner.end == at
                     && self.opened_owner_blocks.contains(**owner)
@@ -622,7 +624,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn carried_by_capture(&self, start: usize, end: usize) -> bool {
-        self.source_replacements.iter().any(|captured| {
+        self.replacements_covering(start, end).any(|captured| {
             captured.anchor.is_none()
                 && captured.source.start <= start
                 && end <= captured.source.end
@@ -666,19 +668,26 @@ impl<'a> Emitter<'a> {
             Statement(&'b Statement),
         }
         let mut parts = Vec::new();
-        for replacement in &self.source_replacements {
+        for replacement in self
+            .replacement_index
+            .starting_in(source.start, source.end.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.source_replacements[index])
+        {
             if replacement.anchor.is_none()
                 && source.start <= replacement.source.start
                 && replacement.source.end <= source.end
                 && replacement.source != source
-                && !self.source_replacements.iter().any(|frame| {
-                    frame.claim
-                        && frame.source.start <= replacement.source.start
-                        && replacement.source.end <= frame.source.end
-                        && !frame
-                            .anchor
-                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                })
+                && !self
+                    .replacements_covering(replacement.source.start, replacement.source.end)
+                    .any(|frame| {
+                        frame.claim
+                            && frame.source.start <= replacement.source.start
+                            && replacement.source.end <= frame.source.end
+                            && !frame
+                                .anchor
+                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                    })
                 && captured
                     .iter()
                     .any(|slot| self.value_slot_name(*slot) == replacement.slot)
@@ -777,13 +786,15 @@ impl<'a> Emitter<'a> {
             })
             .filter(|(_, _, value, _)| span.start <= value.start && value.end <= span.end)
             .filter(|(_, _, value, _)| {
-                !self.source_replacements.iter().any(|captured| {
-                    captured.anchor.is_none()
-                        && span.start <= captured.source.start
-                        && captured.source.start <= value.start
-                        && value.end <= captured.source.end
-                        && captured.source != *value
-                })
+                !self
+                    .replacements_covering(value.start, value.end)
+                    .any(|captured| {
+                        captured.anchor.is_none()
+                            && span.start <= captured.source.start
+                            && captured.source.start <= value.start
+                            && value.end <= captured.source.end
+                            && captured.source != *value
+                    })
             })
             .collect();
         replacements.sort_unstable_by_key(|(_, _, value, _)| value.start);
@@ -1230,6 +1241,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn value_anchor(&self, expr: ExprId) -> (AnchorKind, usize, usize, usize) {
+        crate::work::tick("value anchors");
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {
                 let head = self.span(decision.head);

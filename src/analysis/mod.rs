@@ -648,14 +648,16 @@ fn validate_semantic(file: &SemanticFile) {
             "unresolved HIR use has no source span"
         );
     }
+    let site_starts: std::collections::HashSet<usize> = file
+        .hir
+        .sites
+        .iter()
+        .filter_map(|(_, site)| file.hir.source_map.node_span(site.node))
+        .map(|span| span.start)
+        .collect();
     for analysis in &file.patterns.matches {
         assert!(
-            file.hir.sites.iter().any(|(_, site)| {
-                file.hir
-                    .source_map
-                    .node_span(site.node)
-                    .is_some_and(|span| span.start == analysis.keyword_off)
-            }),
+            site_starts.contains(&analysis.keyword_off),
             "match analysis has no HIR pattern site"
         );
     }

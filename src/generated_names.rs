@@ -45,13 +45,24 @@ pub(crate) fn source_names(source: &str, source_kind: SourceKind) -> HashSet<Str
 }
 
 pub(crate) fn allocate(base: &str, occupied: &mut HashSet<String>) -> Option<String> {
-    if occupied.insert(base.to_owned()) {
-        return Some(base.to_owned());
-    }
-    let mut suffix = 1u32;
+    allocate_after(base, occupied, &mut 0)
+}
+
+pub(crate) fn allocate_after(
+    base: &str,
+    occupied: &mut HashSet<String>,
+    taken: &mut u32,
+) -> Option<String> {
+    let mut suffix = *taken;
     loop {
-        let candidate = format!("{base}_{suffix}");
+        crate::work::tick("generated name probes");
+        let candidate = if suffix == 0 {
+            base.to_owned()
+        } else {
+            format!("{base}_{suffix}")
+        };
         if occupied.insert(candidate.clone()) {
+            *taken = suffix.saturating_add(1);
             return Some(candidate);
         }
         suffix = suffix.checked_add(1)?;

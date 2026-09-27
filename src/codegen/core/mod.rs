@@ -133,6 +133,10 @@ pub(crate) fn lowering_plan_with(
     Ok(plan)
 }
 
+fn span_index(spans: impl Iterator<Item = SourceSpan>) -> crate::span_index::SpanIndex {
+    crate::span_index::SpanIndex::new(spans.map(|span| (span.start, span.end)))
+}
+
 pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
@@ -194,13 +198,42 @@ pub(crate) fn emit_with_map<'a>(
         member_apply_steps,
         rewrite_imports,
         std_imports,
+        owner_slot_index: span_index(target.owner_slots.iter().map(|rewrite| rewrite.owner)),
+        owner_slots_by_expr: target.owner_slots.iter().enumerate().fold(
+            HashMap::new(),
+            |mut by_expr: HashMap<ExprId, Vec<usize>>, (index, rewrite)| {
+                by_expr.entry(rewrite.expr).or_default().push(index);
+                by_expr
+            },
+        ),
         owner_slot_rewrites: target.owner_slots,
+        propagation_index: span_index(
+            target
+                .for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.owner),
+        ),
         for_initializer_propagations: target.for_initializer_propagations,
+        compose_index: span_index(target.composes.iter().map(|rewrite| rewrite.owner)),
         compose_rewrites: target.composes,
+        loop_body_index: span_index(target.loop_tests.iter().map(|rewrite| rewrite.body)),
         loop_test_rewrites: target.loop_tests,
+        replacement_index: span_index(
+            target
+                .source_replacements
+                .iter()
+                .map(|replacement| replacement.source),
+        ),
         source_replacements: target.source_replacements,
         active_capture_sources: RefCell::new(Vec::new()),
         consumed_exprs: target.consumed_exprs,
+        arrow_returns_by_expr: target.arrow_returns.iter().enumerate().rev().fold(
+            HashMap::new(),
+            |mut by_expr, (index, rewrite)| {
+                by_expr.insert(rewrite.expr, index);
+                by_expr
+            },
+        ),
         arrow_return_rewrites: target.arrow_returns,
         slot_exprs: target.slot_exprs,
         value_slots: target.value_slots,
@@ -228,6 +261,13 @@ pub(crate) fn emit_with_map<'a>(
         host_json: target.host_json,
         inline_subjects: target.inline_subjects,
         block_required_propagations: target.block_required_propagations,
+        block_required_by_end: target.block_required_owners.iter().fold(
+            std::collections::BTreeMap::new(),
+            |mut by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>, owner| {
+                by_end.entry(owner.end).or_default().push(*owner);
+                by_end
+            },
+        ),
         block_required_owners: target.block_required_owners,
         opened_owner_blocks: ClosedComposeBlocks::default(),
         closed_owner_blocks: ClosedComposeBlocks::default(),

@@ -541,8 +541,7 @@ impl<'a> Emitter<'a> {
         // emits the child's inline slot and never schedules its statement
         // region a second time.
         if self
-            .owner_slot_rewrites
-            .iter()
+            .owner_slots_of(expr)
             .any(|rewrite| rewrite.expr == expr)
         {
             self.emitted_owner_rewrites.mark(expr);

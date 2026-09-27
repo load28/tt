@@ -534,7 +534,8 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
     // in UTF-16 code units, which is what the protocol counts. One
     // conversion here keeps the two from disagreeing about where a name is
     // (`docs/design/lsp-architecture.md` §C).
-    let offset = |byte: usize| ttc::utf16_offset(text, byte);
+    let offsets = ttc::Utf16Offsets::new(text);
+    let offset = |byte: usize| offsets.offset(byte);
     let span = |bounds: (usize, usize)| serde_json::json!({ "start": offset(bounds.0), "end": offset(bounds.1) });
     let variants: Vec<_> = decls
         .variants

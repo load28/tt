@@ -1,5 +1,7 @@
 //! Whole-file parsing, recovery collection, and parser implementation.
 
+use std::cell::OnceCell;
+
 use super::*;
 
 /// Parses a whole source file into a [`Program`].
@@ -296,8 +298,17 @@ fn recovery_statement_span(tokens: &[Token], start_idx: usize, range_end: usize)
     }
 }
 
-fn starts_statement(src: &str, tokens: &[Token], idx: usize, in_ternary: bool) -> bool {
-    if crate::flow::concise_arrow_boundary_before(src, tokens, idx) {
+fn starts_statement(
+    src: &str,
+    tokens: &[Token],
+    arrow_boundaries: &OnceCell<crate::flow::ConciseArrowBoundaries>,
+    idx: usize,
+    in_ternary: bool,
+) -> bool {
+    if arrow_boundaries
+        .get_or_init(|| crate::flow::ConciseArrowBoundaries::new(src, tokens))
+        .before(idx)
+    {
         return true;
     }
     if in_ternary {
@@ -417,9 +428,15 @@ fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
 /// operator or delimiter requires an operand; those positions need no second
 /// parser. A preceding prefix, statement boundary, or comma remains ambiguous
 /// and is delegated to the host AST without enumerating TypeScript modifiers.
-fn match_may_be_host_owned(src: &str, tokens: &[Token], idx: usize, expr: (usize, bool)) -> bool {
+fn match_may_be_host_owned(
+    src: &str,
+    tokens: &[Token],
+    arrow_boundaries: &OnceCell<crate::flow::ConciseArrowBoundaries>,
+    idx: usize,
+    expr: (usize, bool),
+) -> bool {
     expr.0 < idx
-        || starts_statement(src, tokens, idx, expr.1)
+        || starts_statement(src, tokens, arrow_boundaries, idx, expr.1)
         || idx
             .checked_sub(1)
             .is_some_and(|previous| matches!(tokens[previous].kind, TokenKind::Punct(b',')))
@@ -469,6 +486,7 @@ impl Parser<'_> {
         // state, so `f(a(b) |> g)` finds `a(b)`, not `b`.
         let mut expr: (usize, bool) = (0, false);
         let mut expr_stack: Vec<ExprFrame> = Vec::new();
+        let arrow_boundaries = OnceCell::new();
 
         while i < tokens.len() {
             let tok = &tokens[i];
@@ -633,7 +651,8 @@ impl Parser<'_> {
                 && word == "match"
                 && !self.host_owns_match_name(tok.span)
             {
-                let host_ambiguous = match_may_be_host_owned(self.src, tokens, i, expr);
+                let host_ambiguous =
+                    match_may_be_host_owned(self.src, tokens, &arrow_boundaries, i, expr);
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
                         if host_ambiguous {
@@ -668,7 +687,7 @@ impl Parser<'_> {
             // structurally excluded by the sub-parser).
             if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
                 let misplaced = (expression_root && i == 0)
-                    || !starts_statement(self.src, tokens, i, expr.1)
+                    || !starts_statement(self.src, tokens, &arrow_boundaries, i, expr.1)
                     || in_for_update(self.src, tokens, i)
                     || follows_object_member_colon(self.src, tokens, i);
                 if misplaced

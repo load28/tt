@@ -87,7 +87,7 @@ pub(super) struct ParentCollector {
     pub(super) synthetic_returns: HashSet<ProjectedSpan>,
     pub(super) found: HashMap<TtNodeId, FoundOverlay>,
     pub(super) duplicates: Vec<TtNodeId>,
-    pub(super) source_segments: Vec<ProjectionSourceSegment>,
+    pub(super) source_segments: ProjectionSegments,
     pub(super) projection_only_protocol_parents: HashSet<ProjectedSpan>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
@@ -258,7 +258,7 @@ pub(super) fn object_evaluation_positions(
     node: &ObjectLit,
     source_start: HostOrigin,
     placeholders: &HashSet<ProjectedSpan>,
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, Effects)> {
     let mut positions = Vec::new();
     for property in &node.props {
@@ -322,7 +322,7 @@ pub(super) fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
     source_start: HostOrigin,
     placeholders: &HashSet<ProjectedSpan>,
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments
         .iter()

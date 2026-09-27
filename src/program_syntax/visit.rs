@@ -75,7 +75,7 @@ impl ParentCollector {
             synthetic_returns,
             found: HashMap::new(),
             duplicates: Vec::new(),
-            source_segments: source_segments.to_vec(),
+            source_segments: ProjectionSegments::new(source_segments.to_vec()),
             projection_only_protocol_parents: projection_only_protocol_parents
                 .iter()
                 .copied()
@@ -151,6 +151,11 @@ impl ParentCollector {
             .iter()
             .map(|entry| (entry.id, entry.projected))
             .collect();
+        let overlay_index = crate::span_index::SpanIndex::new(
+            overlay_spans
+                .iter()
+                .map(|(_, span)| (span.start.0, span.end.0)),
+        );
         for entry in &pending {
             let found = self
                 .found
@@ -198,8 +203,10 @@ impl ParentCollector {
                 owner_id
             };
             owners[owner_id.0 as usize].roots.push(entry.id);
-            let enclosing_overlay = overlay_spans
-                .iter()
+            let enclosing_overlay = overlay_index
+                .covering(entry.projected.start.0, entry.projected.end.0)
+                .into_iter()
+                .map(|index| &overlay_spans[index])
                 .filter(|(id, span)| {
                     *id != entry.id
                         && span.start <= entry.projected.start

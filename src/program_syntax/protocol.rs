@@ -3,7 +3,7 @@
 use super::*;
 
 pub(super) fn evaluation_protocol(
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
     value: ProjectedSpan,
     source_value: SourceSpan,
     frames: &[ProjectedProtocolFrame],
@@ -122,7 +122,7 @@ pub(super) struct ProjectedConditionalFacts {
 }
 
 pub(super) fn protocol_step(
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
     value: ProjectedSpan,
     source_value: SourceSpan,
     frame: &ProjectedProtocolFrame,
@@ -546,7 +546,7 @@ pub(super) fn protocol_step(
 }
 
 pub(super) fn map_evaluation_span(
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
     projected: ProjectedSpan,
 ) -> Result<SourceSpan, ProgramSyntaxError> {
     source_span_for_projection(segments, projected).ok_or(
@@ -558,7 +558,7 @@ pub(super) fn map_evaluation_span(
 }
 
 pub(super) fn map_structural_span(
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
     projected: ProjectedSpan,
 ) -> Result<SourceSpan, ProgramSyntaxError> {
     if let Some(span) = source_span_for_projection(segments, projected) {
@@ -618,7 +618,7 @@ pub(super) fn operand_span(
     expression: &swc_ecma_ast::Expr,
     source_start: HostOrigin,
     placeholders: &HashSet<ProjectedSpan>,
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
 ) -> ProjectedSpan {
     let mut inner = expression;
     while let swc_ecma_ast::Expr::Paren(paren) = inner {
@@ -680,15 +680,25 @@ pub(super) fn source_byte_for_projection(
 }
 
 pub(super) fn source_span_for_projection(
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
     projected: ProjectedSpan,
 ) -> Option<SourceSpan> {
-    if let Some(segment) = segments.iter().find(|segment| {
-        segment.kind != ProjectionSegmentKind::SourceBoundary && segment.projected == projected
-    }) {
+    if let Some(segment) = segments
+        .starting_at(projected.start)
+        .into_iter()
+        .map(|index| &segments[index])
+        .find(|segment| {
+            segment.kind != ProjectionSegmentKind::SourceBoundary && segment.projected == projected
+        })
+    {
         return Some(segment.source);
     }
-    let start = segments.iter().find_map(|segment| {
+    let start = in_segment_order(
+        segments.starting_at(projected.start),
+        segments.containing(projected.start),
+    )
+    .map(|index| &segments[index])
+    .find_map(|segment| {
         if segment.kind != ProjectionSegmentKind::SourceBoundary
             && projected.start == segment.projected.start
         {
@@ -702,7 +712,12 @@ pub(super) fn source_span_for_projection(
             None
         }
     })?;
-    let end = segments.iter().find_map(|segment| {
+    let end = in_segment_order(
+        segments.ending_at(projected.end),
+        segments.containing(projected.end),
+    )
+    .map(|index| &segments[index])
+    .find_map(|segment| {
         if segment.kind != ProjectionSegmentKind::SourceBoundary
             && projected.end == segment.projected.end
         {
@@ -717,4 +732,11 @@ pub(super) fn source_span_for_projection(
         }
     })?;
     Some(SourceSpan { start, end })
+}
+
+fn in_segment_order(mut first: Vec<usize>, second: Vec<usize>) -> impl Iterator<Item = usize> {
+    first.extend(second);
+    first.sort_unstable();
+    first.dedup();
+    first.into_iter()
 }
