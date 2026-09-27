@@ -943,3 +943,13 @@ console.log(JSON.stringify(seen));
 "#);
     assert_eq!(lines, ["[0,1,2,10,11]"]);
 }
+
+#[test]
+fn a_wildcard_only_match_reads_nothing_from_its_subject() {
+    require_toolchain!();
+    let lines = run(r#"
+const values: (number | null | undefined)[] = [1, null, undefined];
+console.log(JSON.stringify(values.map(v => match (v) { _ => "any" })));
+"#);
+    assert_eq!(lines, [r#"["any","any","any"]"#]);
+}

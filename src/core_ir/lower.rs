@@ -621,11 +621,9 @@ fn match_kind(decision: &Decision) -> DecisionKind {
         });
     let dispatch = if !switch {
         MatchDispatch::Conditional
-    } else if decision
-        .arms
-        .iter()
-        .any(|arm| pattern_has_literal_test(&arm.pattern))
-    {
+    } else if decision.arms.iter().all(|arm| {
+        matches!(arm.pattern, PatternPlan::Any) || pattern_has_literal_test(&arm.pattern)
+    }) {
         MatchDispatch::LiteralSwitch
     } else {
         MatchDispatch::VariantSwitch

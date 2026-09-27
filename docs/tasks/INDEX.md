@@ -420,6 +420,7 @@
 | TASK-413 | Report a malformed variant behind declaration modifiers once | Complete | 2026-09-27 | 2026-09-27 | [TASK-413](./TASK-413-malformed-variant-once.md) |
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
+| TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
 
 ## Next task number
 
