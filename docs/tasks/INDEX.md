@@ -423,18 +423,18 @@
 | TASK-413 | Report a malformed variant behind declaration modifiers once | Complete | 2026-09-27 | 2026-09-27 | [TASK-413](./TASK-413-malformed-variant-once.md) |
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
-| TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
-| TASK-427 | Decide `result` ownership of `try` from the parsed construct boundaries | Complete | 2026-09-27 | 2026-09-27 | [TASK-427](./TASK-427-result-try-ownership.md) |
-| TASK-428 | Route abrupt exits through `finally` in the divergence graph | Complete | 2026-09-27 | 2026-09-27 | [TASK-428](./TASK-428-finally-routing.md) |
-| TASK-429 | Keep missing-arm suggestions free of duplicate bindings across tuple positions | Complete | 2026-09-27 | 2026-09-27 | [TASK-429](./TASK-429-tuple-suggestion-bindings.md) |
-| TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
-| TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 | TASK-416 | Emit values the lowering plan cannot own as recovery placeholders | Complete | 2026-09-27 | 2026-09-27 | [TASK-416](./TASK-416-unowned-value-recovery-emission.md) |
 | TASK-417 | Keep generated bindings out of completion, hover, and references | Complete | 2026-09-27 | 2026-09-27 | [TASK-417](./TASK-417-generated-bindings-out-of-service-answers.md) |
 | TASK-418 | Compute dead arms in matches that have a `_` arm | Complete | 2026-09-27 | 2026-09-27 | [TASK-418](./TASK-418-dead-arms-beside-wildcards.md) |
 | TASK-419 | Stop marking a case covered in completion when only a guarded arm handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-419](./TASK-419-guarded-arms-never-cover-in-completion.md) |
 | TASK-420 | Clamp a position past the end of its line to the line's length | Complete | 2026-09-27 | 2026-09-27 | [TASK-420](./TASK-420-clamp-positions-to-the-line.md) |
 | TASK-421 | Treat JSX text as opaque when classifying semantic tokens | Complete | 2026-09-27 | 2026-09-27 | [TASK-421](./TASK-421-jsx-text-semantic-tokens.md) |
+| TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
+| TASK-427 | Decide `result` ownership of `try` from the parsed construct boundaries | Complete | 2026-09-27 | 2026-09-27 | [TASK-427](./TASK-427-result-try-ownership.md) |
+| TASK-428 | Route abrupt exits through `finally` in the divergence graph | Complete | 2026-09-27 | 2026-09-27 | [TASK-428](./TASK-428-finally-routing.md) |
+| TASK-429 | Keep missing-arm suggestions free of duplicate bindings across tuple positions | Complete | 2026-09-27 | 2026-09-27 | [TASK-429](./TASK-429-tuple-suggestion-bindings.md) |
+| TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
+| TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 
 ## Next task number
 
