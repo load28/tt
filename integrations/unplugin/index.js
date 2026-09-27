@@ -20,6 +20,7 @@
  * a `.ts` file import `.tt` without the type checker complaining.
  * ----------------------------------------------------------------------- */
 import { execFile } from "node:child_process";
+import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -138,7 +139,8 @@ export const unpluginFactory = (options = {}) => {
       }
       if (!source.endsWith(".tt") && !source.endsWith(".ttx")) return null;
 
-      if (!path.isAbsolute(source) && !source.startsWith(".")) {
+      const onDisk = path.isAbsolute(source) && fs.existsSync(source);
+      if (!onDisk && (!path.isAbsolute(source) || typeof this.resolve === "function") && !source.startsWith(".")) {
         // Package exports and aliases belong to the host resolver.
         if (typeof this.resolve !== "function") return null;
         return this.resolve(source, importer, { skipSelf: true }).then(resolved => {
@@ -149,9 +151,9 @@ export const unpluginFactory = (options = {}) => {
       const file = path.isAbsolute(source)
         ? source
         : importer === undefined || importer === null
-          ? null
+          ? path.resolve(source)
           : path.resolve(path.dirname(importer), source);
-      return file === null ? null : `${file}${sourceSuffix(file)}`;
+      return `${file}${sourceSuffix(file)}`;
     },
 
     async load(id) {

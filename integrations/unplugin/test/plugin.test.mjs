@@ -75,6 +75,22 @@ test('the shared hooks resolve and compile tt, ttx, and standard modules', async
   assert.equal(std.map, null)
 })
 
+test('entry and root-relative tt specifiers resolve like the host resolves them', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-entry-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const plugin = unpluginFactory({ compiler })
+  const previous = process.cwd()
+  process.chdir(root)
+  t.after(() => process.chdir(previous))
+  assert.equal(plugin.resolveId('./src/main.tt'), `${join(await realpath(root), 'src/main.tt')}.ts`)
+
+  const requests = []
+  const host = { async resolve(...args) { requests.push(args); return { id: join(root, 'src/main.tt') } } }
+  const resolved = await plugin.resolveId.call(host, '/src/main.tt', join(root, 'index.html'))
+  assert.equal(resolved.id, `${join(root, 'src/main.tt')}.ts`)
+  assert.deepEqual(requests, [['/src/main.tt', join(root, 'index.html'), { skipSelf: true }]])
+})
+
 test('a CRLF source keeps its line endings and hands its map to the host', async (t) => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
   const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-crlf-'))
