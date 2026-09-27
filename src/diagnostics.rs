@@ -447,9 +447,10 @@ explicitly."
 A let-else was written outside the statement stream it needs.
 
 Like `try`, its `else` block leaves the enclosing function, so it belongs
-to a statement list — not to a `match` arm, a `result` block, or another
-construct's value region. Module top level is allowed here, because a
-let-else has no `return` of its own to place."
+to a statement list — not to a `match` arm or another construct's value
+region. Inside a statement-bodied `result` block its `else` exits complete
+that block, as a `return` written there does. Module top level is allowed
+here, because a let-else has no `return` of its own to place."
             }
 
             DiagnosticCode::LetElseNotDiverging => {

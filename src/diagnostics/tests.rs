@@ -74,3 +74,16 @@ fn a_diagnostic_converts_to_the_cli_error_form() {
     assert_eq!((e.line, e.col), (2, 2));
     assert_eq!(e.to_string(), "x.tt:2:2: match: duplicate arm \"A\"");
 }
+
+#[test]
+fn the_let_else_placement_explanation_allows_the_result_block_it_is_allowed_in() {
+    let explanation = DiagnosticCode::LetElsePlacement.explanation();
+    assert!(
+        explanation.contains("complete\nthat block"),
+        "{explanation}"
+    );
+    assert!(
+        !explanation.contains("a `result` block, or"),
+        "{explanation}"
+    );
+}
