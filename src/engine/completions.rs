@@ -67,9 +67,9 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
     );
     let declarations = super::language::analyses_for(path, source).declarations;
     let items = match context(source, &tokens, offset) {
-        Some(Context::Case { of: Some(tags) }) => {
-            let mut items = resolve_all(&declarations, &tags)
-                .flat_map(|declared| cases(declared, &tags))
+        Some(Context::Case { of: Some(arms) }) => {
+            let mut items = resolve_all(&declarations, &arms.tags)
+                .flat_map(|declared| cases(declared, &arms.covered))
                 .collect::<Vec<_>>();
             // An arm position always admits the wildcard, whether or not
             // the subject resolved.
@@ -136,7 +136,7 @@ enum Context {
     /// A tag is expected. `of` carries the tags already written in the same
     /// match, which is what says *which* variant — `None` when the position
     /// has no such evidence (an `if let`).
-    Case { of: Option<Vec<String>> },
+    Case { of: Option<ArmTags> },
     /// A payload field name of `tag` is expected.
     Field { tag: String },
     /// A nested pattern's tag is expected, in `tag`'s field `field`.
@@ -175,7 +175,10 @@ fn context(source: &str, tokens: &[Token], offset: usize) -> Option<Context> {
         )
     {
         return Some(Context::Case {
-            of: Some(Vec::new()),
+            of: Some(ArmTags {
+                tags: Vec::new(),
+                covered: Vec::new(),
+            }),
         });
     }
 
@@ -325,17 +328,25 @@ fn enclosing_match_body(source: &str, tokens: &[Token], before: usize) -> Option
 /// Completed arm headers provide variant evidence. An unfinished sibling and
 /// a wildcard do not identify a variant; expression-body identifiers and pipes
 /// are outside the pattern grammar and must never constrain its candidates.
+#[derive(Debug, PartialEq, Eq)]
+struct ArmTags {
+    tags: Vec<String>,
+    covered: Vec<String>,
+}
+
 fn arm_tags(
     source: &str,
     tokens: &[Token],
     (open, close): (usize, usize),
     prefix: Option<usize>,
-) -> Vec<String> {
+) -> ArmTags {
     let mut tags = Vec::new();
+    let mut covered: Vec<String> = Vec::new();
     let mut pending = Vec::new();
     let mut depth = 0usize;
     let mut pattern = true;
     let mut alternatives = true;
+    let mut guarded = false;
     let mut expect = true;
     for (index, token) in tokens.iter().enumerate().take(close).skip(open + 1) {
         match token.kind {
@@ -348,10 +359,14 @@ fn arm_tags(
                 pending.clear();
                 pattern = true;
                 alternatives = true;
+                guarded = false;
                 expect = true;
             }
             TokenKind::Arrow if depth == 0 && pattern => {
                 for tag in pending.drain(..) {
+                    if !guarded && !covered.contains(&tag) {
+                        covered.push(tag.clone());
+                    }
                     if !tags.contains(&tag) {
                         tags.push(tag);
                     }
@@ -361,6 +376,7 @@ fn arm_tags(
             }
             TokenKind::Ident if depth == 0 && pattern && text(source, token) == "if" => {
                 alternatives = false;
+                guarded = true;
                 expect = false;
             }
             TokenKind::Punct(b'|') if depth == 0 && pattern && alternatives => expect = true,
@@ -375,7 +391,7 @@ fn arm_tags(
             _ => {}
         }
     }
-    tags
+    ArmTags { tags, covered }
 }
 
 /// Keep every declaration consistent with the known tags. With no evidence,
@@ -482,6 +498,34 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["Circle"],
             "an arm already written is marked, not hidden"
+        );
+    }
+
+    #[test]
+    fn a_guarded_arm_does_not_mark_its_case_covered() {
+        let src = format!("{DECL}const a = match (s) {{ Circle(r) if r > 1 => 1, Po }};\n");
+        let items = tt_completions_at(
+            Path::new("/p/a.tt"),
+            &src,
+            at(&src, "Circle(r) if r > 1 => 1, "),
+        );
+        assert_eq!(
+            items.iter().map(|i| i.label.as_str()).collect::<Vec<_>>(),
+            ["Circle", "Rect", "Point", "_"]
+        );
+        assert!(items.iter().all(|i| !i.covered), "{items:?}");
+
+        let src = format!(
+            "{DECL}const a = match (s) {{ Circle(r) if r > 1 => 1, Circle(r) => 0, Po }};\n"
+        );
+        let items = tt_completions_at(Path::new("/p/a.tt"), &src, at(&src, "Circle(r) => 0, "));
+        assert_eq!(
+            items
+                .iter()
+                .filter(|i| i.covered)
+                .map(|i| i.label.as_str())
+                .collect::<Vec<_>>(),
+            ["Circle"]
         );
     }
 
