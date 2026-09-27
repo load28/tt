@@ -691,14 +691,15 @@ impl<'a> Emitter<'a> {
             // complete. There is then no safe source owner to rewrite and no
             // planned slot. Keep the structurally parsed match available to
             // the language service through the existing expression boundary.
-            out.push_lit("(() => { let $tt_recovery; ");
+            let recovery = self.generated_name("$tt_recovery");
+            out.push_lit(format!("(() => {{ let {recovery}; "));
             out.append(
-                self.emit_continued_expr(expr, &ValueContinuation::assign("$tt_recovery"))
+                self.emit_continued_expr(expr, &ValueContinuation::assign(&recovery))
                     .unwrap_or_else(|| {
                         crate::ice::bug!("statement match has no expression-boundary emission")
                     }),
             );
-            out.push_lit(" return $tt_recovery; })()");
+            out.push_lit(format!(" return {recovery}; }})()"));
             return;
         }
         out.append(self.emit_expr(expr));

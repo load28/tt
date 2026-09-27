@@ -75,7 +75,7 @@ pub(super) fn binding_keyword(mode: BindingMode) -> &'static str {
     }
 }
 
-pub(super) fn temp_name(temp: TempId) -> String {
+pub(super) fn temp_base(temp: TempId) -> String {
     match temp {
         TempId::Statement(sequence) => format!("$tt_t{sequence}"),
         TempId::Result(sequence) => format!("$tt_r{sequence}"),
@@ -215,7 +215,8 @@ impl BindingRecovery {
             return None;
         }
         loop {
-            let candidate = format!("$tt_discard{}", self.discard_sequence);
+            let candidate =
+                emitter.generated_name(&format!("$tt_discard{}", self.discard_sequence));
             self.discard_sequence += 1;
             if self.available.insert(candidate.clone()) {
                 return Some(candidate);

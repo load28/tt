@@ -134,6 +134,7 @@ pub(crate) struct LoweringPlan {
     nested_relocations: Vec<SourceSpan>,
     expression_boundary_name: String,
     match_raise_name: String,
+    generated_names: Option<crate::generated_names::GeneratedNames>,
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
@@ -496,6 +497,10 @@ impl LoweringPlan {
 
     pub(crate) fn match_raise_name(&self) -> &str {
         &self.match_raise_name
+    }
+
+    pub(crate) fn generated_names(&self) -> Option<&crate::generated_names::GeneratedNames> {
+        self.generated_names.as_ref()
     }
 
     pub(crate) fn match_subject_names(&self, expr: ExprId) -> &[String] {

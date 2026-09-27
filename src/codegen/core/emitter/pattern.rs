@@ -50,7 +50,7 @@ impl<'a> Emitter<'a> {
             for subject in &decision.subjects {
                 out.append(self.emit_subject_initialization(
                     subject,
-                    &temp_name(subject.temporary),
+                    &self.temp_name(subject.temporary),
                     decision.head,
                 ));
                 out.push_break(0);
@@ -62,14 +62,14 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
-                &temp_name(subject.temporary),
+                &self.temp_name(subject.temporary),
                 decision.head,
             ));
         }
         let DecisionKind::Match { dispatch, .. } = decision.kind else {
             crate::ice::bug!("selector is not a match")
         };
-        let temp = temp_name(decision.subjects[0].temporary);
+        let temp = self.temp_name(decision.subjects[0].temporary);
         if dispatch == MatchDispatch::Conditional {
             crate::ice::bug!("a narrowing condition cannot be separated from its arm value");
         }
@@ -267,7 +267,7 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("switch decision is not a match")
         };
         let literal = dispatch == MatchDispatch::LiteralSwitch;
-        let temp = temp_name(decision.subjects[0].temporary);
+        let temp = self.temp_name(decision.subjects[0].temporary);
         let mut out = Rope::new();
         out.push_break(0);
         out.push_lit(if literal {
@@ -340,10 +340,11 @@ impl<'a> Emitter<'a> {
         };
         let mut out = Rope::new();
         let mut depth = 0;
-        let chain_exit_label = needs_label.then_some("$tt_b");
-        if needs_label {
+        let chain_exit_label = needs_label.then(|| self.generated_name("$tt_b"));
+        let chain_exit_label = chain_exit_label.as_deref();
+        if let Some(label) = chain_exit_label {
             out.push_break(depth);
-            out.push_lit("$tt_b: {");
+            out.push_lit(format!("{label}: {{"));
             depth += 1;
         } else if continuation.assigns() {
             out.push_break(depth);
@@ -763,12 +764,7 @@ impl<'a> Emitter<'a> {
         payload_for: Option<NodeId>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        out.push_lit(
-            self.inline_subjects
-                .get(&decision.extent)
-                .map(|names| names[place.subject].clone())
-                .unwrap_or_else(|| temp_name(decision.subjects[place.subject].temporary)),
-        );
+        out.push_lit(self.subject_reference(decision, place.subject));
         for (index, field) in place.fields.iter().enumerate() {
             out.push_lit(".");
             if index + 1 == place.fields.len()
@@ -907,27 +903,32 @@ impl<'a> Emitter<'a> {
         self.constructor_name(constructor)
     }
 
+    fn subject_reference(&self, decision: &Decision, subject: usize) -> String {
+        self.inline_subjects
+            .get(&decision.extent)
+            .map(|names| names[subject].clone())
+            .unwrap_or_else(|| self.temp_name(decision.subjects[subject].temporary))
+    }
+
     pub(super) fn unexpected_throw(&self, decision: &Decision) -> String {
         match decision.miss {
             MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
-                let temps = decision
-                    .subjects
-                    .iter()
-                    .map(|subject| temp_name(subject.temporary))
+                let temps = (0..decision.subjects.len())
+                    .map(|subject| self.subject_reference(decision, subject))
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
                     "throw new Error(\"tt match: unexpected case \" + JSON.stringify([{temps}]));"
                 )
             }
-            MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
-                "throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));"
-                    .to_owned()
-            }
-            MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
-                "throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"
-                    .to_owned()
-            }
+            MissAction::ThrowUnexpected(UnexpectedKind::Literal) => format!(
+                "throw new Error(\"tt match: unexpected literal \" + JSON.stringify({}));",
+                self.subject_reference(decision, 0)
+            ),
+            MissAction::ThrowUnexpected(UnexpectedKind::Case) => format!(
+                "throw new Error(\"tt match: unexpected case \" + JSON.stringify({}));",
+                self.subject_reference(decision, 0)
+            ),
             _ => crate::ice::bug!("match has non-match miss action"),
         }
     }

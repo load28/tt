@@ -65,6 +65,7 @@ pub mod engine;
 mod error;
 mod evaluation_ir;
 pub mod flow;
+mod generated_names;
 pub mod hir;
 mod host_input;
 pub mod ice;

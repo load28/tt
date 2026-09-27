@@ -441,6 +441,7 @@
 | TASK-413 | Report a malformed variant behind declaration modifiers once | Complete | 2026-09-27 | 2026-09-27 | [TASK-413](./TASK-413-malformed-variant-once.md) |
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
+| TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
 
 ## Next task number
 

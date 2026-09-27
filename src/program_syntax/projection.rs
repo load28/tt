@@ -148,7 +148,10 @@ impl ProgramSyntax {
         );
         let mut path = AstNodePath::default();
         parsed.module.visit_with_ast_path(&mut collector, &mut path);
-        let collected = collector.finish(projection.pending)?;
+        let mut collected = collector.finish(projection.pending)?;
+        collected
+            .occupied_names
+            .extend(crate::generated_names::source_names(source, source_kind));
         let syntax = Self {
             source_len: source.len(),
             projection: projection.code,

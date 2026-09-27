@@ -576,37 +576,12 @@ pub(super) fn allocate_slot_name(
     slot: ValueSlotId,
     occupied: &mut HashSet<String>,
 ) -> Result<String, EvaluationError> {
-    let base = format!("$tt_v{}", slot.0);
-    if occupied.insert(base.clone()) {
-        return Ok(base);
-    }
-    let mut suffix = 1u32;
-    loop {
-        let candidate = format!("{base}_{suffix}");
-        if occupied.insert(candidate.clone()) {
-            return Ok(candidate);
-        }
-        suffix = suffix
-            .checked_add(1)
-            .ok_or(EvaluationError::GeneratedNameOverflow)?;
-    }
+    allocate_generated_name(&format!("$tt_v{}", slot.0), occupied)
 }
 
 pub(super) fn allocate_generated_name(
     base: &str,
     occupied: &mut HashSet<String>,
 ) -> Result<String, EvaluationError> {
-    if occupied.insert(base.to_owned()) {
-        return Ok(base.to_owned());
-    }
-    let mut suffix = 1u32;
-    loop {
-        let candidate = format!("{base}_{suffix}");
-        if occupied.insert(candidate.clone()) {
-            return Ok(candidate);
-        }
-        suffix = suffix
-            .checked_add(1)
-            .ok_or(EvaluationError::GeneratedNameOverflow)?;
-    }
+    crate::generated_names::allocate(base, occupied).ok_or(EvaluationError::GeneratedNameOverflow)
 }

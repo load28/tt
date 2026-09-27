@@ -349,3 +349,48 @@ console.log(choose(false), events.splice(0).join(","));
 "#);
     assert_eq!(out, ["false 1", "false 1,2", "true 1,2", "true 3", "true 3,4", "true 5", "false 6"]);
 }
+
+#[test]
+fn generated_bindings_never_capture_user_identifiers() {
+    if !have("tsc") || !have("node") { return; }
+    let out = run(r#"
+variant O { S(v: number), N }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+const $tt_m = "m";
+const $tt_m_1 = "m1";
+const $tt_t0 = "t0";
+const $tt_ap = "ap";
+const $tt_fl = "fl";
+const $tt_v = "v";
+const $tt_r = "r";
+const $tt_k = "k";
+const obj = { tag: "o", add(n: number) { return n + this.tag + $tt_r + $tt_k + $tt_v; } };
+const key = "add" as const;
+const r = match (O.S(1)) { S(v) => v + $tt_m + $tt_m_1, N => "" };
+function f(): R<string> { const a = try Ok(2); return Ok(a + $tt_t0); }
+const xs = [1].map(x => x |> String);
+const ys = [1].map(x => x |> obj.add);
+const zs = [1].map(x => x |> obj[key]);
+const g = flow |> ((n: number) => n + 1) |> .toFixed(1) |> Number |> obj.add;
+console.log(r, JSON.stringify(f()), xs[0], ys[0], zs[0], g(1), $tt_ap, $tt_fl);
+"#);
+    assert_eq!(
+        out,
+        [r#"1mm1 {"kind":"Ok","value":"2t0"} 1 1orkv 1orkv 2orkv ap fl"#]
+    );
+}
+
+#[test]
+fn an_unexpected_case_reports_its_own_match_subject() {
+    if !have("tsc") || !have("node") { return; }
+    let out = run(r#"
+const pick = (s: string) => s as "a" | "b";
+function outer(s: string) {
+  return match (match (pick(s)) { "a" => pick("z"), "b" => pick("b") }) { "a" => 1, "b" => 2 };
+}
+try { outer("a"); } catch (error) { console.log((error as Error).message); }
+console.log(outer("b"));
+"#);
+    assert_eq!(out, [r#"tt match: unexpected literal "z""#, "2"]);
+}

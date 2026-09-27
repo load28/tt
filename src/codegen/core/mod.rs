@@ -231,18 +231,23 @@ pub(crate) fn emit_with_map<'a>(
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
         used_flow: Cell::new(false),
+        generated_names: RefCell::new(lowering_plan.generated_names().cloned().unwrap_or_else(
+            || crate::generated_names::GeneratedNames::for_source(source, source_kind),
+        )),
     };
     let mut output = emitter.emit_body(core.root);
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
     if used_pipe || used_flow {
-        let names = match (used_pipe, used_flow) {
-            (true, true) => "$tt_ap, $tt_fl",
-            (true, false) => "$tt_ap",
-            (false, true) => "$tt_fl",
-            // The enclosing `if` is `used_pipe || used_flow`.
-            (false, false) => unreachable!("no helper is needed, so no import is written"),
-        };
+        let names = [("$tt_ap", used_pipe), ("$tt_fl", used_flow)]
+            .into_iter()
+            .filter(|(_, used)| *used)
+            .map(|(export, _)| match emitter.generated_name(export) {
+                local if local == export => local,
+                local => format!("{export} as {local}"),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
         let runtime = std_imports
             .get(crate::StdModule::Runtime)
             .unwrap_or_else(|| crate::StdModule::Runtime.specifier());

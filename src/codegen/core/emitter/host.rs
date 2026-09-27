@@ -70,7 +70,7 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| {
                 crate::ice::bug!("for initializer propagation is missing from Core IR")
             });
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(
@@ -85,7 +85,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_for_initializer_payload(&self, propagate: &Propagate) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = Rope::new();
         if let Some(binding) = propagate.binding {
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));

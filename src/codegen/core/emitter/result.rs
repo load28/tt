@@ -46,7 +46,7 @@ impl<'a> Emitter<'a> {
     /// The lowering of one `try`. It opens its own layout scope: a
     /// structured propagation value writes block structure into it.
     pub(super) fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(
@@ -408,7 +408,7 @@ impl<'a> Emitter<'a> {
                             context.failure,
                             context.exit_label,
                         );
-                        let temp = temp_name(propagate.temporary);
+                        let temp = self.temp_name(propagate.temporary);
                         let mut payload = Rope::new();
                         let try_span = self.span(propagate.node);
                         if argument.start < try_span.start {
@@ -508,7 +508,7 @@ impl<'a> Emitter<'a> {
         let assignment_target = continuation.assignment_target();
         let distinct_label = assignment_target.and_then(|target| {
             let slot = self.structured_value_slot(expr)?;
-            (slot != target).then(|| exit_label(slot))
+            (slot != target).then(|| self.exit_label(slot))
         });
         let exit_label = distinct_label.as_deref().or(assignment_target);
         let _failure_scope = self.enter_result_failure(region.id, continuation, exit_label);
@@ -568,7 +568,7 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
         exit_label: Option<&str>,
     ) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(

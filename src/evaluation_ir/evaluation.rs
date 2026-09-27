@@ -707,6 +707,9 @@ impl EvaluationFile {
             }
         }
         Ok(LoweringPlan {
+            generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
+                occupied_names,
+            )),
             match_raise_name,
             match_subject_names,
             owners: rewrites,

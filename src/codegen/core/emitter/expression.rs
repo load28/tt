@@ -80,7 +80,7 @@ impl<'a> Emitter<'a> {
                                 );
                             } else {
                                 self.used_pipe.set(true);
-                                next.push_lit("$tt_ap(");
+                                next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
                                 push_grouped(&mut input, acc);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
@@ -119,20 +119,25 @@ impl<'a> Emitter<'a> {
         input: Rope<'a>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        out.push_lit("(($tt_v");
-        if member.receiver.is_some() {
-            out.push_lit(", $tt_r");
-        }
-        if member.key.is_some() {
-            out.push_lit(", $tt_k");
-        }
-        out.push_lit(") => (");
+        let input_name = self.generated_name("$tt_v");
+        let mut names = vec![input_name.clone()];
+        names.extend(self.member_operand_names(member));
+        out.push_lit(format!("(({}) => (", names.join(", ")));
         out.append(self.member_callee_body(value, member));
-        out.push_lit(")($tt_v))(");
+        out.push_lit(format!(")({input_name}))("));
         out.append(input);
         self.push_member_operands(&mut out, member, true);
         out.push_lit(")");
         out
+    }
+
+    fn member_operand_names(&self, member: crate::program_syntax::MemberCallee) -> Vec<String> {
+        member
+            .receiver
+            .map(|_| self.generated_name("$tt_r"))
+            .into_iter()
+            .chain(member.key.map(|_| self.generated_name("$tt_k")))
+            .collect()
     }
 
     fn emit_flow_function(&self, value: ExprId) -> Rope<'a> {
@@ -151,11 +156,11 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("a member pipeline step is not source text");
         };
         let callee = self.span(*node);
-        let mut substitutions: Vec<(SourceSpan, &'static str)> = member
+        let mut substitutions: Vec<(SourceSpan, String)> = member
             .receiver
-            .map(|receiver| (receiver, "$tt_r"))
+            .map(|receiver| (receiver, self.generated_name("$tt_r")))
             .into_iter()
-            .chain(member.key.map(|key| (key, "$tt_k")))
+            .chain(member.key.map(|key| (key, self.generated_name("$tt_k"))))
             .collect();
         substitutions.sort_by_key(|(span, _)| span.start);
         let mut body = Rope::new();
@@ -165,7 +170,7 @@ impl<'a> Emitter<'a> {
                 start: cursor,
                 end: span.start,
             }));
-            body.push_lit(*name);
+            body.push_lit(name.clone());
             cursor = span.end;
         }
         body.append(self.source_range_rope(hir::Span {
@@ -210,20 +215,12 @@ impl<'a> Emitter<'a> {
     ) -> Rope<'a> {
         let mut out = Rope::new();
         out.push_lit("((");
-        let mut names = Vec::new();
-        if member.receiver.is_some() {
-            names.push("$tt_r");
-        }
-        if member.key.is_some() {
-            names.push("$tt_k");
-        }
-        out.push_lit(names.join(", "));
+        out.push_lit(self.member_operand_names(member).join(", "));
         out.push_lit(") => (");
         out.append(self.member_callee_body(value, member));
-        out.push_lit(if member.receiver.is_some() {
-            ").bind($tt_r))("
-        } else {
-            ").bind(this))("
+        out.push_lit(match member.receiver {
+            Some(_) => format!(").bind({}))(", self.generated_name("$tt_r")),
+            None => ").bind(this))(".to_owned(),
         });
         self.push_member_operands(&mut out, member, false);
         out.push_lit(")");
@@ -243,7 +240,7 @@ impl<'a> Emitter<'a> {
             let step_span = self.span(step.node);
             let body = self.emit_flow_function(step.value);
             let mut next = Rope::new();
-            next.push_lit("$tt_fl(");
+            next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
             // `emit_apply`).
@@ -257,7 +254,8 @@ impl<'a> Emitter<'a> {
             );
             match step.mode {
                 ApplyMode::Postfix { .. } => {
-                    next.push_lit(", (($tt_v) => ($tt_v)");
+                    let input_name = self.generated_name("$tt_v");
+                    next.push_lit(format!(", (({input_name}) => ({input_name})"));
                     next.append(body);
                     next.push_lit("))");
                 }
@@ -376,7 +374,7 @@ impl<'a> Emitter<'a> {
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
-        let temp = temp_name(subject.temporary);
+        let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
         out.push_break(0);
@@ -425,7 +423,7 @@ impl<'a> Emitter<'a> {
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
-        let temp = temp_name(subject.temporary);
+        let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = Rope::new();
         out.push_lit("{");
@@ -491,7 +489,7 @@ impl<'a> Emitter<'a> {
             .assignment_target()
             .filter(|_| decision_has_block_arm(decision))
             .filter(|_| exits.iter().any(|exit| exit.captured_break))
-            .map(exit_label);
+            .map(|target| self.exit_label(target));
         if let Some(label) = &label {
             out.push_lit(format!("{label}: "));
         }
@@ -503,7 +501,7 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
-                &temp_name(subject.temporary),
+                &self.temp_name(subject.temporary),
                 decision.head,
             ));
         }
@@ -628,7 +626,7 @@ impl<'a> Emitter<'a> {
         propagate: &Propagate,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(

@@ -70,6 +70,24 @@ pub(super) struct Emitter<'a> {
     pub(super) used_expression_boundary: Cell<bool>,
     pub(super) used_pipe: Cell<bool>,
     pub(super) used_flow: Cell<bool>,
+    pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
+}
+
+impl Emitter<'_> {
+    pub(super) fn generated_name(&self, base: &str) -> String {
+        self.generated_names.borrow_mut().stable(base)
+    }
+
+    pub(super) fn temp_name(&self, temp: TempId) -> String {
+        self.generated_name(&temp_base(temp))
+    }
+
+    fn exit_label(&self, target: &str) -> String {
+        self.generated_name(&format!(
+            "$tt_y_{}",
+            target.strip_prefix("$tt_").unwrap_or(target)
+        ))
+    }
 }
 
 /// A recursion stack whose guard never holds a `RefCell` borrow while target
@@ -329,10 +347,6 @@ fn decision_has_block_arm(decision: &Decision) -> bool {
             }
         )
     })
-}
-
-fn exit_label(target: &str) -> String {
-    format!("$tt_y_{}", target.strip_prefix("$tt_").unwrap_or(target))
 }
 
 fn push_region_break(out: &mut Rope<'_>, label: Option<&str>) {
