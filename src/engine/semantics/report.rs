@@ -131,14 +131,14 @@ pub(crate) fn report(
         }
     }
 
-    // A file the configured program does not contain gets no answers from
-    // the checker: no question about its scrutinees is ever asked, so the
-    // tag path below has nothing to report about it. That is the same
-    // situation as a backend that could not run, and the same rule applies
-    // — the typed facts go, the tt layer does not. Its coverage is
+    // A file no checked project contains gets no answers from the checker
+    // (a requested or open file outside the configured program is answered
+    // by its default project): no question about its scrutinees is ever
+    // asked, so the tag path below has nothing to report about it. That is
+    // the same situation as a backend that could not run, and the same rule
+    // applies — the typed facts go, the tt layer does not. Its coverage is
     // answered from the declarations the file can see, exactly as
-    // `ttc --check` answers it, so a file the caller named is never passed
-    // in silence.
+    // `ttc --check` answers it.
     let checker_members: Option<HashSet<&std::path::Path>> = answers
         .project_modules
         .as_ref()

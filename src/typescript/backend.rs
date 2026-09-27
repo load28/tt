@@ -158,6 +158,7 @@ pub(crate) struct Query {
     /// otherwise never be checked. With a `tsconfig.json` the project's own
     /// `include` decides and this stays empty.
     pub sources: Vec<PathBuf>,
+    pub roots: Vec<PathBuf>,
     pub literals: Vec<LiteralQuery>,
     pub tags: Vec<TagQuery>,
     pub symbols: Vec<SymbolQuery>,

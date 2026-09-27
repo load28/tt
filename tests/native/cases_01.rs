@@ -821,15 +821,14 @@ fn the_server_reports_a_pipeline_mismatch_over_the_step_text() {
     );
 }
 
-/// The tsconfig decides what the checker holds, and a caller can name a file
-/// it leaves out. Such a file gets no answer from the checker about its
-/// scrutinees, so the typed pass has to answer for it from declarations —
-/// otherwise naming it explicitly reports nothing and exits 0, while
-/// `--check` on the same file reports and fails.
+/// The tsconfig decides what the configured program holds, and a caller can
+/// name a file it leaves out. Such a file is checked in its default
+/// (inferred) project, as the language service checks it, so naming it
+/// explicitly reports its holes and fails like `--check` on the same file.
 #[test]
 fn a_named_file_the_project_excludes_is_still_checked() {
     require_tsgo!();
-    let source = "variant C { A, B }\nexport const r = match (C.A) { A => 1 };\n";
+    let source = "variant C { A, B }\nexport const r = (c: C) => match (c) { A => 1 };\n";
     let dir = project(&[("src/in_project.tt", "export const ok = 1;\n")]);
     std::fs::create_dir_all(dir.join("lib")).unwrap();
     std::fs::write(dir.join("lib/outside.tt"), source).unwrap();

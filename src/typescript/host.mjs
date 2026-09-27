@@ -5,7 +5,8 @@
  * only place that knows the TypeScript API: it opens ONE real TypeScript
  * project over a layered file system where every `.tt` file appears as the
  * ordinary TypeScript it lowers to, and answers tt's semantic questions
- * against that project's checker.
+ * against that project's checker — or, for a root module that project does
+ * not contain, against the module's default project.
  *
  * The API comes from the TypeScript the project installed (see
  * `toolchain.rs`): the JS client and the native executable speak an
@@ -22,6 +23,7 @@
  *       →  { ok: true }
  *
  *   ask    { modules: [{ path, text }],   // lowered .tt → virtual .ts
+ *            roots: [path],               // requested and open modules
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
  *            symbolChecks: [{ module, start }],
@@ -202,6 +204,7 @@ async function main() {
   writeLine(JSON.stringify({ ok: true }));
 
   let opened = false;
+  const openRoots = new Set();
   try {
     while (true) {
       const line = readLine();
@@ -310,8 +313,8 @@ async function main() {
       : open.tsconfig
         ? { openProjects: [open.tsconfig] }
         : { openFiles: [...paths, ...(job.sources ?? [])] };
-    const snapshot = api.updateSnapshot(params);
-    const project = open.tsconfig
+    let snapshot = api.updateSnapshot(params);
+    let project = open.tsconfig
       ? snapshot.getProject(open.tsconfig)
       : paths.map((p) => snapshot.getDefaultProjectForFile(p)).find(Boolean);
     if (!project) {
@@ -327,76 +330,96 @@ async function main() {
     const projectModules = new Set(
       paths.filter((module) => project.program.getSourceFile(module) !== undefined),
     );
-    out.projectModules = [...projectModules];
 
-    // The whole program, not just the lowered modules: a hand-written `.ts`
-    // and an `.tt` are in one project, so an error in either is this run's to
-    // report. Which file it lands in decides how it is positioned, and that
-    // is ttc's half.
-    const checker = project.checker;
-    for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
-      const source = project.program.getSourceFile(slot.module);
-      if (!source) continue;
-      let declaration;
-      const identifiers = [];
-      const assignments = [];
-      const visit = (node) => {
-        if (isVariableDeclaration(node) && isIdentifier(node.name) &&
-            node.name.end === slot.declarationEnd && !node.type) declaration = node;
-        if (isIdentifier(node)) identifiers.push(node);
-        if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) assignments.push(node);
-        node.forEachChild(visit);
-      };
-      visit(source);
-      if (!declaration) continue;
-      const symbol = checker.getSymbolAtLocation(declaration.name);
-      if (!symbol) continue;
-      const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
-      let expected;
-      let ambiguous = false;
-      for (const identifier of identifiers) {
-        if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
-        if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
-        // A use narrowed by control flow cannot supply the declaration's
-        // type: doing so would reject the initializer's other constituents.
-        if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
-        const context = checker.getContextualType(identifier);
-        if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
-        if (expected && expected.id !== context.id) { ambiguous = true; break; }
-        expected = context;
-      }
-      if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
-        // A statement join must have the union of its incoming value types.
-        // In particular, TS's evolving-array inference at assignment sites is
-        // not expression inference. Ask for each RHS type in its branch scope
-        // and serialize it at the declaration; never infer from diagnostic text.
-        const incoming = assignments.filter(assignment =>
-          assignment.left.text === declaration.name.text &&
-          checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
-        const types = incoming.map(assignment =>
-          checker.getWidenedType(checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(assignment.right))));
-        if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
-        // Remove constituents subsumed by another incoming type. This is the
-        // checker's assignability relation, including never[] <: number[].
-        const joined = types.filter((type, index) => !types.some((other, otherIndex) =>
-          index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
-          (!checker.isTypeAssignableTo(other, type) || otherIndex < index)));
-        const annotations = joined.map(type => {
-          const node = checker.typeToTypeNode(type, declaration);
-          return node && project.emitter.printNode(node);
-        });
-        if (annotations.length && annotations.every(Boolean)) {
-          out.contextualSlots.push({ index, annotation: annotations.length === 1
-            ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
-        }
-        continue;
-      }
-      if (!expected || ambiguous) continue;
-      const node = checker.typeToTypeNode(expected, declaration);
-      if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
+    const outside = open.tsconfig
+      ? (job.roots ?? []).filter((root) => files.has(root) && !projectModules.has(root))
+      : [];
+    const opening = outside.filter((root) => !openRoots.has(root));
+    const closing = [...openRoots].filter((root) => !outside.includes(root));
+    if (opening.length > 0 || closing.length > 0) {
+      snapshot = api.updateSnapshot({ openFiles: opening, closeFiles: closing });
+      for (const root of closing) openRoots.delete(root);
+      for (const root of opening) openRoots.add(root);
+      project = snapshot.getProject(open.tsconfig);
+      if (!project) throw new Error("no project for " + open.tsconfig);
     }
+    const groups = [{ project, members: projectModules, whole: true }];
+    for (const root of outside) {
+      const owner = snapshot.getDefaultProjectForFile(root);
+      if (!owner || owner.id === project.id || !owner.program.getSourceFile(root)) continue;
+      const group = groups.find((candidate) => candidate.project.id === owner.id);
+      if (group) group.members.add(root);
+      else groups.push({ project: owner, members: new Set([root]), whole: false });
+    }
+    out.projectModules = groups.flatMap((group) => [...group.members]);
+
+    const contextual = ({ project, members }) => {
+      const checker = project.checker;
+      for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
+        if (!members.has(slot.module)) continue;
+        const source = project.program.getSourceFile(slot.module);
+        if (!source) continue;
+        let declaration;
+        const identifiers = [];
+        const assignments = [];
+        const visit = (node) => {
+          if (isVariableDeclaration(node) && isIdentifier(node.name) &&
+              node.name.end === slot.declarationEnd && !node.type) declaration = node;
+          if (isIdentifier(node)) identifiers.push(node);
+          if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) assignments.push(node);
+          node.forEachChild(visit);
+        };
+        visit(source);
+        if (!declaration) continue;
+        const symbol = checker.getSymbolAtLocation(declaration.name);
+        if (!symbol) continue;
+        const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
+        let expected;
+        let ambiguous = false;
+        for (const identifier of identifiers) {
+          if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
+          if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
+          // A use narrowed by control flow cannot supply the declaration's
+          // type: doing so would reject the initializer's other constituents.
+          if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
+          const context = checker.getContextualType(identifier);
+          if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
+          if (expected && expected.id !== context.id) { ambiguous = true; break; }
+          expected = context;
+        }
+        if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
+          // A statement join must have the union of its incoming value types.
+          // In particular, TS's evolving-array inference at assignment sites is
+          // not expression inference. Ask for each RHS type in its branch scope
+          // and serialize it at the declaration; never infer from diagnostic text.
+          const incoming = assignments.filter(assignment =>
+            assignment.left.text === declaration.name.text &&
+            checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+          const types = incoming.map(assignment =>
+            checker.getWidenedType(checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(assignment.right))));
+          if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
+          // Remove constituents subsumed by another incoming type. This is the
+          // checker's assignability relation, including never[] <: number[].
+          const joined = types.filter((type, index) => !types.some((other, otherIndex) =>
+            index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
+            (!checker.isTypeAssignableTo(other, type) || otherIndex < index)));
+          const annotations = joined.map(type => {
+            const node = checker.typeToTypeNode(type, declaration);
+            return node && project.emitter.printNode(node);
+          });
+          if (annotations.length && annotations.every(Boolean)) {
+            out.contextualSlots.push({ index, annotation: annotations.length === 1
+              ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
+          }
+          continue;
+        }
+        if (!expected || ambiguous) continue;
+        const node = checker.typeToTypeNode(expected, declaration);
+        if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
+      }
+    };
+    for (const group of groups) contextual(group);
     if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return out; }
-    const program = project.program;
     const reported = new Set();
     const unique = (diagnostics) => diagnostics.filter((d) => {
       const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, d.text]);
@@ -404,197 +427,212 @@ async function main() {
       reported.add(key);
       return true;
     });
-    const structural = unique([
-      ...program.getConfigFileParsingDiagnostics(),
-      ...program.getProgramDiagnostics(),
-      ...program.getGlobalDiagnostics(),
-      ...program.getSyntacticDiagnostics(),
-    ]);
-    const semantic = unique(program.getSemanticDiagnostics());
-    const late = unique(program.getGlobalDiagnostics());
-    for (const d of [...structural, ...late]) {
-      if (!d.fileName || configFiles.has(d.fileName) || d.pos < 0) {
-        if (open.tsconfig) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: d.text });
-        continue;
+    // The whole configured program, not just the lowered modules: a
+    // hand-written `.ts` and an `.tt` are in one project, so an error in
+    // either is this run's to report. Which file it lands in decides how it
+    // is positioned, and that is ttc's half. Another project answers only
+    // for the requested modules it is the default project of.
+    const answer = ({ project, members, whole }) => {
+      const checker = project.checker;
+      const program = project.program;
+      const scope = whole ? undefined : [...members];
+      const structural = unique([
+        ...(whole
+          ? [
+            ...program.getConfigFileParsingDiagnostics(),
+            ...program.getProgramDiagnostics(),
+            ...program.getGlobalDiagnostics(),
+          ]
+          : []),
+        ...program.getSyntacticDiagnostics(scope),
+      ]);
+      const semantic = unique(program.getSemanticDiagnostics(scope));
+      const late = whole ? unique(program.getGlobalDiagnostics()) : [];
+      for (const d of [...structural, ...late]) {
+        if (!d.fileName || configFiles.has(d.fileName) || d.pos < 0) {
+          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: d.text });
+          continue;
+        }
+        out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: d.text });
       }
-      out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: d.text });
-    }
-    for (const d of semantic) {
-      if (!d.fileName) {
-        if (open.tsconfig) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
-        continue;
+      for (const d of semantic) {
+        if (!d.fileName) {
+          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
+          continue;
+        }
+        const mismatch = contextualMismatch(project, checker, d, isExpression);
+        const related = relatedPlaces(d);
+        out.diagnostics.push({
+          file: d.fileName,
+          start: d.pos,
+          end: d.end,
+          code: d.code,
+          message: d.text,
+          ...(mismatch ? { mismatch } : {}),
+          ...(related.length > 0 ? { related } : {}),
+        });
       }
-      const mismatch = contextualMismatch(project, checker, d, isExpression);
-      const related = relatedPlaces(d);
-      out.diagnostics.push({
-        file: d.fileName,
-        start: d.pos,
-        end: d.end,
-        code: d.code,
-        message: d.text,
-        ...(mismatch ? { mismatch } : {}),
-        ...(related.length > 0 ? { related } : {}),
+      /**
+       * Whether a declaration lives in one of TypeScript's own lib files.
+       * Answered from the program's per-file metadata when the client has it
+       * — a small, cached query — rather than by fetching the whole source
+       * file just to ask about it.
+       */
+      const isDefaultLibrary = (declaration) => {
+        if (!declaration.path) return false;
+        if (typeof project.program.getSourceFileMetadata === "function") {
+          const metadata = project.program.getSourceFileMetadata(String(declaration.path));
+          return metadata ? metadata.isDefaultLibrary === true : false;
+        }
+        const file = project.program.getSourceFile(String(declaration.path));
+        return file ? project.program.isSourceFileDefaultLibrary(file) : false;
+      };
+
+      // The per-position questions, batched by module: the checker's position
+      // APIs take an array of positions for one file, so a project's worth of
+      // questions costs one round trip per module per kind instead of one per
+      // question. The batch is an implementation detail of this host — the
+      // job's own indices are what every answer is keyed by, and `perModule`
+      // scatters each answer back onto the entry it was asked for.
+
+      // Literal- and tag-match exhaustiveness share one type question: the
+      // type TypeScript computes AT the scrutinee — narrowing included —
+      // decides what the arms miss.
+      const typeChecks = [
+        ...(job.literalChecks ?? []).map((check, index) => ({ check, index, tag: false })),
+        ...(job.tagChecks ?? []).map((check, index) => ({ check, index, tag: true })),
+      ].filter((entry) => members.has(entry.check.module));
+      const types = perModule(typeChecks, (module, positions) =>
+        batched(
+          "typesAtPositions",
+          () => checker.getTypeAtPosition(module, positions),
+          () => positions.map((p) => checker.getTypeAtPosition(module, p)),
+        ));
+      // A project's matches share their scrutinee types: one variant matched in
+      // three hundred places is one type, and the answers derived from a type
+      // — its constituents, each constituent's `kind` — depend on nothing
+      // else. Both are asked once per type, not once per match. (Type ids are
+      // snapshot-scoped, so the memo lives and dies with this ask.)
+      const constituentCache = new Map();
+      const constituentsOf = (type) => {
+        let constituents = constituentCache.get(type.id);
+        if (constituents === undefined) {
+          constituents = type.isUnionType?.() ? type.getTypes() : [type];
+          constituentCache.set(type.id, constituents);
+        }
+        return constituents;
+      };
+      const kindCache = new Map();
+      const kindSymbolOf = (constituent) => {
+        let kind = kindCache.get(constituent.id);
+        if (kind === undefined) {
+          kind = checker.getPropertyOfType(constituent, "kind") ?? null;
+          kindCache.set(constituent.id, kind);
+        }
+        return kind;
+      };
+      // A tag check needs a second round: the `kind` property's type of every
+      // constituent. The types of the distinct `kind` symbols — across every
+      // tag check — are one batch.
+      const tagWork = [];
+      typeChecks.forEach((entry, at) => {
+        if (!entry.tag) {
+          const missing = missingLiterals(types[at], entry.check.covered, constituentsOf);
+          if (missing) out.literalMissing.push({ index: entry.index, missing });
+          return;
+        }
+        // A tt variant lowers to a discriminated union, so the question is
+        // "which `kind` values does the scrutinee's type still allow?" —
+        // again at the match, so a case an earlier guard removed is not
+        // demanded back.
+        const symbols = tagKindSymbols(types[at], constituentsOf, kindSymbolOf);
+        if (symbols) tagWork.push({ index: entry.index, covered: entry.check.covered, symbols });
       });
-    }
-    /**
-     * Whether a declaration lives in one of TypeScript's own lib files.
-     * Answered from the program's per-file metadata when the client has it
-     * — a small, cached query — rather than by fetching the whole source
-     * file just to ask about it.
-     */
-    const isDefaultLibrary = (declaration) => {
-      if (!declaration.path) return false;
-      if (typeof project.program.getSourceFileMetadata === "function") {
-        const metadata = project.program.getSourceFileMetadata(String(declaration.path));
-        return metadata ? metadata.isDefaultLibrary === true : false;
-      }
-      const file = project.program.getSourceFile(String(declaration.path));
-      return file ? project.program.isSourceFileDefaultLibrary(file) : false;
-    };
-
-    // The per-position questions, batched by module: the checker's position
-    // APIs take an array of positions for one file, so a project's worth of
-    // questions costs one round trip per module per kind instead of one per
-    // question. The batch is an implementation detail of this host — the
-    // job's own indices are what every answer is keyed by, and `perModule`
-    // scatters each answer back onto the entry it was asked for.
-
-    // Literal- and tag-match exhaustiveness share one type question: the
-    // type TypeScript computes AT the scrutinee — narrowing included —
-    // decides what the arms miss.
-    const typeChecks = [
-      ...(job.literalChecks ?? []).map((check, index) => ({ check, index, tag: false })),
-      ...(job.tagChecks ?? []).map((check, index) => ({ check, index, tag: true })),
-    ].filter((entry) => projectModules.has(entry.check.module));
-    const types = perModule(typeChecks, (module, positions) =>
-      batched(
-        "typesAtPositions",
-        () => checker.getTypeAtPosition(module, positions),
-        () => positions.map((p) => checker.getTypeAtPosition(module, p)),
-      ));
-    // A project's matches share their scrutinee types: one variant matched in
-    // three hundred places is one type, and the answers derived from a type
-    // — its constituents, each constituent's `kind` — depend on nothing
-    // else. Both are asked once per type, not once per match. (Type ids are
-    // snapshot-scoped, so the memo lives and dies with this ask.)
-    const constituentCache = new Map();
-    const constituentsOf = (type) => {
-      let constituents = constituentCache.get(type.id);
-      if (constituents === undefined) {
-        constituents = type.isUnionType?.() ? type.getTypes() : [type];
-        constituentCache.set(type.id, constituents);
-      }
-      return constituents;
-    };
-    const kindCache = new Map();
-    const kindSymbolOf = (constituent) => {
-      let kind = kindCache.get(constituent.id);
-      if (kind === undefined) {
-        kind = checker.getPropertyOfType(constituent, "kind") ?? null;
-        kindCache.set(constituent.id, kind);
-      }
-      return kind;
-    };
-    // A tag check needs a second round: the `kind` property's type of every
-    // constituent. The types of the distinct `kind` symbols — across every
-    // tag check — are one batch.
-    const tagWork = [];
-    typeChecks.forEach((entry, at) => {
-      if (!entry.tag) {
-        const missing = missingLiterals(types[at], entry.check.covered, constituentsOf);
-        if (missing) out.literalMissing.push({ index: entry.index, missing });
-        return;
-      }
-      // A tt variant lowers to a discriminated union, so the question is
-      // "which `kind` values does the scrutinee's type still allow?" —
-      // again at the match, so a case an earlier guard removed is not
-      // demanded back.
-      const symbols = tagKindSymbols(types[at], constituentsOf, kindSymbolOf);
-      if (symbols) tagWork.push({ index: entry.index, covered: entry.check.covered, symbols });
-    });
-    if (tagWork.length > 0) {
-      // One question per distinct symbol: the same case tag reached from
-      // three hundred matches is still one symbol.
-      const distinct = new Map();
-      for (const work of tagWork) {
-        for (const symbol of work.symbols) {
-          if (!distinct.has(symbol.id)) distinct.set(symbol.id, symbol);
+      if (tagWork.length > 0) {
+        // One question per distinct symbol: the same case tag reached from
+        // three hundred matches is still one symbol.
+        const distinct = new Map();
+        for (const work of tagWork) {
+          for (const symbol of work.symbols) {
+            if (!distinct.has(symbol.id)) distinct.set(symbol.id, symbol);
+          }
+        }
+        const asked = [...distinct.values()];
+        const kinds = batched(
+          "typesOfSymbols",
+          () => checker.getTypeOfSymbol(asked),
+          () => asked.map((symbol) => checker.getTypeOfSymbol(symbol)),
+        );
+        const valueOf = new Map(asked.map((symbol, i) => [symbol.id, literalValue(kinds[i])]));
+        for (const work of tagWork) {
+          const tags = work.symbols.map((symbol) => valueOf.get(symbol.id));
+          // Every constituent must carry a single string-literal `kind`;
+          // anything less definite makes the whole question indefinite, and
+          // an indefinite question gets no answer.
+          if (tags.some((tag) => typeof tag !== "string")) continue;
+          const seen = new Set(work.covered);
+          const missing = tags.filter((tag) => !seen.has(tag));
+          if (missing.length > 0) out.tagMissing.push({ index: work.index, missing });
+          // The whole member list, not just what the arms left out: tt runs
+          // its own exhaustiveness algorithm over it, which is what sees
+          // holes *inside* a payload (TASK-108). The `missing` above stays
+          // for the answer tt falls back to.
+          out.tagMembers.push({ index: work.index, tags });
         }
       }
-      const asked = [...distinct.values()];
-      const kinds = batched(
-        "typesOfSymbols",
-        () => checker.getTypeOfSymbol(asked),
-        () => asked.map((symbol) => checker.getTypeOfSymbol(symbol)),
-      );
-      const valueOf = new Map(asked.map((symbol, i) => [symbol.id, literalValue(kinds[i])]));
-      for (const work of tagWork) {
-        const tags = work.symbols.map((symbol) => valueOf.get(symbol.id));
-        // Every constituent must carry a single string-literal `kind`;
-        // anything less definite makes the whole question indefinite, and
-        // an indefinite question gets no answer.
-        if (tags.some((tag) => typeof tag !== "string")) continue;
-        const seen = new Set(work.covered);
-        const missing = tags.filter((tag) => !seen.has(tag));
-        if (missing.length > 0) out.tagMissing.push({ index: work.index, missing });
-        // The whole member list, not just what the arms left out: tt runs
-        // its own exhaustiveness algorithm over it, which is what sees
-        // holes *inside* a payload (TASK-108). The `missing` above stays
-        // for the answer tt falls back to.
-        out.tagMembers.push({ index: work.index, tags });
-      }
-    }
 
-    const resultChecks = (job.resultShapeChecks ?? [])
-      .map((check, index) => ({ check, index }))
-      .filter((entry) => projectModules.has(entry.check.module));
-    const resultTypes = resultChecks.map((entry) => {
-      const sourceFile = project.program.getSourceFile(entry.check.module);
-      if (!sourceFile) return null;
-      const expression = smallestExpressionCovering(
-        sourceFile,
-        entry.check.start,
-        entry.check.end,
-        isExpression,
-      );
-      return expression ? checker.getTypeAtLocation(expression) : null;
-    });
-    resultChecks.forEach((entry, at) => {
-      if (
-        resultTypes[at] &&
-        isDefiniteResult(resultTypes[at], constituentsOf, kindSymbolOf, checker)
-      ) {
-        out.resultShapes.push({ index: entry.index });
-      }
-    });
-
-    // Resolution: the primitive tt's `val` is built from. Which binding an
-    // identifier names, and whether a method is a built-in, are both "what
-    // symbol is this?" — asked here, interpreted by tt.
-    const symbolChecks = (job.symbolChecks ?? [])
-      .map((check, index) => ({ check, index }))
-      .filter((entry) => projectModules.has(entry.check.module));
-    const symbols = perModule(symbolChecks, (module, positions) =>
-      batched(
-        "symbolsAtPositions",
-        () => checker.getSymbolAtPosition(module, positions),
-        () => positions.map((p) => checker.getSymbolAtPosition(module, p)),
-      ));
-    symbolChecks.forEach((entry, at) => {
-      const symbol = symbols[at];
-      if (!symbol) return; // `any`, unresolved — never a verdict
-      const declarations = symbol.declarations ?? [];
-      out.symbols.push({
-        index: entry.index,
-        id: symbol.id,
-        name: symbol.name,
-        // Whether this is one of TypeScript's own declarations is the
-        // compiler's answer, not a guess from the path: a released package
-        // reads its libraries from disk while a built checkout serves them
-        // from `bundled:///`, and both are the same fact.
-        builtin: declarations.length > 0 && declarations.every(isDefaultLibrary),
+      const resultChecks = (job.resultShapeChecks ?? [])
+        .map((check, index) => ({ check, index }))
+        .filter((entry) => members.has(entry.check.module));
+      const resultTypes = resultChecks.map((entry) => {
+        const sourceFile = project.program.getSourceFile(entry.check.module);
+        if (!sourceFile) return null;
+        const expression = smallestExpressionCovering(
+          sourceFile,
+          entry.check.start,
+          entry.check.end,
+          isExpression,
+        );
+        return expression ? checker.getTypeAtLocation(expression) : null;
       });
-    });
+      resultChecks.forEach((entry, at) => {
+        if (
+          resultTypes[at] &&
+          isDefiniteResult(resultTypes[at], constituentsOf, kindSymbolOf, checker)
+        ) {
+          out.resultShapes.push({ index: entry.index });
+        }
+      });
+
+      // Resolution: the primitive tt's `val` is built from. Which binding an
+      // identifier names, and whether a method is a built-in, are both "what
+      // symbol is this?" — asked here, interpreted by tt.
+      const symbolChecks = (job.symbolChecks ?? [])
+        .map((check, index) => ({ check, index }))
+        .filter((entry) => members.has(entry.check.module));
+      const symbols = perModule(symbolChecks, (module, positions) =>
+        batched(
+          "symbolsAtPositions",
+          () => checker.getSymbolAtPosition(module, positions),
+          () => positions.map((p) => checker.getSymbolAtPosition(module, p)),
+        ));
+      symbolChecks.forEach((entry, at) => {
+        const symbol = symbols[at];
+        if (!symbol) return; // `any`, unresolved — never a verdict
+        const declarations = symbol.declarations ?? [];
+        out.symbols.push({
+          index: entry.index,
+          id: symbol.id,
+          name: symbol.name,
+          // Whether this is one of TypeScript's own declarations is the
+          // compiler's answer, not a guess from the path: a released package
+          // reads its libraries from disk while a built checkout serves them
+          // from `bundled:///`, and both are the same fact.
+          builtin: declarations.length > 0 && declarations.every(isDefaultLibrary),
+        });
+      });
+    };
+    for (const group of groups) answer(group);
     // Declaration emit, in memory. The compiler writes the `.d.ts` for a
     // lowered module exactly as it would for a hand-written one, so ttc
     // never generates TypeScript declaration syntax itself.

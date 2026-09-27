@@ -212,6 +212,7 @@ fn job_json(query: &Query) -> serde_json::Value {
             .map(|m| json!({ "path": m.path, "text": crate::error::decoded(&m.text) }))
             .collect::<Vec<_>>(),
         "sources": query.sources,
+        "roots": query.roots,
         "literalChecks": query.literals.iter()
             .map(|l| json!({
                 "module": l.module,
@@ -464,7 +465,7 @@ const value = consume(match (flag) {
         .unwrap();
         assert!(!emit.contextual_slots.is_empty());
         let mut modules = vec![(root.join("contextual-materialized.ts"), emit)];
-        super::super::contextual::materialize(&backend, None, root, &mut modules, &[], &[])
+        super::super::contextual::materialize(&backend, None, root, &mut modules, &[], &[], &[])
             .unwrap();
         let emit = &modules[0].1;
         for mapping in &emit.mappings {

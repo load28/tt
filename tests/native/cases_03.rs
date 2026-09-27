@@ -441,3 +441,87 @@ fn a_byte_order_mark_moves_no_reported_position() {
     assert!(plain.contains("\n  |                   ^^^\n"), "{plain}");
     assert_eq!(reports[1], *plain);
 }
+
+#[test]
+fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project() {
+    require_tsgo!();
+    use std::io::Write;
+    let outside = "const n: number = \"x\";\nval const v = [1];\nv.push(2);\nexport {};\n";
+    let inside = "export const a: number = 1;\n";
+    let dir = project(&[("src/a.tt", inside)]);
+    fs::create_dir_all(dir.join("other")).unwrap();
+    write(&dir, "other/x.tt", outside);
+
+    let out = run(&dir, &["--check-types", "other/x.tt"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("error[ts2322]"), "{stderr}");
+    assert!(stderr.contains("--> other/x.tt:1:19"), "{stderr}");
+    assert!(stderr.contains("error[val-mutation]"), "{stderr}");
+
+    let out = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "{stderr}");
+    assert!(!stderr.contains("other/x.tt"), "{stderr}");
+
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let x = dir.join("other/x.tt").canonicalize().unwrap();
+    let requests = [
+        serde_json::json!({ "id": 1, "method": "openDocument",
+            "params": { "path": a, "text": inside } }),
+        serde_json::json!({ "id": 2, "method": "typedCheck",
+            "params": { "path": a, "text": inside, "includeTypes": true } }),
+        serde_json::json!({ "id": 3, "method": "openDocument",
+            "params": { "path": x, "text": outside } }),
+        serde_json::json!({ "id": 4, "method": "typedCheck",
+            "params": { "path": x, "text": outside, "includeTypes": true } }),
+        serde_json::json!({ "id": 5, "method": "tsDiagnostics",
+            "params": { "path": x, "position": { "line": 0, "character": 0 } } }),
+    ];
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    for request in requests {
+        writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    }
+    drop(child.stdin.take());
+    let output = child.wait_with_output().expect("server answers");
+    let answers: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("JSON response"))
+        .collect();
+    let answer = |id: u64| {
+        answers
+            .iter()
+            .find(|answer| answer["id"] == id)
+            .unwrap_or_else(|| panic!("no answer {id}: {answers:?}"))
+    };
+    assert!(
+        answer(2)["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(Vec::is_empty),
+        "{answers:?}"
+    );
+    let typed = answer(4)["result"]["diagnostics"]
+        .as_array()
+        .expect("typed diagnostics");
+    let service = answer(5)["result"]["diagnostics"]
+        .as_array()
+        .expect("service diagnostics");
+    assert!(
+        service.iter().any(|d| d["code"] == 2322),
+        "{answers:?}"
+    );
+    assert!(
+        typed
+            .iter()
+            .any(|d| d["code"] == "ts2322" && d["line"] == 1 && d["col"] == 19),
+        "{answers:?}"
+    );
+    assert!(typed.iter().any(|d| d["code"] == "val-mutation"), "{answers:?}");
+}

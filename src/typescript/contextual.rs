@@ -16,6 +16,7 @@ pub(crate) fn materialize(
     modules: &mut [(PathBuf, MappedEmit)],
     support: &[Module],
     sources: &[PathBuf],
+    roots: &[PathBuf],
 ) -> Result<Vec<Vec<Option<String>>>, Failure> {
     let mut types: Vec<Vec<Option<String>>> = modules
         .iter()
@@ -31,6 +32,7 @@ pub(crate) fn materialize(
             contextual_only: true,
             infer_join_types: infer_joins,
             sources: sources.to_vec(),
+            roots: roots.to_vec(),
             modules: support.to_vec(),
             ..Query::default()
         };
@@ -296,7 +298,15 @@ pub(crate) fn standalone(
             }).to_string() }]
         } else { Vec::new() });
         let configuration = config.as_deref().unwrap_or(&inferred_config);
-        let types = materialize(backend, Some(configuration), &root, &mut modules, &support, &[])?;
+        let types = materialize(
+            backend,
+            Some(configuration),
+            &root,
+            &mut modules,
+            &support,
+            &[],
+            &[],
+        )?;
         let mut edits = Vec::new();
         for (position, annotation) in emit.contextual_slots.iter().copied().zip(&types[0]) {
             let Some(annotation) = annotation else {

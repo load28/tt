@@ -65,6 +65,7 @@ pub struct Project {
     /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
     pub(super) input_roots: Vec<PathBuf>,
+    pub(super) named: Vec<PathBuf>,
     dependencies: RefCell<HashSet<PathBuf>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
@@ -115,6 +116,7 @@ impl Project {
             out_dir,
             requested: collected.into_iter().collect(),
             input_roots: Vec::new(),
+            named: Vec::new(),
             dependencies: RefCell::new(HashSet::new()),
             initial,
             sources,
@@ -318,6 +320,7 @@ impl Project {
                 &mut modules,
                 &query.modules,
                 &query.sources,
+                &self.roots(&projected),
             )
             .map_err(|failure| {
                 Box::new(Blocked {
@@ -456,6 +459,17 @@ impl Project {
         self.pattern_analysis(path, source, externs)
     }
 
+    fn roots(&self, files: &[Arc<ProjectedDocument>]) -> Vec<PathBuf> {
+        files
+            .iter()
+            .filter(|file| {
+                self.named.contains(&file.source_path)
+                    || self.overlays.contains_key(&file.source_path)
+            })
+            .map(|file| file.module_path.clone())
+            .collect()
+    }
+
     /// Checks a snapshot: asks the running compiler about it and returns
     /// diagnostics at `.tt` positions — and the emitted declarations, when
     /// the request wants them. The session persists across calls; only what
@@ -469,6 +483,7 @@ impl Project {
             &self.sources,
         );
         query.emit_declarations = request.emit_declarations;
+        query.roots = self.roots(snapshot.files());
         query
             .modules
             .extend(snapshot.host_overlays.iter().map(|(path, text)| {
