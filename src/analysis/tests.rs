@@ -400,11 +400,9 @@ fn unreachable_arms_are_computed_but_not_an_error() {
     // `A` is already covered, so the third arm matches nothing new.
     let src = "variant E { A(x: string), B(y: number) }\n\
                    const v = match (e) { A(x) => x, B(y) => y, A(x: z) => z };\n";
-    let coverage = pattern_analyses(src, &[]).matches[0]
-        .coverage
-        .clone()
-        .expect("resolved");
-    assert_eq!(coverage.unreachable, [2]);
+    let analysis = &pattern_analyses(src, &[]).matches[0];
+    let coverage = analysis.coverage.clone().expect("resolved");
+    assert_eq!(analysis.unreachable, [2]);
     assert!(coverage.missing.is_empty());
 }
 

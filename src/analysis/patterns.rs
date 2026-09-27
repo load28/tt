@@ -307,7 +307,7 @@ pub(super) fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> Ma
         })
         .collect();
 
-    let coverage = coverage_of(expr, table);
+    let (coverage, unreachable) = coverage_of(expr, table);
     MatchAnalysis {
         keyword_off: expr.keyword_off,
         head_end: expr.scrutinee_span.end + 1,
@@ -316,6 +316,7 @@ pub(super) fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> Ma
         subjects: vec![subject.map(to_subject)],
         arms,
         coverage,
+        unreachable,
     }
 }
 
@@ -373,6 +374,7 @@ pub(super) fn analyze_tuple_match(
         })
         .collect();
 
+    let (coverage, unreachable) = tuple_coverage_of(expr, table);
     MatchAnalysis {
         keyword_off: expr.keyword_off,
         head_end: expr
@@ -383,7 +385,8 @@ pub(super) fn analyze_tuple_match(
         body_close: expr.body_close,
         subjects: subjects.into_iter().map(|s| s.map(to_subject)).collect(),
         arms,
-        coverage: tuple_coverage_of(expr, table),
+        coverage,
+        unreachable,
     }
 }
 

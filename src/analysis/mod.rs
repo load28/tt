@@ -238,6 +238,16 @@ pub struct MatchAnalysis {
     pub subjects: Vec<Option<MatchSubject>>,
     /// The arms, in source order.
     pub arms: Vec<AnalyzedArm>,
+    /// Indices of arms that match nothing an earlier arm has not already
+    /// matched — dead code, in source order. Computed for every match whose
+    /// tags identify a known variant, with or without a `_` arm.
+    ///
+    /// Nothing reports these as errors: an unreachable arm is a *lint* in
+    /// Rust, and tt has only errors, so turning it into one would reject
+    /// programs that compile today. The editor is where a hint belongs
+    /// (TASK-101 §P3). The narrower duplicate-arm rule sema enforces is
+    /// unchanged.
+    pub unreachable: Vec<usize>,
     /// The exhaustiveness answer — for a single match over its subject's
     /// tags, for a tuple match over the product of its positions. `None`
     /// when the question does not arise: a wildcard arm covers everything,
@@ -373,16 +383,6 @@ pub struct Coverage {
     /// match is exhaustive; bounded, so a wide product does not build a
     /// list nobody can read.
     pub missing: Vec<Uncovered>,
-    /// Indices of arms that match nothing an earlier arm has not already
-    /// matched — dead code, in source order.
-    ///
-    /// Nothing reports these yet: an unreachable arm is a *lint* in Rust,
-    /// and tt has only errors, so turning it into one would reject
-    /// programs that compile today. It is computed here because the same
-    /// recursion answers it, and because the editor is where a hint
-    /// belongs (TASK-101 §P3). The narrower duplicate-arm rule sema
-    /// enforces is unchanged.
-    pub unreachable: Vec<usize>,
 }
 
 /// One value a match leaves unhandled, as the tt pattern that would cover

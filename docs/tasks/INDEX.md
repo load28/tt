@@ -431,6 +431,7 @@
 | TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 | TASK-416 | Emit values the lowering plan cannot own as recovery placeholders | Complete | 2026-09-27 | 2026-09-27 | [TASK-416](./TASK-416-unowned-value-recovery-emission.md) |
 | TASK-417 | Keep generated bindings out of completion, hover, and references | Complete | 2026-09-27 | 2026-09-27 | [TASK-417](./TASK-417-generated-bindings-out-of-service-answers.md) |
+| TASK-418 | Compute dead arms in matches that have a `_` arm | Complete | 2026-09-27 | 2026-09-27 | [TASK-418](./TASK-418-dead-arms-beside-wildcards.md) |
 
 ## Next task number
 

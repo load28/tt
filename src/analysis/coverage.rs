@@ -3,15 +3,19 @@
 use super::*;
 
 /// [`Coverage`] of a single match, when the question means something: a tag
-/// match with no wildcard arm whose tags identify a known variant.
+/// match with no wildcard arm whose tags identify a known variant — and,
+/// whenever the tags identify one, wildcard or not, the arms that match
+/// nothing an earlier arm has not.
 ///
 /// The arms become a one-column matrix and the algorithm answers
 /// ([`usefulness`]). Guarded arms stay out of it — a guard may be false —
 /// but arms carrying nested patterns are now *in*: the recursion descends
 /// into the payload, so such an arm covers exactly what it covers instead
 /// of being written off.
-pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
-    let rows = match_rows(expr)?;
+pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>, Vec<usize>) {
+    let Some(rows) = match_rows(expr) else {
+        return (None, Vec::new());
+    };
     // Several variants can hold every tag. The one the arms *satisfy* is the
     // subject if there is one; otherwise the one they leave least of —
     // the rule sema has always reported, now measured in witnesses.
@@ -28,13 +32,16 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> Option<Coverage> {
             best = Some((entry, missing));
         }
     }
-    let (entry, missing) = best?;
-    Some(Coverage {
+    let Some((entry, missing)) = best else {
+        return (None, Vec::new());
+    };
+    let unreachable = unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx);
+    let coverage = (!rows.wildcard).then(|| Coverage {
         positions: vec![Some(entry.covered_variant())],
         covered: rows.covered,
         missing,
-        unreachable: unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx),
-    })
+    });
+    (coverage, unreachable)
 }
 
 /// The same answer for a subject the caller names — the typed path, where
@@ -65,7 +72,7 @@ pub(crate) fn checked_coverage(
             continue;
         };
         let entry = table.entry_of_members(tags);
-        let Some(rows) = match_rows(expr) else {
+        let Some(rows) = match_rows(expr).filter(|rows| !rows.wildcard) else {
             continue;
         };
         let cx = Alphabets {
@@ -88,7 +95,6 @@ pub(crate) fn checked_coverage(
                 positions: vec![None],
                 covered: rows.covered,
                 missing,
-                unreachable: unreachable_arms(&rows.arm_rows, &types, &cx),
             },
         ));
     }
@@ -123,8 +129,7 @@ pub(crate) fn checked_coverage(
             })
             .collect();
         let mut rows: Vec<Vec<Cell>> = Vec::new();
-        let mut arm_rows: Vec<(usize, Vec<Vec<Cell>>)> = Vec::new();
-        for (index, arm) in expr.arms.iter().enumerate() {
+        for arm in &expr.arms {
             let TuplePattern::Elems(elems) = &arm.pattern else {
                 continue;
             };
@@ -134,7 +139,6 @@ pub(crate) fn checked_coverage(
             let Some(this) = tuple_rows(elems) else {
                 continue;
             };
-            arm_rows.push((index, this.clone()));
             rows.extend(this);
         }
         let cx = Alphabets {
@@ -155,7 +159,6 @@ pub(crate) fn checked_coverage(
                 positions: vec![None; arity],
                 covered: Vec::new(),
                 missing: render_witnesses(&usefulness::missing(&rows, &types, &cx)),
-                unreachable: unreachable_arms(&arm_rows, &types, &cx),
             },
         ));
     }
@@ -271,30 +274,32 @@ pub(super) fn collect_if_let_matches<'a>(
 }
 
 /// One match's arms as the algorithm's input: the tags they name, the tags
-/// they cover outright, the matrix, and the per-arm rows reachability
-/// needs. `None` when the question does not arise — a wildcard arm covers
-/// everything, or no arm carries a tag pattern.
+/// they cover outright, the matrix, the per-arm rows reachability needs
+/// (an unguarded wildcard arm among them), and whether the match has a
+/// wildcard arm. `None` when no arm carries a tag pattern.
 pub(super) struct MatchRows<'a> {
     tags: Vec<&'a str>,
     covered: Vec<String>,
     rows: Vec<Vec<Cell<'a>>>,
     arm_rows: Vec<(usize, Vec<Vec<Cell<'a>>>)>,
+    wildcard: bool,
 }
 
 pub(super) fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
-    if expr
+    let wildcard = expr
         .arms
         .iter()
-        .any(|a| matches!(a.pattern, Pattern::Wildcard))
-    {
-        return None;
-    }
+        .any(|a| matches!(a.pattern, Pattern::Wildcard));
     // Identification uses every arm's tags, guarded ones included.
     let mut tags: Vec<&str> = Vec::new();
     let mut covered: Vec<String> = Vec::new();
     let mut rows: Vec<Vec<Cell>> = Vec::new();
     let mut arm_rows: Vec<(usize, Vec<Vec<Cell>>)> = Vec::new();
     for (index, arm) in expr.arms.iter().enumerate() {
+        if matches!(arm.pattern, Pattern::Wildcard) && arm.guard.is_none() {
+            arm_rows.push((index, vec![vec![Cell::Wild]]));
+            continue;
+        }
         let Pattern::Tags(alts) = &arm.pattern else {
             continue;
         };
@@ -326,22 +331,25 @@ pub(super) fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
         covered,
         rows,
         arm_rows,
+        wildcard,
     })
 }
 
 /// [`Coverage`] of a tuple match: the same algorithm over as many columns
 /// as there are scrutinees. `None` when a bare `_` arm covers everything,
 /// when a tagged position resolves to no known variant, or when no position
-/// is tagged at all (nothing to enumerate).
-pub(super) fn tuple_coverage_of(expr: &TupleMatchExpr, table: &Table) -> Option<Coverage> {
+/// is tagged at all (nothing to enumerate). The arms that match nothing an
+/// earlier arm has not are computed whenever the positions resolve, a bare
+/// `_` arm or not.
+pub(super) fn tuple_coverage_of(
+    expr: &TupleMatchExpr,
+    table: &Table,
+) -> (Option<Coverage>, Vec<usize>) {
     let arity = expr.scrutinees.len();
-    if expr
+    let wildcard = expr
         .arms
         .iter()
-        .any(|a| matches!(a.pattern, TuplePattern::Wildcard))
-    {
-        return None;
-    }
+        .any(|a| matches!(a.pattern, TuplePattern::Wildcard));
 
     // Per position, the tags any arm writes there — identification, as in
     // a single match but one column at a time.
@@ -375,37 +383,44 @@ pub(super) fn tuple_coverage_of(expr: &TupleMatchExpr, table: &Table) -> Option<
         }
         // A position whose tags name no variant makes the whole question
         // unanswerable — the same conservatism as before.
-        let entry = *table.candidates(tags).first()?;
+        let Some(entry) = table.candidates(tags).first().copied() else {
+            return (None, Vec::new());
+        };
         positions.push(Some(entry.covered_variant()));
         types.push(ColTy::Variant(entry));
     }
     if positions.iter().all(Option::is_none) {
-        return None;
+        return (None, Vec::new());
     }
 
     let mut rows: Vec<Vec<Cell>> = Vec::new();
     let mut arm_rows: Vec<(usize, Vec<Vec<Cell>>)> = Vec::new();
     for (index, arm) in expr.arms.iter().enumerate() {
-        let TuplePattern::Elems(elems) = &arm.pattern else {
-            continue;
-        };
-        if elems.len() != arity || arm.guard.is_some() {
+        if arm.guard.is_some() {
             continue;
         }
-        let Some(this) = tuple_rows(elems) else {
-            continue;
+        let this = match &arm.pattern {
+            TuplePattern::Wildcard => vec![vec![Cell::Wild; arity]],
+            TuplePattern::Elems(elems) if elems.len() == arity => {
+                let Some(this) = tuple_rows(elems) else {
+                    continue;
+                };
+                rows.extend(this.clone());
+                this
+            }
+            TuplePattern::Elems(_) => continue,
         };
-        arm_rows.push((index, this.clone()));
-        rows.extend(this);
+        arm_rows.push((index, this));
     }
 
     let cx = Alphabets::of(table);
-    Some(Coverage {
+    let unreachable = unreachable_arms(&arm_rows, &types, &cx);
+    let coverage = (!wildcard).then(|| Coverage {
         positions,
         covered: Vec::new(),
         missing: render_witnesses(&usefulness::missing(&rows, &types, &cx)),
-        unreachable: unreachable_arms(&arm_rows, &types, &cx),
-    })
+    });
+    (coverage, unreachable)
 }
 
 /// One tuple arm as rows: the cartesian product of its elements'
