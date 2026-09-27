@@ -423,6 +423,8 @@
 
 | TASK-394 | Check unsaved overlays and rebuild importers of deleted files in watch | Complete | 2026-09-27 | 2026-09-27 | [TASK-394](./TASK-394-unsaved-overlay-and-watch-deletions.md) |
 
+| TASK-395 | Encode source map URLs and end the map comment with the output's line ending | Complete | 2026-09-27 | 2026-09-27 | [TASK-395](./TASK-395-source-map-urls-and-line-endings.md) |
+
 ## Next task number
 
 **TASK-391**

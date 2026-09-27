@@ -208,3 +208,96 @@ fn watch_rebuilds_importers_of_a_deleted_or_renamed_file() {
         std::panic::resume_unwind(error);
     }
 }
+
+fn have_node() -> bool {
+    Command::new("node")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success())
+}
+
+#[test]
+fn source_map_urls_percent_encode_file_names() {
+    let root = Workspace::new("source-map-urls");
+    fs::create_dir(root.join("my src")).unwrap();
+    fs::write(
+        root.join("my src/a b#1%.tt"),
+        "const f = (n: number) => {\n  throw new Error(\"boom \" + n);\n};\nconst v = 1 |> f;\n",
+    )
+    .unwrap();
+    success(run(
+        &root,
+        &[
+            "--no-banner",
+            "--source-map",
+            "file",
+            "-o",
+            "out dir",
+            "my src",
+        ],
+    ));
+    let code = fs::read_to_string(root.join("out dir/a b#1%.ts")).unwrap();
+    assert!(
+        code.ends_with("\n//# sourceMappingURL=a%20b%231%25.ts.map\n"),
+        "{code}"
+    );
+    let map: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(root.join("out dir/a b#1%.ts.map")).unwrap())
+            .unwrap();
+    assert_eq!(
+        map["sources"],
+        serde_json::json!(["../my%20src/a%20b%231%25.tt"])
+    );
+    assert_eq!(map["file"], "a b#1%.ts");
+    if !have_node() {
+        return;
+    }
+    let run = Command::new("node")
+        .current_dir(&root)
+        .args(["--enable-source-maps", "--experimental-strip-types"])
+        .arg(root.join("out dir/a b#1%.ts"))
+        .output()
+        .unwrap();
+    let trace = String::from_utf8_lossy(&run.stderr);
+    assert!(trace.contains("boom 1"), "{trace}");
+    assert!(trace.contains("a b#1%.tt:2:"), "{trace}");
+}
+
+#[test]
+fn source_map_comments_use_the_line_ending_of_the_output() {
+    let root = Workspace::new("source-map-crlf");
+    fs::write(
+        root.join("crlf.tt"),
+        "const a = 1 |> String;\r\nexport { a };",
+    )
+    .unwrap();
+    fs::write(
+        root.join("bom.tt"),
+        "\u{feff}const b = 1 |> String;\r\nexport { b };\r\n",
+    )
+    .unwrap();
+    fs::write(root.join("lf.tt"), "const c = 1 |> String;\nexport { c };").unwrap();
+    success(run(&root, &["--source-map", "file", "-o", "out", "."]));
+    success(run(&root, &["--source-map", "inline", "-o", "inline", "."]));
+    for dir in ["out", "inline"] {
+        for (name, ending) in [("crlf", "\r\n"), ("bom", "\r\n"), ("lf", "\n")] {
+            let code = fs::read_to_string(root.join(dir).join(format!("{name}.ts"))).unwrap();
+            let bare = code.replace("\r\n", "");
+            assert!(!bare.contains('\r'), "{dir}/{name}: {code:?}");
+            if ending == "\r\n" {
+                assert!(!bare.contains('\n'), "{dir}/{name}: {code:?}");
+            } else {
+                assert!(!code.contains('\r'), "{dir}/{name}: {code:?}");
+            }
+            let (_, last) = code
+                .strip_suffix(ending)
+                .unwrap()
+                .rsplit_once(ending)
+                .unwrap();
+            assert!(
+                last.starts_with("//# sourceMappingURL="),
+                "{dir}/{name}: {code:?}"
+            );
+        }
+    }
+}

@@ -30,6 +30,7 @@ pub(super) fn source_map_for(
     source: &str,
     banner: BannerPlacement,
     mode: SourceMapMode,
+    line_ending: &str,
 ) -> RenderedSourceMap {
     let out_name = job
         .out_path
@@ -47,19 +48,41 @@ pub(super) fn source_map_for(
             generated_line_offset_at: banner.at_line,
         },
     );
-    match mode {
-        SourceMapMode::Inline | SourceMapMode::Off => RenderedSourceMap {
-            comment: ttc::source_map::SourceMap::url_comment(&map.to_data_url()),
-            document: None,
-        },
-        SourceMapMode::File => RenderedSourceMap {
-            comment: ttc::source_map::SourceMap::url_comment(&format!(
-                "{}.map",
-                out_name.as_deref().unwrap_or("output")
-            )),
-            document: Some(map.to_json()),
-        },
+    let (url, document) = match mode {
+        SourceMapMode::Inline | SourceMapMode::Off => (map.to_data_url(), None),
+        SourceMapMode::File => (
+            url_path([format!("{}.map", out_name.as_deref().unwrap_or("output")).as_str()]),
+            Some(map.to_json()),
+        ),
+    };
+    let comment = ttc::source_map::SourceMap::url_comment(&url);
+    RenderedSourceMap {
+        comment: format!("{}{line_ending}", comment.trim_end_matches('\n')),
+        document,
     }
+}
+
+fn url_path<'a>(segments: impl IntoIterator<Item = &'a str>) -> String {
+    let mut out = String::new();
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 {
+            out.push('/');
+        }
+        for byte in segment.bytes() {
+            let encode = match byte {
+                b'%' | b'\\' | b'?' | b'#' | b' ' | b'"' | b'<' | b'>' | b'^' | b'`' | b'{'
+                | b'}' => true,
+                b':' => index == 0,
+                _ => !(0x21..0x7f).contains(&byte),
+            };
+            if encode {
+                out.push_str(&format!("%{byte:02X}"));
+            } else {
+                out.push(byte as char);
+            }
+        }
+    }
+    out
 }
 
 /// `path` as seen from the directory `base`, as a `/`-separated URL — how
@@ -77,11 +100,9 @@ pub(super) fn relative_to(path: &Path, base: &Path) -> String {
         .zip(base.iter())
         .take_while(|(left, right)| left == right)
         .count();
-    let mut out = String::new();
-    for _ in 0..base.len() - shared {
-        out.push_str("../");
-    }
-    out.push_str(&path[shared..].join("/"));
+    let segments = std::iter::repeat_n("..", base.len() - shared)
+        .chain(path[shared..].iter().map(String::as_str));
+    let out = url_path(segments);
     if out.is_empty() { path.join("/") } else { out }
 }
 

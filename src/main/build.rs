@@ -482,11 +482,18 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 let map = match opts.source_map {
                     SourceMapMode::Off => None,
                     _ if ttc::SourceKind::from_tt_path(&job.file).is_none() => None,
-                    mode => Some(source_map_for(job, &emit, &loaded.source, banner, mode)),
+                    mode => Some(source_map_for(
+                        job,
+                        &emit,
+                        &loaded.source,
+                        banner,
+                        mode,
+                        ttc::line_ending(&code),
+                    )),
                 };
                 if let Some(rendered) = &map {
                     if !code.ends_with('\n') {
-                        code.push('\n');
+                        code.push_str(ttc::line_ending(&code));
                     }
                     code.push_str(&rendered.comment);
                 }
