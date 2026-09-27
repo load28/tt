@@ -305,3 +305,30 @@ fn a_yield_crossing_a_result_block_reports_only_the_crossing() {
     let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(codes, [DiagnosticCode::ResultYieldCrossing], "{diagnostics:#?}");
 }
+
+#[test]
+fn a_pipeline_as_the_unbraced_body_of_a_statement_header_starts_after_the_header() {
+    let out = ok("declare const c: boolean, x: number;\n\
+         declare function g(n: number): any;\n\
+         declare const xs: AsyncIterable<number>;\n\
+         if (c) x |> g;\n\
+         if (c) x |> g; else x |> g;\n\
+         while (c) x |> g;\n\
+         for (;;) x |> g;\n\
+         for (const a of [1]) a |> g;\n\
+         async function h() { for await (const v of xs) v |> g; }\n\
+         const y = (c) |> g;\n");
+    assert!(out.contains("if (c) $tt_ap(x, g);"), "{out}");
+    assert!(
+        out.contains("if (c) $tt_ap(x, g); else $tt_ap(x, g);"),
+        "{out}"
+    );
+    assert!(out.contains("while (c) $tt_ap(x, g);"), "{out}");
+    assert!(out.contains("for (;;) $tt_ap(x, g);"), "{out}");
+    assert!(out.contains("for (const a of [1]) $tt_ap(a, g);"), "{out}");
+    assert!(
+        out.contains("for await (const v of xs) $tt_ap(v, g);"),
+        "{out}"
+    );
+    assert!(out.contains("const y = $tt_ap((c), g);"), "{out}");
+}

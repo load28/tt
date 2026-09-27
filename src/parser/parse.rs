@@ -184,6 +184,11 @@ impl Parser<'_> {
     }
 }
 
+enum ExprFrame {
+    Resume((usize, bool)),
+    StatementHeader,
+}
+
 fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
     if start < end {
         segments.push(Segment::Verbatim(Span { start, end }));
@@ -463,7 +468,7 @@ impl Parser<'_> {
         // rule). Brackets save and restore the enclosing expression's
         // state, so `f(a(b) |> g)` finds `a(b)`, not `b`.
         let mut expr: (usize, bool) = (0, false);
-        let mut expr_stack: Vec<(usize, bool)> = Vec::new();
+        let mut expr_stack: Vec<ExprFrame> = Vec::new();
 
         while i < tokens.len() {
             let tok = &tokens[i];
@@ -830,19 +835,28 @@ impl Parser<'_> {
         i: usize,
         tokens: &[Token],
         expr: &mut (usize, bool),
-        stack: &mut Vec<(usize, bool)>,
+        stack: &mut Vec<ExprFrame>,
     ) {
+        let fresh = (i + 1, false);
+        let restore = |frame: Option<ExprFrame>| match frame {
+            Some(ExprFrame::Resume(outer)) => outer,
+            Some(ExprFrame::StatementHeader) | None => fresh,
+        };
         match tok.kind {
-            TokenKind::JsxRaw => *expr = (i + 1, false),
+            TokenKind::JsxRaw => *expr = fresh,
+            TokenKind::Punct(b'(') if self.opens_statement_header(tokens, i) => {
+                stack.push(ExprFrame::StatementHeader);
+                *expr = fresh;
+            }
             TokenKind::Punct(b'(' | b'[' | b'{') => {
-                stack.push(*expr);
-                *expr = (i + 1, false);
+                stack.push(ExprFrame::Resume(*expr));
+                *expr = fresh;
             }
             TokenKind::Punct(b')' | b']') => {
-                *expr = stack.pop().unwrap_or((i + 1, false));
+                *expr = restore(stack.pop());
             }
             TokenKind::Punct(b'}') => {
-                let outer = stack.pop().unwrap_or((i + 1, false));
+                let outer = restore(stack.pop());
                 *expr = if self.brace_ends_expression(tokens, i) {
                     outer
                 } else {
@@ -869,6 +883,25 @@ impl Parser<'_> {
             TokenKind::Punct(b'?') => *expr = (i + 1, true),
             TokenKind::Arrow => *expr = (i + 1, false),
             _ => {}
+        }
+    }
+
+    fn opens_statement_header(&self, tokens: &[Token], open_idx: usize) -> bool {
+        let word_at = |k: usize| {
+            tokens
+                .get(k)
+                .filter(|t| matches!(t.kind, TokenKind::Ident) && !cursor::dotted_at(tokens, 0, k))
+                .map(|t| &self.src[t.span.start..t.span.end])
+        };
+        let Some(keyword_idx) = open_idx.checked_sub(1) else {
+            return false;
+        };
+        match word_at(keyword_idx) {
+            Some("if" | "while" | "for" | "with") => true,
+            Some("await") => keyword_idx
+                .checked_sub(1)
+                .is_some_and(|k| word_at(k) == Some("for")),
+            _ => false,
         }
     }
 
