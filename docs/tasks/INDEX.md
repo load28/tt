@@ -442,6 +442,7 @@
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
 | TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
+| TASK-405 | Write the runtime import before generated text at the top of the file | Complete | 2026-09-27 | 2026-09-27 | [TASK-405](./TASK-405-runtime-import-at-top.md) |
 
 ## Next task number
 

@@ -258,10 +258,15 @@ pub(crate) fn emit_with_map<'a>(
         // A prologue that runs to the end of the file leaves nothing to
         // insert before, so the import lands at the end and needs the
         // line break the source did not write.
-        if at >= source.len() && !output.ends_with_newline() {
-            output.push_lit("\n");
-        }
-        output.insert_lit_at_source(at, format!("import {{ {names} }} from \"{runtime}\";\n"));
+        let separator = if at >= source.len() && !output.ends_with_newline() {
+            "\n"
+        } else {
+            ""
+        };
+        output.insert_lit_at_source(
+            at,
+            format!("{separator}import {{ {names} }} from \"{runtime}\";\n"),
+        );
     }
     if emitter.used_match_raise.get() {
         if !output.ends_with_newline() {

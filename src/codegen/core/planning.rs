@@ -2,8 +2,8 @@
 
 use super::*;
 
-/// The byte offset a generated `import` may be written at: past a shebang
-/// and past the file's directive prologue.
+/// The byte offset a generated `import` may be written at: past a
+/// byte-order mark, a shebang, and the file's directive prologue.
 ///
 /// A directive (`"use client"`, `"use strict"`) is only a directive while
 /// it is the first thing in the file, so an import written above one would
@@ -17,10 +17,16 @@ use super::*;
 /// are skipped by its quotes, not read.
 pub(super) fn directive_prologue_end(source: &str) -> usize {
     let bytes = source.as_bytes();
-    let mut at = 0;
+    let mut at = if source.starts_with('\u{feff}') {
+        '\u{feff}'.len_utf8()
+    } else {
+        0
+    };
     // A shebang is not a statement, but nothing may precede it either.
-    if bytes.starts_with(b"#!") {
-        at = source.find('\n').map_or(bytes.len(), |nl| nl + 1);
+    if bytes[at..].starts_with(b"#!") {
+        at = source[at..]
+            .find('\n')
+            .map_or(bytes.len(), |nl| at + nl + 1);
     }
     let mut end = at;
     loop {

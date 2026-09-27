@@ -179,9 +179,10 @@ impl<'a> Rope<'a> {
         }
     }
 
-    /// Inserts `text` immediately before the first source byte at or after
-    /// `at` that this rope prints at its top level, or appends it when the
-    /// rope prints no such byte.
+    /// Inserts `text` after the leading top-level source pieces that print
+    /// only bytes before `at`, splitting the piece that straddles `at`, so
+    /// `text` precedes every piece written for source at or after `at`,
+    /// generated glue included.
     ///
     /// The one thing codegen cannot know while emitting is what the
     /// emission will *need* — a pipeline helper's import is decided by the
@@ -189,51 +190,26 @@ impl<'a> Rope<'a> {
     /// but read as a stray line at the bottom of the file; this puts it
     /// where a reader looks for an import.
     ///
-    /// Only the top level is considered: a piece inside a construct's own
-    /// glue belongs to that lowering's arrangement, and a statement cannot
-    /// go there anyway. Splitting a pass-through piece in two keeps both
-    /// halves pointing at the bytes they always did, so the emission still
-    /// covers the source exactly once and still in order.
+    /// Splitting a pass-through piece in two keeps both halves pointing at
+    /// the bytes they always did, so the emission still covers the source
+    /// exactly once and still in order.
     pub(crate) fn insert_lit_at_source(&mut self, at: usize, text: impl Into<Cow<'a, str>>) {
         let text = text.into();
         if text.is_empty() {
             return;
         }
-        let mut depth = 0usize;
-        let mut top_level_container = None;
-        let mut found: Option<(usize, Option<usize>)> = None;
-        for (index, piece) in self.pieces.iter().enumerate() {
-            match piece {
-                Piece::Open { .. } | Piece::ScopeOpen => {
-                    if depth == 0 {
-                        top_level_container = Some(index);
-                    }
-                    depth += 1;
-                }
-                Piece::Close | Piece::ScopeClose => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        top_level_container = None;
-                    }
-                }
-                Piece::Src { text, src } if src + text.len() > at => {
-                    found = if depth == 0 {
-                        Some((index, (*src < at).then(|| at - src)))
-                    } else {
-                        // The source sits inside a top-level construct. An
-                        // import cannot split that construct's anchor or
-                        // layout scope, so insert before its outer boundary.
-                        top_level_container.map(|container| (container, None))
-                    };
-                    break;
-                }
-                _ => {}
+        let mut index = 0;
+        let mut split = None;
+        while let Some(Piece::Src { text, src }) = self.pieces.get(index) {
+            if src + text.len() <= at {
+                index += 1;
+                continue;
             }
+            if *src < at {
+                split = Some(at - src);
+            }
+            break;
         }
-        let Some((index, split)) = found else {
-            self.push_lit(text);
-            return;
-        };
         self.len += text.len();
         match split {
             None => self.pieces.insert(index, Piece::Lit(text)),
