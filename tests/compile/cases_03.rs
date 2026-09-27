@@ -2,7 +2,7 @@
 #[test]
 fn try_inside_match_arm_is_an_error() {
     // Directly in an arm's statement stream the emitted `return` would
-    // exit the switch IIFE — the match would *evaluate to* the `Err`
+    // deliver the arm's value — the match would *evaluate to* the `Err`
     // instead of propagating it.
     let e = err(
         "const x = match (r) {\n  Ok(value) => { const y = try f(value); return y; },\n  Err(error) => fallback(error),\n};\n",
@@ -13,6 +13,13 @@ fn try_inside_match_arm_is_an_error() {
         "{}",
         e.message
     );
+    assert!(
+        e.message
+            .contains("would complete this construct's value instead of returning from"),
+        "{}",
+        e.message
+    );
+    assert!(!e.message.contains("IIFE"), "{}", e.message);
     // The propagation, not the declaration it is written in.
     assert_eq!((e.line, e.col), (2, 28));
     assert_eq!((e.end_line, e.end_col), (2, 40));

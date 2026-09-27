@@ -227,8 +227,8 @@ impl Checker {
             } else {
                 (
                     "`try` cannot be used here, in an isolated value region — it compiles to \
-                     a `return`, which would exit this construct's own IIFE instead of the \
-                     enclosing function",
+                     a `return`, which would complete this construct's value instead of \
+                     returning from the enclosing function",
                     "extract the logic into a function (a `try` inside a function written \
                      here is fine), or move the propagation into a statement-bodied `result` block",
                 )
@@ -253,8 +253,8 @@ impl Checker {
                     stmt.head_span.start,
                     stmt.head_span.end,
                     "let-else cannot be used here — its `else` block's exit (`return`, \
-                     `break`, `continue`) would leave this construct's own IIFE instead of \
-                     the enclosing function"
+                     `break`, `continue`) would complete this construct's value instead of \
+                     leaving the enclosing function"
                         .to_string(),
                 )
                 .code(DiagnosticCode::LetElsePlacement)

@@ -189,6 +189,7 @@ fn let_else_inside_match_arm_is_error() {
         "{}",
         e.message
     );
+    assert!(!e.message.contains("IIFE"), "{}", e.message);
 }
 
 #[test]
