@@ -127,6 +127,31 @@ pub(super) fn direct_apply_inputs(
         .collect()
 }
 
+pub(super) fn member_apply_steps(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> HashMap<ExprId, crate::program_syntax::MemberCallee> {
+    core.exprs
+        .iter()
+        .filter_map(|expr| match expr {
+            Expr::Apply(apply) => Some(apply),
+            _ => None,
+        })
+        .flat_map(|apply| &apply.steps)
+        .filter(|step| matches!(step.mode, ApplyMode::Call))
+        .filter_map(|step| {
+            let Expr::Opaque(node) = &core.exprs[step.value.index()] else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            crate::program_syntax::source_member_callee(source, span, source_kind)
+                .map(|member| (step.value, member))
+        })
+        .collect()
+}
+
 /// The pass-through ranges of a file, for the target's preservation check
 /// ([`SourcePreservation::owned`]): the source the compiler does not
 /// interpret — Core `Opaque` statements and expressions and template raw

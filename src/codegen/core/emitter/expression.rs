@@ -57,6 +57,27 @@ impl<'a> Emitter<'a> {
                                     input,
                                 );
                                 next.push_lit(")");
+                            } else if let Some(member) =
+                                self.member_apply_steps.get(&step.value).copied()
+                            {
+                                push_grouped(&mut input, acc);
+                                let mut call = Rope::new();
+                                call.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    self.emit_member_step(step.value, member, call),
+                                );
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit("$tt_ap(");
@@ -91,21 +112,136 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    fn emit_member_step(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+        input: Rope<'a>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        out.push_lit("(($tt_v");
+        if member.receiver.is_some() {
+            out.push_lit(", $tt_r");
+        }
+        if member.key.is_some() {
+            out.push_lit(", $tt_k");
+        }
+        out.push_lit(") => (");
+        out.append(self.member_callee_body(value, member));
+        out.push_lit(")($tt_v))(");
+        out.append(input);
+        self.push_member_operands(&mut out, member, true);
+        out.push_lit(")");
+        out
+    }
+
+    fn emit_flow_function(&self, value: ExprId) -> Rope<'a> {
+        match self.member_apply_steps.get(&value).copied() {
+            Some(member) => self.emit_bound_member(value, member),
+            None => guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
+        }
+    }
+
+    fn member_callee_body(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+    ) -> Rope<'a> {
+        let Expr::Opaque(node) = &self.core.exprs[value.index()] else {
+            crate::ice::bug!("a member pipeline step is not source text");
+        };
+        let callee = self.span(*node);
+        let mut substitutions: Vec<(SourceSpan, &'static str)> = member
+            .receiver
+            .map(|receiver| (receiver, "$tt_r"))
+            .into_iter()
+            .chain(member.key.map(|key| (key, "$tt_k")))
+            .collect();
+        substitutions.sort_by_key(|(span, _)| span.start);
+        let mut body = Rope::new();
+        let mut cursor = callee.start;
+        for (span, name) in &substitutions {
+            body.append(self.source_range_rope(hir::Span {
+                start: cursor,
+                end: span.start,
+            }));
+            body.push_lit(*name);
+            cursor = span.end;
+        }
+        body.append(self.source_range_rope(hir::Span {
+            start: cursor,
+            end: callee.end,
+        }));
+        guard_line_comment(body, 0, self.source_kind)
+    }
+
+    fn push_member_operands(
+        &self,
+        out: &mut Rope<'a>,
+        member: crate::program_syntax::MemberCallee,
+        leading_separator: bool,
+    ) {
+        for (index, span) in [member.receiver, member.key]
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            out.push_lit(if leading_separator || index > 0 {
+                ", ("
+            } else {
+                "("
+            });
+            out.append(guard_line_comment(
+                self.source_range_rope(hir::Span {
+                    start: span.start,
+                    end: span.end,
+                }),
+                0,
+                self.source_kind,
+            ));
+            out.push_lit(")");
+        }
+    }
+
+    fn emit_bound_member(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        out.push_lit("((");
+        let mut names = Vec::new();
+        if member.receiver.is_some() {
+            names.push("$tt_r");
+        }
+        if member.key.is_some() {
+            names.push("$tt_k");
+        }
+        out.push_lit(names.join(", "));
+        out.push_lit(") => (");
+        out.append(self.member_callee_body(value, member));
+        out.push_lit(if member.receiver.is_some() {
+            ").bind($tt_r))("
+        } else {
+            ").bind(this))("
+        });
+        self.push_member_operands(&mut out, member, false);
+        out.push_lit(")");
+        out
+    }
+
     pub(super) fn emit_flow(&self, apply: &Apply, owner_end: usize) -> Rope<'a> {
         let mut steps = apply.steps.iter();
         let first = steps
             .next()
             .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
         let mut acc = Rope::new();
-        push_grouped(
-            &mut acc,
-            guard_line_comment(self.emit_expr(first.value).trim(), 0, self.source_kind),
-        );
+        push_grouped(&mut acc, self.emit_flow_function(first.value));
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
             let step_span = self.span(step.node);
-            let body = guard_line_comment(self.emit_expr(step.value).trim(), 0, self.source_kind);
+            let body = self.emit_flow_function(step.value);
             let mut next = Rope::new();
             next.push_lit("$tt_fl(");
             // The composition built so far is what this step composes onto;

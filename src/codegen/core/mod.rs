@@ -144,6 +144,7 @@ pub(crate) fn emit_with_map<'a>(
 ) -> Flat {
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
+    let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
         .iter()
@@ -151,6 +152,16 @@ pub(crate) fn emit_with_map<'a>(
         .collect();
     relocated.extend(target.relocated_values.iter().copied());
     relocated.extend(direct_apply_inputs.iter().filter_map(|expr| {
+        let Expr::Opaque(node) = &core.exprs[expr.index()] else {
+            return None;
+        };
+        semantic
+            .hir
+            .source_map
+            .node_span(*node)
+            .map(SourceSpan::from)
+    }));
+    relocated.extend(member_apply_steps.keys().filter_map(|expr| {
         let Expr::Opaque(node) = &core.exprs[expr.index()] else {
             return None;
         };
@@ -179,6 +190,7 @@ pub(crate) fn emit_with_map<'a>(
         source,
         source_kind,
         direct_apply_inputs,
+        member_apply_steps,
         rewrite_imports,
         std_imports,
         owner_slot_rewrites: target.owner_slots,

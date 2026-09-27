@@ -418,6 +418,74 @@ pub(crate) fn source_expression_effects(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MemberCallee {
+    pub(crate) receiver: Option<SourceSpan>,
+    pub(crate) key: Option<SourceSpan>,
+}
+
+pub(crate) fn source_member_callee(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> Option<MemberCallee> {
+    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, SuperProp};
+
+    let text = source.get(span.start..span.end)?;
+    if crate::lexer::host_syntax_error(text, source_kind).is_some() {
+        return None;
+    }
+    let input = HostInput::new(text);
+    let parse = |context: swc_ecma_parser::Context| {
+        let mut parser = input.parser(source_kind);
+        parser.set_ctx(parser.ctx() | context);
+        match parser.parse_expr() {
+            Ok(expression) if parser.take_errors().is_empty() => Some(expression),
+            Ok(_) | Err(_) => None,
+        }
+    };
+    let expression = parse(swc_ecma_parser::Context::empty()).or_else(|| {
+        parse(
+            swc_ecma_parser::Context::Module
+                | swc_ecma_parser::Context::CanBeModule
+                | swc_ecma_parser::Context::InAsync
+                | swc_ecma_parser::Context::InGenerator,
+        )
+    })?;
+    let at = |node: swc_common::Span| SourceSpan {
+        start: span.start + input.byte(node.lo),
+        end: span.start + input.byte(node.hi),
+    };
+    let mut callee = &*expression;
+    loop {
+        callee = match callee {
+            SwcExpr::Paren(inner) => &inner.expr,
+            SwcExpr::TsNonNull(inner) => &inner.expr,
+            SwcExpr::TsAs(inner) => &inner.expr,
+            SwcExpr::TsSatisfies(inner) => &inner.expr,
+            SwcExpr::TsTypeAssertion(inner) => &inner.expr,
+            _ => break,
+        };
+    }
+    match callee {
+        SwcExpr::Member(member) => Some(MemberCallee {
+            receiver: Some(at(member.obj.span())),
+            key: match &member.prop {
+                MemberProp::Computed(computed) => Some(at(computed.expr.span())),
+                MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
+            },
+        }),
+        SwcExpr::SuperProp(member) => Some(MemberCallee {
+            receiver: None,
+            key: match &member.prop {
+                SuperProp::Computed(computed) => Some(at(computed.expr.span())),
+                SuperProp::Ident(_) => None,
+            },
+        }),
+        _ => None,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HostEvaluationOperation {
     Eager(EagerPosition),
     Conditional(ConditionalBranch),

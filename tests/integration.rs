@@ -863,3 +863,41 @@ run(O.A, O.B)\n\
 console.log(log.join(\",\"))\n");
     assert_eq!(lines, ["start,xa,yb,2,2,2"]);
 }
+
+#[test]
+fn a_member_step_calls_the_method_on_its_receiver() {
+    require_toolchain!();
+    let lines = run(r#"
+const order: string[] = [];
+const obj = { k: 10, add(n: number) { return n + this.k; } };
+const key = "add" as const;
+const traced = { k: 1, get m() { order.push("get"); return function (this: { k: number }, n: number) { return n + this.k; }; } };
+class Base { k = 3; m(n: number) { return n + this.k; } }
+class Derived extends Base {
+    #p(n: number) { return n - this.k; }
+    run() { return [2].map(x => x |> this.m |> this.#p); }
+    parent() { return [4].map(x => x |> super.m); }
+    composed() { return flow |> super.m |> this.#p; }
+}
+const gen = { id<T>(v: T): T { return v; } };
+const inlined = 1 |> obj.add;
+const nested = [1].map(x => x |> obj.add);
+const chained = 1 |> obj.add |> obj.add;
+const computed = [2].map(x => x |> obj[key]);
+const generic: number = (1 + 1) |> gen.id;
+const ordered = (order.push("head"), 1) |> traced.m;
+const composed = flow |> ((n: number) => n * 2) |> obj.add |> String;
+async function awaited() { return 3 |> (await Promise.resolve(obj)).add; }
+awaited().then(q => {
+    console.log(JSON.stringify([inlined, nested, chained, computed, generic, ordered, q]));
+    console.log(JSON.stringify([new Derived().run(), new Derived().parent(), new Derived().composed()(5), composed(1), order]));
+});
+"#);
+    assert_eq!(
+        lines,
+        [
+            "[11,[11],21,[12],2,2,13]",
+            r#"[[2],[7],5,"12",["head","get"]]"#
+        ]
+    );
+}

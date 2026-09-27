@@ -420,6 +420,7 @@
 | TASK-390 | Keep block returns of a value region that `try` propagates | Complete | 2026-09-27 | 2026-09-27 | [TASK-390](./TASK-390-propagated-value-region-exits.md) |
 | TASK-391 | Honour automatic semicolon insertion around pipelines and statement constructs | Complete | 2026-09-27 | 2026-09-27 | [TASK-391](./TASK-391-automatic-semicolon-boundaries.md) |
 
+| TASK-392 | Call member pipeline steps on their receiver | Complete | 2026-09-27 | 2026-09-27 | [TASK-392](./TASK-392-member-pipeline-steps.md) |
 | TASK-393 | Make output owner identity cwd-independent and symlink-canonical | Complete | 2026-09-27 | 2026-09-27 | [TASK-393](./TASK-393-output-owner-identity.md) |
 
 | TASK-394 | Check unsaved overlays and rebuild importers of deleted files in watch | Complete | 2026-09-27 | 2026-09-27 | [TASK-394](./TASK-394-unsaved-overlay-and-watch-deletions.md) |
@@ -434,4 +435,4 @@
 
 ## Next task number
 
-**TASK-392**
+**TASK-401**
