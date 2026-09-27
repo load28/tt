@@ -167,7 +167,9 @@ fn numeric_literal_patterns_take_their_ecmascript_values() {
             "{source}{diagnostics:#?}"
         );
     }
+}
 
+#[test]
 fn generated_names_are_allocated_around_the_files_identifiers() {
     let out = ok("const $tt_ap = 1;\nconst \\u0024tt_m = 2;\nconst xs = [1].map(x => x |> String);\nconst r = match (xs[0]) { \"1\" => $tt_m, _ => $tt_ap };\n");
     assert!(

@@ -266,7 +266,6 @@
 | TASK-256 | TypeScript는 프로젝트가 설치한 npm 패키지 하나로 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-256](./TASK-256-typescript-from-npm-only.md) |
 | TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 완료 | 2026-08-27 | 2026-08-27 | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 | TASK-258 | TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-258](./TASK-258-ts-preview-vsix.md) |
-
 | TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-259](./TASK-259-upstream-extension-id.md) |
 | TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-260](./TASK-260-nightly-install-docs.md) |
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
@@ -355,23 +354,17 @@
 | TASK-344 | A sidecar directory that cannot be resolved is reported, not ignored | Complete | 2026-09-05 | 2026-09-05 | [TASK-344](./TASK-344-sidecar-directory-resolution.md) |
 | TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
 | TASK-346 | Hold the task index and the task records to the same state | Complete | 2026-09-05 | 2026-09-05 | [TASK-346](./TASK-346-task-state-agreement.md) |
-
 | TASK-347 | Rebase product audit onto updated main | Complete | 2026-09-09 | 2026-09-09 | [TASK-347](./TASK-347-rebase-product-audit.md) |
-
 | TASK-348 | Audit product and mixed-source composition failures | Complete | 2026-09-06 | 2026-09-06 | [TASK-348](./TASK-348-product-composition-audit.md) |
 | TASK-349 | Preserve contextual types across scoped values | Complete | 2026-09-06 | 2026-09-06 | [TASK-349](./TASK-349-contextual-type-materialization.md) |
-
 | TASK-350 | Manually promote a published Nightly to latest | Complete | 2026-09-09 | 2026-09-09 | [TASK-350](./TASK-350-manual-nightly-latest.md) |
-
 | TASK-351 | Tolerate registry propagation during latest verification | Complete | 2026-09-09 | 2026-09-09 | [TASK-351](./TASK-351-nightly-tag-verification.md) |
 | TASK-352 | Repair the developer-facing surfaces of tt | Complete | 2026-09-09 | 2026-09-09 | [TASK-352](./TASK-352-developer-surface-structural-fixes.md) |
 | TASK-353 | Correct PR 115 at the owning compiler and tooling layers | Complete | 2026-09-10 | 2026-09-10 | [TASK-353](./TASK-353-pr115-structural-corrections.md) |
 | TASK-354 | A missing toolchain removes the refinement, not the compilation | Complete | 2026-09-10 | 2026-09-10 | [TASK-354](./TASK-354-contextual-refinement-degrades.md) |
 | TASK-355 | Say which artifact an emit fixture pins | Complete | 2026-09-10 | 2026-09-10 | [TASK-355](./TASK-355-emit-fixture-toolchain-contract.md) |
 | TASK-356 | Separate a missing toolchain from a project the pass cannot read | Complete | 2026-09-10 | 2026-09-10 | [TASK-356](./TASK-356-contextual-inputs-and-std-support.md) |
-
 | TASK-357 | Preserve contextual project inputs and package resolution | Complete | 2026-09-10 | 2026-09-10 | [TASK-357](./TASK-357-contextual-project-boundaries.md) |
-
 | TASK-358 | Audit developer workflows across every product surface | Complete | 2026-09-10 | 2026-09-10 | [TASK-358](./TASK-358-developer-workflow-audit.md) |
 | TASK-359 | Preserve type-service failures across compiler and editor boundaries | Complete | 2026-09-10 | 2026-09-10 | [TASK-359](./TASK-359-type-service-failures.md) |
 | TASK-360 | Give unsaved files full project type services | Complete | 2026-09-10 | 2026-09-10 | [TASK-360](./TASK-360-unsaved-file-type-services.md) |
@@ -384,54 +377,40 @@
 | TASK-367 | Type-check mixed imports from TSX consumers | Complete | 2026-09-12 | 2026-09-12 | [TASK-367](./TASK-367-tsx-consumer-mixed-imports.md) |
 | TASK-368 | Normalize diagnostic byte offsets at UTF-8 boundaries | Complete | 2026-09-12 | 2026-09-12 | [TASK-368](./TASK-368-normalize-diagnostic-byte-offsets.md) |
 | TASK-369 | Remove the duplicated JSX preflight heuristic | Complete | 2026-09-12 | 2026-09-12 | [TASK-369](./TASK-369-remove-jsx-preflight-heuristic.md) |
-
 | TASK-370 | Preserve unrecognized JSX numeric references | Complete | 2026-09-12 | 2026-09-12 | [TASK-370](./TASK-370-jsx-entity-parser-errors.md) |
-
 | TASK-371 | Audit and repair editor type services | Complete | 2026-09-12 | 2026-09-12 | [TASK-371](./TASK-371-editor-type-services.md) |
-
 | TASK-372 | Audit live typing and editor feedback latency | Complete | 2026-09-12 | 2026-09-12 | [TASK-372](./TASK-372-live-typing-feedback.md) |
-
 | TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
-
 | TASK-374 | Refresh native diagnostics across focus transitions | Complete | 2026-09-12 | 2026-09-12 | [TASK-374](./TASK-374-editor-discard-synchronization.md) |
-
 | TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | 2026-09-12 | [TASK-375](./TASK-375-match-pattern-completions.md) |
-
 | TASK-376 | Isolate externally terminated mapper profiles | Complete | 2026-09-12 | 2026-09-12 | [TASK-376](./TASK-376-mapper-coverage-lifecycle.md) |
 | TASK-377 | Repair compiler boundary and lowering defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-377](./TASK-377-compiler-boundary-defects.md) |
 | TASK-378 | Repair editor session and document ownership defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-378](./TASK-378-editor-session-defects.md) |
 | TASK-379 | Complete structurally owned lowering and the remaining audit defects | Complete | 2026-09-15 | 2026-09-16 | [TASK-379](./TASK-379-complete-lowering-ownership.md) |
 | TASK-380 | Color match by the construct shape in the TextMate grammar | Complete | 2026-09-15 | 2026-09-16 | [TASK-380](./TASK-380-grammar-construct-shape.md) |
-
 | TASK-381 | Resolve PR 125 structural review findings | Complete | 2026-09-18 | 2026-09-18 | [TASK-381](./TASK-381-structural-review.md) |
-
 | TASK-382 | Review and rebase native diagnostic focus scheduling | Complete | 2026-09-18 | 2026-09-18 | [TASK-382](./TASK-382-native-diagnostic-review.md) |
-
 | TASK-383 | Audit tt and ttx developer workflows | Complete | 2026-09-18 | 2026-09-18 | [TASK-383](./TASK-383-developer-workflow-audit.md) |
-
 | TASK-384 | Repair developer workflow contracts | Complete | 2026-09-18 | 2026-09-18 | [TASK-384](./TASK-384-developer-workflow-repairs.md) |
-
 | TASK-385 | Reuse projection imports during graph discovery | Complete | 2026-09-18 | 2026-09-18 | [TASK-385](./TASK-385-projection-import-discovery.md) |
-
 | TASK-386 | Track canonical directory identity during source discovery | Complete | 2026-09-23 | 2026-09-23 | [TASK-386](./TASK-386-source-directory-identity.md) |
 | TASK-387 | Classify excluded source entries before reading metadata | Complete | 2026-09-23 | 2026-09-23 | [TASK-387](./TASK-387-source-entry-admission.md) |
 | TASK-388 | Report project, configuration, and syntax diagnostics from the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-388](./TASK-388-typed-check-diagnostic-classes.md) |
 | TASK-389 | Run the CLI typed-check suite against the repository TypeScript | Complete | 2026-09-27 | 2026-09-27 | [TASK-389](./TASK-389-cli-typed-suite-toolchain.md) |
 | TASK-390 | Keep block returns of a value region that `try` propagates | Complete | 2026-09-27 | 2026-09-27 | [TASK-390](./TASK-390-propagated-value-region-exits.md) |
 | TASK-391 | Honour automatic semicolon insertion around pipelines and statement constructs | Complete | 2026-09-27 | 2026-09-27 | [TASK-391](./TASK-391-automatic-semicolon-boundaries.md) |
-
 | TASK-392 | Call member pipeline steps on their receiver | Complete | 2026-09-27 | 2026-09-27 | [TASK-392](./TASK-392-member-pipeline-steps.md) |
 | TASK-393 | Make output owner identity cwd-independent and symlink-canonical | Complete | 2026-09-27 | 2026-09-27 | [TASK-393](./TASK-393-output-owner-identity.md) |
-
 | TASK-394 | Check unsaved overlays and rebuild importers of deleted files in watch | Complete | 2026-09-27 | 2026-09-27 | [TASK-394](./TASK-394-unsaved-overlay-and-watch-deletions.md) |
-
 | TASK-395 | Encode source map URLs and end the map comment with the output's line ending | Complete | 2026-09-27 | 2026-09-27 | [TASK-395](./TASK-395-source-map-urls-and-line-endings.md) |
-
 | TASK-396 | Read sidecar declarations from tsc's layout and name rejected tt-only inputs accurately | Complete | 2026-09-27 | 2026-09-27 | [TASK-396](./TASK-396-sidecar-layout-and-tt-input-errors.md) |
 | TASK-397 | Mirror the source tree in save-time sidecar refresh | Complete | 2026-09-27 | 2026-09-27 | [TASK-397](./TASK-397-sidecar-tree-layout.md) |
 | TASK-398 | Own the compiler per workspace folder end to end | Complete | 2026-09-27 | 2026-09-27 | [TASK-398](./TASK-398-folder-compiler-ownership.md) |
 | TASK-399 | Limit trigger-character completions to their registered contexts | Complete | 2026-09-27 | 2026-09-27 | [TASK-399](./TASK-399-completion-trigger-contexts.md) |
 | TASK-400 | Version quick-fix edits and convert fallback diagnostic columns | Complete | 2026-09-27 | 2026-09-27 | [TASK-400](./TASK-400-versioned-fixes-and-columns.md) |
+| TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
+| TASK-405 | Write the runtime import before generated text at the top of the file | Complete | 2026-09-27 | 2026-09-27 | [TASK-405](./TASK-405-runtime-import-at-top.md) |
+| TASK-406 | Encode sidecar map URLs and verify output before the contextual pass | Complete | 2026-09-27 | 2026-09-27 | [TASK-406](./TASK-406-sidecar-urls-and-contextual-diagnostics.md) |
 | TASK-407 | Describe value-region placement without the retired IIFE lowering | Complete | 2026-09-27 | 2026-09-27 | [TASK-407](./TASK-407-value-region-placement-wording.md) |
 | TASK-408 | Own the calls around a value in either branch of a conditional expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-408](./TASK-408-ternary-active-branches.md) |
 | TASK-409 | Emit a C-style loop test prefix once | Complete | 2026-09-27 | 2026-09-27 | [TASK-409](./TASK-409-loop-test-prefix-once.md) |
@@ -441,10 +420,7 @@
 | TASK-413 | Report a malformed variant behind declaration modifiers once | Complete | 2026-09-27 | 2026-09-27 | [TASK-413](./TASK-413-malformed-variant-once.md) |
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
-| TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
-| TASK-405 | Write the runtime import before generated text at the top of the file | Complete | 2026-09-27 | 2026-09-27 | [TASK-405](./TASK-405-runtime-import-at-top.md) |
-| TASK-406 | Encode sidecar map URLs and verify output before the contextual pass | Complete | 2026-09-27 | 2026-09-27 | [TASK-406](./TASK-406-sidecar-urls-and-contextual-diagnostics.md) |
 
 ## Next task number
 
-**TASK-401**
+**TASK-416**
