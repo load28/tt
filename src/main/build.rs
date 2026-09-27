@@ -267,12 +267,13 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             }
         }
         for job in jobs {
-            if let Err(error) = check_output_owner(&job.out_path, &job.file) {
+            if let Err(error) = check_output_owner(&job.out_path, OutputOwner::Source(&job.file)) {
                 eprintln!("{error}");
                 conflicted = true;
             }
             if opts.source_map == SourceMapMode::File
-                && let Err(error) = check_output_owner(&map_path(&job.out_path), &job.file)
+                && let Err(error) =
+                    check_output_owner(&map_path(&job.out_path), OutputOwner::Source(&job.file))
             {
                 eprintln!("{error}");
                 conflicted = true;
@@ -311,10 +312,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
     {
         for module in &modules {
             let support = dir.join(module.file_name());
-            if let Err(error) = check_output_owner(
-                &support,
-                &PathBuf::from(format!("@tt/std/{}", module.file_name())),
-            ) {
+            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
                 eprintln!("{error}");
                 return true;
             }
@@ -346,7 +344,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 }
                 write_owned_output(
                     &dir.join(module.file_name()),
-                    &PathBuf::from(format!("@tt/std/{}", module.file_name())),
+                    OutputOwner::Support(*module),
                     &code,
                 )
                 .map_err(std::io::Error::other)?;
@@ -497,15 +495,20 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                     return out;
                 }
                 if !opts.check {
-                    if let Err(e) = write_owned_output(&job.out_path, &job.file, &code) {
+                    if let Err(e) =
+                        write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &code)
+                    {
                         out.messages.push(e);
                         out.failed = true;
                         return out;
                     }
                     if let Some(rendered) = &map
                         && let Some(document) = &rendered.document
-                        && let Err(e) =
-                            write_owned_output(&map_path(&job.out_path), &job.file, document)
+                        && let Err(e) = write_owned_output(
+                            &map_path(&job.out_path),
+                            OutputOwner::Source(&job.file),
+                            document,
+                        )
                     {
                         out.messages.push(e);
                         out.failed = true;
@@ -534,7 +537,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             crate::out::text(&code);
             continue;
         }
-        match write_owned_output(&job.out_path, &job.file, &code) {
+        match write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &code) {
             Ok(()) => eprintln!("ttc: {} → {}", job.file.display(), job.out_path.display()),
             Err(e) => {
                 eprintln!("{e}");

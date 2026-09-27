@@ -27,8 +27,37 @@ pub(super) fn owned_output(output: &Path) -> bool {
         })
 }
 
-pub(super) fn check_output_owner(output: &Path, source: &Path) -> Result<(), String> {
-    if same_file(output, source) {
+#[derive(Clone, Copy)]
+pub(super) enum OutputOwner<'a> {
+    Source(&'a Path),
+    Support(StdModule),
+}
+
+fn source_identity(path: &Path) -> PathBuf {
+    fs::canonicalize(path).unwrap_or_else(|_| normalized_absolute(path))
+}
+
+fn support_identity(module: StdModule) -> String {
+    format!("@tt/std/{}", module.file_name())
+}
+
+fn owns(record: &serde_json::Value, owner: OutputOwner) -> bool {
+    match owner {
+        OutputOwner::Source(source) => record["source"].as_str().is_some_and(|recorded| {
+            source_identity(Path::new(recorded)) == source_identity(source)
+        }),
+        OutputOwner::Support(module) => {
+            let identity = support_identity(module);
+            record["support"].as_str() == Some(identity.as_str())
+                || record["source"].as_str() == normalized_absolute(Path::new(&identity)).to_str()
+        }
+    }
+}
+
+pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<(), String> {
+    if let OutputOwner::Source(source) = owner
+        && same_file(output, source)
+    {
         return Err(format!(
             "ttc: {}: output would overwrite the input — pass -o <dir>",
             output.display()
@@ -37,10 +66,7 @@ pub(super) fn check_output_owner(output: &Path, source: &Path) -> Result<(), Str
     if !output.exists() {
         return Ok(());
     }
-    let owner = normalized_absolute(source);
-    if owned_output(output)
-        && record(output).is_some_and(|record| record["source"].as_str() == owner.to_str())
-    {
+    if owned_output(output) && record(output).is_some_and(|record| owns(&record, owner)) {
         return Ok(());
     }
     Err(format!(
@@ -49,10 +75,20 @@ pub(super) fn check_output_owner(output: &Path, source: &Path) -> Result<(), Str
     ))
 }
 
-pub(super) fn write_owned_output(output: &Path, source: &Path, code: &str) -> Result<(), String> {
-    check_output_owner(output, source)?;
+pub(super) fn write_owned_output(
+    output: &Path,
+    owner: OutputOwner,
+    code: &str,
+) -> Result<(), String> {
+    check_output_owner(output, owner)?;
     write_output(output, code)?;
-    let record =
-        serde_json::json!({ "version": 1, "source": normalized_absolute(source), "content": code });
+    let record = match owner {
+        OutputOwner::Source(source) => {
+            serde_json::json!({ "version": 1, "source": source_identity(source), "content": code })
+        }
+        OutputOwner::Support(module) => {
+            serde_json::json!({ "version": 1, "support": support_identity(module), "content": code })
+        }
+    };
     write_output(&record_path(output), &record.to_string())
 }
