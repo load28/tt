@@ -13,7 +13,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import * as engine from "../engine";
-import { runCheck, unusableCompiler } from "../ttc";
+import { runCheck, runTypedCheck, unusableCompiler } from "../ttc";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 import { caseDir } from "./workspace";
 
@@ -134,4 +134,45 @@ setTimeout(() => {
   const inputs: string[] = fs.readFileSync(log, "utf8").trim().split("\n").map(line => JSON.parse(line));
   assert.equal(new Set(inputs).size, 3);
   for (const input of inputs) assert.equal(fs.existsSync(path.dirname(input)), false);
+});
+
+function oneShotCompiler(project: string): string {
+  const compiler = path.join(project, "one-shot-ttc");
+  fs.writeFileSync(compiler, `#!/usr/bin/env node
+const { spawn } = require("node:child_process");
+const args = process.argv.slice(2);
+if (args.includes("--server")) process.exit(1);
+const child = spawn(${JSON.stringify(COMPILER)}, args, { stdio: ["pipe", "inherit", "inherit"] });
+child.stdin.on("error", () => {});
+process.stdin.pipe(child.stdin);
+child.on("exit", (code) => process.exit(code ?? 1));
+`);
+  fs.chmodSync(compiler, 0o755);
+  return compiler;
+}
+
+test("the one-shot check reports UTF-16 columns after astral characters, as the engine does", { skip: compilerAvailable() ? process.platform === "win32" : "no ttc", timeout: 60_000 }, async () => {
+  const project = caseDir("tt-oneshot-columns-");
+  const compiler = oneShotCompiler(project);
+  const line = 'const e = "\u{1F600}\u{1F600}"; const a = match (s) { Circel(radius) => radius, Empty => 0 };';
+  const source = `variant Shape { Circle(radius: number), Empty }\ndeclare const s: Shape;\n${line}\n`;
+  const column = (result: Awaited<ReturnType<typeof runCheck>>) =>
+    result.kind === "ok" ? result.diagnostics.find((d) => d.code === "unknown-case")?.col : result.kind;
+
+  assert.equal(column(await runCheck(COMPILER, source, "shape.tt", false)), line.indexOf("Circel") + 1);
+  assert.equal(column(await runCheck(compiler, source, "shape.tt", false)), line.indexOf("Circel") + 1);
+});
+
+test("the one-shot typed check reports UTF-16 columns after astral characters, as the engine does", { skip: typedSkip || (process.platform === "win32" ? "posix wrapper" : false), timeout: 60_000 }, async () => {
+  const project = caseDir("tt-oneshot-typed-columns-");
+  const compiler = oneShotCompiler(project);
+  const file = path.join(project, "main.tt");
+  const source = 'const e = "\u{1F600}\u{1F600}"; export const value: number = "wrong";\n';
+  fs.writeFileSync(file, source);
+  const column = (result: Awaited<ReturnType<typeof runTypedCheck>>) =>
+    result.kind === "ok" ? result.diagnostics.find((d) => d.code === "ts2322")?.col : JSON.stringify(result);
+
+  const engineColumn = column(await runTypedCheck(COMPILER, source, file, true));
+  assert.equal(engineColumn, source.indexOf('"wrong"') + 1);
+  assert.equal(column(await runTypedCheck(compiler, source, file, true)), engineColumn);
 });

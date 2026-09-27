@@ -57,6 +57,7 @@ import {
   SignatureHelp,
   SignatureInformation,
   SymbolKind,
+  TextDocumentEdit,
   TextDocuments,
   TextDocumentSyncKind,
   TextEdit,
@@ -82,6 +83,7 @@ const documents = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
+let hasVersionedWorkspaceEditCapability = false;
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -92,6 +94,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   );
   hasWorkspaceFolderCapability = Boolean(
     params.capabilities.workspace?.workspaceFolders,
+  );
+  hasVersionedWorkspaceEditCapability = Boolean(
+    params.capabilities.workspace?.workspaceEdit?.documentChanges,
   );
   workspaceRoots = folderRoots(params.workspaceFolders);
 
@@ -859,7 +864,9 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     // The compiler's own fixes, carried through to `onCodeAction`. LSP
     // round-trips `data` untouched, so the quick fix is the compiler's
     // answer rather than this server's reading of the message.
-    data: d.suggestions?.length ? { suggestions: d.suggestions } : undefined,
+    data: d.suggestions?.length
+      ? { suggestions: d.suggestions, version: doc.version }
+      : undefined,
   };
 }
 
@@ -1564,8 +1571,11 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
  * recognise a message by its shape.
  */
 function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
-  const data = diag.data as { suggestions?: ttc.TtcSuggestion[] } | undefined;
+  const data = diag.data as
+    | { suggestions?: ttc.TtcSuggestion[]; version?: number }
+    | undefined;
   const actions: CodeAction[] = [];
+  if (data?.version !== doc.version) return actions;
   for (const suggestion of data?.suggestions ?? []) {
     const edit = suggestion.edit;
     if (!edit) continue;
@@ -1584,11 +1594,19 @@ function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
       kind: CodeActionKind.QuickFix,
       diagnostics: [diag],
       isPreferred: actions.length === 0,
-      edit: {
-        changes: {
-          [doc.uri]: [{ range, newText: edit.replacement }],
-        },
-      },
+      edit: hasVersionedWorkspaceEditCapability
+        ? {
+            documentChanges: [
+              TextDocumentEdit.create({ uri: doc.uri, version: data.version }, [
+                TextEdit.replace(range, edit.replacement),
+              ]),
+            ],
+          }
+        : {
+            changes: {
+              [doc.uri]: [TextEdit.replace(range, edit.replacement)],
+            },
+          },
     });
   }
   return actions;

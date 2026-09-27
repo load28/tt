@@ -1259,6 +1259,62 @@ test(
   },
 );
 
+test("a quick fix edits only the document version its diagnostic was computed for", { skip, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Empty }",
+    "declare const s: Shape;",
+    "const a = match (s) { Circel(radius) => radius, Empty => 0 };",
+    "",
+  ].join("\n");
+  const title = "a case with a similar name exists";
+  for (const versioned of [false, true]) {
+    const dir = caseDir("tt-versioned-fix-");
+    const file = path.join(dir, "main.tt");
+    fs.writeFileSync(file, source);
+    const uri = pathToFileURL(file).toString();
+    const client = connect();
+    try {
+      await client.request("initialize", {
+        processId: process.pid,
+        rootUri: pathToFileURL(dir).toString(),
+        workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }],
+        capabilities: versioned ? { workspace: { workspaceEdit: { documentChanges: true } } } : {},
+      });
+      client.notify("initialized", {});
+      const published = client.waitFor("textDocument/publishDiagnostics", (p: any) =>
+        p.uri === uri && p.diagnostics.some((d: any) => d.code === "unknown-case"));
+      client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+      const diagnostic = (await published).diagnostics.find((d: any) => d.code === "unknown-case");
+      const actionsFor = async () => ((await client.request("textDocument/codeAction", {
+        textDocument: { uri },
+        range: diagnostic.range,
+        context: { diagnostics: [diagnostic] },
+      })).result ?? []) as any[];
+
+      const fix = (await actionsFor()).find((a) => a.title === title);
+      assert.ok(fix, "the fix is offered for the version it describes");
+      if (versioned) {
+        assert.equal(fix.edit.changes, undefined);
+        assert.equal(fix.edit.documentChanges.length, 1);
+        assert.deepEqual(fix.edit.documentChanges[0].textDocument, { uri, version: 1 });
+        assert.equal(covered(source, fix.edit.documentChanges[0].edits[0].range), "Circel");
+      } else {
+        assert.equal(covered(source, fix.edit.changes[uri][0].range), "Circel");
+      }
+
+      client.notify("textDocument/didChange", {
+        textDocument: { uri, version: 2 },
+        contentChanges: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, text: "// moved\n" }],
+      });
+      assert.deepEqual(
+        (await actionsFor()).filter((a) => a.title === title),
+        [],
+        "a diagnostic from version 1 offers no edit against version 2",
+      );
+    } finally { client.stop(); }
+  }
+});
+
 test(
   "a match with holes offers the arms the compiler wrote for it",
   { skip, timeout },

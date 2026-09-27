@@ -270,7 +270,10 @@ async function runCheckOnce(
             resolve({ kind: "not-found", compiler, reason: unusable });
             return;
           }
-          const diagnostics = parseStderr(String(stderr), file);
+          const diagnostics = protocolColumns(
+            parseStderr(String(stderr), file),
+            text,
+          );
           if (err && diagnostics.length === 0) {
             // Crashed or timed out without a parseable diagnostic.
             resolve({
@@ -515,7 +518,10 @@ function runTypedCheckOnce(
           maxBuffer: 4 * 1024 * 1024,
         },
         (err, _stdout, stderr) => {
-          const diagnostics = parseStderr(String(stderr), shown);
+          const diagnostics = protocolColumns(
+            parseStderr(String(stderr), shown),
+            text,
+          );
           // Exit code 2 is "could not run, nothing was checked" — a tt-level
           // error left nothing to lower. Anything else with no parseable
           // diagnostic is a missing toolchain or a crash. Both keep whatever
@@ -596,6 +602,28 @@ export function parseStderr(stderr: string, file: string): TtcDiagnostic[] {
     });
   }
   return diagnostics;
+}
+
+export function utf16Column(text: string, line: number, column: number): number {
+  const lineText = line >= 1 ? text.split("\n")[line - 1] : undefined;
+  if (lineText === undefined) return column;
+  const characters = Array.from(lineText);
+  const before = Math.max(0, column - 1);
+  if (before < characters.length) {
+    return characters.slice(0, before).join("").length + 1;
+  }
+  return column === characters.length + 1 ? lineText.length + 1 : column;
+}
+
+function protocolColumns(
+  diagnostics: TtcDiagnostic[],
+  text: string,
+): TtcDiagnostic[] {
+  return diagnostics.map((diagnostic) =>
+    diagnostic.line > 0 && diagnostic.col > 0
+      ? { ...diagnostic, col: utf16Column(text, diagnostic.line, diagnostic.col) }
+      : diagnostic,
+  );
 }
 
 /** Reads a spawn failure: `null` when the process ran and merely reported
