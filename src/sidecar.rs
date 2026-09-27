@@ -30,9 +30,10 @@ pub struct Sidecar {
 /// for ttc's output of that module, and `tt_path` is the path to the `.tt`
 /// file **relative to where the sidecar will be written** — `"notice.tt"`
 /// when the two sit together, `"../src/notice.tt"` when declarations live
-/// in their own tree (which TypeScript merges back with `rootDirs`). It
-/// becomes the map's `sources`, and its file name becomes the stem of the
-/// written files (`notice.tt.d.ts`).
+/// in their own tree (which TypeScript merges back with `rootDirs`). Written
+/// as a relative URL, it becomes the map's `sources`, and its file name
+/// becomes the stem of the written files (`notice.tt.d.ts`) and, as a URL,
+/// of the `sourceMappingURL` comment.
 ///
 /// Every exported declaration that can be located in the source gets two
 /// mapping segments: one at column 0 and one at the column where its name
@@ -73,14 +74,14 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
     let declarations = format!(
         "// @generated from {tt_file_name} by ttc --sidecar — do not edit.\n{}\n//# sourceMappingURL={}\n",
         body.trim_end(),
-        map_name.as_str()
+        crate::source_map::url_path([map_name.as_str()])
     );
     // A leading `;` skips the banner line the declarations open with.
     let mappings = format!(";{}", encode_mappings(&hits));
     let map = format!(
         "{{\"version\":3,\"file\":{},\"sourceRoot\":\"\",\"sources\":[{}],\"names\":[],\"mappings\":\"{}\"}}\n",
         json_string(&format!("{tt_file_name}.d.ts")),
-        json_string(tt_path),
+        json_string(&crate::source_map::url_path(tt_path.split('/'))),
         mappings,
     );
 

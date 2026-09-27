@@ -1970,3 +1970,36 @@ fn deeply_nested_host_expressions_with_tt_keep_the_server_alive() {
         );
     }
 }
+
+#[test]
+fn an_invalid_file_reports_the_same_diagnostic_with_typescript_installed() {
+    require_types_toolchain!();
+    let sources = [
+        (
+            "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\nfunction res(b: boolean): R<number> {\n  const q = (try result { if (b) { return 10; } return 1; }) * 2;\n  return { kind: \"Ok\", value: q };\n}\n",
+            "error[verify-failed]",
+            "main.tt:3:25",
+        ),
+        (
+            "declare const b: boolean;\nconst q = (try result { if (b) { return 10; } return 1; }) * 2;\nexport { q };\n",
+            "error[try-placement]",
+            "main.tt:2:12",
+        ),
+    ];
+    for (source, code, location) in sources {
+        let mut reports = Vec::new();
+        for dir in [typed_workspace(), Workspace::new("untyped-invalid")] {
+            fs::write(dir.join("main.tt"), source).unwrap();
+            let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+                .args(["--check", "main.tt"])
+                .current_dir(&dir)
+                .output()
+                .expect("failed to run ttc");
+            assert!(!out.status.success());
+            reports.push(String::from_utf8_lossy(&out.stderr).into_owned());
+        }
+        assert!(reports[0].starts_with(code), "{}", reports[0]);
+        assert!(reports[0].contains(location), "{}", reports[0]);
+        assert_eq!(reports[0], reports[1]);
+    }
+}

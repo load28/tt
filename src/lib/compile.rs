@@ -656,6 +656,36 @@ pub fn compile_projection_report(source: &str, options: &Options) -> ProjectionR
     }
 }
 
+fn verified_emit(
+    emit: MappedEmit,
+    program: &ast::Program,
+    options: &Options,
+    errors: &mut Vec<TtError>,
+) -> Option<MappedEmit> {
+    if !options.verify {
+        return Some(emit);
+    }
+    let Err(failure) = verify::verify_output(&emit.code, options.source_kind) else {
+        return Some(emit);
+    };
+    // A failed self-check *with tt errors already reported* is the
+    // effect, not a second cause — the emitted text reflects the
+    // invalid construct those errors name (e.g. a module-level `try`'s
+    // `return`), and the backstop's "or a ttc bug" wording would
+    // mislead. Report the causes and withhold the emit; the check
+    // reappears on its own once they are fixed.
+    if errors.is_empty() {
+        errors.push(verify::at_source(
+            &parser::unclaimed_candidates(program),
+            &emit.mappings,
+            &emit.anchors,
+            &emit.code,
+            &failure,
+        ));
+    }
+    None
+}
+
 /// Compiles `source` and reports everything — the multi-diagnostic,
 /// still-emitting form of [`compile_mapped`]. See [`CompileReport`].
 pub fn compile_report(source: &str, options: &Options) -> CompileReport {
@@ -713,7 +743,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         options.rewrite_imports,
         options.std_imports,
     );
-    let mut emit = Some(MappedEmit {
+    let lowered = MappedEmit {
         code: flat.code,
         mappings: flat.mappings,
         scrutinee_temps: flat.scrutinee_temps,
@@ -721,35 +751,19 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
-    });
+    };
+    let mut emit = verified_emit(lowered, &program, options, &mut errors);
     if !options.defer_to_checker
         && let Some(lowered) = emit.take()
     {
+        let annotated = !lowered.contextual_slots.is_empty();
         match crate::typescript::contextual::standalone(lowered, source, options) {
+            Ok(typed) if annotated => {
+                emit = verified_emit(typed, &program, options, &mut errors);
+            }
             Ok(typed) => emit = Some(typed),
             Err(failure) => errors.push(TtError::positionless(failure.to_string())),
         }
-    }
-    if options.verify
-        && let Some(flat) = &emit
-        && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)
-    {
-        // A failed self-check *with tt errors already reported* is the
-        // effect, not a second cause — the emitted text reflects the
-        // invalid construct those errors name (e.g. a module-level `try`'s
-        // `return`), and the backstop's "or a ttc bug" wording would
-        // mislead. Report the causes and withhold the emit; the check
-        // reappears on its own once they are fixed.
-        if errors.is_empty() {
-            errors.push(verify::at_source(
-                &parser::unclaimed_candidates(&program),
-                &flat.mappings,
-                &flat.anchors,
-                &flat.code,
-                &failure,
-            ));
-        }
-        emit = None;
     }
     CompileReport {
         emit,

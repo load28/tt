@@ -51,7 +51,9 @@ pub(super) fn source_map_for(
     let (url, document) = match mode {
         SourceMapMode::Inline | SourceMapMode::Off => (map.to_data_url(), None),
         SourceMapMode::File => (
-            url_path([format!("{}.map", out_name.as_deref().unwrap_or("output")).as_str()]),
+            ttc::source_map::url_path([
+                format!("{}.map", out_name.as_deref().unwrap_or("output")).as_str()
+            ]),
             Some(map.to_json()),
         ),
     };
@@ -60,29 +62,6 @@ pub(super) fn source_map_for(
         comment: format!("{}{line_ending}", comment.trim_end_matches('\n')),
         document,
     }
-}
-
-fn url_path<'a>(segments: impl IntoIterator<Item = &'a str>) -> String {
-    let mut out = String::new();
-    for (index, segment) in segments.into_iter().enumerate() {
-        if index > 0 {
-            out.push('/');
-        }
-        for byte in segment.bytes() {
-            let encode = match byte {
-                b'%' | b'\\' | b'?' | b'#' | b' ' | b'"' | b'<' | b'>' | b'^' | b'`' | b'{'
-                | b'}' => true,
-                b':' => index == 0,
-                _ => !(0x21..0x7f).contains(&byte),
-            };
-            if encode {
-                out.push_str(&format!("%{byte:02X}"));
-            } else {
-                out.push(byte as char);
-            }
-        }
-    }
-    out
 }
 
 /// `path` as seen from the directory `base`, as a `/`-separated URL — how
@@ -102,7 +81,7 @@ pub(super) fn relative_to(path: &Path, base: &Path) -> String {
         .count();
     let segments = std::iter::repeat_n("..", base.len() - shared)
         .chain(path[shared..].iter().map(String::as_str));
-    let out = url_path(segments);
+    let out = ttc::source_map::url_path(segments);
     if out.is_empty() { path.join("/") } else { out }
 }
 

@@ -376,3 +376,32 @@ fn tt_only_modes_name_the_file_and_the_extensions_they_accept() {
         "ttc: app.js: not a tt or TypeScript source (expected .tt, .ttx, .ts, .tsx, .mts, .cts)"
     );
 }
+
+#[test]
+fn sidecar_map_urls_percent_encode_file_names() {
+    let root = Workspace::new("sidecar-urls");
+    write_all(
+        &root,
+        &[
+            ("my src/a b#1%.tt", "export const a = 1;\n"),
+            ("decl/a b#1%.d.ts", "export declare const a = 1;\n"),
+        ],
+    );
+    success(run(
+        &root,
+        &["--sidecar", "decl", "-o", "out dir", "my src"],
+    ));
+    let declarations = fs::read_to_string(root.join("out dir/a b#1%.tt.d.ts")).unwrap();
+    assert!(
+        declarations.ends_with("\n//# sourceMappingURL=a%20b%231%25.tt.d.ts.map\n"),
+        "{declarations}"
+    );
+    let map: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(root.join("out dir/a b#1%.tt.d.ts.map")).unwrap())
+            .unwrap();
+    assert_eq!(
+        map["sources"],
+        serde_json::json!(["../my%20src/a%20b%231%25.tt"])
+    );
+    assert_eq!(map["file"], "a b#1%.tt.d.ts");
+}

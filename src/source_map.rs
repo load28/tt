@@ -203,6 +203,30 @@ fn source_byte_at(out: usize, mappings: &[EmitMapping], anchors: &[EmitAnchor]) 
         .map(|anchor| anchor.src)
 }
 
+#[doc(hidden)]
+pub fn url_path<'a>(segments: impl IntoIterator<Item = &'a str>) -> String {
+    let mut out = String::new();
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 {
+            out.push('/');
+        }
+        for byte in segment.bytes() {
+            let encode = match byte {
+                b'%' | b'\\' | b'?' | b'#' | b' ' | b'"' | b'<' | b'>' | b'^' | b'`' | b'{'
+                | b'}' => true,
+                b':' => index == 0,
+                _ => !(0x21..0x7f).contains(&byte),
+            };
+            if encode {
+                out.push_str(&format!("%{byte:02X}"));
+            } else {
+                out.push(byte as char);
+            }
+        }
+    }
+    out
+}
+
 /// Byte offsets of every line start, for turning a byte into the format's
 /// line and UTF-16 column.
 struct LineTable {

@@ -443,6 +443,7 @@
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
 | TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
 | TASK-405 | Write the runtime import before generated text at the top of the file | Complete | 2026-09-27 | 2026-09-27 | [TASK-405](./TASK-405-runtime-import-at-top.md) |
+| TASK-406 | Encode sidecar map URLs and verify output before the contextual pass | Complete | 2026-09-27 | 2026-09-27 | [TASK-406](./TASK-406-sidecar-urls-and-contextual-diagnostics.md) |
 
 ## Next task number
 
