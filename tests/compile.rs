@@ -703,6 +703,51 @@ fn every_value_region_crosses_every_host_protocol_class() {
             unmodeled_conditional: false,
         },
         HostCase {
+            name: "owner-member-decorator",
+            source_kind: SourceKind::TypeScript,
+            source: "function probe() { class C { @use({expr}) m() {} } }",
+            owner_takes_statements: false,
+            propagation_boundary: true,
+            repeated: false,
+            unmodeled_conditional: false,
+        },
+        HostCase {
+            name: "owner-computed-member-name",
+            source_kind: SourceKind::TypeScript,
+            source: "function probe() { class C { [use({expr})]() {} } }",
+            owner_takes_statements: false,
+            propagation_boundary: true,
+            repeated: false,
+            unmodeled_conditional: false,
+        },
+        HostCase {
+            name: "owner-class-decorator",
+            source_kind: SourceKind::TypeScript,
+            source: "function probe() { @use({expr}) class C {} }",
+            owner_takes_statements: false,
+            propagation_boundary: true,
+            repeated: false,
+            unmodeled_conditional: false,
+        },
+        HostCase {
+            name: "owner-decorated-class-heritage",
+            source_kind: SourceKind::TypeScript,
+            source: "function probe() { @use class C extends use({expr}) {} }",
+            owner_takes_statements: false,
+            propagation_boundary: true,
+            repeated: false,
+            unmodeled_conditional: false,
+        },
+        HostCase {
+            name: "class-heritage",
+            source_kind: SourceKind::TypeScript,
+            source: "function probe() { class C extends use({expr}) {} }",
+            owner_takes_statements: true,
+            propagation_boundary: true,
+            repeated: false,
+            unmodeled_conditional: false,
+        },
+        HostCase {
             name: "owner-static-block",
             source_kind: SourceKind::TypeScript,
             source: "class C { static { use({expr}); } }",
@@ -858,9 +903,9 @@ fn every_value_region_crosses_every_host_protocol_class() {
         }
     }
     assert_eq!(values.len(), 42);
-    assert_eq!(hosts.len(), 40);
+    assert_eq!(hosts.len(), 45);
     assert_eq!(ungrouped_cells, 252);
-    assert_eq!(cells, 1_932);
+    assert_eq!(cells, 2_142);
 }
 
 include!("compile/cases_01.rs");

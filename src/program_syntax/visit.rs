@@ -98,12 +98,25 @@ impl ParentCollector {
         let ambient = path.iter().any(|parent| {
             matches!(parent, swc_ecma_visit::AstParentNodeRef::TsModuleDecl(decl, _) if decl.declare)
         });
+        let decorated_classes = path
+            .iter()
+            .enumerate()
+            .filter_map(|(index, parent)| match parent {
+                swc_ecma_visit::AstParentNodeRef::Class(class, _)
+                    if !class.decorators.is_empty() =>
+                {
+                    Some(index)
+                }
+                _ => None,
+            })
+            .collect();
         if self
             .found
             .insert(
                 id,
                 FoundOverlay {
                     ambient,
+                    decorated_classes,
                     parents: path.kinds().to_vec(),
                     host_owners: self.host_owners.clone(),
                     protocol_frames: self.protocol_frames.clone(),
@@ -205,6 +218,7 @@ impl ParentCollector {
                             .transpose()?,
                         function_return_awaited: found.function_return_awaited,
                         ambient: found.ambient,
+                        decorated_classes: found.decorated_classes,
                     },
                 ),
                 // A frame outside the host owner is not this owner's

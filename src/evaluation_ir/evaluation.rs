@@ -679,7 +679,9 @@ impl EvaluationFile {
                 Some(TargetCapability::ExpressionBoundary(reason)) => reason,
                 Some(TargetCapability::StatementRegion) => return None,
                 None => match context.owner {
-                    EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer => {
+                    EvaluationOwner::ParameterInitializer
+                    | EvaluationOwner::ClassInitializer
+                    | EvaluationOwner::ClassDefinition => {
                         ExpressionBoundaryReason::OwnerTakesNoStatements
                     }
                     _ => ExpressionBoundaryReason::ValueHasNoStatementForm,

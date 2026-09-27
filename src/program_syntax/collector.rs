@@ -117,6 +117,7 @@ pub(super) struct CollectedProgramSyntax {
 
 pub(super) struct FoundOverlay {
     pub(super) ambient: bool,
+    pub(super) decorated_classes: Vec<usize>,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,

@@ -374,7 +374,8 @@ A `try` was written where its propagation could not go anywhere.
 a value only where the TypeScript host can preserve that exit and the
 original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
-loop headers, parameter defaults, and class field initializers.
+loop headers, parameter defaults, class field initializers, decorators,
+computed member names, and the heritage of a decorated class.
 
 Move the propagation into the nearest Result scope when the surrounding
 expression cannot carry it."
@@ -604,7 +605,13 @@ A `match` is used in a TypeScript host that cannot own its control flow.
 Expression matches lower to host-owned statements and a result slot. They
 never use an IIFE, an immediately invoked callback, or `$tt_expr`. Move the
 match to a function-body statement whose evaluation count and conditional
-reachability are explicit."
+reachability are explicit.
+
+A class definition evaluates its decorators, heritage, and computed member
+names itself, in an order that depends on the TypeScript decorator mode, so
+a match in a decorator, a computed member name, or the heritage of a
+decorated class is rejected. The heritage of an undecorated class is
+evaluated first under every mode and lowers before the class."
             }
             DiagnosticCode::MatchControlCrossing => {
                 r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.

@@ -234,3 +234,28 @@ fn a_tuple_missing_arm_suggestion_pastes_back_without_duplicate_bindings() {
     let after = ttc::analyze(&fixed, &Options::default());
     assert!(after.is_empty(), "{fixed}{after:#?}");
 }
+
+#[test]
+fn a_match_the_class_definition_evaluates_reports_its_placement() {
+    let prelude = "variant S { A(n: number), B }\ndeclare const s: S;\ndeclare function tag(n: number): any;\ndeclare function say(m: string): any;\n";
+    for body in [
+        "class K extends say(\"x\") { @tag(match (s) { A(n) => n, B => 0 }) m() {} }\n",
+        "class K { [match (s) { A => \"a\", B => \"b\" }]() {} }\n",
+        "const E = class { @tag(match (s) { A(n) => n, B => 0 }) accessor a = 1; };\n",
+        "@tag(match (s) { A(n) => n, B => 0 }) class K extends say(\"x\") {}\n",
+        "@tag(1) class K extends match (s) { A => say(\"a\"), B => say(\"b\") } {}\n",
+    ] {
+        let source = format!("{prelude}{body}");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
+        assert_eq!(codes, [DiagnosticCode::MatchPlacement], "{source}{diagnostics:#?}");
+        assert!(
+            diagnostics[0].message.contains("decorator, a computed member name"),
+            "{diagnostics:#?}"
+        );
+    }
+    let out = ok(&format!(
+        "{prelude}class K extends match (s) {{ A => say(\"a\"), B => say(\"b\") }} {{}}\n"
+    ));
+    assert!(out.contains("class K extends ($tt_v0 === 0 ? say(\"a\") : say(\"b\")) {}"), "{out}");
+}

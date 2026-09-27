@@ -605,6 +605,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             EvaluationOwner::Generator => "generator",
             EvaluationOwner::ParameterInitializer => "parameter",
             EvaluationOwner::ClassInitializer => "class-field",
+            EvaluationOwner::ClassDefinition => "class-definition",
             EvaluationOwner::StaticBlock => "static-block",
         }
     }
@@ -770,6 +771,10 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
         ),
         (
             crate::SourceKind::TypeScript,
+            format!("class C {{ [{expression}]() {{}} }}"),
+        ),
+        (
+            crate::SourceKind::TypeScript,
             format!("class C {{ static {{ use({expression}); }} }}"),
         ),
         (
@@ -836,6 +841,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
     assert_eq!(
         owners,
         BTreeSet::from([
+            "class-definition",
             "class-field",
             "constructor",
             "function",

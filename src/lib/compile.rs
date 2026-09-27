@@ -309,6 +309,10 @@ fn match_placement_message(
             "`match` cannot be used in a class field initializer — this TypeScript boundary has no statement position",
             help,
         ),
+        (EvaluationOwner::ClassDefinition, Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be used in a decorator, a computed member name, or a decorated class's heritage — the class definition evaluates it with no statement position",
+            help,
+        ),
         (_, Reason::RepeatedInOwner) => (
             "`match` cannot be lowered from this repeated loop position without changing how often it evaluates",
             help,
@@ -405,6 +409,12 @@ fn try_placement_message(
         (EvaluationOwner::ClassInitializer, Reason::OwnerTakesNoStatements) => (
             "`try` cannot be used in a class field initializer — this TypeScript control-flow \
              boundary has no statement position for its `Err` propagation",
+            help,
+        ),
+        (EvaluationOwner::ClassDefinition, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in a decorator, a computed member name, or a decorated \
+             class's heritage — the class definition evaluates it with no statement position \
+             for its `Err` propagation",
             help,
         ),
         (EvaluationOwner::Constructor, _) => (

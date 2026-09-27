@@ -452,7 +452,9 @@ pub(super) fn target_capability(
     use ExpressionBoundaryReason as Reason;
     if matches!(
         context.owner,
-        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
+        EvaluationOwner::ParameterInitializer
+            | EvaluationOwner::ClassInitializer
+            | EvaluationOwner::ClassDefinition
     ) {
         return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
     }

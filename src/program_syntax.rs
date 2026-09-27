@@ -647,6 +647,7 @@ pub(crate) enum EvaluationOwner {
     Generator,
     ParameterInitializer,
     ClassInitializer,
+    ClassDefinition,
     StaticBlock,
 }
 
@@ -701,6 +702,7 @@ pub(crate) struct OverlayFacts {
     pub(crate) function_return_type: Option<SourceSpan>,
     pub(crate) function_return_awaited: bool,
     pub(crate) ambient: bool,
+    pub(crate) decorated_classes: Vec<usize>,
 }
 
 impl EvaluationContext {
@@ -719,9 +721,10 @@ impl EvaluationContext {
             function_return_type,
             function_return_awaited,
             ambient,
+            decorated_classes,
         } = facts;
         let requires_block = statement_requires_block(parents);
-        let (mut owner, owner_edge) = evaluation_owner(parents);
+        let (mut owner, owner_edge) = evaluation_owner(parents, &decorated_classes);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
         // body into the return contracts that differ from an ordinary
@@ -874,9 +877,22 @@ fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
     reach
 }
 
-fn evaluation_owner(parents: &[AstParentKind]) -> (EvaluationOwner, usize) {
+fn evaluation_owner(
+    parents: &[AstParentKind],
+    decorated_classes: &[usize],
+) -> (EvaluationOwner, usize) {
     for (index, parent) in parents.iter().enumerate().rev() {
         match parent {
+            AstParentKind::Class(
+                fields::ClassField::Decorators(_) | fields::ClassField::Body(_),
+            ) => {
+                return (EvaluationOwner::ClassDefinition, index + 1);
+            }
+            AstParentKind::Class(fields::ClassField::SuperClass)
+                if decorated_classes.contains(&index) =>
+            {
+                return (EvaluationOwner::ClassDefinition, index + 1);
+            }
             AstParentKind::Function(fields::FunctionField::Params(_))
             | AstParentKind::ArrowExpr(fields::ArrowExprField::Params(_))
             | AstParentKind::Constructor(fields::ConstructorField::Params(_)) => {
