@@ -687,6 +687,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_statement_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
+        // The source decision is one statement, so its projection is one
+        // block: as the unbraced body of an `if`, loop, or label, the
+        // placeholder and the bodies below stay together under that parent.
+        self.code.push('{');
         self.push_placeholder(
             SyntaxCategory::Statement,
             self.source_span(decision.extent)?,
@@ -695,7 +699,9 @@ impl<'a> ProjectionBuilder<'a> {
         // Statement decisions do not introduce a function boundary. Keep their
         // bodies in this lexical control-flow region so returns belong to the
         // surrounding match/result, and nested values retain their real owner.
-        self.emit_inline_decision_bodies(decision)
+        self.emit_inline_decision_bodies(decision)?;
+        self.code.push('}');
+        Ok(())
     }
 
     fn emit_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {

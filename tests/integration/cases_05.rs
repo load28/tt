@@ -572,3 +572,35 @@ console.log(log.join(","));
 "#);
     assert_eq!(out, ["3 -1 0", "6,7,5,5,5,-5,50", "Err Ok Ok", "else,4,Ok,4,5"]);
 }
+
+#[test]
+fn runtime_an_if_let_as_an_unbraced_body_keeps_its_parent_and_its_else() {
+    require_toolchain!();
+    let out = run(r#"
+variant O { Some(value: number), None }
+function f(xs: O[]): number {
+  let t = 0;
+  for (const x of xs) if let Some(value) = x { t += value; } else { break; }
+  return t;
+}
+function g(c: boolean, x: O): number {
+  if (c) if let Some(value) = x { return value; } else { return 2; }
+  else { return 3; }
+}
+function h(c: boolean, x: O): number {
+  if (c) if let Some(value) = x { return value; }
+  else { return 3; }
+  return 4;
+}
+function k(xs: O[]): number {
+  let t = 0;
+  outer: for (const x of xs) if let Some(value) = x { if (value > 5) continue outer; t += value; }
+  return t;
+}
+console.log(f([O.Some(1), O.Some(2), O.None, O.Some(9)]));
+console.log(g(true, O.Some(1)), g(true, O.None), g(false, O.None));
+console.log(h(true, O.Some(1)), h(true, O.None), h(false, O.None));
+console.log(k([O.Some(1), O.Some(7), O.Some(2)]));
+"#);
+    assert_eq!(out, ["3", "1 2 3", "1 3 4", "3"]);
+}

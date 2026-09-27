@@ -383,3 +383,17 @@ fn a_labeled_loop_keeps_its_label_on_the_loop_when_its_header_hoists_a_value() {
     assert!(out.contains("if (c) { let $tt_v1: number[];"), "{out}");
     assert!(out.contains("} outer: inner: for (const q of $tt_v1) { continue outer; } }"), "{out}");
 }
+
+#[test]
+fn an_if_let_as_an_unbraced_body_is_projected_as_one_statement() {
+    for source in [
+        "variant O { Some(value: number), None }\nfunction f(xs: O[]): number {\n  let t = 0;\n  for (const x of xs) if let Some(value) = x { t += value; } else { break; }\n  return t;\n}\n",
+        "variant O { Some(value: number), None }\nfunction f(c: boolean, x: O): number {\n  if (c) if let Some(value) = x { return value; } else { return 2; }\n  else { return 3; }\n}\n",
+        "variant O { Some(value: number), None }\nfunction f(xs: O[]): number {\n  let t = 0;\n  outer: for (const x of xs) if let Some(value) = x { if (value > 5) continue outer; t += value; }\n  return t;\n}\n",
+        "variant O { Some(value: number), None }\nfunction f(c: boolean, x: O, y: O): number {\n  while (c) if let Some(value) = x { return value; } else if let Some(value) = y { return value; } else { break; }\n  return 0;\n}\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert!(diagnostics.is_empty(), "{source}{diagnostics:#?}");
+        ok(source);
+    }
+}
