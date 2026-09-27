@@ -422,6 +422,7 @@
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
 | TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
 | TASK-401 | Judge only val-rooted paths and resolve hoisted declarations | Complete | 2026-09-27 | 2026-09-27 | [TASK-401](./TASK-401-val-path-roots-and-hoisting.md) |
+| TASK-402 | Emit optional variant fields as absent properties and reject required-after-optional | Complete | 2026-09-27 | 2026-09-27 | [TASK-402](./TASK-402-optional-variant-fields.md) |
 
 ## Next task number
 

@@ -327,7 +327,16 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceK
                         .collect::<Vec<_>>()
                         .join(", ");
                     let object = std::iter::once(format!("kind: \"{}\"", variant.name))
-                        .chain(fields.iter().map(|field| field.name.clone()))
+                        .chain(fields.iter().map(|field| {
+                            if field.optional {
+                                format!(
+                                    "...({} === undefined ? {{}} : {{ {} }})",
+                                    field.name, field.name
+                                )
+                            } else {
+                                field.name.clone()
+                            }
+                        }))
                         .collect::<Vec<_>>()
                         .join(", ");
                     format!(

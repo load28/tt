@@ -394,3 +394,26 @@ console.log(outer("b"));
 "#);
     assert_eq!(out, [r#"tt match: unexpected literal "z""#, "2"]);
 }
+
+fn optional_variant_fields_are_absent_when_their_argument_is() {
+    require_toolchain!();
+    let src = r#"
+variant V { C(opt?: number), D }
+variant G<T> { P(label: string, value?: T, note?: string) }
+const bare = V.C();
+const full = V.C(2);
+const generic = G.P<number>("p", undefined, "n");
+const opt: number | undefined = match (bare) { C(opt) => opt, D => 0 };
+console.log("opt" in bare, "opt" in full, JSON.stringify(full));
+console.log(JSON.stringify(generic), "value" in generic, opt === undefined);
+"#;
+    let expected = [
+        "false true {\"kind\":\"C\",\"opt\":2}",
+        "{\"kind\":\"P\",\"label\":\"p\",\"note\":\"n\"} false true",
+    ];
+    assert_eq!(run(src), expected);
+    assert_eq!(
+        run_with_tsc_flags(src, &["--exactOptionalPropertyTypes"]),
+        expected
+    );
+}

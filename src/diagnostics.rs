@@ -97,6 +97,9 @@ pub enum DiagnosticCode {
     VariantInvalidFieldType,
     /// A variant payload field named like the property the case tag uses.
     VariantFieldShadowsTag,
+    /// A required variant field after an optional one, which the case's
+    /// constructor parameter list cannot express.
+    VariantRequiredAfterOptional,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
     /// A match mixing tag patterns with literal or `is` patterns.
@@ -172,6 +175,7 @@ impl DiagnosticCode {
             DiagnosticCode::VariantDuplicateCase => "variant-duplicate-case",
             DiagnosticCode::VariantInvalidFieldType => "variant-invalid-field-type",
             DiagnosticCode::VariantFieldShadowsTag => "variant-field-shadows-tag",
+            DiagnosticCode::VariantRequiredAfterOptional => "variant-required-after-optional",
             DiagnosticCode::PatternDuplicateBinding => "pattern-duplicate-binding",
             DiagnosticCode::MatchMixedPatterns => "match-mixed-patterns",
             DiagnosticCode::MatchWildcardNotLast => "match-wildcard-not-last",
@@ -226,6 +230,7 @@ impl DiagnosticCode {
         DiagnosticCode::VariantDuplicateCase,
         DiagnosticCode::VariantInvalidFieldType,
         DiagnosticCode::VariantFieldShadowsTag,
+        DiagnosticCode::VariantRequiredAfterOptional,
         DiagnosticCode::PatternDuplicateBinding,
         DiagnosticCode::MatchMixedPatterns,
         DiagnosticCode::MatchWildcardNotLast,
@@ -502,6 +507,20 @@ so the value could no longer say which case it is.
 Rename the field. Nothing else about the case changes:
 
     variant Token { Word(text: string) }"
+            }
+
+            DiagnosticCode::VariantRequiredAfterOptional => {
+                "\
+A case declares a required field after an optional one.
+
+A case's fields are also its constructor's parameters, in order, and a
+TypeScript parameter list cannot have a required parameter after an
+optional one: the call could not leave the optional argument out and
+still pass the required one.
+
+Put the required fields first, or make the later field optional too:
+
+    variant Request { Get(url: string, timeout?: number) }"
             }
 
             DiagnosticCode::PatternDuplicateBinding => {

@@ -789,3 +789,30 @@ fn val_writes_follow_assignment_targets_not_neighboring_tokens() {
         assert!(!ttc::analyze(&source, &Options::default()).iter().any(|d| d.code == ttc::DiagnosticCode::ValMutation), "{source}");
     }
 }
+
+#[test]
+fn an_optional_variant_field_is_set_only_when_its_argument_is() {
+    let out = ok("variant V { C(req: string, opt?: number), D }\n");
+    assert!(out.contains("| { kind: \"C\"; req: string; opt?: number }"), "{out}");
+    assert!(
+        out.contains(
+            "C: (req: string, opt?: number): V => ({ kind: \"C\", req, ...(opt === undefined ? {} : { opt }) }),"
+        ),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_required_variant_field_cannot_follow_an_optional_one() {
+    let src = "variant W { C(opt?: number, req: string, more: boolean), D(a?: number, b?: string) }\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let found = diagnostics
+        .iter()
+        .filter(|d| d.code == ttc::DiagnosticCode::VariantRequiredAfterOptional)
+        .map(|d| (d.start, d.end))
+        .collect::<Vec<_>>();
+    let at = |name: &str| src.find(name).map(|start| (Some(start), Some(start + name.len())));
+    assert_eq!(found, [at("req").unwrap(), at("more").unwrap()], "{diagnostics:?}");
+    let e = err(src);
+    assert!(e.message.contains("required field `req` after optional field `opt`"), "{e}");
+}

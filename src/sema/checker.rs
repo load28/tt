@@ -500,6 +500,32 @@ impl Checker {
             }
         }
 
+        for case in &decl.cases {
+            let Some(fields) = &case.fields else {
+                continue;
+            };
+            let Some(first_optional) = fields.iter().position(|field| field.optional) else {
+                continue;
+            };
+            for field in fields[first_optional..]
+                .iter()
+                .filter(|field| !field.optional)
+            {
+                self.error(
+                    TtError::span(
+                        field.name_off,
+                        field.name_off + field.name.len(),
+                        format!(
+                            "variant {}: case \"{}\" declares required field `{}` after optional field `{}`",
+                            decl.name, case.tag, field.name, fields[first_optional].name
+                        ),
+                    )
+                    .code(DiagnosticCode::VariantRequiredAfterOptional)
+                    .help("declare the required fields before the optional ones"),
+                );
+            }
+        }
+
         if self.verify {
             for case in &decl.cases {
                 if let Some(fields) = &case.fields {
