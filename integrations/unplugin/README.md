@@ -36,13 +36,15 @@ import { Notice, render } from "./notice.tt";
 
 | 단계 | 하는 일 |
 |------|---------|
-| `resolveId` | `.tt`/`.ttx` 지정자를 파일 경로로 풀고 각각 `.ts`/`.tsx`를 덧붙인 가상 id를 돌려줍니다. `@tt/std`, `@tt/std/option`, `@tt/std/result`는 각각 가상 모듈 id로 바꿉니다 |
+| `resolveId` | Resolves a `.tt`/`.ttx` specifier to its file and returns that path with a query ending in `lang.ts` or `lang.tsx`, keeping any query the import already had. `@tt/std`, `@tt/std/option`, and `@tt/std/result` become virtual module ids |
 | `load` | `ttc -p --rewrite-imports off`의 출력을 돌려줍니다. 표준 라이브러리와 파이프 런타임은 모듈별 `ttc --emit-std types|option|result|runtime` 출력을 사용합니다 |
 
-id에 `.ts` 또는 `.tsx`를 붙이는 이유는 **호스트의 TypeScript 처리에 그대로 태우기**
-위해서입니다. 덕분에 플러그인이 변환을 직접 하지 않습니다. 다만 esbuild의
-`load`는 JavaScript만 반환할 수 있어서, 그 경로에는 소스 종류에 맞는 `ts`/`tsx`
-loader를 명시합니다.
+The `lang.ts`/`lang.tsx` query ending **routes the module through the host's own
+TypeScript handling**, so the plugin does not transpile anything itself. The part
+before the query stays the real `.tt` file, so tools that strip the query (Vite's
+`cleanUrl`, its worker and asset handling, and its dependency scanner) find a file
+on disk. esbuild's `load` can return only JavaScript, so that path names the `ts`
+or `tsx` loader that matches the source.
 
 `--rewrite-imports off`인 것도 의도입니다. 지정자 재작성은 미리 컴파일하는
 파이프라인을 위한 기능이고, 여기서는 `.tt`이 그대로 남아야 이 플러그인이
@@ -96,6 +98,28 @@ load content mappers.
 - `resolveId`는 Rspack·Rsbuild에서 최신 버전을 요구합니다.
 
 ## Module ids
+
+A `.tt` module's id is its file path plus a query, for example
+`/project/src/lib.tt?lang.ts`. An import's own query is kept in front of the
+marker, so Vite's worker script request `./worker.tt?worker_file&type=module`
+compiles to `/project/src/worker.tt?worker_file&type=module&lang.ts`. Imports that
+ask Vite for something other than the module (`?raw`, `?url`, `?worker`,
+`?sharedworker`, and their combinations) are left to Vite, which returns the raw
+source, the file URL, or a worker constructor.
+
+Vite applies `config.plugins` to workers only in development. To bundle a `.tt`
+worker in a production build, register the plugin in `worker.plugins` as well:
+
+```ts
+export default defineConfig({
+  plugins: [tt()],
+  worker: { plugins: () => [tt()] },
+});
+```
+
+Rollup derives default chunk names from the id, so an entry or dynamic import of
+`main.tt` is named `main.tt_lang`. Name entries with an input object
+(`input: { main: "src/main.tt" }`) when the output file name matters.
 
 The standard library has no file on disk, so `@tt/std`, `@tt/std/option`,
 `@tt/std/result`, and `@tt/runtime` resolve to the virtual ids

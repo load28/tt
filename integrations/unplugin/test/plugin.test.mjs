@@ -54,8 +54,8 @@ test('the shared hooks resolve and compile tt, ttx, and standard modules', async
   const plugin = unpluginFactory({ compiler, sourcemap: true })
   const ttId = plugin.resolveId('./shape.tt', importer)
   const ttxId = plugin.resolveId('./view.ttx', importer)
-  assert.equal(ttId, `${tt}.ts`)
-  assert.equal(ttxId, `${ttx}.tsx`)
+  assert.equal(ttId, `${tt}?lang.ts`)
+  assert.equal(ttxId, `${ttx}?lang.tsx`)
 
   const ttContext = context()
   const compiledTt = await plugin.load.call(ttContext, ttId)
@@ -82,12 +82,12 @@ test('entry and root-relative tt specifiers resolve like the host resolves them'
   const previous = process.cwd()
   process.chdir(root)
   t.after(() => process.chdir(previous))
-  assert.equal(plugin.resolveId('./src/main.tt'), `${join(await realpath(root), 'src/main.tt')}.ts`)
+  assert.equal(plugin.resolveId('./src/main.tt'), `${join(await realpath(root), 'src/main.tt')}?lang.ts`)
 
   const requests = []
   const host = { async resolve(...args) { requests.push(args); return { id: join(root, 'src/main.tt') } } }
   const resolved = await plugin.resolveId.call(host, '/src/main.tt', join(root, 'index.html'))
-  assert.equal(resolved.id, `${join(root, 'src/main.tt')}.ts`)
+  assert.equal(resolved.id, `${join(root, 'src/main.tt')}?lang.ts`)
   assert.deepEqual(requests, [['/src/main.tt', join(root, 'index.html'), { skipSelf: true }]])
 })
 
@@ -99,7 +99,7 @@ test('a CRLF source keeps its line endings and hands its map to the host', async
   await writeFile(file, 'variant V { A, B }\r\nexport const f = (v: V) => match (v) { A => 1, B => 2 };\r\n')
 
   const plugin = unpluginFactory({ compiler, sourcemap: true })
-  const compiled = await plugin.load.call(context(), `${file}.ts`)
+  const compiled = await plugin.load.call(context(), `${file}?lang.ts`)
   assert.ok(compiled.map, 'the inline map was not detached')
   assert.equal(compiled.map.sources[0], 'crlf.tt')
   assert.doesNotMatch(compiled.code, /sourceMappingURL/)
@@ -118,12 +118,12 @@ test('sourcemap false is a working public option and diagnostics reach the host'
 
   const plugin = unpluginFactory({ compiler, sourcemap: false })
   await assert.rejects(
-    plugin.load.call(context(), `${file}.ts`),
+    plugin.load.call(context(), `${file}?lang.ts`),
     /error\[match-not-exhaustive\]/,
   )
 
   await writeFile(file, 'export const value = 1;\n')
-  const compiled = await plugin.load.call(context(), `${file}.ts`)
+  const compiled = await plugin.load.call(context(), `${file}?lang.ts`)
   assert.equal(compiled.map, null)
   assert.doesNotMatch(compiled.code, /sourceMappingURL/)
 })
@@ -132,14 +132,44 @@ test('bare tt specifiers use host package exports and preserve external decision
   const plugin = unpluginFactory({ compiler })
   const requests = []
   const host = { async resolve(...args) { requests.push(args); return { id: '/workspace/packages/domain/model.tt', meta: { host: true } } } }
-  const result = await plugin.resolveId.call(host, '@acme/domain/model.tt', '/workspace/app/main.tt.ts')
-  assert.equal(result.id, '/workspace/packages/domain/model.tt.ts')
+  const result = await plugin.resolveId.call(host, '@acme/domain/model.tt', '/workspace/app/main.tt?lang.ts')
+  assert.equal(result.id, '/workspace/packages/domain/model.tt?lang.ts')
   assert.deepEqual(result.meta, { host: true })
-  assert.deepEqual(requests, [['@acme/domain/model.tt', '/workspace/app/main.tt.ts', { skipSelf: true }]])
+  assert.deepEqual(requests, [['@acme/domain/model.tt', '/workspace/app/main.tt?lang.ts', { skipSelf: true }]])
   const external = { id: '@acme/domain/model.tt', external: true }
-  assert.equal(await plugin.resolveId.call({ resolve: async () => external }, external.id, '/app/main.tt.ts'), external)
+  assert.equal(await plugin.resolveId.call({ resolve: async () => external }, external.id, '/app/main.tt?lang.ts'), external)
   const javascript = { id: '/workspace/packages/domain/model.js' }
-  assert.equal(await plugin.resolveId.call({ resolve: async () => javascript }, external.id, '/app/main.tt.ts'), javascript)
+  assert.equal(await plugin.resolveId.call({ resolve: async () => javascript }, external.id, '/app/main.tt?lang.ts'), javascript)
+})
+
+test('query-suffixed tt imports keep their query and the real file before it', async (t) => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-query-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const worker = join(root, 'worker.tt')
+  const importer = join(root, 'main.tt')
+  await writeFile(worker, 'variant M { Ping, Pong }\nconst m: M = M.Ping;\nexport const reply = match (m) { Ping => "ping", Pong => "pong" };\n')
+
+  const plugin = unpluginFactory({ compiler })
+  const workerFile = plugin.resolveId('./worker.tt?worker_file&type=module', `${importer}?lang.ts`)
+  assert.equal(workerFile, `${worker}?worker_file&type=module&lang.ts`)
+  assert.equal(plugin.resolveId(workerFile), workerFile)
+  assert.equal(plugin.resolveId(`${worker}?lang.ts`), `${worker}?lang.ts`)
+  const compiled = await plugin.load.call(context(), workerFile)
+  assert.match(compiled.code, /const reply/)
+  assert.equal(plugin.esbuild.loader('', workerFile), 'ts')
+  assert.ok(plugin.esbuild.onLoadFilter.test(workerFile))
+
+  for (const query of ['?worker', '?sharedworker', '?worker&inline', '?worker&url', '?raw', '?url', '?import&raw']) {
+    assert.equal(plugin.resolveId(`./worker.tt${query}`, importer), null, query)
+    assert.equal(await plugin.load.call(context(), `${worker}${query}`), null, query)
+  }
+
+  const requests = []
+  const host = { async resolve(...args) { requests.push(args); return { id: worker } } }
+  const served = await plugin.resolveId.call(host, '/src/worker.tt?worker_file&type=module', undefined)
+  assert.equal(served.id, `${worker}?worker_file&type=module&lang.ts`)
+  assert.deepEqual(requests, [['/src/worker.tt', undefined, { skipSelf: true }]])
 })
 
 test('type-only dependencies invalidate cached modules even with HMR disabled', async t => {
