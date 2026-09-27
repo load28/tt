@@ -59,7 +59,7 @@ fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
 #[test]
 fn overlay_keeps_the_buffer_in_its_project() {
     require_types_toolchain!();
-    let dir = tmpdir();
+    let dir = typed_workspace();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
     fs::write(

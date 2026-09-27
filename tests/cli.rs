@@ -689,26 +689,15 @@ fn have(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether ttc can resolve a TypeScript to drive. Asked by running the mode
-/// itself over a trivial project: the answer is ttc's own resolution, not a
-/// guess about the machine.
-fn have_typescript() -> bool {
-    let dir = tmpdir();
-    fs::create_dir_all(dir.join("src")).unwrap();
-    fs::write(dir.join("src/probe.tt"), "export const n: number = 1;\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .args(["--check-types", "src"])
-        .current_dir(&dir)
-        .output()
-        .expect("failed to run ttc");
-    out.status.success()
+fn typed_workspace() -> Workspace {
+    Workspace::in_repo("cli")
 }
 
 /// Runs `ttc --check-types` over a one-file project and returns ttc's
 /// stderr. Nothing is written, so a released TypeScript 7 — which cannot
 /// emit declarations — answers these just as well as a built one.
 fn types_stderr(source: &str) -> String {
-    let dir = tmpdir();
+    let dir = typed_workspace();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
     fs::write(src.join("main.tt"), source).unwrap();
@@ -725,7 +714,7 @@ fn types_stderr(source: &str) -> String {
 /// `--overlay`, and the check is what an editor would run.
 fn types_stderr_overlay(saved: &str, buffer: &str, tt_only: bool) -> String {
     use std::io::Write;
-    let dir = tmpdir();
+    let dir = typed_workspace();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
     let file = src.join("main.tt");
@@ -759,7 +748,7 @@ fn types_stderr_overlay(saved: &str, buffer: &str, tt_only: bool) -> String {
 
 macro_rules! require_types_toolchain {
     () => {
-        if !have("node") || !have_typescript() {
+        if !have("node") || !common::toolchain() {
             eprintln!("skipping: no node, or no TypeScript for ttc to drive");
             return;
         }
