@@ -274,6 +274,7 @@ pub(super) enum ProjectionSegmentKind {
     /// it was incomplete; the delimiter itself is fixed syntax.
     SourceBoundary,
     Placeholder,
+    AutomaticSemicolon,
 }
 
 #[derive(Debug)]
@@ -449,6 +450,9 @@ impl<'a> ProjectionBuilder<'a> {
 
     fn emit_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
         for statement in &self.core.bodies[body.index()].statements {
+            if let Some(start) = self.statement_source_start(statement)? {
+                self.preserve_statement_boundary(start);
+            }
             match statement {
                 Statement::Opaque(node) => self.push_source(*node)?,
                 Statement::Adt(adt) => self.emit_adt(adt)?,
@@ -486,7 +490,6 @@ impl<'a> ProjectionBuilder<'a> {
                 propagate.value,
             );
         }
-        self.preserve_concise_arrow_statement_boundary(self.source_span(propagate.owner)?.start);
         self.push_placeholder(
             SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
@@ -494,12 +497,59 @@ impl<'a> ProjectionBuilder<'a> {
         )
     }
 
-    fn preserve_concise_arrow_statement_boundary(&mut self, source_start: usize) {
+    fn statement_source_start(
+        &self,
+        statement: &Statement,
+    ) -> Result<Option<usize>, ProgramSyntaxError> {
+        let node = match statement {
+            Statement::Opaque(_) | Statement::Import(_) => return Ok(None),
+            Statement::Adt(adt) => adt.node,
+            Statement::Propagate(propagate) => propagate.owner,
+            Statement::Decision(decision) => decision.extent,
+            Statement::Expr(expr) => match &self.core.exprs[expr.index()] {
+                Expr::Decision(decision) => decision.extent,
+                Expr::Propagate(propagate) => propagate.node,
+                Expr::Apply(apply) => {
+                    let mut start = self.source_span(apply.node)?.start;
+                    if let Some(head) = apply.head
+                        && let Some(head_start) =
+                            self.statement_source_start(&Statement::Expr(head))?
+                    {
+                        start = start.min(head_start);
+                    }
+                    return Ok(Some(start));
+                }
+                Expr::ResultRegion(region) => region.node,
+                Expr::Opaque(_) | Expr::Sequence(_) | Expr::Template(_) => return Ok(None),
+            },
+        };
+        Ok(Some(self.source_span(node)?.start))
+    }
+
+    fn preserve_statement_boundary(&mut self, source_start: usize) {
         let at = self
             .tokens
             .partition_point(|token| token.span.start < source_start);
-        if crate::flow::concise_arrow_boundary_before(self.source, &self.tokens, at) {
+        if self
+            .tokens
+            .get(at)
+            .is_some_and(|token| token.span.start == source_start)
+            && (crate::flow::concise_arrow_boundary_before(self.source, &self.tokens, at)
+                || crate::flow::asi_boundary_at(self.source, &self.tokens, at))
+        {
+            let start = ProjectedByte(self.code.len());
             self.code.push(';');
+            self.source_segments.push(ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                source: SourceSpan {
+                    start: source_start,
+                    end: source_start,
+                },
+                kind: ProjectionSegmentKind::AutomaticSemicolon,
+            });
         }
     }
 

@@ -91,6 +91,9 @@ pub(super) fn parse_pipeline(
         let step_from = k;
         let mut depth = 0usize;
         while let Some(t) = tokens.get(k) {
+            if depth == 0 && k > step_from && crate::flow::asi_boundary_at(parser.src, tokens, k) {
+                break;
+            }
             match &t.kind {
                 TokenKind::PipeOp if depth == 0 => break,
                 TokenKind::JsxRaw if depth == 0 => break,

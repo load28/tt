@@ -671,7 +671,9 @@ pub(super) fn source_byte_for_projection(
             ProjectionSegmentKind::Copied => {
                 Some(segment.source.start + projected.0 - segment.projected.start.0)
             }
-            ProjectionSegmentKind::SourceBoundary => Some(segment.source.start),
+            ProjectionSegmentKind::SourceBoundary | ProjectionSegmentKind::AutomaticSemicolon => {
+                Some(segment.source.start)
+            }
             ProjectionSegmentKind::Placeholder => None,
         }
     })

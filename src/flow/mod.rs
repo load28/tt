@@ -48,8 +48,8 @@ use crate::lexer::{Token, TokenKind};
 use scanner::*;
 use syntax::*;
 pub(crate) use syntax::{
-    FunctionTarget, brace_opens_statement, concise_arrow_boundary_before, function_depth_at,
-    function_target_at, in_function_body, in_static_block,
+    FunctionTarget, asi_boundary_at, brace_opens_statement, concise_arrow_boundary_before,
+    function_depth_at, function_target_at, in_function_body, in_static_block,
 };
 
 /// One body's control-flow graph.

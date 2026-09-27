@@ -418,6 +418,7 @@
 | TASK-388 | Report project, configuration, and syntax diagnostics from the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-388](./TASK-388-typed-check-diagnostic-classes.md) |
 | TASK-389 | Run the CLI typed-check suite against the repository TypeScript | Complete | 2026-09-27 | 2026-09-27 | [TASK-389](./TASK-389-cli-typed-suite-toolchain.md) |
 | TASK-390 | Keep block returns of a value region that `try` propagates | Complete | 2026-09-27 | 2026-09-27 | [TASK-390](./TASK-390-propagated-value-region-exits.md) |
+| TASK-391 | Honour automatic semicolon insertion around pipelines and statement constructs | Complete | 2026-09-27 | 2026-09-27 | [TASK-391](./TASK-391-automatic-semicolon-boundaries.md) |
 
 | TASK-393 | Make output owner identity cwd-independent and symlink-canonical | Complete | 2026-09-27 | 2026-09-27 | [TASK-393](./TASK-393-output-owner-identity.md) |
 
@@ -429,4 +430,4 @@
 
 ## Next task number
 
-**TASK-391**
+**TASK-392**

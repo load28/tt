@@ -834,3 +834,32 @@ console.log(JSON.stringify([alternate(false), piped(), interpolated(true), neste
         ]
     );
 }
+
+#[test]
+fn semicolon_free_statements_keep_their_automatic_boundaries() {
+    require_toolchain!();
+    let lines = run("variant O { A, B }\n\
+const log: string[] = []\n\
+const inc = (n: number) => n + 1\n\
+const note = (text: string) => { log.push(text) }\n\
+function run(x: O, y: O) {\n\
+  log.push(\"start\")\n\
+  match (x) {\n\
+    A => { log.push(\"xa\") },\n\
+    B => { log.push(\"xb\") },\n\
+  }\n\
+  match (y) {\n\
+    A => { log.push(\"ya\") },\n\
+    B => { log.push(\"yb\") },\n\
+  }\n\
+  const n = 1\n\
+  n |> inc |> String |> note\n\
+  const piped = 1 |> inc\n\
+  log.push(String(piped))\n\
+  const next = 2\n\
+  next |> String |> note\n\
+}\n\
+run(O.A, O.B)\n\
+console.log(log.join(\",\"))\n");
+    assert_eq!(lines, ["start,xa,yb,2,2,2"]);
+}

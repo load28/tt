@@ -2,10 +2,15 @@
 
 use super::*;
 
-/// Words that start a statement and can never continue an expression —
-/// the ones an automatic-semicolon boundary is recognized before.
-pub(super) const STATEMENT_START_WORDS: &[&str] = &[
-    "return", "throw", "break", "continue", "if", "for", "while", "do", "switch", "try",
+pub(super) const TYPE_OPERATOR_WORDS: &[&str] = &[
+    "as",
+    "satisfies",
+    "keyof",
+    "infer",
+    "is",
+    "asserts",
+    "unique",
+    "readonly",
 ];
 
 /// Words that can never be the last token of an expression. Value
@@ -266,20 +271,45 @@ pub(crate) fn concise_arrow_boundary_before(src: &str, tokens: &[Token], at: usi
 /// `at`. Flow graph statement splitting and concise-arrow target discovery
 /// share this predicate so semicolon-free source has one structural boundary
 /// in both models.
-pub(super) fn asi_boundary_at(src: &str, tokens: &[Token], at: usize) -> bool {
+pub(crate) fn asi_boundary_at(src: &str, tokens: &[Token], at: usize) -> bool {
     let Some(token) = tokens.get(at) else {
         return false;
     };
-    let TokenKind::Ident = token.kind else {
-        return false;
-    };
-    let word = &src[token.span.start..token.span.end];
-    STATEMENT_START_WORDS.contains(&word)
-        && at
-            .checked_sub(1)
-            .and_then(|previous| tokens.get(previous))
-            .is_some_and(|previous| token_ends_expression(src, previous))
+    at.checked_sub(1)
+        .and_then(|previous| tokens.get(previous))
+        .is_some_and(|previous| {
+            token_ends_expression(src, previous)
+                && !(matches!(previous.kind, TokenKind::Ident)
+                    && TYPE_OPERATOR_WORDS.contains(&&src[previous.span.start..previous.span.end]))
+        })
         && line_break_before_tokens(src, tokens, at)
+        && !continues_expression_after_line_break(src, tokens, at, token)
+}
+
+fn continues_expression_after_line_break(
+    src: &str,
+    tokens: &[Token],
+    at: usize,
+    token: &Token,
+) -> bool {
+    match token.kind {
+        TokenKind::Ident => {
+            matches!(&src[token.span.start..token.span.end], "in" | "instanceof")
+        }
+        TokenKind::Str | TokenKind::Regex | TokenKind::JsxRaw => false,
+        TokenKind::Template(_)
+        | TokenKind::Arrow
+        | TokenKind::OrOr
+        | TokenKind::OptChain
+        | TokenKind::Coalesce
+        | TokenKind::PipeOp => true,
+        TokenKind::Punct(byte @ (b'+' | b'-')) => !tokens.get(at + 1).is_some_and(|next| {
+            matches!(next.kind, TokenKind::Punct(other) if other == byte)
+                && next.span.start == token.span.end
+        }),
+        TokenKind::Punct(b'!' | b'~' | b'@' | b'#') => false,
+        TokenKind::Punct(byte) => !byte.is_ascii_digit(),
+    }
 }
 
 pub(super) fn token_ends_expression(src: &str, token: &Token) -> bool {

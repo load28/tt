@@ -467,6 +467,9 @@ impl Parser<'_> {
 
         while i < tokens.len() {
             let tok = &tokens[i];
+            if crate::flow::asi_boundary_at(self.src, tokens, i) {
+                expr = (i, false);
+            }
             let word = match tok.kind {
                 TokenKind::Template(ref parts) => {
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
