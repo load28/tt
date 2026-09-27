@@ -425,6 +425,8 @@
 
 | TASK-395 | Encode source map URLs and end the map comment with the output's line ending | Complete | 2026-09-27 | 2026-09-27 | [TASK-395](./TASK-395-source-map-urls-and-line-endings.md) |
 
+| TASK-396 | Read sidecar declarations from tsc's layout and name rejected tt-only inputs accurately | Complete | 2026-09-27 | 2026-09-27 | [TASK-396](./TASK-396-sidecar-layout-and-tt-input-errors.md) |
+
 ## Next task number
 
 **TASK-391**

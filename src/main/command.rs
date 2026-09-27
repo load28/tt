@@ -616,7 +616,7 @@ pub(super) fn run() -> ExitCode {
     }
 
     if let Some(dir) = &sidecar_dir {
-        return sidecar_mode(&jobs, dir);
+        return sidecar_mode(&jobs, dir, &inputs);
     }
 
     let build = BuildOptions {

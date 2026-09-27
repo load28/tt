@@ -301,3 +301,78 @@ fn source_map_comments_use_the_line_ending_of_the_output() {
         }
     }
 }
+
+fn write_all(root: &Path, files: &[(&str, &str)]) {
+    for (path, text) in files {
+        let path = root.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+}
+
+#[test]
+fn sidecars_read_declarations_from_the_layout_tsc_emits() {
+    let root = Workspace::new("sidecar-layout");
+    write_all(
+        &root,
+        &[
+            ("src/a/x.tt", "export const a = 1;\n"),
+            ("src/b/x.tt", "export const b = \"s\";\n"),
+            ("decl/a/x.d.ts", "export declare const a = 1;\n"),
+            ("decl/b/x.d.ts", "export declare const b = \"s\";\n"),
+            ("decl/x.d.ts", "export declare const decoy: 0;\n"),
+            ("flat/only.tt", "export const only = 1;\n"),
+            ("flat-decl/only.d.ts", "export declare const only = 1;\n"),
+            ("mixed/index.ts", "export {};\n"),
+            ("mixed/lib/y.tt", "export const y = 2;\n"),
+            ("mixed-decl/index.d.ts", "export {};\n"),
+            ("mixed-decl/lib/y.d.ts", "export declare const y = 2;\n"),
+        ],
+    );
+    success(run(&root, &["--sidecar", "decl", "src"]));
+    let a = fs::read_to_string(root.join("src/a/x.tt.d.ts")).unwrap();
+    let b = fs::read_to_string(root.join("src/b/x.tt.d.ts")).unwrap();
+    assert!(a.contains("const a = 1") && !a.contains("decoy"), "{a}");
+    assert!(b.contains("const b = \"s\"") && !b.contains("decoy"), "{b}");
+    success(run(&root, &["--sidecar", "decl", "src"]));
+    success(run(&root, &["--sidecar", "flat-decl", "flat"]));
+    assert!(
+        fs::read_to_string(root.join("flat/only.tt.d.ts"))
+            .unwrap()
+            .contains("const only = 1")
+    );
+    success(run(&root, &["--sidecar", "mixed-decl", "mixed"]));
+    assert!(
+        fs::read_to_string(root.join("mixed/lib/y.tt.d.ts"))
+            .unwrap()
+            .contains("const y = 2")
+    );
+}
+
+#[test]
+fn tt_only_modes_name_the_file_and_the_extensions_they_accept() {
+    let root = Workspace::new("tt-only-inputs");
+    fs::write(root.join("x.ts"), "export const x = 1;\n").unwrap();
+    fs::write(root.join("app.js"), "export const y = 1;\n").unwrap();
+    for mode in [
+        &["--symbols"][..],
+        &["--emit-map"],
+        &["--check-types"],
+        &["--sidecar", "decl"],
+        &["--dependencies"],
+    ] {
+        let output = run(&root, &[mode, &["x.ts"]].concat());
+        let err = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{mode:?}: {err}");
+        assert_eq!(
+            err.trim_end(),
+            "ttc: x.ts: not a tt source (expected .tt, .ttx)",
+            "{mode:?}"
+        );
+    }
+    let output = run(&root, &["app.js"]);
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim_end(),
+        "ttc: app.js: not a tt or TypeScript source (expected .tt, .ttx, .ts, .tsx, .mts, .cts)"
+    );
+}

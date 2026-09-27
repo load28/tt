@@ -107,7 +107,24 @@ pub(super) fn emit_map_mode(jobs: &[Job]) -> ExitCode {
 /// output). The map's `sources` is the `.tt` file, so an editor's "go to
 /// definition" from a `.ts` importer lands in the original — not in the
 /// generated declarations. Compiles nothing.
-pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
+pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> ExitCode {
+    let sources = match build_jobs(inputs, None, true) {
+        Ok(sources) => sources,
+        Err(error) => {
+            eprintln!("{error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let declaration_root = deepest_shared_directory(
+        sources
+            .iter()
+            .filter(|source| !is_declaration_file(&source.file))
+            .filter_map(|source| {
+                normalized_absolute(&source.file)
+                    .parent()
+                    .map(Path::to_path_buf)
+            }),
+    );
     let mut failed = false;
     for job in jobs {
         let Some(stem) = job
@@ -133,7 +150,18 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
                 continue;
             }
         };
-        let decl_path = decl_dir.join(format!("{stem}.d.ts"));
+        let relative = declaration_root
+            .as_deref()
+            .and_then(|root| {
+                normalized_absolute(&job.file)
+                    .strip_prefix(root)
+                    .ok()
+                    .map(Path::to_path_buf)
+            })
+            .unwrap_or_else(|| PathBuf::from(&file_name));
+        let decl_path = decl_dir
+            .join(relative)
+            .with_file_name(format!("{stem}.d.ts"));
         let declarations = match fs::read_to_string(&decl_path) {
             Ok(s) => s,
             Err(e) => {
@@ -174,6 +202,15 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+fn is_declaration_file(path: &Path) -> bool {
+    path.file_name().is_some_and(|name| {
+        let name = name.to_string_lossy();
+        [".d.ts", ".d.mts", ".d.cts"]
+            .iter()
+            .any(|suffix| name.ends_with(suffix))
+    })
 }
 
 /// Path from `from_dir` to `to_file`, `/`-separated — the form a source map

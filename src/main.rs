@@ -113,7 +113,9 @@ Tooling options (bundler plugins, editors):
                         js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
                         off = untouched
   --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
-                        <dir>/<name>.d.ts (tsc --emitDeclarationOnly output);
+                        <dir>/<path>/<name>.d.ts, where <path> is the input's
+                        directory below the inputs' common directory (the
+                        layout of tsc --emitDeclarationOnly --outDir <dir>);
                         compiles nothing (--types runs this step for you)
   --symbols             print tt variant declarations (with positions) and the
                         direct .tt imports of each input as JSON; compiles

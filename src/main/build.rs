@@ -137,8 +137,7 @@ pub(super) fn build_jobs(
         }
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
-        collect_sources(input_path, include_ts, &mut files)
-            .map_err(|e| format!("ttc: {input}: {e}"))?;
+        collect_sources(input_path, include_ts, &mut files).map_err(|e| format!("ttc: {e}"))?;
         if is_dir && let Some(dir) = out_dir {
             files.retain(|file| !path_is_within(file, dir));
         }

@@ -629,11 +629,19 @@ fn collect_sources_in(
         // Without this, `ttc -o build src/app.js` wrote TypeScript syntax
         // into a file still called `.js`.
         if !is_source(entry, include_ts) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!(
-                    "not a tt or TypeScript source (expected {})",
-                    source_extensions(include_ts)
+            return Err(named(
+                entry,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "{} (expected {})",
+                        if include_ts {
+                            "not a tt or TypeScript source"
+                        } else {
+                            "not a tt source"
+                        },
+                        source_extensions(include_ts)
+                    ),
                 ),
             ));
         }
