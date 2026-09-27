@@ -189,8 +189,19 @@ pub(in super::super) fn externs_from(
     imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
 ) -> Vec<crate::VariantSymbol> {
+    imported_variants(path, imports, exports_of)
+        .into_iter()
+        .map(|(_, symbol)| symbol)
+        .collect()
+}
+
+pub(in super::super) fn imported_variants(
+    path: &Path,
+    imports: &[crate::TtImport],
+    exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
+) -> Vec<(PathBuf, crate::VariantSymbol)> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    let mut externs: Vec<crate::VariantSymbol> = Vec::new();
+    let mut externs: Vec<(PathBuf, crate::VariantSymbol)> = Vec::new();
     for import in imports {
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
@@ -206,7 +217,7 @@ pub(in super::super) fn externs_from(
             crate::TtImportNames::Namespace(ns) => {
                 externs.extend(decls.into_iter().map(|mut d| {
                     d.name = format!("{ns}.{}", d.name);
-                    d
+                    (target.clone(), d)
                 }));
             }
             crate::TtImportNames::Named(entries) => {
@@ -214,7 +225,7 @@ pub(in super::super) fn externs_from(
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         let mut d = d.clone();
                         d.name = alias.clone().unwrap_or_else(|| name.clone());
-                        externs.push(d);
+                        externs.push((target.clone(), d));
                     }
                 }
             }

@@ -266,4 +266,6 @@ struct ProbeDoc {
 const PROBE_NAME: &str = "$tt_probe";
 
 use service::*;
-pub(super) use service::{analyses_for, externs_from, externs_of, source_byte, span_range};
+pub(super) use service::{
+    analyses_for, externs_from, externs_of, imported_variants, source_byte, span_range,
+};

@@ -257,7 +257,7 @@ fn case_definition(
             range: super::language::span_range(source, case.offset, case.offset + case.tag.len()),
         });
     }
-    let (target, text, imported) = imported_declaration(path, declared)?;
+    let (target, text, imported) = imported_declaration(path, source, declared)?;
     let case = imported.cases.iter().find(|c| c.tag == tag)?;
     Some(Location {
         path: target,
@@ -285,7 +285,7 @@ fn field_definition(
             range: super::language::span_range(source, start, end),
         });
     }
-    let (target, text, imported) = imported_declaration(path, declared)?;
+    let (target, text, imported) = imported_declaration(path, source, declared)?;
     let (start, end) = find(&imported)?;
     Some(Location {
         path: target,
@@ -298,40 +298,33 @@ fn field_definition(
 /// `.tt` imports.
 fn imported_declaration(
     path: &Path,
+    source: &str,
     declared: &DeclaredVariant,
 ) -> Option<(PathBuf, String, VariantSymbol)> {
     let Origin::Imported { .. } = declared.origin else {
         return None;
     };
-    // A namespace import renames the variant to `ns.Name`; the declaration in
-    // the other file still carries its own name.
-    let own = declared
-        .name
-        .rsplit('.')
-        .next()
-        .unwrap_or(&declared.name)
-        .to_string();
-    let dir = path.parent().unwrap_or(Path::new("."));
-    let source = std::fs::read_to_string(path).ok()?;
-    for import in crate::tt_imports_with_kind(
-        &source,
+    let texts = std::cell::RefCell::new(std::collections::HashMap::new());
+    let imports = crate::tt_imports_with_kind(
+        source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
-    ) {
-        let target = super::paths::canonical(&dir.join(&import.specifier)).ok()?;
-        let Ok(text) = std::fs::read_to_string(&target) else {
-            continue;
-        };
-        if let Some(found) = crate::variant_symbols_with_kind(
+    );
+    let (target, found) = super::language::imported_variants(path, &imports, &|target| {
+        let text = std::fs::read_to_string(target).ok()?;
+        let exported = crate::variant_symbols_with_kind(
             &text,
-            crate::SourceKind::from_path(&target).unwrap_or_default(),
+            crate::SourceKind::from_path(target).unwrap_or_default(),
         )
         .into_iter()
-        .find(|d| d.exported && (d.name == own || d.name == declared.name))
-        {
-            return Some((target, text, found));
-        }
-    }
-    None
+        .filter(|d| d.exported)
+        .collect();
+        texts.borrow_mut().insert(target.to_path_buf(), text);
+        Some(exported)
+    })
+    .into_iter()
+    .find(|(_, symbol)| symbol.name == declared.name)?;
+    let text = texts.borrow_mut().remove(&target)?;
+    Some((target, text, found))
 }
 
 /// `variant Shape { Circle(radius: number), Point }` — the declaration as the
@@ -473,6 +466,52 @@ mod tests {
         assert!(case.detail.contains("built-in"), "{}", case.detail);
         // The built-ins have no declaration to open.
         assert_eq!(case.definition, None);
+    }
+
+    #[test]
+    fn an_imported_case_is_found_under_the_name_the_buffer_imports_it_by() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "tt-imported-definition-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let shapes = "export variant Shape { Circle(r: number), Point }\n";
+        std::fs::write(dir.join("shapes.tt"), shapes).unwrap();
+        let user = dir.join("user.tt");
+        std::fs::write(&user, "export const saved = 1;\n").unwrap();
+        let declared = dir.join("shapes.tt").canonicalize().unwrap();
+        let case = shapes.find("Circle").unwrap();
+        let field = shapes.find("r:").unwrap();
+        let arms = "match (s) { Circle(r) => r, Point => 0 }";
+        for header in [
+            "import { Shape as S } from \"./shapes.tt\";\ndeclare const s: S;\n",
+            "import { Gone } from \"./gone.tt\";\nimport { Shape } from \"./shapes.tt\";\n\
+             declare const s: Shape;\n",
+            "import * as ns from \"./shapes.tt\";\ndeclare const s: ns.Shape;\n",
+        ] {
+            let source = format!("{header}export const f = {arms};\n");
+            let tag = tt_symbol_at(&user, &source, at(&source, "Circle(r)", 0))
+                .unwrap_or_else(|| panic!("no case in {source}"));
+            let definition = tag.definition.unwrap_or_else(|| panic!("{source}"));
+            assert_eq!(definition.path, declared, "{source}");
+            assert_eq!(
+                definition.range,
+                super::super::language::span_range(shapes, case, case + 6),
+                "{source}"
+            );
+            let binding = tt_symbol_at(&user, &source, at(&source, "Circle(r)", 7))
+                .unwrap_or_else(|| panic!("no field in {source}"));
+            assert_eq!(
+                binding.definition.map(|location| location.range),
+                Some(super::super::language::span_range(shapes, field, field + 1)),
+                "{source}"
+            );
+        }
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
