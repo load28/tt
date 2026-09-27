@@ -408,6 +408,9 @@
 | TASK-398 | Own the compiler per workspace folder end to end | Complete | 2026-09-27 | 2026-09-27 | [TASK-398](./TASK-398-folder-compiler-ownership.md) |
 | TASK-399 | Limit trigger-character completions to their registered contexts | Complete | 2026-09-27 | 2026-09-27 | [TASK-399](./TASK-399-completion-trigger-contexts.md) |
 | TASK-400 | Version quick-fix edits and convert fallback diagnostic columns | Complete | 2026-09-27 | 2026-09-27 | [TASK-400](./TASK-400-versioned-fixes-and-columns.md) |
+| TASK-401 | Judge only val-rooted paths and resolve hoisted declarations | Complete | 2026-09-27 | 2026-09-27 | [TASK-401](./TASK-401-val-path-roots-and-hoisting.md) |
+| TASK-402 | Emit optional variant fields as absent properties and reject required-after-optional | Complete | 2026-09-27 | 2026-09-27 | [TASK-402](./TASK-402-optional-variant-fields.md) |
+| TASK-403 | Claim let-else whose initializer contains an object literal | Complete | 2026-09-27 | 2026-09-27 | [TASK-403](./TASK-403-let-else-object-literal-initializer.md) |
 | TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
 | TASK-405 | Write the runtime import before generated text at the top of the file | Complete | 2026-09-27 | 2026-09-27 | [TASK-405](./TASK-405-runtime-import-at-top.md) |
 | TASK-406 | Encode sidecar map URLs and verify output before the contextual pass | Complete | 2026-09-27 | 2026-09-27 | [TASK-406](./TASK-406-sidecar-urls-and-contextual-diagnostics.md) |
@@ -421,10 +424,7 @@
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
 | TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
-| TASK-401 | Judge only val-rooted paths and resolve hoisted declarations | Complete | 2026-09-27 | 2026-09-27 | [TASK-401](./TASK-401-val-path-roots-and-hoisting.md) |
-| TASK-402 | Emit optional variant fields as absent properties and reject required-after-optional | Complete | 2026-09-27 | 2026-09-27 | [TASK-402](./TASK-402-optional-variant-fields.md) |
-| TASK-403 | Claim let-else whose initializer contains an object literal | Complete | 2026-09-27 | 2026-09-27 | [TASK-403](./TASK-403-let-else-object-literal-initializer.md) |
 
 ## Next task number
 
-**TASK-416**
+**TASK-427**

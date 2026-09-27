@@ -395,6 +395,7 @@ console.log(outer("b"));
     assert_eq!(out, [r#"tt match: unexpected literal "z""#, "2"]);
 }
 
+#[test]
 fn optional_variant_fields_are_absent_when_their_argument_is() {
     require_toolchain!();
     let src = r#"
