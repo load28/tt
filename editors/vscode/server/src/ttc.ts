@@ -142,6 +142,18 @@ export function findCompiler(
   return "ttc";
 }
 
+export function folderCompiler(configuredPath: string, root: string): string {
+  const configured = configuredPath.trim();
+  const namesPath =
+    configured.includes("/") || configured.includes(path.sep);
+  return findCompiler(
+    namesPath && !path.isAbsolute(configured)
+      ? path.resolve(root, configured)
+      : configured,
+    [root],
+  );
+}
+
 /**
  * Whether a TypeScript language toolchain is around, from the one place
  * the engine looks: the TypeScript the project installed

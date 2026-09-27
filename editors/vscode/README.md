@@ -118,11 +118,12 @@ is a correctness policy, not a measured large-project latency guarantee.
 
 ### Toolchain resolution and unavailable features
 
-The compiler is resolved in this order:
+The compiler is resolved for each workspace folder, from that folder's
+settings, in this order:
 
 1. `tt.compilerPath`, when explicitly configured.
-2. The newest workspace `target/release/ttc` or `target/debug/ttc` build.
-3. The workspace's `@openload28/tt-lang` package via its `binaryPath()` API.
+2. The newest `target/release/ttc` or `target/debug/ttc` build in the folder.
+3. The folder's `@openload28/tt-lang` package via its `binaryPath()` API.
 4. `ttc` on PATH.
 
 An explicit path or a workspace development build can differ from `npx ttc`.
@@ -139,7 +140,7 @@ highlighting does not require a working compiler.
 
 | Setting | Default | Effect |
 | --- | --- | --- |
-| `tt.compilerPath` | `""` | Explicit compiler executable; otherwise use the resolution order above. |
+| `tt.compilerPath` | `""` | Explicit compiler executable, per workspace folder: a relative path is resolved against that folder, a bare name is looked up on PATH; otherwise use the resolution order above, searched from the document's folder. |
 | `tt.verify` | `true` | Verify emitted syntax during syntax checks. |
 | `tt.typeDiagnostics` | `true` | Include TypeScript type diagnostics for tt documents. |
 | `tt.typedChecks` | `true` | Include type-dependent tt checks. |

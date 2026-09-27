@@ -18,6 +18,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { URI } from "vscode-uri";
 
 import { refreshSidecar } from "../sidecar";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
@@ -126,6 +127,195 @@ for (const consumerKind of ["tt", "ttx"]) {
   }
 }
 
+function loggingCompiler(file: string): string {
+  const logs = `${file}.logs`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
+const logs = ${JSON.stringify(logs)};
+fs.mkdirSync(logs, { recursive: true });
+const log = path.join(logs, process.pid + ".jsonl");
+const args = process.argv.slice(2);
+fs.appendFileSync(log, JSON.stringify({ argv: args }) + "\\n");
+const child = spawn(${JSON.stringify(COMPILER)}, args, { stdio: ["pipe", "inherit", "inherit"] });
+child.stdin.on("error", () => {});
+process.stdin.on("data", (chunk) => { fs.appendFileSync(log, chunk); child.stdin.write(chunk); });
+process.stdin.on("end", () => child.stdin.end());
+child.on("exit", (code) => process.exit(code ?? 1));
+`);
+  fs.chmodSync(file, 0o755);
+  return logs;
+}
+
+function compilerLog(logs: string): any[] {
+  if (!fs.existsSync(logs)) return [];
+  return fs.readdirSync(logs).flatMap((name) =>
+    fs.readFileSync(path.join(logs, name), "utf8").split("\n").flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    }),
+  );
+}
+
+function openedIn(entries: any[]): string[] {
+  return entries
+    .filter((entry) => entry.method === "openDocument")
+    .map((entry) => path.basename(entry.params.path));
+}
+
+async function eventually(condition: () => boolean, what: string, limit = 20_000): Promise<void> {
+  const deadline = Date.now() + limit;
+  while (!condition()) {
+    if (Date.now() > deadline) assert.fail(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+function underFolder(scopeUri: string | undefined, folder: string): boolean {
+  if (scopeUri === undefined) return false;
+  const file = URI.parse(scopeUri).fsPath;
+  return file === folder || file.startsWith(`${folder}${path.sep}`);
+}
+
+async function openTwoFolders(
+  client: Client,
+  first: string,
+  second: string,
+  capabilities: object,
+): Promise<{ alpha: string; beta: string }> {
+  const alpha = path.join(first, "alpha.tt");
+  const beta = path.join(second, "beta.tt");
+  const source = "export const n: number = 1;\n";
+  fs.writeFileSync(alpha, source);
+  fs.writeFileSync(beta, source);
+  await client.request("initialize", {
+    processId: process.pid,
+    rootUri: pathToFileURL(first).toString(),
+    workspaceFolders: [
+      { uri: pathToFileURL(first).toString(), name: "first" },
+      { uri: pathToFileURL(second).toString(), name: "second" },
+    ],
+    capabilities,
+  });
+  client.notify("initialized", {});
+  const published = Promise.all([alpha, beta].map((file) =>
+    client.waitFor("textDocument/publishDiagnostics", (p) => p.uri === pathToFileURL(file).toString())));
+  for (const file of [alpha, beta]) {
+    client.notify("textDocument/didOpen", {
+      textDocument: { uri: pathToFileURL(file).toString(), languageId: "tt", version: 1, text: source },
+    });
+  }
+  await published;
+  return { alpha, beta };
+}
+
+test("each folder keeps its configured compiler when the configuration changes", { skip, timeout }, async () => {
+  const first = caseDir("tt-owner-first-");
+  const second = caseDir("tt-owner-second-");
+  const firstCompiler = path.join(first, "tools", "ttc");
+  const secondCompiler = path.join(second, "tools", "ttc");
+  const firstLogs = loggingCompiler(firstCompiler);
+  const secondLogs = loggingCompiler(secondCompiler);
+  const client = connect(SERVER, {
+    configuration: (item) => ({
+      compilerPath: underFolder(item.scopeUri, first)
+        ? firstCompiler
+        : underFolder(item.scopeUri, second)
+          ? secondCompiler
+          : "",
+    }),
+  });
+  try {
+    const { alpha, beta } = await openTwoFolders(client, first, second, { workspace: { configuration: true, workspaceFolders: true } });
+    await eventually(
+      () => openedIn(compilerLog(firstLogs)).includes("alpha.tt") && openedIn(compilerLog(secondLogs)).includes("beta.tt"),
+      "each folder's compiler to receive its document",
+    );
+    const firstMark = compilerLog(firstLogs).length;
+    const secondMark = compilerLog(secondLogs).length;
+
+    const republished = Promise.all([alpha, beta].map((file) =>
+      client.waitFor("textDocument/publishDiagnostics", (p) => p.uri === pathToFileURL(file).toString())));
+    client.notify("workspace/didChangeConfiguration", { settings: null });
+    await republished;
+    await eventually(
+      () => openedIn(compilerLog(secondLogs).slice(secondMark)).includes("beta.tt"),
+      "the second folder's compiler to receive its document again",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const firstAfter = compilerLog(firstLogs).slice(firstMark);
+    const secondAfter = compilerLog(secondLogs).slice(secondMark);
+    assert.deepEqual(openedIn(firstAfter), ["alpha.tt"], JSON.stringify(firstAfter));
+    assert.deepEqual(openedIn(secondAfter), ["beta.tt"], JSON.stringify(secondAfter));
+    assert.ok(secondAfter.some((entry) => entry.method === "reloadProjects"), "the second folder's session reloads its projects");
+  } finally { client.stop(); }
+});
+
+test("documents opened before the configuration arrives never reach an unconfigured compiler", { skip, timeout }, async () => {
+  const first = caseDir("tt-owner-startup-");
+  const second = caseDir("tt-owner-startup-second-");
+  const configured = path.join(first, "tools", "ttc");
+  const configuredLogs = loggingCompiler(configured);
+  const discoveredLogs = loggingCompiler(path.join(first, "target", "debug", "ttc"));
+  const client = connect(SERVER, {
+    configuration: (item) => ({ compilerPath: underFolder(item.scopeUri, first) ? configured : "" }),
+  });
+  try {
+    await openTwoFolders(client, first, second, { workspace: { configuration: true } });
+    await eventually(() => openedIn(compilerLog(configuredLogs)).includes("alpha.tt"), "the configured compiler to receive the document");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.deepEqual(compilerLog(discoveredLogs), [], "the auto-discovered build was never started");
+  } finally { client.stop(); }
+});
+
+test("a folder without a configured compiler discovers its own build", { skip, timeout }, async () => {
+  const first = caseDir("tt-owner-build-first-");
+  const second = caseDir("tt-owner-build-second-");
+  const firstLogs = loggingCompiler(path.join(first, "target", "debug", "ttc"));
+  const secondLogs = loggingCompiler(path.join(second, "target", "debug", "ttc"));
+  const client = connect();
+  try {
+    await openTwoFolders(client, first, second, {});
+    await eventually(
+      () => openedIn(compilerLog(firstLogs)).includes("alpha.tt") && openedIn(compilerLog(secondLogs)).includes("beta.tt"),
+      "each folder's build to receive its document",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.ok(!openedIn(compilerLog(firstLogs)).includes("beta.tt"), "the first folder's build does not serve the second folder");
+    assert.ok(!openedIn(compilerLog(secondLogs)).includes("alpha.tt"), "and the reverse");
+  } finally { client.stop(); }
+});
+
+test("a relative compiler path resolves against the folder that configures it", { skip, timeout }, async () => {
+  const first = caseDir("tt-owner-relative-first-");
+  const second = caseDir("tt-owner-relative-second-");
+  const firstLogs = loggingCompiler(path.join(first, "tools", "ttc"));
+  const secondLogs = loggingCompiler(path.join(second, "tools", "ttc"));
+  const client = connect(SERVER, {
+    configuration: () => ({ compilerPath: path.join("tools", "ttc"), sidecar: "always" }),
+  });
+  try {
+    const { beta } = await openTwoFolders(client, first, second, { workspace: { configuration: true } });
+    await eventually(
+      () => openedIn(compilerLog(firstLogs)).includes("alpha.tt") && openedIn(compilerLog(secondLogs)).includes("beta.tt"),
+      "each folder's relative compiler to receive its document",
+    );
+    client.notify("textDocument/didSave", { textDocument: { uri: pathToFileURL(beta).toString() } });
+    await eventually(
+      () => compilerLog(secondLogs).some((entry) => Array.isArray(entry.argv) && entry.argv.includes("--types")),
+      "the sidecar refresh to run the second folder's compiler",
+    );
+    assert.ok(!compilerLog(firstLogs).some((entry) => Array.isArray(entry.argv) && entry.argv.includes("--types")));
+    assert.ok(!openedIn(compilerLog(firstLogs)).includes("beta.tt"));
+  } finally { client.stop(); }
+});
+
 /* A window's folders are not what it started with: people add and remove
  * them all day. Every folder is a place the compiler, the TypeScript
  * toolchain and a relative `tt.sidecarDir` are resolved from, and the
@@ -219,7 +409,12 @@ interface Client {
 }
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
-function connect(server = SERVER): Client {
+interface ConnectOptions {
+  env?: NodeJS.ProcessEnv;
+  configuration?: (item: { scopeUri?: string; section?: string }) => unknown;
+}
+
+function connect(server = SERVER, options: ConnectOptions = {}): Client {
   const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
     stdio: ["pipe", "pipe", "pipe"],
     // The LSP case lives in a temporary project, while the test contract is
@@ -230,6 +425,7 @@ function connect(server = SERVER): Client {
       ...process.env,
       TTC_BINARY: COMPILER,
       PATH: `${path.dirname(COMPILER)}${path.delimiter}${process.env.PATH ?? ""}`,
+      ...options.env,
     },
   });
   interface Request {
@@ -278,7 +474,15 @@ function connect(server = SERVER): Client {
       if (buf.length < sep + 4 + size) return;
       const body = JSON.parse(buf.subarray(sep + 4, sep + 4 + size).toString());
       buf = buf.subarray(sep + 4 + size);
-      const request = body.id !== undefined ? pending.get(body.id) : undefined;
+      if (body.method !== undefined && body.id !== undefined) {
+        const result =
+          body.method === "workspace/configuration" && options.configuration
+            ? (body.params.items as any[]).map(options.configuration)
+            : null;
+        send({ id: body.id, result });
+        continue;
+      }
+      const request = body.id !== undefined && body.method === undefined ? pending.get(body.id) : undefined;
       if (request) {
         pending.delete(body.id);
         request.resolve(body);
