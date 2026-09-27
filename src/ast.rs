@@ -681,9 +681,46 @@ impl LiteralValue {
                 out.push('"');
                 out
             }
-            LiteralValue::Num(n) => format!("{n}"),
+            LiteralValue::Num(n) => js_number_string(*n),
             LiteralValue::BigInt(d) => format!("{d}n"),
             LiteralValue::Bool(b) => b.to_string(),
+        }
+    }
+}
+
+pub(crate) fn js_number_string(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_string();
+    }
+    if value == 0.0 {
+        return "0".to_string();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-Infinity" } else { "Infinity" }.to_string();
+    }
+    if value < 0.0 {
+        return format!("-{}", js_number_string(-value));
+    }
+    let scientific = format!("{value:e}");
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .unwrap_or((scientific.as_str(), "0"));
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let k = digits.len() as i32;
+    let n = exponent.parse::<i32>().unwrap_or(0) + 1;
+    if k <= n && n <= 21 {
+        format!("{digits}{}", "0".repeat((n - k) as usize))
+    } else if 0 < n && n <= 21 {
+        format!("{}.{}", &digits[..n as usize], &digits[n as usize..])
+    } else if -6 < n && n <= 0 {
+        format!("0.{}{digits}", "0".repeat((-n) as usize))
+    } else {
+        let sign = if n - 1 < 0 { '-' } else { '+' };
+        let exponent = (n - 1).abs();
+        if k == 1 {
+            format!("{digits}e{sign}{exponent}")
+        } else {
+            format!("{}.{}e{sign}{exponent}", &digits[..1], &digits[1..])
         }
     }
 }

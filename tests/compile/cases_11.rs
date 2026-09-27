@@ -134,3 +134,37 @@ fn an_exported_try_declaration_reports_only_its_placement() {
         assert_eq!(codes, [DiagnosticCode::TryPlacement], "{source}{diagnostics:#?}");
     }
 }
+
+#[test]
+fn numeric_literal_patterns_take_their_ecmascript_values() {
+    let out = ok("declare const x: number; declare const b: bigint;\n\
+         export const a = match (x) { 1e400 => 1, 0x100000000000000000000000000000000 => 2, 0xff => 3, 1_000 => 4, _ => 0 };\n\
+         export const c = match (b) { 0x100000000000000000000000000000000n => 1, 0o7n => 2, _ => 0 };\n");
+    assert!(out.contains("1e400"), "{out}");
+    for (source, duplicate) in [
+        (
+            "declare const b: bigint;\nexport const c = match (b) { 0x100000000000000000000000000000000n => 1, 340282366920938463463374607431768211456n => 2, _ => 0 };\n",
+            "duplicate arm 340282366920938463463374607431768211456n",
+        ),
+        (
+            "declare const x: number;\nexport const d = match (x) { 1e400 => 1, 2e400 => 2, _ => 0 };\n",
+            "duplicate arm Infinity",
+        ),
+        (
+            "declare const x: number;\nexport const d = match (x) { 1e21 => 1, 1000000000000000000000 => 2, _ => 0 };\n",
+            "duplicate arm 1e+21",
+        ),
+        (
+            "declare const x: number;\nexport const d = match (x) { 0.0000001 => 1, 1e-7 => 2, _ => 0 };\n",
+            "duplicate arm 1e-7",
+        ),
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.message.contains(duplicate)),
+            "{source}{diagnostics:#?}"
+        );
+    }
+}

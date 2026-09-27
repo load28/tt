@@ -237,15 +237,21 @@ fn boundary(src: &[u8], j: usize, end: usize) -> Option<usize> {
 /// The value of a scanned numeric literal.
 fn numeric_value(text: &str) -> Option<LiteralValue> {
     let digits: String = text.chars().filter(|c| *c != '_').collect();
-    if let Some(rest) = digits.strip_suffix('n') {
-        let value = if let Some(hex) = strip_radix(rest, 'x') {
-            u128::from_str_radix(hex, 16).ok()?.to_string()
+    let integer = |rest: &str| -> Option<String> {
+        if let Some(hex) = strip_radix(rest, 'x') {
+            radix_to_decimal(hex, 16)
         } else if let Some(oct) = strip_radix(rest, 'o') {
-            u128::from_str_radix(oct, 8).ok()?.to_string()
+            radix_to_decimal(oct, 8)
         } else if let Some(bin) = strip_radix(rest, 'b') {
-            u128::from_str_radix(bin, 2).ok()?.to_string()
+            radix_to_decimal(bin, 2)
         } else {
-            rest.trim_start_matches('0').to_string()
+            None
+        }
+    };
+    if let Some(rest) = digits.strip_suffix('n') {
+        let value = match integer(rest) {
+            Some(value) => value,
+            None => rest.trim_start_matches('0').to_string(),
         };
         let value = if value.is_empty() {
             "0".to_string()
@@ -254,19 +260,39 @@ fn numeric_value(text: &str) -> Option<LiteralValue> {
         };
         return Some(LiteralValue::BigInt(value));
     }
-    let value = if let Some(hex) = strip_radix(&digits, 'x') {
-        u128::from_str_radix(hex, 16).ok()? as f64
-    } else if let Some(oct) = strip_radix(&digits, 'o') {
-        u128::from_str_radix(oct, 8).ok()? as f64
-    } else if let Some(bin) = strip_radix(&digits, 'b') {
-        u128::from_str_radix(bin, 2).ok()? as f64
-    } else {
-        digits.parse::<f64>().ok()?
+    let value = match integer(&digits) {
+        Some(decimal) => decimal.parse::<f64>().ok()?,
+        None => digits.parse::<f64>().ok()?,
     };
-    if !value.is_finite() {
+    if value.is_nan() {
         return None;
     }
     Some(LiteralValue::Num(normalize_zero(value)))
+}
+
+fn radix_to_decimal(digits: &str, radix: u32) -> Option<String> {
+    const BASE: u64 = 1_000_000_000;
+    if digits.is_empty() {
+        return None;
+    }
+    let mut limbs: Vec<u64> = vec![0];
+    for c in digits.chars() {
+        let mut carry = u64::from(c.to_digit(radix)?);
+        for limb in limbs.iter_mut() {
+            let value = *limb * u64::from(radix) + carry;
+            *limb = value % BASE;
+            carry = value / BASE;
+        }
+        while carry > 0 {
+            limbs.push(carry % BASE);
+            carry /= BASE;
+        }
+    }
+    let mut out = limbs.last().copied().unwrap_or(0).to_string();
+    for limb in limbs.iter().rev().skip(1) {
+        out.push_str(&format!("{limb:09}"));
+    }
+    Some(out)
 }
 
 /// `0x1f` → `Some("1f")` for marker `x` (case-insensitive).

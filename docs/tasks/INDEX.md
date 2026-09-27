@@ -440,6 +440,7 @@
 | TASK-412 | Resolve entry and root-relative tt specifiers in the bundler plugin | Complete | 2026-09-27 | 2026-09-27 | [TASK-412](./TASK-412-unplugin-entry-resolution.md) |
 | TASK-413 | Report a malformed variant behind declaration modifiers once | Complete | 2026-09-27 | 2026-09-27 | [TASK-413](./TASK-413-malformed-variant-once.md) |
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
+| TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
 
 ## Next task number
 

@@ -99,7 +99,7 @@ pub(crate) fn externs_of(
 pub(super) fn display_literal(literal: &crate::Literal) -> String {
     match literal {
         crate::Literal::String(s) => format!("{s:?}"),
-        crate::Literal::Number(n) => n.to_string(),
+        crate::Literal::Number(n) => crate::ast::js_number_string(*n),
         crate::Literal::BigInt(d) => format!("{d}n"),
         crate::Literal::Boolean(b) => b.to_string(),
     }
