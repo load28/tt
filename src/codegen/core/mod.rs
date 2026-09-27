@@ -226,6 +226,7 @@ pub(crate) fn emit_with_map<'a>(
         emitted_owner_rewrites: EmittedOwnerRewrites::default(),
         closed_compose_blocks: ClosedComposeBlocks::default(),
         emitted_compose_rewrites: ClosedComposeBlocks::default(),
+        emitted_loop_tests: ClosedComposeBlocks::default(),
         loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),

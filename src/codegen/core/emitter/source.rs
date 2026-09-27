@@ -186,6 +186,7 @@ impl<'a> Emitter<'a> {
                 .loop_test_rewrites
                 .iter()
                 .find(|rewrite| rewrite.kind == LoopTestKind::For && cursor == rewrite.test.start)
+                && self.emitted_loop_tests.claim(rewrite.owner)
             {
                 rope.append(self.emit_loop_test_prefix(rewrite));
             }

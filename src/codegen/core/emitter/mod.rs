@@ -62,6 +62,7 @@ pub(super) struct Emitter<'a> {
     /// brace is written exactly once.
     pub(super) closed_compose_blocks: ClosedComposeBlocks,
     pub(super) emitted_compose_rewrites: ClosedComposeBlocks,
+    pub(super) emitted_loop_tests: ClosedComposeBlocks,
     /// Loop-test actions emit their tt values before the rebuilt source test.
     /// Host replacements apply only to that source test, not while the
     /// actions recursively emit their own source fragments.

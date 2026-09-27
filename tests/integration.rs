@@ -929,3 +929,17 @@ console.log(JSON.stringify([wrapped(true, Ok(4)), wrapped(true, Err("e")), wrapp
         ]
     );
 }
+
+#[test]
+fn a_c_style_loop_test_captures_its_left_operand_once() {
+    require_toolchain!();
+    let lines = run(r#"
+const xs = [3];
+let j = 0;
+const seen: number[] = [];
+for (; j < match (xs[0]) { 3 => 3, _ => 0 };) { seen.push(j); j++; }
+for (let k = 0; k < match (xs[0]) { 3 => 2, _ => 0 }; k++) { seen.push(10 + k); }
+console.log(JSON.stringify(seen));
+"#);
+    assert_eq!(lines, ["[0,1,2,10,11]"]);
+}
