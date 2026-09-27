@@ -355,9 +355,12 @@ impl<'a> Emitter<'a> {
                 consequent,
                 alternate,
             } => {
-                let branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
+                let mut branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
                     PlannedBranch::Value(expr) => {
-                        out.append(Rope::indented(1, deliver_value(*expr, result)));
+                        out.append(Rope::indented(
+                            1,
+                            self.emit_conditional_active_branch(operation, *expr, result, captured),
+                        ));
                     }
                     PlannedBranch::Source(span) => {
                         out.push_lit(format!("{result} = "));
@@ -523,13 +526,14 @@ impl<'a> Emitter<'a> {
         result: &str,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
-        let Some(branch) = operation.active_branch else {
+        let Some(active) = operation.active.iter().find(|active| active.value == value) else {
             return self
                 .emit_continued_expr(value, &ValueContinuation::assign(result))
                 .unwrap_or_else(|| {
                     crate::ice::bug!("conditional operation value is not structurally emit-able")
                 });
         };
+        let branch = active.branch;
         let value_slot = self.value_name_of(value);
         let mut out = Rope::new();
         out.push_value_declaration(value_slot);
@@ -539,7 +543,7 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| {
                 crate::ice::bug!("conditional branch value is not structurally emit-able")
             });
-        for step in &operation.active_steps {
+        for step in &active.steps {
             lowered = self.emit_scheduled_step(step, lowered, captured);
         }
         out.append(lowered);

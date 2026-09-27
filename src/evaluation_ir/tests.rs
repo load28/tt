@@ -348,8 +348,8 @@ fn a_conditional_operation_owns_its_complete_active_branch() {
         TargetCapability::StatementRegion,
     );
     let operation = &plan.owners[0].operations[0];
-    assert!(operation.active_branch.is_some());
-    assert_eq!(operation.active_steps.len(), 1);
+    assert_eq!(operation.active.len(), 1);
+    assert_eq!(operation.active[0].steps.len(), 1);
 }
 
 #[test]

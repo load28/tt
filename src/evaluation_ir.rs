@@ -206,11 +206,17 @@ pub(crate) struct PlannedConditionalOperation {
     /// evaluation steps between each consumed value and that branch. This
     /// lets the target rebuild `condition && wrapper(match ...)` as one
     /// region instead of requiring the match to be the entire branch.
-    pub(crate) active_branch: Option<SourceSpan>,
-    pub(crate) active_steps: Vec<PlannedEvaluationStep>,
+    pub(crate) active: Vec<PlannedActiveBranch>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
     pub(crate) outer: Vec<PlannedEvaluationStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PlannedActiveBranch {
+    pub(crate) value: ExprId,
+    pub(crate) branch: SourceSpan,
+    pub(crate) steps: Vec<PlannedEvaluationStep>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

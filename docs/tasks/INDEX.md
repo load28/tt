@@ -433,6 +433,7 @@
 | TASK-399 | Limit trigger-character completions to their registered contexts | Complete | 2026-09-27 | 2026-09-27 | [TASK-399](./TASK-399-completion-trigger-contexts.md) |
 | TASK-400 | Version quick-fix edits and convert fallback diagnostic columns | Complete | 2026-09-27 | 2026-09-27 | [TASK-400](./TASK-400-versioned-fixes-and-columns.md) |
 | TASK-407 | Describe value-region placement without the retired IIFE lowering | Complete | 2026-09-27 | 2026-09-27 | [TASK-407](./TASK-407-value-region-placement-wording.md) |
+| TASK-408 | Own the calls around a value in either branch of a conditional expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-408](./TASK-408-ternary-active-branches.md) |
 
 ## Next task number
 

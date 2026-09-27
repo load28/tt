@@ -901,3 +901,31 @@ awaited().then(q => {
         ]
     );
 }
+
+#[test]
+fn a_conditional_branch_owns_the_calls_around_its_value() {
+    require_toolchain!();
+    let lines = run(r#"
+variant O { A, B }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+const Err = (error: string): R<never> => ({ kind: "Err", error });
+const log: string[] = [];
+const f = (n: number) => { log.push("f" + n); return n * 10; };
+const g = (n: number) => { log.push("g" + n); return n + 1; };
+function both(c: boolean, o: O) { return c ? f(match (o) { A => 1, B => 2 }) : g(match (o) { A => 3, B => 4 }); }
+function left(c: boolean, o: O) { return c ? f(match (o) { A => 1, B => 2 }) : 0; }
+function right(c: boolean, o: O) { return c ? match (o) { A => 5, B => 6 } : g(match (o) { A => 7, B => 8 }); }
+function wrapped(c: boolean, r: R<number>): R<number> { const v = c ? Ok(try r) : Ok(0); return v; }
+function summed(c: boolean, r: R<number>): R<number> { const v = c ? (try r) + 1 : 0; return Ok(v); }
+console.log(JSON.stringify([both(true, O.A), both(false, O.B), left(true, O.B), left(false, O.A), right(true, O.B), right(false, O.A), log]));
+console.log(JSON.stringify([wrapped(true, Ok(4)), wrapped(true, Err("e")), wrapped(false, Err("e")), summed(true, Ok(4)), summed(true, Err("e")), summed(false, Err("e"))]));
+"#);
+    assert_eq!(
+        lines,
+        [
+            r#"[10,5,20,0,6,8,["f1","g4","f2","g7"]]"#,
+            r#"[{"kind":"Ok","value":4},{"kind":"Err","error":"e"},{"kind":"Ok","value":0},{"kind":"Ok","value":5},{"kind":"Err","error":"e"},{"kind":"Ok","value":0}]"#
+        ]
+    );
+}

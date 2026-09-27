@@ -1285,10 +1285,13 @@ impl TargetRewritePlan {
             .collect();
         let mut source_replacements: Vec<_> = all_values()
             .flat_map(|value| &value.steps)
-            .chain(
-                all_operations()
-                    .flat_map(|operation| operation.active_steps.iter().chain(&operation.outer)),
-            )
+            .chain(all_operations().flat_map(|operation| {
+                operation
+                    .active
+                    .iter()
+                    .flat_map(|active| &active.steps)
+                    .chain(&operation.outer)
+            }))
             .flat_map(|step| &step.inputs)
             .filter_map(|input| match input {
                 PlannedEvaluationInput::Source {
