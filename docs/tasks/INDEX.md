@@ -444,6 +444,7 @@
 | TASK-434 | Make create-tt init check solution configs, require the verified TypeScript, and quote the printed directory | Complete | 2026-09-27 | 2026-09-27 | [TASK-434](./TASK-434-create-tt-init-project-setup.md) |
 | TASK-437 | Stop marking a case covered in completion when only a nested pattern handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-437](./TASK-437-nested-pattern-completion-coverage.md) |
 | TASK-438 | Place watch-mode support modules by the whole input set | Complete | 2026-09-27 | 2026-09-27 | [TASK-438](./TASK-438-watch-support-placement.md) |
+| TASK-439 | Serve unplugin standard modules under path-free ids | Complete | 2026-09-27 | 2026-09-27 | [TASK-439](./TASK-439-unplugin-std-virtual-ids.md) |
 
 ## Next task number
 

@@ -95,6 +95,16 @@ load content mappers.
   표). 그 두 곳에서는 플러그인 순서를 직접 앞에 두세요.
 - `resolveId`는 Rspack·Rsbuild에서 최신 버전을 요구합니다.
 
+## Module ids
+
+The standard library has no file on disk, so `@tt/std`, `@tt/std/option`,
+`@tt/std/result`, and `@tt/runtime` resolve to the virtual ids
+`virtual:unplugin-tt/std/types.ts`, `…/option.ts`, `…/result.ts`, and
+`…/runtime.ts`. The ids contain no file system path, so they stay the same when
+Vite normalizes Windows separators. They keep the `virtual:` namespace but not
+the `\0` prefix, because the host's TypeScript transform must still process
+them; Vite serves them in development as `/@id/virtual:unplugin-tt/std/…`.
+
 ## Resolution and dependency invalidation
 
 Bare package imports ending in `.tt` or `.ttx` use the bundler's resolver, including

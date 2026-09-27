@@ -64,9 +64,10 @@ const STD_MODULES = new Map([
   ["@tt/runtime", "runtime"],
 ]);
 
-/** Virtual module id for the standard library, per working directory. */
-const stdId = (module) =>
-  path.resolve(process.cwd(), "__tt_std__", `${module}${TS_SUFFIX}`);
+const STD_ID_PREFIX = "virtual:unplugin-tt/std/";
+
+/** Virtual module id for the standard library. */
+const stdId = (module) => `${STD_ID_PREFIX}${module}${TS_SUFFIX}`;
 
 const stdModuleOfId = (id) => {
   for (const module of STD_MODULES.values()) {
@@ -74,6 +75,8 @@ const stdModuleOfId = (id) => {
   }
   return null;
 };
+
+const nativePath = (file) => path.resolve(file);
 
 const INLINE_MAP =
   /(\r?\n)\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)(?:\r?\n)?$/;
@@ -130,6 +133,7 @@ export const unpluginFactory = (options = {}) => {
       // becomes a virtual module. Nothing lands in the project tree.
       const stdModule = STD_MODULES.get(source);
       if (stdModule !== undefined) return stdId(stdModule);
+      if (stdModuleOfId(source) !== null) return source;
       if (importer !== undefined && importer !== null) {
         const importerModule = stdModuleOfId(importer);
         if (importerModule !== null) {
@@ -181,7 +185,7 @@ export const unpluginFactory = (options = {}) => {
       try {
         const metadata = await run(compiler, ["--dependencies", file], { maxBuffer: 16 * 1024 * 1024 });
         const dependencies = JSON.parse(metadata.stdout);
-        dependenciesByModule.set(id, new Set(dependencies));
+        dependenciesByModule.set(id, new Set(dependencies.map(nativePath)));
         for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
         const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
         return detachInlineSourceMap(stdout);
@@ -196,9 +200,10 @@ export const unpluginFactory = (options = {}) => {
 
     watchChange(file) {
       if (!devServer) return;
+      const changed = nativePath(file);
       for (const environment of Object.values(devServer.environments ?? { client: devServer })) {
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(file)) continue;
+          if (!dependencies.has(changed)) continue;
           const module = environment.moduleGraph.getModuleById(id);
           if (module) environment.moduleGraph.invalidateModule(module);
         }
@@ -208,8 +213,9 @@ export const unpluginFactory = (options = {}) => {
       configureServer(server) { devServer = server; },
       handleHotUpdate(context) {
         const modules = new Set(context.modules);
+        const changed = nativePath(context.file);
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(context.file)) continue;
+          if (!dependencies.has(changed)) continue;
           const module = context.server.moduleGraph.getModuleById(id);
           if (module) {
             context.server.moduleGraph.invalidateModule(module);
@@ -232,7 +238,7 @@ export const unpluginFactory = (options = {}) => {
       // may only return JavaScript — so narrow the filters to our ids and
       // name the loader for the TypeScript ttc emits.
       onResolveFilter: /(\.ttx?|^@tt\/(?:std(?:\/(?:option|result))?|runtime)$|\.\/(?:option|result)\.js$)/,
-      onLoadFilter: /(\.tt\.ts|\.ttx\.tsx|__tt_std__\/(?:types|option|result|runtime)\.ts)$/,
+      onLoadFilter: /(\.tt\.ts|\.ttx\.tsx|^virtual:unplugin-tt\/std\/(?:types|option|result|runtime)\.ts)$/,
       loader: (_code, id) => (id.endsWith(TSX_SUFFIX) ? "tsx" : "ts"),
     },
   };
