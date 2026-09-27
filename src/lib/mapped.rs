@@ -162,6 +162,7 @@ pub struct MappedEmit {
     pub(crate) result_return_temps: Vec<ResultReturnTemp>,
     /// Byte offsets after generated value declaration identifiers.
     pub(crate) contextual_slots: Vec<usize>,
+    pub(crate) generated_names: std::collections::HashSet<String>,
 }
 
 impl MappedEmit {
@@ -253,6 +254,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        generated_names: flat.generated_names,
     }
 }
 

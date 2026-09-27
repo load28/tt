@@ -706,9 +706,14 @@ impl EvaluationFile {
                 }
             }
         }
+        let allocated_names = occupied_names
+            .difference(&self.occupied_names)
+            .cloned()
+            .collect();
         Ok(LoweringPlan {
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
                 occupied_names,
+                allocated_names,
             )),
             match_raise_name,
             match_subject_names,

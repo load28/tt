@@ -244,6 +244,7 @@ pub(crate) struct ServiceDoc {
     /// quick checker layer uses their syntax owners before VSCode ever sees
     /// a provisional consequence.
     tt_diagnostics: Vec<crate::Diagnostic>,
+    generated_names: HashSet<String>,
 }
 
 /// A compiled completion probe: the buffer with `$tt_probe` spliced in at
@@ -256,6 +257,7 @@ struct ProbeDoc {
     /// asked.
     offset: usize,
     version: u64,
+    generated_names: HashSet<String>,
 }
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so

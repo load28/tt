@@ -32,6 +32,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         anchors: emit.anchors,
         recovered,
         tt_diagnostics: report.diagnostics,
+        generated_names: emit.generated_names,
     }
 }
 
@@ -73,6 +74,7 @@ pub(super) fn ts_completions(
     path: &Path,
     at: usize,
     code: &str,
+    generated_names: &HashSet<String>,
 ) -> Result<CompletionAnswer, String> {
     let answer = session.client.request(
         "textDocument/completion",
@@ -89,6 +91,9 @@ pub(super) fn ts_completions(
     let mut entries = Vec::with_capacity(items.len());
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
+        if generated_names.contains(&label) {
+            continue;
+        }
         session
             .last_completion
             .insert((path.to_path_buf(), at, label.clone()), item.clone());
@@ -299,6 +304,7 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         offset: mapper::to_utf16(&emit.code, out),
         code: emit.code,
         version,
+        generated_names: emit.generated_names,
     })
 }
 
@@ -372,7 +378,7 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
 }
 
 /// A service span translated back to source UTF-16 offsets, or `None` when
-/// either end has no source counterpart.
+/// any byte of it was not copied verbatim from the source.
 pub(super) fn from_service_span(
     doc: &ServiceDoc,
     start: usize,
@@ -380,11 +386,7 @@ pub(super) fn from_service_span(
 ) -> Option<(usize, usize)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
-    let ss = mapper::to_source_inclusive(&doc.mappings, sb)?;
-    let se = mapper::to_source_inclusive(&doc.mappings, eb)?;
-    if se < ss {
-        return None;
-    }
+    let (ss, se) = mapper::to_source_span(&doc.mappings, sb, eb)?;
     Some((
         mapper::to_utf16(&doc.source, ss),
         mapper::to_utf16(&doc.source, se),

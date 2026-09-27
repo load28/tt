@@ -638,6 +638,7 @@ impl<'a> TargetFile<'a> {
             anchors,
             result_return_temps: result_returns,
             contextual_slots,
+            generated_names: std::collections::HashSet::new(),
         }
     }
 }

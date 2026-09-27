@@ -273,3 +273,50 @@ fn service_requests_answer_over_values_the_plan_cannot_own() {
         project.service_diagnostics(&file).unwrap();
     }
 }
+
+#[test]
+fn generated_bindings_never_surface_as_user_symbols() {
+    require_tsgo!();
+    let source = "declare function parse(t: string): { value: number } | { error: string };\n\
+                  declare const o: 1 | 2;\n\
+                  export function f() {\n\
+                  \x20 const a = match (o) { 1 => \"one\", _ => \"other\" };\n\
+                  \x20 const n = try parse(a);\n\
+                  \x20 \n\
+                  \x20 return n;\n\
+                  }\n";
+    let emitted = ttc::emit_mapped(source).code;
+    let glue: Vec<&str> = ["$tt_v0", "$tt_t0"]
+        .into_iter()
+        .filter(|name| emitted.contains(name))
+        .collect();
+    assert_eq!(glue.len(), 2, "{emitted}");
+    let dir = project(&[("src/glue.tt", source)]);
+    let file = dir.join("src/glue.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let answer = project
+        .completion(&file, ttc::engine::Position { line: 5, character: 2 }, false)
+        .unwrap();
+    let labels: Vec<&str> = answer.items.iter().map(|item| item.label.as_str()).collect();
+    assert!(labels.contains(&"a") && labels.contains(&"n"), "{labels:?}");
+    assert!(glue.iter().all(|name| !labels.contains(name)), "{labels:?}");
+    let on_match = project
+        .hover(&file, ttc::engine::Position { line: 3, character: 12 })
+        .unwrap();
+    assert!(on_match.is_none(), "{on_match:?}");
+    let on_binding = project
+        .hover(&file, ttc::engine::Position { line: 3, character: 8 })
+        .unwrap()
+        .expect("the user's binding still hovers");
+    assert_eq!(on_binding.signature, "const a: string");
+    let references = project
+        .references(&file, ttc::engine::Position { line: 3, character: 12 })
+        .unwrap();
+    assert!(references.is_empty(), "{references:?}");
+}

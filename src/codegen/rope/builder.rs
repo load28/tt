@@ -427,4 +427,5 @@ pub(crate) struct Flat {
     /// Explicit Result return values in source and emitted coordinates.
     pub result_return_temps: Vec<ResultReturnTemp>,
     pub contextual_slots: Vec<usize>,
+    pub generated_names: std::collections::HashSet<String>,
 }

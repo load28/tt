@@ -213,6 +213,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        generated_names: flat.generated_names,
     };
     if options.defer_to_checker {
         return Ok(emit);
@@ -751,6 +752,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        generated_names: flat.generated_names,
     };
     let mut emit = verified_emit(lowered, &program, options, &mut errors);
     if !options.defer_to_checker

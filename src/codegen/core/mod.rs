@@ -353,5 +353,6 @@ pub(crate) fn emit_with_map<'a>(
             .find(|argument| argument.start == result_return.src)
             .map_or(result_return.src, |argument| argument.end);
     }
+    flat.generated_names = emitter.generated_names.into_inner().into_allocated();
     flat
 }

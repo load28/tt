@@ -330,7 +330,7 @@ impl Project {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         let plain = match to_service(&doc, position) {
-            Some(at) => ts_completions(session, &path, at, &doc.code)?,
+            Some(at) => ts_completions(session, &path, at, &doc.code, &doc.generated_names)?,
             None => CompletionAnswer::default(),
         };
         if !member {
@@ -359,7 +359,13 @@ impl Project {
         session.probe_count += 1;
         session.client.open(&served_uri(&path), &probe.code);
         session.served.insert(path.clone(), probe.code.clone());
-        let mut probed = ts_completions(session, &path, probe.offset, &probe.code)?;
+        let mut probed = ts_completions(
+            session,
+            &path,
+            probe.offset,
+            &probe.code,
+            &probe.generated_names,
+        )?;
         probed.probe = Some(probe.version);
         session.last_probe = Some(probe);
         Ok(if probed.member {
@@ -383,7 +389,7 @@ impl Project {
     ) -> Result<Option<CompletionDetail>, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
-        let at = match probe {
+        let (at, generated_names) = match probe {
             Some(version) => {
                 let Some(installed) = session
                     .last_probe
@@ -394,10 +400,10 @@ impl Project {
                 };
                 session.client.open(&served_uri(&path), &installed.code);
                 session.served.insert(path.clone(), installed.code.clone());
-                installed.offset
+                (installed.offset, installed.generated_names)
             }
             None => match to_service(&doc, position) {
-                Some(at) => at,
+                Some(at) => (at, doc.generated_names.clone()),
                 None => return Ok(None),
             },
         };
@@ -411,7 +417,7 @@ impl Project {
         if !session.last_completion.contains_key(&key) {
             // The server resolves the item *it* produced, not a name, so the
             // list has to have been asked for first.
-            let _ = ts_completions(session, &path, at, &code)?;
+            let _ = ts_completions(session, &path, at, &code, &generated_names)?;
         }
         let Some(item) = session.last_completion.get(&key).cloned() else {
             return Ok(None);
@@ -830,6 +836,7 @@ impl Project {
                     anchors: projected.emit.anchors.clone(),
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
+                    generated_names: projected.emit.generated_names.clone(),
                 }),
             );
         }
