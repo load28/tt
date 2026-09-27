@@ -180,3 +180,32 @@ fn generated_names_are_allocated_around_the_files_identifiers() {
     assert!(out.contains("const $tt_m_1 = xs[0];"), "{out}");
     assert!(out.contains("= $tt_m;"), "{out}");
 }
+
+#[test]
+fn a_try_in_a_concise_arrow_inside_a_result_block_targets_the_arrow() {
+    let out = ok("declare function get(n: number): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+         export const r = result {\n\
+           const f = (n: number) => ({ kind: \"Ok\" as const, value: try get(n) + 1 });\n\
+           const x = try get(1);\n\
+           return f(x);\n\
+         };\n");
+    let arrow = out
+        .split("const f = ")
+        .nth(1)
+        .and_then(|rest| rest.split("\n  };").next())
+        .unwrap_or_default();
+    assert!(arrow.contains("return $tt_t0;"), "{out}");
+    assert!(!arrow.contains("break"), "{out}");
+}
+
+#[test]
+fn a_result_block_whose_try_sits_in_a_match_arm_reports_the_crossing() {
+    let diagnostics = ttc::analyze(
+        "declare const o: { kind: \"Some\"; value: number } | { kind: \"None\" };\n\
+         declare function get(n: number): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+         export const r = result { const q = match (o) { Some(value) => try get(value), None => 0 }; return q; };\n",
+        &Options::default(),
+    );
+    let codes: Vec<_> = diagnostics.iter().map(|diagnostic| diagnostic.code).collect();
+    assert_eq!(codes, [DiagnosticCode::TryCrossesValueRegion], "{diagnostics:#?}");
+}

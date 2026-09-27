@@ -146,6 +146,46 @@ pub(crate) fn function_depth_at(src: &str, tokens: &[Token], at: usize) -> usize
     stack.into_iter().filter(|is_function| *is_function).count()
 }
 
+pub(crate) fn user_function_depth_at(
+    src: &str,
+    tokens: &[Token],
+    at: usize,
+    tt_owned: &std::collections::HashSet<usize>,
+) -> usize {
+    let mut stack = Vec::new();
+    for (index, token) in tokens.iter().enumerate().take(at) {
+        match token.kind {
+            TokenKind::Punct(b'{') => stack.push(
+                function_body_brace(src, tokens, index)
+                    && !tt_owned.contains(&index)
+                    && !index
+                        .checked_sub(1)
+                        .is_some_and(|previous| tt_owned.contains(&previous)),
+            ),
+            TokenKind::Punct(b'}') => {
+                stack.pop();
+            }
+            _ => {}
+        }
+    }
+    let braced = stack.into_iter().filter(|is_function| *is_function).count();
+    let concise = tokens
+        .iter()
+        .enumerate()
+        .take(at)
+        .filter(|(arrow, token)| {
+            matches!(token.kind, TokenKind::Arrow) && !tt_owned.contains(arrow)
+        })
+        .filter(|(arrow, _)| {
+            !matches!(
+                tokens.get(arrow + 1).map(|token| &token.kind),
+                Some(TokenKind::Punct(b'{'))
+            ) && concise_arrow_end(src, tokens, arrow + 1) > at
+        })
+        .count();
+    braced + concise
+}
+
 /// Whether `at` is directly enclosed by a class static block. A nested
 /// user-written function remains its own Result scope, so callers combine
 /// this with [`function_target_at`] rather than treating every nested token

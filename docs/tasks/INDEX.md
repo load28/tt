@@ -424,7 +424,8 @@
 | TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
 | TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
 | TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
+| TASK-427 | Decide `result` ownership of `try` from the parsed construct boundaries | Complete | 2026-09-27 | 2026-09-27 | [TASK-427](./TASK-427-result-try-ownership.md) |
 
 ## Next task number
 
-**TASK-427**
+**TASK-428**
