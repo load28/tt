@@ -436,6 +436,7 @@
 | TASK-408 | Own the calls around a value in either branch of a conditional expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-408](./TASK-408-ternary-active-branches.md) |
 | TASK-409 | Emit a C-style loop test prefix once | Complete | 2026-09-27 | 2026-09-27 | [TASK-409](./TASK-409-loop-test-prefix-once.md) |
 | TASK-410 | Serve tt modules without the project's tt content mapper in the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-410](./TASK-410-typed-check-content-mappers.md) |
+| TASK-411 | Detach CRLF-terminated inline maps in the bundler plugin | Complete | 2026-09-27 | 2026-09-27 | [TASK-411](./TASK-411-unplugin-crlf-maps.md) |
 
 ## Next task number
 

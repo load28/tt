@@ -75,6 +75,21 @@ test('the shared hooks resolve and compile tt, ttx, and standard modules', async
   assert.equal(std.map, null)
 })
 
+test('a CRLF source keeps its line endings and hands its map to the host', async (t) => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-crlf-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const file = join(root, 'crlf.tt')
+  await writeFile(file, 'variant V { A, B }\r\nexport const f = (v: V) => match (v) { A => 1, B => 2 };\r\n')
+
+  const plugin = unpluginFactory({ compiler, sourcemap: true })
+  const compiled = await plugin.load.call(context(), `${file}.ts`)
+  assert.ok(compiled.map, 'the inline map was not detached')
+  assert.equal(compiled.map.sources[0], 'crlf.tt')
+  assert.doesNotMatch(compiled.code, /sourceMappingURL/)
+  assert.match(compiled.code, /\r\n$/)
+})
+
 test('sourcemap false is a working public option and diagnostics reach the host', async (t) => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
   const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-errors-'))

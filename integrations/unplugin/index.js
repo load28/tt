@@ -75,7 +75,7 @@ const stdModuleOfId = (id) => {
 };
 
 const INLINE_MAP =
-  /\n\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)\n?$/;
+  /(\r?\n)\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)(?:\r?\n)?$/;
 
 /**
  * Splits ttc's inline source map back out of the printed output.
@@ -91,8 +91,8 @@ function detachInlineSourceMap(code) {
   const found = INLINE_MAP.exec(code);
   if (found === null) return { code, map: null };
   try {
-    const map = JSON.parse(Buffer.from(found[1], "base64").toString("utf8"));
-    return { code: code.slice(0, found.index + 1), map };
+    const map = JSON.parse(Buffer.from(found[2], "base64").toString("utf8"));
+    return { code: code.slice(0, found.index + found[1].length), map };
   } catch {
     // An unreadable map is not a reason to fail the build; the code is
     // still exactly what ttc produced.
