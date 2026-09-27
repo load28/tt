@@ -366,6 +366,9 @@ impl<'a> Scanner<'a> {
                     if depth == 0 && brace_opens_statement(self.src, self.tokens, at, k) {
                         return self.close(k, end).map_or(end, |close| close + 1);
                     }
+                    if depth == 0 && brace_starts_statement(self.src, self.tokens, at, k) {
+                        return k;
+                    }
                     depth += 1;
                 }
                 TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),

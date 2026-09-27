@@ -334,6 +334,11 @@ pub(crate) fn asi_boundary_at(src: &str, tokens: &[Token], at: usize) -> bool {
     let Some(token) = tokens.get(at) else {
         return false;
     };
+    line_break_after_expression(src, tokens, at)
+        && !continues_expression_after_line_break(src, tokens, at, token)
+}
+
+fn line_break_after_expression(src: &str, tokens: &[Token], at: usize) -> bool {
     at.checked_sub(1)
         .and_then(|previous| tokens.get(previous))
         .is_some_and(|previous| {
@@ -342,7 +347,57 @@ pub(crate) fn asi_boundary_at(src: &str, tokens: &[Token], at: usize) -> bool {
                     && TYPE_OPERATOR_WORDS.contains(&&src[previous.span.start..previous.span.end]))
         })
         && line_break_before_tokens(src, tokens, at)
-        && !continues_expression_after_line_break(src, tokens, at, token)
+}
+
+pub(super) fn brace_starts_statement(src: &str, tokens: &[Token], at: usize, k: usize) -> bool {
+    k > at && line_break_after_expression(src, tokens, k) && !head_owes_body(src, tokens, at, k)
+}
+
+fn head_owes_body(src: &str, tokens: &[Token], at: usize, k: usize) -> bool {
+    let word = |i: usize| match tokens.get(i) {
+        Some(token) if matches!(token.kind, TokenKind::Ident) => {
+            Some(&src[token.span.start..token.span.end])
+        }
+        _ => None,
+    };
+    let names_on_same_line = |i: usize| {
+        tokens
+            .get(i + 1)
+            .is_some_and(|next| matches!(next.kind, TokenKind::Ident | TokenKind::Str))
+            && !line_break_before_tokens(src, tokens, i + 1)
+    };
+    let mut heads: Vec<usize> = Vec::new();
+    let mut depth = 0usize;
+    for j in at..k {
+        match tokens[j].kind {
+            TokenKind::Punct(b'{') => {
+                if depth == 0
+                    && let Some(&head) = heads.last()
+                    && (j == head + 1
+                        || token_ends_expression(src, &tokens[j - 1])
+                        || matches!(tokens[j - 1].kind, TokenKind::Punct(b'>')))
+                {
+                    heads.pop();
+                }
+                depth += 1;
+            }
+            TokenKind::Punct(b'(' | b'[') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            TokenKind::Ident if depth == 0 => {
+                let head = match word(j) {
+                    Some("function" | "class" | "enum") => true,
+                    Some("interface" | "namespace" | "module") => names_on_same_line(j),
+                    Some("global") => j > at && word(j - 1) == Some("declare"),
+                    _ => false,
+                };
+                if head {
+                    heads.push(j);
+                }
+            }
+            _ => {}
+        }
+    }
+    !heads.is_empty()
 }
 
 fn continues_expression_after_line_break(

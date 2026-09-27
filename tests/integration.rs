@@ -865,6 +865,45 @@ console.log(log.join(\",\"))\n");
 }
 
 #[test]
+fn a_semicolon_free_brace_after_an_expression_is_a_diverging_block() {
+    require_toolchain!();
+    let lines = run(
+        "type Opt = { kind: \"Some\"; value: number } | { kind: \"None\" }\n\
+let foo = 0, Foo = 0\n\
+function unwrap(o: Opt): number {\n\
+  let Some(value) = o else {\n\
+    foo\n\
+    Foo\n\
+    { return -1 }\n\
+  };\n\
+  return value\n\
+}\n\
+function arm(o: Opt): number {\n\
+  const n: number = match (o) {\n\
+    Some(value) => {\n\
+      foo\n\
+      { return value * 2 }\n\
+    },\n\
+    None => 0,\n\
+  }\n\
+  return n\n\
+}\n\
+function body(o: Opt): number {\n\
+  if let Some(value) = o {\n\
+    Foo\n\
+    { return value + 1 }\n\
+  } else {\n\
+    foo\n\
+    { return -2 }\n\
+  }\n\
+}\n\
+console.log([unwrap({ kind: \"Some\", value: 3 }), unwrap({ kind: \"None\" })].join(\",\"))\n\
+console.log([arm({ kind: \"Some\", value: 3 }), body({ kind: \"Some\", value: 3 }), body({ kind: \"None\" })].join(\",\"))\n",
+    );
+    assert_eq!(lines, ["3,-1", "6,4,-2"]);
+}
+
+#[test]
 fn a_member_step_calls_the_method_on_its_receiver() {
     require_toolchain!();
     let lines = run(r#"

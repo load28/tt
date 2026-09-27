@@ -1,5 +1,7 @@
 # TASK-391: Honour automatic semicolon insertion around pipelines and statement constructs
 
+> Updated by [TASK-451](./TASK-451-brace-after-expression-starts-block.md): flow statement splitting now ends a statement before a line-broken `{` that follows a complete expression unless a head in the statement still owes its body. Decision 1 still holds for the shared `asi_boundary_at` predicate.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

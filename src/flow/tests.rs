@@ -252,10 +252,8 @@ fn a_try_diverges_when_every_half_that_can_complete_does_not() {
 
 #[test]
 fn a_brace_on_its_own_line_does_not_start_a_statement() {
-    // Allman braces are why the automatic-semicolon rule splits only
-    // before the statement *keywords* and never before `{`: after
-    // `function g()` or `= function ()` a newline and a brace still
-    // open that function's body, and splitting there would let its
+    // After `function g()` or `= function ()` a newline and a brace
+    // still open that function's body, and splitting there would let its
     // `return` escape into the analyzed block.
     assert!(!check("function g()\n{\n  return 1;\n}"));
     assert!(!check("const g = function ()\n{\n  return 1;\n};"));
@@ -267,6 +265,42 @@ fn a_brace_on_its_own_line_does_not_start_a_statement() {
     assert!(check("while (true)\n{\n  log(\"x\");\n}"));
     assert!(check(
         "switch (k)\n{\n  case \"a\": return 1;\n  default: throw e;\n}"
+    ));
+}
+
+#[test]
+fn a_brace_after_a_complete_expression_on_a_new_line_starts_a_block() {
+    assert!(check("foo\nFoo\n{ return 0; }"));
+    assert!(check("Foo\n{ throw e; }"));
+    assert!(check("log(\"x\")\n{\n  return 1;\n}"));
+    assert!(check("const k = items[0]\n{ return k; }"));
+    assert!(check("const g = function () { return 1; }\n{ return 2; }"));
+    assert!(check("const C = class extends Base {}\n{ return 2; }"));
+    assert!(check("if (c) log(\"x\")\n{ return 1; }"));
+    assert!(!check("foo { return 0; }"));
+    assert!(!check(
+        "const g = function (): { n: number }\n{\n  return { n: 1 };\n}"
+    ));
+    assert!(!check(
+        "const C = class extends Base\n{\n  m() { return 1; }\n}"
+    ));
+    assert!(!check(
+        "const C = class extends mixin(function () {})\n{\n  m() { return 1; }\n}"
+    ));
+    assert!(!check("export function g()\n{\n  return 1;\n}"));
+    assert!(!check(
+        "export class C extends Base\n{\n  m() { return 1; }\n}"
+    ));
+    assert!(!check("export interface I extends J\n{\n  m(): number\n}"));
+    assert!(!check("export namespace N.M\n{\n  throw e;\n}"));
+    assert!(!check("declare module \"m\"\n{\n  throw e;\n}"));
+    assert!(!check("declare global\n{\n  throw e;\n}"));
+}
+
+#[test]
+fn if_let_bodies_split_a_brace_after_an_expression() {
+    assert!(check(
+        "if let Some(v) = o {\n  foo\n  { return v; }\n} else {\n  Foo\n  { return 1; }\n}"
     ));
 }
 
