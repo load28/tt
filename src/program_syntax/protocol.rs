@@ -681,6 +681,11 @@ pub(super) fn source_span_for_projection(
     segments: &[ProjectionSourceSegment],
     projected: ProjectedSpan,
 ) -> Option<SourceSpan> {
+    if let Some(segment) = segments.iter().find(|segment| {
+        segment.kind != ProjectionSegmentKind::SourceBoundary && segment.projected == projected
+    }) {
+        return Some(segment.source);
+    }
     let start = segments.iter().find_map(|segment| {
         if segment.kind != ProjectionSegmentKind::SourceBoundary
             && projected.start == segment.projected.start

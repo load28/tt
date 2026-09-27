@@ -478,8 +478,13 @@ impl<'a> ProjectionBuilder<'a> {
         // initializer. Project it as an expression so that header remains
         // valid TypeScript; its typed continuation decides the eventual
         // statement shape in target lowering.
-        if self.expr_contains_decision(propagate.value) {
-            return self.emit_propagate_with_shadow(propagate);
+        if self.expr_contains_value_region(propagate.value) {
+            return self.emit_propagate_with_shadow(
+                SyntaxCategory::Propagation,
+                self.source_span(propagate.owner)?,
+                CoreRoot::Propagate(propagate.node),
+                propagate.value,
+            );
         }
         self.preserve_concise_arrow_statement_boundary(self.source_span(propagate.owner)?.start);
         self.push_placeholder(
@@ -504,28 +509,30 @@ impl<'a> ProjectionBuilder<'a> {
     /// typed overlays to schedule the decision before the propagation.
     fn emit_propagate_with_shadow(
         &mut self,
-        propagate: &Propagate,
+        category: SyntaxCategory,
+        source: SourceSpan,
+        core_root: CoreRoot,
+        value: ExprId,
     ) -> Result<(), ProgramSyntaxError> {
-        let source = self.source_span(propagate.owner)?;
         let ordinal =
             u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
         let id = TtNodeId(ordinal);
         let pending_index = self.pending.len();
         self.pending.push(PendingOverlay {
             id,
-            category: SyntaxCategory::Propagation,
+            category,
             source,
             projected: ProjectedSpan {
                 start: ProjectedByte(0),
                 end: ProjectedByte(0),
             },
-            core_root: CoreRoot::Propagate(propagate.node),
+            core_root,
             marker: OverlayMarker::Identifier,
             synthetic_return: None,
         });
         let owner_start = ProjectedByte(self.code.len());
         self.code.push('(');
-        self.emit_shadow_expr(propagate.value)?;
+        self.emit_shadow_expr(value)?;
         self.code.push_str(", ");
         let start = ProjectedByte(self.code.len());
         self.code.push_str("$tt_syntax_expr_");
@@ -534,7 +541,9 @@ impl<'a> ProjectionBuilder<'a> {
         self.pending[pending_index].projected = ProjectedSpan { start, end };
         self.code.push(')');
         let owner_end = ProjectedByte(self.code.len());
-        self.code.push(';');
+        if category == SyntaxCategory::Propagation {
+            self.code.push(';');
+        }
         self.projection_only_protocol_parents.push(ProjectedSpan {
             start: ProjectedByte(owner_start.0 + 1),
             end: ProjectedByte(owner_end.0 - 1),
@@ -579,15 +588,28 @@ impl<'a> ProjectionBuilder<'a> {
             Expr::Opaque(node) => self.push_source(*node),
             Expr::Sequence(body) => self.emit_body(*body),
             Expr::Decision(decision) => self.emit_decision_region(expr, decision),
-            Expr::Propagate(propagate) => self.push_placeholder(
-                SyntaxCategory::Expression,
-                self.source_span(propagate.node)?,
-                CoreRoot::Expr(expr),
-            ),
+            Expr::Propagate(propagate) => self.emit_propagate_expr(expr, propagate),
             Expr::Apply(apply) => self.emit_apply(expr, apply),
             Expr::ResultRegion(region) => self.emit_result_region(expr, region),
             Expr::Template(template) => self.emit_template(template),
         }
+    }
+
+    fn emit_propagate_expr(
+        &mut self,
+        expr: ExprId,
+        propagate: &Propagate,
+    ) -> Result<(), ProgramSyntaxError> {
+        let source = self.source_span(propagate.node)?;
+        if self.expr_contains_value_region(propagate.value) {
+            return self.emit_propagate_with_shadow(
+                SyntaxCategory::Expression,
+                source,
+                CoreRoot::Expr(expr),
+                propagate.value,
+            );
+        }
+        self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))
     }
 
     fn emit_apply(&mut self, expr: ExprId, apply: &Apply) -> Result<(), ProgramSyntaxError> {
@@ -609,11 +631,11 @@ impl<'a> ProjectionBuilder<'a> {
             .enumerate()
             .filter(|step| {
                 self.expr_contains_propagation(step.1.value)
-                    || self.expr_contains_decision(step.1.value)
+                    || self.expr_contains_value_region(step.1.value)
             })
             .collect();
         let shadow_head = apply.head.filter(|head| {
-            self.expr_contains_propagation(*head) || self.expr_contains_decision(*head)
+            self.expr_contains_propagation(*head) || self.expr_contains_value_region(*head)
         });
         if shadow_head.is_none() && shadow_steps.is_empty() {
             return self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr));
@@ -716,39 +738,27 @@ impl<'a> ProjectionBuilder<'a> {
             })
     }
 
-    fn expr_contains_decision(&self, expr: ExprId) -> bool {
+    fn expr_contains_value_region(&self, expr: ExprId) -> bool {
         match &self.core.exprs[expr.index()] {
             Expr::Decision(_) => true,
             Expr::Sequence(body) => self.core.bodies[body.index()].statements.iter().any(
                 |statement| {
-                    matches!(statement, Statement::Expr(expr) if self.expr_contains_decision(*expr))
+                    matches!(statement, Statement::Expr(expr) if self.expr_contains_value_region(*expr))
                 },
             ),
             Expr::Apply(apply) => {
                 apply
                     .head
-                    .is_some_and(|head| self.expr_contains_decision(head))
+                    .is_some_and(|head| self.expr_contains_value_region(head))
                     || apply
                         .steps
                         .iter()
-                        .any(|step| self.expr_contains_decision(step.value))
+                        .any(|step| self.expr_contains_value_region(step.value))
             }
-            Expr::Propagate(propagate) => self.expr_contains_decision(propagate.value),
-            Expr::ResultRegion(region) => {
-                region.items.iter().any(|item| match item {
-                    crate::core_ir::ResultRegionItem::Statements(body) => self.core.bodies
-                        [body.index()]
-                    .statements
-                    .iter()
-                    .any(|statement| {
-                        matches!(statement, Statement::Expr(expr) if self.expr_contains_decision(*expr))
-                    }),
-                }) || region
-                    .value
-                    .is_some_and(|value| self.expr_contains_decision(value))
-            }
+            Expr::Propagate(propagate) => self.expr_contains_value_region(propagate.value),
+            Expr::ResultRegion(_) => true,
             Expr::Template(template) => template.parts.iter().any(|part| {
-                matches!(part, TemplatePart::Interpolation(expr) if self.expr_contains_decision(*expr))
+                matches!(part, TemplatePart::Interpolation(expr) if self.expr_contains_value_region(*expr))
             }),
             Expr::Opaque(_) => false,
         }
@@ -757,11 +767,7 @@ impl<'a> ProjectionBuilder<'a> {
     fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.push_source(*node),
-            Expr::Propagate(propagate) => self.push_placeholder(
-                SyntaxCategory::Expression,
-                self.source_span(propagate.node)?,
-                CoreRoot::Expr(expr),
-            ),
+            Expr::Propagate(propagate) => self.emit_propagate_expr(expr, propagate),
             Expr::Sequence(body) => self.emit_shadow_body(*body),
             // A nested pipeline is opaque to SWC for the same reason as its
             // parent. Its own projection retains the structural placeholder.

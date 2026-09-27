@@ -165,6 +165,7 @@ impl EvaluationFile {
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
+        let mut owned_child_exits = Vec::new();
         for (owner, values) in owners {
             let assigned = values
                 .into_iter()
@@ -256,6 +257,12 @@ impl EvaluationFile {
                 .map(|child| child.expr)
                 .collect();
             structurally_owned_children.extend(owned_children.iter().copied());
+            owned_child_exits.extend(
+                values
+                    .iter()
+                    .filter(|value| owned_children.contains(&value.expr) && !value.exits.is_empty())
+                    .map(|value| (value.expr, value.exits.clone())),
+            );
             for child in values
                 .iter()
                 .filter(|value| owned_children.contains(&value.expr))
@@ -752,6 +759,7 @@ impl EvaluationFile {
                     };
                     (!exits.is_empty()).then(|| (expr, exits.clone()))
                 })
+                .chain(owned_child_exits)
                 .collect(),
             expression_boundary_name,
             unsupported_expression_propagations,

@@ -417,7 +417,8 @@
 | TASK-387 | Classify excluded source entries before reading metadata | Complete | 2026-09-23 | 2026-09-23 | [TASK-387](./TASK-387-source-entry-admission.md) |
 | TASK-388 | Report project, configuration, and syntax diagnostics from the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-388](./TASK-388-typed-check-diagnostic-classes.md) |
 | TASK-389 | Run the CLI typed-check suite against the repository TypeScript | Complete | 2026-09-27 | 2026-09-27 | [TASK-389](./TASK-389-cli-typed-suite-toolchain.md) |
+| TASK-390 | Keep block returns of a value region that `try` propagates | Complete | 2026-09-27 | 2026-09-27 | [TASK-390](./TASK-390-propagated-value-region-exits.md) |
 
 ## Next task number
 
-**TASK-390**
+**TASK-391**

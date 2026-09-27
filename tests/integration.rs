@@ -776,3 +776,61 @@ console.log(events.join(","));
         ]
     );
 }
+
+#[test]
+fn a_propagated_value_region_keeps_its_block_returns() {
+    require_toolchain!();
+    let lines = run(r#"
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+const Err = (error: string): R<never> => ({ kind: "Err", error });
+function statement(): R<number> {
+    const q = try result { const w = try Ok(10); return w + 1; };
+    return Ok(q * 2);
+}
+function product(fail: boolean): R<number> {
+    const q = (try result { const w = try (fail ? Err("no") : Ok(10)); return w + 1; }) * 2;
+    return Ok(q);
+}
+function discarded(): R<number> {
+    try result { const w = try Err("inner"); return w; };
+    return Ok(0);
+}
+function matched(b: boolean): R<number> {
+    const q = (try match (b) { true => { return Ok(10); }, false => Ok(1) }) * 2;
+    return Ok(q + 1000);
+}
+function guarded(ready: boolean, b: boolean): R<number> {
+    const q = ready && (try match (b) { true => { return Ok(10); }, false => Ok(1) });
+    return Ok(Number(q) + 1000);
+}
+function argument(b: boolean): R<number> {
+    const q = String(try match (b) { true => { return Ok(10); }, false => Ok(1) });
+    return Ok(Number(q) + 1000);
+}
+function alternate(ready: boolean): R<number> {
+    const q = ready ? 5 : (try result { const w = try Ok(3); return w + 1; });
+    return Ok(q);
+}
+function piped(): R<string> {
+    const q = (try result { const w = try Ok(3); return w + 1; }) |> String;
+    return Ok(q);
+}
+function interpolated(b: boolean): R<number> {
+    const q = `${try match (b) { true => { return Ok(7); }, false => Err("x") }}`;
+    return Ok(Number(q) + 1);
+}
+const nested = result { const q = try result { const w = try Ok(3); return w + 1; }; return q * 2; };
+console.log(JSON.stringify([statement(), product(false), product(true), discarded()]));
+console.log(JSON.stringify([matched(true), guarded(true, true), guarded(false, true), argument(true)]));
+console.log(JSON.stringify([alternate(false), piped(), interpolated(true), nested]));
+"#);
+    assert_eq!(
+        lines,
+        [
+            r#"[{"kind":"Ok","value":22},{"kind":"Ok","value":22},{"kind":"Err","error":"no"},{"kind":"Err","error":"inner"}]"#,
+            r#"[{"kind":"Ok","value":1020},{"kind":"Ok","value":1010},{"kind":"Ok","value":1000},{"kind":"Ok","value":1010}]"#,
+            r#"[{"kind":"Ok","value":4},{"kind":"Ok","value":"4"},{"kind":"Ok","value":8},{"kind":"Ok","value":8}]"#,
+        ]
+    );
+}
