@@ -561,12 +561,12 @@ pub(super) fn run() -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
-            match path.canonicalize() {
+            match ttc::engine::normalize_document_path(path) {
                 Ok(path) => {
                     overlay.insert(path, text);
                 }
                 Err(e) => {
-                    eprintln!("ttc: --overlay {}: {e}", path.display());
+                    eprintln!("ttc: --overlay {e}");
                     return ExitCode::FAILURE;
                 }
             }

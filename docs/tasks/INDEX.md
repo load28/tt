@@ -421,6 +421,8 @@
 
 | TASK-393 | Make output owner identity cwd-independent and symlink-canonical | Complete | 2026-09-27 | 2026-09-27 | [TASK-393](./TASK-393-output-owner-identity.md) |
 
+| TASK-394 | Check unsaved overlays and rebuild importers of deleted files in watch | Complete | 2026-09-27 | 2026-09-27 | [TASK-394](./TASK-394-unsaved-overlay-and-watch-deletions.md) |
+
 ## Next task number
 
 **TASK-391**

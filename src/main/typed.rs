@@ -30,7 +30,16 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
         return typed_watch(&mut project, options);
     }
 
-    let files = project.initial_files();
+    let mut files = project.initial_files();
+    files.extend(
+        options
+            .overlay
+            .keys()
+            .filter(|path| ttc::SourceKind::from_tt_path(path).is_some())
+            .cloned(),
+    );
+    files.sort();
+    files.dedup();
     match typed_pass(&mut project, &files, options) {
         // The exit code answers "did the check pass?", in every mode — a
         // `--types` run still *writes* its sidecars when the code has type

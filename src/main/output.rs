@@ -221,16 +221,25 @@ pub(super) fn watch_mode(
                 .iter()
                 .filter(|(file, stamp)| stamps.get(*file) != Some(stamp))
                 .map(|(file, _)| file.clone())
+                .chain(
+                    stamps
+                        .keys()
+                        .filter(|file| !current.contains_key(*file))
+                        .cloned(),
+                )
                 .collect()
         };
 
-        if !changed.is_empty() {
+        let selected: Vec<Job> = if changed.is_empty() {
+            Vec::new()
+        } else {
             let targets = with_dependents(&jobs, &changed);
-            let selected: Vec<Job> = jobs
-                .iter()
+            jobs.iter()
                 .filter(|job| targets.contains(&job.file))
                 .cloned()
-                .collect();
+                .collect()
+        };
+        if !selected.is_empty() {
             let failed = compile_jobs(&selected, opts);
             // The count is what was rebuilt; only the word after it says
             // how the round went, so "failed" must not borrow it.
@@ -280,10 +289,10 @@ pub(super) fn input_relative(file: &Path, inputs: &[String]) -> PathBuf {
 /// The changed files plus every job that imports one of them.
 pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<PathBuf> {
     let mut targets: HashSet<PathBuf> = changed.iter().cloned().collect();
-    let changed_real: HashSet<PathBuf> = changed
-        .iter()
-        .filter_map(|file| file.canonicalize().ok())
-        .collect();
+    let identity = |path: &Path| {
+        ttc::engine::normalize_document_path(path).unwrap_or_else(|_| normalized_absolute(path))
+    };
+    let changed_real: HashSet<PathBuf> = changed.iter().map(|file| identity(file)).collect();
 
     for job in jobs {
         if targets.contains(&job.file) {
@@ -293,11 +302,9 @@ pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<Path
             continue;
         };
         let dir = job.file.parent().unwrap_or(Path::new("."));
-        let imports_changed = ttc::tt_imports(&source).iter().any(|import| {
-            dir.join(&import.specifier)
-                .canonicalize()
-                .is_ok_and(|target| changed_real.contains(&target))
-        });
+        let imports_changed = ttc::tt_imports(&source)
+            .iter()
+            .any(|import| changed_real.contains(&identity(&dir.join(&import.specifier))));
         if imports_changed {
             targets.insert(job.file.clone());
         }

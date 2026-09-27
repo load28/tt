@@ -1117,10 +1117,10 @@ fn overlay_does_not_combine_with_watch() {
     );
 }
 
-/// The flag needs a value, and the path it names has to exist — it stands
-/// in for a file of the project, so there has to be one.
+/// The flag needs a value, and the path it names needs an existing
+/// directory — it stands in for a file of the project, saved or not.
 #[test]
-fn overlay_reports_a_missing_value_and_a_missing_file() {
+fn overlay_reports_a_missing_value_and_a_missing_directory() {
     let out = ttc(&["--check-types", "--overlay"]);
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
@@ -1132,7 +1132,7 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     let dir = tmpdir();
     let file = dir.join("a.tt");
     fs::write(&file, "export const n = 1;\n").unwrap();
-    let gone = dir.join("gone.tt");
+    let gone = dir.join("gone").join("a.tt");
     let out = ttc(&[
         "--check-types",
         "--overlay",
@@ -1142,7 +1142,7 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
     assert!(err.contains("--overlay"), "{err}");
-    assert!(err.contains("gone.tt"), "{err}");
+    assert!(err.contains("gone"), "{err}");
 }
 
 include!("cli/cases_01.rs");
