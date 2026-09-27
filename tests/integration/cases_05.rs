@@ -536,3 +536,39 @@ iterator.next().then((first) =>
         ]
     );
 }
+
+#[test]
+fn runtime_values_hoisted_out_of_unbraced_bodies_stay_under_their_parent() {
+    require_toolchain!();
+    let out = run(r#"
+variant S { A(n: number), B }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const log: string[] = [];
+function note(x: unknown) { log.push(String(x)); }
+function f(s: S, c: boolean) {
+  if (c) return match (s) { A(n) => n, B => 0 };
+  return -1;
+}
+function loops(s: S, xs: number[]) {
+  for (const q of xs) note(match (s) { A(n) => n + q, B => q });
+  let i = 0;
+  while (i++ < 2) note(match (s) { A(n) => n, B => -1 });
+  outer: for (const q of match (s) { A(n) => [n, n + 1], B => [] }) { if (q > 5) continue outer; note(q); }
+  do note(match (s) { A(n) => -n, B => 0 }); while (false);
+  lbl: note(match (s) { A(n) => n * 10, B => 0 });
+}
+function tries(c: boolean, r: R): R {
+  if (c) note(try r); else note("else");
+  if (c) note(result { const v = try r; return v + 1; }.kind);
+  if (c) for (let k = try r; k < 6; k++) note(k);
+  return { kind: "Ok", value: 0 };
+}
+console.log(f(S.A(3), true), f(S.A(3), false), f(S.B, true));
+loops(S.A(5), [1, 2]);
+console.log(log.join(","));
+log.length = 0;
+console.log(tries(true, { kind: "Err", error: "e" }).kind, tries(false, { kind: "Ok", value: 1 }).kind, tries(true, { kind: "Ok", value: 4 }).kind);
+console.log(log.join(","));
+"#);
+    assert_eq!(out, ["3 -1 0", "6,7,5,5,5,-5,50", "Err Ok Ok", "else,4,Ok,4,5"]);
+}

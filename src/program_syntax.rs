@@ -584,6 +584,25 @@ pub(crate) struct HostOwner {
     pub(crate) id: HostOwnerId,
     pub(crate) kind: HostOwnerKind,
     pub(crate) span: SourceSpan,
+    /// Where the statement a prelude hoisted to this owner is written
+    /// before begins; it ends where the owner does. See [`HostOwner::anchor`].
+    anchor_start: usize,
+}
+
+impl HostOwner {
+    /// The statement a prelude hoisted to this owner is written before: the
+    /// owner itself, or the outermost label of the labels an iteration
+    /// statement owner stands under. A `continue` can name a label only
+    /// when the label applies directly to its loop (ECMA-262 §14.13.1,
+    /// ContainsUndefinedContinueTarget), so the prelude — and any block
+    /// the owner needs — must enclose the labels rather than separate them
+    /// from the loop.
+    pub(crate) fn anchor(&self) -> SourceSpan {
+        SourceSpan {
+            start: self.anchor_start,
+            end: self.span.end,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -713,6 +732,7 @@ impl EvaluationContext {
         category: SyntaxCategory,
         parents: &[AstParentKind],
         host_owner_edge: usize,
+        requires_block: bool,
         facts: OverlayFacts,
     ) -> Self {
         let OverlayFacts {
@@ -723,7 +743,6 @@ impl EvaluationContext {
             ambient,
             decorated_classes,
         } = facts;
-        let requires_block = statement_requires_block(parents);
         let (mut owner, owner_edge) = evaluation_owner(parents, &decorated_classes);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
@@ -782,18 +801,11 @@ impl EvaluationContext {
     }
 }
 
-fn statement_requires_block(parents: &[AstParentKind]) -> bool {
-    let Some(statement) = parents
-        .iter()
-        .rposition(|parent| matches!(parent, AstParentKind::ExprStmt(_) | AstParentKind::Stmt(_)))
-    else {
-        return false;
-    };
-    let parent = parents[..statement]
-        .iter()
-        .rev()
-        .find(|parent| !matches!(parent, AstParentKind::Stmt(_) | AstParentKind::ExprStmt(_)));
-    parent.is_some_and(|parent| {
+/// Whether the statement the path `above` leads into is the unbraced body
+/// of an `if`, loop, label, or `with`: the one position where replacing that
+/// statement with several leaves only the first under the parent.
+fn is_unbraced_body(above: &[AstParentKind]) -> bool {
+    above.last().is_some_and(|parent| {
         matches!(
             parent,
             AstParentKind::IfStmt(fields::IfStmtField::Cons | fields::IfStmtField::Alt)
@@ -806,6 +818,39 @@ fn statement_requires_block(parents: &[AstParentKind]) -> bool {
                 | AstParentKind::WithStmt(fields::WithStmtField::Body)
         )
     })
+}
+
+/// The owner a prelude for the innermost of `owners` is written before.
+/// `owners` runs from the outermost enclosing host owner to the chosen one;
+/// only an iteration statement looks through the labels naming it.
+fn prelude_anchor<'o>(
+    owners: &'o [ProjectedHostOwner],
+    parents: &[AstParentKind],
+) -> &'o ProjectedHostOwner {
+    let mut index = owners.len() - 1;
+    let owner = &owners[index];
+    let iteration = owner.kind == HostOwnerKind::Statement
+        && matches!(
+            parents.get(owner.edge),
+            Some(AstParentKind::Stmt(
+                fields::StmtField::For
+                    | fields::StmtField::ForIn
+                    | fields::StmtField::ForOf
+                    | fields::StmtField::While
+                    | fields::StmtField::DoWhile
+            ))
+        );
+    while iteration
+        && index > 0
+        && owners[index].edge > 0
+        && matches!(
+            parents.get(owners[index].edge - 1),
+            Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
+        )
+    {
+        index -= 1;
+    }
+    &owners[index]
 }
 
 /// The evaluation regions between a value's host owner and the value.

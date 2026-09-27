@@ -299,6 +299,24 @@ fn a_yield_in_a_match_subject_or_guard_suspends_the_enclosing_generator() {
 }
 
 #[test]
+fn a_value_hoisted_out_of_an_unbraced_body_opens_its_own_block() {
+    let prelude = "variant S { A(n: number), B }\ndeclare const s: S;\ndeclare const c: boolean;\ndeclare function g(n: number): void;\ndeclare const r: { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n";
+    for (body, opened, closed) in [
+        ("function f() { if (c) return match (s) { A(n) => n, B => 0 }; return -1; }", "if (c) { let $tt_v0: number;", "return $tt_v0; } return -1;"),
+        ("function f(xs: number[]) { for (const q of xs) g(match (s) { A(n) => n, B => q }); }", "for (const q of xs) { const $tt_v1 = (g);", "} } }"),
+        ("function f() { if (c) g(try r); else g(0); }", "if (c) { let $tt_v0: number;", "$tt_v1($tt_v0); } else g(0);"),
+        ("function f() { lbl: match (s) { A(n) => g(n), B => g(0) }; }", "lbl: { let $tt_v0: void;", "} ; }"),
+        ("function f() { while (c) match (s) { A(n) => g(n), B => g(0) } }", "while (c) { let $tt_v0: void;", "} } }"),
+        ("function f() { if (c) g(0); else if (match (s) { A(n) => n > 0, B => false }) g(1); }", "else { let $tt_v0: boolean;", "if ($tt_v0) g(1); }"),
+        ("function f() { if (c) for (let i = try r; i < 3; i++) g(i); }", "if (c) { const $tt_t0 = r;", "for (let i = $tt_t0.value; i < 3; i++) g(i); }"),
+    ] {
+        let out = compact(&ok(&format!("{prelude}{body}\n")));
+        assert!(out.contains(opened), "{body}\n{out}");
+        assert!(out.contains(closed), "{body}\n{out}");
+    }
+}
+
+#[test]
 fn a_yield_crossing_a_result_block_reports_only_the_crossing() {
     let source = "import type { TResult } from \"@tt/std\";\ndeclare const x: TResult<number, string>;\nfunction* g(): Generator<number, unknown, number> {\n  const r = result { const v = try x; const w = yield v; return w; };\n  return r;\n}\n";
     let diagnostics = ttc::analyze(source, &Options::default());
@@ -356,4 +374,12 @@ fn try_binds_to_a_private_member_operand() {
     assert!(out.contains("const $tt_t3 = this.#case;"), "{out}");
     assert!(out.contains("const $tt_t4 = this.#match();"), "{out}");
     assert!(out.contains("const d = $tt_v0 * 2;"), "{out}");
+}
+
+#[test]
+fn a_labeled_loop_keeps_its_label_on_the_loop_when_its_header_hoists_a_value() {
+    let out = compact(&ok("variant S { A(n: number), B }\ndeclare const s: S;\ndeclare const c: boolean;\nfunction f(xs: number[][]) {\n  lbl: for (const q of match (s) { A(n) => xs[n], B => [] }) { if (c) continue lbl; }\n  if (c) outer: inner: for (const q of match (s) { A(n) => xs[n], B => [] }) { continue outer; }\n}\n"));
+    assert!(out.contains("} lbl: for (const q of $tt_v0) { if (c) continue lbl; }"), "{out}");
+    assert!(out.contains("if (c) { let $tt_v1: number[];"), "{out}");
+    assert!(out.contains("} outer: inner: for (const q of $tt_v1) { continue outer; } }"), "{out}");
 }

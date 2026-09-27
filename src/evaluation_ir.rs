@@ -141,6 +141,7 @@ pub(crate) struct LoweringPlan {
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
     block_required_propagations: HashSet<NodeId>,
+    block_required_owners: HashSet<SourceSpan>,
     ambient_items: HashSet<NodeId>,
     owner_model_unavailable: bool,
 }
@@ -551,6 +552,13 @@ impl LoweringPlan {
 
     pub(crate) fn block_required_propagations(&self) -> &HashSet<NodeId> {
         &self.block_required_propagations
+    }
+
+    /// Host owners, by their anchor, that are the unbraced body of an `if`,
+    /// loop, label, or `with`: a prelude hoisted in front of one has to open
+    /// a block there so the owner stays a single statement under its parent.
+    pub(crate) fn block_required_owners(&self) -> &HashSet<SourceSpan> {
+        &self.block_required_owners
     }
 
     pub(crate) fn ambient_items(&self) -> &HashSet<NodeId> {

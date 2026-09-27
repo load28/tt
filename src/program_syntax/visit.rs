@@ -156,19 +156,28 @@ impl ParentCollector {
                 .found
                 .remove(&entry.id)
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
-            let (projected_owner, kind, span) = found
+            let (owner_index, projected_owner, kind, span) = found
                 .host_owners
                 .iter()
+                .enumerate()
                 .rev()
-                .filter(|owner| {
+                .filter(|(_, owner)| {
                     owner.span.start <= entry.projected.start
                         && entry.projected.end <= owner.span.end
                 })
-                .find_map(|owner| {
+                .find_map(|(index, owner)| {
                     source_span_for_projection(&self.source_segments, owner.span)
-                        .map(|span| (*owner, owner.kind, span))
+                        .map(|span| (index, *owner, owner.kind, span))
                 })
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let projected_anchor =
+                prelude_anchor(&found.host_owners[..=owner_index], &found.parents);
+            let anchor = source_span_for_projection(&self.source_segments, projected_anchor.span)
+                .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let requires_block = projected_anchor.kind == HostOwnerKind::Statement
+                && is_unbraced_body(
+                    &found.parents[..projected_anchor.edge.min(found.parents.len())],
+                );
             let owner_id = if let Some(owner_id) = owner_ids.get(&projected_owner).copied() {
                 owner_id
             } else {
@@ -182,6 +191,7 @@ impl ParentCollector {
                         id: owner_id,
                         kind,
                         span,
+                        anchor_start: anchor.start,
                     },
                     roots: Vec::new(),
                 });
@@ -206,6 +216,7 @@ impl ParentCollector {
                     entry.category,
                     &found.parents,
                     projected_owner.edge,
+                    requires_block,
                     OverlayFacts {
                         function_target: found.function_target,
                         contextual_type: found
@@ -812,27 +823,10 @@ impl VisitAstPath for ParentCollector {
                     projected_span(reference_value_span(argument), self.source_start)
                 }),
                 captured_break: self.break_capture_depth > region_break_depth,
-                requires_block: path
-                    .kinds()
-                    .iter()
-                    .rev()
-                    .find(|parent| {
-                        !matches!(parent, AstParentKind::Stmt(fields::StmtField::Return))
-                    })
-                    .is_some_and(|parent| {
-                        matches!(
-                            parent,
-                            AstParentKind::IfStmt(
-                                fields::IfStmtField::Cons | fields::IfStmtField::Alt
-                            ) | AstParentKind::ForStmt(fields::ForStmtField::Body)
-                                | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
-                                | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
-                                | AstParentKind::WhileStmt(fields::WhileStmtField::Body)
-                                | AstParentKind::DoWhileStmt(fields::DoWhileStmtField::Body)
-                                | AstParentKind::LabeledStmt(fields::LabeledStmtField::Body)
-                                | AstParentKind::WithStmt(fields::WithStmtField::Body)
-                        )
-                    }),
+                requires_block: is_unbraced_body(match &path.kinds()[..] {
+                    [above @ .., AstParentKind::Stmt(fields::StmtField::Return)] => above,
+                    kinds => kinds,
+                }),
             });
         }
         <ReturnStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);

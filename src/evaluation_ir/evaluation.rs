@@ -793,9 +793,37 @@ impl EvaluationFile {
                 .iter()
                 .filter_map(|region| match (region.root, &region.placement) {
                     (Some(CoreRoot::Propagate(node)), RegionPlacement::Host { context, .. })
-                        if context.requires_block =>
+                        if context.requires_block
+                            && context.continuation != HostContinuation::ForInitialize =>
                     {
                         Some(node)
+                    }
+                    _ => None,
+                })
+                .collect(),
+            // Every root that hoists a prelude in front of its owner, rather
+            // than replacing the owner as a statement-form `try` does.
+            block_required_owners: self
+                .regions
+                .iter()
+                .filter_map(|region| match (region.root, &region.placement) {
+                    (
+                        Some(root),
+                        RegionPlacement::Host {
+                            context,
+                            host_owner,
+                            ..
+                        },
+                    ) if context.requires_block
+                        && match root {
+                            CoreRoot::Expr(_) => true,
+                            CoreRoot::Propagate(_) => {
+                                context.continuation == HostContinuation::ForInitialize
+                            }
+                            CoreRoot::Adt(_) | CoreRoot::Decision(_) => false,
+                        } =>
+                    {
+                        Some(host_owner.anchor())
                     }
                     _ => None,
                 })

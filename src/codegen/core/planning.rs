@@ -405,6 +405,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) host_json: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
     pub(super) block_required_propagations: HashSet<NodeId>,
+    pub(super) block_required_owners: HashSet<SourceSpan>,
     pub(super) ambient_items: HashSet<NodeId>,
 }
 
@@ -822,7 +823,7 @@ impl TargetRewritePlan {
             .for_initializer_propagations()
             .map(|propagation| ForInitializerPropagationRewrite {
                 node: propagation.node,
-                owner: propagation.owner.span,
+                owner: propagation.owner.anchor(),
                 source: propagation.source,
             })
             .collect();
@@ -861,7 +862,7 @@ impl TargetRewritePlan {
                     && value.schedule.steps().is_empty()
                     && value.capability == TargetCapability::StatementRegion)
                     .then(|| OwnerSlotRewrite {
-                        owner: rewrite.owner.span,
+                        owner: rewrite.owner.anchor(),
                         source: structured_expr_span(semantic, core, value.expr)
                             .unwrap_or(value.source),
                         expr: value.expr,
@@ -1072,7 +1073,7 @@ impl TargetRewritePlan {
                         })
                         .collect();
                     ComposeRewrite {
-                        owner: rewrite.owner.span,
+                        owner: rewrite.owner.anchor(),
                         owner_kind: rewrite.owner.kind,
                         actions,
                     }
@@ -1491,6 +1492,7 @@ impl TargetRewritePlan {
         Self {
             inline_subjects,
             block_required_propagations: lowering.block_required_propagations().clone(),
+            block_required_owners: lowering.block_required_owners().clone(),
             ambient_items: lowering.ambient_items().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),
             host_error: lowering.host_global("Error"),

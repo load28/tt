@@ -4,6 +4,56 @@ use super::*;
 
 impl<'a> Emitter<'a> {
     pub(super) fn emit_owner_slot_rewrite(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
+        self.within_owner_prelude(rewrite.owner, || self.emit_owner_slot_prelude(rewrite))
+    }
+
+    /// Writes one prelude hoisted to `owner`, first opening the owner's block
+    /// when the owner is an unbraced body and no earlier prelude opened it.
+    /// The opening brace carries its own layout scope, so the prelude and
+    /// the rest of the owner's source indent one level inside it.
+    pub(super) fn within_owner_prelude(
+        &self,
+        owner: SourceSpan,
+        prelude: impl FnOnce() -> Rope<'a>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        if self.block_required_owners.contains(&owner) && self.opened_owner_blocks.claim(owner) {
+            out.push_scope_open();
+            out.push_lit("{");
+            out.push_break(1);
+        }
+        self.emitting_owner_preludes.borrow_mut().push(owner);
+        let prelude = prelude();
+        self.emitting_owner_preludes.borrow_mut().pop();
+        out.append(prelude);
+        out
+    }
+
+    /// Closes, innermost first, every opened owner block whose owner ends at
+    /// `at`, unless that owner's own prelude is the one reaching its end.
+    pub(super) fn close_owner_blocks_at(&self, at: usize, out: &mut Rope<'a>) {
+        let mut ending: Vec<_> = self
+            .block_required_owners
+            .iter()
+            .filter(|owner| {
+                owner.end == at
+                    && self.opened_owner_blocks.contains(**owner)
+                    && !self.closed_owner_blocks.contains(**owner)
+                    && !self.emitting_owner_preludes.borrow().contains(owner)
+            })
+            .copied()
+            .collect();
+        ending.sort_unstable_by_key(|owner| std::cmp::Reverse(owner.start));
+        for owner in ending {
+            self.closed_owner_blocks.claim(owner);
+            *out = std::mem::take(out).trim_end();
+            out.push_break(0);
+            out.push_lit("}");
+            out.push_scope_close();
+        }
+    }
+
+    fn emit_owner_slot_prelude(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
         let _active = self.active_structured_exprs.enter(rewrite.expr);
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
@@ -56,6 +106,15 @@ impl<'a> Emitter<'a> {
         &self,
         rewrite: &ForInitializerPropagationRewrite,
     ) -> Rope<'a> {
+        self.within_owner_prelude(rewrite.owner, || {
+            self.for_initializer_propagation_prelude(rewrite)
+        })
+    }
+
+    fn for_initializer_propagation_prelude(
+        &self,
+        rewrite: &ForInitializerPropagationRewrite,
+    ) -> Rope<'a> {
         let propagate = self
             .core
             .bodies
@@ -81,6 +140,7 @@ impl<'a> Emitter<'a> {
         out.push_lit(format!("return {temp};"));
         out.push_break(0);
         out.push_lit("}");
+        out.push_break(0);
         Rope::scoped(out)
     }
 
@@ -96,6 +156,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_compose_rewrite(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
+        self.within_owner_prelude(rewrite.owner, || self.emit_compose_prelude(rewrite))
+    }
+
+    fn emit_compose_prelude(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         let mut out = Rope::new();
         let depth = u16::from(rewrite.owner_kind == HostOwnerKind::ArrowExpression);
         if depth > 0 {

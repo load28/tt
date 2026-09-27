@@ -45,6 +45,17 @@ pub(super) struct Emitter<'a> {
     pub(super) host_json: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
     pub(super) block_required_propagations: HashSet<NodeId>,
+    /// Statement owners that must open a block before their first hoisted
+    /// prelude and close it after their last byte. Several entry points can
+    /// write a prelude, and the owner's end can be reached by more than one
+    /// source walk, so both braces are claimed exactly once.
+    pub(super) block_required_owners: HashSet<SourceSpan>,
+    pub(super) opened_owner_blocks: ClosedComposeBlocks,
+    pub(super) closed_owner_blocks: ClosedComposeBlocks,
+    /// Owners whose prelude is being written right now. A prelude re-emits
+    /// source inside its own owner, which can end exactly where the owner
+    /// ends; that walk must not close the block around it.
+    pub(super) emitting_owner_preludes: RefCell<Vec<SourceSpan>>,
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) used_match_raise: Cell<bool>,
     /// How many conditional-operation regions are being emitted right now.

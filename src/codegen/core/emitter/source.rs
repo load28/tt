@@ -146,6 +146,7 @@ impl<'a> Emitter<'a> {
         let mut loop_endings = loop_endings.into_iter().peekable();
         let mut cursor = span.start;
         while cursor < span.end {
+            self.close_owner_blocks_at(cursor, &mut rope);
             while let Some(_rewrite) = loop_endings.next_if(|rewrite| rewrite.body.end == cursor) {
                 rope.push_lit("}");
             }
@@ -296,7 +297,15 @@ impl<'a> Emitter<'a> {
                 .map(|replacement| replacement.source.start)
                 .min()
                 .unwrap_or(span.end);
+            let next_owner_end = self
+                .block_required_owners
+                .iter()
+                .map(|owner| owner.end)
+                .filter(|end| cursor < *end && *end < span.end)
+                .min()
+                .unwrap_or(span.end);
             let next = next_insertion
+                .min(next_owner_end)
                 .min(next_compose)
                 .min(next_propagation)
                 .min(next_compose_end)
@@ -308,6 +317,7 @@ impl<'a> Emitter<'a> {
                 cursor = next;
             }
         }
+        self.close_owner_blocks_at(span.end, &mut rope);
         while let Some(rewrite) = compose_endings.next_if(|rewrite| rewrite.owner.end == span.end) {
             rope.append(self.emit_compose_suffix(rewrite));
         }
