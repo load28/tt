@@ -698,7 +698,20 @@ impl Parser<'_> {
                     tries::parse_try_decl(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
                     stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
-                    flush_verbatim(&mut segments, seg_start, tok.span.start);
+                    let mut first = i;
+                    while first > 0
+                        && tokens[first - 1].span.start >= seg_start
+                        && matches!(tokens[first - 1].kind, TokenKind::Ident)
+                        && matches!(
+                            &self.src[tokens[first - 1].span.start..tokens[first - 1].span.end],
+                            "export" | "declare"
+                        )
+                        && !cursor::dotted_at(tokens, 0, first - 1)
+                    {
+                        first -= 1;
+                    }
+                    stmt.owner_span.start = tokens[first].span.start;
+                    flush_verbatim(&mut segments, seg_start, stmt.owner_span.start);
                     segments.push(Segment::Try(stmt));
                     seg_start = byte_end;
                     i = cur.idx;

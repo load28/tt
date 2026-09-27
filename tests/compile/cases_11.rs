@@ -122,3 +122,15 @@ fn a_malformed_variant_behind_modifiers_is_reported_once() {
         assert_eq!(malformed.len(), 1, "{source}{diagnostics:#?}");
     }
 }
+
+#[test]
+fn an_exported_try_declaration_reports_only_its_placement() {
+    for source in [
+        "declare function f(): any;\nexport const a = try f();\n",
+        "declare function f(): any;\nnamespace N { export const a = try f(); }\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        let codes: Vec<_> = diagnostics.iter().map(|diagnostic| diagnostic.code).collect();
+        assert_eq!(codes, [DiagnosticCode::TryPlacement], "{source}{diagnostics:#?}");
+    }
+}
