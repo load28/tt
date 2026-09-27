@@ -230,6 +230,7 @@ async function main() {
     const out = {
       projectModules: [],
       diagnostics: [],
+      projectDiagnostics: [],
       literalMissing: [],
       tagMissing: [],
       tagMembers: [],
@@ -382,8 +383,34 @@ async function main() {
       if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
     }
     if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return out; }
-    for (const d of project.program.getSemanticDiagnostics()) {
-      if (!d.fileName) continue;
+    const program = project.program;
+    const reported = new Set();
+    const unique = (diagnostics) => diagnostics.filter((d) => {
+      const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, d.text]);
+      if (reported.has(key)) return false;
+      reported.add(key);
+      return true;
+    });
+    const structural = unique([
+      ...program.getConfigFileParsingDiagnostics(),
+      ...program.getProgramDiagnostics(),
+      ...program.getGlobalDiagnostics(),
+      ...program.getSyntacticDiagnostics(),
+    ]);
+    const semantic = unique(program.getSemanticDiagnostics());
+    const late = unique(program.getGlobalDiagnostics());
+    for (const d of [...structural, ...late]) {
+      if (!d.fileName || configFiles.has(d.fileName) || d.pos < 0) {
+        if (open.tsconfig) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: d.text });
+        continue;
+      }
+      out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: d.text });
+    }
+    for (const d of semantic) {
+      if (!d.fileName) {
+        if (open.tsconfig) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
+        continue;
+      }
       const mismatch = contextualMismatch(project, checker, d, isExpression);
       const related = relatedPlaces(d);
       out.diagnostics.push({

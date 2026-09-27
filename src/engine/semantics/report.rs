@@ -172,6 +172,19 @@ pub(crate) fn report(
     // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
     let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };
+    if !tt_only {
+        for diagnostic in &answers.project_diagnostics {
+            out.push(Diagnostic {
+                path: diagnostic.file.clone(),
+                position: None,
+                end: None,
+                message: diagnostic.message.clone(),
+                code: Some(format!("ts{}", diagnostic.code)),
+                suggestions: Vec::new(),
+                labels: Vec::new(),
+            });
+        }
+    }
     let structured_glue: HashSet<(PathBuf, usize, AnchorKind)> = type_diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.mismatch.is_some())

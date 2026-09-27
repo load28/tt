@@ -773,6 +773,88 @@ fn types_reports_a_missing_literal_of_a_finite_union() {
     assert!(err.contains("--> src/main.tt:3:10"), "{err}");
 }
 
+fn types_project_output(tsconfig: &str, files: &[(&str, &str)]) -> (bool, String) {
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("tsconfig.json"), tsconfig).unwrap();
+    for (path, text) in files {
+        fs::write(dir.join(path), text).unwrap();
+    }
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    (
+        out.status.success(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn types_reports_configuration_parsing_diagnostics() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": tru }, \"include\": [\"src\"] }\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts5024]"), "{err}");
+    assert!(err.contains("--> tsconfig.json:1:"), "{err}");
+}
+
+#[test]
+fn types_reports_a_missing_extended_configuration_without_a_position() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"extends\": \"./missing.json\", \"include\": [\"src\"] }\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts5083]"), "{err}");
+    assert_eq!(err.matches("error[ts5083]").count(), 1, "{err}");
+    assert!(err.contains("--> tsconfig.json\n"), "{err}");
+}
+
+#[test]
+fn types_reports_program_diagnostics_without_a_file() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"types\": [\"does-not-exist\"] }, \"include\": [\"src\"] }\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts2688]"), "{err}");
+    assert_eq!(err.matches("error[ts2688]").count(), 1, "{err}");
+}
+
+#[test]
+fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_position() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"target\": \"es5x\" },\n  \"include\": [\"src/**/*.tt\"]\n}\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts6046]"), "{err}");
+    assert!(err.contains("--> tsconfig.json\n"), "{err}");
+}
+
+#[test]
+fn types_reports_syntax_errors_in_hand_written_typescript() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": true }, \"include\": [\"src\"] }\n",
+        &[
+            ("src/a.tt", "export const ok: number = 1;\n"),
+            ("src/h.ts", "export const broken: number = ;\n"),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts1109]"), "{err}");
+    assert!(err.contains("--> src/h.ts:1:"), "{err}");
+}
+
 #[test]
 fn types_is_silent_when_the_literal_match_is_exhaustive() {
     require_types_toolchain!();

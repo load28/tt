@@ -182,7 +182,7 @@ impl TypeScriptBackend for NativeBackend {
         let job = job_json(query);
         let answer = exchange(session, &job.to_string());
         match answer {
-            Ok(line) => parse_answers(&line),
+            Ok(line) => parse_answers(&line, tsconfig.unwrap_or(root)),
             Err(_) => {
                 // The host is gone; take its last words, and let the next
                 // question start a fresh one.
@@ -257,7 +257,7 @@ fn literal_json(literal: &crate::Literal) -> serde_json::Value {
 
 /// Reads the host's answer. A shape that does not match is a bug in the pair
 /// of this file and `host.mjs`, and is reported as one.
-fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
+fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
     let value: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
         Failure::internal(format!(
             "the TypeScript backend answered with malformed JSON: {e}"
@@ -323,6 +323,15 @@ fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
                         .collect()
                 })
                 .unwrap_or_default(),
+        });
+    }
+    for d in array(&value, "projectDiagnostics") {
+        answers.project_diagnostics.push(ProjectDiagnostic {
+            file: d["file"]
+                .as_str()
+                .map_or_else(|| project.to_path_buf(), PathBuf::from),
+            code: d["code"].as_u64().unwrap_or_default() as u32,
+            message: d["message"].as_str().unwrap_or_default().to_string(),
         });
     }
     for m in array(&value, "literalMissing") {
