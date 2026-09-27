@@ -429,6 +429,10 @@
 | TASK-419 | Stop marking a case covered in completion when only a guarded arm handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-419](./TASK-419-guarded-arms-never-cover-in-completion.md) |
 | TASK-420 | Clamp a position past the end of its line to the line's length | Complete | 2026-09-27 | 2026-09-27 | [TASK-420](./TASK-420-clamp-positions-to-the-line.md) |
 | TASK-421 | Treat JSX text as opaque when classifying semantic tokens | Complete | 2026-09-27 | 2026-09-27 | [TASK-421](./TASK-421-jsx-text-semantic-tokens.md) |
+| TASK-422 | Navigate from variant use sites to the variant declaration | Complete | 2026-09-27 | 2026-09-27 | [TASK-422](./TASK-422-variant-navigation.md) |
+| TASK-423 | Find an imported variant's declaration the way the analysis resolved it | Complete | 2026-09-27 | 2026-09-27 | [TASK-423](./TASK-423-imported-tt-symbol-definition.md) |
+| TASK-424 | Measure every reported position in the decoded text of a file with a byte order mark | Complete | 2026-09-27 | 2026-09-27 | [TASK-424](./TASK-424-byte-order-mark-positions.md) |
+| TASK-425 | Check a requested file outside the configuration in its inferred project | Complete | 2026-09-27 | 2026-09-27 | [TASK-425](./TASK-425-inferred-project-typed-check.md) |
 | TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
 | TASK-427 | Decide `result` ownership of `try` from the parsed construct boundaries | Complete | 2026-09-27 | 2026-09-27 | [TASK-427](./TASK-427-result-try-ownership.md) |
 | TASK-428 | Route abrupt exits through `finally` in the divergence graph | Complete | 2026-09-27 | 2026-09-27 | [TASK-428](./TASK-428-finally-routing.md) |
@@ -436,10 +440,6 @@
 | TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
 | TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 | TASK-432 | Reach the host `Error` and `JSON` past user declarations in generated guards | Complete | 2026-09-27 | 2026-09-27 | [TASK-432](./TASK-432-host-globals-in-guards.md) |
-| TASK-422 | Navigate from variant use sites to the variant declaration | Complete | 2026-09-27 | 2026-09-27 | [TASK-422](./TASK-422-variant-navigation.md) |
-| TASK-423 | Find an imported variant's declaration the way the analysis resolved it | Complete | 2026-09-27 | 2026-09-27 | [TASK-423](./TASK-423-imported-tt-symbol-definition.md) |
-| TASK-424 | Measure every reported position in the decoded text of a file with a byte order mark | Complete | 2026-09-27 | 2026-09-27 | [TASK-424](./TASK-424-byte-order-mark-positions.md) |
-| TASK-425 | Check a requested file outside the configuration in its inferred project | Complete | 2026-09-27 | 2026-09-27 | [TASK-425](./TASK-425-inferred-project-typed-check.md) |
 
 ## Next task number
 
