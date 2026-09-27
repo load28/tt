@@ -15,7 +15,7 @@ fn free_intervals_carve_around_occupied_stretches() {
 fn passthrough_maps_as_one_verbatim_span() {
     let source = "const n: number = 1;\n";
     let emit = ttc::emit_mapped(source);
-    let spans = span_mappings(&emit.mappings, &emit.anchors);
+    let spans = span_mappings(&emit.mappings, &emit.anchors, &[]);
     assert_eq!(
         spans,
         [serde_json::json!([
@@ -32,7 +32,7 @@ fn passthrough_maps_as_one_verbatim_span() {
 fn glue_maps_to_its_construct_without_features() {
     let source = "variant E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x, B => 0 };\n";
     let emit = ttc::emit_mapped(source);
-    let spans = span_mappings(&emit.mappings, &emit.anchors);
+    let spans = span_mappings(&emit.mappings, &emit.anchors, &[]);
     // Spans are sorted and non-overlapping in the virtual text.
     let mut last_end = 0u64;
     for span in &spans {
@@ -471,4 +471,72 @@ fn positionless_diagnostics_serialize_as_zero_spans() {
     assert_eq!(wire["code"], code_number("variant-duplicate-case"));
     assert!(wire["start"].as_u64().is_some());
     assert!(wire["length"].as_u64().is_some());
+}
+
+#[test]
+fn recovered_syntax_never_travels_as_verbatim_text() {
+    let cases = [
+        (
+            "declare const s: any;\nconst v = match (s) {\n  Circle { r } => r,\n};\nexport const a = 1;\n",
+            "malformed-match",
+        ),
+        (
+            "export variant Shape {\n  Circle(r: number\n}\nexport const a = 1;\n",
+            "malformed-variant",
+        ),
+        (
+            "declare function f(): any;\nconst v = try f();\nexport const a = 1;\n",
+            "try-placement",
+        ),
+        (
+            "export variant Broken { Value(x: number]) }\nexport const a = 1;\n",
+            "variant-invalid-field-type",
+        ),
+    ];
+    for (content, code) in cases {
+        let result = respond(
+            &mut session(),
+            &request(
+                "transform",
+                serde_json::json!({
+                    "fileName": "/nonexistent/recovered.tt",
+                    "content": content,
+                    "projectHandle": "p:0",
+                }),
+            ),
+        )
+        .unwrap();
+        let text = result["text"].as_str().unwrap();
+        let spans = result["mappings"].as_array().unwrap();
+        assert!(text.contains("export const a = 1;"), "{code}: {text}");
+        let mut atoms = 0;
+        for span in spans {
+            let values: Vec<usize> = span
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_u64().unwrap() as usize)
+                .collect();
+            let (out, out_len, src, src_len) = (values[0], values[1], values[2], values[3]);
+            if values[4] as u64 == SPAN_VERBATIM {
+                assert_eq!(out_len, src_len);
+                assert_eq!(
+                    &text[out..out + out_len],
+                    &content[src..src + src_len],
+                    "{code}: verbatim span {span} differs from the original"
+                );
+            } else {
+                atoms += 1;
+                assert_eq!(values[5] as u64, FEATURES_NONE);
+            }
+        }
+        assert!(atoms > 0, "{code}: the recovered stretch maps as an atom");
+        let diagnostics = result["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == code_number(code)),
+            "{code}: {diagnostics:?}"
+        );
+    }
 }

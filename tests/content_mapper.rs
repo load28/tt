@@ -383,6 +383,45 @@ fn a_type_error_inside_glue_reports_at_the_construct() {
 }
 
 #[test]
+fn recovered_syntax_reports_its_tt_diagnostic_instead_of_a_rejected_mapping() {
+    let tsc = require_mapper_toolchain!();
+    let cases = [
+        (
+            "declare const s: any;\nconst v = match (s) {\n  Circle { r } => r,\n};\nexport const a = 1;\n",
+            "b.tt(2,11): error tt7",
+        ),
+        (
+            "export variant Shape {\n  Circle(r: number\n}\nexport const a = 1;\n",
+            "b.tt(1,8): error tt6",
+        ),
+        (
+            "declare function f(): any;\nconst v = try f();\nexport const a = 1;\n",
+            "b.tt(2,11): error tt11",
+        ),
+    ];
+    for (source, expected) in cases {
+        let project = mapper_project(false);
+        fs::write(project.path().join("src/b.tt"), source).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { a } from \"./b.tt\";\nconst x: string = a;\n",
+        )
+        .unwrap();
+
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok);
+        assert!(
+            !text.contains("TS100029"),
+            "TypeScript rejected the mapping:\n{text}"
+        );
+        assert!(
+            text.contains(expected),
+            "expected `{expected}` at its source, got:\n{text}"
+        );
+    }
+}
+
+#[test]
 fn generated_slots_preserve_contextual_literal_types_for_the_checker() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

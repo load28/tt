@@ -334,7 +334,7 @@ fn transform(
 
     let (text, mappings) = match report.emit {
         Some(emit) => {
-            let mappings = span_mappings(&emit.mappings, &emit.anchors);
+            let mappings = span_mappings(&emit.mappings, &emit.anchors, &report.recovered);
             (emit.code, mappings)
         }
         // A diagnostic blocked projection: there is no TypeScript to
@@ -403,6 +403,13 @@ fn code_number(name: &str) -> u64 {
 /// The span map of one emission: verbatim chunks as `Verbatim`, glue as
 /// `Atom` spans owned by the construct that wrote it.
 ///
+/// A projection that recovered from malformed syntax compiled a copy of the
+/// source whose `recovered` byte ranges hold placeholders, so a chunk copied
+/// from inside one of them is not the original text there. TypeScript
+/// rejects a `Verbatim` span whose two sides differ (TS100029), so those
+/// stretches are `Atom` spans owned by the whole recovered range, with no
+/// features, like glue.
+///
 /// Virtual spans must not overlap, and anchors both nest and contain the
 /// verbatim chunks of their construct's copied text (a match's arm
 /// bodies), so each anchor contributes only the stretches nothing else
@@ -411,21 +418,49 @@ fn code_number(name: &str) -> u64 {
 /// diagnostics are not feature-gated and land on the construct's own
 /// source range, while navigation and rename — which must never resolve
 /// into glue — stay off.
-fn span_mappings(mappings: &[EmitMapping], anchors: &[EmitAnchor]) -> Vec<serde_json::Value> {
+fn span_mappings(
+    mappings: &[EmitMapping],
+    anchors: &[EmitAnchor],
+    recovered: &[(usize, usize)],
+) -> Vec<serde_json::Value> {
     // Occupied intervals of the virtual text, kept sorted by start.
     let mut occupied: Vec<(usize, usize)> =
         mappings.iter().map(|m| (m.out, m.out + m.len)).collect();
     occupied.sort_unstable();
 
-    let mut spans: Vec<(usize, serde_json::Value)> = mappings
-        .iter()
-        .map(|m| {
-            (
-                m.out,
-                serde_json::json!([m.out, m.len, m.src, m.len, SPAN_VERBATIM]),
-            )
-        })
-        .collect();
+    let mut recovered = recovered.to_vec();
+    recovered.sort_unstable();
+    let mut spans: Vec<(usize, serde_json::Value)> = Vec::new();
+    for mapping in mappings {
+        let src_end = mapping.src + mapping.len;
+        let mut cursor = mapping.src;
+        for &(recovery_start, recovery_end) in &recovered {
+            if recovery_end <= cursor || recovery_start >= src_end {
+                continue;
+            }
+            let overlap_start = recovery_start.max(cursor);
+            let overlap_end = recovery_end.min(src_end);
+            if overlap_start > cursor {
+                spans.push(verbatim_span(mapping, cursor, overlap_start));
+            }
+            let out = mapping.out + (overlap_start - mapping.src);
+            spans.push((
+                out,
+                serde_json::json!([
+                    out,
+                    overlap_end - overlap_start,
+                    recovery_start,
+                    recovery_end - recovery_start,
+                    SPAN_ATOM,
+                    FEATURES_NONE,
+                ]),
+            ));
+            cursor = overlap_end;
+        }
+        if cursor < src_end || mapping.len == 0 {
+            spans.push(verbatim_span(mapping, cursor, src_end));
+        }
+    }
 
     for anchor in anchors {
         let original_start = anchor.src;
@@ -449,6 +484,15 @@ fn span_mappings(mappings: &[EmitMapping], anchors: &[EmitAnchor]) -> Vec<serde_
 
     spans.sort_by_key(|(start, _)| *start);
     spans.into_iter().map(|(_, span)| span).collect()
+}
+
+fn verbatim_span(mapping: &EmitMapping, start: usize, end: usize) -> (usize, serde_json::Value) {
+    let out = mapping.out + (start - mapping.src);
+    let len = end - start;
+    (
+        out,
+        serde_json::json!([out, len, start, len, SPAN_VERBATIM]),
+    )
 }
 
 /// The stretches of `[start, end)` not covered by any `occupied` interval.
