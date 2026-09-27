@@ -18,6 +18,9 @@ pub(super) fn parse_variant<'t>(
     exported: bool,
     declared: bool,
 ) -> Claim<(Cursor<'t>, usize, VariantDecl)> {
+    if cur.line_break_before() {
+        return Claim::NotTt;
+    }
     if let Some(parsed) = parse_variant_complete(cur, exported, declared) {
         return Claim::Parsed(parsed);
     }

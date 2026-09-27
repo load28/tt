@@ -51,6 +51,10 @@ impl<'t> Cursor<'t> {
         Some(t)
     }
 
+    pub(super) fn line_break_before(&self) -> bool {
+        line_break_before(self.parser.src, self.tokens, self.idx)
+    }
+
     pub(super) fn text(&self, t: &Token) -> &'t str {
         &self.parser.src[t.span.start..t.span.end]
     }
@@ -169,6 +173,18 @@ fn ends_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
         | TokenKind::Coalesce
         | TokenKind::PipeOp => false,
     }
+}
+
+/// Whether a line terminator separates token `k` from the token before it,
+/// the fact TypeScript's automatic semicolon insertion keys on.
+pub(super) fn line_break_before(src: &str, tokens: &[Token], k: usize) -> bool {
+    let (Some(previous), Some(token)) = (
+        k.checked_sub(1).and_then(|previous| tokens.get(previous)),
+        tokens.get(k),
+    ) else {
+        return false;
+    };
+    src[previous.span.end..token.span.start].contains(['\n', '\r', '\u{2028}', '\u{2029}'])
 }
 
 /// True when the token before `k` (within a scan that started at `from`)

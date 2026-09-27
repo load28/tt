@@ -273,6 +273,31 @@ console.log(variant.kind, variant);
 }
 
 #[test]
+fn variant_followed_by_a_line_break_is_an_expression_statement() {
+    assert_passthrough(
+        "declare let declare: number, variant: number, Foo: number, A: number;\n\
+         variant\nFoo\n{ A }\n\
+         variant /* a\n */ Foo\n{ A }\n\
+         declare\nvariant\nFoo\n{ A }\n\
+         export {};\n",
+    );
+}
+
+#[test]
+fn declare_followed_by_a_line_break_does_not_declare_the_variant() {
+    let out = compile(
+        "declare let declare: number;\ndeclare\nvariant Foo { A }\n",
+        &Options::default(),
+    )
+    .expect("compile failed");
+    assert!(
+        out.starts_with("declare let declare: number;\ndeclare\n"),
+        "{out}"
+    );
+    assert!(out.contains("const Foo = {"), "{out}");
+}
+
+#[test]
 fn match_inside_string() {
     assert_passthrough("const s = \"match (x) { A => 1 }\";\n");
 }

@@ -564,11 +564,17 @@ impl Parser<'_> {
                 };
                 let (kw_idx, exported, declared) = match word {
                     "variant" => (Some(i), false, false),
-                    "declare" if word_at(i + 1) == Some("variant") => (Some(i + 1), false, true),
+                    "declare"
+                        if word_at(i + 1) == Some("variant")
+                            && !cursor::line_break_before(self.src, tokens, i + 1) =>
+                    {
+                        (Some(i + 1), false, true)
+                    }
                     "export" if word_at(i + 1) == Some("variant") => (Some(i + 1), true, false),
                     "export"
                         if word_at(i + 1) == Some("declare")
-                            && word_at(i + 2) == Some("variant") =>
+                            && word_at(i + 2) == Some("variant")
+                            && !cursor::line_break_before(self.src, tokens, i + 2) =>
                     {
                         (Some(i + 2), true, true)
                     }

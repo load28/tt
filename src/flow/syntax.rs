@@ -643,7 +643,7 @@ pub(super) fn variant_or_enum_body(src: &str, tokens: &[Token], last: usize, k: 
     };
     if let Some(mut i) = variant {
         i += 1;
-        if word(i).is_none() {
+        if word(i).is_none() || line_break_before_tokens(src, tokens, i) {
             return false;
         }
         i += 1;
