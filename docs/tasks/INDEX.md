@@ -429,6 +429,7 @@
 | TASK-396 | Read sidecar declarations from tsc's layout and name rejected tt-only inputs accurately | Complete | 2026-09-27 | 2026-09-27 | [TASK-396](./TASK-396-sidecar-layout-and-tt-input-errors.md) |
 | TASK-397 | Mirror the source tree in save-time sidecar refresh | Complete | 2026-09-27 | 2026-09-27 | [TASK-397](./TASK-397-sidecar-tree-layout.md) |
 | TASK-398 | Own the compiler per workspace folder end to end | Complete | 2026-09-27 | 2026-09-27 | [TASK-398](./TASK-398-folder-compiler-ownership.md) |
+| TASK-399 | Limit trigger-character completions to their registered contexts | Complete | 2026-09-27 | 2026-09-27 | [TASK-399](./TASK-399-completion-trigger-contexts.md) |
 
 ## Next task number
 

@@ -523,6 +523,8 @@ function connect(server = SERVER, options: ConnectOptions = {}): Client {
   };
 }
 
+const TRIGGER_CHARACTERS = [".", "(", "|", "{", ","];
+
 /** A server with `source` open as a tt-family document, ready to be asked. */
 async function open(source: string, languageId: "tt" | "ttx" = "tt") {
   const dir = caseDir("tt-server-test-");
@@ -555,7 +557,9 @@ async function open(source: string, languageId: "tt" | "ttx" = "tt") {
         line,
         character: before.length - (before.lastIndexOf("\n") + 1),
       },
-      context: { triggerKind: 2, triggerCharacter: "." },
+      context: TRIGGER_CHARACTERS.includes(source[offset - 1])
+        ? { triggerKind: 2, triggerCharacter: source[offset - 1] }
+        : { triggerKind: 1 },
     });
     const items = (
       Array.isArray(response.result)
@@ -1577,6 +1581,42 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
         const labels = items.map((item: any) => item.label);
         for (const label of expected) assert.ok(labels.includes(label), `${pattern}: ${JSON.stringify(labels)}`);
         if (expected.length === 0) assert.deepEqual(labels, []);
+      }
+    } finally { stop(); }
+  }
+});
+
+test("a trigger character completes only the context it is registered for", { skip, timeout }, async () => {
+  const prefix = 'variant User { Admin(name: string, level: number), Guest }\ndeclare const user: User;\ndeclare const a: number;\n';
+  for (const language of ["tt", "ttx"] as const) {
+    const { client, uri, stop } = await open(prefix, language);
+    try {
+      let version = 1;
+      for (const [line, trigger, expected] of [
+        ['console.log(#);', '(', []],
+        ['if (#) {}', '(', []],
+        ['const y = a |#', '|', []],
+        ['const y = a ||#', '|', []],
+        ['// see user.#', '.', []],
+        ['const r = match (user) { Admin(#) => 0, Guest => 1 };', '(', ['name', 'level']],
+        ['const r = match (user) { Guest |# };', '|', ['Admin']],
+        ['const r = match (user) {# };', '{', ['Admin', 'Guest']],
+        ['const n = user.#', '.', []],
+      ] as const) {
+        const source = prefix + line.replace('#', '');
+        const offset = prefix.length + line.indexOf('#');
+        const before = source.slice(0, offset);
+        client.notify("textDocument/didChange", { textDocument: { uri, version: ++version }, contentChanges: [{ text: source }] });
+        const response = await client.request("textDocument/completion", {
+          textDocument: { uri },
+          position: { line: before.split('\n').length - 1, character: offset - before.lastIndexOf('\n') - 1 },
+          context: { triggerKind: 2, triggerCharacter: trigger },
+        });
+        const labels = (response.result?.items ?? response.result ?? []).map((item: any) => item.label);
+        if (expected.length === 0 && trigger !== '.') assert.deepEqual(labels, [], `${language} ${line}`);
+        for (const label of expected) assert.ok(labels.includes(label), `${language} ${line}: ${JSON.stringify(labels)}`);
+        if (line.startsWith('//')) assert.deepEqual(labels, [], `${language} ${line}`);
+        assert.ok(!labels.includes('match'), `${language} ${line}: no keyword snippets after a trigger character`);
       }
     } finally { stop(); }
   }

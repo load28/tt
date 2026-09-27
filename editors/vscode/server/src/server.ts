@@ -39,6 +39,7 @@ import {
   CodeActionKind,
   CompletionItem,
   CompletionItemKind,
+  CompletionTriggerKind,
   createConnection,
   Diagnostic,
   DiagnosticSeverity,
@@ -72,6 +73,9 @@ import * as ttc from "./ttc";
 import * as path from "node:path";
 
 import * as sidecar from "./sidecar";
+
+const MEMBER_TRIGGER_CHARACTERS = ["."];
+const PATTERN_TRIGGER_CHARACTERS = ["(", "|", "{", ","];
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -110,7 +114,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         save: { includeText: false },
       },
       completionProvider: {
-        triggerCharacters: [".", "(", "|", "{", ","],
+        triggerCharacters: [...MEMBER_TRIGGER_CHARACTERS, ...PATTERN_TRIGGER_CHARACTERS],
         // Signatures and documentation are fetched per entry, when the
         // editor asks for the one the user highlighted (onCompletionResolve).
         resolveProvider: true,
@@ -1132,6 +1136,10 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   const { masked } = analyze(doc);
   const offset = doc.offsetAt(params.position);
   const visible = (await declarationsOf(doc)).variants;
+  const trigger =
+    params.context?.triggerKind === CompletionTriggerKind.TriggerCharacter
+      ? params.context.triggerCharacter
+      : undefined;
 
   // `Variant.` member access → the variant's case constructors, then everything
   // else TypeScript offers on that same object. Both halves are needed:
@@ -1156,6 +1164,9 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // no variant names, no keyword snippets.
   if (atMemberAccess(masked, offset)) {
     return tsCompletions(doc, offset, true);
+  }
+  if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
+    return [];
   }
 
   // A pattern position — an arm, an `if let`, a payload field list, a
@@ -1190,8 +1201,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
   // Delimiters invoke pattern completion without a word prefix. Outside a
   // pattern they must not open the general keyword/global suggestion list.
-  if (params.context?.triggerKind === 2 &&
-      (params.context.triggerCharacter === "{" || params.context.triggerCharacter === ",")) {
+  if (trigger !== undefined) {
     return [];
   }
 
