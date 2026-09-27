@@ -347,8 +347,23 @@ fn arm_tags(
     let mut pattern = true;
     let mut alternatives = true;
     let mut guarded = false;
+    let mut nested = false;
     let mut expect = true;
     for (index, token) in tokens.iter().enumerate().take(close).skip(open + 1) {
+        if pattern
+            && depth > 0
+            && matches!(token.kind, TokenKind::Punct(b':'))
+            && matches!(
+                tokens.get(index + 1).map(|next| &next.kind),
+                Some(TokenKind::Ident)
+            )
+            && matches!(
+                tokens.get(index + 2).map(|next| &next.kind),
+                Some(TokenKind::Punct(b'('))
+            )
+        {
+            nested = true;
+        }
         match token.kind {
             TokenKind::Punct(b'(' | b'{' | b'[') => {
                 depth += 1;
@@ -360,11 +375,12 @@ fn arm_tags(
                 pattern = true;
                 alternatives = true;
                 guarded = false;
+                nested = false;
                 expect = true;
             }
             TokenKind::Arrow if depth == 0 && pattern => {
                 for tag in pending.drain(..) {
-                    if !guarded && !covered.contains(&tag) {
+                    if !guarded && !nested && !covered.contains(&tag) {
                         covered.push(tag.clone());
                     }
                     if !tags.contains(&tag) {
@@ -526,6 +542,33 @@ mod tests {
                 .map(|i| i.label.as_str())
                 .collect::<Vec<_>>(),
             ["Circle"]
+        );
+    }
+
+    #[test]
+    fn a_nested_pattern_does_not_mark_its_case_covered() {
+        let decl = "variant O { Some(value: number), None }\nvariant W { Has(o: O), Nope }\ndeclare const w: W;\n";
+        let src = format!("{decl}const a = match (w) {{ Has(o: Some(value)) => 1, No }};\n");
+        let items = tt_completions_at(
+            Path::new("/p/a.tt"),
+            &src,
+            at(&src, "Has(o: Some(value)) => 1, "),
+        );
+        assert!(items.iter().all(|i| !i.covered), "{items:?}");
+
+        let src = format!("{decl}const a = match (w) {{ Has(o: renamed) => 1, No }};\n");
+        let items = tt_completions_at(
+            Path::new("/p/a.tt"),
+            &src,
+            at(&src, "Has(o: renamed) => 1, "),
+        );
+        assert_eq!(
+            items
+                .iter()
+                .filter(|i| i.covered)
+                .map(|i| i.label.as_str())
+                .collect::<Vec<_>>(),
+            ["Has"]
         );
     }
 

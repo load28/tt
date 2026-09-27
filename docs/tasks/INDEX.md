@@ -440,7 +440,8 @@
 | TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
 | TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 | TASK-432 | Reach the host `Error` and `JSON` past user declarations in generated guards | Complete | 2026-09-27 | 2026-09-27 | [TASK-432](./TASK-432-host-globals-in-guards.md) |
+| TASK-437 | Stop marking a case covered in completion when only a nested pattern handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-437](./TASK-437-nested-pattern-completion-coverage.md) |
 
 ## Next task number
 
-**TASK-433**
+**TASK-438**
