@@ -417,18 +417,14 @@ pub(crate) fn is_primary_expression(src: &[u8], from: usize, end: usize) -> bool
             return true;
         }
         match src[next] {
-            b'.' => {
-                let name = skip_ws_comments(src, next + 1, end);
-                if name < end && is_ident_start(src[name]) {
-                    i = ident_end(src, name, end);
-                } else {
-                    return false;
-                }
-            }
+            b'.' => match member_name_end(src, skip_ws_comments(src, next + 1, end), end) {
+                Some(name_end) => i = name_end,
+                None => return false,
+            },
             b'?' if at(src, next + 1, end) == Some(b'.') => {
                 let after = skip_ws_comments(src, next + 2, end);
-                if after < end && is_ident_start(src[after]) {
-                    i = ident_end(src, after, end);
+                if let Some(name_end) = member_name_end(src, after, end) {
+                    i = name_end;
                 } else if after < end && matches!(src[after], b'(' | b'[') {
                     match find_matching(src, after, end) {
                         Some(close) => i = close + 1,
@@ -447,6 +443,18 @@ pub(crate) fn is_primary_expression(src: &[u8], from: usize, end: usize) -> bool
             _ => return false,
         }
     }
+}
+
+/// The end of the member name at `i` after `.` or `?.`: an identifier, or a
+/// private name (`#name`, ECMA-262 `PrivateIdentifier`), which is one token
+/// with no gap after the `#`.
+fn member_name_end(src: &[u8], i: usize, end: usize) -> Option<usize> {
+    let name = if at(src, i, end) == Some(b'#') {
+        i + 1
+    } else {
+        i
+    };
+    (name < end && is_ident_start(src[name])).then(|| ident_end(src, name, end))
 }
 
 pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {

@@ -332,3 +332,28 @@ fn a_pipeline_as_the_unbraced_body_of_a_statement_header_starts_after_the_header
     );
     assert!(out.contains("const y = $tt_ap((c), g);"), "{out}");
 }
+
+#[test]
+fn try_binds_to_a_private_member_operand() {
+    let out = ok("variant R { Ok(value: number), Err(error: string) }\n\
+         class C {\n\
+         #v: R = R.Ok(1);\n\
+         #c: C = this;\n\
+         #case: R = R.Ok(1);\n\
+         #match(): R { return R.Ok(2); }\n\
+         f(): R {\n\
+         const a = try this.#v;\n\
+         try this.#v;\n\
+         const b = try this.#c?.#v;\n\
+         try this.#case;\n\
+         const d = try this.#match() * 2;\n\
+         return R.Ok(a + b + d);\n\
+         }\n\
+         }\n");
+    assert!(out.contains("const $tt_t0 = this.#v;"), "{out}");
+    assert!(out.contains("const $tt_t1 = this.#v;"), "{out}");
+    assert!(out.contains("const $tt_t2 = this.#c?.#v;"), "{out}");
+    assert!(out.contains("const $tt_t3 = this.#case;"), "{out}");
+    assert!(out.contains("const $tt_t4 = this.#match();"), "{out}");
+    assert!(out.contains("const d = $tt_v0 * 2;"), "{out}");
+}

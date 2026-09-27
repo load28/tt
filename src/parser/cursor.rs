@@ -187,15 +187,18 @@ pub(super) fn line_break_before(src: &str, tokens: &[Token], k: usize) -> bool {
     src[previous.span.end..token.span.start].contains(['\n', '\r', '\u{2028}', '\u{2029}'])
 }
 
-/// True when the token before `k` (within a scan that started at `from`)
-/// is a member-access dot — `.` or the `?.` of optional chaining — i.e.
-/// the identifier at `k` is a property name, not a keyword.
+/// True when the identifier at `k` (within a scan that started at `from`)
+/// is a property name, not a keyword or a binding: the token before it is a
+/// member-access dot (`.` or the `?.` of optional chaining), or the `#` of a
+/// private name (`#name`, ECMA-262 `PrivateIdentifier`), which the lexer
+/// splits into `#` and the identifier with no gap between them.
 pub(crate) fn dotted_at(tokens: &[Token], from: usize, k: usize) -> bool {
     k > from
-        && matches!(
-            tokens[k - 1].kind,
-            TokenKind::Punct(b'.') | TokenKind::OptChain
-        )
+        && match tokens[k - 1].kind {
+            TokenKind::Punct(b'.') | TokenKind::OptChain => true,
+            TokenKind::Punct(b'#') => tokens[k - 1].span.end == tokens[k].span.start,
+            _ => false,
+        }
 }
 
 /// The index just past a construct that carries its own top-level braces

@@ -451,6 +451,7 @@
 | TASK-443 | Map every copied token to its own column | Complete | 2026-09-27 | 2026-09-27 | [TASK-443](./TASK-443-token-granular-source-maps.md) |
 | TASK-444 | Start a pipeline head after an `if`/`while`/`for`/`with` header | Complete | 2026-09-27 | 2026-09-27 | [TASK-444](./TASK-444-statement-header-pipeline-head.md) |
 | TASK-445 | Keep `variant` followed by a line break an expression statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-445](./TASK-445-variant-line-break-asi.md) |
+| TASK-446 | Let `try` bind to a private-member operand | Complete | 2026-09-27 | 2026-09-27 | [TASK-446](./TASK-446-try-private-member-operand.md) |
 | TASK-449 | Reject a match the class definition evaluates instead of hoisting it before the class | Complete | 2026-09-27 | 2026-09-27 | [TASK-449](./TASK-449-class-definition-placement.md) |
 | TASK-450 | Project a value region in a generator as a generator so its `yield` parses | Complete | 2026-09-27 | 2026-09-27 | [TASK-450](./TASK-450-generator-value-region-projection.md) |
 
