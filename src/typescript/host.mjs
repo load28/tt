@@ -195,6 +195,8 @@ async function main() {
   const configFiles = new Map();
   const dependencies = new Map();
   const listings = new Map();
+  const pendingDisk = { created: [], changed: [], deleted: [] };
+  let diskGeneration = 0;
   const api = new API({
     cwd: open.cwd,
     // The client runs the executable shipped beside it — the one it was
@@ -214,8 +216,13 @@ async function main() {
         if (process.env.TTC_TYPESCRIPT_BACKEND_FAIL_FOR_TEST === "1") {
           throw new Error("injected TypeScript backend contract failure");
         }
-        answer = handle(JSON.parse(line));
-        opened = true;
+        const job = JSON.parse(line);
+        if (job.diskGeneration) {
+          answer = detectDisk();
+        } else {
+          answer = handle(job);
+          opened = true;
+        }
       } catch (e) {
         // The Rust boundary classifies this as an internal compiler error.
         // Keep the protocol response actionable without leaking a Node
@@ -226,6 +233,27 @@ async function main() {
     }
   } finally {
     api.close();
+  }
+
+  function detectDisk() {
+    let found = false;
+    for (const [file, previous] of dependencies) {
+      const current = diskVersion(file);
+      if (current !== previous) {
+        (current === null ? pendingDisk.deleted : previous === null ? pendingDisk.created : pendingDisk.changed).push(file);
+        dependencies.set(file, current);
+        found = true;
+      }
+    }
+    for (const [directory, previous] of listings) {
+      let current;
+      try { current = new Set(fs.readdirSync(directory)); } catch { current = new Set(); }
+      for (const name of current) if (!previous.has(name)) { pendingDisk.created.push(path.join(directory, name)); found = true; }
+      for (const name of previous) if (!current.has(name)) { pendingDisk.deleted.push(path.join(directory, name)); found = true; }
+      listings.set(directory, current);
+    }
+    if (found) diskGeneration += 1;
+    return { diskGeneration };
   }
 
   /** One `ask`: refresh the served modules, then answer every question. */
@@ -243,20 +271,12 @@ async function main() {
       contextualSlots: [],
     };
     const changes = serve(files, dirs, job.modules ?? []);
-    for (const [file, previous] of dependencies) {
-      const current = diskVersion(file);
-      if (current !== previous) {
-        (current === null ? changes.deleted : previous === null ? changes.created : changes.changed).push(file);
-        dependencies.set(file, current);
-      }
+    detectDisk();
+    for (const kind of ["created", "changed", "deleted"]) {
+      changes[kind].push(...pendingDisk[kind]);
+      pendingDisk[kind] = [];
     }
-    for (const [directory, previous] of listings) {
-      let current;
-      try { current = new Set(fs.readdirSync(directory)); } catch { current = new Set(); }
-      for (const name of current) if (!previous.has(name)) changes.created.push(path.join(directory, name));
-      for (const name of previous) if (!current.has(name)) changes.deleted.push(path.join(directory, name));
-      listings.set(directory, current);
-    }
+    out.diskGeneration = diskGeneration;
     if (open.tsconfig) {
       // Parse JSONC and discover extended configurations through TypeScript.
       // Translate the schema's file patterns through the same path projection

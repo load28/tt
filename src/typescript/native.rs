@@ -36,6 +36,7 @@ pub(crate) struct NativeBackend {
     /// The `node` binary that runs the host (`--node`, else `node` on PATH).
     node: PathBuf,
     session: RefCell<Option<Session>>,
+    observed: std::cell::Cell<Option<(u64, u64, bool)>>,
 }
 
 /// The running host: a process, and the two pipes a request travels over.
@@ -47,6 +48,7 @@ struct Session {
     /// What the project was opened as. A question about a different project
     /// needs a different session.
     opened: (Option<PathBuf>, PathBuf),
+    id: u64,
     /// The directory this session created for its host script. The session
     /// owns it, so it goes away with the session.
     dir: PathBuf,
@@ -60,6 +62,7 @@ impl NativeBackend {
             toolchain: toolchain::client(from)?,
             node: node.unwrap_or_else(|| PathBuf::from("node")),
             session: RefCell::new(None),
+            observed: std::cell::Cell::new(None),
         })
     }
 
@@ -112,6 +115,7 @@ impl NativeBackend {
             stdin,
             stdout,
             opened: (tsconfig.map(Path::to_path_buf), root.to_path_buf()),
+            id: session_id,
             dir,
         })
     }
@@ -165,6 +169,39 @@ impl Drop for Session {
     }
 }
 
+impl NativeBackend {
+    pub(crate) fn observe_generations(&self) {
+        self.observed.set(None);
+    }
+
+    pub(crate) fn stable_generation(&self) -> Option<(u64, u64)> {
+        self.observed
+            .take()
+            .and_then(|(id, generation, stable)| stable.then_some((id, generation)))
+    }
+
+    pub(crate) fn current_generation(
+        &self,
+        tsconfig: Option<&Path>,
+        root: &Path,
+    ) -> Option<(u64, u64)> {
+        let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
+        let mut slot = self.session.borrow_mut();
+        let session = slot.as_mut().filter(|session| session.opened == wanted)?;
+        let generation = exchange(session, r#"{"diskGeneration":true}"#)
+            .ok()
+            .and_then(|line| serde_json::from_str::<serde_json::Value>(line.trim()).ok())
+            .and_then(|value| value["diskGeneration"].as_u64());
+        match generation {
+            Some(generation) => Some((session.id, generation)),
+            None => {
+                *slot = None;
+                None
+            }
+        }
+    }
+}
+
 impl TypeScriptBackend for NativeBackend {
     fn ask(&self, tsconfig: Option<&Path>, root: &Path, query: &Query) -> Result<Answers, Failure> {
         let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
@@ -182,7 +219,17 @@ impl TypeScriptBackend for NativeBackend {
         let job = job_json(query);
         let answer = exchange(session, &job.to_string());
         match answer {
-            Ok(line) => parse_answers(&line, tsconfig.unwrap_or(root)),
+            Ok(line) => {
+                let answers = parse_answers(&line, tsconfig.unwrap_or(root))?;
+                let seen = (session.id, answers.disk_generation.unwrap_or(u64::MAX));
+                self.observed.set(Some(match self.observed.get() {
+                    None => (seen.0, seen.1, answers.disk_generation.is_some()),
+                    Some((id, generation, stable)) => {
+                        (seen.0, seen.1, stable && (id, generation) == seen)
+                    }
+                }));
+                Ok(answers)
+            }
             Err(_) => {
                 // The host is gone; take its last words, and let the next
                 // question start a fresh one.
@@ -270,7 +317,10 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
         )));
     }
 
-    let mut answers = Answers::default();
+    let mut answers = Answers {
+        disk_generation: value["diskGeneration"].as_u64(),
+        ..Answers::default()
+    };
     let project_modules = value["projectModules"]
         .as_array()
         .ok_or_else(|| Failure::internal("the TypeScript backend answer omitted projectModules"))?;

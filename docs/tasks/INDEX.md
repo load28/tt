@@ -443,6 +443,7 @@
 | TASK-433 | Map recovered syntax as atoms in the content mapper | Complete | 2026-09-27 | 2026-09-27 | [TASK-433](./TASK-433-mapper-recovered-spans.md) |
 | TASK-434 | Make create-tt init check solution configs, require the verified TypeScript, and quote the printed directory | Complete | 2026-09-27 | 2026-09-27 | [TASK-434](./TASK-434-create-tt-init-project-setup.md) |
 | TASK-435 | Make parse-only engine requests linear in the number of `match` expressions | Complete | 2026-09-27 | 2026-09-27 | [TASK-435](./TASK-435-linear-parse-only-requests.md) |
+| TASK-436 | Reuse contextual projections and checker answers across a project's files | Complete | 2026-09-27 | 2026-09-27 | [TASK-436](./TASK-436-contextual-phase-reuse.md) |
 | TASK-437 | Stop marking a case covered in completion when only a nested pattern handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-437](./TASK-437-nested-pattern-completion-coverage.md) |
 | TASK-438 | Place watch-mode support modules by the whole input set | Complete | 2026-09-27 | 2026-09-27 | [TASK-438](./TASK-438-watch-support-placement.md) |
 | TASK-439 | Serve unplugin standard modules under path-free ids | Complete | 2026-09-27 | 2026-09-27 | [TASK-439](./TASK-439-unplugin-std-virtual-ids.md) |

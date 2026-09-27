@@ -319,6 +319,7 @@ pub(crate) struct Answers {
     pub result_shapes: Vec<ResultShape>,
     pub declarations: Vec<Declaration>,
     pub contextual_slots: Vec<ContextualSlotType>,
+    pub disk_generation: Option<u64>,
 }
 
 /// A checker-proven Result shape answer. Absent answers remain unknown.

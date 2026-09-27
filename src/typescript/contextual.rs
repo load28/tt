@@ -1,5 +1,6 @@
 //! Contextual type facts applied to explicit codegen value-storage sites.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::backend::{ContextualSlotQuery, Failure, Module, Query, TypeScriptBackend};
@@ -53,6 +54,7 @@ pub(crate) fn materialize(
         if sites.is_empty() {
             return Ok(types);
         }
+        crate::work::tick("contextual checker asks");
         let answers = backend.ask(config, root, &query)?;
         if answers.contextual_slots.is_empty() {
             if infer_joins {
@@ -186,6 +188,7 @@ pub(crate) fn standalone(
     }
     thread_local! {
         static BACKEND: std::cell::RefCell<Option<(PathBuf, super::native::NativeBackend)>> = const { std::cell::RefCell::new(None) };
+        static REUSE: std::cell::RefCell<Reuse> = std::cell::RefCell::new(Reuse::default());
     }
     let cwd =
         std::env::current_dir().map_err(|error| StandaloneFailure::Input(error.to_string()))?;
@@ -222,6 +225,7 @@ pub(crate) fn standalone(
                 return false;
             };
             *state = Some((root.clone(), backend));
+            REUSE.with(|reuse| *reuse.borrow_mut() = Reuse::default());
         }
         true
     });
@@ -263,27 +267,43 @@ pub(crate) fn standalone(
         let mut candidates = Vec::new();
         crate::engine::collect_sources(&root, false, &mut candidates)
             .map_err(|error| StandaloneFailure::Input(error.to_string()))?;
-        for candidate in candidates {
-            if candidate == *file {
-                continue;
+        REUSE.with(|reuse| {
+            let mut reuse = reuse.borrow_mut();
+            let mut previous = std::mem::take(&mut reuse.projections);
+            for candidate in candidates {
+                if candidate == *file {
+                    continue;
+                }
+                let source = std::fs::read_to_string(&candidate).map_err(|error| {
+                    StandaloneFailure::Input(format!("{}: {error}", candidate.display()))
+                })?;
+                let emit = match previous.remove(&candidate) {
+                    Some((projected, emit)) if projected == source => emit,
+                    _ => {
+                        crate::work::tick("contextual projections");
+                        crate::compile_projection_report(
+                            &source,
+                            &crate::Options {
+                                source_kind: crate::SourceKind::from_path(&candidate)
+                                    .unwrap_or_default(),
+                                defer_to_checker: true,
+                                rewrite_imports: crate::ImportRewrite::Off,
+                                ..crate::Options::default()
+                            },
+                        )
+                        .emit
+                    }
+                };
+                if let Some(emit) = &emit {
+                    modules.push((module_path(&candidate), emit.clone()));
+                }
+                reuse.projections.insert(candidate, (source, emit));
             }
-            let source = std::fs::read_to_string(&candidate).map_err(|error| {
-                StandaloneFailure::Input(format!("{}: {error}", candidate.display()))
-            })?;
-            let report = crate::compile_projection_report(
-                &source,
-                &crate::Options {
-                    source_kind: crate::SourceKind::from_path(&candidate).unwrap_or_default(),
-                    defer_to_checker: true,
-                    rewrite_imports: crate::ImportRewrite::Off,
-                    ..crate::Options::default()
-                },
-            );
-            if let Some(emit) = report.emit {
-                modules.push((module_path(&candidate), emit));
-            }
-        }
+            Ok::<(), StandaloneFailure>(())
+        })?;
     }
+    let requested = modules[0].0.clone();
+    modules.sort_by(|left, right| left.0.cmp(&right.0));
     BACKEND.with(|cell| {
         let state = cell.borrow();
         let (_, backend) = state.as_ref().expect("backend initialized above");
@@ -294,21 +314,60 @@ pub(crate) fn standalone(
         support.extend(if config.is_none() {
             vec![Module { path: inferred_config.clone(), text: serde_json::json!({
                 "compilerOptions": { "strict": true, "target": "esnext", "module": "preserve", "moduleResolution": "bundler", "jsx": "preserve", "skipLibCheck": true, "noEmit": true },
-                "files": [modules[0].0]
+                "files": [requested]
             }).to_string() }]
         } else { Vec::new() });
         let configuration = config.as_deref().unwrap_or(&inferred_config);
-        let types = materialize(
-            backend,
-            Some(configuration),
-            &root,
-            &mut modules,
-            &support,
-            &[],
-            &[],
-        )?;
+        let asked = Materialization {
+            configuration: configuration.to_path_buf(),
+            root: root.clone(),
+            support: support.clone(),
+            modules: modules.clone(),
+        };
+        let reused = REUSE.with(|reuse| {
+            let reuse = reuse.borrow();
+            reuse
+                .answers
+                .as_ref()
+                .filter(|(previous, generation, _)| {
+                    *previous == asked
+                        && backend.current_generation(Some(configuration), &root)
+                            == Some(*generation)
+                })
+                .map(|(_, _, types)| types.clone())
+        });
+        let types = match reused {
+            Some(types) => types,
+            None => {
+                backend.observe_generations();
+                let types = materialize(
+                    backend,
+                    Some(configuration),
+                    &root,
+                    &mut modules,
+                    &support,
+                    &[],
+                    &[],
+                )?;
+                let generation = backend.stable_generation();
+                REUSE.with(|reuse| {
+                    reuse.borrow_mut().answers =
+                        generation.map(|generation| (asked, generation, types.clone()));
+                });
+                types
+            }
+        };
+        let requested = modules
+            .iter()
+            .position(|(path, _)| *path == requested)
+            .ok_or_else(|| Failure::internal("contextual projection lost the requested module"))?;
         let mut edits = Vec::new();
-        for (position, annotation) in emit.contextual_slots.iter().copied().zip(&types[0]) {
+        for (position, annotation) in emit
+            .contextual_slots
+            .iter()
+            .copied()
+            .zip(&types[requested])
+        {
             let Some(annotation) = annotation else {
                 continue;
             };
@@ -331,6 +390,22 @@ pub(crate) fn standalone(
         insert_annotations(&mut emit, &edits);
         Ok(emit)
     })
+}
+
+type SlotTypes = Vec<Vec<Option<String>>>;
+
+#[derive(Default)]
+struct Reuse {
+    projections: HashMap<PathBuf, (String, Option<MappedEmit>)>,
+    answers: Option<(Materialization, (u64, u64), SlotTypes)>,
+}
+
+#[derive(PartialEq)]
+struct Materialization {
+    configuration: PathBuf,
+    root: PathBuf,
+    support: Vec<Module>,
+    modules: Vec<(PathBuf, MappedEmit)>,
 }
 
 fn module_path(path: &Path) -> PathBuf {
