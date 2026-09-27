@@ -426,7 +426,8 @@
 | TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
 | TASK-427 | Decide `result` ownership of `try` from the parsed construct boundaries | Complete | 2026-09-27 | 2026-09-27 | [TASK-427](./TASK-427-result-try-ownership.md) |
 | TASK-428 | Route abrupt exits through `finally` in the divergence graph | Complete | 2026-09-27 | 2026-09-27 | [TASK-428](./TASK-428-finally-routing.md) |
+| TASK-429 | Keep missing-arm suggestions free of duplicate bindings across tuple positions | Complete | 2026-09-27 | 2026-09-27 | [TASK-429](./TASK-429-tuple-suggestion-bindings.md) |
 
 ## Next task number
 
-**TASK-429**
+**TASK-430**

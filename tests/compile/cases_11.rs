@@ -209,3 +209,28 @@ fn a_result_block_whose_try_sits_in_a_match_arm_reports_the_crossing() {
     let codes: Vec<_> = diagnostics.iter().map(|diagnostic| diagnostic.code).collect();
     assert_eq!(codes, [DiagnosticCode::TryCrossesValueRegion], "{diagnostics:#?}");
 }
+
+#[test]
+fn a_tuple_missing_arm_suggestion_pastes_back_without_duplicate_bindings() {
+    let source = "variant O { Some(value: number), None }\n\
+         variant R { Ok(value: O), Err(error: string) }\n\
+         declare const r: R; declare const s: R; declare const u: R;\n\
+         export const x = match (r, s, u) { (Ok, Ok, Ok) => 1, (Err, _, _) => 2, (_, Err, _) => 3 };\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    let missing = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagnosticCode::MatchNotExhaustive)
+        .expect("the match is not exhaustive");
+    let edit = missing.suggestions[0]
+        .edit
+        .as_ref()
+        .expect("the missing-arm suggestion has an edit");
+    let fixed = format!(
+        "{}{}{}",
+        &source[..edit.start],
+        edit.replacement,
+        &source[edit.end..]
+    );
+    let after = ttc::analyze(&fixed, &Options::default());
+    assert!(after.is_empty(), "{fixed}{after:#?}");
+}

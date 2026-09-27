@@ -134,7 +134,7 @@ impl Witness {
     /// Only the arm's own level binds. Deeper, `field: Name` is how a
     /// nested pattern is written, so a binding there would change what the
     /// pattern tests; nested positions keep `render`'s form.
-    pub(super) fn arm(&self) -> String {
+    pub(super) fn arm(&self, bound: &mut std::collections::HashSet<String>) -> String {
         match self {
             Witness::Wild | Witness::Unknown => "_".to_string(),
             Witness::Ctor { tag, args } => {
@@ -144,7 +144,15 @@ impl Witness {
                 let fields: Vec<String> = args
                     .iter()
                     .map(|(name, w)| match w {
-                        Witness::Wild | Witness::Unknown => name.clone(),
+                        Witness::Wild | Witness::Unknown => {
+                            let binding = crate::generated_names::allocate(name, bound)
+                                .unwrap_or_else(|| name.clone());
+                            if &binding == name {
+                                binding
+                            } else {
+                                format!("{name}: {binding}")
+                            }
+                        }
                         _ => format!("{name}: {}", w.write(true)),
                     })
                     .collect();

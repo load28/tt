@@ -460,7 +460,10 @@ pub(super) fn render_witnesses(found: &[Vec<usefulness::Witness>]) -> Vec<Uncove
         .iter()
         .map(|row| Uncovered {
             pattern: row.iter().map(usefulness::Witness::render).collect(),
-            arm: row.iter().map(usefulness::Witness::arm).collect(),
+            arm: {
+                let mut bound = std::collections::HashSet::new();
+                row.iter().map(|witness| witness.arm(&mut bound)).collect()
+            },
             certain: row.iter().all(usefulness::Witness::certain),
         })
         .collect()
