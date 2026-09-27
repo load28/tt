@@ -428,7 +428,8 @@
 | TASK-428 | Route abrupt exits through `finally` in the divergence graph | Complete | 2026-09-27 | 2026-09-27 | [TASK-428](./TASK-428-finally-routing.md) |
 | TASK-429 | Keep missing-arm suggestions free of duplicate bindings across tuple positions | Complete | 2026-09-27 | 2026-09-27 | [TASK-429](./TASK-429-tuple-suggestion-bindings.md) |
 | TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
+| TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 
 ## Next task number
 
-**TASK-431**
+**TASK-432**

@@ -122,9 +122,15 @@ impl<'a> Emitter<'a> {
         let input_name = self.generated_name("$tt_v");
         let mut names = vec![input_name.clone()];
         names.extend(self.member_operand_names(member));
-        out.push_lit(format!("(({}) => (", names.join(", ")));
-        out.append(self.member_callee_body(value, member));
-        out.push_lit(format!(")({input_name}))("));
+        out.push_lit(format!("(({}) => ", names.join(", ")));
+        if member.grouped {
+            out.push_lit("(");
+            out.append(self.member_callee_body(value, member));
+            out.push_lit(")");
+        } else {
+            out.append(self.member_callee_body(value, member));
+        }
+        out.push_lit(format!("({input_name}))("));
         out.append(input);
         self.push_member_operands(&mut out, member, true);
         out.push_lit(")");
@@ -142,8 +148,8 @@ impl<'a> Emitter<'a> {
 
     fn emit_flow_function(&self, value: ExprId) -> Rope<'a> {
         match self.member_apply_steps.get(&value).copied() {
-            Some(member) => self.emit_bound_member(value, member),
-            None => guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
+            Some(member) if !member.optional => self.emit_bound_member(value, member),
+            Some(_) | None => guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
         }
     }
 

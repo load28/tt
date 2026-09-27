@@ -953,3 +953,19 @@ console.log(JSON.stringify(values.map(v => match (v) { _ => "any" })));
 "#);
     assert_eq!(lines, [r#"["any","any","any"]"#]);
 }
+
+#[test]
+fn an_optional_member_step_is_the_optional_call() {
+    require_toolchain!();
+    let lines = run(r#"
+class C { k = 3; m(x: number) { return x * this.k; } }
+const pick = <T,>(value: T): T => [value][0];
+const o: C | undefined = pick<C | undefined>(new C());
+const none: C | undefined = pick<C | undefined>(undefined);
+const nested: { c?: C } | undefined = pick<{ c?: C } | undefined>({ c: new C() });
+const order: string[] = [];
+const head = () => { order.push("head"); return 2; };
+console.log(JSON.stringify([head() |> o?.m, head() |> none?.m, head() |> nested?.c?.m, order]));
+"#);
+    assert_eq!(lines, [r#"[6,null,6,["head","head","head"]]"#]);
+}

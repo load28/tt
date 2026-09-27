@@ -112,7 +112,7 @@ else { prompt(); }
 ```tt
 const label = half(4) |> Option.mapP(x => x + 1) |> Option.unwrapOrP(0) |> .toFixed(1);
 ```
-- `x |> f` = `f(x)`; step starting `.` = postfix chain on piped value (`x |> .trim().split(",")`). A member step (`x |> obj.m`, `obj[k]`, `this.#m`, `super.m`, also as a `flow` step) calls the method on its receiver, as `obj.m(x)` does; the piped value is evaluated before the receiver. A step starting `?.` is one JavaScript optional postfix tail: `?.name`, `?.[key]`, or `?.(args)`, followed by ordinary/optional member, index, or call operations.
+- `x |> f` = `f(x)`; step starting `.` = postfix chain on piped value (`x |> .trim().split(",")`). A member step (`x |> obj.m`, `obj[k]`, `this.#m`, `super.m`, also as a `flow` step) calls the method on its receiver, as `obj.m(x)` does; the piped value is evaluated before the receiver. An optional-chain step (`x |> obj?.m`) is the optional call `obj?.m(x)`: it short-circuits to `undefined` when the chain does. A step starting `?.` is one JavaScript optional postfix tail: `?.name`, `?.[key]`, or `?.(args)`, followed by ordinary/optional member, index, or call operations.
 - Multi-arg: std `*P` curried variants or parenthesized arrow `x |> (n => add(n, 2))`.
 - PARENTHESIZE ternaries & arrows at head/step top level: `(c ? a : b) |> f`, `x |> (n => n+1)` — else compile error.
 - An optional step short-circuits only its own tail; a following `|> f` still calls `f(undefined)`. Optional keys and arguments are evaluated only when JavaScript would reach them. No empty step or incomplete/unsupported optional tail; no try STATEMENT inside head/step (pipeline inside a try expr is fine: `const a = try readCfg() |> normalize;`).

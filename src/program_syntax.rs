@@ -421,6 +421,8 @@ pub(crate) fn source_expression_effects(
 pub(crate) struct MemberCallee {
     pub(crate) receiver: Option<SourceSpan>,
     pub(crate) key: Option<SourceSpan>,
+    pub(crate) grouped: bool,
+    pub(crate) optional: bool,
 }
 
 pub(crate) fn source_member_callee(
@@ -428,7 +430,7 @@ pub(crate) fn source_member_callee(
     span: crate::hir::Span,
     source_kind: crate::SourceKind,
 ) -> Option<MemberCallee> {
-    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, SuperProp};
+    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, OptChainBase, SuperProp};
 
     let text = source.get(span.start..span.end)?;
     if crate::lexer::host_syntax_error(text, source_kind).is_some() {
@@ -455,6 +457,10 @@ pub(crate) fn source_member_callee(
         start: span.start + input.byte(node.lo),
         end: span.start + input.byte(node.hi),
     };
+    let grouped = matches!(
+        &*expression,
+        SwcExpr::TsAs(_) | SwcExpr::TsSatisfies(_) | SwcExpr::TsTypeAssertion(_)
+    );
     let mut callee = &*expression;
     loop {
         callee = match callee {
@@ -473,6 +479,8 @@ pub(crate) fn source_member_callee(
                 MemberProp::Computed(computed) => Some(at(computed.expr.span())),
                 MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
             },
+            grouped,
+            optional: false,
         }),
         SwcExpr::SuperProp(member) => Some(MemberCallee {
             receiver: None,
@@ -480,7 +488,39 @@ pub(crate) fn source_member_callee(
                 SuperProp::Computed(computed) => Some(at(computed.expr.span())),
                 SuperProp::Ident(_) => None,
             },
+            grouped,
+            optional: false,
         }),
+        SwcExpr::OptChain(chain) if matches!(&*chain.base, OptChainBase::Member(_)) => {
+            let mut root = None;
+            let mut node = callee;
+            loop {
+                node = match node {
+                    SwcExpr::OptChain(link) => {
+                        let object = match &*link.base {
+                            OptChainBase::Member(member) => &member.obj,
+                            OptChainBase::Call(call) => &call.callee,
+                        };
+                        if link.optional {
+                            root = Some(&**object);
+                        }
+                        object
+                    }
+                    SwcExpr::Member(member) => &member.obj,
+                    SwcExpr::Call(call) => match &call.callee {
+                        swc_ecma_ast::Callee::Expr(callee) => callee,
+                        swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => break,
+                    },
+                    _ => break,
+                };
+            }
+            Some(MemberCallee {
+                receiver: Some(at(root?.span())),
+                key: None,
+                grouped,
+                optional: true,
+            })
+        }
         _ => None,
     }
 }
