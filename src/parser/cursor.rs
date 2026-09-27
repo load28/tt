@@ -134,6 +134,43 @@ pub(crate) fn find_close_at(tokens: &[Token], open_idx: usize) -> Option<usize> 
     None
 }
 
+/// Whether the `{` at `k`, in an expression scan that started at `from`,
+/// begins an expression: an object literal (ECMA-262 PrimaryExpression),
+/// an arrow body, or a type literal, each stepped over as one group. It
+/// is a block that follows the expression only when the token before it
+/// ends an expression.
+pub(super) fn brace_begins_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+    k <= from || !ends_expression(src, tokens, from, k - 1)
+}
+
+/// Whether the token at `k` can be the last token of an expression: an
+/// identifier, a literal, or a closer. An operator, a keyword that takes
+/// an operand, and a JSX run (whose `{` opens an expression container)
+/// cannot.
+fn ends_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+    let token = &tokens[k];
+    match token.kind {
+        TokenKind::Ident => {
+            let word = &src[token.span.start..token.span.end];
+            dotted_at(tokens, from, k)
+                || matches!(word, "this" | "super" | "null" | "true" | "false")
+                || !(super::is_reserved(word)
+                    || matches!(
+                        word,
+                        "as" | "satisfies" | "keyof" | "infer" | "is" | "asserts" | "unique"
+                    ))
+        }
+        TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex => true,
+        TokenKind::Punct(c) => matches!(c, b')' | b']' | b'}') || c.is_ascii_digit(),
+        TokenKind::JsxRaw
+        | TokenKind::Arrow
+        | TokenKind::OrOr
+        | TokenKind::OptChain
+        | TokenKind::Coalesce
+        | TokenKind::PipeOp => false,
+    }
+}
+
 /// True when the token before `k` (within a scan that started at `from`)
 /// is a member-access dot — `.` or the `?.` of optional chaining — i.e.
 /// the identifier at `k` is a property name, not a keyword.

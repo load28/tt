@@ -455,6 +455,26 @@ fn let_else_emits_guard_and_bind() {
 }
 
 #[test]
+fn let_else_initializer_may_be_an_object_literal() {
+    let out = ok(
+        "function f(n: number) {\n  const Some(value: v) = { kind: \"Some\" as const, value: n } else { return; };\n  return v;\n}\n",
+    );
+    assert!(
+        compact(&out).contains(
+            "const $tt_t0 = { kind: \"Some\" as const, value: n }; if ($tt_t0.kind !== \"Some\") { return; } const { value: v } = $tt_t0;"
+        ),
+        "{out}"
+    );
+    let out = ok(
+        "function f(o?: { kind: \"Some\"; value: number }, c = true) {\n  const Some(value) = o ?? (c ? { kind: \"Some\" as const, value: 1 } : { kind: \"None\" as const }) else { return 0; };\n  const Some(value: w) = c ? { kind: \"Some\" as const, value } : { kind: \"None\" as const } else { return 1; };\n  return w;\n}\n",
+    );
+    assert!(
+        out.contains("const $tt_t1 = c ? { kind: \"Some\" as const, value } : { kind: \"None\" as const };"),
+        "{out}"
+    );
+}
+
+#[test]
 fn let_else_binding_alias_and_keyword() {
     let out = ok(
         "function f(): string {\n  let Some(value: user) = find() else { throw new Error(\"none\"); };\n  return user;\n}\n",

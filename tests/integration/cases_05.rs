@@ -417,3 +417,20 @@ console.log(JSON.stringify(generic), "value" in generic, opt === undefined);
         expected
     );
 }
+
+#[test]
+fn runtime_let_else_binds_from_an_object_literal_initializer() {
+    require_toolchain!();
+    let out = run(r#"
+function f(n: number) {
+  const Some(value: v) = { kind: "Some" as const, value: n } else { return -1; };
+  return v;
+}
+function g(on: boolean) {
+  const Some(value) = on ? { kind: "Some" as const, value: "on" } : { kind: "None" as const } else { return "off"; };
+  return value;
+}
+console.log(f(3), g(true), g(false));
+"#);
+    assert_eq!(out, ["3 on off"]);
+}
