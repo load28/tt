@@ -199,6 +199,68 @@ impl ProgramSyntax {
         self.occupied_names.iter().map(String::as_str)
     }
 
+    pub(crate) fn declared_names(&self) -> HashSet<String> {
+        use swc_ecma_visit::{Visit, VisitWith};
+
+        struct Declarations(HashSet<String>);
+        impl Visit for Declarations {
+            fn visit_binding_ident(&mut self, node: &swc_ecma_ast::BindingIdent) {
+                self.0.insert(node.id.sym.to_string());
+            }
+            fn visit_fn_decl(&mut self, node: &swc_ecma_ast::FnDecl) {
+                self.0.insert(node.ident.sym.to_string());
+                node.visit_children_with(self);
+            }
+            fn visit_fn_expr(&mut self, node: &swc_ecma_ast::FnExpr) {
+                if let Some(ident) = &node.ident {
+                    self.0.insert(ident.sym.to_string());
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_class_decl(&mut self, node: &swc_ecma_ast::ClassDecl) {
+                self.0.insert(node.ident.sym.to_string());
+                node.visit_children_with(self);
+            }
+            fn visit_class_expr(&mut self, node: &swc_ecma_ast::ClassExpr) {
+                if let Some(ident) = &node.ident {
+                    self.0.insert(ident.sym.to_string());
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_import_named_specifier(&mut self, node: &swc_ecma_ast::ImportNamedSpecifier) {
+                self.0.insert(node.local.sym.to_string());
+            }
+            fn visit_import_default_specifier(
+                &mut self,
+                node: &swc_ecma_ast::ImportDefaultSpecifier,
+            ) {
+                self.0.insert(node.local.sym.to_string());
+            }
+            fn visit_import_star_as_specifier(
+                &mut self,
+                node: &swc_ecma_ast::ImportStarAsSpecifier,
+            ) {
+                self.0.insert(node.local.sym.to_string());
+            }
+            fn visit_ts_enum_decl(&mut self, node: &swc_ecma_ast::TsEnumDecl) {
+                self.0.insert(node.id.sym.to_string());
+                node.visit_children_with(self);
+            }
+            fn visit_ts_module_decl(&mut self, node: &swc_ecma_ast::TsModuleDecl) {
+                if let swc_ecma_ast::TsModuleName::Ident(ident) = &node.id {
+                    self.0.insert(ident.sym.to_string());
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_ts_import_equals_decl(&mut self, node: &swc_ecma_ast::TsImportEqualsDecl) {
+                self.0.insert(node.id.sym.to_string());
+            }
+        }
+        let mut declarations = Declarations(HashSet::new());
+        self.module.visit_with(&mut declarations);
+        declarations.0
+    }
+
     fn validate(&self) -> Result<(), ProgramSyntaxError> {
         let _module_span = self.module.span;
         let projection_len = self.projection.len();

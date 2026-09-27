@@ -56,6 +56,7 @@ impl EvaluationFile {
         let file = Self {
             regions: builder.regions,
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
+            declared_names: syntax.declared_names(),
             tt_spans: syntax
                 .core_contexts()
                 .map(|(_, _, _, _, source, _, _)| source)
@@ -710,7 +711,20 @@ impl EvaluationFile {
             .difference(&self.occupied_names)
             .cloned()
             .collect();
+        let shadowed_globals = ["Error", "JSON"]
+            .into_iter()
+            .filter(|name| {
+                self.declared_names.contains(*name)
+                    || core.bodies.iter().any(|body| {
+                        body.statements.iter().any(|statement| {
+                            matches!(statement, crate::core_ir::Statement::Adt(adt) if adt.name == *name)
+                        })
+                    })
+            })
+            .map(str::to_owned)
+            .collect();
         Ok(LoweringPlan {
+            shadowed_globals,
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
                 occupied_names,
                 allocated_names,

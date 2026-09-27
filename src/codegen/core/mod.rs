@@ -224,6 +224,8 @@ pub(crate) fn emit_with_map<'a>(
         recovered_sources: RefCell::new(Vec::new()),
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
+        host_error: target.host_error,
+        host_json: target.host_json,
         inline_subjects: target.inline_subjects,
         block_required_propagations: target.block_required_propagations,
         ambient_items: target.ambient_items,

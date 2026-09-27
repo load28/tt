@@ -435,7 +435,8 @@
 | TASK-429 | Keep missing-arm suggestions free of duplicate bindings across tuple positions | Complete | 2026-09-27 | 2026-09-27 | [TASK-429](./TASK-429-tuple-suggestion-bindings.md) |
 | TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
 | TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
+| TASK-432 | Reach the host `Error` and `JSON` past user declarations in generated guards | Complete | 2026-09-27 | 2026-09-27 | [TASK-432](./TASK-432-host-globals-in-guards.md) |
 
 ## Next task number
 
-**TASK-432**
+**TASK-433**

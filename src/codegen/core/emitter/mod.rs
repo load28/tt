@@ -41,6 +41,8 @@ pub(super) struct Emitter<'a> {
     pub(super) recovered_sources: RefCell<Vec<SourceSpan>>,
     pub(super) expression_boundary_name: String,
     pub(super) match_raise_name: String,
+    pub(super) host_error: String,
+    pub(super) host_json: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
     pub(super) block_required_propagations: HashSet<NodeId>,
     pub(super) ambient_items: HashSet<NodeId>,

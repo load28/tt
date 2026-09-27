@@ -244,8 +244,8 @@ impl<'a> Emitter<'a> {
                 _ => crate::ice::bug!("inline match has no failure completion"),
             };
             out.push_lit(format!(
-                "{}(new Error(\"tt match: unexpected {kind} \" + JSON.stringify({value})))",
-                self.match_raise_name
+                "{}(new {}(\"tt match: unexpected {kind} \" + {}.stringify({value})))",
+                self.match_raise_name, self.host_error, self.host_json
             ));
         }
         out.push_lit(")");
@@ -918,15 +918,20 @@ impl<'a> Emitter<'a> {
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!(
-                    "throw new Error(\"tt match: unexpected case \" + JSON.stringify([{temps}]));"
+                    "throw new {}(\"tt match: unexpected case \" + {}.stringify([{temps}]));",
+                    self.host_error, self.host_json
                 )
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Literal) => format!(
-                "throw new Error(\"tt match: unexpected literal \" + JSON.stringify({}));",
+                "throw new {}(\"tt match: unexpected literal \" + {}.stringify({}));",
+                self.host_error,
+                self.host_json,
                 self.subject_reference(decision, 0)
             ),
             MissAction::ThrowUnexpected(UnexpectedKind::Case) => format!(
-                "throw new Error(\"tt match: unexpected case \" + JSON.stringify({}));",
+                "throw new {}(\"tt match: unexpected case \" + {}.stringify({}));",
+                self.host_error,
+                self.host_json,
                 self.subject_reference(decision, 0)
             ),
             _ => crate::ice::bug!("match has non-match miss action"),

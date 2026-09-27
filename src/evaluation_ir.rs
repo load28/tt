@@ -113,6 +113,7 @@ struct EvalRegion {
 pub(crate) struct EvaluationFile {
     regions: Vec<EvalRegion>,
     occupied_names: HashSet<String>,
+    declared_names: HashSet<String>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
@@ -135,6 +136,7 @@ pub(crate) struct LoweringPlan {
     expression_boundary_name: String,
     match_raise_name: String,
     generated_names: Option<crate::generated_names::GeneratedNames>,
+    shadowed_globals: HashSet<String>,
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
@@ -509,6 +511,14 @@ impl LoweringPlan {
 
     pub(crate) fn match_raise_name(&self) -> &str {
         &self.match_raise_name
+    }
+
+    pub(crate) fn host_global(&self, name: &str) -> String {
+        if self.shadowed_globals.contains(name) {
+            format!("globalThis.{name}")
+        } else {
+            name.to_owned()
+        }
     }
 
     pub(crate) fn generated_names(&self) -> Option<&crate::generated_names::GeneratedNames> {
