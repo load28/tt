@@ -387,3 +387,21 @@ fn module_and_non_function_braces_are_not() {
     // A function body *closed before* the position provides nothing.
     assert!(!inside("function f() {} HERE;", "HERE"));
 }
+
+#[test]
+fn an_abrupt_exit_runs_the_finally_that_can_replace_it() {
+    assert!(!check("x: { try { return -1; } finally { break x; } }"));
+    assert!(!check(
+        "while (true) { try { continue; } finally { break; } }"
+    ));
+    assert!(!check("x: { try { break x; } finally { } }"));
+    assert!(check("x: { try { break x; } finally { return 1; } }"));
+    assert!(check("try { return 1; } finally { }"));
+    assert!(check("try { log(\"x\"); } finally { return 2; }"));
+    assert!(check(
+        "x: { try { throw e; } catch (e) { break x; } finally { return 3; } }"
+    ));
+    assert!(!check(
+        "x: { try { throw e; } catch (e) { return 1; } finally { break x; } }"
+    ));
+}

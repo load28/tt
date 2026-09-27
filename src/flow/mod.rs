@@ -271,7 +271,10 @@ fn lower_region(src: &str, tokens: &[Token], if_lets: &IfLetHeads) -> FlowBody {
         if_lets,
     }
     .statements(0, tokens.len());
-    let mut builder = Builder { blocks: Vec::new() };
+    let mut builder = Builder {
+        blocks: Vec::new(),
+        abrupt: Vec::new(),
+    };
     let end = builder.block(Terminator::End);
     let entry = builder.seq(&statements, end, &mut Vec::new());
     FlowBody {
@@ -547,6 +550,13 @@ fn continue_target(scopes: &[Scope<'_>], label: Option<&str>) -> Option<BlockId>
 
 struct Builder {
     blocks: Vec<BasicBlock>,
+    abrupt: Vec<AbruptTargets>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AbruptTargets {
+    return_to: BlockId,
+    jump_to: BlockId,
 }
 
 impl Builder {
@@ -569,6 +579,12 @@ impl Builder {
     /// The entry block of `stmts` followed by `follow`. Lowered back to
     /// front, so each statement's successor is already built; scopes nest
     /// lexically, never sequentially, so the order is free.
+    fn outside_jump(&self) -> Terminator {
+        self.abrupt.last().map_or(Terminator::Jump, |targets| {
+            Terminator::Goto(targets.jump_to)
+        })
+    }
+
     fn seq<'a>(
         &mut self,
         stmts: &[Stmt<'a>],
@@ -601,15 +617,20 @@ impl Builder {
         label: Option<&'a str>,
     ) -> BlockId {
         match stmt {
-            Stmt::Return => self.block(Terminator::Return),
+            Stmt::Return => {
+                let terminator = self.abrupt.last().map_or(Terminator::Return, |targets| {
+                    Terminator::Goto(targets.return_to)
+                });
+                self.block(terminator)
+            }
             Stmt::Break { label: name, .. } => {
-                let terminator =
-                    break_target(scopes, *name).map_or(Terminator::Jump, Terminator::Goto);
+                let terminator = break_target(scopes, *name)
+                    .map_or_else(|| self.outside_jump(), Terminator::Goto);
                 self.block(terminator)
             }
             Stmt::Continue { label: name, .. } => {
-                let terminator =
-                    continue_target(scopes, *name).map_or(Terminator::Jump, Terminator::Goto);
+                let terminator = continue_target(scopes, *name)
+                    .map_or_else(|| self.outside_jump(), Terminator::Goto);
                 self.block(terminator)
             }
             Stmt::Yield(_) | Stmt::Other => self.block(Terminator::Goto(follow)),
@@ -667,19 +688,35 @@ impl Builder {
                 catch,
                 finally,
             } => {
-                // Everything that leaves the guarded block or its handler
-                // normally runs the `finally` first, so a `finally` that
-                // diverges makes the whole statement diverge. An abrupt
-                // exit (`return`/`break`/`continue`) from inside is *not*
-                // routed through this copy: it already diverges, and a
-                // diverging `finally` could only make it more so — the
-                // omission can never claim a divergence that is not there.
+                // Everything that leaves the guarded block or its handler,
+                // normally or abruptly, runs the `finally` first; an abrupt
+                // `finally` replaces that completion (ECMA-262 §14.15.3).
                 let join = match finally {
                     Some(stmts) => self.seq(stmts, follow, scopes),
                     None => follow,
                 };
+                let mut routed = scopes.clone();
+                if let Some(stmts) = finally {
+                    for scope in routed.iter_mut() {
+                        scope.break_to = self.seq(stmts, scope.break_to, scopes);
+                        scope.continue_to = scope
+                            .continue_to
+                            .map(|target| self.seq(stmts, target, scopes));
+                    }
+                    let return_exit =
+                        self.block(self.abrupt.last().map_or(Terminator::Return, |targets| {
+                            Terminator::Goto(targets.return_to)
+                        }));
+                    let jump_exit = self.block(self.outside_jump());
+                    let targets = AbruptTargets {
+                        return_to: self.seq(stmts, return_exit, scopes),
+                        jump_to: self.seq(stmts, jump_exit, scopes),
+                    };
+                    self.abrupt.push(targets);
+                }
+                let scopes = &mut routed;
                 let try_entry = self.seq(block, join, scopes);
-                match catch {
+                let entry = match catch {
                     // An exception can be raised anywhere in the guarded
                     // block, so the handler is reachable in place of any
                     // prefix of it. The statement then reaches `join`
@@ -695,7 +732,11 @@ impl Builder {
                     // With no handler an exception leaves the function;
                     // normal completion is the only edge out.
                     None => try_entry,
+                };
+                if finally.is_some() {
+                    self.abrupt.pop();
                 }
+                entry
             }
         }
     }
