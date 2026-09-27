@@ -136,6 +136,23 @@ impl<'a> Rope<'a> {
         });
     }
 
+    pub(crate) fn push_declared_name(
+        &mut self,
+        text: impl Into<Cow<'a, str>>,
+        src: usize,
+        src_end: usize,
+    ) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::DeclaredNameStart,
+        });
+        self.push_lit(text);
+        self.pieces.push(Piece::Mark {
+            src: src_end,
+            kind: MarkKind::DeclaredNameEnd,
+        });
+    }
+
     /// Appends `inner` as one construct's glue. `src..src_end` is its
     /// primary display range; `src..owner_end` is the complete syntax node
     /// that owns consequences of this lowering ([`crate::EmitAnchor`]).
@@ -428,4 +445,5 @@ pub(crate) struct Flat {
     pub result_return_temps: Vec<ResultReturnTemp>,
     pub contextual_slots: Vec<usize>,
     pub generated_names: std::collections::HashSet<String>,
+    pub declared_names: Vec<DeclaredName>,
 }

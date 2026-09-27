@@ -141,6 +141,36 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
 }
 
 #[test]
+fn variant_glue_names_stand_for_their_source_names_in_navigation_only() {
+    for ambient in ["", "declare "] {
+        let src = format!("{ambient}variant V {{ A(x: number), B }}\nconst w = V.B;\n");
+        let doc = service_doc(Path::new("/p/a.tt"), src.clone());
+        let source_of = |glue: &str, name: &str| {
+            let at = doc
+                .code
+                .find(glue)
+                .unwrap_or_else(|| panic!("{glue:?} in {}", doc.code))
+                + glue.find(name).unwrap();
+            let start = mapper::to_utf16(&doc.code, at);
+            let end = start + name.len();
+            assert_eq!(from_service_span(&doc, start, end), None, "{glue:?}");
+            declared_name_span(&doc, start, end)
+        };
+        let variant = src.find("V {").unwrap();
+        let case_a = src.find("A(").unwrap();
+        let case_b = src.find("B }").unwrap();
+        let field = src.find("x:").unwrap();
+        assert_eq!(source_of("type V", "V"), Some((variant, variant + 1)));
+        assert_eq!(source_of("const V", "V"), Some((variant, variant + 1)));
+        assert_eq!(source_of("A: ", "A"), Some((case_a, case_a + 1)));
+        assert_eq!(source_of("B: ", "B"), Some((case_b, case_b + 1)));
+        assert_eq!(source_of("x: number }", "x"), Some((field, field + 1)));
+        let kind = doc.code.find("\"A\"").unwrap();
+        assert_eq!(declared_name_span(&doc, kind + 1, kind + 2), None);
+    }
+}
+
+#[test]
 fn declared_hover_names_the_constructor_and_its_type() {
     let src =
         "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";

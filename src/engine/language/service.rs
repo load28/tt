@@ -30,6 +30,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         code: emit.code,
         mappings: emit.mappings,
         anchors: emit.anchors,
+        declared_names: emit.declared_names,
         recovered,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
@@ -308,15 +309,22 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TargetUse {
+    Navigation,
+    Edit,
+}
+
 /// Maps one service answer target back to a user-visible file. `None` when
 /// the target is not a file, cannot be read, or the span has no source
-/// counterpart — the caller decides whether that skips one result
-/// (navigation) or refuses the whole operation (rename).
+/// counterpart for `purpose` — the caller decides whether that skips one
+/// result (navigation) or refuses the whole operation (rename).
 pub(super) fn map_target(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,
     uri: &str,
     range: &serde_json::Value,
+    purpose: TargetUse,
 ) -> Option<Location> {
     let path = uri_path(uri)?;
     let lsp_range = Range {
@@ -333,7 +341,11 @@ pub(super) fn map_target(
         let doc = serve_doc_only(session, overlays, &tt_path)?;
         let start = u16_offset(&doc.code, lsp_range.start);
         let end = u16_offset(&doc.code, lsp_range.end);
-        let (s, e) = from_service_span(&doc, start, end)?;
+        let (s, e) = match from_service_span(&doc, start, end) {
+            Some(span) => span,
+            None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
+            None => return None,
+        };
         return Some(Location {
             path: tt_path,
             range: source_range(&doc.source, s, e),
@@ -390,6 +402,23 @@ pub(super) fn from_service_span(
     Some((
         mapper::to_utf16(&doc.source, ss),
         mapper::to_utf16(&doc.source, se),
+    ))
+}
+
+pub(super) fn declared_name_span(
+    doc: &ServiceDoc,
+    start: usize,
+    end: usize,
+) -> Option<(usize, usize)> {
+    let sb = mapper::from_utf16(&doc.code, start);
+    let eb = mapper::from_utf16(&doc.code, end);
+    let name = doc
+        .declared_names
+        .iter()
+        .find(|name| name.out == sb && name.out_end == eb)?;
+    Some((
+        mapper::to_utf16(&doc.source, name.src),
+        mapper::to_utf16(&doc.source, name.src_end),
     ))
 }
 

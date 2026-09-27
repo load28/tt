@@ -436,6 +436,7 @@
 | TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
 | TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 | TASK-432 | Reach the host `Error` and `JSON` past user declarations in generated guards | Complete | 2026-09-27 | 2026-09-27 | [TASK-432](./TASK-432-host-globals-in-guards.md) |
+| TASK-422 | Navigate from variant use sites to the variant declaration | Complete | 2026-09-27 | 2026-09-27 | [TASK-422](./TASK-422-variant-navigation.md) |
 
 ## Next task number
 

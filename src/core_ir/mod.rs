@@ -257,6 +257,7 @@ pub(crate) struct Adt {
 
 #[derive(Debug)]
 pub(crate) struct AdtVariant {
+    pub node: NodeId,
     pub name: String,
     pub fields: Option<Vec<AdtField>>,
     pub emit_constructor: bool,
@@ -264,6 +265,7 @@ pub(crate) struct AdtVariant {
 
 #[derive(Debug)]
 pub(crate) struct AdtField {
+    pub node: NodeId,
     pub name: String,
     pub optional: bool,
     pub ty_text: String,

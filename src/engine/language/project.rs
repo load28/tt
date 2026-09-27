@@ -249,8 +249,8 @@ impl Project {
             .collect())
     }
 
-    /// Find references. `is_definition` marks the first result, as the
-    /// editor has always presented it.
+    /// Find references. `is_definition` marks each reference that is a
+    /// definition the checker names for the same position.
     pub fn references(
         &mut self,
         path: &Path,
@@ -262,12 +262,17 @@ impl Project {
             "textDocument/references",
             serde_json::json!({ "context": { "includeDeclaration": true } }),
         )?;
+        let definitions = self.locations(
+            path,
+            position,
+            "textDocument/definition",
+            serde_json::json!({}),
+        )?;
         Ok(locations
             .into_iter()
-            .enumerate()
-            .map(|(index, location)| Reference {
+            .map(|location| Reference {
+                is_definition: definitions.contains(&location),
                 location,
-                is_definition: index == 0,
             })
             .collect())
     }
@@ -309,7 +314,14 @@ impl Project {
             };
             // Anything unmappable is dropped — a reference into glue is not
             // a place the user can go.
-            if let Some(mapped) = map_target(session, overlays, uri, &location["range"]) {
+            if let Some(mapped) = map_target(
+                session,
+                overlays,
+                uri,
+                &location["range"],
+                TargetUse::Navigation,
+            ) && !out.contains(&mapped)
+            {
                 out.push(mapped);
             }
         }
@@ -483,8 +495,13 @@ impl Project {
                 return Ok(None);
             };
             for one in edits {
-                let Some(location) = map_target(session, overlays, edited_uri, &one["range"])
-                else {
+                let Some(location) = map_target(
+                    session,
+                    overlays,
+                    edited_uri,
+                    &one["range"],
+                    TargetUse::Edit,
+                ) else {
                     return Ok(None);
                 };
                 let new_text = one["newText"].as_str().map(String::from);
@@ -834,6 +851,7 @@ impl Project {
                     code: projected.emit.code.clone(),
                     mappings: projected.emit.mappings.clone(),
                     anchors: projected.emit.anchors.clone(),
+                    declared_names: projected.emit.declared_names.clone(),
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
                     generated_names: projected.emit.generated_names.clone(),

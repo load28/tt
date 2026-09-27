@@ -227,7 +227,16 @@ impl BindingRecovery {
 
 /// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
-pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceKind) -> Rope<'a> {
+pub(super) fn emit_adt<'a>(
+    adt: &Adt,
+    span: impl Fn(NodeId) -> hir::Span,
+    ambient: bool,
+    source_kind: crate::SourceKind,
+) -> Rope<'a> {
+    let declared = |out: &mut Rope<'a>, name: &str, node: NodeId| {
+        let span = span(node);
+        out.push_declared_name(name.to_owned(), span.start, span.end);
+    };
     let export = match (adt.exported, adt.declared) {
         (true, true) => "export declare ",
         (true, false) => "export ",
@@ -235,27 +244,33 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceK
         (false, false) => "",
     };
     let ambient = ambient || adt.declared;
-    let arms = adt
-        .variants
-        .iter()
-        .map(|variant| match &variant.fields {
-            Some(fields) if !fields.is_empty() => format!(
-                "{{ kind: \"{}\"; {} }}",
-                variant.name,
-                fields
-                    .iter()
-                    .map(|field| format!(
-                        "{}{}: {}",
-                        field.name,
-                        if field.optional { "?" } else { "" },
-                        field.ty_text
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            ),
-            _ => format!("{{ kind: \"{}\" }}", variant.name),
-        })
-        .collect::<Vec<_>>();
+    let field_list = |fields: &[AdtField], separator: &str, out: &mut Rope<'a>| {
+        for (index, field) in fields.iter().enumerate() {
+            if index > 0 {
+                out.push_lit(separator.to_owned());
+            }
+            declared(out, &field.name, field.node);
+            out.push_lit(format!(
+                "{}: {}",
+                if field.optional { "?" } else { "" },
+                field.ty_text
+            ));
+        }
+    };
+    let parameter_list = |fields: &[AdtField]| {
+        fields
+            .iter()
+            .map(|field| {
+                format!(
+                    "{}{}: {}",
+                    field.name,
+                    if field.optional { "?" } else { "" },
+                    field.ty_text
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
     let type_args = if adt.generics.is_empty() {
         String::new()
     } else {
@@ -275,94 +290,72 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceK
     } else {
         adt.generics.clone()
     };
-    let constructors = adt
-        .variants
-        .iter()
-        .filter_map(|variant| {
-            if !variant.emit_constructor {
-                return None;
-            }
-            if ambient {
-                return Some(match &variant.fields {
-                    None => format!(
-                        "readonly {}: {{ readonly kind: \"{}\" }};",
-                        variant.name, variant.name
-                    ),
-                    Some(fields) => {
-                        let params = fields
-                            .iter()
-                            .map(|field| {
-                                format!(
-                                    "{}{}: {}",
-                                    field.name,
-                                    if field.optional { "?" } else { "" },
-                                    field.ty_text
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        format!(
-                            "readonly {}: {}({params}) => {}{type_args};",
-                            variant.name, adt.generics, adt.name
-                        )
-                    }
-                });
-            }
-            Some(match &variant.fields {
-                None => format!(
-                    "{}: {{ kind: \"{}\" }} as const,",
-                    variant.name, variant.name
-                ),
-                Some(fields) => {
-                    let params = fields
-                        .iter()
-                        .map(|field| {
-                            format!(
-                                "{}{}: {}",
-                                field.name,
-                                if field.optional { "?" } else { "" },
-                                field.ty_text
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let object = std::iter::once(format!("kind: \"{}\"", variant.name))
-                        .chain(fields.iter().map(|field| {
-                            if field.optional {
-                                format!(
-                                    "...({} === undefined ? {{}} : {{ {} }})",
-                                    field.name, field.name
-                                )
-                            } else {
-                                field.name.clone()
-                            }
-                        }))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!(
-                        "{}: {}({params}): {}{type_args} => ({{ {object} }}),",
-                        variant.name, arrow_generics, adt.name
-                    )
-                }
-            })
-        })
-        .collect::<Vec<_>>();
     let mut out = Rope::new();
-    out.push_lit(format!("{export}type {}{} =", adt.name, adt.generics));
-    for arm in arms {
+    out.push_lit(format!("{export}type "));
+    declared(&mut out, &adt.name, adt.node);
+    out.push_lit(format!("{} =", adt.generics));
+    for variant in &adt.variants {
         out.push_break(1);
-        out.push_lit(format!("| {arm}"));
+        out.push_lit(format!("| {{ kind: \"{}\"", variant.name));
+        match &variant.fields {
+            Some(fields) if !fields.is_empty() => {
+                out.push_lit("; ");
+                field_list(fields, "; ", &mut out);
+                out.push_lit(" }");
+            }
+            _ => out.push_lit(" }"),
+        }
     }
     out.push_lit(";");
     out.push_break(0);
-    if ambient {
-        out.push_lit(format!("{export}const {}: {{", adt.name));
-    } else {
-        out.push_lit(format!("{export}const {} = {{", adt.name));
-    }
-    for constructor in constructors {
+    out.push_lit(format!("{export}const "));
+    declared(&mut out, &adt.name, adt.node);
+    out.push_lit(if ambient { ": {" } else { " = {" });
+    for variant in adt
+        .variants
+        .iter()
+        .filter(|variant| variant.emit_constructor)
+    {
         out.push_break(1);
-        out.push_lit(constructor);
+        if ambient {
+            out.push_lit("readonly ");
+            declared(&mut out, &variant.name, variant.node);
+            out.push_lit(match &variant.fields {
+                None => format!(": {{ readonly kind: \"{}\" }};", variant.name),
+                Some(fields) => format!(
+                    ": {}({}) => {}{type_args};",
+                    adt.generics,
+                    parameter_list(fields),
+                    adt.name
+                ),
+            });
+            continue;
+        }
+        declared(&mut out, &variant.name, variant.node);
+        out.push_lit(match &variant.fields {
+            None => format!(": {{ kind: \"{}\" }} as const,", variant.name),
+            Some(fields) => {
+                let object = std::iter::once(format!("kind: \"{}\"", variant.name))
+                    .chain(fields.iter().map(|field| {
+                        if field.optional {
+                            format!(
+                                "...({} === undefined ? {{}} : {{ {} }})",
+                                field.name, field.name
+                            )
+                        } else {
+                            field.name.clone()
+                        }
+                    }))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    ": {}({}): {}{type_args} => ({{ {object} }}),",
+                    arrow_generics,
+                    parameter_list(fields),
+                    adt.name
+                )
+            }
+        });
     }
     out.push_break(0);
     out.push_lit("};");

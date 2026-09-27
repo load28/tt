@@ -320,3 +320,100 @@ fn generated_bindings_never_surface_as_user_symbols() {
         .unwrap();
     assert!(references.is_empty(), "{references:?}");
 }
+
+fn source_position(text: &str, needle: &str, delta: usize) -> ttc::engine::Position {
+    let offset = text.find(needle).expect("needle") + delta;
+    let before = &text[..offset];
+    ttc::engine::Position {
+        line: before.matches('\n').count() as u32,
+        character: before[before.rfind('\n').map_or(0, |n| n + 1)..]
+            .encode_utf16()
+            .count() as u32,
+    }
+}
+
+fn source_location(path: &Path, text: &str, needle: &str, delta: usize, len: usize) -> ttc::engine::Location {
+    ttc::engine::Location {
+        path: path.to_path_buf(),
+        range: ttc::engine::Range {
+            start: source_position(text, needle, delta),
+            end: source_position(text, needle, delta + len),
+        },
+    }
+}
+
+#[test]
+fn variant_navigation_lands_on_the_variant_declaration() {
+    require_tsgo!();
+    let local = "variant V { A(x: number), B }\n\
+                 const v: V = V.A(1);\n\
+                 const w = V.B;\n\
+                 function f(q: V) { return q; }\n";
+    let shapes = "export variant Shape { Circle(r: number), Point }\n";
+    let user = "import { Shape } from \"./shapes.tt\";\n\
+                export function g(s: Shape) { return s; }\n\
+                const c = Shape.Circle(1);\n";
+    let dir = project(&[
+        ("src/a.tt", local),
+        ("src/shapes.tt", shapes),
+        ("src/use.tt", user),
+    ]);
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let shapes_path = dir.join("src/shapes.tt").canonicalize().unwrap();
+    let use_path = dir.join("src/use.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[dir.join("src").to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .expect("the project opens");
+    let variant = source_location(&a, local, "V {", 0, 1);
+    let case_a = source_location(&a, local, "A(x", 0, 1);
+    let case_b = source_location(&a, local, "B }", 0, 1);
+    for (needle, delta, expected) in [
+        ("v: V", 3, &variant),
+        ("V.A(1)", 0, &variant),
+        ("V.A(1)", 2, &case_a),
+        ("V.B", 0, &variant),
+        ("V.B", 2, &case_b),
+        ("q: V", 3, &variant),
+    ] {
+        let found = project
+            .definition(&a, source_position(local, needle, delta))
+            .expect("definition answers");
+        assert_eq!(found, vec![expected.clone()], "{needle:?}+{delta}");
+    }
+    let references = project
+        .references(&a, source_position(local, "V.A(1)", 2))
+        .expect("references answer");
+    let declared: Vec<_> = references
+        .iter()
+        .filter(|reference| reference.is_definition)
+        .map(|reference| reference.location.clone())
+        .collect();
+    assert_eq!(declared, vec![case_a], "{references:?}");
+    assert_eq!(references.len(), 2, "{references:?}");
+
+    let shape = source_location(&shapes_path, shapes, "Shape", 0, 5);
+    let found = project
+        .definition(&use_path, source_position(user, "s: Shape", 3))
+        .expect("definition answers");
+    assert_eq!(found, vec![shape.clone()]);
+    let references = project
+        .references(&use_path, source_position(user, "s: Shape", 3))
+        .expect("references answer");
+    let declared: Vec<_> = references
+        .iter()
+        .filter(|reference| reference.is_definition)
+        .map(|reference| reference.location.clone())
+        .collect();
+    assert_eq!(declared, vec![shape], "{references:?}");
+    let specifier = source_location(&use_path, user, "Shape", 0, 5);
+    assert!(
+        references
+            .iter()
+            .any(|reference| reference.location == specifier && !reference.is_definition),
+        "{references:?}"
+    );
+}

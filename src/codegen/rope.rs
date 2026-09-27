@@ -21,7 +21,8 @@ use std::borrow::Cow;
 use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubject};
 use crate::program_syntax::SourceSpan;
 use crate::{
-    AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp, ScrutineeTemp, SourceKind,
+    AnchorKind, DeclaredName, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp,
+    ScrutineeTemp, SourceKind,
 };
 
 pub(crate) use builder::{Flat, Rope};
@@ -41,6 +42,8 @@ pub(crate) enum MarkKind {
     ResultReturnStart,
     /// End of the same returned value.
     ResultReturnEnd,
+    DeclaredNameStart,
+    DeclaredNameEnd,
 }
 
 enum Piece<'a> {
@@ -510,6 +513,7 @@ impl<'a> TargetFile<'a> {
         let mut payloads: Vec<PayloadTemp> = Vec::new();
         let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
         let mut contextual_slots = Vec::new();
+        let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
@@ -589,6 +593,28 @@ impl<'a> TargetFile<'a> {
                         });
                     mark.out_end = out.len();
                 }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DeclaredNameStart,
+                } => declared_names.push(DeclaredName {
+                    src: *src,
+                    src_end: *src,
+                    out: out.len(),
+                    out_end: out.len(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DeclaredNameEnd,
+                } => {
+                    let name = declared_names
+                        .last_mut()
+                        .filter(|name| name.out_end == name.out && name.src <= *src)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("declared name end has no matching start")
+                        });
+                    name.src_end = *src;
+                    name.out_end = out.len();
+                }
                 TargetPiece::ScopeOpen => scopes.push(line_indent(&out).to_owned()),
                 TargetPiece::ScopeClose => {
                     scopes.pop();
@@ -639,6 +665,7 @@ impl<'a> TargetFile<'a> {
             result_return_temps: result_returns,
             contextual_slots,
             generated_names: std::collections::HashSet::new(),
+            declared_names,
         }
     }
 }

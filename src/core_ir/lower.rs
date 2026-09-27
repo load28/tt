@@ -125,6 +125,7 @@ impl Lowering<'_> {
                             .map(|variant_id| {
                                 let variant = &self.semantic.hir.variants[*variant_id];
                                 AdtVariant {
+                                    node: variant.node,
                                     name: variant.name.clone(),
                                     fields: variant.fields.as_ref().map(|field_ids| {
                                         field_ids
@@ -132,6 +133,7 @@ impl Lowering<'_> {
                                             .map(|field_id| {
                                                 let field = &self.semantic.hir.fields[*field_id];
                                                 AdtField {
+                                                    node: field.node,
                                                     name: field.name.clone(),
                                                     optional: field.optional,
                                                     ty_text: field.ty_text.clone(),

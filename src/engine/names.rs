@@ -1,12 +1,12 @@
 //! tt's own names — the semantic surface the checker cannot be asked about.
 //!
 //! Three of tt's name spaces exist only in `.tt` source: a **variant name**,
-//! a **case tag**, and a **payload field name**. None survives lowering in
-//! a form TypeScript can be pointed at — a variant declaration is synthesized
-//! text with no mapping back, a tag becomes a string literal, a field a
-//! destructuring key. So the answers TypeScript gives for every other
-//! identifier (hover, go-to-definition) are simply absent here, and tt has
-//! to give them itself.
+//! a **case tag**, and a **payload field name**. Inside the declaration and
+//! in a pattern, none survives lowering in a form TypeScript can be pointed
+//! at — a variant declaration is synthesized text with no mapping back, a
+//! tag becomes a string literal, a field a destructuring key. So the answers
+//! TypeScript gives for every other identifier (hover, go-to-definition) are
+//! simply absent there, and tt has to give them itself.
 //!
 //! This module is that answer, and it follows the same layering the rest of
 //! the engine does:

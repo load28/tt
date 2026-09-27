@@ -68,8 +68,8 @@ pub struct Location {
 pub struct Reference {
     /// Where.
     pub location: Location,
-    /// Whether this is the declaration. (The service does not mark it; the
-    /// first result stands in, as it always has — presentation only.)
+    /// Whether this is a declaration: one of the definitions the checker
+    /// names for the same position.
     pub is_definition: bool,
 }
 
@@ -237,6 +237,7 @@ pub(crate) struct ServiceDoc {
     /// The glue each construct wrote — what a diagnostic landing outside
     /// every mapping is *about* (`crate::EmitAnchor`).
     anchors: Vec<crate::EmitAnchor>,
+    declared_names: Vec<crate::DeclaredName>,
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,

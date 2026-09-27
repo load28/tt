@@ -57,6 +57,14 @@ pub struct ResultReturnTemp {
     pub out_end: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DeclaredName {
+    pub src: usize,
+    pub src_end: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
 /// Which tt construct a stretch of compiler-written glue belongs to.
 ///
 /// The kind is half of what turns a TypeScript diagnostic on that glue into
@@ -163,6 +171,7 @@ pub struct MappedEmit {
     /// Byte offsets after generated value declaration identifiers.
     pub(crate) contextual_slots: Vec<usize>,
     pub(crate) generated_names: std::collections::HashSet<String>,
+    pub(crate) declared_names: Vec<DeclaredName>,
 }
 
 impl MappedEmit {
@@ -255,6 +264,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
         generated_names: flat.generated_names,
+        declared_names: flat.declared_names,
     }
 }
 

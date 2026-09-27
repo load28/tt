@@ -24,6 +24,10 @@ pub(crate) fn insert_annotations(emit: &mut MappedEmit, edits: &[(usize, String)
         mark.out = shifted(mark.out, true);
         mark.out_end = shifted(mark.out_end, false);
     }
+    for name in &mut emit.declared_names {
+        name.out = shifted(name.out, true);
+        name.out_end = shifted(name.out_end, false);
+    }
     for anchor in &mut emit.anchors {
         anchor.out = shifted(anchor.out, true);
         anchor.end = shifted(anchor.end, false);
