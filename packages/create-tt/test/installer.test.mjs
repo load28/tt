@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
-import { createProject, dependencyChannel, detectBundler, initializeExisting, run } from '../src/installer.js'
+import { createProject, dependencyChannel, detectBundler, initializeExisting, parseJsonc, run, shellQuote } from '../src/installer.js'
 
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const expectedDependencyChannel = dependencyChannel(ownManifest.version)
@@ -154,4 +157,139 @@ test('repeated init is idempotent when generated configs are unchanged', async (
   await initializeExisting({ directory: root, bundler: 'auto' })
   const after = await Promise.all(['package.json', 'tsconfig.tt.json', 'tt.vite.config.mjs'].map(file => readFile(join(root, file), 'utf8')))
   assert.deepEqual(after, before)
+})
+
+function installedTypeScript(directory) {
+  const entry = join(directory, 'node_modules/typescript/lib/tsc.js')
+  if (existsSync(entry)) return entry
+  const parent = dirname(directory)
+  return parent === directory ? undefined : installedTypeScript(parent)
+}
+
+const repositoryTypeScript = installedTypeScript(fileURLToPath(new URL('../../..', import.meta.url)))
+
+async function viteSolutionProject() {
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-solution-'))
+  await writeFile(join(root, 'package.json'), '{"devDependencies":{"vite":"^8.0.0"}}\n')
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({
+    files: [],
+    references: [{ path: './tsconfig.app.json' }, { path: './tsconfig.node.json' }],
+  }, null, 2))
+  await writeFile(join(root, 'tsconfig.app.json'), `{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "ES2022",
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    // Linting
+    "strict": true,
+  },
+  "include": ["src"]
+}
+`)
+  await writeFile(join(root, 'tsconfig.node.json'), `{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "noEmit": true
+  },
+  "include": ["vite.config.ts"]
+}
+`)
+  await writeFile(join(root, 'vite.config.ts'), 'export default {}\n')
+  await mkdir(join(root, 'src'))
+  await writeFile(join(root, 'src/main.ts'), 'export const label: string = 1\n')
+  return root
+}
+
+test('init composes a solution tsconfig through its project references', async () => {
+  const root = await viteSolutionProject()
+  const result = await initializeExisting({ directory: root, bundler: 'auto' })
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  assert.equal(manifest.scripts['tt:check'], 'tsc -b tsconfig.tt.json --runExternalCode')
+  assert.equal(manifest.scripts['tt:build'], 'tsc -b tsconfig.tt.json --runExternalCode && vite build --config tt.vite.config.mjs')
+  const mapper = [{ package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] }]
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8')), {
+    extends: './tsconfig.json',
+    compilerOptions: { noEmit: true },
+    contentMappers: mapper,
+    references: [{ path: './tsconfig.app.tt.json' }, { path: './tsconfig.node.tt.json' }],
+  })
+  for (const name of ['app', 'node']) {
+    assert.deepEqual(JSON.parse(await readFile(join(root, `tsconfig.${name}.tt.json`), 'utf8')), {
+      extends: `./tsconfig.${name}.json`,
+      compilerOptions: { noEmit: true },
+      contentMappers: mapper,
+    })
+  }
+  assert.deepEqual(result.files.sort(), [
+    'tsconfig.app.tt.json', 'tsconfig.node.tt.json', 'tsconfig.tt.json', 'tt.vite.config.mjs',
+  ])
+  await initializeExisting({ directory: root, bundler: 'auto' })
+})
+
+test('the generated solution check reaches the referenced sources', { skip: !repositoryTypeScript && 'the repository TypeScript is not installed' }, async () => {
+  const root = await viteSolutionProject()
+  await initializeExisting({ directory: root, bundler: 'auto' })
+  const mapperPackage = join(root, 'node_modules/@openload28/tt-lang')
+  await mkdir(mapperPackage, { recursive: true })
+  await writeFile(join(mapperPackage, 'package.json'), JSON.stringify({
+    name: '@openload28/tt-lang',
+    version: '0.0.0',
+    typescript: { contentMapper: { exec: ['ttc', '--content-mapper'] } },
+  }))
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  const [, ...args] = manifest.scripts['tt:check'].split(' ')
+  const check = spawnSync(process.execPath, [repositoryTypeScript, ...args], { cwd: root, encoding: 'utf8' })
+  assert.notEqual(check.status, 0, check.stdout + check.stderr)
+  assert.match(check.stdout, /src\/main\.ts\(1,14\): error TS2322/)
+})
+
+test('init replaces an incompatible TypeScript and reports it', async () => {
+  for (const section of ['devDependencies', 'dependencies']) {
+    const root = await mkdtemp(join(tmpdir(), 'create-tt-typescript-'))
+    await writeFile(join(root, 'package.json'), JSON.stringify({ [section]: { typescript: '~5.8.0' } }))
+    const result = await initializeExisting({ directory: root, bundler: 'none' })
+    const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+    assert.equal(manifest[section].typescript, scaffoldedTypeScript)
+    assert.equal(Object.keys(manifest.devDependencies).includes('typescript'), section === 'devDependencies')
+    assert.deepEqual(result.updated, [{ name: 'typescript', from: '~5.8.0', to: scaffoldedTypeScript }])
+    const lines = []
+    await run(['init', root, '--no-install', '--bundler', 'none'], { log: (line) => lines.push(line) })
+    assert.ok(!lines.some((line) => line.startsWith('Updated typescript')), lines.join('\n'))
+  }
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-typescript-report-'))
+  await writeFile(join(root, 'package.json'), '{"devDependencies":{"typescript":"~5.8.0"}}\n')
+  const lines = []
+  await run(['init', root, '--no-install', '--bundler', 'none'], { log: (line) => lines.push(line) })
+  assert.ok(lines.includes(`Updated typescript from ~5.8.0 to ${scaffoldedTypeScript}: tt's content mapper needs this TypeScript 7.1 build.`), lines.join('\n'))
+})
+
+test('create quotes the printed directory for a POSIX shell', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'create-tt-quote-'))
+  const lines = []
+  const cwd = process.cwd()
+  process.chdir(parent)
+  try {
+    await run(['ct app 2', '--no-install'], { log: (line) => lines.push(line) })
+  } finally {
+    process.chdir(cwd)
+  }
+  assert.ok(lines.includes("Run: cd 'ct app 2' && bun run dev"), lines.join('\n'))
+  assert.equal(shellQuote('my-app'), 'my-app')
+  assert.equal(shellQuote("it's here"), "'it'\\''s here'")
+  assert.equal(shellQuote('$HOME;rm'), "'$HOME;rm'")
+})
+
+test('reads tsconfig comments and trailing commas without touching strings', () => {
+  assert.deepEqual(
+    parseJsonc('{\n  // line\n  "a": "x // y, }", /* block */\n  "b": [1, 2,],\n}\n'),
+    { a: 'x // y, }', b: [1, 2] },
+  )
 })

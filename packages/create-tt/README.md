@@ -20,8 +20,14 @@ bunx @openload28/create-tt@next init
 The initializer updates `package.json` structurally. For bundlers with a
 declarative config, it generates an `tt.*.config.mjs` wrapper instead of
 rewriting arbitrary user code. It also creates `tsconfig.tt.json`, which extends
-the existing TypeScript config and declares the content mapper. Existing scripts
-and config files stay intact. Re-running init accepts unchanged generated configs;
+the existing TypeScript config and declares the content mapper. A config with
+project `references` (such as Vite's solution-style `tsconfig.json`) gets a
+`*.tt.json` counterpart for every referenced config inside the project, the
+generated configs reference each other the way the originals do, and the
+generated scripts check them with `tsc -b`. The initializer sets `typescript` to
+the TypeScript 7.1 build tt is verified with; when the project named another
+version, it replaces it and prints the change. Existing scripts and config files
+stay intact. Re-running init accepts unchanged generated configs;
 if a generated config has been customized, init stops before writing any project
 files.
 Use `--no-install` in CI or when dependencies will be installed later.

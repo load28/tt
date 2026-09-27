@@ -441,6 +441,7 @@
 | TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
 | TASK-432 | Reach the host `Error` and `JSON` past user declarations in generated guards | Complete | 2026-09-27 | 2026-09-27 | [TASK-432](./TASK-432-host-globals-in-guards.md) |
 | TASK-433 | Map recovered syntax as atoms in the content mapper | Complete | 2026-09-27 | 2026-09-27 | [TASK-433](./TASK-433-mapper-recovered-spans.md) |
+| TASK-434 | Make create-tt init check solution configs, require the verified TypeScript, and quote the printed directory | Complete | 2026-09-27 | 2026-09-27 | [TASK-434](./TASK-434-create-tt-init-project-setup.md) |
 | TASK-437 | Stop marking a case covered in completion when only a nested pattern handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-437](./TASK-437-nested-pattern-completion-coverage.md) |
 
 ## Next task number
