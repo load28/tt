@@ -9,9 +9,13 @@ use std::collections::HashSet;
 
 pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile {
     let temp_ordinals = temp_ordinals(semantic);
+    let tokens = crate::lexer::lex(source, 0, source.len());
+    let tt_owned = tt_owned_tokens(semantic, &tokens);
     let mut cx = Lowering {
         semantic,
         source,
+        tokens,
+        tt_owned,
         temp_ordinals,
     };
     let bodies = semantic
@@ -50,7 +54,54 @@ pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile 
 struct Lowering<'a> {
     semantic: &'a SemanticFile,
     source: &'a str,
+    tokens: Vec<crate::lexer::Token>,
+    tt_owned: HashSet<usize>,
     temp_ordinals: HashMap<NodeId, u32>,
+}
+
+fn tt_owned_tokens(semantic: &SemanticFile, tokens: &[crate::lexer::Token]) -> HashSet<usize> {
+    let hir = &semantic.hir;
+    let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
+        let from = tokens.partition_point(|token| token.span.start < offset);
+        tokens[from..]
+            .iter()
+            .position(|token| wanted(&token.kind))
+            .map(|index| from + index)
+    };
+    let span = |node: NodeId| {
+        hir.source_map
+            .node_span(node)
+            .unwrap_or_else(|| crate::ice::bug!("match syntax has no source span"))
+    };
+    let mut owned = HashSet::new();
+    for (_, expr) in hir.exprs.iter() {
+        let hir::Expr::Match { node, site, .. } = expr else {
+            continue;
+        };
+        owned.extend(first_from(span(*node).end, |kind| {
+            matches!(kind, crate::lexer::TokenKind::Punct(b'{'))
+        }));
+        for arm in &hir.sites[*site].arms {
+            if arm.body.is_none() {
+                continue;
+            }
+            let pattern_end = hir
+                .source_map
+                .pattern_span(arm.pattern)
+                .unwrap_or_else(|| crate::ice::bug!("match arm pattern has no source span"))
+                .end;
+            let guard_end = arm
+                .guard
+                .map_or(pattern_end, |guard| match &hir.exprs[guard] {
+                    hir::Expr::OpaqueTs(node) | hir::Expr::Seq { node, .. } => span(*node).end,
+                    _ => crate::ice::bug!("match guard is not an expression program"),
+                });
+            owned.extend(first_from(pattern_end.max(guard_end), |kind| {
+                matches!(kind, crate::lexer::TokenKind::Arrow)
+            }));
+        }
+    }
+    owned
 }
 
 impl Lowering<'_> {
@@ -272,6 +323,7 @@ impl Lowering<'_> {
                 completes: *completes,
                 value: *value,
                 is_async: self.node_contains_await(*region_node),
+                in_generator: self.node_in_generator(*region_node),
             }),
             hir::Expr::Template { node, chunks } => Expr::Template(Template {
                 node: *node,
@@ -333,6 +385,7 @@ impl Lowering<'_> {
             head: site.node,
             extent,
             is_async: !file_unique_temps && self.node_contains_await(extent),
+            in_generator: self.node_in_generator(extent),
             kind,
         }
     }
@@ -531,6 +584,20 @@ impl Lowering<'_> {
             .node_span(node)
             .unwrap_or_else(|| crate::ice::bug!("Core IR async node has no source span"));
         contains_await(self.source.as_bytes(), span.start, span.end)
+    }
+
+    fn node_in_generator(&self, node: NodeId) -> bool {
+        let span = self
+            .semantic
+            .hir
+            .source_map
+            .node_span(node)
+            .unwrap_or_else(|| crate::ice::bug!("Core IR generator node has no source span"));
+        let at = self
+            .tokens
+            .partition_point(|token| token.span.start < span.start);
+        crate::flow::user_function_target_at(self.source, &self.tokens, at, &self.tt_owned)
+            == Some(crate::flow::FunctionTarget::Generator)
     }
 }
 

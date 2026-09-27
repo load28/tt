@@ -450,6 +450,7 @@
 | TASK-442 | Anchor unplugin source map sources to the tt file | Complete | 2026-09-27 | 2026-09-27 | [TASK-442](./TASK-442-unplugin-source-map-anchor.md) |
 | TASK-443 | Map every copied token to its own column | Complete | 2026-09-27 | 2026-09-27 | [TASK-443](./TASK-443-token-granular-source-maps.md) |
 | TASK-449 | Reject a match the class definition evaluates instead of hoisting it before the class | Complete | 2026-09-27 | 2026-09-27 | [TASK-449](./TASK-449-class-definition-placement.md) |
+| TASK-450 | Project a value region in a generator as a generator so its `yield` parses | Complete | 2026-09-27 | 2026-09-27 | [TASK-450](./TASK-450-generator-value-region-projection.md) |
 
 ## Next task number
 

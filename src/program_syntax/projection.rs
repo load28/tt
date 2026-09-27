@@ -932,11 +932,7 @@ impl<'a> ProjectionBuilder<'a> {
             marker: OverlayMarker::CallExpression,
             synthetic_return: None,
         });
-        self.code.push('(');
-        if region.is_async {
-            self.code.push_str("async ");
-        }
-        self.code.push_str("() => {");
+        self.push_region_function(region.is_async, region.in_generator);
         for item in &region.items {
             match item {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
@@ -967,6 +963,18 @@ impl<'a> ProjectionBuilder<'a> {
             end: ProjectedByte(self.code.len() - 4),
         });
         Ok(())
+    }
+
+    fn push_region_function(&mut self, is_async: bool, in_generator: bool) {
+        self.code.push('(');
+        if is_async {
+            self.code.push_str("async ");
+        }
+        self.code.push_str(if in_generator {
+            "function* () {"
+        } else {
+            "() => {"
+        });
     }
 
     fn emit_inline_decision_bodies(
@@ -1032,11 +1040,7 @@ impl<'a> ProjectionBuilder<'a> {
             marker: OverlayMarker::DecisionCallExpression,
             synthetic_return: None,
         });
-        self.code.push('(');
-        if decision.is_async {
-            self.code.push_str("async ");
-        }
-        self.code.push_str("() => {");
+        self.push_region_function(decision.is_async, decision.in_generator);
         for subject in &decision.subjects {
             self.code.push('(');
             let segments_since = self.source_segments.len();

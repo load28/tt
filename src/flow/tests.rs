@@ -34,6 +34,39 @@ fn semicolon_free_concise_arrow_does_not_own_the_next_try_statement() {
     );
 }
 
+#[test]
+fn match_body_braces_and_arm_arrows_open_no_function_target() {
+    let source = "function* outer() { const r = match (s) { A => match (yield 1) { B => { const k = match (s) { C => 1 }; } } }; }";
+    let tokens = crate::lexer::lex(source, 0, source.len());
+    let matches: Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| &source[token.span.start..token.span.end] == "match")
+        .map(|(index, _)| index)
+        .collect();
+    let mut owned: std::collections::HashSet<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| matches!(token.kind, TokenKind::Arrow))
+        .map(|(index, _)| index)
+        .collect();
+    for at in &matches {
+        owned.extend(
+            (*at..tokens.len()).find(|index| matches!(tokens[*index].kind, TokenKind::Punct(b'{'))),
+        );
+    }
+    for at in &matches[1..] {
+        assert_eq!(
+            function_target_at(source, &tokens, *at),
+            Some(FunctionTarget::Ordinary)
+        );
+        assert_eq!(
+            user_function_target_at(source, &tokens, *at, &owned),
+            Some(FunctionTarget::Generator)
+        );
+    }
+}
+
 /// Answers the divergence question the way the compiler asks it: the
 /// region is parsed first, so tt's own constructs reach the graph.
 fn check(body: &str) -> bool {

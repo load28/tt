@@ -472,3 +472,67 @@ console.log(f(3), g(true), g(false));
 "#);
     assert_eq!(out, ["3 on off"]);
 }
+
+#[test]
+fn runtime_match_suspends_its_generator_from_the_subject_and_guard() {
+    require_toolchain!();
+    let out = run(r#"
+variant S { A(n: number), B }
+
+function* subject(): Generator<string, number, S> {
+  const r = match (yield "subject") { A(n) => n, B => 0 };
+  return r;
+}
+
+function* guard(s: S): Generator<number, string, number> {
+  const r = match (s) { A(n) if (yield n) === 1 => `one ${n}`, _ => "other" };
+  return r;
+}
+
+function* cast(): Generator<number, number, unknown> {
+  const r = match ((yield 1) as S) {
+    A(n) => match ((yield n) as S) { A(n: m) => n + m, B => n },
+    B => 0,
+  };
+  return r;
+}
+
+class Base { start() { return 7; } }
+class Derived extends Base {
+  scale = 10;
+  *run(): Generator<number, number, S> {
+    return match (yield super.start()) { A(n) => n * this.scale, B => -1 };
+  }
+}
+
+async function* later(): AsyncGenerator<number, number, Promise<S>> {
+  const r = match (await (yield 1)) { A(n) => n, B => 0 };
+  return r;
+}
+
+const drive = <Y, R, N>(g: Generator<Y, R, N>, sent: N[]) => {
+  const seen: unknown[] = [JSON.stringify(g.next().value)];
+  for (const value of sent) seen.push(JSON.stringify(g.next(value).value));
+  return seen.join(" ");
+};
+
+console.log(drive(subject(), [S.A(4)]), drive(subject(), [S.B]));
+console.log(drive(guard(S.A(3)), [1]), drive(guard(S.A(3)), [2]), drive(guard(S.B), []));
+console.log(drive(cast(), [S.A(2), S.A(5)]), drive(cast(), [S.A(2), S.B]), drive(cast(), [S.B]));
+console.log(drive(new Derived().run(), [S.A(3)]));
+const iterator = later();
+iterator.next().then((first) =>
+  iterator.next(Promise.resolve(S.A(9))).then((last) => console.log(first.value, last.value)),
+);
+"#);
+    assert_eq!(
+        out,
+        [
+            r#""subject" 4 "subject" 0"#,
+            r#"3 "one 3" 3 "other" "other""#,
+            "1 2 7 1 2 2 1 0",
+            "7 30",
+            "1 9",
+        ]
+    );
+}

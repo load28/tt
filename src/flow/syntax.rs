@@ -224,12 +224,29 @@ pub(crate) enum FunctionTarget {
 
 /// Returns the innermost user function enclosing `at`.
 pub(crate) fn function_target_at(src: &str, tokens: &[Token], at: usize) -> Option<FunctionTarget> {
+    user_function_target_at(src, tokens, at, &std::collections::HashSet::new())
+}
+
+/// Returns the innermost user-written function enclosing `at`, skipping the
+/// match body braces and arm arrows in `tt_owned`, which open no function.
+pub(crate) fn user_function_target_at(
+    src: &str,
+    tokens: &[Token],
+    at: usize,
+    tt_owned: &std::collections::HashSet<usize>,
+) -> Option<FunctionTarget> {
     let mut stack: Vec<Option<(usize, FunctionTarget)>> = Vec::new();
     for (index, token) in tokens.iter().enumerate().take(at) {
         match token.kind {
-            TokenKind::Punct(b'{') => {
-                stack.push(function_target_brace(src, tokens, index).map(|target| (index, target)))
-            }
+            TokenKind::Punct(b'{') => stack.push(
+                (!tt_owned.contains(&index)
+                    && !index
+                        .checked_sub(1)
+                        .is_some_and(|previous| tt_owned.contains(&previous)))
+                .then(|| function_target_brace(src, tokens, index))
+                .flatten()
+                .map(|target| (index, target)),
+            ),
             TokenKind::Punct(b'}') => {
                 stack.pop();
             }
@@ -241,7 +258,9 @@ pub(crate) fn function_target_at(src: &str, tokens: &[Token], at: usize) -> Opti
         .iter()
         .enumerate()
         .take(at)
-        .filter(|(_, token)| matches!(token.kind, TokenKind::Arrow))
+        .filter(|(arrow, token)| {
+            matches!(token.kind, TokenKind::Arrow) && !tt_owned.contains(arrow)
+        })
         .filter(|(arrow, _)| concise_arrow_end(src, tokens, arrow + 1) > at)
         .map(|(arrow, _)| (arrow, FunctionTarget::Ordinary))
         .next_back();

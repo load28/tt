@@ -172,6 +172,7 @@ pub(crate) struct Decision {
     pub head: NodeId,
     pub extent: NodeId,
     pub is_async: bool,
+    pub in_generator: bool,
     pub kind: DecisionKind,
 }
 
@@ -388,6 +389,7 @@ pub(crate) struct ResultRegion {
     pub completes: bool,
     pub value: Option<ExprId>,
     pub is_async: bool,
+    pub in_generator: bool,
 }
 
 #[derive(Debug)]

@@ -51,6 +51,7 @@ const area = match (shape) {
 - `is` patterns: `is Error`, `is Error { message }`, `is ns.Error { message: detail }`, or type-only `is RangeError | is TypeError`. They emit ordered `instanceof` tests and `const` destructuring. An `is` match requires a final `_`; empty braces, bindings on an or-pattern, duplicate constructor paths (even on guarded arms), and `is Type(...)` are errors. Parent-before-child shadowing is runtime source order and is not diagnosed.
 - A block arm's direct `return` delivers the match value; returns inside nested functions remain JavaScript returns. A `break`, `continue`, or `yield` may target only control flow written inside that arm.
 - await allowed in scrutinee/guards/bodies → remains in the surrounding async owner. Detection is token-level: await inside a nested callback also triggers async — avoid in non-async contexts.
+- In a generator, `yield` is allowed in the scrutinee, a guard, and an expression arm body → it suspends the surrounding generator; a block arm may not `yield` (see above).
 
 Literal match (`switch ($tt_m)` instead of `$tt_m.kind`):
 ```tt

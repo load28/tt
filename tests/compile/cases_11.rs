@@ -259,3 +259,49 @@ fn a_match_the_class_definition_evaluates_reports_its_placement() {
     ));
     assert!(out.contains("class K extends ($tt_v0 === 0 ? say(\"a\") : say(\"b\")) {}"), "{out}");
 }
+
+#[test]
+fn a_yield_in_a_match_subject_or_guard_suspends_the_enclosing_generator() {
+    let prelude = "variant S { A(n: number), B }\ndeclare const s: S;\n";
+    for (body, expected) in [
+        (
+            "function* g(): Generator<number, number, any> {\n  const r = match (yield 1) { A(n) => n, B => 0 };\n  return r;\n}\n",
+            "const $tt_m = yield 1;",
+        ),
+        (
+            "function* g(): Generator<number, number, any> {\n  const r = match (s) { A(n) if (yield n) === 1 => n, _ => 0 };\n  return r;\n}\n",
+            "if ((yield n) === 1) {",
+        ),
+        (
+            "function* g(): Generator<number, number, any> {\n  const r = match ((yield 1) as any as S) { A(n) => n, B => 0 };\n  return r;\n}\n",
+            "const $tt_m = (yield 1) as any as S;",
+        ),
+        (
+            "function* g(): Generator<number, number, any> {\n  const r = match (s) { A(n) => match ((yield n) as S) { A(n: m) => m, B => 1 }, B => 0 };\n  return r;\n}\n",
+            "const $tt_m = (yield n) as S;",
+        ),
+        (
+            "function* g(): Generator<number, number, any> {\n  const r = match (s) { A(n) if [n].some((x) => x > 0) => match ((yield n) as S) { A(n: m) => m, B => 1 }, _ => 0 };\n  return r;\n}\n",
+            "const $tt_m = (yield n) as S;",
+        ),
+        (
+            "async function* g(): AsyncGenerator<number, number, any> {\n  const r = match (await (yield 1)) { A(n) => n, B => 0 };\n  return r;\n}\n",
+            "const $tt_m = await (yield 1);",
+        ),
+        (
+            "class K { m() { return 1; } }\nclass L extends K {\n  *g(): Generator<number, number, any> {\n    return match ((yield super.m()) as S) { A(n) => n, B => 0 };\n  }\n}\n",
+            "const $tt_m = (yield super.m()) as S;",
+        ),
+    ] {
+        let out = ok(&format!("{prelude}{body}"));
+        assert!(out.contains(expected), "{body}{out}");
+    }
+}
+
+#[test]
+fn a_yield_crossing_a_result_block_reports_only_the_crossing() {
+    let source = "import type { TResult } from \"@tt/std\";\ndeclare const x: TResult<number, string>;\nfunction* g(): Generator<number, unknown, number> {\n  const r = result { const v = try x; const w = yield v; return w; };\n  return r;\n}\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
+    assert_eq!(codes, [DiagnosticCode::ResultYieldCrossing], "{diagnostics:#?}");
+}
