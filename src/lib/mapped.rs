@@ -187,7 +187,9 @@ impl MappedEmit {
     /// The map is built from [`MappedEmit::mappings`] and
     /// [`MappedEmit::anchors`] — the emission's own record of which output
     /// bytes are copied source and which construct wrote each stretch of
-    /// glue. `code` is not searched for anything but line breaks.
+    /// glue — and `source`'s own tokens, so every token a chunk copies maps
+    /// to its own line and column. `code` is not searched for anything but
+    /// line breaks.
     ///
     /// ```
     /// use ttc::{compile_mapped, source_map::SourceMapRequest, Options};

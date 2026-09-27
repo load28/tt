@@ -270,6 +270,43 @@ fn a_node_stack_trace_points_at_the_tt_source() {
 }
 
 #[test]
+fn a_node_stack_frame_on_a_copied_line_names_its_column() {
+    if !have("node") {
+        return;
+    }
+    // TASK-443: a consumer takes the nearest mapping at or before a frame,
+    // so a line copied as one chunk reported column 1 for every frame on it.
+    let dir = tmpdir();
+    let source = dir.join("app.tt");
+    fs::write(
+        &source,
+        "variant E { A(v: number), B }\n\
+         export const n = match (E.B) { A(v) => v, B => 0 };\n\
+         const  x = 1;   function boom() { return [1].map(() => { throw new Error(\"boom\"); }); }\n\
+         boom();\n",
+    )
+    .unwrap();
+    let out_dir = dir.join("out");
+    let compiled = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", out_dir.to_str().unwrap()])
+        .args(["--source-map", "file"])
+        .arg(&source)
+        .output()
+        .expect("failed to run ttc");
+    assert!(compiled.status.success(), "{compiled:?}");
+    let run = Command::new("node")
+        .arg("--enable-source-maps")
+        .arg("--experimental-strip-types")
+        .arg(out_dir.join("app.ts"))
+        .output()
+        .expect("failed to run node");
+    let trace = String::from_utf8_lossy(&run.stderr).into_owned();
+    // `new Error` and the `.map` call that reached it, at their own columns.
+    assert!(trace.contains("app.tt:3:64)"), "{trace}");
+    assert!(trace.contains("app.tt:3:46)"), "{trace}");
+}
+
+#[test]
 fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
     if !have("node") {
         return;

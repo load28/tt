@@ -46,6 +46,7 @@ pub(super) fn source_map_for(
             embed_source: true,
             generated_line_offset: banner.lines,
             generated_line_offset_at: banner.at_line,
+            source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
         },
     );
     let (url, document) = match mode {
