@@ -106,6 +106,10 @@ module.
   forms, with `worker.plugins`, produced compiled worker chunks. With
   `rollup@4.63.5` and `esbuild@0.28.2`, bundles built, and the esbuild output
   ran.
+- 2026-09-27: Merged onto TASK-412, which resolves a relative specifier
+  without an importer against the working directory, as Rollup resolves an
+  entry point. The query-aware `resolveId` keeps that rule instead of
+  returning `null`, and the TASK-411/412 tests now expect the `?lang.ts` id.
 
 ## Issues and resolutions
 

@@ -63,7 +63,7 @@ or `tsx` loader that matches the source.
 |------|--------|------|
 | `compiler` | 설치된 `@openload28/tt-lang`의 바이너리, 없으면 `"ttc"` | ttc 실행 파일 경로 |
 | `verify` | `true` | `false`면 `--no-verify`를 넘겨 방출물 자가 검사를 생략합니다 |
-| `sourcemap` | `true` | Set to `false` to omit the source map returned to the bundler |
+| `sourcemap` | `true` | Set to `false` to omit the source map returned to the bundler. The map names each source by its absolute path, so every bundler resolves it to the `.tt` file whatever its output directory |
 
 타입 선언(`index.d.ts`와 서브패스별 `.d.ts`)을 함께 싣습니다 — 소비자가
 `vite.config.ts`를 타입 검사에 넣어도 `tt()`의 옵션이 그대로 검사됩니다.

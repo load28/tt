@@ -104,11 +104,13 @@ const INLINE_MAP =
  * @param {string} code
  * @returns {{ code: string, map: object | null }}
  */
-function detachInlineSourceMap(code) {
+function detachInlineSourceMap(code, file) {
   const found = INLINE_MAP.exec(code);
   if (found === null) return { code, map: null };
   try {
-    const map = JSON.parse(Buffer.from(found[2], "base64").toString("utf8"));
+    const { sourceRoot, ...map } = JSON.parse(Buffer.from(found[2], "base64").toString("utf8"));
+    const base = path.resolve(path.dirname(file), sourceRoot ?? "");
+    map.sources = (map.sources ?? []).map((source) => (source === null ? null : path.resolve(base, source)));
     return { code: code.slice(0, found.index + found[1].length), map };
   } catch {
     // An unreadable map is not a reason to fail the build; the code is
@@ -233,7 +235,7 @@ export const unpluginFactory = (options = {}) => {
         dependenciesByModule.set(id, new Set(dependencies.map(nativePath)));
         for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
         const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
-        return detachInlineSourceMap(stdout);
+        return detachInlineSourceMap(stdout, file);
       } catch (error) {
         // ttc reports `file:line:col: message` on stderr; surface that as
         // the build error so the host shows the compiler's diagnostic.

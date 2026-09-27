@@ -447,6 +447,7 @@
 | TASK-439 | Serve unplugin standard modules under path-free ids | Complete | 2026-09-27 | 2026-09-27 | [TASK-439](./TASK-439-unplugin-std-virtual-ids.md) |
 | TASK-440 | Preserve import queries on unplugin tt module ids | Complete | 2026-09-27 | 2026-09-27 | [TASK-440](./TASK-440-unplugin-query-ids.md) |
 | TASK-441 | Let the Vite dependency scanner read tt modules | Complete | 2026-09-27 | 2026-09-27 | [TASK-441](./TASK-441-unplugin-dep-scan.md) |
+| TASK-442 | Anchor unplugin source map sources to the tt file | Complete | 2026-09-27 | 2026-09-27 | [TASK-442](./TASK-442-unplugin-source-map-anchor.md) |
 
 ## Next task number
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, isAbsolute, join } from 'node:path'
 import test from 'node:test'
@@ -61,7 +61,8 @@ test('the shared hooks resolve and compile tt, ttx, and standard modules', async
   const ttContext = context()
   const compiledTt = await plugin.load.call(ttContext, ttId)
   assert.match(compiledTt.code, /export type Shape/)
-  assert.equal(compiledTt.map.sources[0], 'shape.tt')
+  assert.deepEqual(compiledTt.map.sources, [tt])
+  assert.equal(compiledTt.map.sourceRoot, undefined)
   assert.ok(ttContext.watched.includes(tt))
   assert.ok(ttContext.watched.includes(await realpath(ttx)))
 
@@ -102,9 +103,28 @@ test('a CRLF source keeps its line endings and hands its map to the host', async
   const plugin = unpluginFactory({ compiler, sourcemap: true })
   const compiled = await plugin.load.call(context(), `${file}?lang.ts`)
   assert.ok(compiled.map, 'the inline map was not detached')
-  assert.equal(compiled.map.sources[0], 'crlf.tt')
+  assert.equal(compiled.map.sources[0], file)
   assert.doesNotMatch(compiled.code, /sourceMappingURL/)
   assert.match(compiled.code, /\r\n$/)
+})
+
+test('source map sources are anchored to the compiled file, honouring sourceRoot', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-map-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const file = join(root, 'src', 'lib.tt')
+  const fake = join(root, 'ttc.mjs')
+  const map = { version: 3, sourceRoot: '../shared', sources: ['lib.tt', null], names: [], mappings: 'AAAA' }
+  await writeFile(fake, `#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "--dependencies") process.stdout.write(JSON.stringify([args[1]]));
+else process.stdout.write("export const a = 1;\\n//# sourceMappingURL=data:application/json;charset=utf-8;base64," + ${JSON.stringify(Buffer.from(JSON.stringify(map)).toString('base64'))} + "\\n");
+`)
+  await chmod(fake, 0o755)
+  const plugin = unpluginFactory({ compiler: fake })
+  const compiled = await plugin.load.call(context(), `${file}?lang.ts`)
+  assert.equal(compiled.code, 'export const a = 1;\n')
+  assert.deepEqual(compiled.map.sources, [join(root, 'shared', 'lib.tt'), null])
+  assert.equal('sourceRoot' in compiled.map, false)
 })
 
 test('sourcemap false is a working public option and diagnostics reach the host', async (t) => {
