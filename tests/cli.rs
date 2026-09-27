@@ -841,6 +841,34 @@ fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_posit
 }
 
 #[test]
+fn types_serves_tt_modules_itself_under_the_documented_content_mapper_configuration() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"strict\": true, \"noEmit\": true },\n  \"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }],\n  \"include\": [\"src\"]\n}\n",
+        &[("src/a.tt", "export const a: number = 1;\n")],
+    );
+    assert!(ok, "{err}");
+    assert!(!err.contains("ts100024"), "{err}");
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"strict\": true, \"noEmit\": true },\n  \"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }],\n  \"include\": [\"src\"]\n}\n",
+        &[("src/a.tt", "export const a: string = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts2322]"), "{err}");
+}
+
+#[test]
+fn types_keeps_reporting_content_mappers_it_does_not_serve() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"strict\": true, \"noEmit\": true },\n  \"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }, { \"package\": \"other-mapper\", \"extensions\": [\".other\"] }],\n  \"include\": [\"src\"]\n}\n",
+        &[("src/a.tt", "export const a: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts100024]"), "{err}");
+}
+
+#[test]
 fn types_reports_syntax_errors_in_hand_written_typescript() {
     require_types_toolchain!();
     let (ok, err) = types_project_output(

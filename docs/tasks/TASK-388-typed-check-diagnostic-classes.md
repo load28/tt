@@ -1,5 +1,7 @@
 # TASK-388: Report project, configuration, and syntax diagnostics from the typed check
 
+> Follow-up: TASK-410 removes the tt content-mapper entry from the configuration this host serves, because reporting program diagnostics exposed TS100024 for the documented mapper setup.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

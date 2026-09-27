@@ -435,6 +435,7 @@
 | TASK-407 | Describe value-region placement without the retired IIFE lowering | Complete | 2026-09-27 | 2026-09-27 | [TASK-407](./TASK-407-value-region-placement-wording.md) |
 | TASK-408 | Own the calls around a value in either branch of a conditional expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-408](./TASK-408-ternary-active-branches.md) |
 | TASK-409 | Emit a C-style loop test prefix once | Complete | 2026-09-27 | 2026-09-27 | [TASK-409](./TASK-409-loop-test-prefix-once.md) |
+| TASK-410 | Serve tt modules without the project's tt content mapper in the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-410](./TASK-410-typed-check-content-mappers.md) |
 
 ## Next task number
 

@@ -275,6 +275,19 @@ async function main() {
             return entry + suffix;
           });
         }
+        if (Array.isArray(config.contentMappers)) {
+          const mappers = config.contentMappers
+            .map(entry => {
+              if (!entry || typeof entry !== "object" || !Array.isArray(entry.extensions)) return entry;
+              const extensions = entry.extensions.filter(extension => extension !== ".tt" && extension !== ".ttx");
+              if (extensions.length === entry.extensions.length) return entry;
+              changed = true;
+              return extensions.length > 0 ? { ...entry, extensions } : null;
+            })
+            .filter(entry => entry !== null);
+          if (mappers.length > 0) config.contentMappers = mappers;
+          else delete config.contentMappers;
+        }
         if (changed) configFiles.set(file, JSON.stringify(config));
       }
       for (const file of new Set([...previous.keys(), ...configFiles.keys()])) {
