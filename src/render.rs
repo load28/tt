@@ -274,7 +274,7 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
         return out;
     };
 
-    let lines: Vec<&str> = source.split('\n').collect();
+    let lines: Vec<&str> = crate::error::decoded(source).split('\n').collect();
     let start = span.start;
     let end = span.end.unwrap_or(Position {
         line: start.line,

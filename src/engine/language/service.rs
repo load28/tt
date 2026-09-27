@@ -489,6 +489,7 @@ pub(super) fn source_range(text: &str, start: usize, end: usize) -> Range {
 /// back to the line's length, and a line past the text's end clamps to the
 /// text's end.
 pub(crate) fn u16_offset(text: &str, position: Position) -> usize {
+    let text = crate::error::decoded(text);
     let mut line = 0u32;
     let mut u16 = 0usize;
     let mut line_start = 0usize;
@@ -517,6 +518,7 @@ pub(crate) fn u16_offset(text: &str, position: Position) -> usize {
 
 /// The zero-based line/character a UTF-16 offset names in `text`.
 pub(crate) fn u16_position(text: &str, offset: usize) -> Position {
+    let text = crate::error::decoded(text);
     let mut u16 = 0usize;
     let mut line = 0u32;
     let mut line_start = 0usize;

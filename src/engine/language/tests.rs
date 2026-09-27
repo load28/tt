@@ -101,6 +101,18 @@ fn a_character_past_the_line_end_defaults_back_to_the_line_length() {
 }
 
 #[test]
+fn protocol_positions_are_measured_in_the_decoded_text() {
+    let source = "\u{feff}export const target = 1;\n";
+    let target = mapper::to_utf16(source, source.find("target").unwrap());
+    let position = Position {
+        line: 0,
+        character: 13,
+    };
+    assert_eq!(u16_position(source, target), position);
+    assert_eq!(u16_offset(source, position), target);
+}
+
+#[test]
 fn a_chunk_end_offset_belongs_to_the_chunk() {
     // The service lookup is inclusive of a chunk's end — completion and
     // hover sit at the end of what was just typed.

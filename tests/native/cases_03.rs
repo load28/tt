@@ -417,3 +417,27 @@ fn variant_navigation_lands_on_the_variant_declaration() {
         "{references:?}"
     );
 }
+
+#[test]
+fn a_byte_order_mark_moves_no_reported_position() {
+    require_tsgo!();
+    let body = "const a: string = 1;\nconst n: number = \"x\";\n";
+    let hand_written = "export const h: string = 2;\n";
+    let reports: Vec<String> = ["", "\u{feff}"]
+        .into_iter()
+        .map(|signature| {
+            let dir = project(&[
+                ("src/b.tt", &format!("{signature}{body}")),
+                ("src/h.ts", &format!("{signature}{hand_written}")),
+            ]);
+            let output = run(&dir, &["--check-types", "src"]);
+            String::from_utf8_lossy(&output.stderr).into_owned()
+        })
+        .collect();
+    let plain = &reports[0];
+    assert!(plain.contains("src/b.tt:1:19"), "{plain}");
+    assert!(plain.contains("src/b.tt:2:19"), "{plain}");
+    assert!(plain.contains("src/h.ts:1:26"), "{plain}");
+    assert!(plain.contains("\n  |                   ^^^\n"), "{plain}");
+    assert_eq!(reports[1], *plain);
+}

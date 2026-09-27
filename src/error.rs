@@ -161,9 +161,19 @@ impl TtError {
     }
 }
 
+pub(crate) fn decoded(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
+}
+
+pub(crate) fn signature_len(text: &str) -> usize {
+    text.len() - decoded(text).len()
+}
+
 /// Convert a byte offset to (1-based line, 1-based column in UTF-8 code points).
 pub(crate) fn line_col(src: &str, offset: usize) -> (usize, usize) {
-    let mut offset = offset.min(src.len());
+    let signature = signature_len(src);
+    let src = decoded(src);
+    let mut offset = offset.saturating_sub(signature).min(src.len());
     while offset > 0 && !src.is_char_boundary(offset) {
         offset -= 1;
     }
@@ -189,7 +199,7 @@ pub(crate) fn line_col(src: &str, offset: usize) -> (usize, usize) {
 pub(crate) fn utf16_column(src: &str, line: usize, column: usize) -> usize {
     let Some(text) = line
         .checked_sub(1)
-        .and_then(|line| src.split('\n').nth(line))
+        .and_then(|line| decoded(src).split('\n').nth(line))
     else {
         return column;
     };
@@ -212,6 +222,16 @@ mod tests {
     fn a_position_only_end_stays_the_sentinel() {
         assert_eq!(utf16_column("한글\n", 0, 0), 0);
         assert_eq!(utf16_column("한글\n", 1, 2), 2);
+    }
+
+    #[test]
+    fn positions_are_measured_in_the_decoded_text() {
+        let source = "\u{feff}const a = 1;\nconst b = 2;\n";
+        let a = source.find('a').unwrap();
+        assert_eq!(line_col(source, a), (1, 7));
+        assert_eq!(line_col(source, 0), (1, 1));
+        assert_eq!(line_col(source, source.find('b').unwrap()), (2, 7));
+        assert_eq!(utf16_column(source, 1, 7), 7);
     }
 
     #[test]

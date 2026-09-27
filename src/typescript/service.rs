@@ -145,6 +145,7 @@ impl Service {
     /// Whole-document sync: the lowered text is regenerated as a whole, so
     /// there is no incremental edit to describe.
     pub(crate) fn open(&mut self, uri: &str, text: &str) {
+        let text = crate::error::decoded(text);
         let version = self.opened.get(uri).copied().unwrap_or(0) + 1;
         self.opened.insert(uri.to_string(), version);
         if version == 1 {

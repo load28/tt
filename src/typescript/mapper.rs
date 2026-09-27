@@ -62,6 +62,9 @@ pub(crate) fn diagnostic_origin(
 /// Offset of `byte` in `text`, counted in UTF-16 code units — TypeScript's
 /// own coordinate space. An offset past the end clamps to the end.
 pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
+    let signature = crate::error::signature_len(text);
+    let text = crate::error::decoded(text);
+    let byte = byte.saturating_sub(signature);
     match text.get(..byte) {
         Some(prefix) => prefix.encode_utf16().count(),
         None => text.encode_utf16().count(),
@@ -72,14 +75,16 @@ pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
 /// offset past the end clamps to the length; one landing inside a surrogate
 /// pair clamps to the start of that character.
 pub(crate) fn from_utf16(text: &str, utf16: usize) -> usize {
+    let signature = crate::error::signature_len(text);
+    let text = crate::error::decoded(text);
     let mut units = 0;
     for (byte, ch) in text.char_indices() {
         if units >= utf16 {
-            return byte;
+            return signature + byte;
         }
         units += ch.len_utf16();
     }
-    text.len()
+    signature + text.len()
 }
 
 /// Where a source byte landed in the emitted output, or `None` when it was
@@ -170,6 +175,18 @@ pub(crate) fn to_source_or_nearest(mappings: &[EmitMapping], out: usize) -> Opti
 mod tests {
     use super::*;
     use crate::AnchorKind;
+
+    #[test]
+    fn utf16_offsets_are_measured_in_the_decoded_text() {
+        let text = "\u{feff}const 한 = 1;\n";
+        let name = text.find('한').unwrap();
+        assert_eq!(to_utf16(text, name), 6);
+        assert_eq!(from_utf16(text, 6), name);
+        assert_eq!(to_utf16(text, 0), 0);
+        assert_eq!(to_utf16(text, 3), 0);
+        assert_eq!(from_utf16(text, 0), 3);
+        assert_eq!(to_utf16(text, text.len()), text.len() - 3 - 2);
+    }
 
     #[test]
     fn a_partially_mapped_diagnostic_belongs_to_its_lowering_anchor() {
