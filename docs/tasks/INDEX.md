@@ -434,6 +434,7 @@
 | TASK-418 | Compute dead arms in matches that have a `_` arm | Complete | 2026-09-27 | 2026-09-27 | [TASK-418](./TASK-418-dead-arms-beside-wildcards.md) |
 | TASK-419 | Stop marking a case covered in completion when only a guarded arm handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-419](./TASK-419-guarded-arms-never-cover-in-completion.md) |
 | TASK-420 | Clamp a position past the end of its line to the line's length | Complete | 2026-09-27 | 2026-09-27 | [TASK-420](./TASK-420-clamp-positions-to-the-line.md) |
+| TASK-421 | Treat JSX text as opaque when classifying semantic tokens | Complete | 2026-09-27 | 2026-09-27 | [TASK-421](./TASK-421-jsx-text-semantic-tokens.md) |
 
 ## Next task number
 

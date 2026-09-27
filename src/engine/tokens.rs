@@ -71,9 +71,17 @@ pub struct SemanticToken {
 
 #[cfg(test)]
 fn scan(source: &str) -> Vec<(usize, usize, SemanticTokenKind)> {
-    let program = crate::parser::parse(source);
+    scan_with_kind(source, crate::SourceKind::TypeScript)
+}
+
+fn scan_with_kind(
+    source: &str,
+    source_kind: crate::SourceKind,
+) -> Vec<(usize, usize, SemanticTokenKind)> {
+    let program = crate::parser::parse_with_kind(source, source_kind);
+    let tokens = lexer::lex_with_kind(source, 0, source.len(), source_kind);
     let mut out = Vec::new();
-    walk(source, &program, &mut out);
+    walk(source, &tokens, &program, &mut out);
     out.sort_by_key(|&(start, _, _)| start);
     out
 }
@@ -93,11 +101,7 @@ pub fn semantic_tokens_with_kind(
     source_kind: crate::SourceKind,
 ) -> Vec<SemanticToken> {
     let lines = LineIndex::new(source);
-    let program = crate::parser::parse_with_kind(source, source_kind);
-    let mut scanned = Vec::new();
-    walk(source, &program, &mut scanned);
-    scanned.sort_by_key(|&(start, _, _)| start);
-    scanned
+    scan_with_kind(source, source_kind)
         .into_iter()
         .map(|(start, len, kind)| SemanticToken {
             range: Range {
@@ -109,10 +113,15 @@ pub fn semantic_tokens_with_kind(
         .collect()
 }
 
-fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
+fn walk(
+    src: &str,
+    tokens: &[Token],
+    program: &Program,
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
     for segment in &program.segments {
         match segment {
-            Segment::Verbatim(span) => deny_lookalikes(src, span.start, span.end, out),
+            Segment::Verbatim(span) => deny_in(src, tokens, (span.start, span.end), out),
             Segment::Variant(decl) => {
                 out.push((decl.name_off, decl.name.len(), SemanticTokenKind::Variant));
                 for case in &decl.cases {
@@ -121,19 +130,19 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
             }
             Segment::Match(m) => {
                 out.push((m.keyword_off, 5, SemanticTokenKind::Keyword));
-                walk(src, &m.scrutinee, out);
+                walk(src, tokens, &m.scrutinee, out);
                 for arm in &m.arms {
                     pattern(src, &arm.pattern, out);
                     if let Some(guard) = &arm.guard {
-                        walk(src, &guard.expr, out);
+                        walk(src, tokens, &guard.expr, out);
                     }
-                    walk(src, &arm.body, out);
+                    walk(src, tokens, &arm.body, out);
                 }
             }
             Segment::TupleMatch(m) => {
                 out.push((m.keyword_off, 5, SemanticTokenKind::Keyword));
                 for (_, scrutinee) in &m.scrutinees {
-                    walk(src, scrutinee, out);
+                    walk(src, tokens, scrutinee, out);
                 }
                 for arm in &m.arms {
                     if let TuplePattern::Elems(elems) = &arm.pattern {
@@ -142,9 +151,9 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                         }
                     }
                     if let Some(guard) = &arm.guard {
-                        walk(src, &guard.expr, out);
+                        walk(src, tokens, &guard.expr, out);
                     }
-                    walk(src, &arm.body, out);
+                    walk(src, tokens, &arm.body, out);
                 }
             }
             Segment::Try(t) => {
@@ -154,20 +163,20 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                 if t.decl.is_none() {
                     out.push((t.keyword_off, 3, SemanticTokenKind::Keyword));
                 }
-                walk(src, &t.expr, out);
+                walk(src, tokens, &t.expr, out);
             }
             Segment::TryExpr(expr) => {
                 out.push((expr.span.start, 3, SemanticTokenKind::Keyword));
-                walk(src, &expr.expr, out);
+                walk(src, tokens, &expr.expr, out);
             }
             Segment::LetElse(stmt) => {
                 for alt in &stmt.alternatives {
                     tag_pattern(alt, out);
                 }
-                walk(src, &stmt.expr, out);
-                walk(src, &stmt.else_body, out);
+                walk(src, tokens, &stmt.expr, out);
+                walk(src, tokens, &stmt.else_body, out);
             }
-            Segment::IfLet(stmt) => if_let(src, stmt, out),
+            Segment::IfLet(stmt) => if_let(src, tokens, stmt, out),
             Segment::TtImport(_) => {}
             Segment::ValModifier(_) => {
                 // `val` keeps its grammar color (a storage modifier); the
@@ -176,7 +185,7 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
             Segment::Template(template) => {
                 for chunk in &template.chunks {
                     if let TemplateChunk::Interp(body) = chunk {
-                        walk(src, body, out);
+                        walk(src, tokens, body, out);
                     }
                 }
             }
@@ -188,20 +197,20 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                         pipe.head_span.end - pipe.head_span.start,
                         SemanticTokenKind::Keyword,
                     )),
-                    Some(head) => walk(src, head, out),
+                    Some(head) => walk(src, tokens, head, out),
                 }
                 for step in &pipe.steps {
-                    walk(src, &step.body, out);
+                    walk(src, tokens, &step.body, out);
                 }
             }
             Segment::ResultBlock(block) => {
                 out.push((block.keyword_off, 6, SemanticTokenKind::Keyword));
                 for item in &block.items {
                     let ResultItem::Stmts(stmts) = item;
-                    walk(src, stmts, out);
+                    walk(src, tokens, stmts, out);
                 }
                 if let Some(value) = &block.value {
-                    walk(src, value, out);
+                    walk(src, tokens, value, out);
                 }
             }
         }
@@ -210,17 +219,18 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
 
 fn if_let(
     src: &str,
+    tokens: &[Token],
     stmt: &crate::ast::IfLetStmt,
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
     for alt in &stmt.alternatives {
         tag_pattern(alt, out);
     }
-    walk(src, &stmt.expr, out);
-    walk(src, &stmt.body, out);
+    walk(src, tokens, &stmt.expr, out);
+    walk(src, tokens, &stmt.body, out);
     match &stmt.else_part {
-        Some(IfLetElse::Block(body)) => walk(src, body, out),
-        Some(IfLetElse::IfLet(chained)) => if_let(src, chained, out),
+        Some(IfLetElse::Block(body)) => walk(src, tokens, body, out),
+        Some(IfLetElse::IfLet(chained)) => if_let(src, tokens, chained, out),
         None => {}
     }
 }
@@ -296,30 +306,28 @@ fn bindings(list: &[Binding], out: &mut Vec<(usize, usize, SemanticTokenKind)>) 
 /// The grammar colors `match (…)` and `result {` wherever they appear; the
 /// parser knows which of those it did *not* claim. Reclassify the ones in
 /// verbatim (plain TypeScript) ranges so the editor shows them as the
-/// identifiers they are. Lexed, not searched — occurrences inside strings,
-/// comments, templates and regexes never reach the token stream as
-/// identifiers.
-fn deny_lookalikes(
+/// identifiers they are. Read off the file's own token stream, lexed once
+/// under its surface kind — occurrences inside strings, comments, templates,
+/// regexes and JSX text never reach it as identifiers.
+fn deny_in(
     src: &str,
-    start: usize,
-    end: usize,
+    tokens: &[Token],
+    (start, end): (usize, usize),
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
-    let tokens = lexer::lex(src, start, end);
-    deny_in(src, &tokens, out);
-}
-
-fn deny_in(src: &str, tokens: &[Token], out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
     for (i, token) in tokens.iter().enumerate() {
+        if token.span.end <= start || end <= token.span.start {
+            continue;
+        }
         match &token.kind {
             Lex::Template(parts) => {
                 for part in parts.iter() {
                     if let lexer::TplPart::Interp { tokens, .. } = part {
-                        deny_in(src, tokens, out);
+                        deny_in(src, tokens, (start, end), out);
                     }
                 }
             }
-            Lex::Ident => {
+            Lex::Ident if start <= token.span.start && token.span.end <= end => {
                 let text = &src[token.span.start..token.span.end];
                 if text != "match" && text != "result" {
                     continue;
@@ -420,6 +428,19 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![&("match".into(), SemanticTokenKind::Function)],
             "the bare call is denied once; the member call is not reported"
+        );
+    }
+
+    #[test]
+    fn jsx_text_stays_opaque_and_jsx_expressions_are_still_read() {
+        let src = "const a = <p>match (x) is fun</p>;\nconst b = <p>{match(x)}</p>;\n";
+        let tokens = semantic_tokens_with_kind(src, crate::SourceKind::Tsx);
+        assert_eq!(tokens.len(), 1, "{tokens:?}");
+        assert_eq!(tokens[0].kind, SemanticTokenKind::Function);
+        assert_eq!(tokens[0].range.start.line, 1);
+        assert_eq!(
+            tokens[0].range.start.character,
+            "const b = <p>{".len() as u32
         );
     }
 
