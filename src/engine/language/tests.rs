@@ -76,7 +76,7 @@ fn u16_positions_round_trip_over_multibyte_text() {
             character: 3
         }
     );
-    // Past-the-line characters spill forward, clamped to the end.
+    // A line past the end clamps to the end of the text.
     assert_eq!(
         u16_offset(
             text,
@@ -87,6 +87,17 @@ fn u16_positions_round_trip_over_multibyte_text() {
         ),
         8
     );
+}
+
+#[test]
+fn a_character_past_the_line_end_defaults_back_to_the_line_length() {
+    let text = "ab한c\r\nsecond\nlast";
+    let at = |line, character| u16_offset(text, Position { line, character });
+    assert_eq!(at(0, 30), 4);
+    assert_eq!(at(0, 5), 4);
+    assert_eq!(at(1, 30), 12);
+    assert_eq!(at(2, 30), 17);
+    assert_eq!(at(1, 2), 8);
 }
 
 #[test]

@@ -445,18 +445,21 @@ pub(super) fn source_range(text: &str, start: usize, end: usize) -> Range {
 }
 
 /// The UTF-16 offset a zero-based line/character names in `text` — the LSP
-/// convention: a character past the line's end spills forward, and both
-/// clamp to the text's end.
+/// convention (3.17, `Position`): a character past the line's end defaults
+/// back to the line's length, and a line past the text's end clamps to the
+/// text's end.
 pub(crate) fn u16_offset(text: &str, position: Position) -> usize {
     let mut line = 0u32;
     let mut u16 = 0usize;
     let mut line_start = 0usize;
+    let mut line_start_byte = 0usize;
     if position.line > 0 {
-        for ch in text.chars() {
+        for (byte, ch) in text.char_indices() {
             u16 += ch.len_utf16();
             if ch == '\n' {
                 line += 1;
                 line_start = u16;
+                line_start_byte = byte + 1;
                 if line == position.line {
                     break;
                 }
@@ -466,8 +469,10 @@ pub(crate) fn u16_offset(text: &str, position: Position) -> usize {
             return text.encode_utf16().count();
         }
     }
-    let total = text.encode_utf16().count();
-    (line_start + position.character as usize).min(total)
+    let rest = &text[line_start_byte..];
+    let content = rest.split('\n').next().unwrap_or_default();
+    let content = content.strip_suffix('\r').unwrap_or(content);
+    line_start + (position.character as usize).min(content.encode_utf16().count())
 }
 
 /// The zero-based line/character a UTF-16 offset names in `text`.
