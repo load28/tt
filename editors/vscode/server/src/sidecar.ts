@@ -84,31 +84,103 @@ export async function refreshSidecar(
   ttPath: string,
   mode: SidecarMode,
   outDir?: string,
+  root?: string,
 ): Promise<SidecarResult> {
   if (mode === "off") return { kind: "skipped", reason: "disabled" };
   if (!ttPath.endsWith(".tt") && !ttPath.endsWith(".ttx")) {
     return { kind: "skipped", reason: "not a tt source" };
   }
 
-  // Declarations either sit next to the source or in their own tree (which
-  // TypeScript merges back with `rootDirs`); the refresh has to look where
-  // they actually are.
-  const base =
-    outDir === undefined ? ttPath : path.join(outDir, path.basename(ttPath));
-  const declarationTarget = `${base}.d.ts`;
-  if (mode === "refresh" && !exists(declarationTarget)) {
+  const existing =
+    outDir === undefined
+      ? [`${ttPath}.d.ts`].filter(exists)
+      : treeSidecarsOf(ttPath, outDir, root);
+  if (mode === "refresh" && existing.length === 0) {
     return { kind: "skipped", reason: "no sidecar to refresh" };
   }
+  const targets =
+    existing.length > 0
+      ? existing
+      : [
+          outDir === undefined
+            ? `${ttPath}.d.ts`
+            : mirroredDeclaration(ttPath, outDir, mirrorBase(ttPath, root)),
+        ];
 
-  // `-o` is always passed: on its own `--types` writes to `.tt-types`, the
-  // directory a project opts into, and the editor's sidecar goes wherever
-  // the settings say — beside the source by default.
-  const args = ["--types", ttPath, "-o", outDir ?? path.dirname(ttPath)];
-  const files = [declarationTarget, `${base}.d.ts.map`];
+  const written: string[] = [];
+  for (const target of targets) {
+    const result = await writeSidecar(compiler, ttPath, target);
+    if (result.kind !== "written") return result;
+    written.push(...result.files);
+  }
+  return { kind: "written", files: written };
+}
+
+async function writeSidecar(
+  compiler: string,
+  ttPath: string,
+  declarationTarget: string,
+): Promise<SidecarResult> {
+  const args = ["--types", ttPath, "-o", path.dirname(declarationTarget)];
+  const files = [declarationTarget, `${declarationTarget}.map`];
   const generation = selfWrites.expect(files);
   const result = await run(compiler, args, files);
   selfWrites.settle(generation, result.kind === "written");
   return result;
+}
+
+function mirrorBase(ttPath: string, root: string | undefined): string {
+  const dir = path.dirname(path.resolve(ttPath));
+  return root !== undefined && isWithin(path.resolve(root), dir)
+    ? path.resolve(root)
+    : dir;
+}
+
+function isWithin(ancestor: string, dir: string): boolean {
+  const relative = path.relative(ancestor, dir);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function mirroredDeclaration(ttPath: string, outDir: string, base: string): string {
+  return `${path.join(path.resolve(outDir), path.relative(base, path.resolve(ttPath)))}.d.ts`;
+}
+
+function treeSidecarsOf(ttPath: string, outDir: string, root: string | undefined): string[] {
+  const source = path.resolve(ttPath);
+  const top = mirrorBase(ttPath, root);
+  const bases: string[] = [];
+  for (let dir = path.dirname(source); ; dir = path.dirname(dir)) {
+    bases.push(dir);
+    if (dir === top || path.dirname(dir) === dir) break;
+  }
+  return bases
+    .map((base) => mirroredDeclaration(source, outDir, base))
+    .filter((declaration) => exists(declaration) && mapNamesSource(`${declaration}.map`, source));
+}
+
+function mapNamesSource(mapFile: string, source: string): boolean {
+  let parsed: { sources?: unknown; sourceRoot?: unknown };
+  try {
+    parsed = JSON.parse(fs.readFileSync(mapFile, "utf8")) as typeof parsed;
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(parsed.sources)) return false;
+  const sourceRoot = typeof parsed.sourceRoot === "string" ? parsed.sourceRoot : "";
+  const wanted = canonical(source);
+  return parsed.sources.some(
+    (entry) =>
+      typeof entry === "string" &&
+      canonical(path.resolve(path.dirname(mapFile), sourceRoot, entry)) === wanted,
+  );
+}
+
+function canonical(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return path.resolve(file);
+  }
 }
 
 function exists(file: string): boolean {

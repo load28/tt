@@ -427,6 +427,7 @@
 | TASK-395 | Encode source map URLs and end the map comment with the output's line ending | Complete | 2026-09-27 | 2026-09-27 | [TASK-395](./TASK-395-source-map-urls-and-line-endings.md) |
 
 | TASK-396 | Read sidecar declarations from tsc's layout and name rejected tt-only inputs accurately | Complete | 2026-09-27 | 2026-09-27 | [TASK-396](./TASK-396-sidecar-layout-and-tt-input-errors.md) |
+| TASK-397 | Mirror the source tree in save-time sidecar refresh | Complete | 2026-09-27 | 2026-09-27 | [TASK-397](./TASK-397-sidecar-tree-layout.md) |
 
 ## Next task number
 

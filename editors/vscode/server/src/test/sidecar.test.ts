@@ -293,3 +293,74 @@ test("a refresh records its sidecar files as the server's own writes", { skip },
 
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+function nestedWorkspace(): { root: string; first: string; second: string; types: string } {
+  const root = caseDir("tt-sidecar-tree-");
+  const first = path.join(root, "src", "a", "notice.tt");
+  const second = path.join(root, "src", "b", "notice.tt");
+  fs.mkdirSync(path.dirname(first), { recursive: true });
+  fs.mkdirSync(path.dirname(second), { recursive: true });
+  fs.writeFileSync(first, SOURCE);
+  fs.writeFileSync(second, "export const other: number = 1;\n");
+  return { root, first, second, types: path.join(root, ".tt-types") };
+}
+
+function sourcesOf(map: string): string[] {
+  return (JSON.parse(fs.readFileSync(map, "utf8")) as { sources: string[] }).sources;
+}
+
+test("refresh mode finds the sidecar ttc --types wrote into a mirrored tree", { skip }, async () => {
+  const { root, first, types } = nestedWorkspace();
+  execFileSync(COMPILER, ["--types", "src"], { cwd: root, stdio: "pipe" });
+  const mirrored = path.join(types, "a", "notice.tt.d.ts");
+  const sibling = path.join(types, "b", "notice.tt.d.ts");
+  assert.equal(fs.existsSync(mirrored), true, "ttc --types src mirrors the source tree");
+  const siblingBefore = fs.readFileSync(sibling, "utf8");
+
+  fs.writeFileSync(first, `${SOURCE}export function count(items: Notice[]): number {\n  return items.length;\n}\n`);
+  const result = await refreshSidecar(COMPILER, first, "refresh", types, root);
+
+  assert.equal(result.kind, "written", JSON.stringify(result));
+  assert.deepEqual(result.kind === "written" ? result.files : [], [mirrored, `${mirrored}.map`]);
+  assert.match(fs.readFileSync(mirrored, "utf8"), /export declare function count/);
+  assert.deepEqual(sourcesOf(`${mirrored}.map`), ["../../src/a/notice.tt"]);
+  assert.equal(fs.existsSync(path.join(types, "notice.tt.d.ts")), false, "no flat stray beside the tree");
+  assert.equal(fs.readFileSync(sibling, "utf8"), siblingBefore, "the other directory's sidecar is untouched");
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("always mode mirrors the workspace folder, so same-named files do not collide", { skip }, async () => {
+  const { root, first, second, types } = nestedWorkspace();
+
+  assert.equal((await refreshSidecar(COMPILER, first, "always", types, root)).kind, "written");
+  assert.equal((await refreshSidecar(COMPILER, second, "always", types, root)).kind, "written");
+
+  const firstTarget = path.join(types, "src", "a", "notice.tt.d.ts");
+  const secondTarget = path.join(types, "src", "b", "notice.tt.d.ts");
+  assert.match(fs.readFileSync(firstTarget, "utf8"), /export type Notice/);
+  assert.match(fs.readFileSync(secondTarget, "utf8"), /export declare const other/);
+  assert.deepEqual(sourcesOf(`${firstTarget}.map`), ["../../../src/a/notice.tt"]);
+  assert.deepEqual(sourcesOf(`${secondTarget}.map`), ["../../../src/b/notice.tt"]);
+  assert.equal(fs.existsSync(path.join(types, "notice.tt.d.ts")), false, "no flat file both saves overwrite");
+
+  assert.equal((await refreshSidecar(COMPILER, first, "refresh", types, root)).kind, "written");
+  assert.equal(fs.existsSync(path.join(types, "notice.tt.d.ts")), false);
+
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("a sidecar whose map names another source is not refreshed as this file's", { skip }, async () => {
+  const { root, first, types } = nestedWorkspace();
+  execFileSync(COMPILER, ["--types", path.join("src", "b", "notice.tt"), "-o", ".tt-types"], { cwd: root, stdio: "pipe" });
+  const flat = path.join(types, "notice.tt.d.ts");
+  assert.deepEqual(sourcesOf(`${flat}.map`), ["../src/b/notice.tt"]);
+  const before = fs.readFileSync(flat, "utf8");
+
+  const result = await refreshSidecar(COMPILER, first, "refresh", types, root);
+
+  assert.equal(result.kind, "skipped", JSON.stringify(result));
+  assert.equal(fs.readFileSync(flat, "utf8"), before, "the other file's sidecar keeps its declarations");
+
+  fs.rmSync(root, { recursive: true, force: true });
+});

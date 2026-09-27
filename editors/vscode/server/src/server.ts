@@ -888,6 +888,7 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
     uri.fsPath,
     settings.sidecar,
     location.kind === "directory" ? location.path : undefined,
+    containingRoot(workspaceRoots, uri.fsPath),
   );
   if (result.kind === "failed") {
     connection.console.warn(`tt: sidecar refresh failed — ${result.detail}`);
