@@ -175,6 +175,12 @@ pub(crate) const WATCH_INTERVAL: Duration = Duration::from_millis(300);
 /// imports it is checked against the new declarations, which is what makes
 /// project-wide exhaustiveness errors appear on the importing side.
 ///
+/// Every round places compiler support modules by the [`support_root`] of
+/// the whole input set, as a one-shot build of it would, however few files
+/// the round recompiles. When that root moves — an input added or removed
+/// outside it — every output refers to the support modules anew, so the
+/// round recompiles every job.
+///
 /// Runs until interrupted; the exit code is only reached on a fatal input
 /// error.
 pub(super) fn watch_mode(
@@ -183,6 +189,7 @@ pub(super) fn watch_mode(
     opts: &BuildOptions,
 ) -> ExitCode {
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
+    let mut placed: Option<PathBuf> = None;
     let mut first = true;
     let mut input_error = None;
 
@@ -214,7 +221,9 @@ pub(super) fn watch_mode(
             })
             .collect();
 
-        let changed: Vec<PathBuf> = if first {
+        let root = support_root(&jobs, out_dir);
+        let moved = root != placed;
+        let changed: Vec<PathBuf> = if first || moved {
             jobs.iter().map(|job| job.file.clone()).collect()
         } else {
             current
@@ -240,7 +249,7 @@ pub(super) fn watch_mode(
                 .collect()
         };
         if !selected.is_empty() {
-            let failed = compile_jobs(&selected, opts);
+            let failed = compile_jobs(&selected, root.as_deref(), opts);
             // The count is what was rebuilt; only the word after it says
             // how the round went, so "failed" must not borrow it.
             eprintln!(
@@ -255,6 +264,7 @@ pub(super) fn watch_mode(
             first = false;
         }
         stamps = current;
+        placed = root;
         thread::sleep(WATCH_INTERVAL);
     }
 }

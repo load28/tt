@@ -1646,6 +1646,91 @@ fn watch_reports_input_failure_transitions_and_recovers() {
     }
 }
 
+/// Support modules belong to the whole watched input set: a round that
+/// recompiles one file in a subdirectory writes them where a one-shot build
+/// does, and a round whose input set moves the shared root recompiles every
+/// output against the new place.
+#[test]
+fn watch_places_support_modules_by_the_whole_input_set() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let dir = tmpdir();
+    let input = dir.join("src");
+    fs::create_dir_all(input.join("sub")).unwrap();
+    fs::write(
+        input.join("a.tt"),
+        "export const x = (n: number) => n |> String;",
+    )
+    .unwrap();
+    fs::write(
+        input.join("sub/b.tt"),
+        "export const x = (n: number) => n |> String;",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&dir)
+        .args(["--watch", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    dir.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let next_round = || {
+        loop {
+            let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+            assert!(!line.contains("with errors"), "{line}");
+            if line.contains("file(s) ok") {
+                break;
+            }
+        }
+    };
+    let result = std::panic::catch_unwind(|| {
+        next_round();
+        assert!(input.join("tt/runtime.ts").exists());
+        assert!(
+            fs::read_to_string(input.join("sub/b.ts"))
+                .unwrap()
+                .contains("\"../tt/runtime.js\"")
+        );
+        fs::write(
+            input.join("sub/b.tt"),
+            "export const x = (n: number) => n |> String;\n",
+        )
+        .unwrap();
+        next_round();
+        assert!(!input.join("sub/tt").exists());
+        assert!(
+            fs::read_to_string(input.join("sub/b.ts"))
+                .unwrap()
+                .contains("\"../tt/runtime.js\"")
+        );
+        fs::remove_file(input.join("a.tt")).unwrap();
+        fs::remove_file(input.join("a.ts")).unwrap();
+        next_round();
+        assert!(input.join("sub/tt/runtime.ts").exists());
+        assert!(
+            fs::read_to_string(input.join("sub/b.ts"))
+                .unwrap()
+                .contains("\"./tt/runtime.js\"")
+        );
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
 /// A contextual annotation refines the type of a generated storage slot;
 /// the emitted program is correct without one. `--check` is documented as
 /// needing no TypeScript, and `-p` is what bundler plugins call, so a

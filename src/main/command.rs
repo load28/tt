@@ -634,7 +634,8 @@ pub(super) fn run() -> ExitCode {
         return watch_mode(&inputs, out_dir.as_deref(), &build);
     }
 
-    if compile_jobs(&jobs, &build) {
+    let root = support_root(&jobs, build.out_dir.as_deref());
+    if compile_jobs(&jobs, root.as_deref(), &build) {
         ExitCode::FAILURE
     } else {
         ExitCode::SUCCESS

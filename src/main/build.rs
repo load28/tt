@@ -36,16 +36,24 @@ pub(super) struct BuildOptions {
     pub(super) jobs: Option<usize>,
 }
 
+/// The directory that holds the generated `tt/` package: the output root
+/// when `-o` was given, otherwise the deepest directory every output of the
+/// whole build shares. It belongs to the build's full input set, so a
+/// compile of any subset of it places support modules where a build of the
+/// whole set does.
+pub(super) fn support_root(jobs: &[Job], out_dir: Option<&Path>) -> Option<PathBuf> {
+    match out_dir {
+        Some(dir) => Some(dir.to_path_buf()),
+        None => common_ancestor(jobs),
+    }
+}
+
 /// Where the generated `tt/` standard-library package goes.
-pub(super) fn std_placement(jobs: &[Job], needed: bool, out_dir: Option<&Path>) -> Option<PathBuf> {
+pub(super) fn std_placement(root: Option<&Path>, needed: bool) -> Option<PathBuf> {
     if !needed {
         return None;
     }
-    let dir = match out_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => common_ancestor(jobs)?,
-    };
-    Some(dir.join("tt"))
+    Some(root?.join("tt"))
 }
 
 /// The deepest directory every output shares.
@@ -220,11 +228,14 @@ pub(super) struct Outcome {
 
 /// Compiles every job. Returns true if any of them failed.
 ///
+/// `support_root` is the [`support_root`] of the build's full input set,
+/// which `jobs` may be only part of.
+///
 /// The run is staged so each input is touched once: read and scanned in
 /// parallel, then compiled in parallel against a shared table of imported
 /// declarations. Diagnostics are collected per job and printed in job
 /// order, so the output of a parallel run is identical to a sequential one.
-pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
+pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
     if !opts.check && !opts.print {
         let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
         let mut outputs: Vec<(&Path, &Path)> = Vec::with_capacity(jobs.len());
@@ -304,7 +315,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             _ => needs_std,
         })
         .collect();
-    let std_dir = std_placement(jobs, !modules.is_empty(), opts.out_dir.as_deref());
+    let std_dir = std_placement(support_root, !modules.is_empty());
     if let Some(dir) = &std_dir
         && !opts.check
         && !opts.print
