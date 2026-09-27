@@ -140,6 +140,7 @@ pub(crate) struct LoweringPlan {
     unsupported_matches: Vec<UnsupportedMatch>,
     block_required_propagations: HashSet<NodeId>,
     ambient_items: HashSet<NodeId>,
+    owner_model_unavailable: bool,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -445,6 +446,17 @@ struct PlannedSourceSlot {
 }
 
 impl LoweringPlan {
+    pub(crate) fn without_owner_model() -> Self {
+        Self {
+            owner_model_unavailable: true,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn has_owner_model(&self) -> bool {
+        !self.owner_model_unavailable
+    }
+
     pub(crate) fn owners(&self) -> impl Iterator<Item = &HostRewrite> {
         self.owners.iter()
     }

@@ -523,3 +523,41 @@ fn a_buffer_whose_typescript_does_not_parse_still_emits() {
     assert!(!m.code.is_empty());
     assert_mapping_invariants(src, &m);
 }
+
+#[test]
+fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
+    let cases = [
+        ("function f() {\n  const value = try g", "try g"),
+        (
+            "function f() {\n  const v = 1 + (try g());\n  x.\n}\n",
+            "try g()",
+        ),
+        (
+            "function read(value = match (1) { 1 => \"one\", _ => \"other\" }) {}\n",
+            "match (1) { 1 => \"one\", _ => \"other\" }",
+        ),
+        (
+            "const a = 1;\nclass C { z = match (a) { 1 => \"one\", _ => \"other\" } }\n",
+            "match (a) { 1 => \"one\", _ => \"other\" }",
+        ),
+    ];
+    for (src, construct) in cases {
+        let m = emit_mapped(src);
+        assert_mapping_invariants(src, &m);
+        let start = src.find(construct).unwrap();
+        let end = start + construct.len();
+        let anchor = m
+            .anchors
+            .iter()
+            .find(|anchor| anchor.src == start)
+            .unwrap_or_else(|| panic!("{src:?}: {:?}", m.anchors));
+        assert_eq!(&m.code[anchor.out..anchor.end], "undefined", "{src:?}");
+        assert!(
+            m.mappings
+                .iter()
+                .all(|e| e.src + e.len <= start || end <= e.src),
+            "{src:?}: {:?}",
+            m.mappings
+        );
+    }
+}

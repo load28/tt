@@ -962,6 +962,21 @@ impl<'a> Emitter<'a> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.source_rope(*node),
             Expr::Sequence(body) => self.emit_body(*body),
+            Expr::Decision(decision) if self.recovered_matches.contains(&expr) => {
+                let head = self.span(decision.head);
+                let extent = self.span(decision.extent);
+                let mut generated = Rope::new();
+                generated.push_lit("undefined");
+                let mut out = Rope::new();
+                out.anchored(
+                    AnchorKind::Match,
+                    head.start,
+                    head.end,
+                    extent.end,
+                    generated,
+                );
+                out
+            }
             Expr::Decision(decision) => {
                 let head = self.span(decision.head);
                 let extent = self.span(decision.extent);
@@ -972,7 +987,7 @@ impl<'a> Emitter<'a> {
                 out
             }
             Expr::Propagate(propagate) => {
-                if !self.recovered_propagations.contains(&expr) {
+                if self.owner_model && !self.recovered_propagations.contains(&expr) {
                     crate::ice::bug!(
                         "unscheduled expression try reached inline emission: {:?} {:?}",
                         expr,
@@ -980,6 +995,11 @@ impl<'a> Emitter<'a> {
                     );
                 }
                 let span = self.span(propagate.node);
+                if !self.owner_model {
+                    self.recovered_sources
+                        .borrow_mut()
+                        .push(SourceSpan::from(span));
+                }
                 let mut generated = Rope::new();
                 generated.push_lit("undefined");
                 let mut out = Rope::new();

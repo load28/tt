@@ -384,6 +384,8 @@ pub(super) struct TargetRewritePlan {
     /// recovering projection emits `undefined` for them and claims their
     /// source so editor/type diagnostics can continue.
     pub(super) recovered_propagations: Vec<(ExprId, SourceSpan)>,
+    pub(super) recovered_matches: Vec<(ExprId, SourceSpan)>,
+    pub(super) owner_model: bool,
     /// tt values a conditional operation consumes; their inline Core
     /// position emits nothing (the operation's replacement covers it).
     pub(super) consumed_exprs: HashSet<ExprId>,
@@ -827,8 +829,14 @@ impl TargetRewritePlan {
             .into_iter()
             .map(|failure| (failure.expr, failure.source))
             .collect();
+        let recovered_matches: Vec<_> = lowering
+            .unsupported_matches()
+            .into_iter()
+            .map(|failure| (failure.expr, failure.source))
+            .collect();
         let recovered: HashSet<_> = recovered_propagations
             .iter()
+            .chain(&recovered_matches)
             .map(|(expr, _)| *expr)
             .collect();
         // Whether a value's control flow may become statements in its host
@@ -1491,6 +1499,8 @@ impl TargetRewritePlan {
             relocated_values,
             rewritten_operations,
             recovered_propagations,
+            recovered_matches,
+            owner_model: lowering.has_owner_model(),
             consumed_exprs,
             arrow_returns,
             slot_exprs,

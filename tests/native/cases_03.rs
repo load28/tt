@@ -229,3 +229,47 @@ fn a_probe_answers_in_a_pipeline_the_buffer_cannot_parse_yet() {
         );
     }
 }
+
+#[test]
+fn service_requests_answer_over_values_the_plan_cannot_own() {
+    require_tsgo!();
+    let cases = [
+        (
+            "src/member.tt",
+            "declare function parse(text: string): { value: number } | { error: string };\n\
+             export function read() {\n\
+             \x20 const value = try parse(\"1\").\n\
+             }\n",
+            ttc::engine::Position { line: 2, character: 31 },
+        ),
+        (
+            "src/parameter.tt",
+            "export function read(value = match (1) { 1 => \"one\", _ => \"other\" }) {\n\
+             \x20 return value;\n\
+             }\n",
+            ttc::engine::Position { line: 1, character: 10 },
+        ),
+        (
+            "src/field.tt",
+            "const a = 1;\n\
+             export class C { z = match (a) { 1 => \"one\", _ => \"other\" } }\n",
+            ttc::engine::Position { line: 1, character: 17 },
+        ),
+    ];
+    let dir = project(&cases.map(|(name, text, _)| (name, text)));
+    let engine = ttc::engine::Engine::new(None);
+    for (name, _, position) in cases {
+        let file = dir.join(name).canonicalize().unwrap();
+        let mut project = engine
+            .open_project(
+                &[file.to_string_lossy().into_owned()],
+                &ttc::engine::ProjectOptions::default(),
+            )
+            .unwrap();
+        project.completion(&file, position, true).unwrap();
+        project.hover(&file, position).unwrap();
+        project.signature_help(&file, position).unwrap();
+        project.definition(&file, position).unwrap();
+        project.service_diagnostics(&file).unwrap();
+    }
+}

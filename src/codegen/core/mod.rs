@@ -182,6 +182,7 @@ pub(crate) fn emit_with_map<'a>(
     let target_recovered_propagations: Vec<_> = target
         .recovered_propagations
         .iter()
+        .chain(&target.recovered_matches)
         .map(|(_, span)| *span)
         .collect();
     let emitter = Emitter {
@@ -214,6 +215,13 @@ pub(crate) fn emit_with_map<'a>(
             .into_iter()
             .map(|(expr, _)| expr)
             .collect(),
+        recovered_matches: target
+            .recovered_matches
+            .into_iter()
+            .map(|(expr, _)| expr)
+            .collect(),
+        owner_model: target.owner_model,
+        recovered_sources: RefCell::new(Vec::new()),
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
         inline_subjects: target.inline_subjects,
@@ -332,6 +340,7 @@ pub(crate) fn emit_with_map<'a>(
     }));
     rewritten.extend(rewritten_operations);
     rewritten.extend(target_recovered_propagations);
+    rewritten.extend(emitter.recovered_sources.take());
     let preservation = SourcePreservation {
         owned: pass_through_spans(semantic, core),
         relocated,

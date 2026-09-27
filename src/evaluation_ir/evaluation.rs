@@ -791,6 +791,7 @@ impl EvaluationFile {
                     _ => None,
                 })
                 .collect(),
+            owner_model_unavailable: false,
         })
     }
 }

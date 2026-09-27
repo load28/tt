@@ -231,9 +231,11 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
     let core = core_ir::lower_semantic(&semantics, source);
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
-    // host rewrites to plan, so the emit degrades to the same shape a file
-    // needing no host lowering gets. Reporting stays [`compile`]'s job.
-    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind).unwrap_or_default();
+    // host rewrites to plan, so every tt value the plan cannot own emits as
+    // a recovery placeholder anchored to its construct — the same values
+    // the plan refuses by placement. Reporting stays [`compile`]'s job.
+    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind)
+        .unwrap_or_else(|_| crate::evaluation_ir::LoweringPlan::without_owner_model());
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
