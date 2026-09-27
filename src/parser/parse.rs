@@ -586,8 +586,14 @@ impl Parser<'_> {
                         Claim::Malformed { error, recovery } => {
                             malformed.push(error);
                             recoveries.push(recovery);
+                            i = kw_idx + 1;
+                            continue;
                         }
-                        Claim::Unclaimed(candidate) => unclaimed.push(candidate),
+                        Claim::Unclaimed(candidate) => {
+                            unclaimed.push(candidate);
+                            i = kw_idx + 1;
+                            continue;
+                        }
                         Claim::NotTt => {}
                     }
                 }

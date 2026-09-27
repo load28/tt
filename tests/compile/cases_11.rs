@@ -105,3 +105,20 @@ fn sibling_matches_in_a_guard_have_one_complete_evaluation_owner() {
     let out = ok("const x = match (1) { 1 if (match (2) { 2 => true, _ => false }) && (match (3) { 3 => true, _ => false }) => 10, _ => 20 };\n");
     assert!(!out.contains("match ("), "{out}");
 }
+
+#[test]
+fn a_malformed_variant_behind_modifiers_is_reported_once() {
+    for source in [
+        "export variant V { A { r: number } }\n",
+        "export declare variant V { A { r: number } }\n",
+        "declare variant V { A { r: number } }\n",
+        "variant V { A { r: number } }\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        let malformed: Vec<_> = diagnostics
+            .iter()
+            .filter(|diagnostic| diagnostic.code == DiagnosticCode::MalformedVariant)
+            .collect();
+        assert_eq!(malformed.len(), 1, "{source}{diagnostics:#?}");
+    }
+}
