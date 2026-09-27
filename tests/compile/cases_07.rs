@@ -646,6 +646,52 @@ fn val_forbids_every_mutating_operator() {
 }
 
 #[test]
+fn val_judges_only_paths_rooted_at_the_binding() {
+    for src in [
+        "val const config = { debug: false };\nconst state = { config: { debug: false } };\nstate.config.debug = true;\n",
+        "val const config = { debug: false };\nclass K {\n  config = { debug: false };\n  m() { this.config.debug = true; }\n}\n",
+        "val const o = { x: 1 };\nconst q = { o: { x: 1 } };\nq.o.x++;\nq!.o.x = 2;\ndelete q.o.x;\n[q.o.x] = [3];\n",
+    ] {
+        assert_eq!(ok(src), src.replacen("val ", "", 1), "{src}");
+    }
+    for (src, at) in [
+        ("val const o = { p: 1 };\n[...o.p] = [1] as any;\n", (2, 5)),
+        ("val const o = { p: 1 };\n({ a: o.p } = { a: 2 });\n", (2, 7)),
+    ] {
+        let e = err(src);
+        assert_eq!((e.line, e.col), at, "{src}");
+        assert!(e.message.contains("val binding `o`"), "{src}: {}", e.message);
+    }
+}
+
+#[test]
+fn val_resolves_hoisted_declarations_to_their_scope() {
+    for src in [
+        "val const o = { x: 1 };\nfunction w() { o.x = 2; var o = { x: 1 }; }\n",
+        "val const o = { x: 1 };\nfunction w() { { var o = { x: 1 }; } o.x = 2; }\n",
+        "val const o = { x: 1 };\nfunction w() { for (var o of [{ x: 1 }]) {} o.x = 2; }\n",
+        "val const o = { x: 1 };\nconst w = [1].map(n => { o.x = n; var o = { x: 1 }; return o; });\n",
+        "val const o = { x: 1 };\nfunction w() { o.x = 2; function o() {} }\n",
+        "val const o = { x: 1 };\nfunction w() { { o.x = 2; function o() {} } }\n",
+    ] {
+        assert_eq!(ok(src), src.replacen("val ", "", 1), "{src}");
+    }
+    for (src, at) in [
+        ("val const o = { x: 1 };\nfunction w() { function g() { var o = { x: 1 }; } o.x = 2; }\n", (2, 51)),
+        ("val const o = { x: 1 };\nfunction w() { try {} catch (e) { var o = { x: 1 }; } }\no.x = 2;\n", (3, 1)),
+        ("val const o = { x: 1 };\nclass C { static { var o = { x: 1 }; } m() { o.x = 2; } }\n", (2, 46)),
+        ("val const o = { x: 1 };\nfunction w() { { function o() {} } o.x = 2; }\n", (2, 36)),
+        ("function w() { p.x = 1; { val var p = { x: 1 }; } }\n", (1, 16)),
+        ("variant V { A(n: number), B }\nval const o = { x: 1 };\nfunction w(v: V) {\n  match (v) {\n    A(n) => { const h = () => { var o = { x: n }; }; },\n    B => {},\n  }\n  o.x = 2;\n}\n", (8, 3)),
+    ] {
+        let e = err(src);
+        assert_eq!((e.line, e.col), at, "{src}");
+        assert!(e.message.contains("cannot mutate through val binding"), "{src}: {}", e.message);
+    }
+    ok("variant V { A(n: number), B }\nval const o = { x: 1 };\nfunction w(v: V) {\n  match (v) {\n    A(n) => { var o = { x: n }; },\n    B => {},\n  }\n  o.x = 2;\n}\n");
+}
+
+#[test]
 fn val_leaves_reads_and_comparisons_alone() {
     // Nothing here mutates `x`, and none of these operators may be
     // mistaken for an assignment.

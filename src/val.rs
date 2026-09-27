@@ -548,6 +548,8 @@ fn run(src: &str, tokens: &[Token], sink: Sink) {
         end: usize::MAX,
         vars: Vec::new(),
     }];
+    let arms = checker.arm_arrows(tokens);
+    checker.instantiate(tokens, 0, tokens.len(), &mut frames, true, &arms);
     checker.walk(tokens, &mut frames);
 }
 

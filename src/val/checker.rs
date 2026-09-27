@@ -1,5 +1,7 @@
 //! Lexical-scope walk and mutation/call probe collection.
 
+use std::collections::HashSet;
+
 use super::*;
 
 /// The `val` checker's walk state.
@@ -35,17 +37,21 @@ impl<'a> Checker<'a> {
     /// the stream that contains it.
     pub(super) fn walk(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
         let writes = targets::writes(self.src, tokens);
+        let arms = self.arm_arrows(tokens);
         let base = frames.len();
         // Parameter scopes, activated when the walk reaches the function
-        // body they belong to: (body start, body end, bindings).
-        let mut pending: Vec<(usize, usize, Vec<Var<'a>>)> = Vec::new();
+        // body they belong to: (body start, body end, bindings, whether the
+        // body is a function's own `var` scope rather than a `catch` block).
+        let mut pending: Vec<(usize, usize, Vec<Var<'a>>, bool)> = Vec::new();
         let mut i = 0usize;
         while i < tokens.len() {
             while frames.len() > base && frames[frames.len() - 1].end <= i {
                 frames.pop();
             }
-            while let Some(pos) = pending.iter().position(|(start, _, _)| *start <= i) {
-                let (_, end, vars) = pending.remove(pos);
+            let mut function_body = false;
+            while let Some(pos) = pending.iter().position(|(start, _, _, _)| *start <= i) {
+                let (start, end, vars, var_scope) = pending.remove(pos);
+                function_body |= var_scope && start == i;
                 frames.push(Frame { end, vars });
             }
 
@@ -64,9 +70,12 @@ impl<'a> Checker<'a> {
                         end,
                         vars: Vec::new(),
                     });
+                    let var_scope = function_body || self.var_scope_block(tokens, i, &arms);
+                    self.instantiate(tokens, i + 1, end, frames, var_scope, &arms);
                 }
                 TokenKind::Punct(b'(') => {
-                    if let Some((start, end, vars)) = self.param_scope(tokens, i) {
+                    if let Some((start, end, vars, var_scope)) = self.param_scope(tokens, i, &arms)
+                    {
                         // A `val` parameter is a `val` binding like any
                         // other; it just never goes through `declare`.
                         if let Sink::Probes(sink) = self.sink {
@@ -80,7 +89,7 @@ impl<'a> Checker<'a> {
                                     }),
                             );
                         }
-                        pending.push((start, end, vars));
+                        pending.push((start, end, vars, var_scope));
                     }
                 }
                 TokenKind::Ident => {
@@ -116,15 +125,18 @@ impl<'a> Checker<'a> {
                 // the parameter's scope is registered at its `(`
                 ValModifier::Parameter => i + 1,
                 ValModifier::Declaration => {
-                    let names = collect_decl_names(self.src, tokens, i + 2);
-                    self.declare(frames, names, Some(tokens[i].span.start));
+                    if self.text(&tokens[i + 1]) != "var" {
+                        let names = collect_decl_names(self.src, tokens, i + 2);
+                        self.declare(frames, names, Some(tokens[i].span.start));
+                    }
                     i + 2
                 }
             };
         }
 
         match word {
-            "const" | "let" | "var" => {
+            "var" => return i + 1,
+            "const" | "let" => {
                 let names = collect_decl_names(self.src, tokens, i + 1);
                 self.declare(frames, names, None);
                 return i + 1;
@@ -175,6 +187,203 @@ impl<'a> Checker<'a> {
         i + 1
     }
 
+    /// Declaration instantiation on entry to the scope whose contents are
+    /// the tokens `from..to` (ECMA-262 FunctionDeclarationInstantiation and
+    /// BlockDeclarationInstantiation): the function declarations directly
+    /// in it bind for the whole scope, and when it is a function's own
+    /// `var` scope, so does every `var` declaration it contains outside a
+    /// nested `var` scope.
+    pub(super) fn instantiate(
+        &self,
+        tokens: &'a [Token],
+        from: usize,
+        to: usize,
+        frames: &mut [Frame<'a>],
+        var_scope: bool,
+        arms: &HashSet<usize>,
+    ) {
+        let to = to.min(tokens.len());
+        let mut k = from;
+        while k < to {
+            match tokens[k].kind {
+                TokenKind::Punct(b'(' | b'[' | b'{') => {
+                    k = find_close_at(tokens, k).map_or(to, |close| close + 1);
+                    continue;
+                }
+                TokenKind::Ident
+                    if self.text(&tokens[k]) == "function"
+                        && !dotted_at(tokens, 0, k)
+                        && self.statement_start(tokens, from, k) =>
+                {
+                    let name = if punct_at(tokens, k + 1, b'*') {
+                        k + 2
+                    } else {
+                        k + 1
+                    };
+                    if let Some(t) = tokens.get(name)
+                        && matches!(t.kind, TokenKind::Ident)
+                    {
+                        self.declare(frames, vec![self.text(t)], None);
+                    }
+                }
+                _ => {}
+            }
+            k += 1;
+        }
+        if !var_scope {
+            return;
+        }
+        let mut k = from;
+        while k < to {
+            if let Some(end) = self.nested_var_scope(tokens, k, arms) {
+                k = end.max(k + 1);
+                continue;
+            }
+            if matches!(tokens[k].kind, TokenKind::Ident)
+                && self.text(&tokens[k]) == "var"
+                && !dotted_at(tokens, 0, k)
+            {
+                let val_at = k
+                    .checked_sub(1)
+                    .filter(|&at| {
+                        matches!(tokens[at].kind, TokenKind::Ident)
+                            && self.text(&tokens[at]) == "val"
+                            && modifier_at(self.src, tokens, at) == Some(ValModifier::Declaration)
+                    })
+                    .map(|at| tokens[at].span.start);
+                let names = collect_decl_names(self.src, tokens, k + 1);
+                self.declare(frames, names, val_at);
+            }
+            k += 1;
+        }
+    }
+
+    /// Whether the token at `k` begins a statement of the statement list
+    /// that starts at `from`, looking back over the words that may prefix
+    /// a declaration.
+    fn statement_start(&self, tokens: &[Token], from: usize, k: usize) -> bool {
+        let mut p = k;
+        while p > from {
+            let prev = &tokens[p - 1];
+            match prev.kind {
+                TokenKind::Ident
+                    if matches!(self.text(prev), "async" | "export" | "default" | "declare") =>
+                {
+                    p -= 1;
+                }
+                TokenKind::Punct(b';' | b'}') => return true,
+                _ => return false,
+            }
+        }
+        true
+    }
+
+    /// The token index at which a nested `var` scope that starts at `k`
+    /// ends: a function's parameter list and body, an arrow's block body,
+    /// a class `static` block, or a namespace body.
+    fn nested_var_scope(
+        &self,
+        tokens: &'a [Token],
+        k: usize,
+        arms: &HashSet<usize>,
+    ) -> Option<usize> {
+        match tokens[k].kind {
+            TokenKind::Punct(b'(') => {
+                let (_, end, var_scope) = self.function_body(tokens, k, arms)?;
+                var_scope.then_some(end)
+            }
+            TokenKind::Arrow if !arms.contains(&k) && punct_at(tokens, k + 1, b'{') => {
+                find_close_at(tokens, k + 1)
+            }
+            TokenKind::Ident if !dotted_at(tokens, 0, k) => {
+                let mut open = k + 1;
+                match self.text(&tokens[k]) {
+                    "static" => {}
+                    "namespace" | "module" => {
+                        while matches!(tokens.get(open)?.kind, TokenKind::Ident) {
+                            open += 1;
+                            if !punct_at(tokens, open, b'.') {
+                                break;
+                            }
+                            open += 1;
+                        }
+                        if open == k + 1 {
+                            return None;
+                        }
+                    }
+                    _ => return None,
+                }
+                if !punct_at(tokens, open, b'{') {
+                    return None;
+                }
+                find_close_at(tokens, open)
+            }
+            _ => None,
+        }
+    }
+
+    /// Whether the block `{` at `open` is its own `var` scope without a
+    /// parameter list in front of it: an arrow's block body after a bare
+    /// parameter, a class `static` block, or a namespace body.
+    fn var_scope_block(&self, tokens: &'a [Token], open: usize, arms: &HashSet<usize>) -> bool {
+        let Some(mut k) = open.checked_sub(1) else {
+            return false;
+        };
+        if matches!(tokens[k].kind, TokenKind::Ident) && self.text(&tokens[k]) != "static" {
+            while k >= 2
+                && punct_at(tokens, k - 1, b'.')
+                && matches!(tokens[k - 2].kind, TokenKind::Ident)
+            {
+                k -= 2;
+            }
+            let Some(keyword) = k.checked_sub(1) else {
+                return false;
+            };
+            k = keyword;
+        }
+        let close = find_close_at(tokens, open);
+        close.is_some() && self.nested_var_scope(tokens, k, arms) == close
+    }
+
+    /// The arrows of the `match` arms in `tokens`: the first arrow at the
+    /// top level of each entry of a `match ( ... ) { ... }` body. An arm
+    /// body is lowered into the enclosing function, so it is a block of
+    /// that function and not a `var` scope of its own.
+    pub(super) fn arm_arrows(&self, tokens: &[Token]) -> HashSet<usize> {
+        let mut arms = HashSet::new();
+        for k in 0..tokens.len() {
+            if !matches!(tokens[k].kind, TokenKind::Ident)
+                || self.text(&tokens[k]) != "match"
+                || dotted_at(tokens, 0, k)
+                || !punct_at(tokens, k + 1, b'(')
+            {
+                continue;
+            }
+            let Some(close) = find_close_at(tokens, k + 1) else {
+                continue;
+            };
+            if !punct_at(tokens, close + 1, b'{') {
+                continue;
+            }
+            for (start, end) in list_entries(tokens, close + 1) {
+                let mut j = start;
+                while j < end {
+                    match tokens[j].kind {
+                        TokenKind::Arrow => {
+                            arms.insert(j);
+                            break;
+                        }
+                        TokenKind::Punct(b'(' | b'[' | b'{') => {
+                            j = find_close_at(tokens, j).map_or(end, |c| c + 1);
+                        }
+                        _ => j += 1,
+                    }
+                }
+            }
+        }
+        arms
+    }
+
     /// Registers bindings in the innermost scope.
     fn declare(&self, frames: &mut [Frame<'a>], names: Vec<&'a str>, val_at: Option<usize>) {
         let src = self.src;
@@ -216,23 +425,9 @@ impl<'a> Checker<'a> {
         &self,
         tokens: &'a [Token],
         open: usize,
-    ) -> Option<(usize, usize, Vec<Var<'a>>)> {
-        if open > 0
-            && let TokenKind::Ident = tokens[open - 1].kind
-        {
-            // A control-flow head (`if (c) { ... }`) or a tt `match` is
-            // not a parameter list even though a block follows it.
-            // `function`/`async` do introduce one, and `catch (e)` really
-            // is a binding form, so those three stay in.
-            let word = self.text(&tokens[open - 1]);
-            if word == "match"
-                || (is_reserved(word) && !matches!(word, "function" | "async" | "catch"))
-            {
-                return None;
-            }
-        }
-        let close = find_close_at(tokens, open)?;
-        let body = self.body_after_params(tokens, close + 1)?;
+        arms: &HashSet<usize>,
+    ) -> Option<(usize, usize, Vec<Var<'a>>, bool)> {
+        let (start, end, var_scope) = self.function_body(tokens, open, arms)?;
         let vars = parse_params(self.src, tokens, open)
             .into_iter()
             .zip(list_entries(tokens, open))
@@ -256,7 +451,41 @@ impl<'a> Checker<'a> {
                 })
             })
             .collect();
-        Some((body.0, body.1, vars))
+        Some((start, end, vars, var_scope))
+    }
+
+    /// The body range of the parameter list whose `(` is at `open`, and
+    /// whether that body is a function's own `var` scope (a `catch` block
+    /// is not one).
+    fn function_body(
+        &self,
+        tokens: &[Token],
+        open: usize,
+        arms: &HashSet<usize>,
+    ) -> Option<(usize, usize, bool)> {
+        let mut var_scope = true;
+        if open > 0
+            && let TokenKind::Ident = tokens[open - 1].kind
+        {
+            // A control-flow head (`if (c) { ... }`) or a tt `match` is
+            // not a parameter list even though a block follows it.
+            // `function`/`async` do introduce one, and `catch (e)` really
+            // is a binding form, so those three stay in.
+            let word = self.text(&tokens[open - 1]);
+            if word == "match"
+                || (is_reserved(word) && !matches!(word, "function" | "async" | "catch"))
+            {
+                return None;
+            }
+            var_scope = word != "catch";
+        }
+        let close = find_close_at(tokens, open)?;
+        let body = self.body_after_params(tokens, close + 1)?;
+        let arm = body
+            .0
+            .checked_sub(1)
+            .is_some_and(|arrow| arms.contains(&arrow));
+        Some((body.0, body.1, var_scope && !arm))
     }
 
     /// The `(start, end)` token range of a function body that follows a

@@ -457,6 +457,21 @@ fn a_shadowing_binding_is_a_different_binding() {
 }
 
 #[test]
+fn a_property_that_shares_a_val_binding_name_is_not_that_binding() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/member.tt",
+        "export function go(): void {\n\
+         \x20 val const config = { debug: false };\n\
+         \x20 const state = { config: { debug: false } };\n\
+         \x20 state.config.debug = true;\n\
+         \x20 void config;\n\
+         }\n",
+    )]);
+    assert_eq!(check(&dir), "");
+}
+
+#[test]
 fn a_direct_mutation_through_a_val_binding_is_reported() {
     require_tsgo!();
     let dir = project(&[(
