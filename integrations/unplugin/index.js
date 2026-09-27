@@ -53,6 +53,8 @@ const SPECIAL_QUERY = /[?&](?:worker|sharedworker|raw|url)\b/;
 const MODULE_MARKERS = new Set([`lang${TS_SUFFIX}`, `lang${TSX_SUFFIX}`]);
 const moduleMarker = (file) => (file.endsWith(".ttx") ? `lang${TSX_SUFFIX}` : `lang${TS_SUFFIX}`);
 
+const SCANNED_FILE = /\.ttx?(?:\?[^/]*)?$/;
+
 const queryOf = (id, file) => id.slice(file.length).replace(/#[\s\S]*$/, "");
 
 const moduleId = (file, query) => {
@@ -132,6 +134,42 @@ export const unpluginFactory = (options = {}) => {
   const dependenciesByModule = new Map();
   let devServer;
 
+  const printArgs = (file, withMap) => {
+    const args = ["-p", "--rewrite-imports", "off"];
+    if (!verify) args.push("--no-verify");
+    // ttc prints the map into the output as a data: URL — the one form
+    // that survives a pipe. It is split back out here so the host gets a
+    // real map object and composes it with its own transforms.
+    if (withMap) args.push("--source-map", "inline");
+    args.push(file);
+    return args;
+  };
+
+  const scanSource = async (id) => {
+    const file = cleanUrl(id);
+    const { stdout } = await run(compiler, printArgs(file, false), { maxBuffer: 16 * 1024 * 1024 });
+    return { code: stdout, lang: file.endsWith(".ttx") ? "tsx" : "ts" };
+  };
+
+  const esbuildScanPlugin = {
+    name: "@openload28/unplugin-tt:dep-scan",
+    setup(build) {
+      build.onLoad({ filter: SCANNED_FILE }, async (args) => {
+        const { code, lang } = await scanSource(args.path);
+        return { contents: code, loader: lang, resolveDir: path.dirname(cleanUrl(args.path)) };
+      });
+    },
+  };
+
+  const rolldownScanPlugin = {
+    name: "@openload28/unplugin-tt:dep-scan",
+    async load(id) {
+      if (!SCANNED_FILE.test(id)) return null;
+      const { code, lang } = await scanSource(id);
+      return { code, moduleType: lang };
+    },
+  };
+
   return {
     name: "@openload28/unplugin-tt",
     // Ahead of the host's own resolution: `.tt` is not an extension it
@@ -184,13 +222,7 @@ export const unpluginFactory = (options = {}) => {
       const file = sourceFileOfId(id);
       if (file === null) return null;
 
-      const args = ["-p", "--rewrite-imports", "off"];
-      if (!verify) args.push("--no-verify");
-      // ttc prints the map into the output as a data: URL — the one form
-      // that survives a pipe. It is split back out here so the host gets a
-      // real map object and composes it with its own transforms.
-      if (sourcemap) args.push("--source-map", "inline");
-      args.push(file);
+      const args = printArgs(file, sourcemap);
 
       this.addWatchFile(file);
       // Compiler metadata includes erased type imports and configuration reads.
@@ -223,6 +255,12 @@ export const unpluginFactory = (options = {}) => {
       }
     },
     vite: {
+      config() {
+        const scanner = this?.meta?.rolldownVersion
+          ? { rolldownOptions: { plugins: [rolldownScanPlugin] } }
+          : { esbuildOptions: { plugins: [esbuildScanPlugin] } };
+        return { optimizeDeps: { extensions: [".tt", ".ttx"], ...scanner } };
+      },
       configureServer(server) { devServer = server; },
       handleHotUpdate(context) {
         const modules = new Set(context.modules);

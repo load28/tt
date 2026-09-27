@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, isAbsolute, join } from 'node:path'
 import test from 'node:test'
 
 import {
@@ -170,6 +171,43 @@ test('query-suffixed tt imports keep their query and the real file before it', a
   const served = await plugin.resolveId.call(host, '/src/worker.tt?worker_file&type=module', undefined)
   assert.equal(served.id, `${worker}?worker_file&type=module&lang.ts`)
   assert.deepEqual(requests, [['/src/worker.tt', undefined, { skipSelf: true }]])
+})
+
+test('the Vite dependency scanner reads tt modules from files that exist', async (t) => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-scan-'))
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const source = join(root, 'lib.tt')
+  const view = join(root, 'view.ttx')
+  await writeFile(source, 'import dep from "scan-dep";\nimport { Some } from "@tt/std/option";\nexport const value: number = dep.answer;\nexport const some = Some(value);\n')
+  await writeFile(view, 'export const View = () => <main>tt</main>;\n')
+
+  const plugin = unpluginFactory({ compiler })
+  const id = plugin.resolveId('./lib.tt', join(root, 'main.ts'))
+  assert.ok(existsSync(id.replace(/[?#][\s\S]*$/, '')), 'the scanner reads the id without its query from disk')
+  assert.equal(isAbsolute(plugin.resolveId('@tt/std/option')), false, 'the scanner externalizes non-absolute ids')
+
+  const esbuildConfig = plugin.vite.config.call(undefined)
+  assert.deepEqual(esbuildConfig.optimizeDeps.extensions, ['.tt', '.ttx'])
+  const loads = []
+  esbuildConfig.optimizeDeps.esbuildOptions.plugins[0].setup({ onLoad: (options, callback) => loads.push({ options, callback }) })
+  assert.equal(loads.length, 1)
+  assert.ok(loads[0].options.filter.test(source))
+  assert.ok(loads[0].options.filter.test(id))
+  const scanned = await loads[0].callback({ path: source })
+  assert.equal(scanned.loader, 'ts')
+  assert.equal(scanned.resolveDir, root)
+  assert.match(scanned.contents, /from "scan-dep"/)
+  assert.match(scanned.contents, /from "@tt\/std\/option"/)
+  assert.equal((await loads[0].callback({ path: view })).loader, 'tsx')
+
+  const rolldownConfig = plugin.vite.config.call({ meta: { rolldownVersion: '1.0.0' } })
+  assert.equal(rolldownConfig.optimizeDeps.esbuildOptions, undefined)
+  const [rolldownScan] = rolldownConfig.optimizeDeps.rolldownOptions.plugins
+  const loaded = await rolldownScan.load(id)
+  assert.equal(loaded.moduleType, 'ts')
+  assert.match(loaded.code, /from "scan-dep"/)
+  assert.equal(await rolldownScan.load(join(root, 'main.ts')), null)
 })
 
 test('type-only dependencies invalidate cached modules even with HMR disabled', async t => {

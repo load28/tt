@@ -117,6 +117,13 @@ export default defineConfig({
 });
 ```
 
+Vite's dependency scanner reads the file in front of the query. The Vite adapter
+adds `.tt` and `.ttx` to `optimizeDeps.extensions` and registers a scanner plugin
+that compiles them: `optimizeDeps.esbuildOptions.plugins` before Vite 8, and
+`optimizeDeps.rolldownOptions.plugins` on Rolldown-powered Vite (detected with
+`this.meta.rolldownVersion`). As a result, bare dependencies imported only from
+`.tt` files are pre-bundled when the dev server starts.
+
 Rollup derives default chunk names from the id, so an entry or dynamic import of
 `main.tt` is named `main.tt_lang`. Name entries with an input object
 (`input: { main: "src/main.tt" }`) when the output file name matters.
