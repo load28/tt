@@ -459,6 +459,7 @@
 | TASK-449 | Reject a match the class definition evaluates instead of hoisting it before the class | Complete | 2026-09-27 | 2026-09-27 | [TASK-449](./TASK-449-class-definition-placement.md) |
 | TASK-450 | Project a value region in a generator as a generator so its `yield` parses | Complete | 2026-09-27 | 2026-09-27 | [TASK-450](./TASK-450-generator-value-region-projection.md) |
 | TASK-451 | Start a block at a line-broken brace after a complete expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-451](./TASK-451-brace-after-expression-starts-block.md) |
+| TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
 
 ## Next task number
 

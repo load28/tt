@@ -397,3 +397,63 @@ fn an_if_let_as_an_unbraced_body_is_projected_as_one_statement() {
         ok(source);
     }
 }
+
+#[test]
+fn a_default_exported_variant_is_reported_at_default_with_a_named_export_fix() {
+    for (source, line) in [
+        ("export default variant Dir { Up, Down }\n", 1),
+        (
+            "export variant Shape { Circle(r: number) }\nexport default variant Dir { Up, Down }\n",
+            2,
+        ),
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{source}{diagnostics:#?}");
+        let diagnostic = &diagnostics[0];
+        assert_eq!(diagnostic.code, DiagnosticCode::VariantDefaultExport);
+        assert_eq!(diagnostic.message, "variant `Dir` cannot be a default export");
+        let default = source.find("default").unwrap();
+        assert_eq!(diagnostic.start, Some(default));
+        assert_eq!(diagnostic.end, Some(default + "default".len()));
+        let edit = diagnostic.suggestions[0]
+            .edit
+            .as_ref()
+            .expect("a named-export edit");
+        let mut fixed = source.to_string();
+        fixed.replace_range(edit.start..edit.end, &edit.replacement);
+        assert!(fixed.contains("export variant Dir { Up, Down }"), "{fixed}");
+        assert!(ttc::analyze(&fixed, &Options::default()).is_empty(), "{fixed}");
+        let e = err(source);
+        assert_eq!((e.line, e.col), (line, 8), "{e}");
+    }
+}
+
+#[test]
+fn a_default_exported_variant_that_does_not_parse_reports_the_variant() {
+    let source = "export default variant Dir { Up, Down(x: ) }\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, DiagnosticCode::MalformedVariant);
+}
+
+#[test]
+fn a_generated_parse_failure_is_located_at_the_construct_that_generated_it() {
+    for source in [
+        "export variant Shape { Circle(r: number) }\nconst x = variant Dir { Up, Down };\n",
+        "export variant Shape { Circle(r: number) }\nf(variant Dir { Up, Down });\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        let failure = diagnostics
+            .iter()
+            .find(|d| d.code == DiagnosticCode::LoweringPlanFailed)
+            .unwrap_or_else(|| panic!("{source}{diagnostics:#?}"));
+        let construct = source.find("variant Dir").unwrap();
+        let name = source.find("Dir").unwrap();
+        assert!(
+            failure
+                .start
+                .is_some_and(|start| construct <= start && start <= name),
+            "{source}{failure:#?}"
+        );
+    }
+}

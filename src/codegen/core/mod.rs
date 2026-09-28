@@ -102,10 +102,14 @@ pub(crate) fn lowering_plan_with(
             return Err(LoweringFailure::SourceNotTypeScript { message, source });
         }
         Err(error) => {
-            return Err(LoweringFailure::HostProjection {
-                error,
-                source: primary_source(),
-            });
+            let source = match &error {
+                crate::program_syntax::ProgramSyntaxError::Parse {
+                    source: Some(source),
+                    ..
+                } => *source,
+                _ => primary_source(),
+            };
+            return Err(LoweringFailure::HostProjection { error, source });
         }
     };
     let evaluation =

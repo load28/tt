@@ -65,6 +65,71 @@ pub(super) fn parse_variant<'t>(
     Claim::NotTt
 }
 
+/// `export default variant Name { ... }`, with `cur` just past `variant` and
+/// `export_start` the byte of `export`. A variant declares a type and a
+/// value, and a TypeScript module has one default export that no
+/// declaration form can give both meanings, so the declaration is never
+/// claimed. A complete declaration reports `variant-default-export` at
+/// `default`; an incomplete one reports what `variant` alone would.
+pub(super) fn parse_default_variant(
+    cur: Cursor<'_>,
+    export_start: usize,
+) -> Claim<std::convert::Infallible> {
+    let Some(default) = cur
+        .idx
+        .checked_sub(2)
+        .and_then(|idx| cur.tokens.get(idx))
+        .map(|token| token.span)
+    else {
+        return Claim::NotTt;
+    };
+    let keyword = cur.tokens[cur.idx - 1].span.start;
+    match parse_variant(cur, false, false) {
+        Claim::Parsed((_, end, decl)) => Claim::Malformed {
+            error: crate::error::TtError::span(
+                default.start,
+                default.end,
+                format!("variant `{}` cannot be a default export", decl.name),
+            )
+            .code(crate::DiagnosticCode::VariantDefaultExport)
+            .suggest(
+                format!("export it by name and import it as `{{ {} }}`", decl.name),
+                default.start,
+                keyword,
+                "",
+            ),
+            recovery: RecoveryNode {
+                span: Span {
+                    start: export_start,
+                    end,
+                },
+                kind: RecoveryKind::VariantDecl {
+                    name: decl.name,
+                    exported: true,
+                },
+            },
+        },
+        Claim::Malformed { error, recovery } => Claim::Malformed {
+            error,
+            recovery: RecoveryNode {
+                span: Span {
+                    start: export_start,
+                    end: recovery.span.end,
+                },
+                kind: match recovery.kind {
+                    RecoveryKind::VariantDecl { name, .. } => RecoveryKind::VariantDecl {
+                        name,
+                        exported: true,
+                    },
+                    kind => kind,
+                },
+            },
+        },
+        Claim::Unclaimed(candidate) => Claim::Unclaimed(candidate),
+        Claim::NotTt => Claim::NotTt,
+    }
+}
+
 fn variant_committed(cur: Cursor<'_>) -> bool {
     let Some(name) = cur.tokens.get(cur.idx) else {
         return false;

@@ -598,6 +598,29 @@ impl Parser<'_> {
                     }
                     _ => (None, false, false),
                 };
+                if word == "export"
+                    && word_at(i + 1) == Some("default")
+                    && word_at(i + 2) == Some("variant")
+                {
+                    match variants::parse_default_variant(
+                        Cursor::new(self, tokens, i + 3, end),
+                        tok.span.start,
+                    ) {
+                        Claim::Malformed { error, recovery } => {
+                            malformed.push(error);
+                            recoveries.push(recovery);
+                            i += 3;
+                            continue;
+                        }
+                        Claim::Unclaimed(candidate) => {
+                            unclaimed.push(candidate);
+                            i += 3;
+                            continue;
+                        }
+                        Claim::Parsed(never) => match never {},
+                        Claim::NotTt => {}
+                    }
+                }
                 if let Some(kw_idx) = kw_idx {
                     match variants::parse_variant(
                         Cursor::new(self, tokens, kw_idx + 1, end),

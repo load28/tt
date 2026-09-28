@@ -100,6 +100,8 @@ pub enum DiagnosticCode {
     /// A required variant field after an optional one, which the case's
     /// constructor parameter list cannot express.
     VariantRequiredAfterOptional,
+    /// A `variant` declared as a module's default export.
+    VariantDefaultExport,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
     /// A match mixing tag patterns with literal or `is` patterns.
@@ -176,6 +178,7 @@ impl DiagnosticCode {
             DiagnosticCode::VariantInvalidFieldType => "variant-invalid-field-type",
             DiagnosticCode::VariantFieldShadowsTag => "variant-field-shadows-tag",
             DiagnosticCode::VariantRequiredAfterOptional => "variant-required-after-optional",
+            DiagnosticCode::VariantDefaultExport => "variant-default-export",
             DiagnosticCode::PatternDuplicateBinding => "pattern-duplicate-binding",
             DiagnosticCode::MatchMixedPatterns => "match-mixed-patterns",
             DiagnosticCode::MatchWildcardNotLast => "match-wildcard-not-last",
@@ -231,6 +234,7 @@ impl DiagnosticCode {
         DiagnosticCode::VariantInvalidFieldType,
         DiagnosticCode::VariantFieldShadowsTag,
         DiagnosticCode::VariantRequiredAfterOptional,
+        DiagnosticCode::VariantDefaultExport,
         DiagnosticCode::PatternDuplicateBinding,
         DiagnosticCode::MatchMixedPatterns,
         DiagnosticCode::MatchWildcardNotLast,
@@ -525,6 +529,26 @@ Put the required fields first, or make the later field optional too:
     variant Request { Get(url: string, timeout?: number) }"
             }
 
+            DiagnosticCode::VariantDefaultExport => {
+                "\
+A `variant` is declared as the module's default export.
+
+A variant declares two things under one name: a type (the union of its
+cases) and a value (the constructor object). TypeScript has no declaration
+form that makes both the default export: `export default type` is not
+syntax, and neither is `export default const`. Exhaustiveness across
+modules also follows named imports only, so a default-exported variant
+would compile unchecked in every importer.
+
+Export the variant by name and import it by name:
+
+    // shape.tt
+    export variant Dir { Up, Down }
+
+    // use.tt
+    import { Dir } from \"./shape.tt\";"
+            }
+
             DiagnosticCode::PatternDuplicateBinding => {
                 "\
 A pattern binds the same name twice.
@@ -781,6 +805,7 @@ look up."
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::StrayResult
                 | DiagnosticCode::MalformedVariant
+                | DiagnosticCode::VariantDefaultExport
                 | DiagnosticCode::MalformedMatch
                 | DiagnosticCode::MatchControlCrossing
                 | DiagnosticCode::VariantInvalidFieldType

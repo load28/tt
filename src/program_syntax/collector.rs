@@ -72,6 +72,15 @@ fn parse_failure_at(
         None => ProgramSyntaxError::Parse {
             message,
             projection: code.to_owned(),
+            source: segments
+                .iter()
+                .filter(|segment| {
+                    segment.kind == ProjectionSegmentKind::Placeholder
+                        && segment.projected.start <= at
+                        && at < segment.projected.end
+                })
+                .min_by_key(|segment| segment.projected.end.0 - segment.projected.start.0)
+                .map(|segment| segment.source),
         },
     }
 }

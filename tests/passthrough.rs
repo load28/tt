@@ -284,6 +284,12 @@ fn variant_followed_by_a_line_break_is_an_expression_statement() {
 }
 
 #[test]
+fn a_default_export_of_a_value_named_variant_passes_through() {
+    assert_passthrough("declare let variant: number, Foo: number;\nexport default variant\nFoo\n");
+    assert_passthrough("declare let variant: number;\nexport default variant;\n");
+}
+
+#[test]
 fn declare_followed_by_a_line_break_does_not_declare_the_variant() {
     let out = compile(
         "declare let declare: number;\ndeclare\nvariant Foo { A }\n",

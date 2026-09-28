@@ -46,9 +46,13 @@ pub(crate) enum ProgramSyntaxError {
         source: usize,
     },
     /// The projection stopped parsing at a byte this compiler generated.
+    /// `source` is the construct whose placeholder holds that byte: the
+    /// innermost one, since a construct's placeholder can enclose those of
+    /// the constructs nested in it.
     Parse {
         message: String,
         projection: String,
+        source: Option<SourceSpan>,
     },
     MissingOverlay {
         id: TtNodeId,
