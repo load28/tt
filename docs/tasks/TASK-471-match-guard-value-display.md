@@ -51,6 +51,7 @@ A `_`-less match compiles to a runtime guard, `throw new Error("tt match: unexpe
 - 2026-09-28: Type-checked the helper alone with `tsc --strict --noUnusedLocals --noImplicitReturns --noFallthroughCasesInSwitch --exactOptionalPropertyTypes` for es2015, es2022, and esnext targets.
 - 2026-09-28: Added `an_unexpected_value_guard_reports_every_scrutinee_type` and `an_unexpected_value_guard_survives_shadowed_globals` to `tests/integration/cases_05.rs`. They cover switch, if-chain, and inline guards and variant and tuple guards, run by node over bigints, a Symbol, a string, numbers including `NaN`, `undefined`, `null`, a boolean, a throwing `toJSON`, a cyclic object, a function, a plain object, and a module that shadows `String` and `JSON`.
 - 2026-09-28: Updated the guard line in `docs/design/match-literal-patterns.md` and `docs/design/variant-and-error-layers.md`, and the guard description in `docs/ai/tt.md`.
+- 2026-09-28: After merging onto TASK-468, the new `variant-comments` emit fixture predated this guard change. Regenerated it with `UPDATE_EXPECT=1 cargo test --test snapshot`; the reviewed diff only swaps `JSON.stringify($tt_m)` for `$tt_show($tt_m)` and appends the helper.
 
 ## Issues and resolutions
 
