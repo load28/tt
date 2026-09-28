@@ -757,3 +757,43 @@ fn try_takes_a_non_ascii_identifier_operand_and_never_splits_one() {
     assert!(output.contains("const $tt_t0 = étry();"), "{output}");
     assert!(output.contains("const n = $tt_t0.value;"), "{output}");
 }
+
+#[test]
+fn a_comment_after_the_last_field_or_case_stays_a_comment() {
+    let output = ok("export variant Shape {\n  Rect(\n    w: number,\n    h: number // height\n  ),\n  Point // last\n}\n");
+    assert_eq!(
+        output.trim_end(),
+        "export type Shape =\n  | {\n      kind: \"Rect\";\n      w: number;\n      h: number; // height\n    }\n  | { kind: \"Point\" }; // last\nexport const Shape = {\n  Rect: (w: number, h: number): Shape => ({ kind: \"Rect\", w, h }),\n  Point: { kind: \"Point\" } as const,\n};"
+    );
+}
+
+#[test]
+fn comments_inside_a_field_type_stay_in_the_type() {
+    let output = ok("variant Size { Px(value: /* css */ number | /* auto */ \"auto\") }\n");
+    assert!(
+        output.contains("| { kind: \"Px\"; value: /* css */ number | /* auto */ \"auto\" };"),
+        "{output}"
+    );
+    assert!(
+        output.contains("Px: (value: /* css */ number | /* auto */ \"auto\"): Size =>"),
+        "{output}"
+    );
+}
+
+#[test]
+fn only_doc_comments_are_repeated_on_constructors() {
+    let output = ok("variant Mode {\n  // internal note\n  /** Read only. */\n  Read, /* block */\n  Write(/** Target path. */ path: string),\n}\n");
+    let constructors = &output[output.find("const Mode").unwrap()..];
+    assert!(constructors.contains("/** Read only. */\n  Read:"), "{output}");
+    assert!(constructors.contains("(\n    /** Target path. */\n    path: string,\n  ): Mode"), "{output}");
+    assert!(!constructors.contains("internal note"), "{output}");
+    assert!(!constructors.contains("/* block */"), "{output}");
+    let union = &output[..output.find("const Mode").unwrap()];
+    assert!(union.contains("  // internal note\n  /** Read only. */\n  | { kind: \"Read\" } /* block */"), "{output}");
+}
+
+#[test]
+fn variant_comments_keep_crlf_line_endings_valid() {
+    let output = ok("variant Flag {\r\n  /** On. */\r\n  On, // yes\r\n  Off,\r\n}\r\n");
+    assert!(output.contains("/** On. */\r\n  | { kind: \"On\" } // yes\r\n"), "{output:?}");
+}

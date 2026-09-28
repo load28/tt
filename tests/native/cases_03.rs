@@ -727,3 +727,50 @@ fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project
     );
     assert!(typed.iter().any(|d| d["code"] == "val-mutation"), "{answers:?}");
 }
+
+#[test]
+fn variant_case_and_field_docs_reach_hover_and_signature_help() {
+    require_tsgo!();
+    let source = "export variant Shape {\n\
+                  \x20 /** A circle around the origin. */\n\
+                  \x20 Circle(radius: number), // the common case\n\
+                  \x20 Rect(\n\
+                  \x20   /** Width in pixels. */\n\
+                  \x20   width: number,\n\
+                  \x20   height: number,\n\
+                  \x20 ),\n\
+                  }\n\
+                  export const c = Shape.Circle(1);\n\
+                  declare const s: Shape;\n\
+                  export const w = s.kind === \"Rect\" ? s.width : 0;\n\
+                  export const r = Shape.Rect(1, 2);\n";
+    let dir = project(&[("src/docs.tt", source)]);
+    let file = dir.join("src/docs.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let on_constructor = project
+        .hover(&file, ttc::engine::Position { line: 9, character: 24 })
+        .unwrap()
+        .expect("the constructor hovers");
+    assert!(
+        format!("{on_constructor:?}").contains("A circle around the origin."),
+        "{on_constructor:?}"
+    );
+    let on_field = project
+        .hover(&file, ttc::engine::Position { line: 11, character: 42 })
+        .unwrap()
+        .expect("the narrowed field hovers");
+    assert!(
+        format!("{on_field:?}").contains("Width in pixels."),
+        "{on_field:?}"
+    );
+    let help = project
+        .signature_help(&file, ttc::engine::Position { line: 12, character: 28 })
+        .unwrap();
+    assert!(format!("{help:?}").contains("Width in pixels."), "{help:?}");
+}

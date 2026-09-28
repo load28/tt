@@ -442,6 +442,26 @@ pub(crate) struct VariantCase {
     pub tag_off: usize,
     /// `None` = unit case (no parens); `Some(vec)` = case with a field list.
     pub fields: Option<Vec<Field>>,
+    pub comments: Comments,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Comments {
+    pub leading: Vec<Comment>,
+    pub trailing: Vec<Comment>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Comment {
+    pub text: String,
+    pub column: usize,
+    pub own_line: bool,
+}
+
+impl Comment {
+    pub(crate) fn is_doc(&self) -> bool {
+        self.text.starts_with("/**") && self.text != "/**/"
+    }
 }
 
 /// One field of a payload-carrying variant case.
@@ -456,6 +476,7 @@ pub(crate) struct Field {
     pub ty: String,
     /// Byte offset of the type annotation, for error reporting.
     pub ty_off: usize,
+    pub comments: Comments,
 }
 
 /// A structurally parsed tt `match` expression.

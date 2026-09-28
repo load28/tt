@@ -245,6 +245,7 @@ pub struct VariantData {
     /// `None` = unit case without parens; `Some` = a (possibly empty)
     /// payload field list.
     pub fields: Option<Vec<FieldId>>,
+    pub(crate) comments: crate::ast::Comments,
 }
 
 /// One payload field of a variant, owned by it.
@@ -261,6 +262,7 @@ pub struct FieldData {
     /// The verbatim type annotation text — a *text*, not a type; the typed
     /// pass asks the checker (Phase 4).
     pub ty_text: String,
+    pub(crate) comments: crate::ast::Comments,
 }
 
 /// A lifted import: a relative `.tt` specifier or an `@tt/std` entry.

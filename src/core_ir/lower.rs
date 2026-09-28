@@ -188,11 +188,13 @@ impl Lowering<'_> {
                                                     name: field.name.clone(),
                                                     optional: field.optional,
                                                     ty_text: field.ty_text.clone(),
+                                                    comments: field.comments.clone(),
                                                 }
                                             })
                                             .collect()
                                     }),
                                     emit_constructor: emitted.insert(variant.name.clone()),
+                                    comments: variant.comments.clone(),
                                 }
                             })
                             .collect(),

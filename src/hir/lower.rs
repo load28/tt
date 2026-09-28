@@ -163,6 +163,7 @@ impl Lower<'_> {
                 owner,
                 name: case.tag.clone(),
                 fields: None,
+                comments: case.comments.clone(),
             });
             let fields = case.fields.as_ref().map(|fields| {
                 fields
@@ -178,6 +179,7 @@ impl Lower<'_> {
                             name: field.name.clone(),
                             optional: field.optional,
                             ty_text: field.ty.clone(),
+                            comments: field.comments.clone(),
                         })
                     })
                     .collect()

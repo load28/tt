@@ -1,6 +1,7 @@
 //! Formatting, naming, pattern, and variant-emission helpers.
 
 use super::*;
+use crate::ast::Comment;
 
 /// Appends `value` to `out` in a position that can only regroup it across
 /// a comma — an initializer, an assignment right-hand side, a `return`
@@ -302,23 +303,83 @@ pub(super) fn emit_adt<'a>(
     } else {
         adt.generics.clone()
     };
+    let parameters = |fields: &[AdtField], out: &mut Rope<'a>| {
+        let documented = fields
+            .iter()
+            .any(|field| field.comments.leading.iter().any(Comment::is_doc));
+        if !documented {
+            out.push_lit(parameter_list(fields));
+            return;
+        }
+        for field in fields {
+            for comment in field
+                .comments
+                .leading
+                .iter()
+                .filter(|comment| comment.is_doc())
+            {
+                out.push_break(2);
+                push_comment(out, comment, 2);
+            }
+            out.push_break(2);
+            out.push_lit(format!(
+                "{}{}: {},",
+                field.name,
+                if field.optional { "?" } else { "" },
+                field.ty_text
+            ));
+        }
+        out.push_break(1);
+    };
     let mut out = Rope::new();
     out.push_lit(format!("{export}type "));
     declared(&mut out, &adt.name, adt.node);
     out.push_lit(format!("{} =", adt.generics));
-    for variant in &adt.variants {
+    let last = adt.variants.len().saturating_sub(1);
+    for (index, variant) in adt.variants.iter().enumerate() {
+        for comment in &variant.comments.leading {
+            out.push_break(1);
+            push_comment(&mut out, comment, 1);
+        }
         out.push_break(1);
-        out.push_lit(format!("| {{ kind: \"{}\"", variant.name));
         match &variant.fields {
+            Some(fields)
+                if fields.iter().any(|field| {
+                    !field.comments.leading.is_empty() || !field.comments.trailing.is_empty()
+                }) =>
+            {
+                out.push_lit("| {");
+                out.push_break(3);
+                out.push_lit(format!("kind: \"{}\";", variant.name));
+                for field in fields {
+                    for comment in &field.comments.leading {
+                        out.push_break(3);
+                        push_comment(&mut out, comment, 3);
+                    }
+                    out.push_break(3);
+                    declared(&mut out, &field.name, field.node);
+                    out.push_lit(format!(
+                        "{}: {};",
+                        if field.optional { "?" } else { "" },
+                        field.ty_text
+                    ));
+                    push_trailing_comments(&mut out, &field.comments.trailing, 3);
+                }
+                out.push_break(2);
+                out.push_lit("}");
+            }
             Some(fields) if !fields.is_empty() => {
-                out.push_lit("; ");
+                out.push_lit(format!("| {{ kind: \"{}\"; ", variant.name));
                 field_list(fields, "; ", &mut out);
                 out.push_lit(" }");
             }
-            _ => out.push_lit(" }"),
+            _ => out.push_lit(format!("| {{ kind: \"{}\" }}", variant.name)),
         }
+        if index == last {
+            out.push_lit(";");
+        }
+        push_trailing_comments(&mut out, &variant.comments.trailing, 1);
     }
-    out.push_lit(";");
     out.push_break(0);
     out.push_lit(format!("{export}const "));
     declared(&mut out, &adt.name, adt.node);
@@ -328,24 +389,32 @@ pub(super) fn emit_adt<'a>(
         .iter()
         .filter(|variant| variant.emit_constructor)
     {
+        for comment in variant
+            .comments
+            .leading
+            .iter()
+            .filter(|comment| comment.is_doc())
+        {
+            out.push_break(1);
+            push_comment(&mut out, comment, 1);
+        }
         out.push_break(1);
         if ambient {
             out.push_lit("readonly ");
             declared(&mut out, &variant.name, variant.node);
-            out.push_lit(match &variant.fields {
-                None => format!(": {{ readonly kind: \"{}\" }};", variant.name),
-                Some(fields) => format!(
-                    ": {}({}) => {}{type_args};",
-                    adt.generics,
-                    parameter_list(fields),
-                    adt.name
-                ),
-            });
+            match &variant.fields {
+                None => out.push_lit(format!(": {{ readonly kind: \"{}\" }};", variant.name)),
+                Some(fields) => {
+                    out.push_lit(format!(": {}(", adt.generics));
+                    parameters(fields, &mut out);
+                    out.push_lit(format!(") => {}{type_args};", adt.name));
+                }
+            }
             continue;
         }
         declared(&mut out, &variant.name, variant.node);
-        out.push_lit(match &variant.fields {
-            None => format!(": {{ kind: \"{}\" }} as const,", variant.name),
+        match &variant.fields {
+            None => out.push_lit(format!(": {{ kind: \"{}\" }} as const,", variant.name)),
             Some(fields) => {
                 let object = std::iter::once(format!("kind: \"{}\"", variant.name))
                     .chain(fields.iter().map(|field| {
@@ -360,18 +429,42 @@ pub(super) fn emit_adt<'a>(
                     }))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!(
-                    ": {}({}): {}{type_args} => ({{ {object} }}),",
-                    arrow_generics,
-                    parameter_list(fields),
-                    adt.name
-                )
+                out.push_lit(format!(": {arrow_generics}("));
+                parameters(fields, &mut out);
+                out.push_lit(format!("): {}{type_args} => ({{ {object} }}),", adt.name));
             }
-        });
+        }
     }
     out.push_break(0);
     out.push_lit("};");
     Rope::scoped(out)
+}
+
+fn push_comment<'a>(out: &mut Rope<'a>, comment: &Comment, depth: u16) {
+    let mut lines = comment.text.lines();
+    if let Some(first) = lines.next() {
+        out.push_lit(first.to_owned());
+    }
+    for line in lines {
+        out.push_break(depth);
+        let indent = line
+            .bytes()
+            .take(comment.column)
+            .take_while(|byte| matches!(byte, b' ' | b'\t'))
+            .count();
+        out.push_lit(line[indent..].to_owned());
+    }
+}
+
+fn push_trailing_comments<'a>(out: &mut Rope<'a>, comments: &[Comment], depth: u16) {
+    for comment in comments {
+        if comment.own_line {
+            out.push_break(depth);
+        } else {
+            out.push_lit(" ");
+        }
+        push_comment(out, comment, depth);
+    }
 }
 
 pub(super) fn generic_param_names(generics: &str) -> Vec<String> {

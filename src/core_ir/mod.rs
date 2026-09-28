@@ -262,6 +262,7 @@ pub(crate) struct AdtVariant {
     pub name: String,
     pub fields: Option<Vec<AdtField>>,
     pub emit_constructor: bool,
+    pub comments: crate::ast::Comments,
 }
 
 #[derive(Debug)]
@@ -270,6 +271,7 @@ pub(crate) struct AdtField {
     pub name: String,
     pub optional: bool,
     pub ty_text: String,
+    pub comments: crate::ast::Comments,
 }
 
 #[derive(Debug, Clone)]
