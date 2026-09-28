@@ -690,9 +690,19 @@ impl<'a> Emitter<'a> {
         let mut produced = self.span(apply.node);
         for step in &apply.steps {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
-            let operand = matches!(step.mode, ApplyMode::Call)
-                .then(|| self.emit_nested_operand(step.value))
-                .flatten();
+            let operand = match (step.mode, self.emit_nested_operand(step.value)) {
+                (ApplyMode::Postfix { .. }, Some((prelude, value))) => {
+                    inner.push_break(1);
+                    inner.append(Rope::indented(1, prelude.trim_end()));
+                    inner.push_break(1);
+                    inner.push_lit(format!("{accumulator} = "));
+                    inner.append(guard_line_comment(value.trim(), 1, self.source_kind));
+                    inner.push_lit(";");
+                    produced = self.span(step.node);
+                    continue;
+                }
+                (_, operand) => operand,
+            };
             let step_value = if let Some((prelude, value)) = operand {
                 inner.push_break(1);
                 inner.append(Rope::indented(1, prelude.trim_end()));

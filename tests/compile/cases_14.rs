@@ -241,3 +241,63 @@ fn an_unstructurable_conditional_in_a_pipeline_operand_is_a_placement_diagnostic
     );
     assert!(compile(&source, &Options::default()).is_err());
 }
+
+const TASK_504_PRELUDE: &str = "declare const x: any;\n\
+declare function g(): any;\n\
+declare const n: number;\n\
+type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+declare function r(): R;\n";
+
+const TASK_504_STEPS: &[&str] = &[
+    "x |> .m(@)",
+    "x |> ?.m(@)",
+    "g() |> .m(@)",
+    "x |> .a(1).m(@)",
+    "x |> .a(@).m(@)",
+    "x |> .list[@]",
+    "x |> .m(@) |> .k(@)",
+    "x |> String |> .m(1, @) |> String",
+    "x |> .m(`${@}`)",
+    "x |> x.m(@)",
+];
+
+#[test]
+fn a_hoisted_value_in_a_member_step_is_emitted_once_after_its_method() {
+    let values = [
+        ("match (n) { 0 => 1, _ => 2 }", "switch ("),
+        ("(try r())", "\"value\" in"),
+    ];
+    for (value, region) in values {
+        for step in TASK_504_STEPS {
+            let expression = step.replace('@', value);
+            let source = if value.contains("try") {
+                format!(
+                    "{TASK_504_PRELUDE}export function h(): R {{\n  const v = {expression};\n  return {{ kind: \"Ok\", value: v }};\n}}\n"
+                )
+            } else {
+                format!("{TASK_504_PRELUDE}export const v = {expression};\n")
+            };
+            let diagnostics = ttc::analyze(&source, &Options::default());
+            assert!(diagnostics.is_empty(), "{source}\n{diagnostics:?}");
+            let out = ok(&source);
+            assert_eq!(
+                out.matches(region).count(),
+                expression.matches(value).count(),
+                "{source}\n{out}"
+            );
+            assert!(!out.contains("|>"), "{source}\n{out}");
+        }
+    }
+}
+
+#[test]
+fn a_member_step_captures_its_method_from_the_piped_value_before_the_argument() {
+    let out = ok(&format!(
+        "{TASK_504_PRELUDE}export const v = g() |> .m(match (n) {{ 0 => 1, _ => 2 }});\n"
+    ));
+    let head = out.find("= g();").expect("the head is evaluated first");
+    let method = out.find(".m).bind(").expect("the method is captured");
+    let region = out.find("switch (").expect("the match follows");
+    assert!(head < method && method < region, "{out}");
+    assert_eq!(out.matches("= g()").count(), 1, "{out}");
+}

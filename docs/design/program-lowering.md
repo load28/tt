@@ -342,6 +342,19 @@ TypeScript owner, bounded by the enclosing value instead of the owner:
   operand with several values, or a value under a call, a template, or a
   logical operator, has exactly one emitter for every source byte.
 
+A postfix step (`x |> .m(match ...)`, `x |> ?.m(...)`) applies its tail to
+the piped value, which the pipeline has already evaluated into its
+accumulator. The projection writes that value as a placeholder in front of
+the step's tail and maps it to the empty source span where the tail begins
+(TASK-504), so the step's evaluation structure is TypeScript's own:
+`P.m(match ...)` captures the method reference `P.m` with its receiver `P`
+before the argument, and `P?.m(...)` is an optional call the pipeline owns as
+a conditional operation. Every input that contains the piped value starts at
+the step, inside the pipeline's extent, and the target prints the piped value
+as the pipeline's accumulator wherever such an input or the step's operand is
+delivered. A step never re-projects the head or an earlier step, so each tt
+value in a pipeline has one host.
+
 ## 8. 전체 tt 표면의 공통 배치
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |

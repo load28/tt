@@ -972,10 +972,9 @@ impl<'a> ProjectionBuilder<'a> {
         let shadow_steps: Vec<_> = apply
             .steps
             .iter()
-            .enumerate()
             .filter(|step| {
-                self.expr_contains_propagation(step.1.value)
-                    || self.expr_contains_value_region(step.1.value)
+                self.expr_contains_propagation(step.value)
+                    || self.expr_contains_value_region(step.value)
             })
             .collect();
         let shadow_head = apply.head.filter(|head| {
@@ -992,20 +991,14 @@ impl<'a> ProjectionBuilder<'a> {
             self.emit_shadow_expr(head)?;
             self.code.push(')');
         }
-        for (index, step) in shadow_steps {
+        for step in shadow_steps {
             self.code.push_str(", (");
-            if let Some(head) = apply.head
-                && apply.steps[..=index]
-                    .iter()
-                    .all(|step| matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. }))
+            if apply.head.is_some()
+                && matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. })
             {
-                self.emit_shadow_expr(head)?;
-                for prefix_step in &apply.steps[..=index] {
-                    self.emit_shadow_expr(prefix_step.value)?;
-                }
-            } else {
-                self.emit_shadow_expr(step.value)?;
+                self.push_piped_value(self.source_span(step.node)?.start);
             }
+            self.emit_shadow_expr(step.value)?;
             self.code.push(')');
         }
         self.code.push(')');
@@ -1030,6 +1023,22 @@ impl<'a> ProjectionBuilder<'a> {
             kind: ProjectionSegmentKind::Placeholder,
         });
         Ok(())
+    }
+
+    fn push_piped_value(&mut self, step_start: usize) {
+        let start = ProjectedByte(self.code.len());
+        self.code.push_str("$tt_syntax_piped");
+        self.source_segments.push(ProjectionSourceSegment {
+            projected: ProjectedSpan {
+                start,
+                end: ProjectedByte(self.code.len()),
+            },
+            source: SourceSpan {
+                start: step_start,
+                end: step_start,
+            },
+            kind: ProjectionSegmentKind::Placeholder,
+        });
     }
 
     fn expr_contains_propagation(&self, expr: ExprId) -> bool {

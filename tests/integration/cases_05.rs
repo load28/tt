@@ -904,3 +904,56 @@ report(second.kind === "Ok" ? second.value : second.error);
         ]
     );
 }
+
+#[test]
+fn a_hoisted_value_in_a_member_step_runs_after_the_piped_value_and_its_method() {
+    require_toolchain!();
+    let out = run(r#"
+variant E { A(value: number), B }
+type N = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+type R = { kind: "Ok"; value: Box } | { kind: "Err"; error: string };
+const order: string[] = [];
+const mark = <T,>(name: string, value: T): T => { order.push(name); return value; };
+const subject = (name: string): E => { order.push(name); return E.A(1); };
+class Box {
+  constructor(readonly n: number) {}
+  get add() { order.push("get"); return Box.prototype.addTo; }
+  addTo(amount: number): Box { order.push("call"); return new Box(this.n + amount); }
+}
+const factory = {
+  get make() { order.push("get"); return (amount: number) => { order.push("make"); return (value: number) => { order.push("apply"); return value + amount; }; }; },
+};
+const okay = (name: string, value: number): N => { order.push(name); return { kind: "Ok", value }; };
+const fail = (name: string): N => { order.push(name); return { kind: "Err", error: name }; };
+const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
+report(mark("head", new Box(1)) |> .add(match (subject("arg")) { A(value) => value, B => 0 }) |> .n);
+report(mark("head", new Box(1)) |> .add(match (subject("one")) { A(value) => value, B => 0 }) |> .add(match (subject("two")) { A(value) => value, B => 0 }) |> .n);
+report(mark("head", new Box(1)) |> .add(1).add(match (subject("arg")) { A(value) => value, B => 0 }).n);
+report(mark("head", { list: [10, 20] }) |> .list[match (subject("index")) { A(value) => value, B => 0 }]);
+report(mark("head", new Box(1) as Box | undefined) |> ?.add(match (subject("arg")) { A(value) => value, B => 0 }) |> String);
+report(mark("head", undefined as Box | undefined) |> ?.add(match (subject("skipped")) { A(value) => value, B => 0 }) |> String);
+report(mark("head", 2) |> factory.make(match (subject("arg")) { A(value) => value, B => 0 }));
+function lifted(ok: boolean): R {
+  const value = mark("head", new Box(1)) |> .add(try (ok ? okay("try", 4) : fail("err")));
+  return { kind: "Ok", value };
+}
+const first = lifted(true);
+report(first.kind === "Ok" ? first.value.n : first.error);
+const second = lifted(false);
+report(second.kind === "Ok" ? second.value.n : second.error);
+"#);
+    assert_eq!(
+        out,
+        [
+            "head,get,arg,call 2",
+            "head,get,one,call,get,two,call 3",
+            "head,get,call,get,arg,call 3",
+            "head,index 20",
+            "head,get,arg,call [object Object]",
+            "head undefined",
+            "head,get,arg,make,apply 3",
+            "head,get,try,call 5",
+            "head,get,err err",
+        ]
+    );
+}

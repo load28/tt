@@ -511,6 +511,7 @@
 | TASK-501 | Compose hoisted values inside pipeline operands like any other expression owner | Complete | 2026-09-28 | 2026-09-28 | [TASK-501](./TASK-501-hoisted-values-in-pipeline-operands.md) |
 | TASK-502 | End an import type at a line break before a `<` | Complete | 2026-09-28 | 2026-09-28 | [TASK-502](./TASK-502-import-type-arguments-line-break.md) |
 | TASK-503 | Read contextual type and declaration words under TypeScript's lookahead rules | Complete | 2026-09-28 | 2026-09-28 | [TASK-503](./TASK-503-contextual-word-lookahead.md) |
+| TASK-504 | Evaluate a hoisted value in a member step after the piped value and its method | Complete | 2026-09-28 | 2026-09-28 | [TASK-504](./TASK-504-hoisted-values-in-member-steps.md) |
 
 ## Next task number
 
