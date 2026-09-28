@@ -636,3 +636,51 @@ console.log(l(O.Some(1)), l(O.None));
 "#);
     assert_eq!(out, ["5 0 undefined", "2 -1", "-3 4 0", "2 -2"]);
 }
+
+#[test]
+fn runtime_sibling_conditional_trys_each_evaluate_their_operand_in_order() {
+    require_toolchain!();
+    let out = run_with_std(
+        r#"
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+const seen: string[] = [];
+function p(s: string): TResult<number, string> {
+  seen.push(s);
+  return s === "e" ? Result.Err("bad " + s) : Result.Ok(Number(s));
+}
+function pair(a: number, b: number): number { return a * 10 + b; }
+function k1(c: boolean, a: string, b: string): TResult<number, string> {
+  const x = [c ? try p(a) : 0, c ? try p(b) : 1];
+  return Result.Ok(x[0] * 10 + x[1]);
+}
+function k2(n: number, a: string, b: string): TResult<number, string> {
+  return Result.Ok((n && try p(a)) + (n && try p(b)));
+}
+function k3(n: number, a: string, b: string): TResult<number, string> {
+  return Result.Ok(pair(n && try p(a), n && try p(b)));
+}
+function k4(c: boolean, a: string, b: string): TResult<string, string> {
+  return Result.Ok(`${c ? try p(a) : 0}-${c ? try p(b) : 1}`);
+}
+function show(r: TResult<unknown, string>): string {
+  const line = ("value" in r ? "ok " + r.value : "err " + r.error) + " [" + seen.join(",") + "]";
+  seen.length = 0;
+  return line;
+}
+console.log(show(k1(true, "1", "2")), show(k1(true, "e", "2")), show(k1(false, "1", "2")));
+console.log(show(k2(1, "3", "4")), show(k2(1, "3", "e")), show(k2(0, "3", "4")));
+console.log(show(k3(1, "5", "6")), show(k3(1, "e", "6")));
+console.log(show(k4(true, "7", "8")), show(k4(false, "7", "8")));
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "ok 12 [1,2] err bad e [e] ok 1 []",
+            "ok 7 [3,4] err bad e [3,e] ok 0 []",
+            "ok 56 [5,6] err bad e [e]",
+            "ok 7-8 [7,8] ok 0-1 []",
+        ]
+    );
+}

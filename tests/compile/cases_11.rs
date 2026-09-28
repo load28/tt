@@ -581,3 +581,23 @@ fn a_lexical_binding_statement_as_an_unbraced_body_is_a_placement_error() {
         ok(source);
     }
 }
+
+#[test]
+fn a_conditional_try_keeps_its_operand_when_a_later_sibling_captures_it() {
+    for body in [
+        "const x = [c ? try p(s) : 0, c ? try p(s) : 1]; return R.Ok(x[0]);",
+        "const x = [c ? try p(s) : 0, c ? 5 : 1, c ? try p(s) : 1]; return R.Ok(x[0]);",
+        "return R.Ok((n && try p(s)) + (n && try p(s)));",
+        "return R.Ok(pair(n && try p(s), n && try p(s)));",
+        "return R.Ok(`${c ? try p(s) : 0}-${c ? try p(s) : 1}`.length);",
+    ] {
+        let source = format!(
+            "variant R {{ Ok(value: number), Err(error: string) }}\ndeclare const p: (s: string) => R;\ndeclare const pair: (a: number, b: number) => number;\nfunction f(c: boolean, n: number, s: string): R {{\n  {body}\n}}\n"
+        );
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        assert!(diagnostics.is_empty(), "{source}{diagnostics:#?}");
+        let out = ok(&source);
+        assert_eq!(out.matches("= p(s);").count(), body.matches("try p(s)").count(), "{out}");
+        assert!(!out.contains("= ;"), "{out}");
+    }
+}

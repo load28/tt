@@ -592,6 +592,7 @@ impl<'a> Emitter<'a> {
         result: &str,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
+        let _active = self.active_structured_exprs.enter(value);
         let Some(active) = operation.active.iter().find(|active| active.value == value) else {
             return self
                 .emit_continued_expr(value, &ValueContinuation::assign(result))

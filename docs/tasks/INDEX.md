@@ -464,6 +464,7 @@
 | TASK-454 | Apply a type assertion after a pipeline step to the whole pipeline | Complete | 2026-09-28 | 2026-09-28 | [TASK-454](./TASK-454-pipeline-step-type-assertion.md) |
 | TASK-455 | Lower a wrapped concise-arrow value to a block body | Complete | 2026-09-28 | 2026-09-28 | [TASK-455](./TASK-455-wrapped-arrow-value-block-body.md) |
 | TASK-456 | Lower a let-else in an unbraced body inside its own block | Complete | 2026-09-28 | 2026-09-28 | [TASK-456](./TASK-456-let-else-unbraced-body.md) |
+| TASK-457 | Keep a conditional value's operand when a later sibling captures it | Complete | 2026-09-28 | 2026-09-28 | [TASK-457](./TASK-457-conditional-value-sibling-capture.md) |
 | TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
 | TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
 
