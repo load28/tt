@@ -7,6 +7,23 @@ pub(super) fn projection_accepts_diagnostics(code: &str, source_kind: crate::Sou
 }
 
 pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
+    if crate::engine::project::is_host_source(path) {
+        return ServiceDoc {
+            mappings: vec![EmitMapping {
+                src: 0,
+                out: 0,
+                len: text.len(),
+            }],
+            code: text.clone(),
+            source: text,
+            anchors: Vec::new(),
+            declared_names: Vec::new(),
+            shared_bindings: Vec::new(),
+            recovered: Vec::new(),
+            tt_diagnostics: Vec::new(),
+            generated_names: HashSet::new(),
+        };
+    }
     let options = crate::Options {
         filename: Some(path.to_str().unwrap_or("<input>")),
         source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
@@ -57,16 +74,22 @@ pub(super) fn serve_one(
             doc
         }
     };
-    if session.served.get(path) != Some(&doc.code) {
+    if !crate::engine::project::is_host_source(path) && session.served.get(path) != Some(&doc.code)
+    {
         session.client.open(&served_uri(path), &doc.code);
         session.served.insert(path.to_path_buf(), doc.code.clone());
     }
     Some(doc)
 }
 
-/// The URI an `.tt` file is served under: the lowered module's name, which
-/// is what an `import "./x.tt"` resolves to.
+/// The URI a file is served under. An `.tt` file is served as the lowered
+/// module's name, which is what an `import "./x.tt"` resolves to; a
+/// hand-written TypeScript file is its own module, served as the buffer the
+/// session opened (or read from disk) under its own name.
 pub(super) fn served_uri(path: &Path) -> String {
+    if crate::engine::project::is_host_source(path) {
+        return file_uri(path);
+    }
     file_uri(&module_path_of(path))
 }
 

@@ -435,6 +435,70 @@ fn or_pattern_bindings_navigate_and_rename_as_one_binding() {
     }
 }
 
+#[test]
+fn a_host_source_is_addressed_as_itself() {
+    require_tsgo!();
+    let helper = "export function helper(n: number): number { return n; }\n";
+    let host = "import { helper } from \"./m.tt\";\n\
+                export type Shape = { kind: \"Circle\"; radius: number } | { kind: \"Point\" };\n\
+                export function area(s: Shape): number {\n\
+                \x20 if (s.kind === \"Circle\") return s.radius + helper(1);\n\
+                \x20 return 0;\n\
+                }\n";
+    let dir = project(&[("src/m.tt", helper), ("src/plain.ts", host)]);
+    let plain = dir.join("src/plain.ts").canonicalize().unwrap();
+    let module = dir.join("src/m.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[dir.join("src").to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .expect("the project opens");
+    let field = source_location(&plain, host, "radius: number", 0, 6);
+    let used = source_location(&plain, host, "radius + helper", 0, 6);
+    for open in [true, false] {
+        if open {
+            project.open_document(plain.clone(), host.to_string());
+        } else {
+            project.close_document(&plain);
+        }
+        let position = used.range.start;
+        assert_eq!(
+            project.definition(&plain, position).expect("definition"),
+            vec![field.clone()],
+            "open: {open}"
+        );
+        let references: Vec<_> = project
+            .references(&plain, position)
+            .expect("references")
+            .into_iter()
+            .map(|reference| reference.location)
+            .collect();
+        assert_eq!(references, vec![field.clone(), used.clone()], "open: {open}");
+        let edits = project
+            .rename(&plain, position)
+            .expect("rename")
+            .expect("the field renames");
+        assert!(
+            edits.iter().all(|edit| edit.location.path == plain),
+            "open: {open}: {edits:?}"
+        );
+        assert_eq!(
+            apply_rename(host, &edits, "size"),
+            host.replace("radius", "size"),
+            "open: {open}"
+        );
+        assert_eq!(
+            project
+                .definition(&plain, source_position(host, "helper(1)", 0))
+                .expect("definition"),
+            vec![source_location(&module, helper, "helper", 0, 6)],
+            "open: {open}"
+        );
+    }
+}
+
 fn apply_rename(source: &str, edits: &[ttc::engine::RenameEdit], name: &str) -> String {
     let offset = |position: ttc::engine::Position| {
         source

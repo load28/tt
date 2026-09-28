@@ -472,6 +472,7 @@
 | TASK-462 | Offer case tags only at arm positions, never in arm bodies or comments | Complete | 2026-09-28 | 2026-09-28 | [TASK-462](./TASK-462-arm-bodies-and-comments-are-not-case-positions.md) |
 | TASK-463 | Rename a shorthand pattern binding from its declaration | Complete | 2026-09-28 | 2026-09-28 | [TASK-463](./TASK-463-shorthand-binding-rename.md) |
 | TASK-464 | Or-pattern bindings navigate and rename as one binding | Complete | 2026-09-28 | 2026-09-28 | [TASK-464](./TASK-464-or-pattern-binding-navigation.md) |
+| TASK-465 | Address a host TypeScript source as itself in the language service | Complete | 2026-09-28 | 2026-09-28 | [TASK-465](./TASK-465-host-source-service-paths.md) |
 
 ## Next task number
 
