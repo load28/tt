@@ -114,6 +114,7 @@ pub(crate) struct EvaluationFile {
     regions: Vec<EvalRegion>,
     occupied_names: HashSet<String>,
     declared_names: HashSet<String>,
+    module_declared_names: HashSet<String>,
     directive_prologue_end: Option<usize>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
@@ -139,6 +140,7 @@ pub(crate) struct LoweringPlan {
     match_show_name: String,
     generated_names: Option<crate::generated_names::GeneratedNames>,
     shadowed_globals: HashSet<String>,
+    host_global_aliases: HashMap<String, HostGlobalAlias>,
     directive_prologue_end: Option<usize>,
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
@@ -148,6 +150,12 @@ pub(crate) struct LoweringPlan {
     lexical_declaration_bodies: Vec<LexicalDeclarationBody>,
     ambient_items: HashSet<NodeId>,
     owner_model_unavailable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HostGlobalAlias {
+    pub(crate) name: String,
+    pub(crate) capture: String,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -537,11 +545,17 @@ impl LoweringPlan {
     }
 
     pub(crate) fn host_global(&self, name: &str) -> String {
-        if self.shadowed_globals.contains(name) {
+        if let Some(alias) = self.host_global_aliases.get(name) {
+            alias.name.clone()
+        } else if self.shadowed_globals.contains(name) {
             format!("globalThis.{name}")
         } else {
             name.to_owned()
         }
+    }
+
+    pub(crate) fn host_global_alias(&self, name: &str) -> Option<&HostGlobalAlias> {
+        self.host_global_aliases.get(name)
     }
 
     pub(crate) fn directive_prologue_end(&self) -> Option<usize> {

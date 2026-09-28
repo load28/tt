@@ -281,6 +281,7 @@ pub(crate) fn emit_with_map<'a>(
         ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
         used_match_show: Cell::new(false),
+        used_host_error: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
         active_scheduled_exprs: ActiveExprStack::default(),
@@ -299,6 +300,7 @@ pub(crate) fn emit_with_map<'a>(
     let mut output = emitter.emit_body(core.root);
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
+    let mut module_prelude = String::new();
     if used_pipe || used_flow {
         let names = [("$tt_ap", used_pipe), ("$tt_fl", used_flow)]
             .into_iter()
@@ -312,6 +314,19 @@ pub(crate) fn emit_with_map<'a>(
         let runtime = std_imports
             .get(crate::StdModule::Runtime)
             .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
+        module_prelude.push_str(&format!("import {{ {names} }} from \"{runtime}\";\n"));
+    }
+    let used_show = emitter.used_match_show.get();
+    for (global, used) in [
+        ("Error", emitter.used_host_error.get()),
+        ("JSON", used_show),
+        ("String", used_show),
+    ] {
+        if used && let Some(alias) = lowering_plan.host_global_alias(global) {
+            module_prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
+        }
+    }
+    if !module_prelude.is_empty() {
         // Which helpers the file needs is only known once the whole file
         // is emitted, but where an import belongs is the top — after
         // anything that has to come before one (TASK-219).
@@ -325,10 +340,7 @@ pub(crate) fn emit_with_map<'a>(
         } else {
             ""
         };
-        output.insert_lit_at_source(
-            at,
-            format!("{separator}import {{ {names} }} from \"{runtime}\";\n"),
-        );
+        output.insert_lit_at_source(at, format!("{separator}{module_prelude}"));
     }
     if emitter.used_match_raise.get() {
         if !output.ends_with_newline() {

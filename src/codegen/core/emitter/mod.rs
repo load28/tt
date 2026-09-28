@@ -69,6 +69,7 @@ pub(super) struct Emitter<'a> {
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) used_match_raise: Cell<bool>,
     pub(super) used_match_show: Cell<bool>,
+    pub(super) used_host_error: Cell<bool>,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.

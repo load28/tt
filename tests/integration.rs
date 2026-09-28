@@ -1030,6 +1030,37 @@ try { k("c" as unknown as "a"); } catch (e) { console.log((e as globalThis.Error
 }
 
 #[test]
+fn generated_guards_reach_the_host_globals_past_a_shadowed_global_this() {
+    require_toolchain!();
+    let lines = run(r#"
+variant O { Some(value: number), None }
+function f(o: O, globalThis: unknown) { const Error = 5; return match (o) { Some(value) => value, None => Error }; }
+try { f({ kind: "Nope" } as unknown as O, 1); } catch (e) { console.log(e instanceof RangeError, (e as { message: string }).message); }
+function g(v: 1 | 2, s: "a" | "b", globalThis: unknown) {
+  const JSON = 1, String = 2;
+  return match (v) { 1 => JSON, 2 => String } + match (s) { "a" => 1, "b" => 2 };
+}
+try { g(3 as 1, "a", 1); } catch (e) { console.log((e as { message: string }).message); }
+try { g(1, "c" as "a", 1); } catch (e) { console.log((e as { message: string }).message); }
+"#);
+    assert_eq!(
+        lines,
+        [
+            r#"false tt match: unexpected case {"kind":"Nope"}"#,
+            "tt match: unexpected literal 3",
+            r#"tt match: unexpected literal "c""#
+        ]
+    );
+    let lines = run(r#"
+variant O { Some(value: number), None }
+const globalThis = { Error: 1 };
+function f(o: O) { const Error = 5; return match (o) { Some(value) => value, None => Error + globalThis.Error }; }
+try { f({ kind: "Nope" } as unknown as O); } catch (e) { console.log((e as { message: string }).message); }
+"#);
+    assert_eq!(lines, [r#"tt match: unexpected case {"kind":"Nope"}"#]);
+}
+
+#[test]
 fn runtime_a_type_assertion_after_a_pipeline_asserts_the_piped_value() {
     require_toolchain!();
     let out = run(r#"

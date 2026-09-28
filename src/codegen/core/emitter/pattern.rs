@@ -243,7 +243,8 @@ impl<'a> Emitter<'a> {
             };
             out.push_lit(format!(
                 "{}(new {}(\"tt match: unexpected {kind} \" + {value}))",
-                self.match_raise_name, self.host_error
+                self.match_raise_name,
+                self.host_error()
             ));
         }
         out.push_lit(")");
@@ -980,8 +981,13 @@ impl<'a> Emitter<'a> {
         };
         format!(
             "throw new {}(\"tt match: unexpected {kind} \" + {shown});",
-            self.host_error
+            self.host_error()
         )
+    }
+
+    fn host_error(&self) -> &str {
+        self.used_host_error.set(true);
+        &self.host_error
     }
 
     fn shown(&self, value: &str) -> String {

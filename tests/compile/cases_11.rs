@@ -983,3 +983,48 @@ fn a_string_that_continues_into_an_expression_is_not_a_directive() {
         );
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-489 host globals past a shadowed `globalThis`                   */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn a_host_global_alias_is_captured_only_when_global_this_is_shadowed() {
+    let variant = "variant O { Some(value: number), None }\n";
+    let arms = "match (o) { Some(value) => value, None => 0 }";
+    let out = ok(&format!(
+        "\"use client\"\n{variant}export function f(o: O, globalThis: unknown) {{ const Error = 5; return {arms}; }}\n"
+    ));
+    assert!(
+        out.contains("\"use client\"\nconst $tt_Error = globalThis.Error;\n"),
+        "{out}"
+    );
+    assert!(out.contains("throw new $tt_Error("), "{out}");
+    assert!(
+        !out.contains("$tt_JSON") && !out.contains("$tt_String"),
+        "{out}"
+    );
+
+    let out = ok(&format!(
+        "{variant}const globalThis = 1;\nexport function f(o: O) {{ const Error = 5; return {arms}; }}\n"
+    ));
+    assert!(out.contains("const $tt_Error = Error;\n"), "{out}");
+    assert!(out.contains("throw new $tt_Error("), "{out}");
+
+    let out = ok(&format!(
+        "{variant}export function f(o: O, globalThis: unknown) {{ return {arms}; }}\n"
+    ));
+    assert!(out.contains("throw new Error("), "{out}");
+    assert!(!out.contains("$tt_Error"), "{out}");
+
+    let out = ok(&format!(
+        "{variant}export function f(o: O) {{ const Error = 5; return {arms}; }}\n"
+    ));
+    assert!(out.contains("throw new globalThis.Error("), "{out}");
+    assert!(!out.contains("$tt_Error"), "{out}");
+
+    let out = ok(&format!(
+        "{variant}export function f(o: O, globalThis: unknown) {{ const Error = 5; return o.kind; }}\n"
+    ));
+    assert!(!out.contains("$tt_Error"), "{out}");
+}

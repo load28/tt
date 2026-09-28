@@ -273,6 +273,123 @@ impl ProgramSyntax {
         declarations.0
     }
 
+    pub(crate) fn module_declared_names(&self) -> HashSet<String> {
+        use swc_ecma_ast::{
+            ArrowExpr, Class, Decl, DefaultDecl, GetterProp, ModuleDecl, ObjectPatProp, SetterProp,
+            TsModuleDecl, VarDecl, VarDeclKind,
+        };
+        use swc_ecma_visit::{Visit, VisitWith};
+
+        fn pattern_names(pattern: &Pat, names: &mut HashSet<String>) {
+            match pattern {
+                Pat::Ident(binding) => {
+                    names.insert(binding.id.sym.to_string());
+                }
+                Pat::Array(array) => {
+                    for element in array.elems.iter().flatten() {
+                        pattern_names(element, names);
+                    }
+                }
+                Pat::Rest(rest) => pattern_names(&rest.arg, names),
+                Pat::Object(object) => {
+                    for property in &object.props {
+                        match property {
+                            ObjectPatProp::KeyValue(pair) => pattern_names(&pair.value, names),
+                            ObjectPatProp::Assign(assign) => {
+                                names.insert(assign.key.id.sym.to_string());
+                            }
+                            ObjectPatProp::Rest(rest) => pattern_names(&rest.arg, names),
+                        }
+                    }
+                }
+                Pat::Assign(assign) => pattern_names(&assign.left, names),
+                Pat::Expr(_) | Pat::Invalid(_) => {}
+            }
+        }
+
+        fn declaration_names(declaration: &Decl, names: &mut HashSet<String>) {
+            match declaration {
+                Decl::Class(class) => {
+                    names.insert(class.ident.sym.to_string());
+                }
+                Decl::Fn(function) => {
+                    names.insert(function.ident.sym.to_string());
+                }
+                Decl::Var(var) => {
+                    for declarator in &var.decls {
+                        pattern_names(&declarator.name, names);
+                    }
+                }
+                Decl::Using(using) => {
+                    for declarator in &using.decls {
+                        pattern_names(&declarator.name, names);
+                    }
+                }
+                Decl::TsEnum(declaration) => {
+                    names.insert(declaration.id.sym.to_string());
+                }
+                Decl::TsModule(declaration) => {
+                    if let swc_ecma_ast::TsModuleName::Ident(ident) = &declaration.id {
+                        names.insert(ident.sym.to_string());
+                    }
+                }
+                Decl::TsInterface(_) | Decl::TsTypeAlias(_) => {}
+            }
+        }
+
+        struct HoistedVars(HashSet<String>);
+        impl Visit for HoistedVars {
+            fn visit_var_decl(&mut self, node: &VarDecl) {
+                if node.kind == VarDeclKind::Var {
+                    for declarator in &node.decls {
+                        pattern_names(&declarator.name, &mut self.0);
+                    }
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_function(&mut self, _: &Function) {}
+            fn visit_arrow_expr(&mut self, _: &ArrowExpr) {}
+            fn visit_class(&mut self, _: &Class) {}
+            fn visit_getter_prop(&mut self, _: &GetterProp) {}
+            fn visit_setter_prop(&mut self, _: &SetterProp) {}
+            fn visit_ts_module_decl(&mut self, _: &TsModuleDecl) {}
+        }
+
+        let mut names = HashSet::new();
+        for item in &self.module.body {
+            match item {
+                ModuleItem::Stmt(Stmt::Decl(declaration)) => {
+                    declaration_names(declaration, &mut names);
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export)) => {
+                    declaration_names(&export.decl, &mut names);
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(export)) => {
+                    let ident = match &export.decl {
+                        DefaultDecl::Class(class) => class.ident.as_ref(),
+                        DefaultDecl::Fn(function) => function.ident.as_ref(),
+                        DefaultDecl::TsInterfaceDecl(_) => None,
+                    };
+                    if let Some(ident) = ident {
+                        names.insert(ident.sym.to_string());
+                    }
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::Import(import)) => {
+                    for specifier in &import.specifiers {
+                        names.insert(specifier.local().sym.to_string());
+                    }
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::TsImportEquals(import)) => {
+                    names.insert(import.id.sym.to_string());
+                }
+                _ => {}
+            }
+        }
+        let mut hoisted = HoistedVars(names);
+        self.module.visit_with(&mut hoisted);
+        hoisted.0
+    }
+
     fn validate(&self) -> Result<(), ProgramSyntaxError> {
         let _module_span = self.module.span;
         let projection_len = self.projection.len();

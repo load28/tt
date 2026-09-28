@@ -57,6 +57,7 @@ impl EvaluationFile {
             regions: builder.regions,
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
             declared_names: syntax.declared_names(),
+            module_declared_names: syntax.module_declared_names(),
             directive_prologue_end: syntax.directive_prologue_end(),
             tt_spans: syntax
                 .core_contexts()
@@ -719,21 +720,49 @@ impl EvaluationFile {
                 }
             }
         }
+        let adt_names: HashSet<&str> = core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .filter_map(|statement| match statement {
+                Statement::Adt(adt) => Some(adt.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        let declared = |name: &str| self.declared_names.contains(name) || adt_names.contains(name);
+        let module_declared =
+            |name: &str| self.module_declared_names.contains(name) || adt_names.contains(name);
+        let shadowed_globals: HashSet<String> = ["Error", "JSON", "String"]
+            .into_iter()
+            .filter(|name| declared(name))
+            .map(str::to_owned)
+            .collect();
+        let mut host_global_aliases = HashMap::new();
+        if declared("globalThis") {
+            for name in ["Error", "JSON", "String"] {
+                if !shadowed_globals.contains(name) {
+                    continue;
+                }
+                let capture = if !module_declared("globalThis") {
+                    format!("globalThis.{name}")
+                } else if !module_declared(name) {
+                    name.to_owned()
+                } else {
+                    continue;
+                };
+                let alias = allocate_generated_name(&format!("$tt_{name}"), &mut occupied_names)?;
+                host_global_aliases.insert(
+                    name.to_owned(),
+                    HostGlobalAlias {
+                        name: alias,
+                        capture,
+                    },
+                );
+            }
+        }
         let allocated_names = occupied_names
             .difference(&self.occupied_names)
             .cloned()
-            .collect();
-        let shadowed_globals = ["Error", "JSON", "String"]
-            .into_iter()
-            .filter(|name| {
-                self.declared_names.contains(*name)
-                    || core.bodies.iter().any(|body| {
-                        body.statements.iter().any(|statement| {
-                            matches!(statement, crate::core_ir::Statement::Adt(adt) if adt.name == *name)
-                        })
-                    })
-            })
-            .map(str::to_owned)
             .collect();
         let block_required: Vec<(NodeId, SourceSpan)> = self
             .regions
@@ -790,6 +819,7 @@ impl EvaluationFile {
             .collect();
         Ok(LoweringPlan {
             shadowed_globals,
+            host_global_aliases,
             directive_prologue_end: self.directive_prologue_end,
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
                 occupied_names,

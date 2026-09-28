@@ -492,6 +492,7 @@
 | TASK-482 | End a statement at a line break after a postfix operator or a restricted production | Complete | 2026-09-28 | 2026-09-28 | [TASK-482](./TASK-482-asi-postfix-restricted-boundaries.md) |
 | TASK-485 | The `@tt/std` CommonJS entry points are declaration files | Complete | 2026-09-28 | 2026-09-28 | [TASK-485](./TASK-485-std-commonjs-declarations.md) |
 | TASK-486 | Place the runtime import after the parsed directive prologue | Complete | 2026-09-28 | 2026-09-28 | [TASK-486](./TASK-486-directive-prologue-import-placement.md) |
+| TASK-489 | Reach host globals when `globalThis` itself is shadowed | Complete | 2026-09-28 | 2026-09-28 | [TASK-489](./TASK-489-shadowed-global-this-host-access.md) |
 
 ## Next task number
 

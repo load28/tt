@@ -1,5 +1,7 @@
 # TASK-432: Reach the host `Error` and `JSON` past user declarations in generated guards
 
+> Updated by [TASK-489](./TASK-489-shadowed-global-this-host-access.md): Decision 1 assumed `globalThis` always names the global object. When the file declares `globalThis` itself, a shadowed host name is reached through a generated alias captured at module top instead.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27
