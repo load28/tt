@@ -580,10 +580,30 @@ impl<'s> Machine<'s> {
 /// ECMAScript reserved words and the strict-mode future reserved words: no
 /// statement label, binding, or operand can be spelled with one.
 pub(super) fn reserved(word: &str) -> bool {
+    keyword(word)
+        || matches!(
+            word,
+            "await"
+                | "implements"
+                | "interface"
+                | "let"
+                | "package"
+                | "private"
+                | "protected"
+                | "public"
+                | "static"
+                | "yield"
+        )
+}
+
+/// The reserved words TypeScript's scanner gives keyword kinds up to
+/// `LastReservedWord`: the words its `isIdentifier` rejects in every
+/// context. The strict-mode future reserved words, `await`, and `yield` are
+/// identifiers to its parser.
+pub(super) fn keyword(word: &str) -> bool {
     matches!(
         word,
-        "await"
-            | "break"
+        "break"
             | "case"
             | "catch"
             | "class"
@@ -602,20 +622,12 @@ pub(super) fn reserved(word: &str) -> bool {
             | "for"
             | "function"
             | "if"
-            | "implements"
             | "import"
             | "in"
             | "instanceof"
-            | "interface"
-            | "let"
             | "new"
             | "null"
-            | "package"
-            | "private"
-            | "protected"
-            | "public"
             | "return"
-            | "static"
             | "super"
             | "switch"
             | "this"
@@ -627,7 +639,6 @@ pub(super) fn reserved(word: &str) -> bool {
             | "void"
             | "while"
             | "with"
-            | "yield"
     )
 }
 

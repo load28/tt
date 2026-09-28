@@ -506,6 +506,7 @@
 | TASK-496 | Keep the source's automatic semicolons when generated code starts a statement | Complete | 2026-09-28 | 2026-09-28 | [TASK-496](./TASK-496-statement-boundaries-survive-lowering.md) |
 | TASK-497 | Let an automatic semicolon end a block-bodied arrow function before an operator line | Complete | 2026-09-28 | 2026-09-28 | [TASK-497](./TASK-497-arrow-body-automatic-semicolon.md) |
 | TASK-498 | Count lines once, under the line breaks each consumer speaks | Complete | 2026-09-28 | 2026-09-28 | [TASK-498](./TASK-498-one-line-model.md) |
+| TASK-499 | Read a parenthesized arrow return type the way TypeScript does | Complete | 2026-09-28 | 2026-09-28 | [TASK-499](./TASK-499-parenthesized-return-type-arrow.md) |
 
 ## Next task number
 

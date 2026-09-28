@@ -86,7 +86,12 @@ and its `>`, whether they bracket type arguments or type parameters
 (TASK-495). `Token::opens_bracket` and `Token::closes_bracket` read that
 last fact, and every bracket walk in the parser, flow, `val`, completion,
 and the lexer's token queries balances brackets through them, so a `,`
-inside `f<A, B>(x)` is never taken for a top-level separator. The lexer's own
+inside `f<A, B>(x)` is never taken for a top-level separator. Where
+TypeScript's parser looks ahead to classify a token, the machine applies
+the same rule by peeking at the bytes after it: a `(` in a type opens a
+function type's parameters only when `isUnambiguouslyStartOfFunctionType`
+holds, so the `=>` after a parenthesized return type such as
+`(): (A | B) =>` belongs to the arrow function (TASK-499). The lexer's own
 regular-expression, JSX, and leading-`.` number decisions are the machine's
 "an operand is expected here" (the `InputElementRegExp` goal of ECMA-262
 §12), which the machine answers with its own transitions (TASK-494): it

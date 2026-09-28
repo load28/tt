@@ -7,16 +7,19 @@
 //! type only on the same line, as in TypeScript's parser; `|`, `&`, and a
 //! qualified name's `.` continue it across a line terminator.
 
-use super::{Frame, Machine, Out, Tk, Tok, TokenFacts};
+use super::{Frame, Machine, Out, Peek, Tk, Tok, TokenFacts};
 use crate::scanner::{at, ident_end, scan_string, skip_trivia, starts_identifier};
 
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Type {
     /// A complete type atom has been read.
     pub(super) atom: bool,
-    /// The atom is a parenthesized group, which `=>` turns into a function
-    /// type's parameters.
-    after_paren: bool,
+    /// The atom is a function type's parameter list, which `=>` continues
+    /// with the return type. A `(` opens one only where TypeScript's
+    /// `isUnambiguouslyStartOfFunctionType` says so; any other `(` opens a
+    /// parenthesized type, and an `=>` after it belongs to the enclosing
+    /// arrow function.
+    parameters: bool,
     /// The atom is `import`, whose `(…)` is part of it.
     import: bool,
     /// Conditional types waiting for `?`, and for `:`.
@@ -28,7 +31,7 @@ impl Type {
     pub(super) fn new() -> Self {
         Type {
             atom: false,
-            after_paren: false,
+            parameters: false,
             import: false,
             pending_question: 0,
             pending_colon: 0,
@@ -65,7 +68,7 @@ impl Machine<'_> {
             return self.type_atom(ty, tok);
         }
         let same_line = !tok.line_break;
-        let after_paren = std::mem::take(&mut ty.after_paren);
+        let parameters = std::mem::take(&mut ty.parameters);
         let import = std::mem::take(&mut ty.import);
         match tok.kind {
             Tk::Punct(b'.' | b'|' | b'&') => {
@@ -112,7 +115,7 @@ impl Machine<'_> {
                 self.push_frame(Frame::Type(ty));
                 Out::Consumed
             }
-            Tk::Arrow if after_paren => {
+            Tk::Arrow if parameters => {
                 ty.atom = false;
                 self.push_frame(Frame::Type(ty));
                 Out::Consumed
@@ -142,7 +145,7 @@ impl Machine<'_> {
             }
             Tk::Punct(b'(') => {
                 ty.atom = true;
-                ty.after_paren = true;
+                ty.parameters = self.starts_function_type(tok.span.end);
                 self.push_frame(Frame::Type(ty));
                 self.open_type_group(b')');
                 Out::Consumed
@@ -291,6 +294,69 @@ impl Machine<'_> {
         }
     }
 
+    /// TypeScript's `isUnambiguouslyStartOfFunctionType`, for the `(` in a
+    /// type ending at byte `from`: the parenthesis opens a function type's
+    /// parameters when it is empty (`()`), starts a rest parameter
+    /// (`(...`), or starts a parameter (`skipParameterStart`: modifiers,
+    /// then a binding name or pattern) followed by `:`, `,`, `?`, `=`, or
+    /// `) =>`. Otherwise it opens a parenthesized type.
+    fn starts_function_type(&self, from: usize) -> bool {
+        let bytes = self.src.as_bytes();
+        let first = self.peek(from).at;
+        match self.byte(first) {
+            Some(b')') => return true,
+            Some(b'.') if bytes[first..self.end].starts_with(b"...") => return true,
+            _ => {}
+        }
+        let Some(name_end) = self.skip_parameter_start(first) else {
+            return false;
+        };
+        let next = self.peek(name_end).at;
+        match self.byte(next) {
+            Some(b':' | b',' | b'?') => true,
+            Some(b'=') => !matches!(self.byte(next + 1), Some(b'=' | b'>')),
+            Some(b')') => {
+                let arrow = self.peek(next + 1).at;
+                bytes[arrow..self.end].starts_with(b"=>")
+            }
+            _ => false,
+        }
+    }
+
+    /// TypeScript's `skipParameterStart` from byte `at`: the end of the
+    /// parameter's modifiers (`parseModifiers`, where a modifier keyword
+    /// counts only when `nextTokenCanFollowModifier` holds) and its binding
+    /// identifier, `this`, or binding pattern.
+    fn skip_parameter_start(&self, mut at: usize) -> Option<usize> {
+        let bytes = self.src.as_bytes();
+        while let Some(word) = self.word_at(Peek {
+            at,
+            line_break: false,
+        }) {
+            let next = self.peek(at + word.len());
+            let follows = match word {
+                "const" => self.word_at(next) == Some("enum"),
+                "static" | "export" | "default" => can_follow_modifier(bytes, next.at, self.end),
+                "abstract" | "accessor" | "async" | "declare" | "in" | "out" | "override"
+                | "private" | "protected" | "public" | "readonly" => {
+                    !next.line_break && can_follow_modifier(bytes, next.at, self.end)
+                }
+                _ => false,
+            };
+            if !follows {
+                break;
+            }
+            at = next.at;
+        }
+        match self.byte(at)? {
+            b'[' | b'{' => binding_pattern_end(bytes, at, self.end),
+            _ if self.src[at..].starts_with("this") && ident_end(bytes, at, self.end) == at + 4 => {
+                Some(at + 4)
+            }
+            _ => binding_identifier_end(bytes, at, self.end),
+        }
+    }
+
     /// Whether the `<` at byte `open`, after an operand, opens type
     /// arguments (`f<T>(x)`, `new Map<K, V>()`, an instantiation
     /// expression) rather than a relational operator: the bracket closes
@@ -361,6 +427,126 @@ pub(in crate::lexer) fn type_arguments_end(bytes: &[u8], open: usize, end: usize
                 }
             }
             _ => return None,
+        }
+    }
+}
+
+/// TypeScript's `canFollowModifier`, at byte `i`: `[`, `{`, `*`, `...`, or
+/// a literal property name (an identifier or keyword, a string, a number).
+fn can_follow_modifier(bytes: &[u8], i: usize, end: usize) -> bool {
+    match at(bytes, i, end) {
+        Some(b'[' | b'{' | b'*' | b'"' | b'\'' | b'0'..=b'9') => true,
+        Some(b'.') => bytes[i..end].starts_with(b"..."),
+        Some(_) => starts_identifier(bytes, i, end),
+        None => false,
+    }
+}
+
+/// The end of the binding identifier at byte `i`: an identifier that is not
+/// one of the words TypeScript's `isIdentifier` rejects.
+fn binding_identifier_end(bytes: &[u8], i: usize, end: usize) -> Option<usize> {
+    if !starts_identifier(bytes, i, end) {
+        return None;
+    }
+    let name_end = ident_end(bytes, i, end);
+    let word = std::str::from_utf8(&bytes[i..name_end]).ok()?;
+    (!super::keyword(word)).then_some(name_end)
+}
+
+/// The end of a binding element at byte `i`: a binding identifier or a
+/// nested pattern (TypeScript's `parseIdentifierOrPattern`).
+fn binding_element_end(bytes: &[u8], i: usize, end: usize) -> Option<usize> {
+    match at(bytes, i, end)? {
+        b'[' | b'{' => binding_pattern_end(bytes, i, end),
+        _ => binding_identifier_end(bytes, i, end),
+    }
+}
+
+/// The byte just past the binding pattern opened by the `[` or `{` at
+/// `open`, when TypeScript's `parseArrayBindingPattern` or
+/// `parseObjectBindingPattern` reads it without an error: elements are
+/// binding identifiers or nested patterns, with an optional `...` and
+/// initializer; an object pattern's element is a shorthand identifier or a
+/// property name, string, number, or computed name followed by `:` and an
+/// element.
+fn binding_pattern_end(bytes: &[u8], open: usize, end: usize) -> Option<usize> {
+    let close = if bytes[open] == b'[' { b']' } else { b'}' };
+    let mut i = open + 1;
+    loop {
+        i = skip_trivia(bytes, i, end).0;
+        let c = at(bytes, i, end)?;
+        if c == close {
+            return Some(i + 1);
+        }
+        if close == b']' && c == b',' {
+            i += 1;
+            continue;
+        }
+        if bytes[i..end].starts_with(b"...") {
+            i = skip_trivia(bytes, i + 3, end).0;
+            i = binding_element_end(bytes, i, end)?;
+        } else if close == b']' {
+            i = binding_element_end(bytes, i, end)?;
+        } else {
+            let shorthand = binding_identifier_end(bytes, i, end);
+            i = match c {
+                b'"' | b'\'' => scan_string(bytes, i, end),
+                b'[' => {
+                    expression_end(bytes, i + 1, end)
+                        .filter(|&close| at(bytes, close, end) == Some(b']'))?
+                        + 1
+                }
+                b'0'..=b'9' => {
+                    let mut j = i;
+                    while at(bytes, j, end).is_some_and(|b| b.is_ascii_alphanumeric() || b == b'.')
+                    {
+                        j += 1;
+                    }
+                    j
+                }
+                _ if starts_identifier(bytes, i, end) => ident_end(bytes, i, end),
+                _ => return None,
+            };
+            let colon = skip_trivia(bytes, i, end).0;
+            if at(bytes, colon, end) == Some(b':') {
+                i = skip_trivia(bytes, colon + 1, end).0;
+                i = binding_element_end(bytes, i, end)?;
+            } else if shorthand != Some(i) {
+                return None;
+            }
+        }
+        i = skip_trivia(bytes, i, end).0;
+        if at(bytes, i, end) == Some(b'=') && at(bytes, i + 1, end) != Some(b'=') {
+            i = expression_end(bytes, i + 1, end)?;
+        }
+        match at(bytes, i, end)? {
+            b',' => i += 1,
+            c if c == close => return Some(i + 1),
+            _ => return None,
+        }
+    }
+}
+
+/// The position of the `,`, `)`, `]`, or `}` that ends the expression
+/// starting at byte `i`, balancing brackets and skipping strings and
+/// templates: an initializer or a computed name inside a binding pattern.
+fn expression_end(bytes: &[u8], mut i: usize, end: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    loop {
+        i = skip_trivia(bytes, i, end).0;
+        match at(bytes, i, end)? {
+            b'"' | b'\'' => i = scan_string(bytes, i, end),
+            b'`' => i = skip_type_template(bytes, i, end),
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                i += 1;
+            }
+            b',' | b')' | b']' | b'}' if depth == 0 => return Some(i),
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                i += 1;
+            }
+            _ => i += 1,
         }
     }
 }

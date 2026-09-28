@@ -812,3 +812,28 @@ fn an_automatic_semicolon_ends_a_block_bodied_arrow_function_before_an_operator_
         }
     }
 }
+
+#[test]
+fn an_arrow_function_with_a_parenthesized_return_type_passes_through() {
+    for ty in [
+        "(A | B)",
+        "(void)",
+        "(() => void)",
+        "(\"a\" | \"b\")",
+        "(A[])",
+        "(typeof x)",
+        "(keyof A)",
+        "(readonly A[])",
+        "([\"a\"])",
+        "(a: A) => void",
+        "({ a }: A) => void",
+        "([p, q = 1]: A[]) => void",
+        "(this: A) => void",
+    ] {
+        let source = format!(
+            "type A = {{ a: 1 }};\ntype B = 2;\ndeclare const x: number;\nexport const f = (): {ty} => {{ return null as any }}\n/x/g.exec(\"x\")\n"
+        );
+        assert_passthrough(&source);
+        assert_tsx_passthrough(&source);
+    }
+}
