@@ -1,0 +1,7 @@
+error[malformed-match]: a literal pattern cannot be a tuple pattern element
+ --> input.tt:7:10
+  |
+7 |   (None, 404) => "missing",
+  |          ^^^
+  |
+  = help: tuple pattern elements are tag patterns or `_`; test this value in an arm guard or a nested `match`

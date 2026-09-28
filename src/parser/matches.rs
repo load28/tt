@@ -60,15 +60,19 @@ pub(super) fn parse_match<'t>(
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
             .map_or(cur.range_end, |token| token.span.end);
+        let value_element = body_open.and_then(|open| tuple_value_element(&cur, open));
         if let Some(arms) = recover_match_arms(cur).filter(|arms| !arms.is_empty()) {
             let first = arms[0];
             return Claim::Malformed {
-                error: crate::error::TtError::span(
-                    first.start,
-                    first.end,
-                    "invalid match arm: expected `<pattern> => <body>`".to_string(),
-                )
-                .code(crate::DiagnosticCode::MalformedMatch),
+                error: match value_element {
+                    Some(element) => element.error(),
+                    None => crate::error::TtError::span(
+                        first.start,
+                        first.end,
+                        "invalid match arm: expected `<pattern> => <body>`".to_string(),
+                    )
+                    .code(crate::DiagnosticCode::MalformedMatch),
+                },
                 recovery: RecoveryNode {
                     span: Span {
                         start: kw_span.start,
@@ -106,10 +110,10 @@ pub(super) fn parse_match<'t>(
                     format!("({scrutinee})"),
                 )
             }
-            _ => error.help(
-                "write `match (<scrutinee>) { <pattern> => <body> }`; a tuple pattern must \
-                 match the scrutinee arity",
-            ),
+            _ => match value_element {
+                Some(element) => element.error(),
+                None => error.help("write `match (<scrutinee>) { <pattern> => <body> }`"),
+            },
         };
         Claim::Malformed {
             error,
@@ -151,6 +155,105 @@ fn has_instance_call_pattern(src: &str, tokens: &[Token], body_open: usize) -> b
         index += 1;
     }
     false
+}
+
+#[derive(Clone, Copy)]
+enum TupleValueElement {
+    Literal(Span),
+    Instance(Span),
+}
+
+impl TupleValueElement {
+    fn error(self) -> crate::error::TtError {
+        let (span, what) = match self {
+            TupleValueElement::Literal(span) => (span, "a literal pattern"),
+            TupleValueElement::Instance(span) => (span, "an `is` pattern"),
+        };
+        crate::error::TtError::span(
+            span.start,
+            span.end,
+            format!("{what} cannot be a tuple pattern element"),
+        )
+        .code(crate::DiagnosticCode::MalformedMatch)
+        .help(
+            "tuple pattern elements are tag patterns or `_`; test this value in an arm \
+             guard or a nested `match`",
+        )
+    }
+}
+
+fn tuple_value_element(cur: &Cursor, body_open: usize) -> Option<TupleValueElement> {
+    let close = super::cursor::find_close_at(cur.tokens, body_open)?;
+    let body = cur.sub(body_open + 1, close, cur.tokens[close].span.start);
+    let mut idx = 0;
+    let mut arm_start = true;
+    while let Some(token) = body.tokens.get(idx) {
+        match token.kind {
+            TokenKind::Punct(b',') => {
+                idx += 1;
+                arm_start = true;
+                continue;
+            }
+            TokenKind::Punct(delimiter @ (b'(' | b'[' | b'{')) => {
+                let end = super::cursor::find_close_at(body.tokens, idx)?;
+                if arm_start
+                    && delimiter == b'('
+                    && let Some(element) =
+                        value_element(body.sub(idx + 1, end, body.tokens[end].span.start))
+                {
+                    return Some(element);
+                }
+                idx = end + 1;
+            }
+            _ => idx += 1,
+        }
+        arm_start = false;
+    }
+    None
+}
+
+fn value_element(elements: Cursor) -> Option<TupleValueElement> {
+    let tokens = elements.tokens;
+    let mut ranges = Vec::new();
+    let mut from = 0;
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate() {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            TokenKind::Punct(b',') if depth == 0 => {
+                ranges.push((from, index));
+                from = index + 1;
+            }
+            _ => {}
+        }
+    }
+    if ranges.is_empty() {
+        return None;
+    }
+    ranges.push((from, tokens.len()));
+    ranges
+        .into_iter()
+        .filter(|(from, to)| from < to)
+        .find_map(|(from, to)| {
+            let span = Span {
+                start: tokens[from].span.start,
+                end: tokens[to - 1].span.end,
+            };
+            let element = elements.sub(from, to, span.end);
+            let complete = |mut cur: Cursor, parse: fn(&mut Cursor) -> bool| {
+                parse(&mut cur) && cur.peek().is_none()
+            };
+            if at_literal(&element)
+                && complete(element, |cur| parse_literal_alternatives(cur).is_some())
+            {
+                Some(TupleValueElement::Literal(span))
+            } else if complete(element, |cur| parse_instance_alternatives(cur).is_some()) {
+                Some(TupleValueElement::Instance(span))
+            } else {
+                None
+            }
+        })
 }
 
 /// Whether the braces opening at `open` hold **arms** rather than

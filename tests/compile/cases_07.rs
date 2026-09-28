@@ -521,7 +521,14 @@ fn tuple_patterns_do_not_accept_literals() {
     };
     let src = r#"const v = match (a, b) { ("x", 1) => 1, _ => 0 };"#;
     let error = compile(src, &opts).expect_err("tuple literals are malformed tt");
-    assert!(error.message.contains("tt `match` could not be parsed"));
+    assert!(
+        error
+            .message
+            .contains("a literal pattern cannot be a tuple pattern element"),
+        "{}",
+        error.message
+    );
+    assert_eq!((error.line, error.col), (1, 27));
 }
 
 #[test]

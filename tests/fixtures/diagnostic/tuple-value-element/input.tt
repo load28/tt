@@ -1,0 +1,9 @@
+variant Opt { Some(value: number), None }
+declare const left: Opt;
+declare const code: number;
+
+export const label = match (left, code) {
+  (Some(value), _) => `some ${value}`,
+  (None, 404) => "missing",
+  _ => "other",
+};

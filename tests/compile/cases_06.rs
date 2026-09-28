@@ -301,6 +301,49 @@ fn tuple_match_arity_mismatch_lowers_over_the_subjects_it_has() {
 }
 
 #[test]
+fn a_value_pattern_in_a_tuple_element_is_reported_at_that_element() {
+    let cases = [
+        (
+            "declare const a: number;\ndeclare const b: string;\n\
+             const r = match (a, b) {\n  (1, \"x\") => 1,\n  _ => 0,\n};\n",
+            "1",
+            "a literal pattern cannot be a tuple pattern element",
+        ),
+        (
+            "variant O { Some(value: number), None }\ndeclare const a: O;\ndeclare const b: O;\n\
+             const r = match (a, b) {\n  (Some(value), None) => value,\n  (None, 1 | 2) => 0,\n  _ => -1,\n};\n",
+            "1 | 2",
+            "a literal pattern cannot be a tuple pattern element",
+        ),
+        (
+            "variant O { Some(value: number), None }\ndeclare const a: O;\ndeclare const n: unknown;\n\
+             const r = match (a, n) {\n  (None, is Date) => 0,\n  _ => 1,\n};\n",
+            "is Date",
+            "an `is` pattern cannot be a tuple pattern element",
+        ),
+    ];
+    for (src, element, message) in cases {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, ttc::DiagnosticCode::MalformedMatch);
+        assert_eq!(d.message, message);
+        assert_eq!(&src[d.start.unwrap()..d.end.unwrap()], element);
+        let help: Vec<&str> = d.suggestions.iter().map(|s| s.message.as_str()).collect();
+        assert_eq!(
+            help,
+            ["tuple pattern elements are tag patterns or `_`; test this value in an arm guard or a nested `match`"]
+        );
+    }
+}
+
+#[test]
+fn an_unparseable_match_help_does_not_claim_an_arity_problem() {
+    let advice = advice("const r = match (x) { A B => 1 };\n");
+    assert_eq!(advice, ["write `match (<scrutinee>) { <pattern> => <body> }`"]);
+}
+
+#[test]
 fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
     let src = "const r = match value { A => 1, _ => 0 };\n";
     let e = err(src);

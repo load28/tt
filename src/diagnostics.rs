@@ -353,7 +353,9 @@ The scrutinee parentheses are mandatory and may not be empty. Each arm is
 `pattern => expression,` or `pattern => { ... }`. An object literal body
 needs its own parentheses (`Tag => ({ a: 1 })`), and scrutinees containing
 a top-level `<` or `>` comparison need parenthesizing so they cannot be
-read as type arguments."
+read as type arguments. Tuple pattern elements are tag patterns or `_`; a
+literal or `is` pattern cannot be an element, so test such a value in an
+arm guard or a nested `match`."
             }
 
             DiagnosticCode::FlowFirstStepMethod => {
