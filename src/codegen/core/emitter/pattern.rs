@@ -21,7 +21,7 @@ impl<'a> Emitter<'a> {
         !decision
             .arms
             .last()
-            .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+            .is_some_and(DecisionArm::always_matches)
             || decision.arms.iter().any(|arm| reads(&arm.pattern, index))
     }
 
@@ -131,17 +131,16 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.push_lit("(");
         for (index, arm) in decision.arms.iter().enumerate() {
-            if index + 1 < decision.arms.len() {
-                if self.has_conditional_match_dispatch(expr) {
+            let mut last = index + 1 == decision.arms.len();
+            if !last {
+                if !self.has_conditional_match_dispatch(expr) {
+                    out.push_lit(format!("{slot} === {index} ? "));
+                } else if let Some(test) = self.emit_arm_test(arm, decision) {
                     out.push_lit("(");
-                    out.append(self.emit_condition(&arm.pattern, decision));
-                    if let Some(guard) = arm.guard {
-                        out.push_lit(" && ");
-                        push_grouped(&mut out, self.emit_expr(guard).trim());
-                    }
+                    out.append(test);
                     out.push_lit(") ? ");
                 } else {
-                    out.push_lit(format!("{slot} === {index} ? "));
+                    last = true;
                 }
             }
             let value = self.emit_deferred_arm_value(expr, &arm.action);
@@ -149,9 +148,10 @@ impl<'a> Emitter<'a> {
                 &mut out,
                 guard_line_comment(value.trim(), 0, self.source_kind),
             );
-            if index + 1 < decision.arms.len() {
-                out.push_lit(" : ");
+            if last {
+                break;
             }
+            out.push_lit(" : ");
         }
         out.push_lit(")");
         out
@@ -207,16 +207,12 @@ impl<'a> Emitter<'a> {
         }
         let mut total = false;
         for arm in &decision.arms {
-            if matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none() {
-                total = true;
-            } else {
+            if let Some(test) = self.emit_arm_test(arm, decision) {
                 out.push_lit("(");
-                out.append(self.emit_condition(&arm.pattern, decision));
-                if let Some(guard) = arm.guard {
-                    out.push_lit(" && ");
-                    push_grouped(&mut out, self.emit_expr(guard).trim());
-                }
+                out.append(test);
                 out.push_lit(") ? ");
+            } else {
+                total = true;
             }
             push_grouped(
                 &mut out,
@@ -355,10 +351,10 @@ impl<'a> Emitter<'a> {
         }
         let mut unconditional = false;
         for arm in &decision.arms {
-            let is_any = !pattern_has_test(&arm.pattern);
+            let is_any = !arm.pattern.has_test();
             out.push_break(depth);
-            if is_any && arm.guard.is_none() {
-                unconditional = true;
+            if is_any {
+                unconditional |= arm.guard.is_none();
             } else {
                 out.push_lit("if (");
                 out.append(self.emit_condition(&arm.pattern, decision));
@@ -389,7 +385,7 @@ impl<'a> Emitter<'a> {
                 },
                 &mut out,
             );
-            if !is_any || arm.guard.is_some() {
+            if !is_any {
                 out.push_break(depth);
                 out.push_lit("}");
             }
@@ -697,6 +693,24 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    pub(super) fn emit_arm_test(&self, arm: &DecisionArm, decision: &Decision) -> Option<Rope<'a>> {
+        let tested = arm.pattern.has_test();
+        if !tested && arm.guard.is_none() {
+            return None;
+        }
+        let mut out = Rope::new();
+        if tested {
+            out.append(self.emit_condition(&arm.pattern, decision));
+        }
+        if let Some(guard) = arm.guard {
+            if tested {
+                out.push_lit(" && ");
+            }
+            push_grouped(&mut out, self.emit_expr(guard).trim());
+        }
+        Some(out)
+    }
+
     pub(super) fn emit_condition(&self, plan: &PatternPlan, decision: &Decision) -> Rope<'a> {
         match plan {
             PatternPlan::Any | PatternPlan::Bind(_) => Rope::new(),
@@ -705,7 +719,7 @@ impl<'a> Emitter<'a> {
                 let mut out = Rope::new();
                 let tests = parts
                     .iter()
-                    .filter(|part| pattern_has_test(part))
+                    .filter(|part| part.has_test())
                     .collect::<Vec<_>>();
                 for (index, part) in tests.iter().enumerate() {
                     if index > 0 {

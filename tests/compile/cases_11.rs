@@ -677,3 +677,10 @@ fn explained_examples_behave_as_their_explanations_say() {
         vec![DiagnosticCode::MatchTupleArity]
     );
 }
+
+#[test]
+fn a_guarded_all_wildcard_tuple_arm_is_tested_by_its_guard_alone() {
+    let out = ok("variant T { A, B }\nfunction f(a: T, b: T, cond: boolean): number {\n  return match (a, b) {\n    (A, _) => 1,\n    (_, _) if cond => 2,\n    _ => 3,\n  };\n}\n");
+    assert!(!out.contains("if ()"), "{out}");
+    assert!(out.contains("      if (cond) {\n        $tt_v0 = 2;\n        break;\n      }\n      $tt_v0 = 3;"), "{out}");
+}

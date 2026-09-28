@@ -38,7 +38,7 @@
 
 - **Symptom**: While checking the help's guard advice, `match (a, b) { (_, _) if a === 1 && b === "x" => "one-x", _ => "other" }` failed verification ("Expression expected"); `--no-verify` shows `if () { if (a === 1 && b === "x") ... }`.
 - **Cause**: The tuple arm's element test is empty when every element is `_`; this is in tuple-arm lowering, not in the diagnostic.
-- **Resolution**: Out of scope for this diagnostic task; queued as a separate task suggestion. A guard on an arm with at least one tag element, as the help describes, lowers correctly.
+- **Resolution**: Out of scope for this diagnostic task; fixed by TASK-478. A guard on an arm with at least one tag element, as the help describes, lowers correctly.
 
 ## Verification
 

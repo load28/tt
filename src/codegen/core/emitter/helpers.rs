@@ -99,14 +99,6 @@ pub(super) fn field_node(field: &FieldAccess) -> NodeId {
     }
 }
 
-pub(super) fn pattern_has_test(plan: &PatternPlan) -> bool {
-    match plan {
-        PatternPlan::Any | PatternPlan::Bind(_) => false,
-        PatternPlan::Test(_) => true,
-        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => parts.iter().any(pattern_has_test),
-    }
-}
-
 pub(super) fn pattern_has_literal_test(plan: &PatternPlan) -> bool {
     match plan {
         PatternPlan::Test(Test::Literal { .. }) => true,

@@ -483,6 +483,7 @@
 | TASK-475 | `ttc explain` texts match what the compiler does | Complete | 2026-09-28 | 2026-09-28 | [TASK-475](./TASK-475-explain-text-audit.md) |
 | TASK-476 | `ttc explain` accepts the number `tsc` prints | Complete | 2026-09-28 | 2026-09-28 | [TASK-476](./TASK-476-explain-numeric-codes.md) |
 | TASK-477 | The typed `val` check sees every spelling of a member call | Complete | 2026-09-28 | 2026-09-28 | [TASK-477](./TASK-477-val-member-call-probes.md) |
+| TASK-478 | Decide a guarded all-wildcard arm by its guard alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-478](./TASK-478-guarded-wildcard-tuple-arm.md) |
 
 ## Next task number
 

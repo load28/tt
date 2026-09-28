@@ -209,6 +209,12 @@ pub(crate) struct DecisionArm {
     pub action: ArmAction,
 }
 
+impl DecisionArm {
+    pub(crate) fn always_matches(&self) -> bool {
+        self.guard.is_none() && !self.pattern.has_test()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum PatternPlan {
     Any,
@@ -216,6 +222,18 @@ pub(crate) enum PatternPlan {
     Bind(Bind),
     AllOf(Vec<PatternPlan>),
     AnyOf(Vec<PatternPlan>),
+}
+
+impl PatternPlan {
+    pub(crate) fn has_test(&self) -> bool {
+        match self {
+            PatternPlan::Any | PatternPlan::Bind(_) => false,
+            PatternPlan::Test(_) => true,
+            PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+                parts.iter().any(PatternPlan::has_test)
+            }
+        }
+    }
 }
 
 #[derive(Debug)]

@@ -745,7 +745,7 @@ fn can_defer_arm_values(
             decision
                 .arms
                 .last()
-                .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+                .is_some_and(DecisionArm::always_matches)
         }
         DecisionKind::Match { .. } => true,
         _ => false,
