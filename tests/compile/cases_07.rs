@@ -739,3 +739,14 @@ fn val_leaves_reads_and_comparisons_alone() {
     let src = "val const x = load();\nconst r = [x.a == 1, x.a === 1, x.a != 1, x.a >= 1, x.a <= 1, x.a && 1, x.a || 1, x.a ?? 1, x.a + 1, x.a > 1];\nconst y = x.a;\nconst z = { ...x };\n";
     assert_eq!(ok(src), src.replacen("val ", "", 1));
 }
+
+#[test]
+fn try_takes_a_non_ascii_identifier_operand_and_never_splits_one() {
+    let output = ok("declare function étry(): Result<number, string>;\n\
+         function r(): Result<number, string> {\n\
+         \x20 const n = try étry();\n\
+         \x20 return Ok(n);\n\
+         }\n");
+    assert!(output.contains("const $tt_t0 = étry();"), "{output}");
+    assert!(output.contains("const n = $tt_t0.value;"), "{output}");
+}

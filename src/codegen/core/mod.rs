@@ -24,7 +24,7 @@ use crate::program_syntax::{
     ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
     HostOwnerKind, LoopTestKind, SourceSpan,
 };
-use crate::scanner::{at, ident_end, is_ident_start, scan_type_end, skip_ws_comments};
+use crate::scanner::{at, ident_end, scan_type_end, skip_ws_comments, starts_identifier};
 use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 
 use emitter::*;

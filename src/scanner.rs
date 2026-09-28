@@ -2,7 +2,10 @@
 //!
 //! All scanning is byte-based: every character the scanner makes decisions on
 //! is ASCII, and UTF-8 continuation bytes (0x80+) never compare equal to any
-//! ASCII byte, so multi-byte characters pass through opaquely.
+//! ASCII byte, so multi-byte characters pass through opaquely. The one
+//! question asked of a whole non-ASCII code point is whether it belongs to an
+//! identifier ([`identifier_char_len`]), so a keyword is never read out of
+//! the middle of a word such as `étry`.
 
 pub(crate) fn is_ident_start(b: u8) -> bool {
     b.is_ascii_alphabetic() || b == b'_' || b == b'$'
@@ -21,11 +24,43 @@ pub(crate) fn at(src: &[u8], i: usize, end: usize) -> Option<u8> {
     if i < end { Some(src[i]) } else { None }
 }
 
+/// Whether an identifier starts at `i`: an ASCII identifier-start byte, or
+/// the lead byte of a non-ASCII code point that is identifier material.
+pub(crate) fn starts_identifier(src: &[u8], i: usize, end: usize) -> bool {
+    at(src, i, end).is_some_and(|b| {
+        is_ident_start(b) || (!b.is_ascii() && identifier_char_len(src, i, end).is_some())
+    })
+}
+
+/// The byte length of the identifier character at `i`, or `None` when the
+/// byte there cannot continue an identifier. Outside strings, comments,
+/// templates, regexes, and JSX text, a non-ASCII code point in valid
+/// TypeScript is either identifier material or one of ECMA-262's
+/// non-ASCII `WhiteSpace`/`LineTerminator` code points, so only those
+/// separate; the code point is consumed whole.
+pub(crate) fn identifier_char_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
+    let b = at(src, i, end)?;
+    if b.is_ascii() {
+        return is_ident_char(b).then_some(1);
+    }
+    let len = match b {
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF7 => 4,
+        _ => return None,
+    };
+    let c = std::str::from_utf8(src.get(i..i + len)?)
+        .ok()?
+        .chars()
+        .next()?;
+    (i + len <= end && !c.is_whitespace() && c != '\u{FEFF}').then_some(len)
+}
+
 /// Reads the identifier starting at `i`; returns the end index (exclusive).
 pub(crate) fn ident_end(src: &[u8], i: usize, end: usize) -> usize {
-    let mut j = i + 1;
-    while j < end && is_ident_char(src[j]) {
-        j += 1;
+    let mut j = i + identifier_char_len(src, i, end).unwrap_or(1);
+    while let Some(len) = identifier_char_len(src, j, end) {
+        j += len;
     }
     j
 }
@@ -179,7 +214,7 @@ pub(crate) fn find_matching(src: &[u8], mut i: usize, end: usize) -> Option<usiz
             prev_sig = b'/';
             continue;
         }
-        if is_ident_start(c) {
+        if starts_identifier(src, i, end) {
             let word_end = ident_end(src, i, end);
             prev_word = std::str::from_utf8(&src[i..word_end]).unwrap_or("");
             prev_sig = src[word_end - 1];
@@ -332,7 +367,7 @@ pub(crate) fn has_top_level_comma(src: &[u8], mut i: usize, end: usize) -> bool 
             prev_sig = b'/';
             continue;
         }
-        if is_ident_start(c) {
+        if starts_identifier(src, i, end) {
             let word_end = ident_end(src, i, end);
             prev_word = std::str::from_utf8(&src[i..word_end]).unwrap_or("");
             prev_sig = src[word_end - 1];
@@ -376,7 +411,7 @@ pub(crate) fn is_primary_expression(src: &[u8], from: usize, end: usize) -> bool
         return false;
     }
     let head = src[i];
-    if is_ident_start(head) {
+    if starts_identifier(src, i, end) {
         let word_end = ident_end(src, i, end);
         let word = std::str::from_utf8(&src[i..word_end]).unwrap_or("");
         // An operand-taking keyword binds looser than member access.
@@ -454,7 +489,7 @@ fn member_name_end(src: &[u8], i: usize, end: usize) -> Option<usize> {
     } else {
         i
     };
-    (name < end && is_ident_start(src[name])).then(|| ident_end(src, name, end))
+    starts_identifier(src, name, end).then(|| ident_end(src, name, end))
 }
 
 pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {
@@ -496,7 +531,7 @@ pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {
             }
             continue;
         }
-        if is_ident_start(c) {
+        if starts_identifier(src, i, end) {
             let j = ident_end(src, i, end);
             if matches!(&src[i..j], b"function" | b"class") {
                 let mut body = j;
@@ -521,7 +556,37 @@ pub(crate) fn contains_await(src: &[u8], mut i: usize, end: usize) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::contains_await;
+    use super::{contains_await, ident_end, identifier_char_len, starts_identifier};
+
+    #[test]
+    fn non_ascii_letters_continue_an_identifier_and_white_space_ends_it() {
+        for word in ["étry", "名try", "tryé", "a\u{200C}b", "𝑥try"] {
+            let src = format!("{word} ");
+            assert!(starts_identifier(src.as_bytes(), 0, src.len()), "{word}");
+            assert_eq!(
+                ident_end(src.as_bytes(), 0, src.len()),
+                word.len(),
+                "{word}"
+            );
+        }
+        for separator in [
+            "\u{00A0}", "\u{1680}", "\u{2000}", "\u{200A}", "\u{2028}", "\u{2029}", "\u{202F}",
+            "\u{205F}", "\u{3000}", "\u{FEFF}",
+        ] {
+            let src = format!("x{separator}try");
+            let bytes = src.as_bytes();
+            assert_eq!(
+                identifier_char_len(bytes, 1, bytes.len()),
+                None,
+                "{separator:?}"
+            );
+            assert_eq!(ident_end(bytes, 0, bytes.len()), 1, "{separator:?}");
+            assert!(!starts_identifier(bytes, 1, bytes.len()), "{separator:?}");
+        }
+        let cut = "é".as_bytes();
+        assert_eq!(identifier_char_len(cut, 0, 1), None);
+        assert_eq!(identifier_char_len(cut, 1, 2), None);
+    }
 
     #[test]
     fn await_scan_stops_at_nested_function_and_class_bodies() {

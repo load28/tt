@@ -460,6 +460,7 @@
 | TASK-450 | Project a value region in a generator as a generator so its `yield` parses | Complete | 2026-09-27 | 2026-09-27 | [TASK-450](./TASK-450-generator-value-region-projection.md) |
 | TASK-451 | Start a block at a line-broken brace after a complete expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-451](./TASK-451-brace-after-expression-starts-block.md) |
 | TASK-452 | Claim a `val` parameter modifier only inside a proven parameter list | Complete | 2026-09-28 | 2026-09-28 | [TASK-452](./TASK-452-val-parameter-list-context.md) |
+| TASK-453 | Never read a tt keyword out of the middle of a non-ASCII identifier | Complete | 2026-09-28 | 2026-09-28 | [TASK-453](./TASK-453-non-ascii-identifier-boundaries.md) |
 | TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
 | TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
 

@@ -369,7 +369,7 @@ pub(super) fn generic_param_names(generics: &str) -> Vec<String> {
     let mut index = 0usize;
     while index < source.len() {
         index = skip_ws_comments(source, index, source.len());
-        if index >= source.len() || !is_ident_start(source[index]) {
+        if !starts_identifier(source, index, source.len()) {
             break;
         }
         let end = ident_end(source, index, source.len());

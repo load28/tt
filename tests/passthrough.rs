@@ -677,6 +677,24 @@ fn val_as_a_call_argument_or_element() {
 }
 
 #[test]
+fn non_ascii_identifiers_ending_in_a_tt_keyword() {
+    assert_passthrough(
+        "const étry = (n: number) => n;\nconsole.log(étry(2));\nconst 名try = (n: number) => n;\n名try(1);\nconst x = { étry: (n: number) => n };\nx.étry(1);\nfunction g() {\n  return étry(3);\n}\n",
+    );
+    assert_passthrough(
+        "declare function f(...a: unknown[]): number;\nconst ématch = (n: number) => ({ n });\nconst m = ématch (1)\n{ }\nconst éval = [1];\nconst w = f(1, éval [0]);\nconst éflow = [1];\nconst q = f(1, éflow [0]);\n",
+    );
+    assert_passthrough(
+        "const évariant = 1;\nconst v = évariant\nlet Foo = 2;\nconst éresult = 1;\nlet r = éresult\n{ }\nconst éelse = 1;\n",
+    );
+}
+
+#[test]
+fn non_ascii_white_space_still_separates_words() {
+    assert_passthrough("const\u{00A0}a = 1;\nlet\u{3000}b = a;\u{2028}const c = b;\n");
+}
+
+#[test]
 fn val_element_access_in_arguments_and_elements() {
     assert_passthrough(
         "const val = [5];\nconsole.log(val [0]);\nconst arr = [1, val [0]];\ng(1, val [1]);\n",

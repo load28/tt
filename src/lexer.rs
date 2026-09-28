@@ -41,7 +41,9 @@ pub(crate) struct Token {
 /// everything else is a single-byte `Punct`.
 #[derive(Debug)]
 pub(crate) enum TokenKind {
-    /// ASCII identifier or keyword (`[A-Za-z_$][A-Za-z0-9_$]*`).
+    /// Identifier or keyword: ASCII `[A-Za-z_$][A-Za-z0-9_$]*` characters
+    /// and every non-ASCII code point that is not ECMA-262 white space or a
+    /// line terminator.
     Ident,
     /// `'...'` / `"..."` string literal (possibly unterminated at a
     /// newline or EOF, exactly as the byte scanner tolerates).
@@ -192,7 +194,7 @@ fn lex_region(
             continue;
         }
 
-        if is_ident_start(c) {
+        if starts_identifier(src, i, end) {
             let j = ident_end(src, i, end);
             tokens.push(Token {
                 kind: TokenKind::Ident,

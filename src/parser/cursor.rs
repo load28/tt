@@ -70,10 +70,12 @@ impl<'t> Cursor<'t> {
         None
     }
 
-    /// Consumes the current token if it is an identifier.
+    /// Consumes the current token if it is an ASCII identifier, the only
+    /// kind a tt construct names or binds.
     pub(super) fn eat_ident(&mut self) -> Option<(&'t str, Span)> {
-        match self.peek()?.kind {
-            TokenKind::Ident => {
+        let token = self.peek()?;
+        match token.kind {
+            TokenKind::Ident if self.text(token).is_ascii() => {
                 let t = self.bump()?;
                 Some((&self.parser.src[t.span.start..t.span.end], t.span))
             }
