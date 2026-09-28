@@ -100,3 +100,39 @@ fn a_line_after_an_import_equals_declaration_starts_a_statement() {
         );
     }
 }
+
+/// Contextual words at the start of a type or a statement that TypeScript
+/// reads as a prefix or modifier only under a lookahead condition; here each
+/// is a name, so the line after it begins a statement (TASK-503).
+const TASK_503_NAMES: &[&str] = &[
+    "type asserts = number;\nexport let a: asserts\n",
+    "type abstract = number;\nexport type A = abstract\n",
+    "declare let namespace: any;\nnamespace instanceof Object;\n",
+    "declare let module: any;\nmodule instanceof Object;\n",
+    "declare let declare: any;\ndeclare instanceof Object;\n",
+];
+
+/// The same words where TypeScript does read them as prefixes.
+const TASK_503_PREFIXES: &[&str] = &[
+    "export function g(v: unknown): asserts v is string {}\n",
+    "export function h(this: unknown): asserts this {}\n",
+    "export type C = abstract new () => object\n",
+    "export let k: new <T>(x: T) => T\n",
+    "export type G = <T>(x: T) => T\n",
+];
+
+#[test]
+fn a_contextual_type_or_statement_word_is_a_name_unless_typescript_reads_a_prefix() {
+    for head in TASK_503_NAMES.iter().chain(TASK_503_PREFIXES) {
+        let source = format!("{head}<p> val const text </p>\n");
+        assert_eq!(ok_tsx(&source), source, "{head:?}");
+        let source = format!("{head}/ val const q = 2 /.test(\"\")\n");
+        assert_eq!(ok(&source), source, "{head:?}");
+        let source = format!("{head}[1] |> console.log\n");
+        let out = ok(&source);
+        assert!(
+            out.contains(&format!("{head}console.log([1])")),
+            "{head:?}:\n{out}"
+        );
+    }
+}

@@ -20,6 +20,10 @@ pub(super) struct Type {
     /// parenthesized type, and an `=>` after it belongs to the enclosing
     /// arrow function.
     parameters: bool,
+    /// TypeScript's `isStartOfFunctionTypeOrConstructorType` has committed
+    /// to a signature: `new` or a type-parameter list came first, so the
+    /// next `(` opens parameters whatever follows it.
+    signature: bool,
     /// The atom is `import`, whose `(…)` is part of it.
     import: bool,
     /// Conditional types waiting for `?`, and for `:`.
@@ -32,6 +36,7 @@ impl Type {
         Type {
             atom: false,
             parameters: false,
+            signature: false,
             import: false,
             pending_question: 0,
             pending_colon: 0,
@@ -127,13 +132,11 @@ impl Machine<'_> {
     fn type_atom(&mut self, mut ty: Type, tok: &Tok<'_>) -> Out {
         match tok.kind {
             Tk::Word => {
-                match tok.text {
-                    "keyof" | "typeof" | "readonly" | "unique" | "infer" | "asserts" | "new"
-                    | "abstract" => {}
-                    word => {
-                        ty.atom = true;
-                        ty.import = word == "import";
-                    }
+                if self.type_operator(tok) {
+                    ty.signature |= tok.text == "new";
+                } else {
+                    ty.atom = true;
+                    ty.import = tok.text == "import";
                 }
                 self.push_frame(Frame::Type(ty));
                 Out::Consumed
@@ -145,7 +148,8 @@ impl Machine<'_> {
             }
             Tk::Punct(b'(') => {
                 ty.atom = true;
-                ty.parameters = self.starts_function_type(tok.span.end);
+                ty.parameters =
+                    std::mem::take(&mut ty.signature) || self.starts_function_type(tok.span.end);
                 self.push_frame(Frame::Type(ty));
                 self.open_type_group(b')');
                 Out::Consumed
@@ -163,6 +167,7 @@ impl Machine<'_> {
                 Out::Consumed
             }
             Tk::Punct(b'<') => {
+                ty.signature = true;
                 self.push_frame(Frame::Type(ty));
                 self.open_type_group(b'>');
                 Out::Consumed
@@ -291,6 +296,26 @@ impl Machine<'_> {
                 keep(self, TypeBody::Start);
                 Out::Retry
             }
+        }
+    }
+
+    /// Whether the word `tok`, where a type begins, is a prefix of the type
+    /// after it rather than a type name, as TypeScript's parser decides:
+    /// `keyof`, `unique`, `readonly` (`parseTypeOperatorOrHigher`), `infer`
+    /// (`parseInferType`), `typeof` (`parseTypeQuery`), and `new` always;
+    /// `abstract` only before `new` (`isStartOfFunctionTypeOrConstructorType`);
+    /// `asserts` only before an identifier or keyword on the same line
+    /// (`nextTokenIsIdentifierOrKeywordOnSameLine`, an assertion
+    /// predicate).
+    fn type_operator(&self, tok: &Tok<'_>) -> bool {
+        match tok.text {
+            "keyof" | "unique" | "readonly" | "infer" | "typeof" | "new" => true,
+            "abstract" => self.next_after(tok).1 == Some("new"),
+            "asserts" => {
+                let (_, next_word, next_break) = self.next_after(tok);
+                next_word.is_some() && !next_break
+            }
+            _ => false,
         }
     }
 

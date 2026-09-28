@@ -3,7 +3,7 @@
 
 use super::expressions::{ExprCfg, GroupKind, ObjectKind};
 use super::types::TypeBody;
-use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, Yield, reserved};
+use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, Yield, keyword, reserved};
 
 /// A statement in progress. `start` is the byte where it began, for the
 /// statement trace.
@@ -449,7 +449,9 @@ impl Machine<'_> {
             "await" if !peek.line_break && next_word == Some("using") => modifier(self),
             "async" if !peek.line_break && next_word == Some("function") => modifier(self),
             "abstract" if !peek.line_break && next_word == Some("class") => modifier(self),
-            "declare" if same_line_word => modifier(self),
+            "declare" if !peek.line_break && next_word.is_some_and(declaration_follows) => {
+                modifier(self)
+            }
             "val" if !peek.line_break && matches!(next_word, Some("const" | "let" | "var")) => {
                 modifier(self)
             }
@@ -466,7 +468,8 @@ impl Machine<'_> {
             "enum" => decl(self, DeclKind::Enum),
             "namespace" | "module"
                 if !peek.line_break
-                    && (next_word.is_some() || matches!(next, Some(b'"' | b'\''))) =>
+                    && (next_word.is_some_and(|word| !keyword(word))
+                        || matches!(next, Some(b'"' | b'\''))) =>
             {
                 decl(self, DeclKind::Namespace)
             }
@@ -1487,4 +1490,38 @@ impl Machine<'_> {
             }
         }
     }
+}
+
+/// Whether a declaration can begin at `word` after a `declare` modifier on
+/// the same line: the tokens TypeScript's `isStartOfDeclaration` accepts
+/// there — a declaration keyword, or another modifier. Any other word
+/// leaves `declare` an identifier in an expression statement
+/// (`declare instanceof C`).
+fn declaration_follows(word: &str) -> bool {
+    matches!(
+        word,
+        "var"
+            | "let"
+            | "const"
+            | "using"
+            | "function"
+            | "class"
+            | "enum"
+            | "interface"
+            | "type"
+            | "namespace"
+            | "module"
+            | "global"
+            | "import"
+            | "export"
+            | "abstract"
+            | "accessor"
+            | "async"
+            | "declare"
+            | "private"
+            | "protected"
+            | "public"
+            | "readonly"
+            | "static"
+    )
 }

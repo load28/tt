@@ -91,7 +91,12 @@ TypeScript's parser looks ahead to classify a token, the machine applies
 the same rule by peeking at the bytes after it: a `(` in a type opens a
 function type's parameters only when `isUnambiguouslyStartOfFunctionType`
 holds, so the `=>` after a parenthesized return type such as
-`(): (A | B) =>` belongs to the arrow function (TASK-499). The lexer's own
+`(): (A | B) =>` belongs to the arrow function (TASK-499); `asserts` is a
+type prefix only before a same-line name and `abstract` only before `new`,
+and `declare`, `namespace`, and `module` begin a declaration only before
+the tokens TypeScript's `isStartOfDeclaration` accepts (TASK-503). An
+import-equals declaration's module reference is `require(…)` or an entity
+name, never an expression (TASK-500). The lexer's own
 regular-expression, JSX, and leading-`.` number decisions are the machine's
 "an operand is expected here" (the `InputElementRegExp` goal of ECMA-262
 §12), which the machine answers with its own transitions (TASK-494): it

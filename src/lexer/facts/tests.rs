@@ -227,6 +227,10 @@ const KNOWN: &[&str] = &[
     "yield1()\nfunction* g3() { const s = yield\n  s }\n",
     "type A = number\nconst r1 = (): (A | undefined) => {}\n/x/g.exec(\"x\")\nconst r2 = (): (() => void) => { return () => {} }\n/x/g.exec(\"x\")\nconst r3 = (): (typeof r1) => r1\nconst r4 = (): (a: A) => void => { return () => {} }\n/x/g.exec(\"x\")\nconst r5 = (): ([\"a\"]) => { return [\"a\"] }\n-1\nconst r6 = (): ({ a }: { a: A }) => void => { return () => {} }\n/x/g.exec(\"x\")\n",
     "namespace B { export namespace C {} }\nimport A = B.C\n/x/g.exec(\"x\")\nimport fs = require(\"fs\")\n[1].forEach(n => n)\nexport import D = B.\n  C\n(1)\nimport type R = require(\"fs\")\n-1\nimport E = B\n`t`\n",
+    "type asserts = number\nlet a1: asserts\n/x/.test(\"\")\ntype abstract = number\ntype A2 = abstract\n/x/.test(\"\")\ntype N = abstract new () => object\n/x/.test(\"\")\nfunction f1(x: unknown): asserts x {}\n/x/.test(\"\")\nfunction f2(this: unknown): asserts this {}\n-1\n",
+    "let ng: new <T>(x: T) => T\n/x/.test(\"\")\ntype G = <T>(x: T) => T\n/x/.test(\"\")\ntype U = unique symbol\ntype K = keyof typeof globalThis\n/x/.test(\"\")\ntype Inf<T> = T extends Array<infer U extends string> ? U : never\n/x/.test(\"\")\ntype V<in I, out O> = (i: I) => O\n/x/.test(\"\")\n",
+    "declare let namespace: any, module: any, declare: any\nnamespace instanceof Object;\nmodule instanceof Object;\nnamespace in Object;\ndeclare instanceof Object;\ndeclare in Object;\ndeclare as any;\n",
+    "class C1 { declare\n x: number\n static\n y = 1\n accessor\n z = 2\n readonly\n w = 3\n get\n v() { return 1 }\n}\n/x/.test(\"\")\ntype L = { readonly\n x: number\n get\n y(): number }\n/x/.test(\"\")\nclass C2 { constructor(readonly\n p: number) {} }\n/x/.test(\"\")\n",
     "let get = 1, set = 2, of = 3, type = 4, declare = 5, abstract = 6, module = 7, namespace = 8\ntype\nFoo\ndeclare\nfoo\n",
 ];
 

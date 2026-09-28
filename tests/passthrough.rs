@@ -863,3 +863,23 @@ fn a_line_after_an_import_equals_declaration_passes_through() {
         }
     }
 }
+
+#[test]
+fn contextual_type_and_statement_words_pass_through() {
+    for head in [
+        "type asserts = number;\nexport let a: asserts\n",
+        "type abstract = number;\nexport type A = abstract\n",
+        "declare let namespace: any;\nnamespace instanceof Object;\n",
+        "declare let module: any;\nmodule in Object;\n",
+        "declare let declare: any;\ndeclare as any;\n",
+        "export function g(v: unknown): asserts v is string {}\n",
+        "export type C = abstract new () => object\n",
+        "export type G = <T>(x: T) => T\n",
+    ] {
+        for line in ["/x/g.exec(\"x\")", "[1].forEach(n => n)", "(1)", "`t`"] {
+            let source = format!("{head}{line}\n");
+            assert_passthrough(&source);
+            assert_tsx_passthrough(&source);
+        }
+    }
+}
