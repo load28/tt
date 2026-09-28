@@ -10,19 +10,28 @@
 //! So tt answers, from the analysis' declaration table — the same table
 //! that decides exhaustiveness and resolution, under the same shadowing.
 //!
-//! **Why the token stream and not the parser.** Completion is asked exactly
-//! when the construct does not parse: `match (s) { Circle(r) => r, Po|` has
-//! an arm with no body yet. The parser is all-or-nothing by contract (it
-//! claims only complete constructs), so a parse-based answer would go
-//! silent at the one moment it is wanted. The context is therefore read off
-//! the token stream, which is defined for any text, and only the
-//! *declarations* come from the parse — and a declaration elsewhere in the
-//! file is complete even while a match is being typed.
+//! **Where a pattern is.** A position is a pattern position only inside a
+//! pattern the grammar introduces: a match arm's pattern, an `if let`'s, a
+//! let-else's. Where a tt construct parses, its parse says so — the arm
+//! pattern spans, the `if let` and let-else alternatives — and everything
+//! else inside it (a scrutinee, a guard, an arm body, a bound expression)
+//! is an expression, where a `(` after a name is a call. Completion is
+//! also asked while a construct is being typed and does not parse yet
+//! (`match (s) { Circle(r) => r, Po|` has an arm with no body): the parser
+//! is all-or-nothing by contract, so that text is read off the token
+//! stream with the same grammar — the arm sequence of pattern, guard,
+//! `=>` and body, and the heads that introduce a single pattern — never by
+//! the shape of the tokens around the cursor alone (TASK-461). The
+//! *declarations* always come from the parse; a declaration elsewhere in
+//! the file is complete even while a match is being typed.
 
 use std::path::Path;
 
 use crate::analysis::DeclaredVariant;
-use crate::lexer::{Token, TokenKind, lex_with_kind};
+use crate::ast::{
+    GuardExpr, IfLetElse, IfLetStmt, Program, ResultItem, Segment, Span, TagPattern, TemplateChunk,
+};
+use crate::lexer::{Token, TokenKind};
 
 use super::language::Position;
 
@@ -59,14 +68,12 @@ pub struct TtCompletion {
 /// service's, and a consumer merges the two lists.
 pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<TtCompletion> {
     let offset = super::language::source_byte(source, position);
-    let tokens = lex_with_kind(
+    let (program, tokens) = crate::parser::lex_and_parse_with_kind(
         source,
-        0,
-        source.len(),
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let declarations = super::language::analyses_for(path, source).declarations;
-    let items = match context(source, &tokens, offset) {
+    let items = match context(source, &program, &tokens, offset) {
         Some(Context::Case { of: Some(arms) }) => {
             let mut items = resolve_all(&declarations, &arms.tags)
                 .flat_map(|declared| cases(declared, &arms.covered))
@@ -143,7 +150,20 @@ enum Context {
     Nested { tag: String, field: String },
 }
 
-fn context(source: &str, tokens: &[Token], offset: usize) -> Option<Context> {
+/// Which pattern a completion position is written in, and the token where
+/// the text of that pattern begins.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Site {
+    /// A match arm's pattern. `body` is the match body's brace token range
+    /// (the close is the end of the stream while it is unwritten), and
+    /// `start` is the arm's first token.
+    Arm { body: (usize, usize), start: usize },
+    /// The one pattern of an `if let` or a let-else, starting at its first
+    /// alternative's tag.
+    Single { start: usize },
+}
+
+fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> Option<Context> {
     // The identifier being typed is not context — step over it.
     let cursor = tokens
         .iter()
@@ -162,13 +182,65 @@ fn context(source: &str, tokens: &[Token], offset: usize) -> Option<Context> {
     if before == 0 {
         return None;
     }
+    let site = match parsed_at(program, offset) {
+        Some(Parsed::Arm { open, close, from }) => Site::Arm {
+            body: (token_at(tokens, open), token_at(tokens, close)),
+            start: from.map_or(before, |from| token_at(tokens, from)),
+        },
+        Some(Parsed::Single { from }) => Site::Single {
+            start: token_at(tokens, from),
+        },
+        Some(Parsed::Expression) => return None,
+        None => unclaimed_site(source, tokens, before)?,
+    };
+    site_context(source, tokens, site, before, prefix)
+}
 
-    // Tuple pattern slots are case positions, not payload fields. The tuple
-    // opener itself must occupy an arm slot directly inside a match body.
-    if let Some(open) = innermost_open(tokens, before)
-        && open > 0
-        && matches!(tokens[open - 1].kind, TokenKind::Punct(b'{' | b','))
-        && enclosing_match_body(source, tokens, open).is_some()
+/// What the pattern grammar expects at `before`, inside `site`'s pattern.
+fn site_context(
+    source: &str,
+    tokens: &[Token],
+    site: Site,
+    before: usize,
+    prefix: Option<usize>,
+) -> Option<Context> {
+    let (Site::Arm { start, .. } | Site::Single { start }) = site;
+    if before < start {
+        return None;
+    }
+    let Some(open) = innermost_paren(tokens, start, before)? else {
+        // The pattern's top level: a tag starts the pattern or follows `|`.
+        if before != start && !matches!(tokens[before - 1].kind, TokenKind::Punct(b'|')) {
+            return None;
+        }
+        return Some(match site {
+            Site::Arm { body, .. } => Context::Case {
+                of: Some(arm_tags(source, tokens, body, prefix)),
+            },
+            Site::Single { .. } => Context::Case { of: None },
+        });
+    };
+    if open > start && matches!(tokens[open - 1].kind, TokenKind::Ident) {
+        let tag = text(source, &tokens[open - 1]).to_string();
+        // `field:` right before the cursor means the nested pattern's tag.
+        if before >= open + 3
+            && matches!(tokens[before - 1].kind, TokenKind::Punct(b':'))
+            && matches!(tokens[before - 2].kind, TokenKind::Ident)
+        {
+            return Some(Context::Nested {
+                tag,
+                field: text(source, &tokens[before - 2]).to_string(),
+            });
+        }
+        // Otherwise a field name: at the start of the list or after a comma.
+        if matches!(tokens[before - 1].kind, TokenKind::Punct(b'(' | b',')) {
+            return Some(Context::Field { tag });
+        }
+        return None;
+    }
+    // A tuple pattern's parens open the arm; each slot is a case position.
+    if matches!(site, Site::Arm { .. })
+        && open == start
         && matches!(
             tokens[before - 1].kind,
             TokenKind::Punct(b'(' | b',' | b'|')
@@ -179,51 +251,6 @@ fn context(source: &str, tokens: &[Token], offset: usize) -> Option<Context> {
                 tags: Vec::new(),
                 covered: Vec::new(),
             }),
-        });
-    }
-
-    // Inside a pattern's parens? The innermost unclosed `(` decides.
-    if let Some(open) = innermost_open(tokens, before)
-        && open > 0
-        && matches!(tokens[open - 1].kind, TokenKind::Ident)
-    {
-        let tag = text(source, &tokens[open - 1]).to_string();
-        // `field:` right before the cursor means the nested pattern's tag.
-        if before >= 2
-            && matches!(tokens[before - 1].kind, TokenKind::Punct(b':'))
-            && matches!(tokens[before - 2].kind, TokenKind::Ident)
-        {
-            return Some(Context::Nested {
-                tag,
-                field: text(source, &tokens[before - 2]).to_string(),
-            });
-        }
-        // Otherwise a field name: at the start of the list or after a comma.
-        if matches!(
-            tokens[before - 1].kind,
-            TokenKind::Punct(b'(') | TokenKind::Punct(b',')
-        ) {
-            return Some(Context::Field { tag });
-        }
-        return None;
-    }
-
-    // `if let <cursor>` — tt-only syntax, so no other reading is possible.
-    if before >= 2
-        && text(source, &tokens[before - 1]) == "let"
-        && text(source, &tokens[before - 2]) == "if"
-    {
-        return Some(Context::Case { of: None });
-    }
-
-    // An arm's pattern: directly inside a match body, after `{` or `,`.
-    if matches!(
-        tokens[before - 1].kind,
-        TokenKind::Punct(b'{') | TokenKind::Punct(b',') | TokenKind::Punct(b'|')
-    ) && let Some(body) = enclosing_match_body(source, tokens, before)
-    {
-        return Some(Context::Case {
-            of: Some(arm_tags(source, tokens, body, prefix)),
         });
     }
     None
@@ -237,71 +264,265 @@ fn is_prefix(tokens: &[Token], index: usize, offset: usize) -> bool {
         && offset <= tokens[index].span.end
 }
 
-/// The index of the innermost `(` still open at `before`, if any. Braces
-/// close the search: a `(` outside the enclosing block is not this
-/// position's paren.
-fn innermost_open(tokens: &[Token], before: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for index in (0..before).rev() {
-        match tokens[index].kind {
-            TokenKind::Punct(b')') => depth += 1,
-            TokenKind::Punct(b'(') => {
-                if depth == 0 {
-                    return Some(index);
-                }
-                depth -= 1;
-            }
-            TokenKind::Punct(b'}') => return None,
-            TokenKind::Punct(b'{') => return None,
-            _ => {}
-        }
-    }
-    None
+/// The index of the first token at or after byte `at`.
+fn token_at(tokens: &[Token], at: usize) -> usize {
+    tokens.partition_point(|token| token.span.start < at)
 }
 
-/// The token range of the `match` body the position sits directly in —
-/// `(open brace index, close brace index or end)` — or `None` when it does
-/// not sit in one.
-fn enclosing_match_body(source: &str, tokens: &[Token], before: usize) -> Option<(usize, usize)> {
-    // Walk back to the `{` this position is directly inside.
-    let mut depth = 0usize;
-    let mut open = None;
-    for index in (0..before).rev() {
-        match tokens[index].kind {
-            TokenKind::Punct(b'}') => depth += 1,
-            TokenKind::Punct(b'{') => {
-                if depth == 0 {
-                    open = Some(index);
-                    break;
-                }
-                depth -= 1;
+/// The innermost `(` a pattern's tokens `start..before` leave open:
+/// `Some(None)` at the pattern's top level, `None` when a `[` or `{` is
+/// innermost — no pattern is written inside those.
+fn innermost_paren(tokens: &[Token], start: usize, before: usize) -> Option<Option<usize>> {
+    let mut open = Vec::new();
+    for (index, token) in tokens.iter().enumerate().take(before).skip(start) {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => open.push(index),
+            TokenKind::Punct(b')' | b']' | b'}') => {
+                open.pop();
             }
             _ => {}
         }
     }
-    let open = open?;
+    match open.last() {
+        None => Some(None),
+        Some(&index) if matches!(tokens[index].kind, TokenKind::Punct(b'(')) => Some(Some(index)),
+        Some(_) => None,
+    }
+}
+
+/// What a parsed tt construct says about a position inside it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Parsed {
+    /// In a match body, between its braces at byte `open` and `close`:
+    /// inside the arm pattern starting at byte `from`, or, when `from` is
+    /// `None`, in the slot before an arm or after the last separator.
+    Arm {
+        open: usize,
+        close: usize,
+        from: Option<usize>,
+    },
+    /// Inside the pattern of an `if let` or a let-else starting at byte
+    /// `from`.
+    Single { from: usize },
+    /// Inside an expression or statement part of a construct — a
+    /// scrutinee, a guard, an arm body, a bound expression, a block — with
+    /// no nested construct claiming the position.
+    Expression,
+}
+
+/// The answer of the innermost parsed tt construct containing `offset`, or
+/// `None` when no construct claims it.
+fn parsed_at(program: &Program, offset: usize) -> Option<Parsed> {
+    program
+        .segments
+        .iter()
+        .find_map(|segment| segment_at(segment, offset))
+}
+
+fn segment_at(segment: &Segment, offset: usize) -> Option<Parsed> {
+    match segment {
+        Segment::Match(expr) => {
+            if offset < expr.keyword_off || offset > expr.body_close {
+                return None;
+            }
+            if offset <= expr.body_open {
+                return Some(parsed_at(&expr.scrutinee, offset).unwrap_or(Parsed::Expression));
+            }
+            let arms = expr.arms.iter().map(|arm| {
+                (
+                    arm.pattern_span,
+                    arm.guard.as_ref(),
+                    &arm.body,
+                    arm.body_span,
+                    arm.block,
+                )
+            });
+            Some(arms_at(expr.body_open, expr.body_close, arms, offset))
+        }
+        Segment::TupleMatch(expr) => {
+            if offset < expr.keyword_off || offset > expr.body_close {
+                return None;
+            }
+            if offset <= expr.body_open {
+                return Some(
+                    expr.scrutinees
+                        .iter()
+                        .find_map(|(_, scrutinee)| parsed_at(scrutinee, offset))
+                        .unwrap_or(Parsed::Expression),
+                );
+            }
+            let arms = expr.arms.iter().map(|arm| {
+                (
+                    arm.pattern_span,
+                    arm.guard.as_ref(),
+                    &arm.body,
+                    arm.body_span,
+                    arm.block,
+                )
+            });
+            Some(arms_at(expr.body_open, expr.body_close, arms, offset))
+        }
+        Segment::IfLet(stmt) => if_let_at(stmt, offset),
+        Segment::LetElse(stmt) => {
+            if offset < stmt.owner_span.start || offset >= stmt.owner_span.end {
+                return None;
+            }
+            Some(
+                single_at(&stmt.alternatives, offset)
+                    .or_else(|| parsed_at(&stmt.expr, offset))
+                    .or_else(|| parsed_at(&stmt.else_body, offset))
+                    .unwrap_or(Parsed::Expression),
+            )
+        }
+        Segment::Try(stmt) => parsed_at(&stmt.expr, offset),
+        Segment::TryExpr(expr) => parsed_at(&expr.expr, offset),
+        Segment::Pipe(pipe) => pipe
+            .head
+            .as_ref()
+            .and_then(|head| parsed_at(head, offset))
+            .or_else(|| {
+                pipe.steps
+                    .iter()
+                    .find_map(|step| parsed_at(&step.body, offset))
+            }),
+        Segment::ResultBlock(block) => block
+            .items
+            .iter()
+            .find_map(|item| {
+                let ResultItem::Stmts(stmts) = item;
+                parsed_at(stmts, offset)
+            })
+            .or_else(|| {
+                block
+                    .value
+                    .as_ref()
+                    .and_then(|value| parsed_at(value, offset))
+            }),
+        Segment::Template(template) => template.chunks.iter().find_map(|chunk| match chunk {
+            TemplateChunk::Interp(interp) => parsed_at(interp, offset),
+            TemplateChunk::Raw(_) => None,
+        }),
+        Segment::Verbatim(_)
+        | Segment::Variant(_)
+        | Segment::TtImport(_)
+        | Segment::ValModifier(_) => None,
+    }
+}
+
+/// A position inside a parsed match body: in an arm's pattern, in an arm's
+/// guard or body, or in a slot between arms.
+fn arms_at<'a>(
+    open: usize,
+    close: usize,
+    arms: impl Iterator<Item = (Span, Option<&'a GuardExpr>, &'a Program, Span, bool)>,
+    offset: usize,
+) -> Parsed {
+    for (pattern, guard, body, body_span, block) in arms {
+        let end = if block {
+            body_span.end + 1
+        } else {
+            body_span.end
+        };
+        if offset < pattern.start || offset > end {
+            continue;
+        }
+        if offset <= pattern.end {
+            return Parsed::Arm {
+                open,
+                close,
+                from: Some(pattern.start),
+            };
+        }
+        return guard
+            .and_then(|guard| parsed_at(&guard.expr, offset))
+            .or_else(|| parsed_at(body, offset))
+            .unwrap_or(Parsed::Expression);
+    }
+    Parsed::Arm {
+        open,
+        close,
+        from: None,
+    }
+}
+
+fn if_let_at(stmt: &IfLetStmt, offset: usize) -> Option<Parsed> {
+    if offset < stmt.owner_span.start || offset >= stmt.owner_span.end {
+        return None;
+    }
+    Some(
+        single_at(&stmt.alternatives, offset)
+            .or_else(|| parsed_at(&stmt.expr, offset))
+            .or_else(|| parsed_at(&stmt.body, offset))
+            .or_else(|| match &stmt.else_part {
+                Some(IfLetElse::Block(block)) => parsed_at(block, offset),
+                Some(IfLetElse::IfLet(inner)) => if_let_at(inner, offset),
+                None => None,
+            })
+            .unwrap_or(Parsed::Expression),
+    )
+}
+
+fn single_at(alternatives: &[TagPattern], offset: usize) -> Option<Parsed> {
+    let (first, last) = (alternatives.first()?, alternatives.last()?);
+    (first.tag_off <= offset && offset <= last.end).then_some(Parsed::Single {
+        from: first.tag_off,
+    })
+}
+
+/// The pattern site of a position no parsed construct claims — text being
+/// typed, which the parser does not claim until it is complete.
+///
+/// The position's pattern is found by the grammar that introduces one, not
+/// by the shape of the text around it: a match arm directly inside a
+/// `match (…) {` body, while that arm is still in its pattern, or the
+/// alternatives after `if let` or after a let-else's declaration keyword.
+/// A `(` after an identifier anywhere else is a call, and an arm's guard
+/// or body is an expression.
+fn unclaimed_site(source: &str, tokens: &[Token], before: usize) -> Option<Site> {
+    let mut open = Vec::new();
+    for (index, token) in tokens.iter().enumerate().take(before) {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => open.push(index),
+            TokenKind::Punct(b')' | b']' | b'}') => {
+                open.pop();
+            }
+            _ => {}
+        }
+    }
+    // The pattern's own parens are the innermost run of open `(`; what
+    // encloses that run decides which construct the pattern belongs to.
+    let parens = open
+        .iter()
+        .rev()
+        .take_while(|&&index| matches!(tokens[index].kind, TokenKind::Punct(b'(')))
+        .count();
+    let head_end = if parens > 0 {
+        open[open.len() - parens]
+    } else {
+        before
+    };
+    if let Some(brace) = open.len().checked_sub(parens + 1).map(|index| open[index])
+        && let Some(body) = match_body(source, tokens, brace)
+    {
+        return arm_start(source, tokens, brace, head_end).map(|start| Site::Arm { body, start });
+    }
+    pattern_head(source, tokens, head_end, parens > 0)
+}
+
+/// The token range of the `match` body whose `{` is at `open` —
+/// `(open, close brace index or end of stream)` — or `None` when the brace
+/// does not open a match body.
+fn match_body(source: &str, tokens: &[Token], open: usize) -> Option<(usize, usize)> {
+    if !matches!(tokens[open].kind, TokenKind::Punct(b'{')) {
+        return None;
+    }
     // `match ( ... ) {` — the scrutinee parens sit between the keyword and
     // the brace, so step back over them.
     let close_paren = open.checked_sub(1)?;
     if !matches!(tokens[close_paren].kind, TokenKind::Punct(b')')) {
         return None;
     }
-    let mut depth = 0usize;
-    let mut keyword = None;
-    for index in (0..close_paren).rev() {
-        match tokens[index].kind {
-            TokenKind::Punct(b')') => depth += 1,
-            TokenKind::Punct(b'(') => {
-                if depth == 0 {
-                    keyword = index.checked_sub(1);
-                    break;
-                }
-                depth -= 1;
-            }
-            _ => {}
-        }
-    }
-    let keyword = keyword?;
+    let keyword = matching_open(tokens, close_paren)?.checked_sub(1)?;
     if text(source, &tokens[keyword]) != "match" {
         return None;
     }
@@ -323,6 +544,114 @@ fn enclosing_match_body(source: &str, tokens: &[Token], before: usize) -> Option
         }
     }
     Some((open, close))
+}
+
+/// The `(` a `)` at `close` closes.
+fn matching_open(tokens: &[Token], close: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for index in (0..close).rev() {
+        match tokens[index].kind {
+            TokenKind::Punct(b')') => depth += 1,
+            TokenKind::Punct(b'(') => {
+                if depth == 0 {
+                    return Some(index);
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Where an arm is in the parser's arm grammar: its pattern, its `if`
+/// guard, or its body after `=>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArmPart {
+    Pattern,
+    Guard,
+    Body,
+}
+
+/// The first token of the arm being written at `until` in the match body
+/// opened at `open`, when `until` is still in that arm's pattern.
+///
+/// The arms are walked with the parser's arm grammar: a pattern, an
+/// optional `if` guard, `=>`, and a body that runs to the next top-level
+/// `,`. A top-level `,` also ends an arm that never reached its `=>`, as
+/// the parser's arm recovery does, so an unfinished sibling does not hide
+/// the arms after it.
+fn arm_start(source: &str, tokens: &[Token], open: usize, until: usize) -> Option<usize> {
+    let mut part = ArmPart::Pattern;
+    let mut start = open + 1;
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate().take(until).skip(open + 1) {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if depth > 0 => {}
+            TokenKind::Punct(b',') => {
+                part = ArmPart::Pattern;
+                start = index + 1;
+            }
+            TokenKind::Arrow if part != ArmPart::Body => part = ArmPart::Body,
+            TokenKind::Ident if part == ArmPart::Pattern && text(source, token) == "if" => {
+                part = ArmPart::Guard;
+            }
+            _ => {}
+        }
+    }
+    (part == ArmPart::Pattern).then_some(start)
+}
+
+/// The `if let` or let-else whose pattern alternatives end at `head_end`,
+/// walking back over the alternatives already written (`A | B(x) | `) to
+/// the construct's keyword. With `parens`, `head_end` is the `(` of the
+/// alternative being written, whose tag precedes it.
+fn pattern_head(source: &str, tokens: &[Token], head_end: usize, parens: bool) -> Option<Site> {
+    let mut first = head_end;
+    if parens {
+        first = first.checked_sub(1)?;
+        if !matches!(tokens[first].kind, TokenKind::Ident) {
+            return None;
+        }
+    }
+    loop {
+        let previous = first.checked_sub(1)?;
+        match tokens[previous].kind {
+            TokenKind::Punct(b'|') => {
+                let alternative = previous.checked_sub(1)?;
+                first = match tokens[alternative].kind {
+                    TokenKind::Ident => alternative,
+                    TokenKind::Punct(b')') => {
+                        let tag = matching_open(tokens, alternative)?.checked_sub(1)?;
+                        if !matches!(tokens[tag].kind, TokenKind::Ident) {
+                            return None;
+                        }
+                        tag
+                    }
+                    _ => return None,
+                };
+            }
+            TokenKind::Ident => {
+                let keyword = text(source, &tokens[previous]);
+                let if_let = keyword == "let"
+                    && previous
+                        .checked_sub(1)
+                        .is_some_and(|at| text(source, &tokens[at]) == "if");
+                // A let-else is claimed by its first alternative's parens:
+                // `const Tag(` is no TypeScript declaration.
+                let let_else = matches!(keyword, "const" | "let" | "var")
+                    && matches!(tokens.get(first).map(|t| &t.kind), Some(TokenKind::Ident))
+                    && matches!(
+                        tokens.get(first + 1).map(|t| &t.kind),
+                        Some(TokenKind::Punct(b'('))
+                    );
+                return (if_let || let_else).then_some(Site::Single { start: first });
+            }
+            _ => return None,
+        }
+    }
 }
 
 /// Completed arm headers provide variant evidence. An unfinished sibling and
@@ -575,7 +904,7 @@ mod tests {
     #[test]
     fn a_payload_position_offers_the_cases_fields() {
         let src = format!("{DECL}const a = match (s) {{ Rect(w) => w, Point => 0 }};\n");
-        assert_eq!(labels(&src, "Rect("), ["w", "h"]);
+        assert_eq!(labels(&src, "{ Rect("), ["w", "h"]);
         // ...and after a comma inside the list.
         let src = format!("{DECL}const a = match (s) {{ Rect(w, ) => w }};\n");
         assert_eq!(labels(&src, "Rect(w, "), ["w", "h"]);
@@ -595,7 +924,7 @@ mod tests {
         let src = "variant Inner { Yes(n: number), No }\n\
                    variant Outer { Wrap(inner: Inner), Bare }\n\
                    const a = match (o) { Wrap(inner: ) => 0 };\n";
-        assert_eq!(labels(src, "Wrap(inner: "), ["Yes", "No"]);
+        assert_eq!(labels(src, "match (o) { Wrap(inner: "), ["Yes", "No"]);
     }
 
     #[test]
@@ -611,7 +940,7 @@ mod tests {
         let src = "variant Inner { Yes(n: number), No }\n\
                    variant Outer { Wrap(inner: Inner), Bare }\n\
                    if let Wrap(inner: ) = o { }\n";
-        assert_eq!(labels(src, "Wrap(inner: "), ["Yes", "No"]);
+        assert_eq!(labels(src, "if let Wrap(inner: "), ["Yes", "No"]);
     }
 
     #[test]
@@ -660,7 +989,10 @@ mod tests {
     fn ambiguous_tags_preserve_fields_and_deduplicate_insertions() {
         let source = "variant Left { Shared(common: string, left: number) }\nvariant Right { Shared(common: number, right: boolean) }\nconst r = match (x) { Shared( }";
         assert_eq!(labels(source, "Shared( }"), Vec::<String>::new());
-        assert_eq!(labels(source, "{ Shared("), ["common", "left", "right"]);
+        assert_eq!(
+            labels(source, "match (x) { Shared("),
+            ["common", "left", "right"]
+        );
     }
 
     #[test]
@@ -688,5 +1020,87 @@ mod tests {
         assert!(labels(&src, "match (").is_empty());
         // An arm body is an expression too.
         assert!(labels(&src, "Circle(r) => ").is_empty());
+    }
+
+    #[test]
+    fn call_arguments_are_not_payload_positions() {
+        for (source, needle) in [
+            (
+                format!("{DECL}const c = Shape.Circle();\n"),
+                "Shape.Circle(",
+            ),
+            (
+                format!("{DECL}const c = Shape.Rect(w, );\n"),
+                "Shape.Rect(w, ",
+            ),
+            (
+                "import { Option } from \"tt/std/option\";\nconst o = Option.Some();\n".to_string(),
+                "Option.Some(",
+            ),
+            (
+                format!("{DECL}function Rect(a: number, b: number) {{}}\nRect(q, );\n"),
+                "\nRect(q, ",
+            ),
+            (format!("{DECL}const c = Rect(q, "), "Rect(q, "),
+            (format!("{DECL}Rect(q, "), "\nRect(q, "),
+            (
+                format!(
+                    "{DECL}const a = match (s) {{ Circle(radius) => Rect(radius, ), _ => 0 }};\n"
+                ),
+                "=> Rect(radius, ",
+            ),
+            (
+                format!("{DECL}const a = match (s) {{ Circle(radius) => Rect(radius, "),
+                "=> Rect(radius, ",
+            ),
+            (
+                format!("{DECL}const a = match (s) {{ Circle(radius) if Rect( => 1 }};\n"),
+                "if Rect(",
+            ),
+            (
+                format!("{DECL}if let Circle(radius) = Rect() {{ }}\n"),
+                "= Rect(",
+            ),
+            (
+                format!("{DECL}const Circle(radius) = Rect() else {{ return; }};\n"),
+                "= Rect(",
+            ),
+        ] {
+            assert!(
+                labels(&source, needle).is_empty(),
+                "{needle}: {:?}",
+                labels(&source, needle)
+            );
+        }
+    }
+
+    #[test]
+    fn a_variant_declaration_is_not_a_payload_position() {
+        assert!(labels(DECL, "variant Shape { Circle(").is_empty());
+        assert!(labels(DECL, "Rect(w: number, ").is_empty());
+    }
+
+    #[test]
+    fn payload_positions_follow_the_pattern_that_introduces_them() {
+        for (source, needle) in [
+            (
+                format!(
+                    "{DECL}const a = match (s) {{ Circle(radius) => match (s) {{ Rect() => 1, _ => 2 }}, _ => 0 }};\n"
+                ),
+                "{ Rect(",
+            ),
+            (
+                format!("{DECL}const a = match (s) {{ Circle(radius) => 1, Rect(w, "),
+                "Rect(w, ",
+            ),
+            (
+                format!("{DECL}const a = match (s) {{ Circle(radius) | Rect( => 1 }};\n"),
+                "| Rect(",
+            ),
+            (format!("{DECL}if let Circle(radius) | Rect("), "| Rect("),
+            (format!("{DECL}let Rect(w, "), "let Rect(w, "),
+        ] {
+            assert_eq!(labels(&source, needle), ["w", "h"], "{needle}");
+        }
     }
 }

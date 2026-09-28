@@ -468,6 +468,7 @@
 | TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
 | TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
 | TASK-460 | Write the separator a missing-arm edit needs after the last written arm | Complete | 2026-09-28 | 2026-09-28 | [TASK-460](./TASK-460-missing-arm-edit-after-unseparated-arm.md) |
+| TASK-461 | Offer payload field completions only inside a pattern | Complete | 2026-09-28 | 2026-09-28 | [TASK-461](./TASK-461-payload-completions-only-in-patterns.md) |
 
 ## Next task number
 
