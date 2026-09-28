@@ -181,10 +181,26 @@ pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
 /// specifier stays bare in the source and in every declaration emitted from
 /// it. Nothing is written to the user's `node_modules`.
 pub(crate) fn std_module_path(module: crate::StdModule) -> PathBuf {
-    match module {
-        crate::StdModule::Runtime => PathBuf::from("node_modules/@tt/runtime/index.ts"),
-        _ => Path::new("node_modules/@tt/std").join(module.file_name()),
-    }
+    let package = match module {
+        crate::StdModule::Runtime => crate::StdPackage::Runtime,
+        _ => crate::StdPackage::Std,
+    };
+    std_package_dir(package).join(crate::StdPackage::file_name(module))
+}
+
+fn std_package_dir(package: crate::StdPackage) -> PathBuf {
+    Path::new("node_modules").join(package.name())
+}
+
+fn std_package_modules(root: &Path, package: crate::StdPackage) -> impl Iterator<Item = Module> {
+    let directory = root.join(std_package_dir(package));
+    package
+        .files_with_banner("")
+        .into_iter()
+        .map(move |(name, text)| Module {
+            path: directory.join(name),
+            text,
+        })
 }
 
 /// The path the compiler emits a lowered module's declarations to:
@@ -214,17 +230,12 @@ pub(crate) fn assemble(
     if files.iter().any(|f| f.imports_std) {
         query
             .modules
-            .extend(crate::StdModule::STANDARD.map(|module| Module {
-                path: root.join(std_module_path(module)),
-                text: module.source().to_string(),
-            }));
+            .extend(std_package_modules(root, crate::StdPackage::Std));
     }
     if files.iter().any(|f| f.uses_pipeline) {
-        let module = crate::StdModule::Runtime;
-        query.modules.push(Module {
-            path: root.join(std_module_path(module)),
-            text: module.source().to_string(),
-        });
+        query
+            .modules
+            .extend(std_package_modules(root, crate::StdPackage::Runtime));
     }
 
     for file in files {

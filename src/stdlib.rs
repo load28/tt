@@ -96,6 +96,162 @@ impl StdModule {
     }
 }
 
+/// One installable package the standard-library modules are served as.
+///
+/// The package is dual-format so that both module formats resolve it in
+/// every `moduleResolution` mode. The package root is `"type": "module"`
+/// and holds the ES-module sources. `cjs/` holds the same sources under a
+/// `"type": "commonjs"` manifest. Each `"exports"` entry maps the `import`
+/// condition to the root file and the `require` condition to its `cjs/` copy,
+/// with a `types` condition first in each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum StdPackage {
+    /// `@tt/std`: the type-only entry point and the Option/Result modules.
+    Std,
+    /// `@tt/runtime`: the compiler-owned pipeline helpers.
+    Runtime,
+}
+
+/// The subdirectory holding the CommonJS copy of a [`StdPackage`].
+pub const STD_PACKAGE_COMMONJS_DIR: &str = "cjs";
+
+impl StdPackage {
+    /// Every package, in deterministic materialization order.
+    pub const ALL: [StdPackage; 2] = [StdPackage::Std, StdPackage::Runtime];
+
+    /// The package name, which is also its `node_modules` directory.
+    pub const fn name(self) -> &'static str {
+        match self {
+            StdPackage::Std => STD_SPECIFIER,
+            StdPackage::Runtime => "@tt/runtime",
+        }
+    }
+
+    /// The modules the package contains.
+    pub const fn modules(self) -> &'static [StdModule] {
+        match self {
+            StdPackage::Std => &StdModule::STANDARD,
+            StdPackage::Runtime => &[StdModule::Runtime],
+        }
+    }
+
+    /// The file a module occupies inside its package directory.
+    pub const fn file_name(module: StdModule) -> &'static str {
+        match module {
+            StdModule::Runtime => "index.ts",
+            _ => module.file_name(),
+        }
+    }
+
+    /// The package's `package.json`.
+    pub fn manifest(self) -> String {
+        let entries = self
+            .modules()
+            .iter()
+            .map(|module| {
+                let subpath = &module.specifier()[self.name().len()..];
+                let file = Self::file_name(*module);
+                let cjs = STD_PACKAGE_COMMONJS_DIR;
+                format!(
+                    "    \".{subpath}\": {{\n      \"import\": {{ \"types\": \"./{file}\", \"default\": \"./{file}\" }},\n      \"require\": {{ \"types\": \"./{cjs}/{file}\", \"default\": \"./{cjs}/{file}\" }}\n    }}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",\n");
+        format!(
+            "{{\n  \"name\": \"{name}\",\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"types\": \"./index.ts\",\n  \"exports\": {{\n{entries}\n  }}\n}}\n",
+            name = self.name()
+        )
+    }
+
+    /// The manifest earlier ttc releases wrote: no `"type"` and no
+    /// `"exports"`. A package directory holding exactly these bytes was
+    /// written by ttc and is upgraded in place by [`StdPackage::materialize`].
+    fn legacy_manifest(self) -> String {
+        format!(
+            "{{\n  \"name\": \"{}\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}}\n",
+            self.name()
+        )
+    }
+
+    /// The CommonJS copy of the package as `(path, text)` pairs relative to
+    /// the package directory.
+    fn commonjs_files(self, banner: &str) -> Vec<(String, String)> {
+        self.modules()
+            .iter()
+            .map(|module| {
+                (
+                    format!("{STD_PACKAGE_COMMONJS_DIR}/{}", Self::file_name(*module)),
+                    format!("{banner}{}", module.source()),
+                )
+            })
+            .chain(std::iter::once((
+                format!("{STD_PACKAGE_COMMONJS_DIR}/package.json"),
+                "{\n  \"type\": \"commonjs\"\n}\n".to_string(),
+            )))
+            .collect()
+    }
+
+    /// Every file of the package as `(path, text)` pairs relative to the
+    /// package directory, each module prefixed with `banner`.
+    pub fn files_with_banner(self, banner: &str) -> Vec<(String, String)> {
+        self.modules()
+            .iter()
+            .map(|module| {
+                (
+                    Self::file_name(*module).to_string(),
+                    format!("{banner}{}", module.source()),
+                )
+            })
+            .chain(self.commonjs_files(banner))
+            .chain(std::iter::once((
+                "package.json".to_string(),
+                self.manifest(),
+            )))
+            .collect()
+    }
+
+    /// Every file of the package, each module with [`GENERATED_BANNER`].
+    pub fn files(self) -> Vec<(String, String)> {
+        self.files_with_banner(GENERATED_BANNER)
+    }
+
+    /// The package's directory under `root`.
+    pub fn directory(self, root: &std::path::Path) -> std::path::PathBuf {
+        root.join("node_modules").join(self.name())
+    }
+
+    /// Writes the package into `root/node_modules` when it is absent. A
+    /// package that exists is left alone, except that one whose manifest is
+    /// byte-equal to [`StdPackage::legacy_manifest`] gets the current
+    /// manifest and its CommonJS copy.
+    pub fn materialize(self, root: &std::path::Path) -> std::io::Result<()> {
+        let directory = self.directory(root);
+        let files = if !directory.exists() {
+            self.files()
+        } else if std::fs::read_to_string(directory.join("package.json"))
+            .is_ok_and(|text| text == self.legacy_manifest())
+        {
+            let mut files = self.commonjs_files(GENERATED_BANNER);
+            files.push(("package.json".to_string(), self.manifest()));
+            files
+        } else {
+            return Ok(());
+        };
+        for (name, text) in files {
+            let path = directory.join(name);
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(path, text)?;
+        }
+        Ok(())
+    }
+}
+
+/// The first line of every standard-library file ttc writes for a project.
+pub const GENERATED_BANNER: &str = "// @generated by ttc --emit-std — do not edit directly.\n";
+
 /// Per-module compiler support rewrites supplied by a build adapter.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct StdImports<'a> {

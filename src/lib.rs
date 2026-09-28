@@ -103,8 +103,8 @@ pub use probe::{
 };
 pub use sidecar::{Sidecar, build_sidecar};
 pub use stdlib::{
-    RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE,
-    StdImports, StdModule,
+    GENERATED_BANNER, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_PACKAGE_COMMONJS_DIR,
+    STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE, StdImports, StdModule, StdPackage,
 };
 pub use val::{Mutation, ValBinding, ValFn, ValParam, ValPass, ValProbes, is_builtin_mutator_name};
 

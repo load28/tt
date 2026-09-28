@@ -58,6 +58,18 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
   tsconfig 루트(또는 파일에서 올라가 찾은 패키지 루트)에
   `node_modules/@tt/{std,runtime}`를 물질화한다 — typed engine이 언어
   서비스에 하는 것과 같은 규칙, 이미 있으면 절대 덮어쓰지 않는다.
+  **Update (TASK-473)**: every materializer (this one, the language
+  service, the contextual pass, and the typed engine's in-memory copy)
+  now writes the one package definition, `ttc::StdPackage`. It is
+  dual-format. The root is `"type": "module"`, and `cjs/` holds identical
+  sources under `"type": "commonjs"`. Each `"exports"` entry (`.`,
+  `./option`, `./result`) sends the `import` condition to the root file and
+  the `require` condition to the `cjs/` copy, each with `types` first. As a
+  result, ES-module and CommonJS importers both resolve subpaths under
+  `node16`/`nodenext`/`bundler`, and each gets files of its own format.
+  A manifest byte-equal to the one earlier
+  releases wrote (name/version/types only) is upgraded in place. Any other
+  existing package is still left alone.
 - **정적 identity**: `dynamicConfig` 없음, `compilerOptions` 요구 없음 —
   tt의 변환은 프로젝트 설정과 무관하다. incremental/`--build`의 up-to-date
   판정이 매퍼 프로세스를 스폰하지 않고 끝난다.

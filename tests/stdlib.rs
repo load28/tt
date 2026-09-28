@@ -132,3 +132,102 @@ fn rolldown_command() -> Option<PathBuf> {
         .filter(|output| output.status.success())
         .map(|_| PathBuf::from("rolldown"))
 }
+
+fn scratch(tag: &str) -> PathBuf {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    std::env::temp_dir().join(format!("tt-stdlib-{tag}-{}-{nonce}", std::process::id()))
+}
+
+#[test]
+fn materialized_packages_are_dual_format_with_an_exports_map() {
+    let root = scratch("package");
+    for package in ttc::StdPackage::ALL {
+        package.materialize(&root).unwrap();
+        let directory = package.directory(&root);
+        let read = |path: &str| fs::read_to_string(directory.join(path)).unwrap();
+        let manifest: serde_json::Value = serde_json::from_str(&read("package.json")).unwrap();
+        assert_eq!(manifest["name"], package.name());
+        assert_eq!(manifest["type"], "module");
+        let commonjs: serde_json::Value = serde_json::from_str(&read(&format!(
+            "{}/package.json",
+            ttc::STD_PACKAGE_COMMONJS_DIR
+        )))
+        .unwrap();
+        assert_eq!(commonjs["type"], "commonjs");
+        for module in package.modules() {
+            let subpath = format!(".{}", &module.specifier()[package.name().len()..]);
+            let entry = &manifest["exports"][subpath.as_str()];
+            let file = ttc::StdPackage::file_name(*module);
+            let copy = format!("{}/{file}", ttc::STD_PACKAGE_COMMONJS_DIR);
+            let text = read("package.json");
+            let import =
+                format!("\"import\": {{ \"types\": \"./{file}\", \"default\": \"./{file}\" }}");
+            let require =
+                format!("\"require\": {{ \"types\": \"./{copy}\", \"default\": \"./{copy}\" }}");
+            assert!(
+                text.find(&import).unwrap() < text.find(&require).unwrap(),
+                "{text}"
+            );
+            assert_eq!(entry["import"]["types"], format!("./{file}"), "{subpath}");
+            assert_eq!(entry["import"]["default"], format!("./{file}"), "{subpath}");
+            assert_eq!(entry["require"]["types"], format!("./{copy}"), "{subpath}");
+            assert_eq!(
+                entry["require"]["default"],
+                format!("./{copy}"),
+                "{subpath}"
+            );
+            for path in [file.to_string(), copy] {
+                assert_eq!(
+                    read(&path),
+                    format!("{}{}", ttc::GENERATED_BANNER, module.source()),
+                    "{path}"
+                );
+            }
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_package_ttc_wrote_before_exports_is_upgraded_and_any_other_is_kept() {
+    let root = scratch("upgrade");
+    let std_dir = ttc::StdPackage::Std.directory(&root);
+    fs::create_dir_all(&std_dir).unwrap();
+    fs::write(
+        std_dir.join("package.json"),
+        "{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
+    )
+    .unwrap();
+    fs::write(std_dir.join("index.ts"), "// mine\n").unwrap();
+    ttc::StdPackage::Std.materialize(&root).unwrap();
+    assert_eq!(
+        fs::read_to_string(std_dir.join("package.json")).unwrap(),
+        ttc::StdPackage::Std.manifest()
+    );
+    for module in ttc::StdPackage::Std.modules() {
+        assert!(
+            std_dir
+                .join(ttc::STD_PACKAGE_COMMONJS_DIR)
+                .join(ttc::StdPackage::file_name(*module))
+                .is_file()
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(std_dir.join("index.ts")).unwrap(),
+        "// mine\n"
+    );
+
+    let runtime_dir = ttc::StdPackage::Runtime.directory(&root);
+    fs::create_dir_all(&runtime_dir).unwrap();
+    let authored = "{ \"name\": \"@tt/runtime\", \"version\": \"9.9.9\" }\n";
+    fs::write(runtime_dir.join("package.json"), authored).unwrap();
+    ttc::StdPackage::Runtime.materialize(&root).unwrap();
+    assert_eq!(
+        fs::read_to_string(runtime_dir.join("package.json")).unwrap(),
+        authored
+    );
+    fs::remove_dir_all(root).unwrap();
+}

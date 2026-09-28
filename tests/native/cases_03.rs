@@ -728,6 +728,48 @@ fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project
     assert!(typed.iter().any(|d| d["code"] == "val-mutation"), "{answers:?}");
 }
 
+fn module_project(
+    package_type: &str,
+    module: &str,
+    resolution: &str,
+    verbatim: bool,
+    files: &[(&str, &str)],
+) -> Workspace {
+    let dir = tmpdir();
+    write(
+        &dir,
+        "package.json",
+        &format!("{{ \"private\": true, \"type\": \"{package_type}\" }}\n"),
+    );
+    write(
+        &dir,
+        "tsconfig.json",
+        &format!(
+            r#"{{
+  "compilerOptions": {{
+    "target": "es2022",
+    "module": "{module}",
+    "moduleResolution": "{resolution}",
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": {verbatim},
+    "noEmit": true
+  }},
+  "include": ["src"]
+}}
+"#
+        ),
+    );
+    for (name, text) in files {
+        write(&dir, name, text);
+    }
+    dir
+}
+
+fn error_count(out: &str) -> usize {
+    out.lines().filter(|line| line.starts_with("error")).count()
+}
+
 #[test]
 fn variant_case_and_field_docs_reach_hover_and_signature_help() {
     require_tsgo!();
@@ -838,4 +880,49 @@ fn hover_documentation_and_jsdoc_tags_are_separate_from_the_signature() {
         .expect("the reference hovers");
     assert_eq!(undocumented.signature, "const r: number");
     assert_eq!(undocumented.documentation, "");
+}
+
+#[test]
+fn the_standard_library_resolves_from_either_module_format_in_every_resolution_mode() {
+    require_tsgo!();
+    for (package_type, module, resolution, verbatim) in [
+        ("commonjs", "node16", "node16", false),
+        ("module", "node16", "node16", false),
+        ("commonjs", "nodenext", "nodenext", false),
+        ("module", "nodenext", "nodenext", true),
+        ("module", "esnext", "bundler", true),
+        ("commonjs", "preserve", "bundler", false),
+        ("commonjs", "commonjs", "bundler", false),
+    ] {
+        let dir = module_project(
+            package_type,
+            module,
+            resolution,
+            verbatim,
+            &[
+                (
+                    "src/s.tt",
+                    "import type { TOption } from \"@tt/std\";\n\
+                     import * as Option from \"@tt/std/option\";\n\
+                     import * as Result from \"@tt/std/result\";\n\
+                     export const o: TOption<number> = Option.fromNullable(1 as number | null);\n\
+                     export const r = Result.Ok(1);\n\
+                     export const n = [1, 2] |> ((xs) => xs.length);\n\
+                     export const bad: string = n;\n",
+                ),
+                (
+                    "src/u.ts",
+                    "import type { TOption } from \"@tt/std\";\n\
+                     export const p: TOption<string> | undefined = undefined;\n",
+                ),
+            ],
+        );
+        let out = check(&dir);
+        let label = format!("{package_type}/{module}/{resolution}/{verbatim}");
+        assert!(
+            block(&out, "type mismatch: expected `string`").contains("--> src/s.tt"),
+            "{label}: {out}"
+        );
+        assert_eq!(error_count(&out), 1, "{label}: {out}");
+    }
 }

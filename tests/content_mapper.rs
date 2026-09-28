@@ -481,6 +481,84 @@ fn std_imports_resolve_through_materialization() {
     );
 }
 
+fn node_module_project(package_type: &str, module: &str, verbatim: bool) -> Workspace {
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("package.json"),
+        format!("{{ \"private\": true, \"type\": \"{package_type}\" }}\n"),
+    )
+    .unwrap();
+    let config = project.path().join("tsconfig.json");
+    let text = fs::read_to_string(&config)
+        .unwrap()
+        .replace("\"esnext\"", &format!("\"{module}\""))
+        .replace("\"bundler\"", &format!("\"{module}\""))
+        .replace(
+            "\"skipLibCheck\": true",
+            &format!("\"skipLibCheck\": true,\n    \"verbatimModuleSyntax\": {verbatim}"),
+        );
+    fs::write(&config, text).unwrap();
+    fs::write(
+        project.path().join("src/opt.tt"),
+        "import type { TOption } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport * as Result from \"@tt/std/result\";\n\nexport function first(values: readonly number[]): TOption<number> {\n  return values.length > 0 ? Option.Some(values[0]) : Option.None;\n}\n\nexport const ok = Result.Ok(1);\nexport const count = [1, 2] |> ((xs) => xs.length);\n",
+    )
+    .unwrap();
+    project
+}
+
+#[test]
+fn std_imports_resolve_under_node_esm_with_verbatim_module_syntax() {
+    let tsc = require_mapper_toolchain!();
+    let project = node_module_project("module", "nodenext", true);
+    let legacy = project.path().join("node_modules/@tt/std");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(
+        legacy.join("package.json"),
+        "{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
+    )
+    .unwrap();
+    for module in ttc::StdPackage::Std.modules() {
+        fs::write(
+            legacy.join(ttc::StdPackage::file_name(*module)),
+            module.source(),
+        )
+        .unwrap();
+    }
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { first, count } from \"./opt.tt\";\nconst value = first([1]);\nexport const n: number = count;\nexport { value };\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, &project);
+    assert!(ok, "expected a clean check, got:\n{text}");
+    assert_eq!(
+        fs::read_to_string(legacy.join("package.json")).unwrap(),
+        ttc::StdPackage::Std.manifest()
+    );
+}
+
+#[test]
+fn std_imports_resolve_from_commonjs_and_esm_files_under_node16() {
+    let tsc = require_mapper_toolchain!();
+    for package_type in ["commonjs", "module"] {
+        let project = node_module_project(package_type, "node16", false);
+        fs::write(
+            project.path().join("src/legacy.cts"),
+            "import Option = require(\"@tt/std/option\");\nimport type { TOption } from \"@tt/std\";\nexport const legacy: TOption<number> = Option.Some(2);\n",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/modern.mts"),
+            "import { legacy } from \"./legacy.cjs\";\nimport * as Option from \"@tt/std/option\";\nexport const next: typeof legacy = Option.None;\n",
+        )
+        .unwrap();
+        check(&tsc, &project);
+        let (ok, text) = check(&tsc, &project);
+        assert!(ok, "{package_type}: expected a clean check, got:\n{text}");
+    }
+}
+
 #[test]
 fn a_ttx_file_serves_as_tsx() {
     let tsc = require_mapper_toolchain!();
