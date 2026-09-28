@@ -1,6 +1,6 @@
 //! Expressions, bracketed groups, parameter lists, and object literals.
 
-use super::statements::{MatchBody, TtIf};
+use super::statements::{FunctionKind, MatchBody, TtIf};
 use super::types::{Type, TypeGroup};
 use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, statement_only_keyword};
 
@@ -170,6 +170,8 @@ pub(super) enum ObjectState {
 pub(super) struct Object {
     pub(super) kind: ObjectKind,
     pub(super) state: ObjectState,
+    /// The member being read is a generator method (`*name() {}`).
+    pub(super) generator: bool,
 }
 
 /// Whether the byte after `?` makes it an optional marker (`a?: T`,
@@ -201,6 +203,7 @@ impl Machine<'_> {
         self.push_frame(Frame::Object(Object {
             kind,
             state: ObjectState::Key,
+            generator: false,
         }));
     }
 
@@ -313,6 +316,7 @@ impl Machine<'_> {
                 if arrow_body {
                     e.after(After::Closed);
                     self.push_frame(Frame::Expr(e));
+                    self.mark_function_body(FunctionKind::Ordinary);
                     self.open_function_body();
                 } else {
                     e.after(After::Primary);
@@ -699,6 +703,7 @@ impl Machine<'_> {
         }
         if tok.is(b',') {
             object.state = ObjectState::Key;
+            object.generator = false;
             self.push_frame(Frame::Object(object));
             return Out::Consumed;
         }
@@ -716,7 +721,12 @@ impl Machine<'_> {
                     self.open_group(GroupKind::Computed);
                     Out::Consumed
                 }
-                Tk::Punct(b'*' | b'#') => {
+                Tk::Punct(b'*') => {
+                    object.generator = true;
+                    self.push_frame(Frame::Object(object));
+                    Out::Consumed
+                }
+                Tk::Punct(b'#') => {
                     self.push_frame(Frame::Object(object));
                     Out::Consumed
                 }
@@ -784,7 +794,13 @@ impl Machine<'_> {
                     Out::Consumed
                 }
                 Tk::Punct(b'{') => {
+                    self.mark_function_body(if object.generator {
+                        FunctionKind::Generator
+                    } else {
+                        FunctionKind::Ordinary
+                    });
                     object.state = ObjectState::AfterValue;
+                    object.generator = false;
                     self.push_frame(Frame::Object(object));
                     self.open_function_body();
                     Out::Consumed

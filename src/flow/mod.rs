@@ -229,7 +229,7 @@ pub(crate) fn outward_controls_in_span(
     let end = start + tokens[start..].partition_point(|token| token.span.end <= span.end);
     let mut heads = IfLetHeads::new();
     collect_if_let_heads(program, &mut heads);
-    let function_depth = function_depth_at(src, tokens, start);
+    let function_depth = function_depth_at(tokens, start);
     let statements = Scanner {
         src,
         tokens: &tokens[start..end],
@@ -246,7 +246,7 @@ pub(crate) fn outward_controls_in_span(
         let absolute = start + index;
         if !matches!(token.kind, TokenKind::Ident)
             || &src[token.span.start..token.span.end] != "yield"
-            || function_depth_at(src, tokens, absolute) != function_depth
+            || function_depth_at(tokens, absolute) != function_depth
             || absolute
                 .checked_sub(1)
                 .and_then(|previous| tokens.get(previous))

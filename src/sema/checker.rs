@@ -144,7 +144,7 @@ impl Checker {
             .iter()
             .position(|token| token.span.start >= stmt.span.start)
             .unwrap_or(self.tokens.len());
-        let function_target = crate::flow::function_target_at(&self.source, &self.tokens, at);
+        let function_target = crate::flow::function_target_at(&self.tokens, at);
         if place != Place::ResultRegion
             && matches!(
                 function_target,

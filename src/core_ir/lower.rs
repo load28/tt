@@ -600,7 +600,7 @@ impl Lowering<'_> {
         let at = self
             .tokens
             .partition_point(|token| token.span.start < span.start);
-        crate::flow::user_function_target_at(self.source, &self.tokens, at, &self.tt_owned)
+        crate::flow::user_function_target_at(&self.tokens, at, &self.tt_owned)
             == Some(crate::flow::FunctionTarget::Generator)
     }
 }

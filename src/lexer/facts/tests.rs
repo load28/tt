@@ -197,6 +197,48 @@ fn statement_starts_and_automatic_semicolons_are_recorded_per_token() {
     assert!(find("void").ends_expression());
 }
 
+/// Each `{` of the source, with the kind of function body it opens.
+fn braces(src: &str) -> Vec<&'static str> {
+    lex_with_kind(src, 0, src.len(), SourceKind::TypeScript)
+        .iter()
+        .filter(|token| matches!(token.kind, TokenKind::Punct(b'{')))
+        .map(|token| match token.facts {
+            facts if facts.constructor_body() => "constructor",
+            facts if facts.generator_body() => "generator",
+            facts if facts.function_body() => "function",
+            _ => "-",
+        })
+        .collect()
+}
+
+#[test]
+fn a_brace_records_the_function_body_it_opens() {
+    assert_eq!(
+        braces("function* g(): Iterator<number> {}\nif (x) {}\nconst f = (a): void => {}\n"),
+        ["generator", "-", "function"]
+    );
+    assert_eq!(
+        braces(
+            "class C extends mix(function () {}) {\n  constructor() {}\n  *m() {}\n  static async *n() {}\n  get x(): { a: number } { return { a: 1 } }\n  static {}\n}\n"
+        ),
+        [
+            "function",
+            "-",
+            "constructor",
+            "generator",
+            "generator",
+            "-",
+            "function",
+            "-",
+            "-",
+        ]
+    );
+    assert_eq!(
+        braces("const o = { m() {}, *g() {}, k: {} }\nfor (;;) {}\nswitch (x) {}\n"),
+        ["-", "function", "generator", "-", "-", "-"]
+    );
+}
+
 #[test]
 fn a_regular_expression_is_lexed_where_an_operand_is_expected() {
     for (src, regex) in [

@@ -91,3 +91,13 @@ fn a_statement_match_after_a_line_ending_in_a_type_keeps_both_statements() {
         assert!(!out.contains("match (s)"), "{line}\n{out}");
     }
 }
+
+#[test]
+fn a_block_after_a_call_opens_no_function() {
+    // The brace after an `if let` scrutinee that ends in a call is a block;
+    // only a brace after a parameter list or `=>` opens a function body.
+    let source = "declare function f(): Option<number>;\n\
+                  declare function g(): Result<number, string>;\n\
+                  if let Some(v) = f() { try g(); }\n";
+    assert_eq!(codes(source), [DiagnosticCode::TryPlacement]);
+}

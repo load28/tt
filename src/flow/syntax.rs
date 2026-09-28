@@ -10,19 +10,18 @@ use super::*;
 /// forms an isolated value region) there is none; inside a `function`, a method, or
 /// an arrow body written in the region there is.
 ///
-/// The classification is per opening brace, from its immediate left
-/// context: `=> {` is an arrow body; `) {` is a function or method body
-/// unless the parenthesis belongs to a control head (`if`/`for`/`while`/
-/// `switch`/`catch`/`with`, `for await`) or a `class ... extends call()`
-/// heritage clause. Everything else — object literals, class and
-/// namespace bodies, control-statement bodies, bare blocks — is
-/// transparent or irrelevant: it never *provides* a function to return
-/// from, and never blocks an outer one from counting.
-pub(crate) fn in_function_body(src: &str, tokens: &[Token], at: usize) -> bool {
+/// The classification is per opening brace, and it is the lexer's: a `{`
+/// with the `function_body` fact ([`crate::lexer::TokenFacts`]) opens a
+/// body after `=>` or after a parameter list and its return type.
+/// Everything else — object literals, class and namespace bodies,
+/// control-statement bodies, bare blocks — is transparent or irrelevant:
+/// it never *provides* a function to return from, and never blocks an
+/// outer one from counting.
+pub(crate) fn in_function_body(tokens: &[Token], at: usize) -> bool {
     let mut stack: Vec<bool> = Vec::new();
     for (k, t) in tokens.iter().enumerate().take(at) {
         match t.kind {
-            TokenKind::Punct(b'{') => stack.push(function_body_brace(src, tokens, k)),
+            TokenKind::Punct(b'{') => stack.push(function_body_brace(tokens, k)),
             TokenKind::Punct(b'}') => {
                 stack.pop();
             }
@@ -36,11 +35,11 @@ pub(crate) fn in_function_body(src: &str, tokens: &[Token], at: usize) -> bool {
 /// the lexical-boundary fact speculative `result` claiming needs: an inner
 /// function has its own Result scope even when the enclosing candidate is
 /// already inside another function.
-pub(crate) fn function_depth_at(src: &str, tokens: &[Token], at: usize) -> usize {
+pub(crate) fn function_depth_at(tokens: &[Token], at: usize) -> usize {
     let mut stack = Vec::new();
     for (index, token) in tokens.iter().enumerate().take(at) {
         match token.kind {
-            TokenKind::Punct(b'{') => stack.push(function_body_brace(src, tokens, index)),
+            TokenKind::Punct(b'{') => stack.push(function_body_brace(tokens, index)),
             TokenKind::Punct(b'}') => {
                 stack.pop();
             }
@@ -51,7 +50,6 @@ pub(crate) fn function_depth_at(src: &str, tokens: &[Token], at: usize) -> usize
 }
 
 pub(crate) fn user_function_depth_at(
-    src: &str,
     tokens: &[Token],
     at: usize,
     tt_owned: &std::collections::HashSet<usize>,
@@ -60,7 +58,7 @@ pub(crate) fn user_function_depth_at(
     for (index, token) in tokens.iter().enumerate().take(at) {
         match token.kind {
             TokenKind::Punct(b'{') => stack.push(
-                function_body_brace(src, tokens, index)
+                function_body_brace(tokens, index)
                     && !tt_owned.contains(&index)
                     && !index
                         .checked_sub(1)
@@ -127,14 +125,13 @@ pub(crate) enum FunctionTarget {
 }
 
 /// Returns the innermost user function enclosing `at`.
-pub(crate) fn function_target_at(src: &str, tokens: &[Token], at: usize) -> Option<FunctionTarget> {
-    user_function_target_at(src, tokens, at, &std::collections::HashSet::new())
+pub(crate) fn function_target_at(tokens: &[Token], at: usize) -> Option<FunctionTarget> {
+    user_function_target_at(tokens, at, &std::collections::HashSet::new())
 }
 
 /// Returns the innermost user-written function enclosing `at`, skipping the
 /// match body braces and arm arrows in `tt_owned`, which open no function.
 pub(crate) fn user_function_target_at(
-    src: &str,
     tokens: &[Token],
     at: usize,
     tt_owned: &std::collections::HashSet<usize>,
@@ -147,7 +144,7 @@ pub(crate) fn user_function_target_at(
                     && !index
                         .checked_sub(1)
                         .is_some_and(|previous| tt_owned.contains(&previous)))
-                .then(|| function_target_brace(src, tokens, index))
+                .then(|| function_target_brace(tokens, index))
                 .flatten()
                 .map(|target| (index, target)),
             ),
@@ -213,215 +210,23 @@ pub(super) fn concise_arrow_end(tokens: &[Token], from: usize) -> usize {
     tokens.len()
 }
 
-pub(super) fn function_target_brace(
-    src: &str,
-    tokens: &[Token],
-    brace: usize,
-) -> Option<FunctionTarget> {
-    if !function_body_brace(src, tokens, brace) {
-        return None;
-    }
-    if matches!(
-        tokens.get(brace.wrapping_sub(1)).map(|token| &token.kind),
-        Some(TokenKind::Arrow)
-    ) {
-        return Some(FunctionTarget::Ordinary);
-    }
-    let close = (0..brace)
-        .rev()
-        .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b')')))?;
-    let open = find_open(tokens, close)?;
-    let word = |index: usize| match tokens.get(index) {
-        Some(token) if matches!(token.kind, TokenKind::Ident) => {
-            Some(&src[token.span.start..token.span.end])
-        }
-        _ => None,
-    };
-    let before = open.checked_sub(1)?;
-    if word(before) == Some("constructor") {
-        return Some(FunctionTarget::Constructor);
-    }
-    let generator = matches!(tokens[before].kind, TokenKind::Punct(b'*'))
-        || (before >= 1 && matches!(tokens[before - 1].kind, TokenKind::Punct(b'*')));
-    Some(if generator {
-        FunctionTarget::Generator
-    } else {
-        FunctionTarget::Ordinary
-    })
+/// The kind of user function the `{` at `brace` opens, if it opens one:
+/// the lexer's function-body facts ([`crate::lexer::TokenFacts`]).
+pub(super) fn function_target_brace(tokens: &[Token], brace: usize) -> Option<FunctionTarget> {
+    let facts = tokens.get(brace)?.facts;
+    facts
+        .function_body()
+        .then_some(if facts.constructor_body() {
+            FunctionTarget::Constructor
+        } else if facts.generator_body() {
+            FunctionTarget::Generator
+        } else {
+            FunctionTarget::Ordinary
+        })
 }
-
-/// Heads whose parenthesized clause is followed by a *control* body, not a
-/// function body.
-pub(super) const CONTROL_PAREN_WORDS: &[&str] = &["if", "for", "while", "switch", "catch", "with"];
-
-/// Statement-position words a return-type walk aborts on: meeting one at
-/// the top level means the walk left the annotation and entered the
-/// preceding statement (or the brace never had an annotation at all).
-pub(super) const NON_TYPE_WORDS: &[&str] = &[
-    "await",
-    "break",
-    "case",
-    "catch",
-    "class",
-    "const",
-    "continue",
-    "declare",
-    "default",
-    "delete",
-    "do",
-    "else",
-    "enum",
-    "export",
-    "extends",
-    "finally",
-    "for",
-    "function",
-    "if",
-    "implements",
-    "import",
-    "in",
-    "instanceof",
-    "interface",
-    "let",
-    "module",
-    "namespace",
-    "new",
-    "of",
-    "return",
-    "switch",
-    "throw",
-    "try",
-    "var",
-    "while",
-    "with",
-    "yield",
-];
 
 /// Whether the `{` at token index `k` opens a function body (see
 /// [`in_function_body`]).
-pub(super) fn function_body_brace(src: &str, tokens: &[Token], k: usize) -> bool {
-    let Some(prev) = k.checked_sub(1) else {
-        return false;
-    };
-    match tokens[prev].kind {
-        // `=> {` — an arrow body.
-        TokenKind::Arrow => true,
-        // `) {` — a parameter list's body, unless the parenthesis is a
-        // control head or a heritage-clause call.
-        TokenKind::Punct(b')') => paren_heads_function(src, tokens, prev),
-        // Anything else may still be `) : <type> {` — a return-type
-        // annotation between the parameter list and the body. Walk back
-        // over the type (balanced brackets; names, operators and function
-        // arrows at its top level); the `:` straight after a `)` is the
-        // annotation's colon and the parenthesis decides as above. A token
-        // no type contains at its top level ends the walk: the brace is
-        // not a body.
-        _ => annotated_paren(src, tokens, k)
-            .is_some_and(|close| paren_heads_function(src, tokens, close)),
-    }
-}
-
-/// The `)` that token `k` follows directly or through a return-type
-/// annotation `) : <type>`.
-fn annotated_paren(src: &str, tokens: &[Token], k: usize) -> Option<usize> {
-    let prev = k.checked_sub(1)?;
-    if matches!(tokens[prev].kind, TokenKind::Punct(b')')) {
-        return Some(prev);
-    }
-    let mut depth = 0usize;
-    let mut j = k;
-    while j > 0 {
-        j -= 1;
-        let t = &tokens[j];
-        match t.kind {
-            TokenKind::Punct(b'>' | b')' | b']' | b'}') => depth += 1,
-            TokenKind::Punct(b'<' | b'(' | b'[' | b'{') => {
-                if depth == 0 {
-                    return None;
-                }
-                depth -= 1;
-            }
-            TokenKind::Punct(b':') if depth == 0 => {
-                return (j >= 1 && matches!(tokens[j - 1].kind, TokenKind::Punct(b')')))
-                    .then(|| j - 1);
-            }
-            TokenKind::Ident if depth == 0 => {
-                if NON_TYPE_WORDS.contains(&&src[t.span.start..t.span.end]) {
-                    return None;
-                }
-            }
-            TokenKind::Arrow if depth == 0 => return None,
-            TokenKind::Str | TokenKind::Arrow => {}
-            TokenKind::Punct(b'.' | b'|' | b'&') => {}
-            TokenKind::Punct(c) if c.is_ascii_digit() => {}
-            _ => {
-                if depth == 0 {
-                    return None;
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Whether the parameter list closed at token index `close` heads a
-/// function body — i.e. it is not a control head (`if (…)`, `for (…)`,
-/// `for await (…)`, …) and not a `class … extends call(…)` heritage
-/// clause.
-pub(super) fn paren_heads_function(src: &str, tokens: &[Token], close: usize) -> bool {
-    let word = |i: usize| match tokens.get(i) {
-        Some(t) if matches!(t.kind, TokenKind::Ident) => Some(&src[t.span.start..t.span.end]),
-        _ => None,
-    };
-    let Some(open) = find_open(tokens, close) else {
-        return false;
-    };
-    let Some(before) = open.checked_sub(1) else {
-        return false;
-    };
-    match tokens[before].kind {
-        TokenKind::Ident => {
-            let name = word(before).unwrap_or_default();
-            if CONTROL_PAREN_WORDS.contains(&name) {
-                return false;
-            }
-            // `for await (…) {` — still a control body.
-            if name == "await" && word(before.wrapping_sub(1)) == Some("for") {
-                return false;
-            }
-            // `class A extends mixin(B) {` — a class body: walk back over
-            // the (possibly dotted) callee to the word before it.
-            let mut j = before;
-            while j >= 2
-                && matches!(tokens[j - 1].kind, TokenKind::Punct(b'.'))
-                && matches!(tokens[j - 2].kind, TokenKind::Ident)
-            {
-                j -= 2;
-            }
-            !(j >= 1 && word(j - 1) == Some("extends"))
-        }
-        // `function* (…) {` — an anonymous generator.
-        TokenKind::Punct(b'*') => word(before.wrapping_sub(1)) == Some("function"),
-        // `f<T>(…) {` — a generic parameter list's body.
-        TokenKind::Punct(b'>') => true,
-        _ => false,
-    }
-}
-
-/// The index of the token opening the bracket closed at `close`.
-pub(super) fn find_open(tokens: &[Token], close: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for k in (0..=close).rev() {
-        match tokens[k].kind {
-            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
-            TokenKind::Punct(b'(' | b'[' | b'{') => {
-                depth = depth.saturating_sub(1);
-                if depth == 0 {
-                    return Some(k);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+pub(super) fn function_body_brace(tokens: &[Token], k: usize) -> bool {
+    tokens[k].facts.function_body()
 }

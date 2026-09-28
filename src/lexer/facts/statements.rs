@@ -204,6 +204,8 @@ pub(super) struct Decl {
     start: Option<usize>,
     kind: DeclKind,
     state: DeclState,
+    /// A `function*`.
+    generator: bool,
 }
 
 impl Decl {
@@ -212,6 +214,7 @@ impl Decl {
             start,
             kind: DeclKind::Function,
             state: DeclState::Keyword,
+            generator: false,
         }
     }
 
@@ -220,6 +223,7 @@ impl Decl {
             start,
             kind: DeclKind::Class,
             state: DeclState::Keyword,
+            generator: false,
         }
     }
 
@@ -228,6 +232,7 @@ impl Decl {
             start: Some(start),
             kind,
             state: DeclState::Keyword,
+            generator: false,
         }
     }
 
@@ -274,6 +279,32 @@ impl SwitchBody {
     }
 }
 
+/// What kind of function a body `{` opens, for the facts on that brace.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum FunctionKind {
+    #[default]
+    Ordinary,
+    Generator,
+    Constructor,
+}
+
+/// A class body, positioned at one member; `function` is the kind of the
+/// member's body if it has one.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct ClassMember {
+    state: ClassBody,
+    function: FunctionKind,
+}
+
+impl ClassMember {
+    pub(super) fn at(state: ClassBody) -> Self {
+        ClassMember {
+            state,
+            function: FunctionKind::Ordinary,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ClassBody {
     Start,
@@ -313,6 +344,17 @@ impl MatchBody {
 }
 
 impl Machine<'_> {
+    /// Records on a `{` that it opens a body after `=>` or a parameter
+    /// list, and which kind of function the body belongs to.
+    pub(super) fn mark_function_body(&mut self, function: FunctionKind) {
+        self.mark(TokenFacts::FUNCTION_BODY);
+        match function {
+            FunctionKind::Ordinary => {}
+            FunctionKind::Generator => self.mark(TokenFacts::GENERATOR_BODY),
+            FunctionKind::Constructor => self.mark(TokenFacts::CONSTRUCTOR_BODY),
+        }
+    }
+
     fn stmt_frame(&mut self, stmt: Stmt) {
         self.push_frame(Frame::Stmt(stmt));
     }
@@ -440,6 +482,7 @@ impl Machine<'_> {
                     start: Some(begin),
                     kind: DeclKind::Namespace,
                     state: DeclState::Head,
+                    generator: false,
                 }));
                 Out::Consumed
             }
@@ -1010,6 +1053,7 @@ impl Machine<'_> {
         }
         match (decl.kind, decl.state, tok.kind) {
             (DeclKind::Function, DeclState::Keyword, Tk::Punct(b'*')) => {
+                decl.generator = true;
                 keep(self, decl);
                 Out::Consumed
             }
@@ -1050,6 +1094,11 @@ impl Machine<'_> {
                 Out::Consumed
             }
             (DeclKind::Function, DeclState::Params | DeclState::Return, Tk::Punct(b'{')) => {
+                self.mark_function_body(if decl.generator {
+                    FunctionKind::Generator
+                } else {
+                    FunctionKind::Ordinary
+                });
                 decl.state = DeclState::Done;
                 keep(self, decl);
                 self.open_function_body();
@@ -1087,7 +1136,7 @@ impl Machine<'_> {
             ) => {
                 decl.state = DeclState::Done;
                 keep(self, decl);
-                self.push_frame(Frame::ClassBody(ClassBody::Start));
+                self.push_frame(Frame::ClassBody(ClassMember::at(ClassBody::Start)));
                 Out::Consumed
             }
             (DeclKind::Interface, DeclState::Head | DeclState::Types, Tk::Punct(b'{')) => {
@@ -1207,19 +1256,33 @@ impl Machine<'_> {
         }
     }
 
-    pub(super) fn class_body(&mut self, state: ClassBody, tok: &Tok<'_>) -> Out {
-        let keep = |m: &mut Self, state: ClassBody| m.push_frame(Frame::ClassBody(state));
+    pub(super) fn class_body(&mut self, member: ClassMember, tok: &Tok<'_>) -> Out {
+        let keep = |m: &mut Self, state: ClassBody| {
+            let function = if state == ClassBody::Start {
+                FunctionKind::Ordinary
+            } else {
+                member.function
+            };
+            m.push_frame(Frame::ClassBody(ClassMember { state, function }));
+        };
         if tok.is(b'}') {
             return Out::Consumed;
         }
-        match state {
+        match member.state {
             ClassBody::Start => match tok.kind {
-                Tk::Punct(b';' | b'*' | b'#') => {
-                    keep(self, ClassBody::Start);
+                Tk::Punct(b'*') => {
+                    self.push_frame(Frame::ClassBody(ClassMember {
+                        state: ClassBody::Start,
+                        function: FunctionKind::Generator,
+                    }));
+                    Out::Consumed
+                }
+                Tk::Punct(b';' | b'#') => {
+                    self.push_frame(Frame::ClassBody(member));
                     Out::Consumed
                 }
                 Tk::Punct(b'@') => {
-                    keep(self, ClassBody::Start);
+                    self.push_frame(Frame::ClassBody(member));
                     self.push_frame(Frame::Decorator {
                         called: false,
                         name: false,
@@ -1251,10 +1314,17 @@ impl Machine<'_> {
                         _ => false,
                     };
                     if modifier {
-                        keep(self, ClassBody::Start);
+                        self.push_frame(Frame::ClassBody(member));
                     } else {
                         self.mark(TokenFacts::MEMBER);
-                        keep(self, ClassBody::AfterName);
+                        self.push_frame(Frame::ClassBody(ClassMember {
+                            state: ClassBody::AfterName,
+                            function: if tok.text == "constructor" {
+                                FunctionKind::Constructor
+                            } else {
+                                member.function
+                            },
+                        }));
                     }
                     Out::Consumed
                 }
@@ -1264,7 +1334,7 @@ impl Machine<'_> {
                     Out::Consumed
                 }
                 _ => {
-                    keep(self, ClassBody::Start);
+                    self.push_frame(Frame::ClassBody(member));
                     Out::Consumed
                 }
             },
@@ -1292,12 +1362,13 @@ impl Machine<'_> {
             },
             ClassBody::AfterType => self.class_member_tail(tok),
             ClassBody::AfterParams | ClassBody::AfterReturn => match tok.kind {
-                Tk::Punct(b':') if state == ClassBody::AfterParams => {
+                Tk::Punct(b':') if member.state == ClassBody::AfterParams => {
                     keep(self, ClassBody::AfterReturn);
                     self.open_type();
                     Out::Consumed
                 }
                 Tk::Punct(b'{') => {
+                    self.mark_function_body(member.function);
                     keep(self, ClassBody::Start);
                     self.open_function_body();
                     Out::Consumed
@@ -1324,11 +1395,11 @@ impl Machine<'_> {
 
     fn class_member_tail(&mut self, tok: &Tok<'_>) -> Out {
         if tok.is(b'=') {
-            self.push_frame(Frame::ClassBody(ClassBody::AfterInit));
+            self.push_frame(Frame::ClassBody(ClassMember::at(ClassBody::AfterInit)));
             self.push_expr(ExprCfg::default());
             return Out::Consumed;
         }
-        self.push_frame(Frame::ClassBody(ClassBody::Start));
+        self.push_frame(Frame::ClassBody(ClassMember::at(ClassBody::Start)));
         if tok.is(b';') {
             Out::Consumed
         } else {
@@ -1381,6 +1452,7 @@ impl Machine<'_> {
                 body.state = MatchState::AfterBody;
                 keep(self, body);
                 if tok.is(b'{') {
+                    self.mark_function_body(FunctionKind::Ordinary);
                     self.open_function_body();
                     return Out::Consumed;
                 }

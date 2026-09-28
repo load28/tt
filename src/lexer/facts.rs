@@ -50,6 +50,9 @@ impl TokenFacts {
     const STATEMENT_START: u16 = 1 << 3;
     const LABEL: u16 = 1 << 4;
     const MEMBER: u16 = 1 << 5;
+    const FUNCTION_BODY: u16 = 1 << 6;
+    const GENERATOR_BODY: u16 = 1 << 7;
+    const CONSTRUCTOR_BODY: u16 = 1 << 8;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -88,6 +91,23 @@ impl TokenFacts {
         self.0 & Self::MEMBER != 0
     }
 
+    /// This `{` opens a body after `=>` or after a parameter list (and its
+    /// return type): a function, method, accessor, constructor, or arrow
+    /// function body, or a tt `match` arm's block.
+    pub(crate) fn function_body(self) -> bool {
+        self.0 & Self::FUNCTION_BODY != 0
+    }
+
+    /// This function body `{` belongs to a generator.
+    pub(crate) fn generator_body(self) -> bool {
+        self.0 & Self::GENERATOR_BODY != 0
+    }
+
+    /// This function body `{` belongs to a class constructor.
+    pub(crate) fn constructor_body(self) -> bool {
+        self.0 & Self::CONSTRUCTOR_BODY != 0
+    }
+
     /// The statement or expression before this token ends before it: an
     /// automatic semicolon or a statement start separates them.
     pub(crate) fn boundary_before(self) -> bool {
@@ -113,6 +133,9 @@ impl std::fmt::Debug for TokenFacts {
             (Self::STATEMENT_START, "statement-start"),
             (Self::LABEL, "label"),
             (Self::MEMBER, "member"),
+            (Self::FUNCTION_BODY, "function-body"),
+            (Self::GENERATOR_BODY, "generator"),
+            (Self::CONSTRUCTOR_BODY, "constructor"),
         ];
         let set: Vec<&str> = names
             .iter()
@@ -182,7 +205,7 @@ enum Out {
 }
 
 use expressions::{Expr, ExprCfg, Group, GroupKind, Object, Params};
-use statements::{ClassBody, Decl, Stmt, SwitchBody, TtIf};
+use statements::{ClassMember, Decl, Stmt, SwitchBody, TtIf};
 use types::{Type, TypeBody, TypeGroup};
 
 /// One grammar position on the machine's stack.
@@ -200,7 +223,7 @@ enum Frame {
     Decl(Decl),
     TtIf(TtIf),
     Switch(SwitchBody),
-    ClassBody(ClassBody),
+    ClassBody(ClassMember),
     Expr(Expr),
     Group(Group),
     Params(Params),

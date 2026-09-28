@@ -12,7 +12,7 @@ fn concise_arrow_is_the_innermost_function_target() {
         })
         .expect("try token");
     assert_eq!(
-        function_target_at(source, &tokens, at),
+        function_target_at(&tokens, at),
         Some(FunctionTarget::Ordinary)
     );
 }
@@ -29,7 +29,7 @@ fn semicolon_free_concise_arrow_does_not_own_the_next_try_statement() {
         })
         .expect("try token");
     assert_eq!(
-        function_target_at(source, &tokens, at),
+        function_target_at(&tokens, at),
         Some(FunctionTarget::Generator)
     );
 }
@@ -57,11 +57,11 @@ fn match_body_braces_and_arm_arrows_open_no_function_target() {
     }
     for at in &matches[1..] {
         assert_eq!(
-            function_target_at(source, &tokens, *at),
+            function_target_at(&tokens, *at),
             Some(FunctionTarget::Ordinary)
         );
         assert_eq!(
-            user_function_target_at(source, &tokens, *at, &owned),
+            user_function_target_at(&tokens, *at, &owned),
             Some(FunctionTarget::Generator)
         );
     }
@@ -406,7 +406,7 @@ fn inside(src: &str, needle: &str) -> bool {
         .iter()
         .position(|t| t.span.start >= offset)
         .unwrap_or(tokens.len());
-    in_function_body(src, &tokens, at)
+    in_function_body(&tokens, at)
 }
 
 #[test]

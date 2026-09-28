@@ -700,7 +700,7 @@ impl Parser<'_> {
                 }
                 match tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, mut stmt)) => {
-                        stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                        stmt.in_function = crate::flow::in_function_body(tokens, i);
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::Try(stmt));
                         seg_start = byte_end;
@@ -724,7 +724,7 @@ impl Parser<'_> {
                 if let Some((cur, byte_end, mut stmt)) =
                     tries::parse_try_decl(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                    stmt.in_function = crate::flow::in_function_body(tokens, i);
                     let mut first = i;
                     while first > 0
                         && tokens[first - 1].span.start >= seg_start
@@ -749,7 +749,7 @@ impl Parser<'_> {
                     && let Some((cur, byte_end, mut stmt)) =
                         lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                    stmt.in_function = crate::flow::in_function_body(tokens, i);
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
                     segments.push(Segment::LetElse(stmt));
                     seg_start = byte_end;
@@ -766,7 +766,7 @@ impl Parser<'_> {
                 if let Some((cur, byte_end, mut stmt)) =
                     iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                    stmt.in_function = crate::flow::in_function_body(tokens, i);
                     stmt.expression_position = !tok.facts.statement_start();
                     if stmt.expression_position {
                         recoveries.push(RecoveryNode {

@@ -81,8 +81,7 @@ pub(super) fn parse_result_block<'t>(
 fn nearest_result_try_spans(program: &Program, cur: &Cursor<'_>, open: usize) -> Vec<Span> {
     let mut tt_owned = std::collections::HashSet::new();
     tt_owned_tokens(program, cur, &mut tt_owned);
-    let depth =
-        |at: usize| crate::flow::user_function_depth_at(cur.parser.src, cur.tokens, at, &tt_owned);
+    let depth = |at: usize| crate::flow::user_function_depth_at(cur.tokens, at, &tt_owned);
     let baseline = depth(open);
     fn collect(
         program: &Program,
