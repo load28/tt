@@ -471,6 +471,21 @@ pub(crate) struct MatchExpr {
     /// The scrutinee, recursively parsed.
     pub scrutinee: Program,
     pub arms: Vec<Arm>,
+    /// Where the written arms end.
+    pub tail: ArmsTail,
+}
+
+/// Where a match body's written arms end, as the parser tokenized them —
+/// what an edit that appends an arm writes after (TASK-460).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArmsTail {
+    /// Byte offset of the last arm's first token.
+    pub last_start: usize,
+    /// Byte offset just past the last arm's final token, before any
+    /// separator, whitespace or comment that follows it.
+    pub last_end: usize,
+    /// Whether a `,` follows the last arm.
+    pub separated: bool,
 }
 
 /// A structurally parsed tt tuple match: two or more comma-separated
@@ -493,6 +508,8 @@ pub(crate) struct TupleMatchExpr {
     /// `await` detection plus the recursively parsed expression.
     pub scrutinees: Vec<(Span, Program)>,
     pub arms: Vec<TupleArm>,
+    /// Where the written arms end — same role as [`MatchExpr::tail`].
+    pub tail: ArmsTail,
 }
 
 impl TupleMatchExpr {

@@ -283,6 +283,7 @@ pub(crate) fn assemble(
                 },
                 body_open: probe.body_open,
                 body_close: probe.body_close,
+                tail: probe.tail,
             });
         }
 
@@ -321,6 +322,7 @@ pub(crate) fn assemble(
                     },
                     body_open: probe.body_open,
                     body_close: probe.body_close,
+                    tail: probe.tail,
                 });
             }
         }
@@ -528,6 +530,8 @@ pub(crate) struct MatchAnchor {
     pub body_open: usize,
     /// Byte offset of the body's closing `}`.
     pub body_close: usize,
+    /// Where the written arms end.
+    pub tail: crate::ArmsTail,
 }
 
 /// One mutation, with the symbol questions that decide whether it is one.

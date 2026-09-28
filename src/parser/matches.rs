@@ -11,8 +11,8 @@ use super::cursor::Cursor;
 use super::is_reserved;
 use super::literals::{at_literal, parse_literal_alternatives};
 use crate::ast::{
-    Arm, Binding, GuardExpr, InstancePattern, MatchExpr, Pattern, RecoveryKind, RecoveryNode, Span,
-    TagPattern, TupleArm, TupleMatchExpr, TuplePattern,
+    Arm, ArmsTail, Binding, GuardExpr, InstancePattern, MatchExpr, Pattern, RecoveryKind,
+    RecoveryNode, Span, TagPattern, TupleArm, TupleMatchExpr, TuplePattern,
 };
 use crate::lexer::{Token, TokenKind};
 
@@ -266,6 +266,7 @@ fn parse_match_complete<'t>(
                 body_open: cur.tokens[body_open].span.start,
                 body_close: cur.tokens[body_close].span.start,
                 scrutinees,
+                tail: arms_tail(&arms_cur, arms.last()?.pattern_span.start)?,
                 arms: arms
                     .into_iter()
                     .map(|arm| arm.into_tuple_arm(cur.parser))
@@ -294,6 +295,7 @@ fn parse_match_complete<'t>(
             body_close: cur.tokens[body_close].span.start,
             scrutinee_span,
             scrutinee,
+            tail: arms_tail(&arms_cur, arms.last()?.pattern_span.start)?,
             arms: arms
                 .into_iter()
                 .map(|arm| arm.into_arm(cur.parser))
@@ -462,6 +464,22 @@ fn parse_strict_arm_list<'t, T>(
         cur.eat_punct(b',')?;
     }
     Some(arms)
+}
+
+/// Where a fully parsed arm list ends. The list's tokens are exactly the
+/// arms and their separators, so its last token is either the last arm's
+/// final token or the comma after it.
+fn arms_tail(arms: &Cursor, last_start: usize) -> Option<ArmsTail> {
+    let separated = arms
+        .tokens
+        .last()
+        .is_some_and(|t| matches!(t.kind, TokenKind::Punct(b',')));
+    let last = arms.tokens.len().checked_sub(1 + usize::from(separated))?;
+    Some(ArmsTail {
+        last_start,
+        last_end: arms.tokens[last].span.end,
+        separated,
+    })
 }
 
 fn parse_arms(cur: Cursor<'_>) -> Option<Vec<ArmSyntax<'_, Pattern>>> {

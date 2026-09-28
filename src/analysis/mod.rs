@@ -231,6 +231,8 @@ pub struct MatchAnalysis {
     /// coverage hole's fix is an edit, and the edit needs the braces
     /// (TASK-216).
     pub body_close: usize,
+    /// Where the written arms end — what that edit appends after.
+    pub tail: crate::ArmsTail,
     /// One subject per scrutinee position: one entry for a single match,
     /// one per position for a tuple match. `None` when the position's arm
     /// tags belong to no known variant — the match still analyzes, its

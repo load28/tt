@@ -38,6 +38,8 @@ pub struct LiteralMatch {
     /// body_open`], where the fix for a hole in this match is written —
     /// the typed pipeline authors that edit too (TASK-216).
     pub body_close: usize,
+    /// Where the written arms end — what that fix appends after.
+    pub tail: ArmsTail,
 }
 
 /// One literal a [`LiteralMatch`] covers, normalized to the value
@@ -84,6 +86,8 @@ pub struct TagMatch {
     /// Byte offset of the body's closing `}` — same role as
     /// [`LiteralMatch::body_close`].
     pub body_close: usize,
+    /// Where the written arms end — same role as [`LiteralMatch::tail`].
+    pub tail: ArmsTail,
 }
 
 /// One nested pattern, as a question about the *payload* it tests.
@@ -436,6 +440,7 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
             covered: literals,
             body_open: expr.body_open,
             body_close: expr.body_close,
+            tail: expr.tail,
         }),
         Kind::Tag => out.tags.push(TagMatch {
             offset: expr.keyword_off,
@@ -445,6 +450,7 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
             covered: tags,
             body_open: expr.body_open,
             body_close: expr.body_close,
+            tail: expr.tail,
         }),
         Kind::None => {}
     }
@@ -488,6 +494,7 @@ fn collect_tuple(expr: &TupleMatchExpr, out: &mut Probes) {
         covered: Vec::new(),
         body_open: expr.body_open,
         body_close: expr.body_close,
+        tail: expr.tail,
     });
 }
 

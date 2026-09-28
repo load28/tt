@@ -70,6 +70,7 @@ pub(crate) fn report_coverage(
                 keyword_off: offset,
                 body_open: analysis.body_open,
                 body_close: analysis.body_close,
+                tail: analysis.tail,
             },
             &arms,
         );

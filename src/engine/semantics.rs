@@ -102,6 +102,7 @@ fn site_of(anchor: &projection::MatchAnchor) -> crate::diagnostics::MatchSite {
         keyword_off: anchor.anchor.offset,
         body_open: anchor.body_open,
         body_close: anchor.body_close,
+        tail: anchor.tail,
     }
 }
 

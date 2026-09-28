@@ -782,3 +782,50 @@ fn scoped_contextual_values_cross_all_mixed_source_edges() {
         assert_eq!(code.matches(": import(").count(), 4, "{code}");
     }
 }
+
+#[test]
+fn typed_missing_arm_edits_compile_after_an_unseparated_last_arm() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Rect(width: number, height: number), Point }\n\
+                  export function area(s: Shape) {\n\
+                  \tconst a = match (s) {\n\
+                  \t\tCircle(radius) => { return radius; } // last\n\
+                  \t};\n\
+                  \treturn a;\n\
+                  }\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let answer = typed_server(&dir, "src/main.tt", source);
+    let hole = answer["result"]["diagnostics"]
+        .as_array()
+        .and_then(|diagnostics| {
+            diagnostics
+                .iter()
+                .find(|d| d["code"] == "match-not-exhaustive")
+        })
+        .unwrap_or_else(|| panic!("{answer}"))
+        .clone();
+    let suggestions = hole["suggestions"].as_array().unwrap();
+    assert_eq!(suggestions.len(), 2, "{hole}");
+    for suggestion in suggestions {
+        let edit = &suggestion["edit"];
+        let replaced = source_slice(source, edit);
+        let start = replaced.as_ptr() as usize - source.as_ptr() as usize;
+        let fixed = format!(
+            "{}{}{}",
+            &source[..start],
+            edit["replacement"].as_str().unwrap(),
+            &source[start + replaced.len()..]
+        );
+        assert!(
+            fixed.contains("\t\tCircle(radius) => { return radius; }, // last\n\t\t"),
+            "{fixed}"
+        );
+        let after = typed_server(&dir, "src/main.tt", &fixed);
+        assert!(
+            after["result"]["diagnostics"]
+                .as_array()
+                .is_some_and(Vec::is_empty),
+            "{fixed}\n{after}"
+        );
+    }
+}

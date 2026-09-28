@@ -467,6 +467,7 @@
 | TASK-457 | Keep a conditional value's operand when a later sibling captures it | Complete | 2026-09-28 | 2026-09-28 | [TASK-457](./TASK-457-conditional-value-sibling-capture.md) |
 | TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
 | TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
+| TASK-460 | Write the separator a missing-arm edit needs after the last written arm | Complete | 2026-09-28 | 2026-09-28 | [TASK-460](./TASK-460-missing-arm-edit-after-unseparated-arm.md) |
 
 ## Next task number
 

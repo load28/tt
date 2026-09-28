@@ -94,6 +94,7 @@ pub use analysis::{
     MatchSubject, NameKind, Origin, PatternAnalyses, PatternBinding, PatternSite, PayloadField,
     SiteKind, UnresolvedName, pattern_analyses,
 };
+pub use ast::ArmsTail;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Edit, Severity, Suggestion};
 pub use error::CompileError;
 pub use probe::{

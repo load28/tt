@@ -503,6 +503,54 @@ fn an_authored_arm_keeps_a_one_line_match_on_one_line() {
 }
 
 #[test]
+fn every_authored_arm_edit_compiles_after_the_last_written_arm() {
+    let prelude = "variant Shape { Circle(radius: number), Rect(width: number, height: number), Point }\ndeclare const s: Shape;\n";
+    for body in [
+        "const a = match (s) {\n  Circle(radius) => radius\n};\n",
+        "const a = match (s) {\n  Circle(r) => { return radius; }\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius // trailing\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius\n  // trailing\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius /* note, here */\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius, // after\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius /* , */\n};\n",
+        "const a = match (s) { Circle(r) => { return radius; } };\n",
+        "const a = match (s) { Circle(radius) => radius /* note */ };\n",
+        "const a = match (s) { Circle(radius) => radius, /* note */ };\n",
+        "const a = match (s) { Circle(radius) => radius,};\n",
+        "const a = match (s) { Circle(radius) => radius\n};\n",
+        "const a = match (s, s) {\n  (Circle(radius), _) => radius\n};\n",
+    ] {
+        let src = format!("{prelude}{body}");
+        let d = hole(&src);
+        for which in 0..d.suggestions.len() {
+            let fixed = with_suggestion_applied(&src, &d, which);
+            let left = ttc::analyze(&fixed, &Options::default());
+            assert!(left.is_empty(), "{fixed}\n{left:#?}");
+        }
+    }
+}
+
+#[test]
+fn authored_arms_take_the_indentation_of_the_written_arms() {
+    let src = "variant Shape { Circle(r: number), Empty }\nfunction f(s: Shape) {\n\tconst a = match (s) {\n\t\tCircle(r) => r\n\t};\n}\n";
+    let d = hole(src);
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "variant Shape { Circle(r: number), Empty }\nfunction f(s: Shape) {\n\tconst a = match (s) {\n\t\tCircle(r) => r,\n\t\tEmpty => undefined,\n\t};\n}\n"
+    );
+    assert_eq!(
+        with_suggestion_applied(src, &d, 1),
+        "variant Shape { Circle(r: number), Empty }\nfunction f(s: Shape) {\n\tconst a = match (s) {\n\t\tCircle(r) => r,\n\t\t_ => undefined,\n\t};\n}\n"
+    );
+    let src = "variant Shape { Circle(r: number), Empty }\nconst a = match (s) {\n    Circle(r) => r, // kept\n};\n";
+    let d = hole(src);
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (s) {\n    Circle(r) => r, // kept\n    Empty => undefined,\n};\n"
+    );
+}
+
+#[test]
 fn misspelled_field_names_the_field_meant() {
     let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
