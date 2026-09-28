@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -207,6 +207,46 @@ async function viteSolutionProject() {
   await writeFile(join(root, 'src/main.ts'), 'export const label: string = 1\n')
   return root
 }
+
+test('init keeps a reference that leaves the project through a symlink as written', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'create-tt-outside-'))
+  await writeFile(join(outside, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-linked-'))
+  await writeFile(join(root, 'package.json'), '{}\n')
+  await mkdir(join(root, 'packages'))
+  await symlink(outside, join(root, 'packages/app'), 'dir')
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './packages/app' }] }))
+  const result = await initializeExisting({ directory: root, bundler: 'none' })
+  assert.equal(existsSync(join(outside, 'tsconfig.tt.json')), false)
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8')).references, [{ path: './packages/app' }])
+  assert.deepEqual(result.files, ['tsconfig.tt.json'])
+})
+
+test('init treats a directory whose name begins with two dots as inside the project', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-dotted-'))
+  await writeFile(join(root, 'package.json'), '{}\n')
+  await mkdir(join(root, '..cache'))
+  await writeFile(join(root, '..cache/tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './..cache' }] }))
+  await initializeExisting({ directory: root, bundler: 'none' })
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8')).references, [{ path: './..cache/tsconfig.tt.json' }])
+  assert.equal(existsSync(join(root, '..cache/tsconfig.tt.json')), true)
+})
+
+test('init visits a config reached through two paths once', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-aliased-'))
+  await writeFile(join(root, 'package.json'), '{}\n')
+  await mkdir(join(root, 'app'))
+  await writeFile(join(root, 'app/tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
+  await symlink(join(root, 'app'), join(root, 'alias'), 'dir')
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './app' }, { path: './alias' }] }))
+  const result = await initializeExisting({ directory: root, bundler: 'none' })
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'tsconfig.tt.json'), 'utf8')).references, [
+    { path: './app/tsconfig.tt.json' },
+    { path: './app/tsconfig.tt.json' },
+  ])
+  assert.deepEqual(result.files.sort(), ['app/tsconfig.tt.json', 'tsconfig.tt.json'])
+})
 
 test('init composes a solution tsconfig through its project references', async () => {
   const root = await viteSolutionProject()

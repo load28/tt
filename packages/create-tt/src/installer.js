@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
@@ -158,7 +158,7 @@ export async function initializeExisting(options) {
   const typeConfig = 'tsconfig.tt.json'
   const generated = []
   const references = existsSync(join(root, 'tsconfig.json'))
-    ? await typeConfigGraph(root, join(root, 'tsconfig.json'), generated)
+    ? await typeConfigGraph(await realpath(root), await realpath(join(root, 'tsconfig.json')), generated)
     : (generated.push([typeConfig, `${JSON.stringify(tsconfig(), null, '  ')}\n`]), false)
   const typeCheck = `tsc ${references ? '-b' : '-p'} ${typeConfig} --runExternalCode`
   manifest.scripts['tt:check'] ??= typeCheck
@@ -213,8 +213,9 @@ async function typeConfigGraph(root, configPath, generated, visited = new Set())
   if (hasReferences) {
     const references = []
     for (const reference of config.references) {
-      const target = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
-      if (!target || !insideRoot(root, target) || !existsSync(target)) {
+      const lexical = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
+      const target = lexical && existsSync(lexical) && await realpath(lexical)
+      if (!target || !insideRoot(root, target)) {
         references.push(reference)
         continue
       }
@@ -235,12 +236,12 @@ function referencedConfig(directory, path) {
 
 function insideRoot(root, path) {
   const fromRoot = relative(root, path)
-  return fromRoot !== '' && !fromRoot.startsWith('..') && !isAbsolute(fromRoot)
+  return fromRoot !== '' && fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot)
 }
 
 function relativePath(from, to) {
   const path = relative(from, to).split('\\').join('/')
-  return path.startsWith('.') ? path : `./${path}`
+  return path === '..' || path.startsWith('../') ? path : `./${path}`
 }
 
 export function parseJsonc(source) {

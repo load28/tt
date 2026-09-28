@@ -514,7 +514,8 @@
 | TASK-504 | Evaluate a hoisted value in a member step after the piped value and its method | Complete | 2026-09-28 | 2026-09-28 | [TASK-504](./TASK-504-hoisted-values-in-member-steps.md) |
 | TASK-505 | Give each value a structured pipeline pipes its own slot | Complete | 2026-09-28 | 2026-09-28 | [TASK-505](./TASK-505-pipeline-slot-per-step.md) |
 | TASK-506 | Schedule a `try` inside a template in a pipeline operand | Complete | 2026-09-28 | 2026-09-28 | [TASK-506](./TASK-506-try-in-template-pipeline-operand.md) |
+| TASK-507 | Judge path containment by path segments and canonical identity | Complete | 2026-09-28 | 2026-09-28 | [TASK-507](./TASK-507-path-containment-by-segments.md) |
 
 ## Next task number
 
-**TASK-507**
+**TASK-508**

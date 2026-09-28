@@ -17,6 +17,8 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { isWithin } from "./paths";
+
 
 /** What to do when an `.tt` file is saved. */
 export type SidecarMode = "off" | "refresh" | "always";
@@ -134,11 +136,6 @@ function mirrorBase(ttPath: string, root: string | undefined): string {
   return root !== undefined && isWithin(path.resolve(root), dir)
     ? path.resolve(root)
     : dir;
-}
-
-function isWithin(ancestor: string, dir: string): boolean {
-  const relative = path.relative(ancestor, dir);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function mirroredDeclaration(ttPath: string, outDir: string, base: string): string {
