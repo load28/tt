@@ -161,33 +161,128 @@ fn materialized_packages_are_dual_format_with_an_exports_map() {
             let subpath = format!(".{}", &module.specifier()[package.name().len()..]);
             let entry = &manifest["exports"][subpath.as_str()];
             let file = ttc::StdPackage::file_name(*module);
-            let copy = format!("{}/{file}", ttc::STD_PACKAGE_COMMONJS_DIR);
+            let declaration = format!(
+                "{}/{}",
+                ttc::STD_PACKAGE_COMMONJS_DIR,
+                ttc::StdPackage::commonjs_file_name(*module)
+            );
+            assert!(declaration.ends_with(".d.ts"), "{declaration}");
             let text = read("package.json");
             let import =
                 format!("\"import\": {{ \"types\": \"./{file}\", \"default\": \"./{file}\" }}");
-            let require =
-                format!("\"require\": {{ \"types\": \"./{copy}\", \"default\": \"./{copy}\" }}");
+            let require = format!(
+                "\"require\": {{ \"types\": \"./{declaration}\", \"default\": \"./{file}\" }}"
+            );
             assert!(
                 text.find(&import).unwrap() < text.find(&require).unwrap(),
                 "{text}"
             );
             assert_eq!(entry["import"]["types"], format!("./{file}"), "{subpath}");
             assert_eq!(entry["import"]["default"], format!("./{file}"), "{subpath}");
-            assert_eq!(entry["require"]["types"], format!("./{copy}"), "{subpath}");
             assert_eq!(
-                entry["require"]["default"],
-                format!("./{copy}"),
+                entry["require"]["types"],
+                format!("./{declaration}"),
                 "{subpath}"
             );
-            for path in [file.to_string(), copy] {
-                assert_eq!(
-                    read(&path),
-                    format!("{}{}", ttc::GENERATED_BANNER, module.source()),
-                    "{path}"
-                );
-            }
+            assert_eq!(
+                entry["require"]["default"],
+                format!("./{file}"),
+                "{subpath}"
+            );
+            assert_eq!(
+                read(file),
+                format!("{}{}", ttc::GENERATED_BANNER, module.source()),
+                "{file}"
+            );
+            assert_eq!(
+                read(&declaration),
+                format!("{}{}", ttc::GENERATED_BANNER, module.declaration()),
+                "{declaration}"
+            );
+            assert!(
+                !directory
+                    .join(ttc::STD_PACKAGE_COMMONJS_DIR)
+                    .join(file)
+                    .exists()
+            );
         }
     }
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn write_source_copy_layout(root: &Path, package: ttc::StdPackage, edited: Option<&str>) {
+    let directory = package.directory(root);
+    let cjs = directory.join(ttc::STD_PACKAGE_COMMONJS_DIR);
+    fs::create_dir_all(&cjs).unwrap();
+    let mut entries = Vec::new();
+    for module in package.modules() {
+        let file = ttc::StdPackage::file_name(*module);
+        let generated = format!("{}{}", ttc::GENERATED_BANNER, module.source());
+        fs::write(directory.join(file), &generated).unwrap();
+        fs::write(cjs.join(file), edited.unwrap_or(&generated)).unwrap();
+        let subpath = &module.specifier()[package.name().len()..];
+        entries.push(format!(
+            "    \".{subpath}\": {{\n      \"import\": {{ \"types\": \"./{file}\", \"default\": \"./{file}\" }},\n      \"require\": {{ \"types\": \"./cjs/{file}\", \"default\": \"./cjs/{file}\" }}\n    }}"
+        ));
+    }
+    fs::write(cjs.join("package.json"), "{\n  \"type\": \"commonjs\"\n}\n").unwrap();
+    fs::write(
+        directory.join("package.json"),
+        format!(
+            "{{\n  \"name\": \"{}\",\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"types\": \"./index.ts\",\n  \"exports\": {{\n{}\n  }}\n}}\n",
+            package.name(),
+            entries.join(",\n")
+        ),
+    )
+    .unwrap();
+}
+
+#[test]
+fn a_package_with_commonjs_source_copies_gets_declarations_in_their_place() {
+    let root = scratch("copies");
+    for package in ttc::StdPackage::ALL {
+        write_source_copy_layout(&root, package, None);
+        package.materialize(&root).unwrap();
+        let directory = package.directory(&root);
+        let mut found: Vec<_> = fs::read_dir(directory.join(ttc::STD_PACKAGE_COMMONJS_DIR))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+            .collect();
+        found.sort();
+        let mut expected: Vec<_> = package
+            .modules()
+            .iter()
+            .map(|module| ttc::StdPackage::commonjs_file_name(*module))
+            .chain(["package.json".to_string()])
+            .collect();
+        expected.sort();
+        assert_eq!(found, expected, "{}", package.name());
+        let mut files = package.files();
+        files.sort();
+        for (name, text) in files {
+            assert_eq!(
+                fs::read_to_string(directory.join(&name)).unwrap(),
+                text,
+                "{name}"
+            );
+        }
+    }
+    fs::remove_dir_all(&root).unwrap();
+
+    write_source_copy_layout(&root, ttc::StdPackage::Std, Some("// mine\n"));
+    let before =
+        fs::read_to_string(ttc::StdPackage::Std.directory(&root).join("package.json")).unwrap();
+    ttc::StdPackage::Std.materialize(&root).unwrap();
+    let directory = ttc::StdPackage::Std.directory(&root);
+    assert_eq!(
+        fs::read_to_string(directory.join("package.json")).unwrap(),
+        before
+    );
+    assert_eq!(
+        fs::read_to_string(directory.join("cjs/option.ts")).unwrap(),
+        "// mine\n"
+    );
+    assert!(!directory.join("cjs/option.d.ts").exists());
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -211,7 +306,7 @@ fn a_package_ttc_wrote_before_exports_is_upgraded_and_any_other_is_kept() {
         assert!(
             std_dir
                 .join(ttc::STD_PACKAGE_COMMONJS_DIR)
-                .join(ttc::StdPackage::file_name(*module))
+                .join(ttc::StdPackage::commonjs_file_name(*module))
                 .is_file()
         );
     }

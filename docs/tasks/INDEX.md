@@ -489,6 +489,7 @@
 | TASK-479 | Separate hover documentation from the signature | Complete | 2026-09-28 | 2026-09-28 | [TASK-479](./TASK-479-hover-documentation-split.md) |
 | TASK-480 | Report an `if let` in any expression position as `if-let-placement` alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-480](./TASK-480-if-let-expression-position.md) |
 | TASK-481 | Project a jump that leaves a `result` block so only its crossing is reported | Complete | 2026-09-28 | 2026-09-28 | [TASK-481](./TASK-481-result-jump-crossing-projection.md) |
+| TASK-485 | The `@tt/std` CommonJS entry points are declaration files | Complete | 2026-09-28 | 2026-09-28 | [TASK-485](./TASK-485-std-commonjs-declarations.md) |
 
 ## Next task number
 

@@ -564,6 +564,108 @@ fn std_imports_resolve_from_commonjs_and_esm_files_under_node16() {
 }
 
 #[test]
+fn a_commonjs_file_requires_the_std_package_cleanly_under_verbatim_module_syntax() {
+    let tsc = require_mapper_toolchain!();
+    for skip_lib_check in [true, false] {
+        let project = node_module_project("module", "nodenext", true);
+        let config = project.path().join("tsconfig.json");
+        let text = fs::read_to_string(&config).unwrap().replace(
+            "\"skipLibCheck\": true",
+            &format!("\"skipLibCheck\": {skip_lib_check}"),
+        );
+        fs::write(&config, text).unwrap();
+        let copied = project.path().join("node_modules/@tt/std");
+        fs::create_dir_all(copied.join(ttc::STD_PACKAGE_COMMONJS_DIR)).unwrap();
+        let mut entries = Vec::new();
+        for module in ttc::StdPackage::Std.modules() {
+            let file = ttc::StdPackage::file_name(*module);
+            let generated = format!("{}{}", ttc::GENERATED_BANNER, module.source());
+            fs::write(copied.join(file), &generated).unwrap();
+            fs::write(
+                copied.join(ttc::STD_PACKAGE_COMMONJS_DIR).join(file),
+                &generated,
+            )
+            .unwrap();
+            let subpath = &module.specifier()[ttc::StdPackage::Std.name().len()..];
+            entries.push(format!(
+                "    \".{subpath}\": {{\n      \"import\": {{ \"types\": \"./{file}\", \"default\": \"./{file}\" }},\n      \"require\": {{ \"types\": \"./cjs/{file}\", \"default\": \"./cjs/{file}\" }}\n    }}"
+            ));
+        }
+        fs::write(
+            copied.join("cjs/package.json"),
+            "{\n  \"type\": \"commonjs\"\n}\n",
+        )
+        .unwrap();
+        fs::write(
+            copied.join("package.json"),
+            format!(
+                "{{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"types\": \"./index.ts\",\n  \"exports\": {{\n{}\n  }}\n}}\n",
+                entries.join(",\n")
+            ),
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/b.cts"),
+            "import Option = require(\"@tt/std/option\");\nimport type { TOption } from \"@tt/std\" with { \"resolution-mode\": \"require\" };\nconst legacy: TOption<number> = Option.None;\nexport = { legacy };\n",
+        )
+        .unwrap();
+        check(&tsc, &project);
+        let (ok, text) = check(&tsc, &project);
+        assert!(
+            ok,
+            "skipLibCheck {skip_lib_check}: expected a clean check, got:\n{text}"
+        );
+        assert_eq!(
+            fs::read_to_string(copied.join("package.json")).unwrap(),
+            ttc::StdPackage::Std.manifest()
+        );
+        assert!(!copied.join("cjs/option.ts").exists());
+    }
+}
+
+#[test]
+fn std_commonjs_declarations_are_the_compilers_declaration_emit() {
+    let tsc = require_mapper_toolchain!();
+    let project = Workspace::new("std-declarations");
+    let modules = [
+        ("types", ttc::StdModule::Types),
+        ("option", ttc::StdModule::Option),
+        ("result", ttc::StdModule::Result),
+        ("runtime", ttc::StdModule::Runtime),
+    ];
+    for (name, module) in modules {
+        fs::write(project.path().join(format!("{name}.ts")), module.source()).unwrap();
+    }
+    let mut command = Command::new("node");
+    command
+        .arg(&tsc)
+        .args([
+            "--declaration",
+            "--emitDeclarationOnly",
+            "--strict",
+            "--target",
+            "es2022",
+            "--module",
+            "esnext",
+            "--moduleResolution",
+            "bundler",
+            "--outDir",
+            "out",
+        ])
+        .args(modules.map(|(name, _)| format!("{name}.ts")))
+        .current_dir(project.path());
+    let output = command.output().expect("tsc runs");
+    assert!(output.status.success(), "{output:?}");
+    for (name, module) in modules {
+        assert_eq!(
+            fs::read_to_string(project.path().join(format!("out/{name}.d.ts"))).unwrap(),
+            module.declaration(),
+            "{name}"
+        );
+    }
+}
+
+#[test]
 fn a_ttx_file_serves_as_tsx() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(true);

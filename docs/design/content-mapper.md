@@ -70,6 +70,15 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
   A manifest byte-equal to the one earlier
   releases wrote (name/version/types only) is upgraded in place. Any other
   existing package is still left alone.
+  **Update (TASK-485)**: `cjs/` now holds TypeScript's declaration emit of
+  each module (`cjs/option.d.ts`, ...) instead of source copies. Under
+  `verbatimModuleSyntax`, a CommonJS source file's `export const` is
+  TS1287, and `.ts` files in `node_modules` are checked even with
+  `skipLibCheck`. A declaration file is ambient, so it is not. The
+  `require` condition's `types` names the declaration, and both conditions'
+  `default` names the root source. A package holding exactly the files the
+  TASK-473 layout wrote (source copies in `cjs/`) is upgraded in place, and
+  its copies are removed.
 - **정적 identity**: `dynamicConfig` 없음, `compilerOptions` 요구 없음 —
   tt의 변환은 프로젝트 설정과 무관하다. incremental/`--build`의 up-to-date
   판정이 매퍼 프로세스를 스폰하지 않고 끝난다.

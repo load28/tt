@@ -927,6 +927,41 @@ fn the_standard_library_resolves_from_either_module_format_in_every_resolution_m
     }
 }
 
+#[test]
+fn a_commonjs_file_requiring_the_standard_library_under_verbatim_module_syntax_is_clean() {
+    require_tsgo!();
+    for resolution in ["node16", "nodenext"] {
+        let dir = module_project(
+            "module",
+            resolution,
+            resolution,
+            true,
+            &[
+                (
+                    "src/s.tt",
+                    "import * as Option from \"@tt/std/option\";\n\
+                     export const o = Option.Some(1);\n\
+                     export const n = [1, 2] |> ((xs) => xs.length);\n\
+                     export const bad: string = n;\n",
+                ),
+                (
+                    "src/b.cts",
+                    "import Option = require(\"@tt/std/option\");\n\
+                     import type { TOption } from \"@tt/std\" with { \"resolution-mode\": \"require\" };\n\
+                     const legacy: TOption<number> = Option.None;\n\
+                     export = { legacy };\n",
+                ),
+            ],
+        );
+        let out = check(&dir);
+        assert!(
+            block(&out, "type mismatch: expected `string`").contains("--> src/s.tt"),
+            "{resolution}: {out}"
+        );
+        assert_eq!(error_count(&out), 1, "{resolution}: {out}");
+    }
+}
+
 const RELATIVE_SOURCES: &[(&str, &str)] = &[
     (
         "src/a.tt",

@@ -1,5 +1,7 @@
 # TASK-473: `@tt/std` and `@tt/runtime` are dual-format packages that resolve in every module mode
 
+> **Superseded in part by [TASK-485](./TASK-485-std-commonjs-declarations.md)**: `cjs/` no longer holds byte-identical source copies. Under `verbatimModuleSyntax`, those copies were TS1287 (51 errors in `node_modules/@tt/std/cjs`) wherever a CommonJS file required the package, including with `skipLibCheck`. `cjs/` now holds TypeScript's declaration emit of each module, and the `require` condition's `default` names the root source. The "Verbatim CommonJS" measurement in the work log below was wrong. See the correction there.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28
@@ -82,6 +84,7 @@ The fix must not change anything that worked before. In particular, CommonJS fil
 
   - **node10.** TypeScript 7 removed `node10`: TS5108 in both builds, so it cannot be checked. The top-level `"types"` field is what such a resolver would read.
   - **Verbatim CommonJS.** `nodenext`/`node16` CommonJS with `verbatimModuleSyntax` reports the same errors before and after, all in the user's own ESM-syntax files (TS1287/TS1295), none in `node_modules`.
+    - **Correction (TASK-485).** This is wrong for the build this task produced. Measured again with the TASK-473 build, `skipLibCheck` on or off, `tsc --runExternalCode` reports 60 errors in that configuration, and 51 of them are TS1287 in `node_modules/@tt/std/cjs/{option,result}.ts`. An ES-module project under `verbatimModuleSyntax` with a `.cts` file that requires the package reports the same 51. `ttc --check-types` reports 2 of them. `skipLibCheck` hides declaration files only, and the `cjs/` copies were `.ts` sources.
   - **Mixed formats.** A mixed `node16` project (`legacy.cts` with `import … = require("@tt/std/option")`, `modern.mts` importing it and `@tt/std/option`) is clean after this change under both `tsc --runExternalCode` and `ttc --check-types`. Before, it had TS2307 errors.
 - 2026-09-28: Tests:
   - `tests/stdlib.rs`: `materialized_packages_are_dual_format_with_an_exports_map` (manifest text, condition order, `cjs/` manifest, byte-identical copies) and `a_package_ttc_wrote_before_exports_is_upgraded_and_any_other_is_kept`.
