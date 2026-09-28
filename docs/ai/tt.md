@@ -180,7 +180,7 @@ const f = (val u: U) => u.name;     // arrows, methods, catch (val e), for (val 
 
 - Import `.tt`/`.ttx` files by relative path WITH extension: `./token.tt` → `./token.js`, `./view.ttx` → `./view.jsx` by default (`--rewrite-imports ts` emits `.ts`/`.tsx`; `off` preserves source specifiers).
 - CLI builds reject distinct inputs that map to one output (`x.tt` + `x.ts`, `x.ttx` + `x.tsx`, overlapping roots, or a compiler support-module path). When `-o` is inside a directory input, that output subtree is excluded from source collection.
-- Exhaustiveness sees exported variants from DIRECT (1-hop) relative `.tt`/`.ttx` imports (named/aliased/`* as ns`); re-export chains & package paths NOT collected → those matches compile unchecked.
+- Exhaustiveness sees exported variants from DIRECT (1-hop) relative `.tt`/`.ttx` imports (named/aliased/`* as ns`). A variant is exported by `export variant X` or by a module-level `export { X }` / `export { X as Y }` / `export type { X }` specifier, under the name the specifier gives it (`export { X as default }` is seen through `import { default as D }`, not through a default import binding); re-export chains (`export { X } from "./a.tt"`) & package paths NOT collected → those matches compile unchecked.
 - Literal dynamic `import()` and import-type specifiers use the same rewrite; computed specifiers remain unchanged.
 
 ## Install

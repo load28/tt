@@ -131,6 +131,29 @@ fn typed_exhaustiveness_resolves_a_payload_declared_in_another_module() {
 }
 
 #[test]
+fn typed_exhaustiveness_resolves_a_payload_exported_through_a_specifier() {
+    require_tsgo!();
+    let dir = project(&[
+        (
+            "src/token.tt",
+            "variant Tok { Num(n: number), Eof }\nexport { Tok as Token };\n",
+        ),
+        (
+            "src/line.tt",
+            "import { Token } from \"./token.tt\";\n\
+             variant Line { Head(t: Token), Blank }\n\
+             declare const l: Line;\n\
+             export const a = match (l) { Head(t: Num(n)) => n, Blank => 0 };\n",
+        ),
+    ]);
+    let out = check(&dir);
+    assert!(
+        out.contains("match is not exhaustive: missing \"Head(t: Eof())\""),
+        "the aliased payload variant is resolved: {out}"
+    );
+}
+
+#[test]
 fn typed_exhaustiveness_covers_tuple_matches_too() {
     require_tsgo!();
     // A tuple match asks one question per position. Before, it asked none:

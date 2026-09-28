@@ -1173,6 +1173,46 @@ fn overlay_reports_a_missing_value_and_a_missing_directory() {
     assert!(err.contains("gone"), "{err}");
 }
 
+/// A variant the imported module exports through an `export { ... }`
+/// specifier is as visible to exhaustiveness as one declared with
+/// `export variant`, under the name the specifier gives it (TASK-459).
+#[test]
+fn check_sees_a_variant_exported_through_a_specifier() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("shape.tt"),
+        "variant Color { Red, Green }\nexport { Color as Hue };\nexport type { Color };\n",
+    )
+    .unwrap();
+    for (name, import, ty) in [
+        ("alias.tt", "{ Hue }", "Hue"),
+        ("type.tt", "{ Color }", "Color"),
+        ("rename.tt", "{ Hue as Shade }", "Shade"),
+        ("namespace.tt", "* as shapes", "shapes.Hue"),
+    ] {
+        let importer = dir.join(name);
+        fs::write(
+            &importer,
+            format!(
+                "import {import} from \"./shape.tt\";\n\
+                 export function f(h: {ty}) {{ return match (h) {{ Red => \"r\" }}; }}\n"
+            ),
+        )
+        .unwrap();
+        let out = ttc(&[
+            "--check",
+            importer.to_str().unwrap(),
+            dir.join("shape.tt").to_str().unwrap(),
+        ]);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success(), "{name}: {stderr}");
+        assert!(
+            stderr.contains("(imported from \"./shape.tt\") is not exhaustive: missing \"Green\""),
+            "{name}: {stderr}"
+        );
+    }
+}
+
 include!("cli/cases_01.rs");
 
 /// A `#!` line and a byte-order mark are only themselves when they come

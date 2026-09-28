@@ -311,13 +311,10 @@ fn imported_declaration(
     );
     let (target, found) = super::language::imported_variants(path, &imports, &|target| {
         let text = std::fs::read_to_string(target).ok()?;
-        let exported = crate::variant_symbols_with_kind(
+        let exported = crate::exported_variant_symbols_with_kind(
             &text,
             crate::SourceKind::from_path(target).unwrap_or_default(),
-        )
-        .into_iter()
-        .filter(|d| d.exported)
-        .collect();
+        );
         texts.borrow_mut().insert(target.to_path_buf(), text);
         Some(exported)
     })

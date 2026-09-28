@@ -167,15 +167,10 @@ pub(in super::super) fn externs_of(
         ),
         &|target| {
             let text = read(target)?;
-            Some(
-                crate::variant_symbols_with_kind(
-                    &text,
-                    crate::SourceKind::from_path(target).unwrap_or_default(),
-                )
-                .into_iter()
-                .filter(|d| d.exported)
-                .collect(),
-            )
+            Some(crate::exported_variant_symbols_with_kind(
+                &text,
+                crate::SourceKind::from_path(target).unwrap_or_default(),
+            ))
         },
     )
 }

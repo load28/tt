@@ -53,6 +53,7 @@ use crate::val;
 use cursor::Cursor;
 
 pub(crate) use cursor::{dotted_at, find_close_at};
+pub(crate) use imports::local_export_specifiers;
 pub(crate) use keywords::is_reserved;
 use keywords::*;
 #[cfg(test)]

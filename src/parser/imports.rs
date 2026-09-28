@@ -15,7 +15,7 @@ use super::cursor::Cursor;
 use super::is_reserved;
 use crate::ast::{Span, TtImportDecl, TtImportNames, TtSpecifier};
 
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind};
 
 /// `cur` is positioned just past an `import` or `export` keyword (`kw`).
 /// Returns the advanced cursor and the lifted import (specifier span plus
@@ -218,4 +218,79 @@ fn tt_spec_span(cur: &Cursor, span: Span) -> Option<(Span, TtSpecifier)> {
     } else {
         None
     }
+}
+
+/// The module's local export specifiers, `export { a, b as c };` and
+/// `export type { a as c };`, as (local name, exported name) pairs in source
+/// order.
+///
+/// A clause followed by `from` re-exports another module and binds no local
+/// name, so it is not included; an entry other than `[type] name [as name]`
+/// is skipped. Only a module-level statement exports from the module, so the
+/// scan reads clauses at bracket depth 0 alone.
+pub(crate) fn local_export_specifiers(src: &str, tokens: &[Token]) -> Vec<(String, String)> {
+    let text = |token: &Token| &src[token.span.start..token.span.end];
+    let is_word = |idx: usize, word: &str| {
+        tokens
+            .get(idx)
+            .is_some_and(|token| matches!(token.kind, TokenKind::Ident) && text(token) == word)
+    };
+    let mut specifiers = Vec::new();
+    let mut depth = 0usize;
+    let mut idx = 0usize;
+    while let Some(token) = tokens.get(idx) {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            TokenKind::Ident
+                if depth == 0
+                    && text(token) == "export"
+                    && !super::cursor::dotted_at(tokens, 0, idx) =>
+            {
+                let open = if is_word(idx + 1, "type") {
+                    idx + 2
+                } else {
+                    idx + 1
+                };
+                if matches!(
+                    tokens.get(open).map(|token| &token.kind),
+                    Some(TokenKind::Punct(b'{'))
+                ) && let Some(close) = super::cursor::find_close_at(tokens, open)
+                {
+                    if !is_word(close + 1, "from") {
+                        specifiers.extend(export_entries(src, &tokens[open + 1..close]));
+                    }
+                    idx = close + 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    specifiers
+}
+
+fn export_entries(src: &str, tokens: &[Token]) -> Vec<(String, String)> {
+    tokens
+        .split(|token| matches!(token.kind, TokenKind::Punct(b',')))
+        .filter_map(|entry| {
+            let words = entry
+                .iter()
+                .map(|token| {
+                    matches!(token.kind, TokenKind::Ident)
+                        .then(|| &src[token.span.start..token.span.end])
+                })
+                .collect::<Option<Vec<&str>>>()?;
+            let words = match words.as_slice() {
+                ["type", rest @ ..] if !rest.is_empty() => rest,
+                all => all,
+            };
+            match words {
+                [name] => Some((name.to_string(), name.to_string())),
+                [local, "as", exported] => Some((local.to_string(), exported.to_string())),
+                _ => None,
+            }
+        })
+        .collect()
 }

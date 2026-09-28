@@ -437,23 +437,12 @@ impl Project {
                 if let Some(doc) = self.cache.get(target)
                     && doc.source == text
                 {
-                    return Some(
-                        doc.variant_symbols()
-                            .iter()
-                            .filter(|d| d.exported)
-                            .cloned()
-                            .collect(),
-                    );
+                    return Some(doc.exported_variant_symbols().to_vec());
                 }
-                Some(
-                    crate::variant_symbols_with_kind(
-                        &text,
-                        crate::SourceKind::from_path(target).unwrap_or_default(),
-                    )
-                    .into_iter()
-                    .filter(|d| d.exported)
-                    .collect(),
-                )
+                Some(crate::exported_variant_symbols_with_kind(
+                    &text,
+                    crate::SourceKind::from_path(target).unwrap_or_default(),
+                ))
             },
         );
         self.pattern_analysis(path, source, externs)

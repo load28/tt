@@ -112,9 +112,10 @@ pub enum TtImportNames {
 /// [`ExternVariant`] entries, without compiling it. Those tags support
 /// exhaustiveness and case-name checking across a module boundary. Rich field
 /// checking in the project engine uses the [`VariantSymbol`] declarations from
-/// [`variant_symbols_with_kind`] instead. Non-exported variants and TypeScript
-/// enums are not included. The returned entries have [`ExternVariant::from`]
-/// set to `None`.
+/// [`exported_variant_symbols_with_kind`] instead. Each entry is named as the
+/// module exports it (see [`exported_variant_symbols`]). Non-exported
+/// variants and TypeScript enums are not included. The returned entries have
+/// [`ExternVariant::from`] set to `None`.
 ///
 /// ```
 /// let decls = ttc::exported_variants(
@@ -130,17 +131,12 @@ pub fn exported_variants(source: &str) -> Vec<ExternVariant> {
 
 /// [`exported_variants`] under an explicit TypeScript surface kind.
 pub fn exported_variants_with_kind(source: &str, source_kind: SourceKind) -> Vec<ExternVariant> {
-    let program = parser::parse_with_kind(source, source_kind);
-    program
-        .segments
-        .iter()
-        .filter_map(|segment| match segment {
-            ast::Segment::Variant(decl) if decl.exported => Some(ExternVariant {
-                name: decl.name.clone(),
-                tags: decl.cases.iter().map(|case| case.tag.clone()).collect(),
-                from: None,
-            }),
-            _ => None,
+    exported_variant_symbols_with_kind(source, source_kind)
+        .into_iter()
+        .map(|symbol| ExternVariant {
+            name: symbol.name,
+            tags: symbol.cases.into_iter().map(|case| case.tag).collect(),
+            from: None,
         })
         .collect()
 }
@@ -357,7 +353,57 @@ pub fn variant_symbols(source: &str) -> Vec<VariantSymbol> {
 
 /// [`variant_symbols`] under an explicit TypeScript surface kind.
 pub fn variant_symbols_with_kind(source: &str, source_kind: SourceKind) -> Vec<VariantSymbol> {
-    let program = parser::parse_with_kind(source, source_kind);
+    program_variant_symbols(&parser::parse_with_kind(source, source_kind))
+}
+
+/// The tt variants a source file exports, each under the name an importer
+/// binds: an `export variant` declaration under its own name, and a local
+/// `export { Name }`, `export { Name as Alias }`, or `export type { ... }`
+/// specifier that names a declared variant under its exported name. One
+/// declaration exported under two names is listed twice; the offsets are
+/// the declaration's. A re-export (`export { Name } from "./other.tt"`)
+/// binds nothing of this file's and is not included.
+///
+/// ```
+/// let syms = ttc::exported_variant_symbols(
+///     "variant Color { Red, Green }\nexport { Color as Hue };\n",
+/// );
+/// assert_eq!(syms.len(), 1);
+/// assert_eq!(syms[0].name, "Hue");
+/// assert_eq!(syms[0].offset, 8);
+/// ```
+pub fn exported_variant_symbols(source: &str) -> Vec<VariantSymbol> {
+    exported_variant_symbols_with_kind(source, SourceKind::TypeScript)
+}
+
+/// [`exported_variant_symbols`] under an explicit TypeScript surface kind.
+pub fn exported_variant_symbols_with_kind(
+    source: &str,
+    source_kind: SourceKind,
+) -> Vec<VariantSymbol> {
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
+    let declared = program_variant_symbols(&program);
+    let mut exported: Vec<VariantSymbol> = declared
+        .iter()
+        .filter(|symbol| symbol.exported)
+        .cloned()
+        .collect();
+    for (local, name) in parser::local_export_specifiers(source, &tokens) {
+        if exported.iter().any(|symbol| symbol.name == name) {
+            continue;
+        }
+        if let Some(symbol) = declared.iter().find(|symbol| symbol.name == local) {
+            exported.push(VariantSymbol {
+                name,
+                exported: true,
+                ..symbol.clone()
+            });
+        }
+    }
+    exported
+}
+
+fn program_variant_symbols(program: &ast::Program) -> Vec<VariantSymbol> {
     program
         .segments
         .iter()

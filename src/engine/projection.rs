@@ -59,22 +59,22 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
-    /// The file's variant declaration symbols, parsed once per content
-    /// version — what an importer's extern collection reads, so a file
-    /// that did not change is never re-parsed for its exports
-    /// (`docs/design/compiler-core.md` §11).
-    variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
+    /// The variants the file exports, under their exported names, parsed
+    /// once per content version — what an importer's extern collection
+    /// reads, so a file that did not change is never re-parsed for its
+    /// exports (`docs/design/compiler-core.md` §11).
+    exported_variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
     /// Relative `.tt` imports collected while projecting this content version.
     /// Shared by snapshot graph discovery and semantic cache dependencies.
     imports: Vec<crate::TtImport>,
 }
 
 impl ProjectedDocument {
-    /// The file's variant declaration symbols (exported or not), computed on
-    /// first use and pinned to this projection's content version.
-    pub(crate) fn variant_symbols(&self) -> &[crate::VariantSymbol] {
-        self.variant_symbols.get_or_init(|| {
-            crate::variant_symbols_with_kind(
+    /// The variants the file exports ([`crate::exported_variant_symbols`]),
+    /// computed on first use and pinned to this projection's content version.
+    pub(crate) fn exported_variant_symbols(&self) -> &[crate::VariantSymbol] {
+        self.exported_variant_symbols.get_or_init(|| {
+            crate::exported_variant_symbols_with_kind(
                 &self.source,
                 crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
             )
@@ -151,7 +151,7 @@ impl ProjectedDocument {
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
-            variant_symbols: std::sync::OnceLock::new(),
+            exported_variant_symbols: std::sync::OnceLock::new(),
             imports: scan.imports,
         })
     }

@@ -68,6 +68,43 @@ fn exported_variants_returns_exported_tt_enums_only() {
 }
 
 #[test]
+fn exported_variants_names_a_variant_by_its_local_export_specifiers() {
+    let decls = ttc::exported_variants(
+        "variant Color { Red, Green }\n\
+         variant Size { S, L }\n\
+         variant Kept { K }\n\
+         export variant Token { Eof }\n\
+         export { Color as Hue, Size };\n\
+         export type { Color as Tint };\n\
+         export { Kept as default };\n\
+         export { Token as Tok };\n\
+         export { Other } from \"./other.tt\";\n\
+         namespace N { export { Color as Inner }; }\n\
+         declare const o: { export: any };\n\
+         o.export({ Size: 1 });\n",
+    );
+    let names: Vec<(&str, Vec<&str>)> = decls
+        .iter()
+        .map(|d| (d.name.as_str(), d.tags.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("Token", vec!["Eof"]),
+            ("Hue", vec!["Red", "Green"]),
+            ("Size", vec!["S", "L"]),
+            ("Tint", vec!["Red", "Green"]),
+            ("default", vec!["K"]),
+            ("Tok", vec!["Eof"]),
+        ]
+    );
+    let symbols = ttc::exported_variant_symbols("variant Color { Red }\nexport { Color as Hue };\n");
+    assert_eq!(symbols[0].name, "Hue");
+    assert!(symbols[0].exported);
+    assert_eq!(symbols[0].offset, "variant ".len());
+}
+
+#[test]
 fn tt_imports_reports_specifiers_and_names() {
     use ttc::TtImportNames;
     let imports = ttc::tt_imports(
