@@ -20,7 +20,6 @@ use super::Claim;
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{Span, TryExpr, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
 use crate::lexer::{Token, TokenKind};
-use crate::scanner::is_primary_expression;
 
 /// `cur` is positioned just past the `try` keyword (`kw_span`) of a bare
 /// `try <expr>;` statement. On success returns the advanced cursor, the
@@ -173,7 +172,12 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
                 operand_end = Some(token.span.end);
                 operand_token_end = k;
             }
-        } else if is_primary_expression(cur.parser.src.as_bytes(), operand_start, token.span.end) {
+        } else if crate::lexer::is_primary_expression(
+            cur.parser.src,
+            operand_start,
+            token.span.end,
+            cur.parser.source_kind,
+        ) {
             operand_end = Some(token.span.end);
             operand_token_end = k;
         }

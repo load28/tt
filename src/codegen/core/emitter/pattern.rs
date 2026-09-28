@@ -147,6 +147,7 @@ impl<'a> Emitter<'a> {
             push_grouped(
                 &mut out,
                 guard_line_comment(value.trim(), 0, self.source_kind),
+                self.source_kind,
             );
             if last {
                 break;
@@ -202,7 +203,11 @@ impl<'a> Emitter<'a> {
             if self.inline_subject_needs_storage(decision, index) {
                 out.push_lit(format!("{name} = "));
             }
-            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            push_grouped(
+                &mut out,
+                self.emit_expr(subject.value).trim(),
+                self.source_kind,
+            );
             out.push_lit(", ");
         }
         let mut total = false;
@@ -221,6 +226,7 @@ impl<'a> Emitter<'a> {
                     0,
                     self.source_kind,
                 ),
+                self.source_kind,
             );
             if total {
                 break;
@@ -637,13 +643,13 @@ impl<'a> Emitter<'a> {
                 ValueWrapper::ResultOk => {
                     let mut wrapped = Rope::new();
                     wrapped.push_lit("{ kind: \"Ok\" as const, value: ");
-                    push_grouped(&mut wrapped, value);
+                    push_grouped(&mut wrapped, value, self.source_kind);
                     wrapped.push_lit(" }");
                     value = wrapped;
                 }
             }
         }
-        let grouped = needs_grouping(&value);
+        let grouped = needs_grouping(&value, self.source_kind);
         let mut out = Rope::new();
         match continuation.destination {
             ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
@@ -707,7 +713,7 @@ impl<'a> Emitter<'a> {
             if tested {
                 out.push_lit(" && ");
             }
-            push_grouped(&mut out, self.emit_expr(guard).trim());
+            push_grouped(&mut out, self.emit_expr(guard).trim(), self.source_kind);
         }
         Some(out)
     }

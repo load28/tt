@@ -432,7 +432,7 @@ impl<'a> Emitter<'a> {
                         out.push_lit(format!("{result} = "));
                         let mut source = Rope::new();
                         source.push_src(&self.source[span.start..span.end], span.start);
-                        push_grouped(out, source);
+                        push_grouped(out, source, self.source_kind);
                         out.push_lit(";");
                     }
                 };
@@ -619,6 +619,7 @@ impl<'a> Emitter<'a> {
         push_grouped(
             &mut out,
             self.source_range_with_value_slots(branch, &operation.values),
+            self.source_kind,
         );
         out.push_lit(";");
         out

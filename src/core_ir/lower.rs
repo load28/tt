@@ -3,7 +3,6 @@ use crate::analysis::SemanticFile;
 use crate::hir::ids::Idx;
 use crate::hir::{self, FieldBinding, Pat};
 use crate::resolve::{Res, Resolution};
-use crate::scanner::contains_await;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
@@ -587,7 +586,7 @@ impl Lowering<'_> {
             .source_map
             .node_span(node)
             .unwrap_or_else(|| crate::ice::bug!("Core IR async node has no source span"));
-        contains_await(self.source.as_bytes(), span.start, span.end)
+        crate::lexer::contains_await(self.source, span.start, span.end)
     }
 
     fn node_in_generator(&self, node: NodeId) -> bool {

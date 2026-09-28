@@ -13,8 +13,8 @@ use crate::ast::Comment;
 /// position it lands in, so the pair is noise the reader has to see past.
 /// A value whose text is not resolved yet (it carries layout breaks, so it
 /// is a lowering rather than one expression) keeps its parentheses.
-pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
-    if needs_grouping(&value) {
+pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: SourceKind) {
+    if needs_grouping(&value, kind) {
         out.push_lit("(");
         out.append(value);
         out.push_lit(")");
@@ -26,10 +26,10 @@ pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
 /// Appends `value` as the receiver of a postfix step (`value.map(f)`).
 /// Member access binds tighter than every operator, so the parentheses are
 /// needed unless the receiver is already one primary expression.
-pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
+pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: SourceKind) {
     let primary = value
         .resolved_text()
-        .is_some_and(|text| crate::scanner::is_primary_expression(text.as_bytes(), 0, text.len()));
+        .is_some_and(|text| crate::lexer::is_primary_expression(&text, 0, text.len(), kind));
     if primary {
         out.append(value);
     } else {
@@ -41,16 +41,16 @@ pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
 
 /// Whether a value delivered to one of those positions has to keep the
 /// parentheses codegen wraps it in. See [`push_grouped`].
-pub(super) fn needs_grouping(value: &Rope<'_>) -> bool {
+pub(super) fn needs_grouping(value: &Rope<'_>, kind: SourceKind) -> bool {
     match value.resolved_text() {
-        Some(text) => grouping_required(&text),
+        Some(text) => grouping_required(&text, kind),
         None => true,
     }
 }
 
 /// The same question about text codegen has not yet made a rope of.
-pub(super) fn grouping_required(text: &str) -> bool {
-    crate::scanner::has_top_level_comma(text.as_bytes(), 0, text.len())
+pub(super) fn grouping_required(text: &str, kind: SourceKind) -> bool {
+    crate::lexer::has_top_level_comma(text, 0, text.len(), kind)
 }
 
 /// Ends the line when `rope` finishes inside a `//` comment, so whatever
@@ -460,26 +460,5 @@ fn push_trailing_comments<'a>(out: &mut Rope<'a>, comments: &[Comment], depth: u
 }
 
 pub(super) fn generic_param_names(generics: &str) -> Vec<String> {
-    let inner = &generics[1..generics.len() - 1];
-    let source = inner.as_bytes();
-    let mut names = Vec::new();
-    let mut index = 0usize;
-    while index < source.len() {
-        index = skip_ws_comments(source, index, source.len());
-        if !starts_identifier(source, index, source.len()) {
-            break;
-        }
-        let end = ident_end(source, index, source.len());
-        let word = &inner[index..end];
-        if word == "const" || word == "in" || word == "out" {
-            index = end;
-            continue;
-        }
-        names.push(word.to_owned());
-        index = scan_type_end(source, end, source.len());
-        if at(source, index, source.len()) == Some(b',') {
-            index += 1;
-        }
-    }
-    names
+    crate::lexer::type_parameter_names(generics)
 }

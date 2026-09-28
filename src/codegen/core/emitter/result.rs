@@ -85,7 +85,7 @@ impl<'a> Emitter<'a> {
             out.push_lit(format!("const {temp} = {slot};"));
         } else {
             out.push_lit(format!("const {temp} = "));
-            push_grouped(&mut out, self.emit_expr(value).trim());
+            push_grouped(&mut out, self.emit_expr(value).trim(), self.source_kind);
             out.push_lit(";");
         }
         out
@@ -124,6 +124,7 @@ impl<'a> Emitter<'a> {
                 push_grouped(
                     &mut out,
                     guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
+                    self.source_kind,
                 );
             } else {
                 out.push_lit("undefined");
@@ -183,7 +184,10 @@ impl<'a> Emitter<'a> {
             }
             match exit.argument {
                 Some(argument) => {
-                    let grouped = grouping_required(&self.source[argument.start..argument.end]);
+                    let grouped = grouping_required(
+                        &self.source[argument.start..argument.end],
+                        self.source_kind,
+                    );
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,

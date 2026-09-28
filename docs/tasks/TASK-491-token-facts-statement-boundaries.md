@@ -55,12 +55,19 @@ An architecture audit found that statement boundaries and automatic semicolon in
 - **Alternatives considered**: Keep the walk. It is the same kind of local token-list predicate the task removes, and its answer differed from the grammar.
 - **Decision and rationale**: The machine knows where a body follows a parameter list, a return type, or `=>`, so it records `function_body` on that `{`, with `generator_body` for `function*`, `*m()`, and `async *m()`, and `constructor_body` for a class `constructor`. A tt `match` arm's block (`pattern => {`) keeps the arrow-body reading the queries relied on; their tt-aware variants still exclude it by the parser's ownership set. `annotated_paren`, `paren_heads_function`, `find_open`, `NON_TYPE_WORDS`, and `CONTROL_PAREN_WORDS` are deleted, and the queries no longer take the source text. A `try` in an `if let` body at a module's top level is now the `try-placement` error it always should have been.
 
+### Decision 8: The byte scanner stops guessing regular expressions
+
+- **Context**: `scanner::regex_allowed` was a second regex-vs-division rule (the previous token's last byte or word) behind `find_matching`, `skip_template`, and `has_top_level_comma`, which `is_primary_expression`, `contains_await`, and `scan_type_end` used on text codegen emits.
+- **Alternatives considered**: Feed the byte scans a machine. They produce no tokens, so each would need its own driver.
+- **Decision and rationale**: The questions are answered over the lexer's tokens (`src/lexer/queries.rs`: `has_top_level_comma`, `is_primary_expression`, `contains_await`, `type_parameter_names`), lexed with the file's `SourceKind` so JSX in emitted `.tsx` is read as JSX. `regex_allowed`, `find_matching`, `skip_template`, `scan_type_end`, and the byte versions are deleted; `scanner.rs` keeps only byte primitives. The parser carries its `SourceKind` for the one query it asks (`try` operand ends).
+
 ## Work log
 
 - 2026-09-28: Verified the audit. Reproduced with `ttc --check`/`ttc -p`: a let-else `else` block whose line before `throw e` ends in `o as Array<number>`, `let g: () => void`, `let p: Promise<void>`, `x satisfies Record<K, unknown>`, or ends with a CR or U+2028 line break reports `let-else-not-diverging`; `let p: Promise<void>` followed by an `if let` reports `if-let-placement`; a pipeline on the line after such a type claims the previous line as its head (`generated TypeScript failed to parse`); a `try` statement after one compiles as a value-form `try`.
 - 2026-09-28: Added the scanner's trivia primitives (`line_terminator_len`, `skip_trivia`, a `line_end` that stops at every terminator, non-ASCII white space and the byte-order mark as trivia, a hashbang line at a file's start as trivia) and the machine (`src/lexer/facts.rs`, `facts/{statements,expressions,types}.rs`). The lexer drives it and records the facts on every token; numeric literals, which the lexer still emits as byte-sized pieces, are pushed as one operand. Added the SWC oracle (`facts/tests.rs`). The first corpus run found `x << 24` read as a type assertion after the second `<`; a shift operator's second `<` is now part of the operator.
 - 2026-09-28: Moved every consumer onto the facts: flow statement splitting and labels (`src/flow/scanner.rs`), concise-arrow ends (`src/flow/syntax.rs`), the parser's statement starts, `try`/`if let` expression positions, pipeline heads and steps, `match` host ambiguity, and the brace-continuation test (`src/parser/`), the projection's boundary semicolon (`src/program_syntax/projection.rs`), and `val`'s same-line rule (`src/parser/vals.rs`). Deleted `asi_boundary_at` and its helpers, `ConciseArrowBoundaries`, `brace_opens_statement`, `brace_starts_statement`, `head_owes_body`, `NON_VALUE_WORDS`, `NON_LABEL_WORDS`, `TYPE_OPERATOR_WORDS`, `BLOCK_STMT_WORDS`, `EXPR_BRACE_WORDS`, `starts_statement`, `in_for_update`, `follows_object_member_colon`, `STMT_ONLY_WORDS`, and the cursor's `line_break_before`/`ends_expression`. Added `tests/compile/cases_12.rs`.
 - 2026-09-28: Recorded function-body facts (`function_body`, `generator_body`, `constructor_body`) and moved flow's function-scope queries onto them (`src/flow/syntax.rs`; callers in `src/parser/`, `src/sema/checker.rs`, `src/core_ir/lower.rs`). Deleted the return-type walk and its word lists. Added `a_brace_records_the_function_body_it_opens` and `a_block_after_a_call_opens_no_function`.
+- 2026-09-28: Moved codegen's text queries onto tokens (`src/lexer/queries.rs`), threaded the `SourceKind` through `push_grouped`, `push_receiver`, `needs_grouping`, and `grouping_required` (`src/codegen/core/emitter/`), and deleted the scanner's regex guess and bracket matcher. Two emit snapshots changed (Issue 3); reviewed with `UPDATE_EXPECT=1 cargo test --test snapshot`.
 
 ## Issues and resolutions
 
@@ -75,6 +82,12 @@ An architecture audit found that statement boundaries and automatic semicolon in
 - **Symptom**: `interface X { try(x); }`, `{ try(x) { … } }`, and `{ try: 1 }` failed to pass through (`untyped_try_methods_survive_next_to_tt_constructs` and three passthrough tests).
 - **Cause**: The old statement-start test answered "yes" after any `{`, which sent a member named `try` to the statement parser, whose member-shape rejection kept it TypeScript. The facts correctly say a member name does not start a statement, so the parser tried the value form.
 - **Resolution**: The machine records `member` on a class, interface, type literal, or object literal member name, and the parser never reads a member name as the value-form `try`. The same fact joins statement starts as a position where a `match` is delegated to the host grammar, which the old test had covered by the same accident.
+
+### Issue 3: Two JSX emit snapshots lost a pair of parentheses
+
+- **Symptom**: `workflow-jsx-block-callback` and `workflow-jsx-nested-arrow` now emit `$tt_v0 = <ul>…</ul>;` where the fixtures had `$tt_v0 = (<ul>…</ul>);`.
+- **Cause**: The byte scanner read the `/` of a JSX closing tag (`</button>`) as the start of a regular expression, lost the bracket balance, and answered "top-level comma" for a value that has none. The rule (`docs/ai/tt.md`) keeps parentheses around a lowered value only where they group it.
+- **Resolution**: A real fix; the fixtures were updated and the diff is exactly the two parenthesis pairs.
 
 ## Verification
 

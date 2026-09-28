@@ -23,7 +23,7 @@ let $tt_v0$view;
   const $tt_m = ready;
   switch ($tt_m) {
     case true: {
-      $tt_v0$view = (<p>{items.map(item=><p>{Number(item.quantity)+Number(item.price)}</p>)}</p>);
+      $tt_v0$view = <p>{items.map(item=><p>{Number(item.quantity)+Number(item.price)}</p>)}</p>;
       break;
     }
     case false: {

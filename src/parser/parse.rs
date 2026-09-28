@@ -29,6 +29,7 @@ pub(crate) fn lex_and_parse_with_kind(
         Parser {
             src,
             bytes: src.as_bytes(),
+            source_kind,
             host_owned_matches,
             host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
@@ -183,6 +184,8 @@ pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidat
 pub(crate) struct Parser<'a> {
     pub src: &'a str,
     pub bytes: &'a [u8],
+    /// The file's surface, for re-lexing a piece of it.
+    pub source_kind: crate::SourceKind,
     host_owned_matches: Vec<Span>,
     /// Keyword offsets of parameter-shaped `val` candidates whose binding
     /// the host grammar does not read as a formal parameter, sorted.
@@ -195,6 +198,7 @@ impl<'a> Parser<'a> {
         Parser {
             src,
             bytes: src.as_bytes(),
+            source_kind: crate::SourceKind::TypeScript,
             host_owned_matches: Vec::new(),
             host_rejected_vals: Vec::new(),
             flow_queries: crate::flow::FlowBodyQueries::default(),

@@ -32,7 +32,7 @@ impl<'a> Emitter<'a> {
                     let mut input = Rope::new();
                     match step.mode {
                         ApplyMode::Postfix { .. } => {
-                            push_receiver(&mut input, acc);
+                            push_receiver(&mut input, acc, self.source_kind);
                             next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
@@ -45,9 +45,9 @@ impl<'a> Emitter<'a> {
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
-                                push_receiver(&mut next, body);
+                                push_receiver(&mut next, body, self.source_kind);
                                 next.push_lit("(");
-                                push_grouped(&mut input, acc);
+                                push_grouped(&mut input, acc, self.source_kind);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -60,7 +60,7 @@ impl<'a> Emitter<'a> {
                             } else if let Some(member) =
                                 self.member_apply_steps.get(&step.value).copied()
                             {
-                                push_grouped(&mut input, acc);
+                                push_grouped(&mut input, acc, self.source_kind);
                                 let mut call = Rope::new();
                                 call.anchored_with_context(
                                     AnchorKind::Pipe,
@@ -81,7 +81,7 @@ impl<'a> Emitter<'a> {
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
-                                push_grouped(&mut input, acc);
+                                push_grouped(&mut input, acc, self.source_kind);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -91,7 +91,7 @@ impl<'a> Emitter<'a> {
                                     input,
                                 );
                                 next.push_lit(", ");
-                                push_grouped(&mut next, body);
+                                push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             }
                         }
@@ -239,7 +239,11 @@ impl<'a> Emitter<'a> {
             .next()
             .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
         let mut acc = Rope::new();
-        push_grouped(&mut acc, self.emit_flow_function(first.value));
+        push_grouped(
+            &mut acc,
+            self.emit_flow_function(first.value),
+            self.source_kind,
+        );
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
@@ -267,7 +271,7 @@ impl<'a> Emitter<'a> {
                 }
                 ApplyMode::Call => {
                     next.push_lit(", ");
-                    push_grouped(&mut next, body);
+                    push_grouped(&mut next, body, self.source_kind);
                     next.push_lit(")");
                 }
             }
@@ -370,7 +374,11 @@ impl<'a> Emitter<'a> {
             out.push_lit("const ");
             out.push_mark(self.span(mark).start);
             out.push_lit(format!("{temp} = "));
-            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            push_grouped(
+                &mut out,
+                self.emit_expr(subject.value).trim(),
+                self.source_kind,
+            );
             out.push_lit(";");
         }
         out
@@ -704,6 +712,7 @@ impl<'a> Emitter<'a> {
             push_grouped(
                 &mut inner,
                 guard_line_comment(self.emit_expr(head).trim(), 1, self.source_kind),
+                self.source_kind,
             );
             inner.push_lit(";");
         }
@@ -757,7 +766,7 @@ impl<'a> Emitter<'a> {
                     // unobservable, so the callee can occupy its natural
                     // call position without changing source evaluation.
                     inner.push_lit(format!("{accumulator} = "));
-                    push_grouped(&mut inner, step_value);
+                    push_grouped(&mut inner, step_value, self.source_kind);
                     inner.push_lit("(");
                     inner.anchored_with_context(
                         AnchorKind::Pipe,

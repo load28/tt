@@ -31,9 +31,13 @@ use crate::scanner::*;
 mod facts;
 mod names;
 pub(crate) mod pragmas;
+mod queries;
 mod validation;
 pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
+pub(crate) use queries::{
+    contains_await, has_top_level_comma, is_primary_expression, type_parameter_names,
+};
 pub(crate) use validation::host_syntax_error;
 
 /// One significant token.

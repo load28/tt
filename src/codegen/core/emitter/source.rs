@@ -424,7 +424,7 @@ impl<'a> Emitter<'a> {
             match exit.argument {
                 Some(argument) => {
                     let grouped =
-                        grouping_required(self.source[argument.start..argument.end].trim());
+                        grouping_required(self.source[argument.start..argument.end].trim(), self.source_kind);
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,

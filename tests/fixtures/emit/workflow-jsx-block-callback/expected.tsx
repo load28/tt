@@ -29,7 +29,7 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
      case "Loaded": {
        const { value } = $tt_m;
        const items=value.filter(item=>item.title.includes(filter));
-   $tt_v0 = (<ul>{items.map(item=>{
+   $tt_v0 = <ul>{items.map(item=>{
      let $tt_v4: number;
      let $tt_v5: number;
      const $tt_v7 = (item.id);
@@ -64,7 +64,7 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
        }
      }
      return <li key={$tt_v7}>{$tt_v9}<strong>{$tt_v11 + $tt_v5}</strong></li>;
-   })}</ul>);
+   })}</ul>;
    break;
      }
      default: {
