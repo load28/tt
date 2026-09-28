@@ -111,7 +111,18 @@ pub(super) enum ModuleState {
     AfterClause,
     From,
     Source,
+    /// After an import-equals declaration's `=`, at its module reference
+    /// (TypeScript's `parseModuleReference`).
     Equals,
+    /// After `require`, at the `(` of an external module reference.
+    Require,
+    /// After a name of an entity-name module reference, which only `.`
+    /// continues.
+    Entity,
+    /// After a `.` of an entity-name module reference.
+    EntityDot,
+    /// After a complete module reference.
+    Reference,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -881,8 +892,6 @@ impl Machine<'_> {
                 }
                 Tk::Punct(b'=') => {
                     keep(self, ModuleState::Equals);
-                    let cfg = self.statement_expr();
-                    self.push_expr(cfg);
                     Out::Consumed
                 }
                 Tk::Word if matches!(tok.text, "type" | "typeof") => {
@@ -918,6 +927,28 @@ impl Machine<'_> {
                 }
                 _ => self.end_statement(start, tok),
             },
+            ModuleState::Equals if tok.kind == Tk::Word => {
+                let (next, _, _) = self.next_after(tok);
+                if tok.text == "require" && next == Some(b'(') {
+                    keep(self, ModuleState::Require);
+                } else {
+                    keep(self, ModuleState::Entity);
+                }
+                Out::Consumed
+            }
+            ModuleState::Require if tok.is(b'(') => {
+                keep(self, ModuleState::Reference);
+                self.open_group(GroupKind::Call);
+                Out::Consumed
+            }
+            ModuleState::Entity if tok.is(b'.') => {
+                keep(self, ModuleState::EntityDot);
+                Out::Consumed
+            }
+            ModuleState::EntityDot if tok.kind == Tk::Word => {
+                keep(self, ModuleState::Entity);
+                Out::Consumed
+            }
             ModuleState::From if tok.kind == Tk::Str => {
                 keep(self, ModuleState::Source);
                 Out::Consumed

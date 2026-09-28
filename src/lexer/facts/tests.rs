@@ -226,6 +226,7 @@ const KNOWN: &[&str] = &[
     "var v1 = x\n-1\nvar v2 = x\n+1\nvar v3 = x\n!y\n",
     "yield1()\nfunction* g3() { const s = yield\n  s }\n",
     "type A = number\nconst r1 = (): (A | undefined) => {}\n/x/g.exec(\"x\")\nconst r2 = (): (() => void) => { return () => {} }\n/x/g.exec(\"x\")\nconst r3 = (): (typeof r1) => r1\nconst r4 = (): (a: A) => void => { return () => {} }\n/x/g.exec(\"x\")\nconst r5 = (): ([\"a\"]) => { return [\"a\"] }\n-1\nconst r6 = (): ({ a }: { a: A }) => void => { return () => {} }\n/x/g.exec(\"x\")\n",
+    "namespace B { export namespace C {} }\nimport A = B.C\n/x/g.exec(\"x\")\nimport fs = require(\"fs\")\n[1].forEach(n => n)\nexport import D = B.\n  C\n(1)\nimport type R = require(\"fs\")\n-1\nimport E = B\n`t`\n",
     "let get = 1, set = 2, of = 3, type = 4, declare = 5, abstract = 6, module = 7, namespace = 8\ntype\nFoo\ndeclare\nfoo\n",
 ];
 

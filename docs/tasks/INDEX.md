@@ -507,6 +507,7 @@
 | TASK-497 | Let an automatic semicolon end a block-bodied arrow function before an operator line | Complete | 2026-09-28 | 2026-09-28 | [TASK-497](./TASK-497-arrow-body-automatic-semicolon.md) |
 | TASK-498 | Count lines once, under the line breaks each consumer speaks | Complete | 2026-09-28 | 2026-09-28 | [TASK-498](./TASK-498-one-line-model.md) |
 | TASK-499 | Read a parenthesized arrow return type the way TypeScript does | Complete | 2026-09-28 | 2026-09-28 | [TASK-499](./TASK-499-parenthesized-return-type-arrow.md) |
+| TASK-500 | Read an import-equals module reference as TypeScript's grammar does | Complete | 2026-09-28 | 2026-09-28 | [TASK-500](./TASK-500-import-equals-module-reference.md) |
 
 ## Next task number
 

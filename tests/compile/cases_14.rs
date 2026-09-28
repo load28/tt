@@ -68,3 +68,35 @@ fn a_function_return_type_still_continues_to_its_own_arrow() {
         assert_eq!(ok(&source), source, "{ty}");
     }
 }
+
+/// Import-equals declarations: the module reference is `require("…")` or
+/// an entity name, and a line break after it ends the declaration
+/// (TypeScript's `parseModuleReference` and `parseSemicolon`, TASK-500).
+const TASK_500_DECLARATIONS: &[&str] = &[
+    "import fs = require(\"fs\")\n",
+    "import type R = require(\"fs\")\n",
+    "export import F = require(\"fs\")\n",
+    "import A = B.C\n",
+    "export import D = B.\n  C\n",
+    "import E = B\n",
+];
+
+const TASK_500_PRELUDE: &str = "namespace B { export namespace C { export const q = 1 } }\n";
+
+#[test]
+fn a_line_after_an_import_equals_declaration_starts_a_statement() {
+    for declaration in TASK_500_DECLARATIONS {
+        let source = format!("{TASK_500_PRELUDE}{declaration}/a|>b/.test(\"a|>b\") && B\n");
+        assert_eq!(ok(&source), source, "{declaration:?}");
+        let source = format!("{TASK_500_PRELUDE}{declaration}/ val const q = 2 /.test(\"\")\n");
+        assert_eq!(ok(&source), source, "{declaration:?}");
+        let source = format!("{TASK_500_PRELUDE}{declaration}<p> val const text </p>\n");
+        assert_eq!(ok_tsx(&source), source, "{declaration:?}");
+        let source = format!("{TASK_500_PRELUDE}{declaration}[1] |> console.log\n");
+        let out = ok(&source);
+        assert!(
+            out.contains(&format!("{declaration}console.log([1])")),
+            "{declaration:?}:\n{out}"
+        );
+    }
+}

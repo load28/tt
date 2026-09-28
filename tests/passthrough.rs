@@ -837,3 +837,29 @@ fn an_arrow_function_with_a_parenthesized_return_type_passes_through() {
         assert_tsx_passthrough(&source);
     }
 }
+
+#[test]
+fn a_line_after_an_import_equals_declaration_passes_through() {
+    for declaration in [
+        "import fs = require(\"fs\")\n",
+        "import type R = require(\"fs\")\n",
+        "export import F = require(\"fs\")\n",
+        "import A = B.C\n",
+        "export import D = B.\n  C\n",
+        "import E = B\n",
+    ] {
+        for line in [
+            "/x/g.exec(\"x\")",
+            "[1].forEach(n => n)",
+            "(1)",
+            "-1",
+            "`t`",
+        ] {
+            let source = format!(
+                "namespace B {{ export namespace C {{ export const q = 1 }} }}\n{declaration}{line}\n"
+            );
+            assert_passthrough(&source);
+            assert_tsx_passthrough(&source);
+        }
+    }
+}
