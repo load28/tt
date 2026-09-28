@@ -497,3 +497,34 @@ fn completion_probe_uses_the_same_arm_recovery_as_hover() {
     let byte = mapper::from_utf16(&probe.code, probe.offset);
     assert!(probe.code[..byte].ends_with("name."), "{}", probe.code);
 }
+
+#[test]
+fn hover_markdown_separates_signature_from_documentation_and_tags() {
+    let markdown = serde_json::json!({
+        "kind": "markdown",
+        "value": "```typescript\nfunction add(a: number): number\n```\nAdds.\n\n```ts\nadd(1)\n```\n\n*@param* `a` — the first",
+    });
+    assert_eq!(
+        split_hover(&markdown),
+        (
+            "function add(a: number): number".to_string(),
+            "Adds.\n\n```ts\nadd(1)\n```\n\n*@param* `a` — the first".to_string()
+        )
+    );
+    let bare =
+        serde_json::json!({ "kind": "markdown", "value": "```typescript\nconst u: 1\n```\n" });
+    assert_eq!(
+        split_hover(&bare),
+        ("const u: 1".to_string(), String::new())
+    );
+    let plain = serde_json::json!({ "kind": "plaintext", "value": "const u: 1" });
+    assert_eq!(
+        split_hover(&plain),
+        ("const u: 1".to_string(), String::new())
+    );
+    let marked = serde_json::json!({ "language": "typescript", "value": "let v: string" });
+    assert_eq!(
+        split_hover(&marked),
+        ("let v: string".to_string(), String::new())
+    );
+}

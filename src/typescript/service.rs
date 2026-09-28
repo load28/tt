@@ -120,7 +120,7 @@ impl Service {
                 "capabilities": {
                     "textDocument": {
                         "synchronization": { "dynamicRegistration": true },
-                        "hover": { "contentFormat": ["plaintext", "markdown"] },
+                        "hover": { "contentFormat": ["markdown", "plaintext"] },
                         "definition": {},
                         "references": {},
                         "completion": { "completionItem": { "labelDetailsSupport": true } },

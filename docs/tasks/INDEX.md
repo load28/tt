@@ -484,6 +484,7 @@
 | TASK-476 | `ttc explain` accepts the number `tsc` prints | Complete | 2026-09-28 | 2026-09-28 | [TASK-476](./TASK-476-explain-numeric-codes.md) |
 | TASK-477 | The typed `val` check sees every spelling of a member call | Complete | 2026-09-28 | 2026-09-28 | [TASK-477](./TASK-477-val-member-call-probes.md) |
 | TASK-478 | Decide a guarded all-wildcard arm by its guard alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-478](./TASK-478-guarded-wildcard-tuple-arm.md) |
+| TASK-479 | Separate hover documentation from the signature | Complete | 2026-09-28 | 2026-09-28 | [TASK-479](./TASK-479-hover-documentation-split.md) |
 
 ## Next task number
 

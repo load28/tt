@@ -51,7 +51,7 @@
 
 - **Symptom**: The new native test's hover answer had `signature: "(property) Circle: (radius: number) => ShapeA circle around the origin."` and an empty `documentation`.
 - **Cause**: The engine requests hover with `contentFormat: ["plaintext", "markdown"]`, and tsgo's plaintext answer concatenates the signature and the JSDoc with no separator, which `split_hover` cannot split. This is independent of variant emission; the documentation does reach the answer.
-- **Resolution**: The test checks the complete hover answer. The split is queued as a separate task suggestion.
+- **Resolution**: The test checks the complete hover answer. Fixed by TASK-479, which requests Markdown hover and splits at its code fence; the test now asserts `signature` and `documentation` separately.
 
 ## Verification
 

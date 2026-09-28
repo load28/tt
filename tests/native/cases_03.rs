@@ -757,18 +757,17 @@ fn variant_case_and_field_docs_reach_hover_and_signature_help() {
         .hover(&file, ttc::engine::Position { line: 9, character: 24 })
         .unwrap()
         .expect("the constructor hovers");
-    assert!(
-        format!("{on_constructor:?}").contains("A circle around the origin."),
-        "{on_constructor:?}"
+    assert_eq!(
+        on_constructor.signature,
+        "(property) Circle: (radius: number) => Shape"
     );
+    assert_eq!(on_constructor.documentation, "A circle around the origin.");
     let on_field = project
         .hover(&file, ttc::engine::Position { line: 11, character: 42 })
         .unwrap()
         .expect("the narrowed field hovers");
-    assert!(
-        format!("{on_field:?}").contains("Width in pixels."),
-        "{on_field:?}"
-    );
+    assert_eq!(on_field.signature, "(property) width: number");
+    assert_eq!(on_field.documentation, "Width in pixels.");
     let help = project
         .signature_help(&file, ttc::engine::Position { line: 12, character: 28 })
         .unwrap();
@@ -799,4 +798,44 @@ fn bigint_literal_unions_are_checked_for_exhaustiveness() {
         3,
         "{out}"
     );
+}
+
+#[test]
+fn hover_documentation_and_jsdoc_tags_are_separate_from_the_signature() {
+    require_tsgo!();
+    let source = "/**\n\
+                  \x20* Adds two numbers.\n\
+                  \x20* @param a the first\n\
+                  \x20* @returns the sum\n\
+                  \x20*/\n\
+                  export function add(a: number, b: number): number { return a + b; }\n\
+                  export const r = add(1, 2);\n\
+                  export const u = r;\n";
+    let dir = project(&[("src/add.tt", source)]);
+    let file = dir.join("src/add.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let on_call = project
+        .hover(&file, ttc::engine::Position { line: 6, character: 18 })
+        .unwrap()
+        .expect("the call hovers");
+    assert_eq!(
+        on_call.signature,
+        "function add(a: number, b: number): number"
+    );
+    assert_eq!(
+        on_call.documentation,
+        "Adds two numbers.\n\n*@param* `a` — the first\n\n*@returns* — the sum"
+    );
+    let undocumented = project
+        .hover(&file, ttc::engine::Position { line: 7, character: 17 })
+        .unwrap()
+        .expect("the reference hovers");
+    assert_eq!(undocumented.signature, "const r: number");
+    assert_eq!(undocumented.documentation, "");
 }

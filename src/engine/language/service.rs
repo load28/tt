@@ -632,25 +632,43 @@ pub(super) fn is_member_context(text: &str, offset: usize) -> bool {
     i > 0 && bytes[i - 1] == b'.'
 }
 
-/// Splits hover contents into the signature and the prose under it: the
-/// first fenced block is the signature, else the first paragraph.
-pub(super) fn split_hover(contents: &str) -> (String, String) {
-    let trimmed = contents.trim();
-    if let Some(rest) = trimmed.strip_prefix("```") {
-        // ```lang\n ... \n``` and whatever prose follows.
-        if let Some(newline) = rest.find('\n') {
-            let body = &rest[newline + 1..];
-            if let Some(close) = body.find("\n```") {
-                let signature = body[..close].trim().to_string();
-                let documentation = body[close + 4..].trim().to_string();
-                return (signature, documentation);
-            }
+pub(super) fn split_hover(contents: &serde_json::Value) -> (String, String) {
+    let value = |contents: &serde_json::Value| {
+        contents["value"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    match contents {
+        serde_json::Value::String(markdown) => split_markdown_hover(markdown),
+        serde_json::Value::Object(_) if contents["kind"] == "markdown" => {
+            split_markdown_hover(contents["value"].as_str().unwrap_or_default())
         }
+        serde_json::Value::Object(_) => (value(contents), String::new()),
+        _ => (String::new(), String::new()),
     }
-    match trimmed.split_once("\n\n") {
-        Some((first, rest)) => (first.trim().to_string(), rest.trim().to_string()),
-        None => (trimmed.to_string(), String::new()),
+}
+
+fn split_markdown_hover(markdown: &str) -> (String, String) {
+    let trimmed = markdown.trim();
+    if let Some(rest) = trimmed.strip_prefix("```")
+        && let Some(newline) = rest.find('\n')
+    {
+        let body = &rest[newline + 1..];
+        let (code, prose) = match body.find("\n```") {
+            Some(close) => {
+                let after = &body[close + 4..];
+                (
+                    &body[..close],
+                    after.find('\n').map_or("", |line| &after[line + 1..]),
+                )
+            }
+            None => (body.strip_suffix("```").unwrap_or(body), ""),
+        };
+        return (code.trim().to_string(), prose.trim().to_string());
     }
+    (String::new(), trimmed.to_string())
 }
 
 /// Documentation as plain text, whichever shape the server used.

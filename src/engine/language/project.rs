@@ -60,14 +60,7 @@ impl Project {
                 "position": lsp_position(u16_position(&doc.code, at)),
             }),
         )?;
-        let contents = match &hover["contents"] {
-            serde_json::Value::String(s) => s.clone(),
-            value => value["value"].as_str().unwrap_or_default().to_string(),
-        };
-        if contents.is_empty() {
-            return Ok(None);
-        }
-        let (signature, documentation) = split_hover(&contents);
+        let (signature, documentation) = split_hover(&hover["contents"]);
         if signature.is_empty() {
             return Ok(None);
         }
@@ -166,11 +159,7 @@ impl Project {
         session.served.insert(path.to_path_buf(), doc.code.clone());
 
         let hover = answer.ok()?;
-        let contents = match &hover["contents"] {
-            serde_json::Value::String(s) => s.clone(),
-            value => value["value"].as_str().unwrap_or_default().to_string(),
-        };
-        let (signature, documentation) = split_hover(&contents);
+        let (signature, documentation) = split_hover(&hover["contents"]);
         if signature.is_empty() {
             return None;
         }

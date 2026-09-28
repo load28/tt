@@ -639,6 +639,38 @@ test(
   },
 );
 
+const DOCUMENTED_SOURCE = [
+  "/**",
+  " * Adds two numbers.",
+  " * @param a the first",
+  " */",
+  "function add(a: number, b: number): number { return a + b; }",
+  "const sum = add(1, 2);",
+  "",
+].join("\n");
+
+test(
+  "a documented TypeScript hover renders its signature and documentation as separate parts",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(DOCUMENTED_SOURCE);
+    try {
+      const hover = await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionOf(DOCUMENTED_SOURCE, "sum = ad"),
+      });
+      assert.equal(hover.result?.contents?.kind, "markdown");
+      assert.equal(
+        hover.result?.contents?.value,
+        "```ts\nfunction add(a: number, b: number): number\n```\n" +
+          "Adds two numbers.\n\n*@param* `a` — the first",
+      );
+    } finally {
+      stop();
+    }
+  },
+);
+
 const STD_SOURCE = [
   'import type { TOption, TResult } from "@tt/std";',
   'import * as Option from "@tt/std/option";',
