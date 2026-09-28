@@ -835,7 +835,7 @@ impl Parser<'_> {
 
             // `val` — a binding modifier, dropped from the output. The
             // two accepted shapes (`val const|let|var` on one line, and
-            // `val <binding>` at the start of a parameter-list entry)
+            // `val <binding>` at the start of a proven parameter-list entry)
             // cannot occur in valid TypeScript, so every other `val` is
             // an ordinary identifier and stays verbatim.
             if !dotted && word == "val" && val::modifier_at(self.src, tokens, i).is_some() {

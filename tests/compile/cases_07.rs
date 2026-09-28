@@ -583,6 +583,47 @@ fn val_parameter_modifier_is_erased_from_the_output() {
 }
 
 #[test]
+fn val_array_pattern_parameter_is_erased_in_every_parameter_list() {
+    let cases = [
+        (
+            "function a(val [x, y]: number[]) { return x + y; }\n",
+            "function a([x, y]: number[]) { return x + y; }\n",
+        ),
+        (
+            "const b = (val [x]: number[]) => x;\n",
+            "const b = ([x]: number[]) => x;\n",
+        ),
+        (
+            "const c = async (p: number, val [x]: number[]): Promise<number> => x;\n",
+            "const c = async (p: number, [x]: number[]): Promise<number> => x;\n",
+        ),
+        (
+            "const d = function* <T>(val [t]: T[]) { yield t; };\n",
+            "const d = function* <T>([t]: T[]) { yield t; };\n",
+        ),
+        (
+            "class K {\n  m(val [h]: number[]): { k: number } { return { k: h }; }\n  n(val [h]: number[])\n  {\n    return h;\n  }\n}\n",
+            "class K {\n  m([h]: number[]): { k: number } { return { k: h }; }\n  n([h]: number[])\n  {\n    return h;\n  }\n}\n",
+        ),
+        (
+            "const o = { m(val [u]: number[]) { return u; } };\n",
+            "const o = { m([u]: number[]) { return u; } };\n",
+        ),
+        (
+            "try { f(); } catch (val [e]: any) { g(e); }\n",
+            "try { f(); } catch ([e]: any) { g(e); }\n",
+        ),
+        (
+            "function over(val [x]: number[]): void;\nfunction over(val [x]: number[]) {}\n",
+            "function over([x]: number[]): void;\nfunction over([x]: number[]) {}\n",
+        ),
+    ];
+    for (src, expected) in cases {
+        assert_eq!(ok(src), expected, "{src}");
+    }
+}
+
+#[test]
 fn val_const_forbids_property_assignment() {
     let e = err("val const x = { a: 1 };\nx.a = 2;\n");
     assert_eq!((e.line, e.col), (2, 1));

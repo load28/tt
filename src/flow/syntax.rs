@@ -562,44 +562,146 @@ pub(super) fn function_body_brace(src: &str, tokens: &[Token], k: usize) -> bool
         // annotation's colon and the parenthesis decides as above. A token
         // no type contains at its top level ends the walk: the brace is
         // not a body.
-        _ => {
-            let mut depth = 0usize;
-            let mut j = k;
-            while j > 0 {
-                j -= 1;
-                let t = &tokens[j];
-                match t.kind {
-                    TokenKind::Punct(b'>' | b')' | b']' | b'}') => depth += 1,
-                    TokenKind::Punct(b'<' | b'(' | b'[' | b'{') => {
-                        if depth == 0 {
-                            return false;
-                        }
-                        depth -= 1;
-                    }
-                    TokenKind::Punct(b':') if depth == 0 => {
-                        return j >= 1
-                            && matches!(tokens[j - 1].kind, TokenKind::Punct(b')'))
-                            && paren_heads_function(src, tokens, j - 1);
-                    }
-                    TokenKind::Ident if depth == 0 => {
-                        if NON_TYPE_WORDS.contains(&&src[t.span.start..t.span.end]) {
-                            return false;
-                        }
-                    }
-                    TokenKind::Arrow if depth == 0 => return false,
-                    TokenKind::Str | TokenKind::Arrow => {}
-                    TokenKind::Punct(b'.' | b'|' | b'&') => {}
-                    TokenKind::Punct(c) if c.is_ascii_digit() => {}
-                    _ => {
-                        if depth == 0 {
-                            return false;
-                        }
-                    }
+        _ => annotated_paren(src, tokens, k)
+            .is_some_and(|close| paren_heads_function(src, tokens, close)),
+    }
+}
+
+/// The `)` that token `k` follows directly or through a return-type
+/// annotation `) : <type>`.
+fn annotated_paren(src: &str, tokens: &[Token], k: usize) -> Option<usize> {
+    let prev = k.checked_sub(1)?;
+    if matches!(tokens[prev].kind, TokenKind::Punct(b')')) {
+        return Some(prev);
+    }
+    let mut depth = 0usize;
+    let mut j = k;
+    while j > 0 {
+        j -= 1;
+        let t = &tokens[j];
+        match t.kind {
+            TokenKind::Punct(b'>' | b')' | b']' | b'}') => depth += 1,
+            TokenKind::Punct(b'<' | b'(' | b'[' | b'{') => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+            }
+            TokenKind::Punct(b':') if depth == 0 => {
+                return (j >= 1 && matches!(tokens[j - 1].kind, TokenKind::Punct(b')')))
+                    .then(|| j - 1);
+            }
+            TokenKind::Ident if depth == 0 => {
+                if NON_TYPE_WORDS.contains(&&src[t.span.start..t.span.end]) {
+                    return None;
                 }
             }
-            false
+            TokenKind::Arrow if depth == 0 => return None,
+            TokenKind::Str | TokenKind::Arrow => {}
+            TokenKind::Punct(b'.' | b'|' | b'&') => {}
+            TokenKind::Punct(c) if c.is_ascii_digit() => {}
+            _ => {
+                if depth == 0 {
+                    return None;
+                }
+            }
         }
     }
+    None
+}
+
+/// Whether the `(` at token index `open` opens a formal parameter list:
+/// a `catch` clause, a `function` head, an arrow head, or a method,
+/// accessor, or constructor head followed by its body.
+pub(crate) fn opens_parameter_list(src: &str, tokens: &[Token], open: usize) -> bool {
+    let before = open.checked_sub(1);
+    if before.is_some_and(|b| {
+        matches!(tokens[b].kind, TokenKind::Ident)
+            && &src[tokens[b].span.start..tokens[b].span.end] == "catch"
+    }) || follows_function_keyword(src, tokens, open)
+    {
+        return true;
+    }
+    let Some(close) = crate::parser::find_close_at(tokens, open) else {
+        return false;
+    };
+    if !matches!(
+        tokens.get(close + 1).map(|t| &t.kind),
+        Some(TokenKind::Arrow | TokenKind::Punct(b'{' | b':'))
+    ) {
+        return false;
+    }
+    let call_shaped = before.is_some_and(|b| token_ends_expression(src, &tokens[b]));
+    let mut depth = 0usize;
+    for k in close + 1..tokens.len() {
+        match tokens[k].kind {
+            TokenKind::Arrow if depth == 0 => {
+                if annotated_paren(src, tokens, k) == Some(close) {
+                    return !call_shaped && !line_break_before_tokens(src, tokens, k);
+                }
+            }
+            TokenKind::Punct(b'{') => {
+                if depth == 0
+                    && !operand_expected_before(&tokens[k - 1])
+                    && annotated_paren(src, tokens, k) == Some(close)
+                {
+                    return paren_heads_function(src, tokens, close);
+                }
+                depth += 1;
+            }
+            TokenKind::Punct(b'(' | b'[') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => {
+                if depth == 0 {
+                    return false;
+                }
+                depth -= 1;
+            }
+            TokenKind::Punct(b';' | b',' | b'=') if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    false
+}
+
+fn operand_expected_before(token: &Token) -> bool {
+    matches!(
+        token.kind,
+        TokenKind::Arrow | TokenKind::Punct(b':' | b'|' | b'&' | b'<' | b',' | b'(' | b'[')
+    )
+}
+
+fn follows_function_keyword(src: &str, tokens: &[Token], open: usize) -> bool {
+    let word = |i: usize| match tokens.get(i) {
+        Some(t) if matches!(t.kind, TokenKind::Ident) => Some(&src[t.span.start..t.span.end]),
+        _ => None,
+    };
+    let mut j = open;
+    if j > 0 && matches!(tokens[j - 1].kind, TokenKind::Punct(b'>')) {
+        let mut depth = 0usize;
+        loop {
+            if j == 0 {
+                return false;
+            }
+            j -= 1;
+            match tokens[j].kind {
+                TokenKind::Punct(b'>') => depth += 1,
+                TokenKind::Punct(b'<') => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    if j > 0 && word(j - 1).is_some_and(|name| name != "function") {
+        j -= 1;
+    }
+    if j > 0 && matches!(tokens[j - 1].kind, TokenKind::Punct(b'*')) {
+        j -= 1;
+    }
+    j > 0 && word(j - 1) == Some("function")
 }
 
 /// Whether the parameter list closed at token index `close` heads a

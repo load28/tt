@@ -677,6 +677,18 @@ fn val_as_a_call_argument_or_element() {
 }
 
 #[test]
+fn val_element_access_in_arguments_and_elements() {
+    assert_passthrough(
+        "const val = [5];\nconsole.log(val [0]);\nconst arr = [1, val [0]];\ng(1, val [1]);\n",
+    );
+    assert_passthrough("h(val [0], val [1]);\nnew C(val [0]);\nconst p = (val [0]);\n");
+    assert_passthrough("const t = c ? f(val [0]) : { a: 1 };\n");
+    assert_passthrough("const u = c ? f(val [0]) : w => w;\n");
+    assert_passthrough("function k(a = g(1, val [0])) { return a; }\n");
+    assert_passthrough("if (val [0]) { log(1); }\nwhile (x, val [0]) { break; }\n");
+}
+
+#[test]
 fn untyped_try_method_signatures_remain_host_members() {
     assert_passthrough("interface X { try(x); }\ntype Y = { try(x); };\n");
 }

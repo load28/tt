@@ -15,8 +15,8 @@
 //!   whether a `val` identifier is a modifier at all. It is deliberately
 //!   narrow so the passthrough contract holds: the two shapes it accepts
 //!   (`val const|let|var` on one line, and `val <binding>` at the start of
-//!   a parameter-list entry) cannot occur in valid TypeScript, so no
-//!   working TypeScript file changes meaning.
+//!   an entry of a structurally proven parameter list) cannot occur in
+//!   valid TypeScript, so no working TypeScript file changes meaning.
 //! - [`check`] — the *semantic* pass. Unlike [`crate::sema`] it works on
 //!   the token stream rather than the AST, because the bindings and the
 //!   mutations it reasons about live in passthrough TypeScript, which the
@@ -152,8 +152,30 @@ pub(crate) fn modifier_at(src: &str, tokens: &[Token], idx: usize) -> Option<Val
             {
                 k -= 1;
             }
-            TokenKind::Punct(b'(' | b',') => return Some(ValModifier::Parameter),
+            TokenKind::Punct(b'(' | b',') => {
+                return enclosing_open(tokens, k - 1)
+                    .filter(|&open| matches!(tokens[open].kind, TokenKind::Punct(b'(')))
+                    .is_some_and(|open| crate::flow::opens_parameter_list(src, tokens, open))
+                    .then_some(ValModifier::Parameter);
+            }
             _ => return None,
+        }
+    }
+    None
+}
+
+fn enclosing_open(tokens: &[Token], at: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for k in (0..=at).rev() {
+        match tokens[k].kind {
+            TokenKind::Punct(b')' | b']' | b'}') if k < at => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') => {
+                if depth == 0 {
+                    return Some(k);
+                }
+                depth -= 1;
+            }
+            _ => {}
         }
     }
     None
