@@ -653,11 +653,11 @@ impl Parser<'_> {
                 }
             }
 
-            // Literal import / re-export of a relative tt path — only
-            // the specifier string is lifted; the clause before it and
-            // the rest of the statement stay verbatim.
+            // Literal import / re-export / import-equals / ambient module
+            // name of a relative tt path — only the specifier string is
+            // lifted; the syntax around it stays verbatim.
             if !dotted
-                && (word == "import" || word == "export")
+                && (word == "import" || word == "export" || word == "module")
                 && let Some((cur, decl)) =
                     imports::parse_tt_import(Cursor::new(self, tokens, i + 1, end), word)
             {

@@ -114,9 +114,17 @@ import * as ns from "../b.tt";
 import "./side.tt";
 export { X } from "./re.tt";
 import { skip } from "./not-tt.ts";
+import legacy = require("./legacy.tt");
+declare module "./augmented.tt" {}
+const lazy = import(`./lazy.tt`);
 "#,
     );
-    assert_eq!(imports.len(), 4);
+    assert_eq!(imports.len(), 7);
+    assert_eq!(imports[4].specifier, "./legacy.tt");
+    assert_eq!(imports[4].names, TtImportNames::Namespace("legacy".to_string()));
+    assert_eq!(imports[5].specifier, "./augmented.tt");
+    assert_eq!(imports[5].names, TtImportNames::None);
+    assert_eq!(imports[6].specifier, "./lazy.tt");
     assert_eq!(imports[0].specifier, "./a.tt");
     assert_eq!(
         imports[0].names,

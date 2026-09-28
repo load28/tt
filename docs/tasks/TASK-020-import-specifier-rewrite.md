@@ -1,5 +1,7 @@
 # TASK-020: import 지정자 재작성 (모듈 그래프 1단계)
 
+> **Superseded in part by [TASK-467](./TASK-467-module-reference-rewrite.md):** import-equals declarations (`import x = require("./a.tt")`) are module references and are now rewritten; the scope exclusion below no longer applies.
+
 - **상태**: 완료
 - **시작일**: 2026-08-17
 - **완료일**: 2026-08-17

@@ -498,6 +498,21 @@ fn computed_dynamic_import_of_tt_path_is_untouched() {
 }
 
 #[test]
+fn tt_paths_outside_module_references_are_untouched() {
+    for source in [
+        "import alias = Namespace.member;\n",
+        "const fs = require(\"./legacy.tt\");\n",
+        "const m = import(`./${name}.tt`);\n",
+        "module\n\"./token.tt\";\n",
+        "const o = { module: \"./token.tt\" };\n",
+        "/// <reference path=\"./token.tt\" />\nexport {};\n",
+        "/** @type {import(\"./token.tt\").Token} */\nlet token;\n",
+    ] {
+        assert_passthrough(source);
+    }
+}
+
+#[test]
 fn export_declarations_are_not_reexports() {
     // `export` followed by a declaration must never be scanned for a
     // module specifier, even if a `from` + string appears later.

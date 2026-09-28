@@ -474,6 +474,7 @@
 | TASK-464 | Or-pattern bindings navigate and rename as one binding | Complete | 2026-09-28 | 2026-09-28 | [TASK-464](./TASK-464-or-pattern-binding-navigation.md) |
 | TASK-465 | Address a host TypeScript source as itself in the language service | Complete | 2026-09-28 | 2026-09-28 | [TASK-465](./TASK-465-host-source-service-paths.md) |
 | TASK-466 | DocumentSymbol ranges enclose the whole variant and each case | Complete | 2026-09-28 | 2026-09-28 | [TASK-466](./TASK-466-document-symbol-ranges.md) |
+| TASK-467 | Rewrite every literal relative .tt/.ttx module reference | Complete | 2026-09-28 | 2026-09-28 | [TASK-467](./TASK-467-module-reference-rewrite.md) |
 
 ## Next task number
 
