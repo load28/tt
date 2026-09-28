@@ -45,7 +45,6 @@ use crate::core_ir::{
 use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
 use crate::host_input::{HostInput, HostOrigin};
-use crate::lexer::Token;
 
 use collector::*;
 #[cfg(test)]

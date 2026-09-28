@@ -455,10 +455,19 @@ impl<'a> Rope<'a> {
     /// Both validators run in every build: a violated target contract is an
     /// internal compiler error, and a release build must fail on it exactly
     /// like a debug build so a wrong lowering is never shipped silently
-    /// (`docs/design/program-lowering.md` §11).
-    pub(crate) fn flatten(self, source: &'a str, preservation: &SourcePreservation) -> Flat {
+    /// (`docs/design/program-lowering.md` §11). `boundaries` are the sorted
+    /// starts of the source statements an automatic semicolon separates
+    /// from the statement before them, which the target keeps separate.
+    pub(crate) fn flatten(
+        self,
+        source: &'a str,
+        source_kind: SourceKind,
+        boundaries: &[usize],
+        preservation: &SourcePreservation,
+    ) -> Flat {
         let mut target = TargetFile::from_rope(self, source.len());
         target.source = Some(source);
+        target.separate_statements(boundaries, source_kind);
         if let Err(error) = target.validate() {
             error.into_ice().raise();
         }

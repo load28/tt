@@ -210,6 +210,90 @@ pub(crate) fn type_parameter_names(generics: &str) -> Vec<String> {
     names
 }
 
+/// A statement the source ends by automatic semicolon insertion (ECMA-262
+/// §12.10.1), because the statement after it cannot continue it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct AutomaticSemicolon {
+    /// Where the ended statement's last token ends.
+    pub(crate) end: usize,
+    /// Where the next statement's first token starts.
+    pub(crate) next: usize,
+}
+
+/// Every statement boundary in `tokens` that an automatic semicolon makes,
+/// template interpolations included, ordered by the next statement's start.
+pub(crate) fn automatic_semicolons(tokens: &[Token]) -> Vec<AutomaticSemicolon> {
+    let mut found = Vec::new();
+    collect_automatic_semicolons(tokens, &mut found);
+    found.sort_unstable_by_key(|boundary| boundary.next);
+    found
+}
+
+fn collect_automatic_semicolons(tokens: &[Token], found: &mut Vec<AutomaticSemicolon>) {
+    for (index, token) in tokens.iter().enumerate() {
+        if index > 0 && token.facts.asi_before() && token.facts.statement_start() {
+            found.push(AutomaticSemicolon {
+                end: tokens[index - 1].span.end,
+                next: token.span.start,
+            });
+        }
+        if let TokenKind::Template(parts) = &token.kind {
+            for part in parts {
+                if let TplPart::Interp { tokens, .. } = part {
+                    collect_automatic_semicolons(tokens, found);
+                }
+            }
+        }
+    }
+}
+
+/// True when `text`, written on the line after a statement that ends with
+/// an operand, would continue that statement instead of starting one
+/// ([`statement_continues_after`] on its first token). ECMA-262 §12.10.2
+/// ("Interesting Cases of Automatic Semicolon Insertion") names `(`, `[`,
+/// a template, `+`, `-`, and `/`; TypeScript adds `<`. The answer comes
+/// from the same token facts that find the source's own boundaries.
+pub(crate) fn continues_statement(text: &str, kind: SourceKind) -> bool {
+    let bytes = text.as_bytes();
+    let (start, _) = crate::scanner::skip_trivia(bytes, 0, bytes.len());
+    let line = &text[start..crate::scanner::line_end(bytes, start, bytes.len())];
+    if line.is_empty() {
+        return false;
+    }
+    let probe = format!("x\n{line}");
+    statement_continues_after(&lex_with_kind(&probe, 0, probe.len(), kind), 1)
+}
+
+/// True when, in `tokens`, the token after the one ending at `end`
+/// continues that token's statement: no automatic semicolon precedes it,
+/// it starts no statement, and it is not a separator or a closing bracket.
+pub(crate) fn statement_continues_after(tokens: &[Token], end: usize) -> bool {
+    let index = tokens.partition_point(|token| token.span.start < end);
+    if let Some(enclosing) = index.checked_sub(1).map(|at| &tokens[at])
+        && enclosing.span.end > end
+    {
+        let TokenKind::Template(parts) = &enclosing.kind else {
+            return false;
+        };
+        return parts.iter().any(|part| match part {
+            TplPart::Interp { span, tokens } => {
+                span.start <= end && end <= span.end && statement_continues_after(tokens, end)
+            }
+            TplPart::Raw(_) => false,
+        });
+    }
+    if index == 0 || tokens[index - 1].span.end != end {
+        return false;
+    }
+    tokens.get(index).is_some_and(|next| {
+        !next.facts.boundary_before()
+            && !matches!(
+                next.kind,
+                TokenKind::Punct(b';' | b'}' | b')' | b']' | b',')
+            )
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,6 +352,46 @@ mod tests {
                 "{text}"
             );
         }
+    }
+
+    #[test]
+    fn a_statement_continues_into_a_line_that_starts_with_an_operator_or_bracket() {
+        for (text, continues) in [
+            ("(a)", true),
+            ("[a]", true),
+            ("`a`", true),
+            ("+a", true),
+            ("-a", true),
+            ("/a/.test(s)", true),
+            ("<T>a", true),
+            ("  /* c */ (a)", true),
+            ("\n  (a)", true),
+            ("a(b)", false),
+            ("++a", false),
+            ("--a", false),
+            ("let a", false),
+            ("{ a }", false),
+            (";(a)", false),
+            ("// (a)", false),
+            ("", false),
+        ] {
+            assert_eq!(
+                continues_statement(text, SourceKind::TypeScript),
+                continues,
+                "{text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn automatic_semicolons_are_found_in_template_interpolations() {
+        let src = "const a = 1\nb\nlet t = `${(() => { c\nd })()}`\n";
+        let tokens = lex_with_kind(src, 0, src.len(), SourceKind::TypeScript);
+        let starts: Vec<&str> = automatic_semicolons(&tokens)
+            .iter()
+            .map(|boundary| &src[boundary.next..boundary.next + 1])
+            .collect();
+        assert_eq!(starts, ["b", "l", "d"]);
     }
 
     #[test]

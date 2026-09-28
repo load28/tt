@@ -231,6 +231,22 @@ lowering 안쪽 depth만큼에서 다시 시작"이라는 뜻이고, 실제 들�
 파싱+방출만 조합한다: sema·verify를 생략해 편집 중인 버퍼에도 무오류로
 방출한다 — 진단이 `--check`의 몫이라는 에러 계층 계약은 그대로다.
 
+**Statement boundaries survive lowering (TASK-496).** A statement the source
+ends by automatic semicolon insertion stays ended in the target, whatever
+emitter path wrote the text after it. The lexer lists those boundaries once
+(`lexer::automatic_semicolons`, template interpolations included), and the
+target file keeps them while it is finalized (`TargetFile::separate_statements`):
+where a source piece carries the line break of such a boundary up to the next
+statement's start, and the target continues with anything but that
+statement's own source text, a `;` is written when the continuing text's
+first token would join the previous statement (`lexer::continues_statement`,
+ECMA-262 §12.10.2: `(`, `[`, a template, `+`, `-`, `/`, and TypeScript's `<`).
+The program-syntax projection reads the same list for its boundary
+semicolon. The self-check backs this up independently: after SWC parses the
+output, `verify::verify_statement_boundaries` lexes it and requires a
+boundary after every source statement end the output copies together with
+its line break (`verify-failed` otherwise).
+
 ## 프로젝트 단위 실행 (드라이버)
 
 `compile()`은 파일 하나짜리 순수 함수다 — 프로젝트 전체를 도는 일은 CLI

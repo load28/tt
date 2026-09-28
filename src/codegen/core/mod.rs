@@ -158,15 +158,29 @@ fn script_runtime_helper(export: &str, local: &str) -> String {
     }
 }
 
+/// The file target lowering emits: its text, its TypeScript surface, and
+/// the statement boundaries its automatic semicolons make, which the target
+/// keeps ([`crate::lexer::automatic_semicolons`]).
+#[derive(Clone, Copy)]
+pub(crate) struct EmitSource<'a> {
+    pub(crate) text: &'a str,
+    pub(crate) kind: SourceKind,
+    pub(crate) automatic_semicolons: &'a [crate::lexer::AutomaticSemicolon],
+}
+
 pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
-    source: &'a str,
-    source_kind: SourceKind,
+    emit_source: EmitSource<'a>,
     lowering_plan: &LoweringPlan,
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
+    let EmitSource {
+        text: source,
+        kind: source_kind,
+        automatic_semicolons,
+    } = emit_source;
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let script = target.script;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
@@ -483,7 +497,11 @@ pub(crate) fn emit_with_map<'a>(
         relocated,
         rewritten,
     };
-    let mut flat = output.flatten(source, &preservation);
+    let boundaries: Vec<usize> = automatic_semicolons
+        .iter()
+        .map(|boundary| boundary.next)
+        .collect();
+    let mut flat = output.flatten(source, source_kind, &boundaries, &preservation);
     for result_return in &mut flat.result_return_temps {
         result_return.src_end = result_return_args
             .iter()

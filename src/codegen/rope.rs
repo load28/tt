@@ -108,6 +108,10 @@ struct ExactOrigin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SyntheticReason {
     UnanchoredGenerated,
+    /// The `;` that keeps a statement the source ended by automatic
+    /// semicolon insertion from running into generated text after it
+    /// ([`TargetFile::separate_statements`]).
+    StatementSeparator,
 }
 
 enum TargetPiece<'a> {
@@ -326,6 +330,91 @@ impl<'a> TargetFile<'a> {
             source_len,
             source: None,
         }
+    }
+
+    /// Keeps every statement boundary the source makes by automatic
+    /// semicolon insertion a boundary of the target.
+    ///
+    /// A source piece that carries the line break an automatic semicolon
+    /// stands on and runs up to the next statement's start copies the
+    /// source's separation of two statements. When the target continues
+    /// with anything but that statement's own source text, what follows is
+    /// generated or moved: a lowering's first token. When that token would continue the previous statement
+    /// ([`crate::lexer::continues_statement`]), an explicit `;` is written
+    /// between them. One rule covers every lowering, because it reads the
+    /// target's pieces rather than the emitter path that produced them.
+    fn separate_statements(&mut self, boundaries: &[usize], kind: SourceKind) {
+        if boundaries.is_empty() {
+            return;
+        }
+        let mut separators = Vec::new();
+        for (index, piece) in self.pieces.iter().enumerate() {
+            let TargetPiece::Source { origin, text } = piece else {
+                continue;
+            };
+            if boundaries.binary_search(&origin.end).is_err()
+                || !crate::scanner::contains_line_terminator(text.as_bytes(), 0, text.len())
+            {
+                continue;
+            }
+            let following = self.pieces[index + 1..].iter().find(|piece| {
+                !piece.text().is_empty() || matches!(piece, TargetPiece::Break { .. })
+            });
+            match following {
+                None => continue,
+                Some(TargetPiece::Source { origin: next, .. }) if next.start == origin.end => {
+                    continue;
+                }
+                Some(_) => {}
+            }
+            if crate::lexer::continues_statement(&self.leading_text(index + 1), kind) {
+                separators.push((index + 1, origin.end));
+            }
+        }
+        for (index, boundary) in separators.into_iter().rev() {
+            self.len += 1;
+            self.pieces.insert(
+                index,
+                TargetPiece::Generated {
+                    text: Cow::Borrowed(";"),
+                    origin: SourceOrigin::Synthetic {
+                        parent: ExactOrigin {
+                            start: boundary,
+                            end: boundary,
+                        },
+                        reason: SyntheticReason::StatementSeparator,
+                    },
+                },
+            );
+        }
+    }
+
+    /// The target's text from piece `from` through the end of the line its
+    /// first significant byte is on, with each layout break read as the
+    /// line break it prints.
+    fn leading_text(&self, from: usize) -> String {
+        let mut text = String::new();
+        for piece in &self.pieces[from..] {
+            let chunk = match piece {
+                TargetPiece::Break { .. } => "\n",
+                piece => piece.text(),
+            };
+            let bytes = text.as_bytes();
+            let (start, _) = crate::scanner::skip_trivia(bytes, 0, bytes.len());
+            let from = if start < bytes.len() {
+                0
+            } else {
+                let chunk_bytes = chunk.as_bytes();
+                crate::scanner::skip_trivia(chunk_bytes, 0, chunk_bytes.len()).0
+            };
+            let chunk_bytes = chunk.as_bytes();
+            let stop = crate::scanner::line_end(chunk_bytes, from, chunk_bytes.len());
+            text.push_str(&chunk[..stop]);
+            if stop < chunk_bytes.len() {
+                break;
+            }
+        }
+        text
     }
 
     fn validate(&self) -> Result<(), TargetError> {

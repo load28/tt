@@ -120,3 +120,92 @@ fn a_comparison_comma_still_separates_scrutinees() {
     assert!(output.contains("const $tt_m0 = a < b;"), "{output}");
     assert!(output.contains("const $tt_m1 = c > a;"), "{output}");
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-496 generated statements keep the source's automatic semicolons */
+/* ------------------------------------------------------------------ */
+
+/// Lines that end their statement by automatic semicolon insertion.
+const TASK_496_STATEMENT_ENDS: &[&str] = &[
+    "const v = 1",
+    "const a = f",
+    "if (c) f",
+    "type T = number",
+    "let d: number",
+    "f // c",
+    "const z = {}",
+    "const g = () => {}",
+];
+
+/// Pipelines whose lowering starts with a token that would continue the
+/// statement before it.
+const TASK_496_CONTINUING_STEPS: &[&str] = &[
+    "v |> o.m",
+    "v |> o[k]",
+    "v |> o?.m",
+    "v |> (o.m)",
+    "v |> String |> o.m",
+    "u as number |> .toFixed(1) |> o.m",
+];
+
+const TASK_496_PRELUDE: &str = "declare const o: { m(x: unknown): unknown };\n\
+                                declare const k: \"m\";\n\
+                                declare const c: boolean;\n\
+                                declare const u: unknown;\n\
+                                declare function f(): void;\n\
+                                declare const v: number;\n";
+
+#[test]
+fn a_lowered_statement_after_a_semicolon_free_line_starts_its_own_statement() {
+    for line in TASK_496_STATEMENT_ENDS {
+        for step in TASK_496_CONTINUING_STEPS {
+            let source = format!("{TASK_496_PRELUDE}export function h() {{\n  {line}\n  {step}\n}}\n");
+            let out = ok(&source);
+            let after = out
+                .split_once(&format!("{line}\n"))
+                .unwrap_or_else(|| panic!("{line} / {step}:\n{out}"))
+                .1
+                .trim_start();
+            assert!(after.starts_with(';'), "{line} / {step}:\n{out}");
+        }
+    }
+}
+
+#[test]
+fn a_lowered_statement_that_starts_with_a_name_needs_no_separator() {
+    let source = format!("{TASK_496_PRELUDE}export function h() {{\n  const a = 1\n  v |> String\n}}\n");
+    let out = ok(&source);
+    assert!(out.contains("const a = 1\n  $tt_ap(v, String)"), "{out}");
+}
+
+#[test]
+fn an_explicit_semicolon_or_a_block_needs_no_separator() {
+    for line in ["const a = 1;", "if (c) { f() }", "{}"] {
+        let source = format!("{TASK_496_PRELUDE}export function h() {{\n  {line}\n  v |> o.m\n}}\n");
+        let out = ok(&source);
+        assert!(out.contains(&format!("{line}\n  ((")), "{line}:\n{out}");
+    }
+}
+
+#[test]
+fn a_separator_follows_a_restricted_production() {
+    for keyword in ["return", "yield"] {
+        let source = format!(
+            "{TASK_496_PRELUDE}export function* h() {{\n  {keyword}\n  v |> o.m\n}}\n"
+        );
+        let out = ok(&source);
+        assert!(out.contains(&format!("{keyword}\n  ;((")), "{keyword}:\n{out}");
+    }
+}
+
+#[test]
+fn a_separator_is_written_at_every_nesting_depth() {
+    let source = format!(
+        "{TASK_496_PRELUDE}export class A {{\n  m(x: number) {{ return x }}\n  run() {{\n    const w = 1\n    w |> this.m\n  }}\n}}\n\
+         export const g = () => {{\n  const w = 2\n  w |> o.m\n}}\n\
+         export const t = `${{(() => {{ const w = 3\n  w |> o.m\n  return w }})()}}`\n"
+    );
+    let out = ok(&source);
+    assert_eq!(out.matches("\n    ;((").count(), 1, "{out}");
+    assert_eq!(out.matches("\n  ;((").count(), 2, "{out}");
+}

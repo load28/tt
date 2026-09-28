@@ -562,7 +562,7 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) pending: Vec<PendingOverlay>,
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
-    pub(super) tokens: Vec<Token>,
+    pub(super) automatic_semicolons: Vec<crate::lexer::AutomaticSemicolon>,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -581,7 +581,12 @@ impl<'a> ProjectionBuilder<'a> {
             pending: Vec::new(),
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
-            tokens: crate::lexer::lex_with_kind(source, 0, source.len(), source_kind),
+            automatic_semicolons: crate::lexer::automatic_semicolons(&crate::lexer::lex_with_kind(
+                source,
+                0,
+                source.len(),
+                source_kind,
+            )),
         }
     }
 
@@ -799,14 +804,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn preserve_statement_boundary(&mut self, source_start: usize) {
-        let at = self
-            .tokens
-            .partition_point(|token| token.span.start < source_start);
         if self
-            .tokens
-            .get(at)
-            .is_some_and(|token| token.span.start == source_start)
-            && self.tokens[at].facts.asi_before()
+            .automatic_semicolons
+            .binary_search_by_key(&source_start, |boundary| boundary.next)
+            .is_ok()
         {
             let start = ProjectedByte(self.code.len());
             self.code.push(';');

@@ -58,16 +58,97 @@ pub(crate) fn check_type_fragment(ty: &str) -> Result<(), String> {
     parse_ts_module(&wrapped, crate::SourceKind::TypeScript).map_err(|(msg, _)| msg)
 }
 
-/// A failed self-check: swc's message and the byte of the *generated*
+/// A failed self-check: its message and the byte of the *generated*
 /// module it stopped at.
 pub(crate) struct Failure {
     pub message: String,
     pub at: usize,
+    pub kind: FailureKind,
+}
+
+/// Which self-check failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FailureKind {
+    /// swc did not parse the generated module.
+    Parse,
+    /// The generated module parses, but a statement the source ends by
+    /// automatic semicolon insertion runs into the text after it.
+    StatementBoundary,
 }
 
 /// Validates the final generated TypeScript.
 pub(crate) fn verify_output(code: &str, source_kind: crate::SourceKind) -> Result<(), Failure> {
-    parse_ts_module(code, source_kind).map_err(|(message, at)| Failure { message, at })
+    parse_ts_module(code, source_kind).map_err(|(message, at)| Failure {
+        message,
+        at,
+        kind: FailureKind::Parse,
+    })
+}
+
+/// Validates the final generated TypeScript, and that it keeps the
+/// source's statement boundaries ([`verify_statement_boundaries`]).
+pub(crate) fn verify_emit(
+    code: &str,
+    source_kind: crate::SourceKind,
+    automatic_semicolons: &[crate::lexer::AutomaticSemicolon],
+    mappings: &[crate::EmitMapping],
+) -> Result<(), Failure> {
+    verify_output(code, source_kind)?;
+    verify_statement_boundaries(code, source_kind, automatic_semicolons, mappings)
+}
+
+/// Checks that every statement the source ends by automatic semicolon
+/// insertion still ends in the generated module.
+///
+/// A module can parse and still mean something else: when generated text
+/// that starts with `(`, `[`, a template, or an operator follows a statement
+/// the source ended by a line break, the two parse as one statement. For
+/// each such source boundary whose ending token the output copies together
+/// with the separation after it, the output's own token facts must show a
+/// boundary after that token too. A copy of the ending token alone is part
+/// of a lowering's text, which ends no statement. Output that copies the
+/// source across the boundary unchanged is the source's statement pair and
+/// needs no lexing.
+pub(crate) fn verify_statement_boundaries(
+    code: &str,
+    source_kind: crate::SourceKind,
+    automatic_semicolons: &[crate::lexer::AutomaticSemicolon],
+    mappings: &[crate::EmitMapping],
+) -> Result<(), Failure> {
+    let mut by_source: Vec<&crate::EmitMapping> = mappings.iter().collect();
+    by_source.sort_unstable_by_key(|mapping| mapping.src);
+    let to_output = |src: usize| {
+        let index = by_source.partition_point(|mapping| mapping.src <= src);
+        let mapping = by_source.get(index.checked_sub(1)?)?;
+        (src < mapping.src + mapping.len).then(|| mapping.out + (src - mapping.src))
+    };
+    let mut output_tokens = None;
+    let bytes = code.as_bytes();
+    for boundary in automatic_semicolons {
+        let Some(last) = boundary.end.checked_sub(1).and_then(to_output) else {
+            continue;
+        };
+        let end = last + 1;
+        if to_output(boundary.end) != Some(end) {
+            continue;
+        }
+        let (next, _) = crate::scanner::skip_trivia(bytes, end, bytes.len());
+        if next < bytes.len() && to_output(boundary.next) == Some(next) {
+            continue;
+        }
+        let tokens = output_tokens
+            .get_or_insert_with(|| crate::lexer::lex_with_kind(code, 0, code.len(), source_kind));
+        if crate::lexer::statement_continues_after(tokens, end) {
+            return Err(Failure {
+                message: "a statement the source ends by automatic semicolon insertion \
+                          continues into the generated code after it"
+                    .to_string(),
+                at: next,
+                kind: FailureKind::StatementBoundary,
+            });
+        }
+    }
+    Ok(())
 }
 
 /// The self-check's failure as an error in the `.tt` file the user has
@@ -93,16 +174,24 @@ pub(crate) fn at_source(
     failure: &Failure,
 ) -> crate::error::TtError {
     let out = failure.at.min(code.len());
-    let generic = || {
-        format!(
+    let generic = || match failure.kind {
+        FailureKind::Parse => format!(
             "generated TypeScript failed to parse: {}. This is either invalid TypeScript passed \
              through from the source or a ttc bug; use --no-verify to bypass.",
             failure.message,
-        )
+        ),
+        FailureKind::StatementBoundary => format!(
+            "generated TypeScript changed the meaning of this code: {}. This is a ttc bug; use \
+             --no-verify to bypass.",
+            failure.message,
+        ),
     };
     let (message, span) = match crate::typescript::mapper::to_source(mappings, out) {
         // Copied from the source: the offending text is the user's own. A
         // parser-owned rollback fact may identify the exact tt candidate.
+        Some(src) if failure.kind == FailureKind::StatementBoundary => {
+            (generic(), Some((src, src)))
+        }
         Some(src) => match unclaimed_candidate_at(unclaimed, src) {
             Some(candidate) => {
                 let word = match candidate.kind {
@@ -240,6 +329,38 @@ mod tests {
         };
         assert_eq!(unclaimed_candidate_at(&[outer, inner], 15), Some(&inner));
         assert_eq!(unclaimed_candidate_at(&[outer, inner], 31), None);
+    }
+
+    #[test]
+    fn generated_text_that_continues_a_source_statement_is_rejected() {
+        let source = "const v = 1\nv |> o.m\nconst w = 2\n";
+        let tokens =
+            crate::lexer::lex_with_kind(source, 0, source.len(), crate::SourceKind::TypeScript);
+        let boundaries = crate::lexer::automatic_semicolons(&tokens);
+        let check = |code: &str, lowered: usize| {
+            let tail = source.find("\nconst w").unwrap();
+            let mappings = [
+                crate::EmitMapping {
+                    src: 0,
+                    out: 0,
+                    len: 12,
+                },
+                crate::EmitMapping {
+                    src: tail,
+                    out: 12 + lowered,
+                    len: source.len() - tail,
+                },
+            ];
+            verify_emit(code, crate::SourceKind::TypeScript, &boundaries, &mappings)
+        };
+        let joined = "const v = 1\n(o.m)(v)\nconst w = 2\n";
+        let failure = check(joined, "(o.m)(v)".len()).expect_err("the statements run together");
+        assert_eq!(failure.kind, FailureKind::StatementBoundary);
+        assert_eq!(failure.at, joined.find("(o.m)").unwrap());
+        let separated = "const v = 1\n;(o.m)(v)\nconst w = 2\n";
+        assert!(check(separated, ";(o.m)(v)".len()).is_ok());
+        let named = "const v = 1\no.m(v)\nconst w = 2\n";
+        assert!(check(named, "o.m(v)".len()).is_ok());
     }
 
     #[test]

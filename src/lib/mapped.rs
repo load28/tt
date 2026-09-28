@@ -253,7 +253,7 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 
 /// [`emit_mapped`] under an explicit TypeScript surface kind.
 pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
-    let program = parser::parse_with_kind(source, source_kind);
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
     let semantics = analysis::coverage_semantics(source, &program, &[]);
     let core = core_ir::lower_semantic(&semantics, source);
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
@@ -263,11 +263,15 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
     // the plan refuses by placement. Reporting stays [`compile`]'s job.
     let plan = codegen::lowering_plan(&semantics, &core, source, source_kind)
         .unwrap_or_else(|_| crate::evaluation_ir::LoweringPlan::without_owner_model());
+    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
-        source,
-        source_kind,
+        codegen::EmitSource {
+            text: source,
+            kind: source_kind,
+            automatic_semicolons: &automatic_semicolons,
+        },
         &plan,
         ImportRewrite::Off,
         StdImports::default(),

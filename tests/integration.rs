@@ -865,6 +865,48 @@ console.log(log.join(\",\"))\n");
 }
 
 #[test]
+fn a_member_step_after_a_semicolon_free_line_calls_the_member() {
+    require_toolchain!();
+    let lines = run("const log: string[] = []\n\
+const o = { m(x: unknown) { log.push(String(x)) } }\n\
+const k = \"m\" as const\n\
+const c = false\n\
+function f() {}\n\
+class A {\n\
+  m(x: unknown) { log.push(\"this \" + String(x)) }\n\
+  run() {\n\
+    const w = 0\n\
+    w |> this.m\n\
+  }\n\
+}\n\
+new A().run()\n\
+const v = 1\n\
+v |> o.m\n\
+const a = f\n\
+2 |> o[k]\n\
+if (c) f\n\
+3 |> o?.m\n\
+type T = number\n\
+4 |> String |> o.m\n\
+let d: number\n\
+5 |> (o.m)\n\
+f // c\n\
+6 |> o.m\n\
+const g = () => {}\n\
+7 |> o.m\n\
+function* gen() {\n\
+  yield\n\
+  8 |> o.m\n\
+}\n\
+log.push(String([...gen()].length))\n\
+log.push(`${(() => { const w = 9\n\
+  w |> o.m\n\
+  return \"t\" })()}`)\n\
+console.log(log.join(\",\"))\n");
+    assert_eq!(lines, ["this 0,1,2,3,4,5,6,7,8,1,9,t"]);
+}
+
+#[test]
 fn a_semicolon_free_brace_after_an_expression_is_a_diverging_block() {
     require_toolchain!();
     let lines = run(

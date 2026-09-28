@@ -176,17 +176,26 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
+    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
-        source,
-        options.source_kind,
+        codegen::EmitSource {
+            text: source,
+            kind: options.source_kind,
+            automatic_semicolons: &automatic_semicolons,
+        },
         &plan,
         options.rewrite_imports,
         options.std_imports,
     );
     if options.verify
-        && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)
+        && let Err(failure) = verify::verify_emit(
+            &flat.code,
+            options.source_kind,
+            &automatic_semicolons,
+            &flat.mappings,
+        )
     {
         // The self-check reads the *generated* module, but the user only
         // has the `.tt` file open. A position in a file no one wrote is
@@ -703,13 +712,19 @@ pub fn compile_projection_report(source: &str, options: &Options) -> ProjectionR
 fn verified_emit(
     emit: MappedEmit,
     program: &ast::Program,
+    automatic_semicolons: &[crate::lexer::AutomaticSemicolon],
     options: &Options,
     errors: &mut Vec<TtError>,
 ) -> Option<MappedEmit> {
     if !options.verify {
         return Some(emit);
     }
-    let Err(failure) = verify::verify_output(&emit.code, options.source_kind) else {
+    let Err(failure) = verify::verify_emit(
+        &emit.code,
+        options.source_kind,
+        automatic_semicolons,
+        &emit.mappings,
+    ) else {
         return Some(emit);
     };
     // A failed self-check *with tt errors already reported* is the
@@ -778,11 +793,15 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
                 .collect(),
         };
     }
+    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
-        source,
-        options.source_kind,
+        codegen::EmitSource {
+            text: source,
+            kind: options.source_kind,
+            automatic_semicolons: &automatic_semicolons,
+        },
         &plan,
         options.rewrite_imports,
         options.std_imports,
@@ -799,14 +818,20 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
     };
-    let mut emit = verified_emit(lowered, &program, options, &mut errors);
+    let mut emit = verified_emit(
+        lowered,
+        &program,
+        &automatic_semicolons,
+        options,
+        &mut errors,
+    );
     if !options.defer_to_checker
         && let Some(lowered) = emit.take()
     {
         let annotated = !lowered.contextual_slots.is_empty();
         match crate::typescript::contextual::standalone(lowered, source, options) {
             Ok(typed) if annotated => {
-                emit = verified_emit(typed, &program, options, &mut errors);
+                emit = verified_emit(typed, &program, &automatic_semicolons, options, &mut errors);
             }
             Ok(typed) => emit = Some(typed),
             Err(failure) => errors.push(TtError::positionless(failure.to_string())),

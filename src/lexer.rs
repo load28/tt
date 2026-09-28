@@ -36,7 +36,8 @@ mod validation;
 pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use queries::{
-    contains_await, has_top_level_comma, is_primary_expression, type_parameter_names,
+    AutomaticSemicolon, automatic_semicolons, contains_await, continues_statement,
+    has_top_level_comma, is_primary_expression, statement_continues_after, type_parameter_names,
 };
 pub(crate) use validation::host_syntax_error;
 
