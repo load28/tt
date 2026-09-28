@@ -541,15 +541,8 @@ mod tests {
         assert_eq!(language_id("file:///project/model.tt"), "typescript");
     }
 
-    fn mapper_project(manifest: Option<serde_json::Value>) -> std::path::PathBuf {
-        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let dir = std::env::temp_dir().join(format!(
-            "tt-service-arrangement-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(dir.join("app")).unwrap();
+    fn mapper_project(manifest: Option<serde_json::Value>) -> crate::test_workspace::Workspace {
+        let dir = crate::test_workspace::Workspace::with_subdir("service-arrangement", "app");
         if let Some(manifest) = manifest {
             let package = dir.join("node_modules/@openload28/tt-lang");
             std::fs::create_dir_all(&package).unwrap();
@@ -612,7 +605,6 @@ mod tests {
                 "{configured:?}"
             );
         }
-        let _ = std::fs::remove_dir_all(&dir);
 
         for manifest in [
             None,
@@ -629,7 +621,6 @@ mod tests {
                 Arrangement::default(),
                 "{manifest:?}"
             );
-            let _ = std::fs::remove_dir_all(&dir);
         }
     }
 

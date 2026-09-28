@@ -1782,13 +1782,7 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     // Outside the repository: the toolchain is resolved by walking up from
     // the file, and every directory inside this checkout has the
     // repository's own `node_modules` above it.
-    let isolated = std::env::temp_dir().join(format!(
-        "tt-no-toolchain-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = fs::remove_dir_all(&isolated);
-    fs::create_dir_all(&isolated).unwrap();
+    let isolated = Workspace::new("no-toolchain");
     let file = isolated.join("shape.tt");
     fs::write(
         &file,
@@ -1813,7 +1807,6 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
         );
         assert!(output.status.success(), "{mode} failed: {stderr}");
     }
-    let _ = fs::remove_dir_all(&isolated);
 }
 
 /// Input read failures must not be mistaken for absent type information.

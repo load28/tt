@@ -329,8 +329,7 @@ mod tests {
 
     #[test]
     fn concurrent_replacements_publish_complete_files_and_remove_staging() {
-        let dir = std::env::temp_dir().join(format!("tt-output-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_workspace::Workspace::new("output");
         let path = dir.join("out.ts");
         let barrier = std::sync::Barrier::new(8);
         std::thread::scope(|scope| {
@@ -348,6 +347,5 @@ mod tests {
         assert_eq!(output.len(), 65536);
         assert!(output.iter().all(|byte| *byte == output[0]));
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
-        fs::remove_dir_all(dir).unwrap();
     }
 }

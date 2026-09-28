@@ -10,21 +10,17 @@
 //! TASK-124 a missing backend degrades the typed facts instead of failing
 //! the pass, so `check()` runs — and counts cache hits — either way.
 
+mod common;
+
 use std::fs;
-use std::path::PathBuf;
 
+use common::Workspace;
 use ttc::engine::{CheckRequest, Engine, ProjectOptions};
-
-fn tmpdir(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("tt-cache-{}-{tag}", std::process::id()));
-    fs::create_dir_all(&dir).unwrap();
-    dir
-}
 
 #[cfg(unix)]
 #[test]
 fn source_walk_skips_excluded_names_before_following_links() {
-    let dir = tmpdir("excluded-dangling-links");
+    let dir = Workspace::new("cache-excluded-dangling-links");
     let source = dir.join("ok.tt");
     fs::write(&source, "export const ok = 1;\n").unwrap();
     let hidden_source = dir.join(".hidden.tt");
@@ -44,12 +40,11 @@ fn source_walk_skips_excluded_names_before_following_links() {
         )
         .unwrap();
     assert_eq!(project.scan().unwrap(), vec![hidden_source, source]);
-    fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
 fn body_changes_keep_importers_and_export_changes_invalidate_them() {
-    let dir = tmpdir("invalidate");
+    let dir = Workspace::new("cache-invalidate");
     let shared = dir.join("shared.tt");
     let user = dir.join("user.tt");
     fs::write(
@@ -115,13 +110,11 @@ fn body_changes_keep_importers_and_export_changes_invalidate_them() {
         3,
         "an exported-declaration change invalidated the importer"
     );
-
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn an_unchanged_projection_is_shared_across_snapshots() {
-    let dir = tmpdir("projection");
+    let dir = Workspace::new("cache-projection");
     let file = dir.join("a.tt");
     fs::write(&file, "export variant E { A(x: number), B }\n").unwrap();
 
@@ -140,12 +133,11 @@ fn an_unchanged_projection_is_shared_across_snapshots() {
         &first.files()[0],
         &second.files()[0]
     ));
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn an_error_node_keeps_its_file_and_other_files_checkable() {
-    let dir = tmpdir("partial-snapshot");
+    let dir = Workspace::new("cache-partial-snapshot");
     let blocked = dir.join("a-blocked.tt");
     let valid = dir.join("b-valid.tt");
     fs::write(&blocked, "const broken = 1 |> ;\n").unwrap();
@@ -187,12 +179,12 @@ fn an_error_node_keeps_its_file_and_other_files_checkable() {
     assert_eq!(checked.diagnostics.len(), 2, "{:#?}", checked.diagnostics);
     assert!(checked.diagnostics.iter().any(|d| d.path == blocked));
     assert!(checked.diagnostics.iter().any(|d| d.path == valid));
-    fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn snapshot_discovers_transitive_imports_and_reuses_unchanged_documents() {
-    let dir = ttc::engine::normalize_document_path(&tmpdir("snapshot-import-graph")).unwrap();
+    let workspace = Workspace::new("cache-snapshot-import-graph");
+    let dir = ttc::engine::normalize_document_path(&workspace).unwrap();
     fs::create_dir_all(dir.join("app")).unwrap();
     fs::create_dir_all(dir.join("domain")).unwrap();
     let entry = dir.join("app/main.tt");
@@ -251,13 +243,13 @@ fn snapshot_discovers_transitive_imports_and_reuses_unchanged_documents() {
     assert_eq!(fourth.files().len(), 2);
     assert!(fourth.files().iter().any(|doc| doc.source_path == unsaved));
     assert!(!unsaved.exists());
-    fs::remove_dir_all(dir).unwrap();
 }
 
 #[cfg(unix)]
 #[test]
 fn project_scan_follows_directory_symlinks() {
-    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-symlink")).unwrap();
+    let workspace = Workspace::new("cache-scan-symlink");
+    let dir = ttc::engine::normalize_document_path(&workspace).unwrap();
     fs::create_dir_all(dir.join("app/nested")).unwrap();
     fs::create_dir_all(dir.join("shared")).unwrap();
     let entry = dir.join("app/main.tt");
@@ -276,13 +268,13 @@ fn project_scan_follows_directory_symlinks() {
     let mut expected = vec![entry, nested, linked];
     expected.sort();
     assert_eq!(project.scan().unwrap(), expected);
-    fs::remove_dir_all(dir).unwrap();
 }
 
 #[cfg(unix)]
 #[test]
 fn source_discovery_visits_directory_identities_once() {
-    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-identities")).unwrap();
+    let workspace = Workspace::new("cache-scan-identities");
+    let dir = ttc::engine::normalize_document_path(&workspace).unwrap();
     fs::create_dir_all(dir.join("app/nested")).unwrap();
     fs::create_dir_all(dir.join("shared")).unwrap();
     let entry = dir.join("app/main.tt");
@@ -320,13 +312,13 @@ fn source_discovery_visits_directory_identities_once() {
         .unwrap();
     assert_eq!(project.scan().unwrap(), expected);
     assert_eq!(project.scan().unwrap(), expected, "visits are per scan");
-    fs::remove_dir_all(dir).unwrap();
 }
 
 #[cfg(unix)]
 #[test]
 fn project_scan_excludes_output_directory_aliases_and_descendants() {
-    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-output-alias")).unwrap();
+    let workspace = Workspace::new("cache-scan-output-alias");
+    let dir = ttc::engine::normalize_document_path(&workspace).unwrap();
     fs::create_dir_all(dir.join("app/build/nested")).unwrap();
     let entry = dir.join("app/main.tt");
     fs::write(&entry, "export const value = 1;").unwrap();
@@ -359,13 +351,13 @@ fn project_scan_excludes_output_directory_aliases_and_descendants() {
             );
         }
     }
-    fs::remove_dir_all(dir).unwrap();
 }
 
 #[cfg(unix)]
 #[test]
 fn project_scan_deduplicates_file_symlinks() {
-    let dir = ttc::engine::normalize_document_path(&tmpdir("scan-file-alias")).unwrap();
+    let workspace = Workspace::new("cache-scan-file-alias");
+    let dir = ttc::engine::normalize_document_path(&workspace).unwrap();
     let entry = dir.join("main.tt");
     fs::write(&entry, "export const value = 1;").unwrap();
     std::os::unix::fs::symlink(&entry, dir.join("alias.tt")).unwrap();
@@ -376,5 +368,4 @@ fn project_scan_deduplicates_file_symlinks() {
         )
         .unwrap();
     assert_eq!(project.scan().unwrap(), vec![entry]);
-    fs::remove_dir_all(dir).unwrap();
 }

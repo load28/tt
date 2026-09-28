@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+
+import { testDir } from "../../scripts/test-dirs.cjs";
 
 import { setReleaseVersion } from "./release-version.mjs";
 
 test("stamps the release branch version into Cargo and published package manifests", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-version-"));
+  const root = testDir("tt-release-version-");
   fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
   fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
   fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\nname = "ttc"\nversion = "0.3.0-dev.7"\n');
@@ -27,7 +28,7 @@ test("stamps the release branch version into Cargo and published package manifes
 });
 
 test("accepts RC versions", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-stage-"));
+  const root = testDir("tt-release-stage-");
   fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
   fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
   fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\nname = "ttc"\nversion = "0.3.0-dev.7"\n');
@@ -40,7 +41,7 @@ test("accepts RC versions", () => {
 });
 
 test("accepts a dated Nightly with a CI build number", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-nightly-"));
+  const root = testDir("tt-release-nightly-");
   fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
   fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
   fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\nname = "ttc"\nversion = "0.4.0-dev.1"\n');
@@ -53,7 +54,7 @@ test("accepts a dated Nightly with a CI build number", () => {
 });
 
 test("accepts Beta versions", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-beta-"));
+  const root = testDir("tt-release-beta-");
   fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
   fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
   fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\nname = "ttc"\nversion = "0.3.0-dev.7"\n');
@@ -66,7 +67,7 @@ test("accepts Beta versions", () => {
 });
 
 test("stamps Cargo manifests with Windows line endings", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-release-version-crlf-"));
+  const root = testDir("tt-release-version-crlf-");
   fs.mkdirSync(path.join(root, "npm", "tt-lang"), { recursive: true });
   fs.mkdirSync(path.join(root, "packages", "create-tt"), { recursive: true });
   fs.writeFileSync(path.join(root, "Cargo.toml"), '[package]\r\nname = "ttc"\r\nversion = "0.3.0-dev.7"\r\n');

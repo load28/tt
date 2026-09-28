@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { containingRoot } from "../roots";
 import { findCompiler, folderCompiler } from "../ttc";
+import { testDir } from "../../../../../scripts/test-dirs.cjs";
 
 /// `tt.compilerPath` is a resource-scoped setting, so two folders in one
 /// window may name different compilers. Which folder a document belongs to
@@ -25,8 +26,8 @@ test("a document is served by the folder that contains it", () => {
 });
 
 test("a folder's compiler path is resolved against that folder", () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "tt-folder-compiler-"));
-  const other = fs.mkdtempSync(path.join(os.tmpdir(), "tt-folder-compiler-other-"));
+  const root = testDir("tt-folder-compiler-");
+  const other = testDir("tt-folder-compiler-other-");
   const absolute = path.join(other, "bin", "ttc");
   assert.equal(folderCompiler(path.join("tools", "ttc"), root), path.join(root, "tools", "ttc"));
   assert.equal(folderCompiler(`.${path.sep}ttc`, root), path.join(root, "ttc"));
@@ -39,6 +40,4 @@ test("a folder's compiler path is resolved against that folder", () => {
   fs.writeFileSync(build, "");
   assert.notEqual(folderCompiler("", root), build, "another folder's build is not this folder's compiler");
   assert.equal(folderCompiler("", other), build);
-  fs.rmSync(root, { recursive: true, force: true });
-  fs.rmSync(other, { recursive: true, force: true });
 });

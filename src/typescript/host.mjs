@@ -54,6 +54,7 @@
  * 2 = the TypeScript API could not be loaded, 3 = malformed job,
  * 5 = the resolved TypeScript has no declaration emit API.
  * ----------------------------------------------------------------------- */
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
@@ -78,6 +79,15 @@ import { fileURLToPath } from "node:url";
  * mapper in.
  */
 const MAPPER_PACKAGE = "@tt/typed-engine-mapper";
+
+function publishFile(file, text) {
+  try {
+    if (fs.readFileSync(file, "utf8") === text) return;
+  } catch {}
+  const staging = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(staging, text);
+  fs.renameSync(staging, file);
+}
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
 const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
@@ -261,7 +271,10 @@ async function main() {
   const pendingDisk = { created: [], changed: [], deleted: [] };
   let diskGeneration = 0;
   let mapped = false;
-  const mapperPackage = path.join(path.dirname(fileURLToPath(import.meta.url)), "typed-engine-mapper");
+  const mapperPackage = path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    `typed-engine-mapper-${createHash("sha256").update(process.execPath).digest("hex").slice(0, 16)}`,
+  );
   // The client runs the executable shipped beside it — the one it was
   // built against, and the same one ttc drives as a language server.
   const connect = () => new API({
@@ -410,8 +423,8 @@ async function main() {
     if (mapped) {
       const link = path.join(path.dirname(open.tsconfig), "node_modules", MAPPER_PACKAGE);
       fs.mkdirSync(mapperPackage, { recursive: true });
-      fs.writeFileSync(path.join(mapperPackage, "mapper.cjs"), IDENTITY_MAPPER);
-      fs.writeFileSync(path.join(mapperPackage, "package.json"), JSON.stringify({
+      publishFile(path.join(mapperPackage, "mapper.cjs"), IDENTITY_MAPPER);
+      publishFile(path.join(mapperPackage, "package.json"), JSON.stringify({
         name: MAPPER_PACKAGE,
         version: "0.0.0",
         typescript: { contentMapper: { exec: [process.execPath, path.join(mapperPackage, "mapper.cjs")] } },

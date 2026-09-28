@@ -121,4 +121,7 @@ mod mapped_result_tests;
 #[path = "lib/scaling_tests.rs"]
 mod scaling_tests;
 
+#[cfg(test)]
+mod test_workspace;
+
 use error::TtError;

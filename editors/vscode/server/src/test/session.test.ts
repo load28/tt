@@ -13,6 +13,7 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { COMPILER, compilerAvailable } from "./toolchain";
+import { testDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 
@@ -21,7 +22,7 @@ after(() => engine.shutdownEngineServer());
 test("a timed-out conversation is retired and the next request restarts", { timeout: 4000 }, async () => {
   engine.retryEngineServer();
   engine.shutdownEngineServer();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-session-timeout-"));
+  const dir = testDir("tt-session-timeout-");
   const compiler = path.join(dir, "ttc");
   const marker = path.join(dir, "first-process-started");
   fs.writeFileSync(
@@ -98,7 +99,7 @@ test("an environment change re-arms a compiler that struck out", { skip }, async
   engine.retryEngineServer();
   // A file that exists but is not a compiler: spawning succeeds on some
   // platforms and the child dies immediately, which is the same "no answer".
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-session-"));
+  const dir = testDir("tt-session-");
   const notACompiler = path.join(dir, "ttc");
   fs.writeFileSync(notACompiler, "");
 
@@ -116,10 +117,9 @@ test("an environment change re-arms a compiler that struck out", { skip }, async
 test("a second compiler keeps its own session instead of ending the first", { skip }, async () => {
   engine.retryEngineServer();
   engine.shutdownEngineServer();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-two-compilers-"));
+  const dir = testDir("tt-two-compilers-");
   const copy = path.join(dir, "ttc");
-  fs.copyFileSync(COMPILER, copy);
-  fs.chmodSync(copy, 0o755);
+  fs.symlinkSync(COMPILER, copy);
 
   const first = await check(COMPILER);
   assert.ok(first && "result" in first, "the first compiler answers");
@@ -136,10 +136,9 @@ test("a second compiler keeps its own session instead of ending the first", { sk
 test("a session start that opens documents elsewhere cannot kill its own session", { skip }, async () => {
   engine.retryEngineServer();
   engine.shutdownEngineServer();
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-session-start-"));
+  const dir = testDir("tt-session-start-");
   const copy = path.join(dir, "ttc");
-  fs.copyFileSync(COMPILER, copy);
-  fs.chmodSync(copy, 0o755);
+  fs.symlinkSync(COMPILER, copy);
   const file = path.join(dir, "a.tt");
   fs.writeFileSync(file, "variant S { A, B }\n");
 
@@ -163,7 +162,7 @@ test("a session start that opens documents elsewhere cannot kill its own session
 });
 
 function fakeCompiler(prefix: string, handle: string): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const dir = testDir(prefix);
   const compiler = path.join(dir, "ttc");
   fs.writeFileSync(
     compiler,

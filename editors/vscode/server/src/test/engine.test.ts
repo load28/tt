@@ -10,13 +10,12 @@
 import * as assert from "node:assert/strict";
 import { after, test } from "node:test";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt, sliceOf, spanOf } from "./positions";
 import { COMPILER, answered, compilerAvailable, findTsgo } from "./toolchain";
-import { caseDir } from "./workspace";
+import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = !compilerAvailable()
   ? "no ttc — none built, installed, or on PATH"
@@ -43,7 +42,7 @@ const RENDER = [
 ].join("\n");
 
 function workspace(): { dir: string; tt: string } {
-  const dir = caseDir("tt-engine-test-");
+  const dir = repoTestDir("tt-engine-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),
@@ -87,7 +86,7 @@ const TTX_SOURCE = [
 ].join("\n");
 
 function ttxWorkspace(): { dir: string; ttx: string } {
-  const dir = caseDir("ttx-engine-test-");
+  const dir = repoTestDir("ttx-engine-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(
     path.join(dir, "tsconfig.json"),
@@ -576,7 +575,7 @@ const ESM_MAIN = [
 const ESM_USE = 'import { dbl } from "./x.tt";\nexport const c: string = dbl(3);\n';
 
 function esmWorkspace(): { main: string; use: string } {
-  const dir = caseDir("tt-engine-esm-test-");
+  const dir = repoTestDir("tt-engine-esm-test-");
   fs.mkdirSync(path.join(dir, "src"));
   fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ type: "module" }));
   fs.writeFileSync(

@@ -537,15 +537,7 @@ mod tests {
 
     #[test]
     fn an_imported_case_is_found_under_the_name_the_buffer_imports_it_by() {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let dir = std::env::temp_dir().join(format!(
-            "tt-imported-definition-{}-{nonce}",
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_workspace::Workspace::new("imported-definition");
         let shapes = "export variant Shape { Circle(r: number), Point }\n";
         std::fs::write(dir.join("shapes.tt"), shapes).unwrap();
         let user = dir.join("user.tt");
@@ -578,7 +570,6 @@ mod tests {
                 "{source}"
             );
         }
-        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]

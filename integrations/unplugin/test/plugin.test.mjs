@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { chmod, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { chmod, realpath, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import test from 'node:test'
+
+import { testDir } from '../../../scripts/test-dirs.cjs'
 
 import {
   esbuildPlugin,
@@ -42,10 +43,9 @@ test('every published adapter is constructible from the shared plugin', () => {
   }
 })
 
-test('the shared hooks resolve and compile tt, ttx, and standard modules', async (t) => {
+test('the shared hooks resolve and compile tt, ttx, and standard modules', async () => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-')
   const importer = join(root, 'entry.ts')
   const tt = join(root, 'shape.tt')
   const ttx = join(root, 'view.ttx')
@@ -78,8 +78,7 @@ test('the shared hooks resolve and compile tt, ttx, and standard modules', async
 })
 
 test('entry and root-relative tt specifiers resolve like the host resolves them', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-entry-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-entry-')
   const plugin = unpluginFactory({ compiler })
   const previous = process.cwd()
   process.chdir(root)
@@ -93,10 +92,9 @@ test('entry and root-relative tt specifiers resolve like the host resolves them'
   assert.deepEqual(requests, [['/src/main.tt', join(root, 'index.html'), { skipSelf: true }]])
 })
 
-test('a CRLF source keeps its line endings and hands its map to the host', async (t) => {
+test('a CRLF source keeps its line endings and hands its map to the host', async () => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-crlf-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-crlf-')
   const file = join(root, 'crlf.tt')
   await writeFile(file, 'variant V { A, B }\r\nexport const f = (v: V) => match (v) { A => 1, B => 2 };\r\n')
 
@@ -108,9 +106,8 @@ test('a CRLF source keeps its line endings and hands its map to the host', async
   assert.match(compiled.code, /\r\n$/)
 })
 
-test('source map sources are anchored to the compiled file, honouring sourceRoot', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-map-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+test('source map sources are anchored to the compiled file, honouring sourceRoot', async () => {
+  const root = testDir('unplugin-tt-map-')
   const file = join(root, 'src', 'lib.tt')
   const fake = join(root, 'ttc.mjs')
   const map = { version: 3, sourceRoot: '../shared', sources: ['lib.tt', null], names: [], mappings: 'AAAA' }
@@ -127,10 +124,9 @@ else process.stdout.write("export const a = 1;\\n//# sourceMappingURL=data:appli
   assert.equal('sourceRoot' in compiled.map, false)
 })
 
-test('sourcemap false is a working public option and diagnostics reach the host', async (t) => {
+test('sourcemap false is a working public option and diagnostics reach the host', async () => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-errors-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-errors-')
   const file = join(root, 'bad.tt')
   await writeFile(
     file,
@@ -163,10 +159,9 @@ test('bare tt specifiers use host package exports and preserve external decision
   assert.equal(await plugin.resolveId.call({ resolve: async () => javascript }, external.id, '/app/main.tt?lang.ts'), javascript)
 })
 
-test('query-suffixed tt imports keep their query and the real file before it', async (t) => {
+test('query-suffixed tt imports keep their query and the real file before it', async () => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-query-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-query-')
   const worker = join(root, 'worker.tt')
   const importer = join(root, 'main.tt')
   await writeFile(worker, 'variant M { Ping, Pong }\nconst m: M = M.Ping;\nexport const reply = match (m) { Ping => "ping", Pong => "pong" };\n')
@@ -193,10 +188,9 @@ test('query-suffixed tt imports keep their query and the real file before it', a
   assert.deepEqual(requests, [['/src/worker.tt', undefined, { skipSelf: true }]])
 })
 
-test('the Vite dependency scanner reads tt modules from files that exist', async (t) => {
+test('the Vite dependency scanner reads tt modules from files that exist', async () => {
   assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-scan-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-scan-')
   const source = join(root, 'lib.tt')
   const view = join(root, 'view.ttx')
   await writeFile(source, 'import dep from "scan-dep";\nimport { Some } from "@tt/std/option";\nexport const value: number = dep.answer;\nexport const some = Some(value);\n')
@@ -231,8 +225,7 @@ test('the Vite dependency scanner reads tt modules from files that exist', async
 })
 
 test('type-only dependencies invalidate cached modules even with HMR disabled', async t => {
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-watch-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+  const root = testDir('unplugin-tt-watch-')
   const source = join(root, 'main.tt')
   const model = join(root, 'model.tt')
   await writeFile(model, 'export variant State { Ready(value: number), Empty }')

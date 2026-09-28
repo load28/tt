@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { chmod, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
+
+import { testDir } from '../../../scripts/test-dirs.cjs'
 import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 
@@ -57,9 +58,8 @@ plugin.watchChange("C:/proj/src/model.tt");
 console.log(JSON.stringify({ types, option, std: std?.code ?? null, resolvedAgain: plugin.resolveId(types), invalidated }));
 `
 
-test('standard module ids and dependency paths survive Vite path normalization on Windows', async (t) => {
-  const root = await mkdtemp(join(tmpdir(), 'unplugin-tt-win32-'))
-  t.after(() => rm(root, { recursive: true, force: true }))
+test('standard module ids and dependency paths survive Vite path normalization on Windows', async () => {
+  const root = testDir('unplugin-tt-win32-')
   const fake = join(root, 'ttc.mjs')
   await writeFile(fake, compiler)
   await chmod(fake, 0o755)

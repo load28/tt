@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, readdir, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+
+import { testDir } from '../../../scripts/test-dirs.cjs'
 
 import { createProject, dependencyChannel, detectBundler, initializeExisting, parseJsonc, run, shellQuote } from '../src/installer.js'
 
@@ -32,7 +33,7 @@ test('keeps dependencies on the installer release channel', () => {
 })
 
 test('creates a complete Vite project without installing', async () => {
-  const parent = await mkdtemp(join(tmpdir(), 'create-tt-new-'))
+  const parent = testDir('create-tt-new-')
   const root = join(parent, 'hello-tt')
   const result = await createProject({ directory: root })
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
@@ -55,7 +56,7 @@ test('creates a complete Vite project without installing', async () => {
 })
 
 test('persists a selected local registry for a new Bun project', async () => {
-  const parent = await mkdtemp(join(tmpdir(), 'create-tt-registry-'))
+  const parent = testDir('create-tt-registry-')
   const root = join(parent, 'local-app')
   await createProject({ directory: root, registry: 'http://127.0.0.1:4873/' })
   assert.equal(
@@ -71,7 +72,7 @@ test('detects the existing bundler from either dependency section', () => {
 })
 
 test('initializes Vite through a wrapper and preserves the user config', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-init-'))
+  const root = testDir('create-tt-init-')
   await writeFile(join(root, 'package.json'), JSON.stringify({
     scripts: { dev: 'vite' },
     devDependencies: { vite: '^8.0.0' },
@@ -104,7 +105,7 @@ test('initializes Vite through a wrapper and preserves the user config', async (
 })
 
 test('keeps esbuild scripts intact and returns an explicit manual hook', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-esbuild-'))
+  const root = testDir('create-tt-esbuild-')
   await writeFile(join(root, 'package.json'), JSON.stringify({
     scripts: { build: 'node build.mjs' },
     devDependencies: { esbuild: '^1.0.0' },
@@ -119,7 +120,7 @@ test('keeps esbuild scripts intact and returns an explicit manual hook', async (
 test('generates a composable wrapper for every declarative bundler adapter', async () => {
   const adapters = ['vite', 'rollup', 'rolldown', 'webpack', 'rspack', 'farm']
   for (const bundler of adapters) {
-    const root = await mkdtemp(join(tmpdir(), `create-tt-${bundler}-`))
+    const root = testDir(`create-tt-${bundler}-`)
     await writeFile(join(root, 'package.json'), '{"scripts":{}}\n')
     const result = await initializeExisting({ directory: root, bundler })
     const wrapper = await readFile(join(root, result.files[0]), 'utf8')
@@ -137,7 +138,7 @@ test('does not allow a new project to drift from the Bun and Vite baseline', asy
 
 test('init preserves customized generated configs without partial writes', async () => {
   for (const file of ['tsconfig.tt.json', 'tt.vite.config.mjs']) {
-    const root = await mkdtemp(join(tmpdir(), 'create-tt-conflict-'))
+    const root = testDir('create-tt-conflict-')
     const manifest = '{"devDependencies":{"vite":"^8"}}\n'
     const config = '// customized project configuration\n'
     await writeFile(join(root, 'package.json'), manifest)
@@ -150,7 +151,7 @@ test('init preserves customized generated configs without partial writes', async
 })
 
 test('repeated init is idempotent when generated configs are unchanged', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-repeat-'))
+  const root = testDir('create-tt-repeat-')
   await writeFile(join(root, 'package.json'), '{"devDependencies":{"vite":"^8"}}\n')
   await initializeExisting({ directory: root, bundler: 'auto' })
   const before = await Promise.all(['package.json', 'tsconfig.tt.json', 'tt.vite.config.mjs'].map(file => readFile(join(root, file), 'utf8')))
@@ -169,7 +170,7 @@ function installedTypeScript(directory) {
 const repositoryTypeScript = installedTypeScript(fileURLToPath(new URL('../../..', import.meta.url)))
 
 async function viteSolutionProject() {
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-solution-'))
+  const root = testDir('create-tt-solution-')
   await writeFile(join(root, 'package.json'), '{"devDependencies":{"vite":"^8.0.0"}}\n')
   await writeFile(join(root, 'tsconfig.json'), JSON.stringify({
     files: [],
@@ -209,9 +210,9 @@ async function viteSolutionProject() {
 }
 
 test('init keeps a reference that leaves the project through a symlink as written', async () => {
-  const outside = await mkdtemp(join(tmpdir(), 'create-tt-outside-'))
+  const outside = testDir('create-tt-outside-')
   await writeFile(join(outside, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-linked-'))
+  const root = testDir('create-tt-linked-')
   await writeFile(join(root, 'package.json'), '{}\n')
   await mkdir(join(root, 'packages'))
   await symlink(outside, join(root, 'packages/app'), 'dir')
@@ -223,9 +224,9 @@ test('init keeps a reference that leaves the project through a symlink as writte
 })
 
 test('init refuses a root tsconfig that resolves outside the project and writes nothing', async () => {
-  const outside = await mkdtemp(join(tmpdir(), 'create-tt-outside-root-'))
+  const outside = testDir('create-tt-outside-root-')
   await writeFile(join(outside, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-linked-root-'))
+  const root = testDir('create-tt-linked-root-')
   await writeFile(join(root, 'package.json'), '{}\n')
   await symlink(join(outside, 'tsconfig.json'), join(root, 'tsconfig.json'))
   await assert.rejects(initializeExisting({ directory: root, bundler: 'none' }), /resolves outside the project/)
@@ -234,8 +235,8 @@ test('init refuses a root tsconfig that resolves outside the project and writes 
 })
 
 test('init refuses to write a generated file through a symlink that leaves the project', async () => {
-  const outside = await mkdtemp(join(tmpdir(), 'create-tt-outside-file-'))
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-linked-file-'))
+  const outside = testDir('create-tt-outside-file-')
+  const root = testDir('create-tt-linked-file-')
   await writeFile(join(root, 'package.json'), '{}\n')
   await writeFile(join(root, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
   await symlink(join(outside, 'target.json'), join(root, 'tsconfig.tt.json'))
@@ -244,7 +245,7 @@ test('init refuses to write a generated file through a symlink that leaves the p
 })
 
 test('init treats a directory whose name begins with two dots as inside the project', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-dotted-'))
+  const root = testDir('create-tt-dotted-')
   await writeFile(join(root, 'package.json'), '{}\n')
   await mkdir(join(root, '..cache'))
   await writeFile(join(root, '..cache/tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
@@ -255,7 +256,7 @@ test('init treats a directory whose name begins with two dots as inside the proj
 })
 
 test('init visits a config reached through two paths once', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-aliased-'))
+  const root = testDir('create-tt-aliased-')
   await writeFile(join(root, 'package.json'), '{}\n')
   await mkdir(join(root, 'app'))
   await writeFile(join(root, 'app/tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
@@ -314,7 +315,7 @@ test('the generated solution check reaches the referenced sources', { skip: !rep
 
 test('init replaces an incompatible TypeScript and reports it', async () => {
   for (const section of ['devDependencies', 'dependencies']) {
-    const root = await mkdtemp(join(tmpdir(), 'create-tt-typescript-'))
+    const root = testDir('create-tt-typescript-')
     await writeFile(join(root, 'package.json'), JSON.stringify({ [section]: { typescript: '~5.8.0' } }))
     const result = await initializeExisting({ directory: root, bundler: 'none' })
     const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
@@ -325,7 +326,7 @@ test('init replaces an incompatible TypeScript and reports it', async () => {
     await run(['init', root, '--no-install', '--bundler', 'none'], { log: (line) => lines.push(line) })
     assert.ok(!lines.some((line) => line.startsWith('Updated typescript')), lines.join('\n'))
   }
-  const root = await mkdtemp(join(tmpdir(), 'create-tt-typescript-report-'))
+  const root = testDir('create-tt-typescript-report-')
   await writeFile(join(root, 'package.json'), '{"devDependencies":{"typescript":"~5.8.0"}}\n')
   const lines = []
   await run(['init', root, '--no-install', '--bundler', 'none'], { log: (line) => lines.push(line) })
@@ -333,7 +334,7 @@ test('init replaces an incompatible TypeScript and reports it', async () => {
 })
 
 test('create quotes the printed directory for a POSIX shell', async () => {
-  const parent = await mkdtemp(join(tmpdir(), 'create-tt-quote-'))
+  const parent = testDir('create-tt-quote-')
   const lines = []
   const cwd = process.cwd()
   process.chdir(parent)

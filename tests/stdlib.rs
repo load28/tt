@@ -1,9 +1,11 @@
 //! Standard-library package contracts.
 
+mod common;
+
+use common::Workspace;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 use ttc::{
     Options, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_TYPES_SOURCE, compile,
 };
@@ -81,12 +83,7 @@ fn namespace_import_is_pruned_by_a_real_bundler() {
         eprintln!("skipping bundler pruning test: rolldown is not installed");
         return;
     };
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system clock predates Unix epoch")
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!("tt-stdlib-tree-shaking-{nonce}"));
-    fs::create_dir_all(&root).expect("failed to create bundle fixture directory");
+    let root = Workspace::new("stdlib-tree-shaking");
     fs::write(root.join("option.ts"), STD_OPTION_SOURCE).expect("failed to write option module");
     fs::write(root.join("result.ts"), STD_RESULT_SOURCE).expect("failed to write result module");
     fs::write(
@@ -108,7 +105,6 @@ fn namespace_import_is_pruned_by_a_real_bundler() {
         String::from_utf8_lossy(&output.stderr)
     );
     let bundle = fs::read_to_string(&output_path).expect("failed to read bundle");
-    fs::remove_dir_all(&root).expect("failed to remove bundle fixture directory");
 
     assert!(
         bundle.contains("Some"),
@@ -133,12 +129,8 @@ fn rolldown_command() -> Option<PathBuf> {
         .map(|_| PathBuf::from("rolldown"))
 }
 
-fn scratch(tag: &str) -> PathBuf {
-    let nonce = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    std::env::temp_dir().join(format!("tt-stdlib-{tag}-{}-{nonce}", std::process::id()))
+fn scratch(tag: &str) -> Workspace {
+    Workspace::new(&format!("stdlib-{tag}"))
 }
 
 #[test]
@@ -207,7 +199,6 @@ fn materialized_packages_are_dual_format_with_an_exports_map() {
             );
         }
     }
-    fs::remove_dir_all(root).unwrap();
 }
 
 fn write_source_copy_layout(root: &Path, package: ttc::StdPackage, edited: Option<&str>) {
@@ -283,7 +274,6 @@ fn a_package_with_commonjs_source_copies_gets_declarations_in_their_place() {
         "// mine\n"
     );
     assert!(!directory.join("cjs/option.d.ts").exists());
-    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -324,5 +314,4 @@ fn a_package_ttc_wrote_before_exports_is_upgraded_and_any_other_is_kept() {
         fs::read_to_string(runtime_dir.join("package.json")).unwrap(),
         authored
     );
-    fs::remove_dir_all(root).unwrap();
 }

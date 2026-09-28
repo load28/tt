@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_workspace::Workspace;
 
 #[test]
 fn free_intervals_carve_around_occupied_stretches() {
@@ -56,31 +57,6 @@ fn code_number(name: &str) -> u32 {
     ttc::DiagnosticCode::parse(name)
         .unwrap_or_else(|| panic!("{name} is not a diagnostic code"))
         .number()
-}
-
-/// A scratch directory for one case, removed on drop.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(tag: &str) -> Scratch {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or_default();
-        let path = std::env::temp_dir().join(format!("tt-cm-{tag}-{}-{nonce}", std::process::id()));
-        std::fs::create_dir_all(&path).expect("a writable temporary directory");
-        Scratch(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
 }
 
 fn session() -> Session {
@@ -173,7 +149,7 @@ fn missing_string_params_answer_invalid_params() {
 
 #[test]
 fn open_project_tracks_the_handle_and_materializes_std() {
-    let scratch = Scratch::new("open");
+    let scratch = Workspace::new("open");
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
     let config = scratch.path().join("tsconfig.json");
     let mut session = session();
@@ -234,7 +210,7 @@ fn a_project_without_a_config_file_opens_too() {
 
 #[test]
 fn transform_serves_a_variant_file_as_virtual_typescript() {
-    let scratch = Scratch::new("transform");
+    let scratch = Workspace::new("transform");
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
     let file = scratch.path().join("shape.tt");
     let source = "export variant Shape { Circle(radius: number), Point }\n\
@@ -268,7 +244,7 @@ fn transform_serves_a_variant_file_as_virtual_typescript() {
 
 #[test]
 fn transform_reads_one_hop_imports_for_exhaustiveness() {
-    let scratch = Scratch::new("extern");
+    let scratch = Workspace::new("extern");
     std::fs::write(
         scratch.path().join("shape.tt"),
         "export variant Shape { Circle(radius: number), Rect(width: number, height: number) }\n",
@@ -311,7 +287,7 @@ fn transform_reads_one_hop_imports_for_exhaustiveness() {
 
 #[test]
 fn namespace_imports_qualify_their_extern_variants() {
-    let scratch = Scratch::new("ns");
+    let scratch = Workspace::new("ns");
     std::fs::write(
         scratch.path().join("dep.tt"),
         "export variant Mode { Fast(), Safe }\n",
@@ -416,7 +392,7 @@ fn a_ttx_file_serves_as_tsx() {
 
 #[test]
 fn std_imports_materialize_next_to_the_nearest_package_root() {
-    let scratch = Scratch::new("std");
+    let scratch = Workspace::new("std");
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
     let nested = scratch.path().join("src/deep");
     std::fs::create_dir_all(&nested).unwrap();
@@ -444,7 +420,7 @@ fn std_imports_materialize_next_to_the_nearest_package_root() {
 
 #[test]
 fn package_root_walks_to_a_marker_or_gives_up() {
-    let scratch = Scratch::new("root");
+    let scratch = Workspace::new("root");
     let nested = scratch.path().join("a/b");
     std::fs::create_dir_all(&nested).unwrap();
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();

@@ -24,6 +24,29 @@ use super::toolchain::{self, Client};
 /// The host script, embedded so a released `ttc` needs no files beside it.
 const HOST: &str = include_str!("host.mjs");
 
+const HOST_DIGEST: u64 = {
+    let bytes = HOST.as_bytes();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut index = 0;
+    while index < bytes.len() {
+        hash = (hash ^ bytes[index] as u64).wrapping_mul(0x0000_0100_0000_01b3);
+        index += 1;
+    }
+    hash
+};
+
+fn prepare_host(session: u64) -> std::io::Result<PathBuf> {
+    let dir = std::env::temp_dir().join(format!("ttc-host-{HOST_DIGEST:016x}"));
+    std::fs::create_dir_all(&dir)?;
+    let script = dir.join("host.mjs");
+    if std::fs::read(&script).ok().as_deref() != Some(HOST.as_bytes()) {
+        let staging = dir.join(format!("host.mjs.{}-{session}.tmp", std::process::id()));
+        std::fs::write(&staging, HOST)?;
+        std::fs::rename(&staging, &script)?;
+    }
+    Ok(script)
+}
+
 /// A [`TypeScriptBackend`] over a running compiler.
 ///
 /// The first question starts the host and opens the project; every question
@@ -49,9 +72,6 @@ struct Session {
     /// needs a different session.
     opened: (Option<PathBuf>, PathBuf),
     id: u64,
-    /// The directory this session created for its host script. The session
-    /// owns it, so it goes away with the session.
-    dir: PathBuf,
 }
 
 impl NativeBackend {
@@ -73,13 +93,8 @@ impl NativeBackend {
         // job resolve against.
         static NEXT_SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let session_id = NEXT_SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("ttc-host-{}-{session_id}", std::process::id()));
-        std::fs::create_dir_all(&dir)
+        let script = prepare_host(session_id)
             .map_err(|e| Failure::unavailable(format!("cannot prepare the host: {e}")))?;
-        let script = dir.join("host.mjs");
-        std::fs::write(&script, HOST)
-            .map_err(|e| Failure::unavailable(format!("cannot write the host: {e}")))?;
 
         let mut child = Command::new(&self.node)
             .arg(&script)
@@ -116,7 +131,6 @@ impl NativeBackend {
             stdout,
             opened: (tsconfig.map(Path::to_path_buf), root.to_path_buf()),
             id: session_id,
-            dir,
         })
     }
 }
@@ -161,11 +175,6 @@ impl Drop for Session {
         // outliving the run.
         let _ = self.child.kill();
         let _ = self.child.wait();
-        // The whole directory, not just the script in it: this session
-        // created it, nothing else writes there, and leaving the empty
-        // directory behind would add one per typed run for the life of the
-        // machine.
-        let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
 

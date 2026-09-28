@@ -46,6 +46,9 @@ mod typed;
 #[path = "main/tests.rs"]
 mod help_tests;
 
+#[cfg(test)]
+mod test_workspace;
+
 use ttc::engine::collect_sources;
 use ttc::source_map::SourceMapRequest;
 use ttc::{

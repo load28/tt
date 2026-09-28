@@ -77,13 +77,8 @@ fn many_utf16_offsets_answer_what_one_offset_answers() {
     }
 }
 
-fn contextual_project(files: usize) -> std::path::PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        "tt-contextual-scaling-{}-{files}",
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(root.join("src")).unwrap();
+fn contextual_project(files: usize) -> (crate::test_workspace::Workspace, std::path::PathBuf) {
+    let root = crate::test_workspace::Workspace::with_subdir("contextual-scaling", "src");
     std::fs::write(
         root.join("tsconfig.json"),
         r#"{ "compilerOptions": { "strict": true, "target": "esnext", "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "skipLibCheck": true }, "include": ["src"] }"#,
@@ -105,7 +100,8 @@ fn contextual_project(files: usize) -> std::path::PathBuf {
         )
         .unwrap();
     }
-    root.canonicalize().unwrap()
+    let canonical = root.canonicalize().unwrap();
+    (root, canonical)
 }
 
 fn contextual_compile(root: &Path, file: usize) -> String {
@@ -133,7 +129,7 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
         return;
     }
     let files = 6;
-    let root = contextual_project(files);
+    let (_workspace, root) = contextual_project(files);
     let fresh: Vec<String> = (0..files)
         .map(|file| {
             let root = root.clone();
@@ -171,5 +167,4 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
     assert_eq!(changed, expected);
     assert!(changed.contains("boolean"), "{changed}");
     assert!(after["contextual checker asks"] > 0);
-    let _ = std::fs::remove_dir_all(&root);
 }

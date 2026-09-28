@@ -273,7 +273,9 @@ tsgo project:
 > probes extensions, which covers CommonJS files and `bundler`. ES-module files
 > under `node16`/`nodenext` get no probing. A configured project is now opened
 > through an identity content mapper (`@tt/typed-engine-mapper`, served from
-> the host's session directory). The host serves the lowered text as the `.tt`
+> the host's directory; since TASK-511 that directory is named by the host
+> script's digest and shared by every session, so it needs no removal). The
+> host serves the lowered text as the `.tt`
 > file's own content, so `.tt` is a supported extension and `"./x.tt"`
 > resolves exactly as it does under `tsc --runExternalCode`. The engine still
 > names the module `x.tt.ts`, and the host translates at its boundary. Two

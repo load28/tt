@@ -2,14 +2,7 @@ use super::*;
 
 #[test]
 fn language_support_materializes_both_tt_packages() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "tt-language-runtime-{}-{nonce}",
-        std::process::id()
-    ));
+    let root = crate::test_workspace::Workspace::new("language-runtime");
 
     // Both, and before the service resolves anything: which one a file
     // needs is a question about text that may not parse yet (TASK-217).
@@ -25,7 +18,6 @@ fn language_support_materializes_both_tt_packages() {
         std::fs::read_to_string(root.join("node_modules/@tt/runtime/index.ts")).unwrap(),
         "// mine\n"
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -268,8 +260,7 @@ fn declared_hover_names_the_constructor_and_its_type() {
 
 #[test]
 fn analyses_collect_imported_declarations_like_the_cli() {
-    let dir = std::env::temp_dir().join(format!("tt-analyses-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_workspace::Workspace::new("analyses");
     std::fs::write(
         dir.join("token.tt"),
         "export variant Token { Num(value: number), Eof }\n",
@@ -316,13 +307,11 @@ fn analyses_collect_imported_declarations_like_the_cli() {
         .unwrap();
     assert_eq!(binding.ty.as_deref(), Some("string"));
     assert_eq!(project.semantic_cache_hits(), 1);
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
-    let dir = std::env::temp_dir().join(format!("tt-shared-cache-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_workspace::Workspace::new("shared-cache");
     let file = dir.join("a.tt");
     let source = "variant E { A(x: number), B }\nconst v = match (e) { A(x) | B => 0 };\n";
     std::fs::write(&file, source).unwrap();
@@ -347,7 +336,6 @@ fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
     // not a second computation of the same answer.
     project.semantic_analyses(&files[0], source);
     assert_eq!(project.semantic_cache_hits(), 1);
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -394,8 +382,7 @@ fn ttx_pattern_analysis_does_not_parse_jsx_text() {
     assert!(analyses.declarations.iter().any(|d| d.name == "Real"));
     assert!(!analyses.declarations.iter().any(|d| d.name == "Fake"));
 
-    let dir = std::env::temp_dir().join(format!("tt-tsx-pattern-kind-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_workspace::Workspace::new("tsx-pattern-kind");
     let path = dir.join("a.ttx");
     std::fs::write(&path, source).unwrap();
     let project = crate::engine::Engine::new(None)
@@ -421,7 +408,6 @@ fn ttx_pattern_analysis_does_not_parse_jsx_text() {
     );
     project.semantic_analyses(&path, source);
     assert_eq!(project.semantic_cache_hits(), 1);
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]

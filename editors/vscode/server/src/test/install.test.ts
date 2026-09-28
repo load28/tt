@@ -4,18 +4,14 @@
  * exercised is the published package's own `binaryPath()` contract. */
 import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
 import { packageCompiler } from "../install";
 import { findCompiler } from "../ttc";
+import { testDir } from "../../../../../scripts/test-dirs.cjs";
 
 const EXE = process.platform === "win32" ? "ttc.exe" : "ttc";
-
-function scratch(prefix: string): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-}
 
 /**
  * A workspace with `@openload28/tt-lang` installed the way npm installs it: a
@@ -72,7 +68,7 @@ module.exports = { binaryPath };
 }
 
 test("a project's installed package provides the compiler", () => {
-  const workspace = scratch("tt-install-");
+  const workspace = testDir("tt-install-");
   const binary = install(workspace);
   assert.equal(packageCompiler([workspace]), binary);
   // And that is what the ladder answers, with no configuration at all —
@@ -81,7 +77,7 @@ test("a project's installed package provides the compiler", () => {
 });
 
 test("the package is found from a workspace nested under the install", () => {
-  const root = scratch("tt-install-mono-");
+  const root = testDir("tt-install-mono-");
   const binary = install(root);
   const nested = path.join(root, "packages", "app");
   fs.mkdirSync(nested, { recursive: true });
@@ -89,7 +85,7 @@ test("the package is found from a workspace nested under the install", () => {
 });
 
 test("an install missing its platform package provides nothing", () => {
-  const workspace = scratch("tt-install-optional-");
+  const workspace = testDir("tt-install-optional-");
   install(workspace, { withBinary: false });
   assert.equal(packageCompiler([workspace]), "");
   // The ladder falls through to PATH rather than to a path that is not there.
@@ -97,19 +93,19 @@ test("an install missing its platform package provides nothing", () => {
 });
 
 test("a stale install (binary gone) provides nothing", () => {
-  const workspace = scratch("tt-install-stale-");
+  const workspace = testDir("tt-install-stale-");
   const binary = install(workspace);
   fs.rmSync(binary);
   assert.equal(packageCompiler([workspace]), "");
 });
 
 test("a project without the package provides nothing", () => {
-  const workspace = scratch("tt-install-none-");
+  const workspace = testDir("tt-install-none-");
   assert.equal(packageCompiler([workspace]), "");
 });
 
 test("a compiler built in the workspace still wins over the install", () => {
-  const workspace = scratch("tt-install-repo-");
+  const workspace = testDir("tt-install-repo-");
   install(workspace);
   const built = path.join(workspace, "target", "release", EXE);
   fs.mkdirSync(path.dirname(built), { recursive: true });
@@ -118,7 +114,7 @@ test("a compiler built in the workspace still wins over the install", () => {
 });
 
 test("the newest workspace build wins when both Cargo profiles exist", () => {
-  const workspace = scratch("tt-install-profiles-");
+  const workspace = testDir("tt-install-profiles-");
   const release = path.join(workspace, "target", "release", EXE);
   const debug = path.join(workspace, "target", "debug", EXE);
   fs.mkdirSync(path.dirname(release), { recursive: true });
@@ -137,13 +133,13 @@ test("the newest workspace build wins when both Cargo profiles exist", () => {
 });
 
 test("the configured path wins over everything", () => {
-  const workspace = scratch("tt-install-configured-");
+  const workspace = testDir("tt-install-configured-");
   install(workspace);
   assert.equal(findCompiler("  /opt/ttc  ", [workspace]), "/opt/ttc");
 });
 
 test("a reinstall is answered by the new install, not a cached one", () => {
-  const workspace = scratch("tt-install-reinstall-");
+  const workspace = testDir("tt-install-reinstall-");
   const first = install(workspace);
   assert.equal(packageCompiler([workspace]), first);
 

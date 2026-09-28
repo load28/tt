@@ -8,13 +8,12 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import { runTypedCheck } from "../ttc";
 import { shutdownEngineServer } from "../engine";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
-import { caseDir } from "./workspace";
+import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** A case that needs a real typed answer, not just a compiler that runs.
@@ -26,7 +25,7 @@ const skipTyped = skip || (findTsgo() ? false : "no tsgo executable");
 const timeout = 60_000;
 
 function tmpProject(): string {
-  const dir = path.join(caseDir("tt-typedcheck-"), "src");
+  const dir = path.join(repoTestDir("tt-typedcheck-"), "src");
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

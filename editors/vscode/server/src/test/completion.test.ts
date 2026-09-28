@@ -12,13 +12,12 @@
 import * as assert from "node:assert/strict";
 import { after, test } from "node:test";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt } from "./positions";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
-import { caseDir } from "./workspace";
+import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = !compilerAvailable()
   ? "no ttc — none built, installed, or on PATH"
@@ -30,7 +29,7 @@ after(() => engine.shutdownEngineServer());
 
 /** A buffer in a workspace of its own, open in the engine. */
 function project(source: string): { file: string; done: () => void } {
-  const dir = caseDir("tt-completion-");
+  const dir = repoTestDir("tt-completion-");
   const file = path.join(dir, "main.tt");
   fs.writeFileSync(file, source);
   engine.openDocument(COMPILER, file, source);

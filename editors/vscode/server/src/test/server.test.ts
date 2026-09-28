@@ -15,14 +15,13 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync, spawn, ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { URI } from "vscode-uri";
 
 import { refreshSidecar } from "../sidecar";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
-import { caseDir } from "./workspace";
+import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const SERVER = path.join(__dirname, "..", "server.js");
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
@@ -37,7 +36,7 @@ const timeout = 60_000;
 for (const consumerKind of ["tt", "ttx"]) {
   for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
     test(`filesystem and config changes refresh ${providerKind} -> ${consumerKind}`, { skip: skipTyped, timeout }, async () => {
-      const dir = caseDir("tt-filesystem-edit-");
+      const dir = repoTestDir("tt-filesystem-edit-");
       const provider = path.join(dir, `provider.${providerKind}`);
       const consumer = path.join(dir, `consumer.${consumerKind}`);
       const configPath = path.join(dir, "tsconfig.json");
@@ -86,7 +85,7 @@ for (const consumerKind of ["tt", "ttx"]) {
     });
 
     test(`unsaved ${providerKind} changes refresh untouched ${consumerKind} diagnostics`, { skip: skipTyped, timeout }, async () => {
-      const dir = caseDir("tt-dependency-edit-");
+      const dir = repoTestDir("tt-dependency-edit-");
       const provider = path.join(dir, `provider.${providerKind}`);
       const consumer = path.join(dir, `consumer.${consumerKind}`);
       const original = 'export const value: string = "disk";\n';
@@ -215,8 +214,8 @@ async function openTwoFolders(
 }
 
 test("each folder keeps its configured compiler when the configuration changes", { skip, timeout }, async () => {
-  const first = caseDir("tt-owner-first-");
-  const second = caseDir("tt-owner-second-");
+  const first = repoTestDir("tt-owner-first-");
+  const second = repoTestDir("tt-owner-second-");
   const firstCompiler = path.join(first, "tools", "ttc");
   const secondCompiler = path.join(second, "tools", "ttc");
   const firstLogs = loggingCompiler(firstCompiler);
@@ -258,8 +257,8 @@ test("each folder keeps its configured compiler when the configuration changes",
 });
 
 test("documents opened before the configuration arrives never reach an unconfigured compiler", { skip, timeout }, async () => {
-  const first = caseDir("tt-owner-startup-");
-  const second = caseDir("tt-owner-startup-second-");
+  const first = repoTestDir("tt-owner-startup-");
+  const second = repoTestDir("tt-owner-startup-second-");
   const configured = path.join(first, "tools", "ttc");
   const configuredLogs = loggingCompiler(configured);
   const discoveredLogs = loggingCompiler(path.join(first, "target", "debug", "ttc"));
@@ -275,8 +274,8 @@ test("documents opened before the configuration arrives never reach an unconfigu
 });
 
 test("a folder without a configured compiler discovers its own build", { skip, timeout }, async () => {
-  const first = caseDir("tt-owner-build-first-");
-  const second = caseDir("tt-owner-build-second-");
+  const first = repoTestDir("tt-owner-build-first-");
+  const second = repoTestDir("tt-owner-build-second-");
   const firstLogs = loggingCompiler(path.join(first, "target", "debug", "ttc"));
   const secondLogs = loggingCompiler(path.join(second, "target", "debug", "ttc"));
   const client = connect();
@@ -293,8 +292,8 @@ test("a folder without a configured compiler discovers its own build", { skip, t
 });
 
 test("a relative compiler path resolves against the folder that configures it", { skip, timeout }, async () => {
-  const first = caseDir("tt-owner-relative-first-");
-  const second = caseDir("tt-owner-relative-second-");
+  const first = repoTestDir("tt-owner-relative-first-");
+  const second = repoTestDir("tt-owner-relative-second-");
   const firstLogs = loggingCompiler(path.join(first, "tools", "ttc"));
   const secondLogs = loggingCompiler(path.join(second, "tools", "ttc"));
   const client = connect(SERVER, {
@@ -323,8 +322,8 @@ test("a relative compiler path resolves against the folder that configures it", 
  * wants one — so without the capability the roots stayed frozen at
  * startup, for the life of the session (TASK-342). */
 test("the server asks for folder changes, and acts on them", { skip, timeout }, async () => {
-  const dir = caseDir("tt-folders-");
-  const added = caseDir("tt-folders-added-");
+  const dir = repoTestDir("tt-folders-");
+  const added = repoTestDir("tt-folders-added-");
   const file = path.join(dir, "main.tt");
   const source = "variant State { Ready, Empty }\ndeclare const state: State;\nexport const label = match (state) { Ready => \"r\" };\n";
   fs.writeFileSync(file, source);
@@ -527,7 +526,7 @@ const TRIGGER_CHARACTERS = [".", "(", "|", "{", ","];
 
 /** A server with `source` open as a tt-family document, ready to be asked. */
 async function open(source: string, languageId: "tt" | "ttx" = "tt") {
-  const dir = caseDir("tt-server-test-");
+  const dir = repoTestDir("tt-server-test-");
   const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
   const uri = pathToFileURL(file).toString();
@@ -1464,7 +1463,7 @@ test("a quick fix edits only the document version its diagnostic was computed fo
   ].join("\n");
   const title = "a case with a similar name exists";
   for (const versioned of [false, true]) {
-    const dir = caseDir("tt-versioned-fix-");
+    const dir = repoTestDir("tt-versioned-fix-");
     const file = path.join(dir, "main.tt");
     fs.writeFileSync(file, source);
     const uri = pathToFileURL(file).toString();
@@ -1626,7 +1625,7 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
     `the editor reports every practical diagnostic in ${caseName}`,
     { skip: skipTyped, timeout },
     async () => {
-      const project = caseDir(`tt-practical-${caseName}-`);
+      const project = repoTestDir(`tt-practical-${caseName}-`);
       fs.cpSync(fixture, project, {
         recursive: true,
         filter: (source) => path.basename(source) !== "node_modules",
@@ -1732,7 +1731,6 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
         }
       } finally {
         client.stop();
-        fs.rmSync(project, { recursive: true, force: true });
       }
     },
   );
@@ -1740,7 +1738,7 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
 
 
 test("LSP client reports process exit instead of hanging pending operations", { timeout }, async () => {
-  const dir = caseDir("tt-lsp-exit-");
+  const dir = repoTestDir("tt-lsp-exit-");
   const server = path.join(dir, "exit.cjs");
   fs.writeFileSync(server, 'process.stdin.once("data", () => { process.stderr.write("controlled server failure\\n"); process.exitCode = 7; process.stdin.destroy(); });\n');
   const client = connect(server);
@@ -1888,7 +1886,7 @@ test("an untitled ttx buffer is checked as ttx", { skip, timeout }, async () => 
 });
 
 test("a declaration answer that lands after an edit is not cached for the edited version", { skip, timeout }, async () => {
-  const dir = caseDir("tt-declaration-race-");
+  const dir = repoTestDir("tt-declaration-race-");
   const file = path.join(dir, "race.tt");
   const before = "variant First { A }\n";
   const after = "variant Second { B }\n";
@@ -1911,7 +1909,7 @@ test("a declaration answer that lands after an edit is not cached for the edited
 });
 
 test("the server's own sidecar writes do not re-arm the project, a hand-written declaration does", { skip: skipTyped, timeout }, async (t) => {
-  const dir = caseDir("tt-own-sidecar-");
+  const dir = repoTestDir("tt-own-sidecar-");
   const file = path.join(dir, "notice.tt");
   const source = "export variant Notice { Info(text: string), Warn }\n";
   fs.writeFileSync(file, source);
