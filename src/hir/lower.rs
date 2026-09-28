@@ -643,6 +643,8 @@ impl Lower<'_> {
         };
         let completes =
             crate::flow::program_diverges_in_span(self.source, statement_body, block.body_span);
+        let outward_jumps =
+            crate::flow::outward_jump_labels(self.source, statement_body, block.body_span);
         let items: Vec<ResultItem> = block
             .items
             .iter()
@@ -701,6 +703,7 @@ impl Lower<'_> {
             node,
             items,
             completes,
+            outward_jumps,
             value,
         })
     }

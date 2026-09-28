@@ -311,6 +311,7 @@ impl Lowering<'_> {
                 node: region_node,
                 items,
                 completes,
+                outward_jumps,
                 value,
             } => Expr::ResultRegion(ResultRegion {
                 id: ResultRegionId(*region_node),
@@ -326,6 +327,7 @@ impl Lowering<'_> {
                 value: *value,
                 is_async: self.node_contains_await(*region_node),
                 in_generator: self.node_in_generator(*region_node),
+                outward_jumps: outward_jumps.clone(),
             }),
             hir::Expr::Template { node, chunks } => Expr::Template(Template {
                 node: *node,

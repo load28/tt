@@ -771,3 +771,102 @@ fn if_let_placement_explanation_names_value_positions() {
         assert!(text.contains(position), "{position}: {text}");
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-481 jumps crossing a `result` block                            */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn a_jump_crossing_a_result_block_reports_only_the_crossing() {
+    use DiagnosticCode::{ResultBreakCrossing, ResultContinueCrossing, ResultLabelCrossing};
+    let prelude = "import type { TResult } from \"@tt/std\";\n\
+                   declare const x: TResult<number, string>;\n";
+    let cases: [(&str, &[DiagnosticCode]); 12] = [
+        (
+            "function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }",
+            &[ResultBreakCrossing],
+        ),
+        (
+            "function f() { for (;;) { const r = result { const v = try x; if (v) continue; return v; }; } }",
+            &[ResultContinueCrossing],
+        ),
+        (
+            "function f() { outer: for (;;) { const r = result { const v = try x; if (v) break outer; return v; }; } }",
+            &[ResultLabelCrossing],
+        ),
+        (
+            "function f() { outer: for (;;) { const r = result { const v = try x; if (v) continue outer; return v; }; } }",
+            &[ResultLabelCrossing],
+        ),
+        (
+            "function f() { outer: { const r = result { const v = try x; if (v) break outer; return v; }; } }",
+            &[ResultLabelCrossing],
+        ),
+        (
+            "function f() { outer: for (;;) { const r = result { const v = try x; inner: for (;;) { if (v) break outer; } return v; }; } }",
+            &[ResultLabelCrossing],
+        ),
+        (
+            "function f() { switch (1) { case 1: const r = result { const v = try x; if (v) break; return v; }; } }",
+            &[ResultBreakCrossing],
+        ),
+        (
+            "function* g() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }",
+            &[ResultBreakCrossing],
+        ),
+        (
+            "async function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }",
+            &[ResultBreakCrossing],
+        ),
+        (
+            "function f() { for (;;) { const r = `${result { const v = try x; if (v) break; return v; }}`; } }",
+            &[ResultBreakCrossing],
+        ),
+        (
+            "function f() { for (const a of [1]) { const r = (result { const v = try x; if (v) continue; return v; }) |> String; } }",
+            &[ResultContinueCrossing],
+        ),
+        (
+            "function f() { outer: for (;;) { const r = result { const v = try x; if (v) break outer; if (v) continue; return v; }; } }",
+            &[ResultLabelCrossing, ResultContinueCrossing],
+        ),
+    ];
+    for (body, expected) in cases {
+        let source = format!("{prelude}{body}\n");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        let found: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
+        assert_eq!(found, expected, "{body}\n{diagnostics:#?}");
+        for diagnostic in &diagnostics {
+            let at = diagnostic.start.expect("located");
+            assert!(
+                source[at..].starts_with("break") || source[at..].starts_with("continue"),
+                "{body}: {:?}",
+                &source[at..]
+            );
+        }
+    }
+}
+
+#[test]
+fn a_jump_crossing_a_result_block_leaves_the_rest_of_the_file_planned() {
+    let source = "import type { TResult } from \"@tt/std\";\n\
+                  declare const x: TResult<number, string>;\n\
+                  function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }\n\
+                  class C { y = try x; }\n";
+    assert_eq!(
+        codes(source),
+        vec![
+            DiagnosticCode::ResultBreakCrossing,
+            DiagnosticCode::TryPlacement
+        ]
+    );
+}
+
+#[test]
+fn jumps_owned_inside_a_result_block_still_compile() {
+    let out = ok("import type { TResult } from \"@tt/std\";\n\
+                  declare const x: TResult<number, string>;\n\
+                  function f() { for (;;) { const r = result { const v = try x; inner: for (;;) { if (v) break inner; continue inner; } for (;;) { break; } return v; }; } }\n");
+    assert!(out.contains("break inner;"), "{out}");
+    assert!(out.contains("continue inner;"), "{out}");
+}

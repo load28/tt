@@ -1014,6 +1014,13 @@ impl<'a> ProjectionBuilder<'a> {
             synthetic_return: None,
         });
         self.push_region_function(region.is_async, region.in_generator);
+        if let Some(labels) = &region.outward_jumps {
+            for label in labels {
+                self.code.push_str(label);
+                self.code.push_str(": ");
+            }
+            self.code.push_str("for (;;) {");
+        }
         for item in &region.items {
             match item {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
@@ -1027,7 +1034,12 @@ impl<'a> ProjectionBuilder<'a> {
         } else {
             self.code.push_str("undefined");
         }
-        self.code.push_str(";})()");
+        self.code.push(';');
+        let synthetic_return_end = ProjectedByte(self.code.len());
+        if region.outward_jumps.is_some() {
+            self.code.push('}');
+        }
+        self.code.push_str("})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
         self.source_segments.insert(
@@ -1041,7 +1053,7 @@ impl<'a> ProjectionBuilder<'a> {
         self.pending[pending_index].projected = projected;
         self.pending[pending_index].synthetic_return = Some(ProjectedSpan {
             start: synthetic_return_start,
-            end: ProjectedByte(self.code.len() - 4),
+            end: synthetic_return_end,
         });
         Ok(())
     }

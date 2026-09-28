@@ -404,23 +404,15 @@ impl Checker {
         let Some(ResultItem::Stmts(body)) = block.items.first() else {
             return;
         };
-        for control in
-            crate::flow::outward_controls_in_span(&self.source, &self.tokens, body, block.body_span)
-        {
+        for control in crate::flow::outward_controls_in_span(&self.source, body, block.body_span) {
             let (span, code, message, help) = match control {
-                crate::flow::OutwardControl::Break {
-                    span,
-                    labeled: false,
-                } => (
+                crate::flow::OutwardControl::Break { span, label: None } => (
                     span,
                     DiagnosticCode::ResultBreakCrossing,
                     "`break` cannot leave a `result` block",
                     "break only a loop or switch written inside this `result` block",
                 ),
-                crate::flow::OutwardControl::Continue {
-                    span,
-                    labeled: false,
-                } => (
+                crate::flow::OutwardControl::Continue { span, label: None } => (
                     span,
                     DiagnosticCode::ResultContinueCrossing,
                     "`continue` cannot leave a `result` block",
@@ -434,11 +426,11 @@ impl Checker {
                 ),
                 crate::flow::OutwardControl::Break {
                     span,
-                    labeled: true,
+                    label: Some(_),
                 }
                 | crate::flow::OutwardControl::Continue {
                     span,
-                    labeled: true,
+                    label: Some(_),
                 } => (
                     span,
                     DiagnosticCode::ResultLabelCrossing,
@@ -849,9 +841,7 @@ impl Checker {
     }
 
     fn check_match_arm_controls(&mut self, body: &Program, body_span: Span) {
-        for control in
-            crate::flow::outward_controls_in_span(&self.source, &self.tokens, body, body_span)
-        {
+        for control in crate::flow::outward_controls_in_span(&self.source, body, body_span) {
             let (span, message, help) = match control {
                 crate::flow::OutwardControl::Break { span, .. } => (
                     span,

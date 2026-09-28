@@ -204,15 +204,15 @@ pub(crate) fn program_diverges_in_span(
 
 /// An abrupt completion that would leave a Result body instead of a
 /// user-written loop or switch inside it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OutwardControl {
     Break {
         span: crate::ast::Span,
-        labeled: bool,
+        label: Option<String>,
     },
     Continue {
         span: crate::ast::Span,
-        labeled: bool,
+        label: Option<String>,
     },
     Yield(crate::ast::Span),
 }
@@ -222,10 +222,10 @@ pub(crate) enum OutwardControl {
 /// CFG, so this query uses the same model instead of a second token walk.
 pub(crate) fn outward_controls_in_span(
     src: &str,
-    tokens: &[Token],
     program: &Program,
     span: crate::ast::Span,
 ) -> Vec<OutwardControl> {
+    let tokens = &crate::lexer::lex(src, span.start, span.end)[..];
     let start = tokens.partition_point(|token| token.span.start < span.start);
     let end = start + tokens[start..].partition_point(|token| token.span.end <= span.end);
     let mut heads = IfLetHeads::new();
@@ -261,6 +261,29 @@ pub(crate) fn outward_controls_in_span(
         }
     }
     controls
+}
+
+pub(crate) fn outward_jump_labels(
+    src: &str,
+    program: &Program,
+    span: crate::ast::Span,
+) -> Option<Vec<String>> {
+    let mut jumps = false;
+    let mut labels: Vec<String> = Vec::new();
+    for control in outward_controls_in_span(src, program, span) {
+        match control {
+            OutwardControl::Break { label, .. } | OutwardControl::Continue { label, .. } => {
+                jumps = true;
+                if let Some(label) = label
+                    && !labels.contains(&label)
+                {
+                    labels.push(label);
+                }
+            }
+            OutwardControl::Yield(_) => {}
+        }
+    }
+    jumps.then_some(labels)
 }
 
 /// Builds the CFG of one token stream treated as a statement sequence.
@@ -457,7 +480,7 @@ fn collect_outward_control<'a>(
             if !control_break_target(scopes, *label) {
                 controls.push(OutwardControl::Break {
                     span: *span,
-                    labeled: label.is_some(),
+                    label: label.map(str::to_owned),
                 });
             }
         }
@@ -465,7 +488,7 @@ fn collect_outward_control<'a>(
             if !control_continue_target(scopes, *label) {
                 controls.push(OutwardControl::Continue {
                     span: *span,
-                    labeled: label.is_some(),
+                    label: label.map(str::to_owned),
                 });
             }
         }

@@ -456,6 +456,9 @@ pub enum Expr {
         items: Vec<ResultItem>,
         /// Whether the statement body completes the Result on every path.
         completes: bool,
+        /// The labels of the `break`/`continue` statements that leave the
+        /// body, or `None` when no jump leaves it.
+        outward_jumps: Option<Vec<String>>,
         /// Optional legacy trailing expression.
         value: Option<ExprId>,
     },

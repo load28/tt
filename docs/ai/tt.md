@@ -144,6 +144,7 @@ const data = result {
 - Error types UNION automatically: bindings of `TResult<_, E1>` + `TResult<_, E2>` → block assignable to `TResult<T, E1 | E2>`. ttc infers NO types; tsc narrows each step.
 - `return x` inside the block completes the block with `Ok(x)`; bare `return;` completes it with `Ok(undefined)`. It never returns a raw value from the surrounding function. A `try` in a nested user function still targets that function; `if let` is fine anywhere here.
 - Returning a Result value wraps it, producing `TResult<TResult<...>>`; use `try` before `return` when its `Err` should exit the block.
+- A `break`, `continue`, or `yield` cannot leave the block: a jump to a loop, switch, or label outside it reports exactly one `result-break-crossing`, `result-continue-crossing`, or `result-label-crossing` at the jump (`result-yield-crossing` for `yield`), wherever the block stands, including a template interpolation. Jumps to targets written inside the block are fine.
 
 ## @tt/std
 

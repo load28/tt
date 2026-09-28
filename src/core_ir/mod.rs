@@ -410,6 +410,7 @@ pub(crate) struct ResultRegion {
     pub value: Option<ExprId>,
     pub is_async: bool,
     pub in_generator: bool,
+    pub outward_jumps: Option<Vec<String>>,
 }
 
 #[derive(Debug)]

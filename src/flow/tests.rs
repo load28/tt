@@ -472,3 +472,29 @@ fn an_abrupt_exit_runs_the_finally_that_can_replace_it() {
         "x: { try { throw e; } catch (e) { return 1; } finally { break x; } }"
     ));
 }
+
+#[test]
+fn outward_jump_labels_name_every_jump_target_outside_the_body() {
+    let labels = |source: &str| {
+        let span = crate::ast::Span {
+            start: 0,
+            end: source.len(),
+        };
+        outward_jump_labels(source, &crate::parser::parse(source), span)
+    };
+    assert_eq!(labels("const v = 1; return v;"), None);
+    assert_eq!(
+        labels("for (;;) { break; } s: switch (1) { case 1: break s; }"),
+        None
+    );
+    assert_eq!(labels("if (v) break;"), Some(vec![]));
+    assert_eq!(labels("while (v) { continue; } continue;"), Some(vec![]));
+    assert_eq!(
+        labels("inner: for (;;) { break outer; continue a; break inner; } break outer;"),
+        Some(vec!["outer".to_string(), "a".to_string()])
+    );
+    assert_eq!(
+        labels("const g = () => { for (;;) break; }; yield 1;"),
+        None
+    );
+}

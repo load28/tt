@@ -488,6 +488,7 @@
 | TASK-478 | Decide a guarded all-wildcard arm by its guard alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-478](./TASK-478-guarded-wildcard-tuple-arm.md) |
 | TASK-479 | Separate hover documentation from the signature | Complete | 2026-09-28 | 2026-09-28 | [TASK-479](./TASK-479-hover-documentation-split.md) |
 | TASK-480 | Report an `if let` in any expression position as `if-let-placement` alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-480](./TASK-480-if-let-expression-position.md) |
+| TASK-481 | Project a jump that leaves a `result` block so only its crossing is reported | Complete | 2026-09-28 | 2026-09-28 | [TASK-481](./TASK-481-result-jump-crossing-projection.md) |
 
 ## Next task number
 
