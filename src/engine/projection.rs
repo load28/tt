@@ -160,13 +160,14 @@ impl ProjectedDocument {
 /// The module path an `.tt` file takes in the project graph: its own path
 /// with `.ts` appended, so `src/token.tt` becomes `src/token.tt.ts`.
 ///
-/// This is what makes the whole arrangement need no configuration. A
-/// specifier written `"./token.tt"` — which is what a hand-written `.ts`
-/// and an `.tt` alike write — resolves to `token.tt.ts` by ordinary
-/// TypeScript resolution, with no `allowImportingTsExtensions`, no
-/// `paths`, and no rewriting. And the declaration the compiler emits for
-/// it lands on `token.tt.d.ts`, which is exactly the editor sidecar the
-/// same specifier resolves to when no compiler is running.
+/// This is the engine's name for the module. The TypeScript backend decides
+/// how the compiler sees it (`src/typescript/host.mjs`). A configured project
+/// holds it as `token.tt` through a content mapper, so `"./token.tt"`
+/// resolves as it does under `tsc --runExternalCode`. Otherwise it is served
+/// as `token.tt.ts`, which ordinary resolution finds where TypeScript probes
+/// extensions. Either way the declaration the compiler emits for it lands on
+/// `token.tt.d.ts`, the editor sidecar the same specifier resolves to when no
+/// compiler is running.
 pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
     let mut name = source_path.as_os_str().to_os_string();
     let kind = crate::SourceKind::from_path(source_path).unwrap_or_default();

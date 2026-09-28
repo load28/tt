@@ -1,5 +1,7 @@
 # TASK-079: tsgo native backend 전환 설계 문서 편입
 
+> **Superseded in part by [TASK-472](./TASK-472-node-esm-typed-resolution.md)**: ordinary resolution of `"./x.tt"` to the served `x.tt.ts` holds only where TypeScript probes extensions. For configured projects, the typed backend now serves the lowered text as the `.tt` file itself through an identity content mapper, so the specifier resolves as it does under `tsc --runExternalCode` in every `moduleResolution` mode. The engine still names the module `x.tt.ts`.
+
 - **상태**: 완료
 - **시작일**: 2026-08-19
 - **완료일**: 2026-08-19

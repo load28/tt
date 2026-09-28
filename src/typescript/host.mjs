@@ -22,7 +22,7 @@
  *   open   { apiModule, cwd, tsconfig (nullable) }
  *       →  { ok: true }
  *
- *   ask    { modules: [{ path, text }],   // lowered .tt → virtual .ts
+ *   ask    { modules: [{ path, text }],   // lowered .tt → x.tt.ts / x.ttx.tsx
  *            roots: [path],               // requested and open modules
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
@@ -57,6 +57,58 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
+
+/**
+ * How a lowered module reaches the compiler.
+ *
+ * A configured project opens its `.tt`/`.ttx` files through a TypeScript
+ * content mapper, the extension point `tsc --runExternalCode` uses for the
+ * same files. `.tt` is then a supported extension, so `"./x.tt"` resolves in
+ * every `moduleResolution` mode exactly as it does for `tsc`. The mapper is
+ * the identity: the engine serves the lowered text as the file's content, so
+ * the virtual text and every position in it are the lowered module's own.
+ * The engine keeps naming the module `x.tt.ts`; `served` and `moduleName`
+ * translate at this boundary.
+ *
+ * A project whose configuration already names another content mapper keeps
+ * the previous arrangement, lowered modules served as `x.tt.ts`, because
+ * enabling external code would also run mappers the user has not trusted
+ * this process to run. An inferred project has no configuration to name a
+ * mapper in.
+ */
+const MAPPER_PACKAGE = "@tt/typed-engine-mapper";
+const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
+const TT_SOURCE = /\.ttx?$/;
+const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
+const IDENTITY_MAPPER = `
+let pending = Buffer.alloc(0);
+process.stdin.on("data", (chunk) => {
+  pending = Buffer.concat([pending, chunk]);
+  for (;;) {
+    const head = pending.indexOf("\\r\\n\\r\\n");
+    if (head < 0) return;
+    const length = Number(/content-length: *(\\d+)/i.exec(pending.subarray(0, head).toString("latin1"))[1]);
+    if (pending.length < head + 4 + length) return;
+    const message = JSON.parse(pending.subarray(head + 4, head + 4 + length).toString("utf8"));
+    pending = pending.subarray(head + 4 + length);
+    if (message.id === undefined) continue;
+    let result = {};
+    if (message.method === "initialize") result = { positionEncoding: "utf-16", diagnosticSource: "tt" };
+    if (message.method === "transform") {
+      const text = message.params.content;
+      result = {
+        text,
+        extension: message.params.fileName.endsWith(".ttx") ? ".tsx" : ".ts",
+        mappings: text.length > 0 ? [[0, text.length, 0, text.length, 0]] : [],
+      };
+    }
+    const body = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }), "utf8");
+    process.stdout.write("Content-Length: " + body.length + "\\r\\n\\r\\n");
+    process.stdout.write(body);
+  }
+});
+`;
 
 /**
  * Writes a whole answer line to stdout **synchronously**.
@@ -122,16 +174,25 @@ function diskVersion(file) {
   catch { return null; }
 }
 
-function layeredFileSystem(files, dirs, configFiles, dependencies, listings) {
+function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links) {
   return {
-    fileExists: (f) => (files.has(f) ? true : undefined),
+    // A `.tt` source the engine did not serve does not exist for TypeScript:
+    // its text is tt, not the lowered module.
+    fileExists: (f) => (files.has(f) ? true : TT_SOURCE.test(f) ? false : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
     readFile: (f) => {
+      if (!files.has(f) && !dependencies.has(f)) dependencies.set(f, diskVersion(f));
+      if (configFiles.has(f)) return configFiles.get(f);
       if (files.has(f)) return files.get(f);
-      if (!dependencies.has(f)) dependencies.set(f, diskVersion(f));
-      return configFiles.get(f);
+      return TT_SOURCE.test(f) ? null : undefined;
     },
     directoryExists: (d) => (dirs.has(d) ? true : undefined),
+    realpath: (p) => {
+      for (const [link, target] of links) {
+        if (p === link || p.startsWith(link + "/")) return target + p.slice(link.length);
+      }
+      return undefined;
+    },
     getAccessibleEntries: (d) => {
       let real = { files: [], directories: [] };
       try {
@@ -143,15 +204,15 @@ function layeredFileSystem(files, dirs, configFiles, dependencies, listings) {
         if (!dirs.has(d)) return undefined;
       }
       listings.set(d, new Set([...real.files, ...real.directories]));
-      const here = [...files.keys()].filter((f) => path.dirname(f) === d);
+      const here = [...files.keys()].filter((f) => path.dirname(f) === d && !aliases.has(f));
       const names = new Set(real.files.map((f) => f));
       for (const f of here) {
         const base = path.basename(f);
         if (!names.has(base)) real.files.push(base);
       }
-      // The sources ttc lowered are not TypeScript; hide them so no tool
-      // tries to read `.tt` as TypeScript.
-      real.files = real.files.filter((f) => !f.endsWith(".tt") && !f.endsWith(".ttx"));
+      // The sources ttc did not serve are not TypeScript; hide them so no
+      // tool tries to read `.tt` as TypeScript.
+      real.files = real.files.filter((f) => !TT_SOURCE.test(f) || files.has(path.join(d, f)));
       return real;
     },
   };
@@ -195,14 +256,20 @@ async function main() {
   const configFiles = new Map();
   const dependencies = new Map();
   const listings = new Map();
+  const links = new Map();
+  const aliases = new Set();
   const pendingDisk = { created: [], changed: [], deleted: [] };
   let diskGeneration = 0;
-  const api = new API({
+  let mapped = false;
+  const mapperPackage = path.join(path.dirname(fileURLToPath(import.meta.url)), "typed-engine-mapper");
+  // The client runs the executable shipped beside it — the one it was
+  // built against, and the same one ttc drives as a language server.
+  const connect = () => new API({
     cwd: open.cwd,
-    // The client runs the executable shipped beside it — the one it was
-    // built against, and the same one ttc drives as a language server.
-    fs: layeredFileSystem(files, dirs, configFiles, dependencies, listings),
+    runExternalCode: mapped,
+    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links),
   });
+  let api = connect();
   writeLine(JSON.stringify({ ok: true }));
 
   let opened = false;
@@ -256,8 +323,96 @@ async function main() {
     return { diskGeneration };
   }
 
+  /** The name a module is served under in the current arrangement. */
+  function served(file) {
+    return mapped && LOWERED.test(file) ? file.slice(0, file.lastIndexOf(".")) : file;
+  }
+
+  /** The engine's name for a file TypeScript reported. */
+  function moduleName(file) {
+    if (!mapped || typeof file !== "string" || !TT_SOURCE.test(file)) return file;
+    return file + (file.endsWith(".ttx") ? ".tsx" : ".ts");
+  }
+
+  /**
+   * The files a job's modules are served as. Mapped, a lowered module is
+   * also served under the engine's own `x.tt.ts` name, unlisted, for a root
+   * outside the configuration: its inferred project names no content mapper
+   * and reaches `"./y.tt"` as `y.tt.ts`, exactly as before.
+   */
+  function servedModules(modules) {
+    aliases.clear();
+    const out = [];
+    for (const module of modules) {
+      out.push({ ...module, path: served(module.path) });
+      if (served(module.path) !== module.path) {
+        aliases.add(module.path);
+        out.push(module);
+      }
+    }
+    return out;
+  }
+
+  /** The job's questions, each addressed to the file TypeScript holds. */
+  function addressed(job, name) {
+    const module = (entry) => ({ ...entry, module: name(entry.module) });
+    return {
+      ...job,
+      literalChecks: (job.literalChecks ?? []).map(module),
+      tagChecks: (job.tagChecks ?? []).map(module),
+      symbolChecks: (job.symbolChecks ?? []).map(module),
+      resultShapeChecks: (job.resultShapeChecks ?? []).map(module),
+      contextualSlots: (job.contextualSlots ?? []).map(module),
+    };
+  }
+
+  function engineAnswer(out) {
+    for (const diagnostic of out.diagnostics) {
+      diagnostic.file = moduleName(diagnostic.file);
+      for (const related of diagnostic.related ?? []) related.file = moduleName(related.file);
+      if (diagnostic.mismatch?.declaration) {
+        diagnostic.mismatch.declaration.file = moduleName(diagnostic.mismatch.declaration.file);
+      }
+    }
+    out.projectModules = out.projectModules.map(moduleName);
+    for (const declaration of out.declarations) {
+      if (mapped) declaration.path = declaration.path.replace(MAPPED_DECLARATION, ".$1.d.ts");
+    }
+    return out;
+  }
+
+  /** Whether the configuration names a content mapper for anything but tt. */
+  function foreignMappers(parsed) {
+    const mappers = parsed?.raw?.contentMappers;
+    return Array.isArray(mappers) && mappers.some((entry) =>
+      !entry || typeof entry !== "object" || !Array.isArray(entry.extensions) ||
+      entry.extensions.some((extension) => extension !== ".tt" && extension !== ".ttx"));
+  }
+
+  /** Switches the arrangement: a fresh compiler, the project not yet open. */
+  function reconnect() {
+    api.close();
+    links.clear();
+    if (mapped) {
+      const link = path.join(path.dirname(open.tsconfig), "node_modules", MAPPER_PACKAGE);
+      fs.mkdirSync(mapperPackage, { recursive: true });
+      fs.writeFileSync(path.join(mapperPackage, "mapper.cjs"), IDENTITY_MAPPER);
+      fs.writeFileSync(path.join(mapperPackage, "package.json"), JSON.stringify({
+        name: MAPPER_PACKAGE,
+        version: "0.0.0",
+        typescript: { contentMapper: { exec: [process.execPath, path.join(mapperPackage, "mapper.cjs")] } },
+      }));
+      links.set(link, mapperPackage);
+      for (let d = link; d !== path.dirname(d); d = path.dirname(d)) dirs.add(d);
+    }
+    api = connect();
+    opened = false;
+    openRoots.clear();
+  }
+
   /** One `ask`: refresh the served modules, then answer every question. */
-  function handle(job) {
+  function handle(request) {
+    let job = request;
     const out = {
       projectModules: [],
       diagnostics: [],
@@ -270,7 +425,7 @@ async function main() {
       declarations: [],
       contextualSlots: [],
     };
-    const changes = serve(files, dirs, job.modules ?? []);
+    let changes = serve(files, dirs, servedModules(job.modules ?? []));
     detectDisk();
     for (const kind of ["created", "changed", "deleted"]) {
       changes[kind].push(...pendingDisk[kind]);
@@ -283,19 +438,32 @@ async function main() {
       // as modules; never alter source strings or infer membership from a scan.
       const previous = new Map(configFiles);
       configFiles.clear();
-      api.parseConfigFile(open.tsconfig);
-      for (const file of [...dependencies.keys()]) {
-        if (!file.endsWith(".json") || !fs.existsSync(file)) continue;
+      const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
+      if (wanted !== mapped) {
+        mapped = wanted;
+        reconnect();
+        changes = serve(files, dirs, servedModules(job.modules ?? []));
+        api.parseConfigFile(open.tsconfig);
+      }
+      for (const file of new Set([open.tsconfig, ...dependencies.keys()])) {
+        if (!file.endsWith(".json") || !(files.has(file) || fs.existsSync(file))) continue;
         const { config, error } = api.readConfigFile(file);
         if (error || !config || typeof config !== "object") continue;
         let changed = false;
-        for (const key of ["files", "include", "exclude"]) {
+        // Unmapped, a pattern naming `.tt` names the lowered `.tt.ts`. Mapped,
+        // user patterns already name what TypeScript sees; only a
+        // configuration the engine serves names its modules by the engine's
+        // `x.tt.ts`.
+        const rename = mapped
+          ? (files.has(file) ? served : null)
+          : (entry) => entry + (entry.endsWith(".ttx") ? ".tsx" : entry.endsWith(".tt") ? ".ts" : "");
+        for (const key of rename ? ["files", "include", "exclude"] : []) {
           if (!Array.isArray(config[key])) continue;
           config[key] = config[key].map(entry => {
             if (typeof entry !== "string") return entry;
-            const suffix = entry.endsWith(".ttx") ? ".tsx" : entry.endsWith(".tt") ? ".ts" : "";
-            changed ||= suffix !== "";
-            return entry + suffix;
+            const renamed = rename(entry);
+            changed ||= renamed !== entry;
+            return renamed;
           });
         }
         if (Array.isArray(config.contentMappers)) {
@@ -310,6 +478,10 @@ async function main() {
             .filter(entry => entry !== null);
           if (mappers.length > 0) config.contentMappers = mappers;
           else delete config.contentMappers;
+        }
+        if (mapped && path.resolve(file) === path.resolve(open.tsconfig)) {
+          config.contentMappers = [{ package: MAPPER_PACKAGE, extensions: [".tt", ".ttx"] }];
+          changed = true;
         }
         if (changed) configFiles.set(file, JSON.stringify(config));
       }
@@ -348,11 +520,11 @@ async function main() {
     // may still join through an import, while an unrelated file must never
     // receive a checker position query.
     const projectModules = new Set(
-      paths.filter((module) => project.program.getSourceFile(module) !== undefined),
+      paths.map(served).filter((module) => project.program.getSourceFile(module) !== undefined),
     );
 
     const outside = open.tsconfig
-      ? (job.roots ?? []).filter((root) => files.has(root) && !projectModules.has(root))
+      ? (job.roots ?? []).filter((root) => files.has(root) && !projectModules.has(served(root)))
       : [];
     const opening = outside.filter((root) => !openRoots.has(root));
     const closing = [...openRoots].filter((root) => !outside.includes(root));
@@ -372,6 +544,11 @@ async function main() {
       else groups.push({ project: owner, members: new Set([root]), whole: false });
     }
     out.projectModules = groups.flatMap((group) => [...group.members]);
+    const names = new Map();
+    for (const group of groups) {
+      for (const member of group.members) names.set(group.whole ? moduleName(member) : member, member);
+    }
+    job = addressed(job, (module) => names.get(module) ?? served(module));
 
     const contextual = ({ project, members }) => {
       const checker = project.checker;
@@ -439,7 +616,7 @@ async function main() {
       }
     };
     for (const group of groups) contextual(group);
-    if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return out; }
+    if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return engineAnswer(out); }
     const reported = new Set();
     const unique = (diagnostics) => diagnostics.filter((d) => {
       const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, d.text]);
@@ -664,14 +841,14 @@ async function main() {
         fail(5, "ttc host: the resolved TypeScript has no declaration emit API");
       }
       const emitted = project.program.getDeclarationEmit(
-        (job.modules ?? []).map((m) => m.path).filter((module) => projectModules.has(module)),
+        (job.modules ?? []).map((m) => served(m.path)).filter((module) => projectModules.has(module)),
       );
       for (const [path, file] of emitted.outputFiles) {
         out.declarations.push({ path, text: file.text });
       }
     }
     out.dependencies = [...dependencies.keys(), ...listings.keys()];
-    return out;
+    return engineAnswer(out);
   }
 }
 

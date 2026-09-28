@@ -926,3 +926,118 @@ fn the_standard_library_resolves_from_either_module_format_in_every_resolution_m
         assert_eq!(error_count(&out), 1, "{label}: {out}");
     }
 }
+
+const RELATIVE_SOURCES: &[(&str, &str)] = &[
+    (
+        "src/a.tt",
+        "export variant A { X(n: number), Y }\nexport default 7;\n",
+    ),
+    (
+        "src/c.ts",
+        "import seven, { A } from \"./a.tt\";\n\
+         export const v: A = A.X(seven);\n\
+         export const bad: string = seven;\n",
+    ),
+    (
+        "src/d.tt",
+        "import { A } from \"./a.tt\";\n\
+         export function size(a: A): number {\n\
+         \x20 return match (a) { X(n) => n, Y => 0 };\n\
+         }\n",
+    ),
+    (
+        "src/view.ttx",
+        "import { A } from \"./a.tt\";\n\
+         export const label = (a: A) => match (a) { X(n) => `${n}`, Y => \"y\" };\n",
+    ),
+];
+
+fn with_tt_content_mapper(dir: &Workspace) {
+    let config = dir.join("tsconfig.json");
+    let text = fs::read_to_string(&config).unwrap().replacen(
+        "\"include\"",
+        "\"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }],\n  \"include\"",
+        1,
+    );
+    fs::write(config, text).unwrap();
+}
+
+#[test]
+fn tt_specifiers_resolve_under_node_esm_as_tsc_resolves_them() {
+    require_tsgo!();
+    for (module, verbatim) in [("nodenext", true), ("node16", false)] {
+        let dir = module_project("module", module, module, verbatim, RELATIVE_SOURCES);
+        with_tt_content_mapper(&dir);
+        let out = check(&dir);
+        assert!(
+            block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+            "{module}: {out}"
+        );
+        assert_eq!(error_count(&out), 1, "{module}: {out}");
+    }
+}
+
+#[test]
+fn tt_specifiers_keep_resolving_in_commonjs_and_bundler_projects() {
+    require_tsgo!();
+    for (package_type, module, resolution) in [
+        ("commonjs", "node16", "node16"),
+        ("commonjs", "nodenext", "nodenext"),
+        ("commonjs", "commonjs", "bundler"),
+        ("module", "esnext", "bundler"),
+        ("module", "preserve", "bundler"),
+    ] {
+        let dir = module_project(package_type, module, resolution, false, RELATIVE_SOURCES);
+        let out = check(&dir);
+        let label = format!("{package_type}/{module}/{resolution}");
+        assert!(
+            block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+            "{label}: {out}"
+        );
+        assert_eq!(error_count(&out), 1, "{label}: {out}");
+    }
+    let dir = module_project(
+        "commonjs",
+        "nodenext",
+        "nodenext",
+        false,
+        &[
+            (
+                "src/legacy.tt",
+                "const legacy = { n: 1 };\nexport = legacy;\n",
+            ),
+            (
+                "src/use.ts",
+                "import legacy = require(\"./legacy.tt\");\n\
+                 export const n: number = legacy.n;\n\
+                 export const bad: string = legacy.n;\n",
+            ),
+        ],
+    );
+    let out = check(&dir);
+    assert!(
+        block(&out, "type mismatch: expected `string`").contains("--> src/use.ts"),
+        "{out}"
+    );
+    assert_eq!(error_count(&out), 1, "{out}");
+}
+
+#[test]
+fn a_project_with_another_content_mapper_runs_no_external_code() {
+    require_tsgo!();
+    let dir = module_project("commonjs", "nodenext", "nodenext", false, RELATIVE_SOURCES);
+    let config = dir.join("tsconfig.json");
+    let text = fs::read_to_string(&config).unwrap().replacen(
+        "\"include\"",
+        "\"contentMappers\": [{ \"package\": \"foo-mapper\", \"extensions\": [\".foo\"] }],\n  \"include\"",
+        1,
+    );
+    fs::write(config, text).unwrap();
+    let out = check(&dir);
+    assert!(
+        block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+        "{out}"
+    );
+    assert!(out.contains("ts100024"), "{out}");
+    assert_eq!(error_count(&out), 2, "{out}");
+}

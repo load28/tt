@@ -479,6 +479,7 @@
 | TASK-469 | Report a literal or `is` tuple element as what it is | Complete | 2026-09-28 | 2026-09-28 | [TASK-469](./TASK-469-tuple-value-element-diagnostic.md) |
 | TASK-470 | Check exhaustiveness of a bigint literal union | Complete | 2026-09-28 | 2026-09-28 | [TASK-470](./TASK-470-bigint-literal-union-exhaustiveness.md) |
 | TASK-471 | Show any unexpected value in a match's runtime guard | Complete | 2026-09-28 | 2026-09-28 | [TASK-471](./TASK-471-match-guard-value-display.md) |
+| TASK-472 | The typed engine resolves `.tt` specifiers through a content mapper, as `tsc` does | Complete | 2026-09-28 | 2026-09-28 | [TASK-472](./TASK-472-node-esm-typed-resolution.md) |
 | TASK-473 | `@tt/std` and `@tt/runtime` are dual-format packages that resolve in every module mode | Complete | 2026-09-28 | 2026-09-28 | [TASK-473](./TASK-473-std-package-exports.md) |
 | TASK-474 | std combinators keep the side a callback never returns | Complete | 2026-09-28 | 2026-09-28 | [TASK-474](./TASK-474-std-empty-side-defaults.md) |
 | TASK-475 | `ttc explain` texts match what the compiler does | Complete | 2026-09-28 | 2026-09-28 | [TASK-475](./TASK-475-explain-text-audit.md) |
