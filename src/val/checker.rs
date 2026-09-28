@@ -534,62 +534,37 @@ impl<'a> Checker<'a> {
     }
 
     /// Reports a mutation through the access path rooted at the identifier
-    /// token `root`, when that identifier resolves to a `val` binding.
-    /// `mutates` is set by callers that already know the path is being
-    /// mutated by an operator *in front* of it (`delete x.p`, `++x.p`);
-    /// otherwise the operator after the path decides.
+    /// token `root`, when that identifier resolves to a `val` binding and
+    /// the path is a write target (`mutates`). Method calls are collected
+    /// from the syntax tree instead ([`super::method_calls`]).
     fn check_mutation(&self, tokens: &[Token], root: usize, frames: &[Frame<'a>], mutates: bool) {
+        if !mutates {
+            return;
+        }
         let name = self.text(&tokens[root]);
         // In probe mode the root is *not* resolved here: which binding it
         // names is the checker's answer, from the symbol at this identifier.
         if !matches!(self.sink, Sink::Probes(_)) && self.lookup(frames, name).is_none() {
             return;
         }
-        let path = parse_path(self.src, tokens, root);
-        if path.steps == 0 && !mutates {
-            // replacing the binding's value is `const`'s business
-            return;
-        }
         let offset = tokens[root].span.start;
-        if mutates {
-            match self.sink {
-                Sink::Probes(sink) => sink.borrow_mut().mutations.push(Mutation {
-                    root: offset,
-                    name: name.to_string(),
-                    method: None,
-                }),
-                Sink::Report(sink) => sink.borrow_mut().push(
-                    TtError::span(
-                        offset,
-                        offset + name.len(),
-                        format!(
-                            "cannot mutate through val binding `{name}` \
-                             (the binding is declared with `val`, so every access path from it is read-only)"
-                        ),
-                    )
-                    .code(crate::DiagnosticCode::ValMutation),
-                ),
-            }
-            return;
-        }
-        // A method call is a *question*: `q.set(k)` mutates only if `q` is
-        // a built-in with a mutating `set`, which needs the receiver's
-        // type. ttc never answers it from the name — it records the call
-        // for `ttc --types`, where the real checker decides.
-        if let (Some(method), Some(tok)) = (path.last_prop, path.last_prop_tok)
-            && punct_at(tokens, path.end, b'(')
-        {
-            match self.sink {
-                // Every call is collected; which ones count is the verdict's
-                // business ([`is_builtin_mutator_name`]), so a name outside
-                // the policy can never hide a question from the checker.
-                Sink::Probes(sink) => sink.borrow_mut().mutations.push(Mutation {
-                    root: offset,
-                    name: name.to_string(),
-                    method: Some((method.to_string(), tokens[tok].span.start)),
-                }),
-                Sink::Report(_) => {}
-            }
+        match self.sink {
+            Sink::Probes(sink) => sink.borrow_mut().mutations.push(Mutation {
+                root: offset,
+                name: name.to_string(),
+                method: None,
+            }),
+            Sink::Report(sink) => sink.borrow_mut().push(
+                TtError::span(
+                    offset,
+                    offset + name.len(),
+                    format!(
+                        "cannot mutate through val binding `{name}` \
+                         (the binding is declared with `val`, so every access path from it is read-only)"
+                    ),
+                )
+                .code(crate::DiagnosticCode::ValMutation),
+            ),
         }
     }
 

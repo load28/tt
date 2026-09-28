@@ -315,14 +315,65 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
 /// assert_eq!(probes.mutations.len(), 1);
 /// assert_eq!(probes.mutations[0].method.as_ref().unwrap().0, "at");
 /// ```
+///
+/// A call is read from the TypeScript syntax tree, so the method may be
+/// named by a string-literal key and the callee may be parenthesized. A
+/// computed key that is not a literal names no method and is not collected:
+///
+/// ```
+/// let probes = ttc::val_probes("val const d = mk();\nd[\"push\"](1);\n(d.pop)();\nd[k](2);\n");
+/// let methods: Vec<&str> = probes
+///     .mutations
+///     .iter()
+///     .map(|m| m.method.as_ref().unwrap().0.as_str())
+///     .collect();
+/// assert_eq!(methods, ["push", "pop"]);
+/// ```
 pub fn val_probes(source: &str) -> ValProbes {
     val_probes_with_kind(source, SourceKind::TypeScript)
 }
 
 /// [`val_probes`] under an explicit TypeScript surface kind.
 pub fn val_probes_with_kind(source: &str, source_kind: SourceKind) -> ValProbes {
+    let probes = val_syntax_probes(source, source_kind);
+    if probes.bindings.is_empty() {
+        return probes;
+    }
+    with_method_calls(
+        probes,
+        &emit_mapped_with_kind(source, source_kind),
+        source_kind,
+    )
+}
+
+/// [`val_probes_with_kind`] over an emission of `source` the caller already
+/// has.
+pub(crate) fn val_probes_with_emit(
+    source: &str,
+    source_kind: SourceKind,
+    emit: &MappedEmit,
+) -> ValProbes {
+    with_method_calls(val_syntax_probes(source, source_kind), emit, source_kind)
+}
+
+fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
     let tokens = lexer::lex_with_kind(source, 0, source.len(), source_kind);
     val::probes(source, &tokens)
+}
+
+fn with_method_calls(
+    mut probes: ValProbes,
+    emit: &MappedEmit,
+    source_kind: SourceKind,
+) -> ValProbes {
+    if probes.bindings.is_empty() {
+        return probes;
+    }
+    probes
+        .mutations
+        .extend(val::method_calls(emit, source_kind));
+    probes.mutations.sort_by_key(|mutation| mutation.root);
+    probes
 }
 
 /// Converts a byte offset into `source` to a 1-based `(line, column)` —

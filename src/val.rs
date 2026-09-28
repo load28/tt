@@ -39,8 +39,11 @@
 //! its argument, and no verdict on a method call it cannot resolve to a
 //! built-in. Run `ttc help val` for the user-facing limits.
 
+mod calls;
 mod checker;
 mod targets;
+
+pub(crate) use calls::method_calls;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -303,11 +306,8 @@ struct Path<'a> {
     /// the bare binding, which `val` says nothing about — replacing the
     /// binding's value is `const`'s business, not `val`'s.
     steps: usize,
-    /// The last `.p` / `?.p` property name, for the method-call probe.
+    /// The last `.p` / `?.p` property name.
     last_prop: Option<&'a str>,
-    /// The token index that name sits at — the node `ttc --types` asks the
-    /// checker to resolve.
-    last_prop_tok: Option<usize>,
 }
 
 /// Parses the access path rooted at the identifier token `root`.
@@ -316,7 +316,6 @@ fn parse_path<'a>(src: &'a str, tokens: &[Token], root: usize) -> Path<'a> {
         end: root + 1,
         steps: 0,
         last_prop: None,
-        last_prop_tok: None,
     };
     loop {
         let j = path.end;
@@ -329,7 +328,6 @@ fn parse_path<'a>(src: &'a str, tokens: &[Token], root: usize) -> Path<'a> {
                 path.end = close + 1;
                 path.steps += 1;
                 path.last_prop = None;
-                path.last_prop_tok = None;
                 continue;
             }
             // a non-null assertion continues the path; `!=` does not
@@ -345,7 +343,6 @@ fn parse_path<'a>(src: &'a str, tokens: &[Token], root: usize) -> Path<'a> {
         match tokens.get(j + 1) {
             Some(t) if matches!(t.kind, TokenKind::Ident) => {
                 path.last_prop = Some(&src[t.span.start..t.span.end]);
-                path.last_prop_tok = Some(j + 1);
                 path.end = j + 2;
                 path.steps += 1;
             }

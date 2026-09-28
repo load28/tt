@@ -437,6 +437,51 @@ fn val_mutation_is_decided_by_the_method_the_call_resolves_to() {
 }
 
 #[test]
+fn val_mutation_covers_every_spelling_of_a_member_call() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/spell.tt",
+        "export function go(k: \"push\", c: boolean): void {\n\
+         \x20 val const items: number[] = [];\n\
+         \x20 items[\"push\"](1);\n\
+         \x20 (items.push)(2);\n\
+         \x20 items?.[`push`](3);\n\
+         \x20 (items as number[]).push(4);\n\
+         \x20 items![k](5);\n\
+         \x20 val const m = new Map<string, number>();\n\
+         \x20 m[\"delete\"](\"a\");\n\
+         \x20 const n = match (c) { true => m[\"set\"](\"b\", 1), false => m };\n\
+         \x20 m[\"get\"](\"a\");\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    let lines: Vec<&str> = out.lines().collect();
+    let reported: Vec<(String, String)> = lines
+        .windows(2)
+        .filter_map(|pair| {
+            let method = pair[0]
+                .strip_prefix("error[val-mutation]: cannot call mutating method `")?
+                .split('`')
+                .next()?;
+            let at = pair[1].rsplit("spell.tt:").next()?.split(':').next()?;
+            Some((at.to_string(), method.to_string()))
+        })
+        .collect();
+    let expected: Vec<(String, String)> = [
+        ("3", "push"),
+        ("4", "push"),
+        ("5", "push"),
+        ("6", "push"),
+        ("9", "delete"),
+        ("10", "set"),
+    ]
+    .iter()
+    .map(|(line, method)| (line.to_string(), method.to_string()))
+    .collect();
+    assert_eq!(reported, expected, "{out}");
+}
+
+#[test]
 fn a_shadowing_binding_is_a_different_binding() {
     require_tsgo!();
     let dir = project(&[(

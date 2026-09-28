@@ -145,7 +145,7 @@ impl ProjectedDocument {
             literal_probes: crate::literal_matches_with_kind(&source, source_kind),
             tag_probes: crate::tag_matches_with_kind(&source, source_kind),
             payload_probes: crate::payload_probes_with_kind(&source, source_kind),
-            val: crate::val_probes_with_kind(&source, source_kind),
+            val: crate::val_probes_with_emit(&source, source_kind, &emit),
             source_path: source_path.to_path_buf(),
             source,
             emit,
