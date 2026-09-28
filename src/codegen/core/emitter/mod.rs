@@ -51,7 +51,7 @@ pub(super) struct Emitter<'a> {
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
-    pub(super) block_required_propagations: HashSet<NodeId>,
+    pub(super) block_required_statements: HashSet<NodeId>,
     /// Statement owners that must open a block before their first hoisted
     /// prelude and close it after their last byte. Several entry points can
     /// write a prelude, and the owner's end can be reached by more than one

@@ -506,3 +506,78 @@ fn a_wrapped_value_in_a_parenthesized_step_arrow_stays_inside_that_arrow() {
     assert!(out.contains("const h = $tt_ap(value, (((v: number) => { let $tt_v1: number;"), "{out}");
     assert!(out.contains("return ($tt_v1) as number; })));"), "{out}");
 }
+
+#[test]
+fn a_var_let_else_as_an_unbraced_body_is_lowered_inside_one_block() {
+    for (source, lowered) in [
+        (
+            "variant O { Some(value: number), None }\nfunction f(o: O) {\n  if (true) var Some(value: hv) = o else { return 0; };\n  return hv;\n}\n",
+            "if (true) { const $tt_t0 = o; if ($tt_t0.kind !== \"Some\") { return 0; } var { value: hv } = $tt_t0; } return hv;",
+        ),
+        (
+            "variant O { Some(value: number), None }\nfunction f(o: O) {\n  while (true) var Some(value: wv) = o else { return 0; };\n}\n",
+            "while (true) { const $tt_t0 = o; if ($tt_t0.kind !== \"Some\") { return 0; } var { value: wv } = $tt_t0; } }",
+        ),
+        (
+            "variant O { Some(value: number), None }\nfunction f(c: boolean, o: O) {\n  if (c) f(c, o); else var Some(value: ev) = o else { return 0; };\n  return ev;\n}\n",
+            "if (c) f(c, o); else { const $tt_t0 = o; if ($tt_t0.kind !== \"Some\") { return 0; } var { value: ev } = $tt_t0; } return ev;",
+        ),
+        (
+            "variant O { Some(value: number), None }\nfunction f(o: O) {\n  lbl: var Some(value: lv) = o else { return 0; };\n  return lv;\n}\n",
+            "lbl: { const $tt_t0 = o; if ($tt_t0.kind !== \"Some\") { return 0; } var { value: lv } = $tt_t0; } return lv;",
+        ),
+        (
+            "variant O { Some(value: number), None }\nfunction f(xs: O[]) {\n  for (const x of xs) var Some(value: fv) = x else { break; };\n  return fv;\n}\n",
+            "for (const x of xs) { const $tt_t0 = x; if ($tt_t0.kind !== \"Some\") { break; } var { value: fv } = $tt_t0; } return fv;",
+        ),
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert!(diagnostics.is_empty(), "{source}{diagnostics:#?}");
+        let out = ok(source);
+        assert!(compact(&out).contains(lowered), "{out}");
+    }
+}
+
+#[test]
+fn a_lexical_binding_statement_as_an_unbraced_body_is_a_placement_error() {
+    for (source, code, head) in [
+        (
+            "variant O { Some(value: number), None }\nfunction f(c: boolean, o: O) {\n  if (c) const Some(value) = o else { return 0; };\n  return 1;\n}\n",
+            DiagnosticCode::LetElsePlacement,
+            "const Some(value) = o",
+        ),
+        (
+            "variant O { Some(value: number), None }\nfunction f(o: O) {\n  while (true) let Some(value) = o else { return 0; };\n}\n",
+            DiagnosticCode::LetElsePlacement,
+            "let Some(value) = o",
+        ),
+        (
+            "variant O { Some(value: number), None }\nfunction f(o: O) {\n  lbl: const Some(value) = o else { return 0; };\n}\n",
+            DiagnosticCode::LetElsePlacement,
+            "const Some(value) = o",
+        ),
+        (
+            "variant R { Ok(value: number), Err(error: string) }\ndeclare const p: () => R;\nfunction f(c: boolean): R {\n  if (c) const x = try p();\n  return R.Ok(0);\n}\n",
+            DiagnosticCode::TryPlacement,
+            "const x = try p()",
+        ),
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{source}{diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, code, "{source}{diagnostics:#?}");
+        assert_eq!(
+            diagnostics[0].start,
+            Some(source.find(head).unwrap()),
+            "{source}{diagnostics:#?}"
+        );
+        err(source);
+    }
+    for source in [
+        "variant O { Some(value: number), None }\nfunction f(c: boolean, o: O) {\n  if (c) { const Some(value) = o else { return 0; }; return value; }\n  return 1;\n}\n",
+        "variant R { Ok(value: number), Err(error: string) }\ndeclare const p: () => R;\nfunction f(c: boolean): R {\n  if (c) { const x = try p(); return R.Ok(x); }\n  if (c) var y = try p();\n  return R.Ok(0);\n}\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        assert!(diagnostics.is_empty(), "{source}{diagnostics:#?}");
+        ok(source);
+    }
+}

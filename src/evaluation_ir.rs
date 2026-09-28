@@ -14,11 +14,11 @@ mod tests;
 use std::collections::{HashMap, HashSet};
 
 use crate::core_ir::{
-    ArmAction, CoreFile, Decision, ExitTarget, Expr, MissAction, Propagate, ResultRegionItem,
-    Statement,
+    ArmAction, CoreFile, Decision, DecisionKind, ExitTarget, Expr, MissAction, Propagate,
+    ResultRegionItem, Statement,
 };
 use crate::hir::ids::Idx;
-use crate::hir::{ArmBodyKind, BodyId, ExprId, NodeId};
+use crate::hir::{ArmBodyKind, BindingMode, BodyId, ExprId, NodeId};
 use crate::ice::LoweringSubject;
 use crate::program_syntax::{
     ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,
@@ -140,8 +140,9 @@ pub(crate) struct LoweringPlan {
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
-    block_required_propagations: HashSet<NodeId>,
+    block_required_statements: HashSet<NodeId>,
     block_required_owners: HashSet<SourceSpan>,
+    lexical_declaration_bodies: Vec<LexicalDeclarationBody>,
     ambient_items: HashSet<NodeId>,
     owner_model_unavailable: bool,
 }
@@ -165,6 +166,18 @@ pub(crate) struct UnsupportedExpressionPropagation {
     pub(crate) source: SourceSpan,
     pub(crate) owner: EvaluationOwner,
     pub(crate) reason: ExpressionBoundaryReason,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LexicalDeclarationBody {
+    pub(crate) source: SourceSpan,
+    pub(crate) statement: BindingStatement,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BindingStatement {
+    LetElse,
+    Try,
 }
 
 /// A match whose host cannot carry a statement region without changing
@@ -550,8 +563,8 @@ impl LoweringPlan {
         self.unsupported_expression_propagations.clone()
     }
 
-    pub(crate) fn block_required_propagations(&self) -> &HashSet<NodeId> {
-        &self.block_required_propagations
+    pub(crate) fn block_required_statements(&self) -> &HashSet<NodeId> {
+        &self.block_required_statements
     }
 
     /// Host owners, by their anchor, that are the unbraced body of an `if`,
@@ -567,6 +580,10 @@ impl LoweringPlan {
 
     pub(crate) fn unsupported_matches(&self) -> Vec<UnsupportedMatch> {
         self.unsupported_matches.clone()
+    }
+
+    pub(crate) fn lexical_declaration_bodies(&self) -> &[LexicalDeclarationBody] {
+        &self.lexical_declaration_bodies
     }
 }
 

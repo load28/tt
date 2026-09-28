@@ -382,7 +382,12 @@ loop headers, parameter defaults, class field initializers, decorators,
 computed member names, and the heritage of a decorated class.
 
 Move the propagation into the nearest Result scope when the surrounding
-expression cannot carry it."
+expression cannot carry it.
+
+A `try` statement that declares its binding with `const` or `let` is a
+lexical declaration, which TypeScript does not allow as the unbraced body of
+an `if`, `else`, loop, or label. Wrap it in braces; a `var` binding is
+allowed there and stays function-scoped."
             }
 
             DiagnosticCode::ResultNoSuccessValue => {
@@ -455,7 +460,12 @@ Like `try`, its `else` block leaves the enclosing function, so it belongs
 to a statement list — not to a `match` arm or another construct's value
 region. Inside a statement-bodied `result` block its `else` exits complete
 that block, as a `return` written there does. Module top level is allowed
-here, because a let-else has no `return` of its own to place."
+here, because a let-else has no `return` of its own to place.
+
+A let-else that declares its binding with `const` or `let` is a lexical
+declaration, which TypeScript does not allow as the unbraced body of an
+`if`, `else`, loop, or label. Wrap it in braces; a `var` let-else is allowed
+there and its binding stays function-scoped."
             }
 
             DiagnosticCode::LetElseNotDiverging => {

@@ -333,10 +333,13 @@ impl<'a> Emitter<'a> {
     ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
-            DecisionKind::LetElse { binding_mode, .. } => (
-                AnchorKind::LetElse,
-                self.emit_let_else(decision, *binding_mode, body),
-            ),
+            DecisionKind::LetElse { binding_mode, .. } => {
+                let mut inner = self.emit_let_else(decision, *binding_mode, body);
+                if self.block_required_statements.contains(&decision.extent) {
+                    inner = Rope::braced(inner);
+                }
+                (AnchorKind::LetElse, inner)
+            }
             DecisionKind::IfLet => (AnchorKind::IfLet, self.emit_if_let(decision, body)),
             DecisionKind::Match { .. } => {
                 crate::ice::bug!("expression decision in a statement body")

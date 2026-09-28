@@ -480,29 +480,22 @@ impl<'a> ProjectionBuilder<'a> {
         source: SourceSpan,
         core_root: CoreRoot,
     ) -> Result<(), ProgramSyntaxError> {
-        let ordinal =
-            u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-        let id = TtNodeId(ordinal);
         let owner_start = ProjectedByte(self.code.len());
         match category {
             SyntaxCategory::Expression | SyntaxCategory::Propagation => self.code.push('('),
-            SyntaxCategory::Statement => self.code.push('{'),
             SyntaxCategory::Item => self.code.push_str("const "),
+            SyntaxCategory::Statement => {
+                crate::ice::bug!("a statement placeholder is framed by its decision")
+            }
         }
-        let start = ProjectedByte(self.code.len());
-        let prefix = match category {
-            SyntaxCategory::Expression | SyntaxCategory::Propagation => "$tt_syntax_expr_",
-            SyntaxCategory::Statement => "$tt_syntax_stmt_",
-            SyntaxCategory::Item => "$tt_syntax_item_",
-        };
-        self.code.push_str(prefix);
-        self.code.push_str(&ordinal.to_string());
-        let end = ProjectedByte(self.code.len());
+        self.push_placeholder_name(category, source, core_root)?;
         match category {
             SyntaxCategory::Expression => self.code.push(')'),
             SyntaxCategory::Propagation => self.code.push_str(");"),
-            SyntaxCategory::Statement => self.code.push_str(";}"),
             SyntaxCategory::Item => self.code.push_str(" = 0;"),
+            SyntaxCategory::Statement => {
+                crate::ice::bug!("a statement placeholder is framed by its decision")
+            }
         }
         let owner_end = ProjectedByte(self.code.len());
         self.source_segments.push(ProjectionSourceSegment {
@@ -513,6 +506,27 @@ impl<'a> ProjectionBuilder<'a> {
             source,
             kind: ProjectionSegmentKind::Placeholder,
         });
+        Ok(())
+    }
+
+    fn push_placeholder_name(
+        &mut self,
+        category: SyntaxCategory,
+        source: SourceSpan,
+        core_root: CoreRoot,
+    ) -> Result<(), ProgramSyntaxError> {
+        let ordinal =
+            u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
+        let id = TtNodeId(ordinal);
+        let start = ProjectedByte(self.code.len());
+        let prefix = match category {
+            SyntaxCategory::Expression | SyntaxCategory::Propagation => "$tt_syntax_expr_",
+            SyntaxCategory::Statement => "$tt_syntax_stmt_",
+            SyntaxCategory::Item => "$tt_syntax_item_",
+        };
+        self.code.push_str(prefix);
+        self.code.push_str(&ordinal.to_string());
+        let end = ProjectedByte(self.code.len());
         self.pending.push(PendingOverlay {
             id,
             category,
@@ -734,18 +748,34 @@ impl<'a> ProjectionBuilder<'a> {
     fn emit_statement_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
         // The source decision is one statement, so its projection is one
         // block: as the unbraced body of an `if`, loop, or label, the
-        // placeholder and the bodies below stay together under that parent.
+        // placeholder and the bodies below stay together under that parent,
+        // and that block is the statement the decision's host owner maps to.
+        let source = self.source_span(decision.extent)?;
+        let segment_index = self.source_segments.len();
+        let owner_start = ProjectedByte(self.code.len());
         self.code.push('{');
-        self.push_placeholder(
+        self.push_placeholder_name(
             SyntaxCategory::Statement,
-            self.source_span(decision.extent)?,
+            source,
             CoreRoot::Decision(decision.extent),
         )?;
+        self.code.push(';');
         // Statement decisions do not introduce a function boundary. Keep their
         // bodies in this lexical control-flow region so returns belong to the
         // surrounding match/result, and nested values retain their real owner.
         self.emit_inline_decision_bodies(decision)?;
         self.code.push('}');
+        self.source_segments.insert(
+            segment_index,
+            ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start: owner_start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                source,
+                kind: ProjectionSegmentKind::Placeholder,
+            },
+        );
         Ok(())
     }
 

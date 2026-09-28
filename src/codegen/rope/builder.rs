@@ -61,6 +61,16 @@ impl<'a> Rope<'a> {
         out
     }
 
+    pub(crate) fn braced(inner: Rope<'a>) -> Rope<'a> {
+        let mut block = Rope::new();
+        block.push_lit("{");
+        block.push_break(1);
+        block.append(Rope::indented(1, inner.trim()));
+        block.push_break(0);
+        block.push_lit("}");
+        Rope::scoped(block)
+    }
+
     /// Nests `inner` `depth` indentation units deeper: every break `inner`
     /// wrote in its *own* layout scope moves in by `depth`. Breaks inside a
     /// scope `inner` opened keep their depth — that scope has its own base.

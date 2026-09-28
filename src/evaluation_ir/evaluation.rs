@@ -733,6 +733,59 @@ impl EvaluationFile {
             })
             .map(str::to_owned)
             .collect();
+        let block_required: Vec<(NodeId, SourceSpan)> = self
+            .regions
+            .iter()
+            .filter_map(|region| match (region.root, &region.placement) {
+                (
+                    Some(CoreRoot::Propagate(node)),
+                    RegionPlacement::Host {
+                        context, source, ..
+                    },
+                ) if context.requires_block
+                    && context.continuation != HostContinuation::ForInitialize =>
+                {
+                    Some((node, *source))
+                }
+                (
+                    Some(CoreRoot::Decision(node)),
+                    RegionPlacement::Host {
+                        context, source, ..
+                    },
+                ) if context.requires_block => Some((node, *source)),
+                _ => None,
+            })
+            .collect();
+        let block_required_statements: HashSet<NodeId> =
+            block_required.iter().map(|(node, _)| *node).collect();
+        let lexical_declaration_bodies = core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .filter_map(|statement| match statement {
+                Statement::Decision(Decision {
+                    extent,
+                    kind: DecisionKind::LetElse { binding_mode, .. },
+                    ..
+                }) => Some((*extent, *binding_mode, BindingStatement::LetElse)),
+                Statement::Propagate(Propagate {
+                    node,
+                    binding: Some(binding),
+                    ..
+                }) => Some((*node, binding.mode, BindingStatement::Try)),
+                _ => None,
+            })
+            .filter(|(_, mode, _)| *mode != BindingMode::Var)
+            .filter_map(|(node, _, statement)| {
+                block_required
+                    .iter()
+                    .find(|(required, _)| *required == node)
+                    .map(|(_, source)| LexicalDeclarationBody {
+                        source: *source,
+                        statement,
+                    })
+            })
+            .collect();
         Ok(LoweringPlan {
             shadowed_globals,
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
@@ -796,19 +849,8 @@ impl EvaluationFile {
             expression_boundary_name,
             unsupported_expression_propagations,
             unsupported_matches,
-            block_required_propagations: self
-                .regions
-                .iter()
-                .filter_map(|region| match (region.root, &region.placement) {
-                    (Some(CoreRoot::Propagate(node)), RegionPlacement::Host { context, .. })
-                        if context.requires_block
-                            && context.continuation != HostContinuation::ForInitialize =>
-                    {
-                        Some(node)
-                    }
-                    _ => None,
-                })
-                .collect(),
+            block_required_statements,
+            lexical_declaration_bodies,
             // Every root that hoists a prelude in front of its owner, rather
             // than replacing the owner as a statement-form `try` does.
             block_required_owners: self

@@ -404,7 +404,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
-    pub(super) block_required_propagations: HashSet<NodeId>,
+    pub(super) block_required_statements: HashSet<NodeId>,
     pub(super) block_required_owners: HashSet<SourceSpan>,
     pub(super) ambient_items: HashSet<NodeId>,
 }
@@ -1489,7 +1489,7 @@ impl TargetRewritePlan {
             .collect();
         Self {
             inline_subjects,
-            block_required_propagations: lowering.block_required_propagations().clone(),
+            block_required_statements: lowering.block_required_statements().clone(),
             block_required_owners: lowering.block_required_owners().clone(),
             ambient_items: lowering.ambient_items().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),

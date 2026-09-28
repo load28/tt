@@ -657,14 +657,8 @@ impl<'a> Emitter<'a> {
                     } else {
                         self.emit_propagate(propagate)
                     };
-                    if self.block_required_propagations.contains(&propagate.node) {
-                        let mut block = Rope::new();
-                        block.push_lit("{");
-                        block.push_break(1);
-                        block.append(Rope::indented(1, emitted.trim()));
-                        block.push_break(0);
-                        block.push_lit("}");
-                        emitted = Rope::scoped(block);
+                    if self.block_required_statements.contains(&propagate.node) {
+                        emitted = Rope::braced(emitted);
                     }
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }

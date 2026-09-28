@@ -292,6 +292,32 @@ fn match_target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
         .collect()
 }
 
+fn lexical_declaration_body_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
+    plan.lexical_declaration_bodies()
+        .iter()
+        .map(|body| {
+            let (construct, code) = match body.statement {
+                evaluation_ir::BindingStatement::LetElse => {
+                    ("a let-else", DiagnosticCode::LetElsePlacement)
+                }
+                evaluation_ir::BindingStatement::Try => {
+                    ("a `try` statement", DiagnosticCode::TryPlacement)
+                }
+            };
+            TtError::span(
+                body.source.start,
+                body.source.end,
+                format!(
+                    "{construct} declaring `const` or `let` cannot be the unbraced body of an \
+                     `if`, loop, or label — TypeScript allows no lexical declaration there"
+                ),
+            )
+            .code(code)
+            .help("wrap the statement in braces to give its binding a block")
+        })
+        .collect()
+}
+
 fn match_placement_message(
     owner: program_syntax::EvaluationOwner,
     reason: evaluation_ir::ExpressionBoundaryReason,
@@ -359,6 +385,7 @@ fn recovered_target_errors(
 fn target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
     let mut errors = try_target_errors(plan);
     errors.extend(match_target_errors(plan));
+    errors.extend(lexical_declaration_body_errors(plan));
     errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
     errors
 }

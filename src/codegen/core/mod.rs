@@ -264,7 +264,7 @@ pub(crate) fn emit_with_map<'a>(
         host_error: target.host_error,
         host_json: target.host_json,
         inline_subjects: target.inline_subjects,
-        block_required_propagations: target.block_required_propagations,
+        block_required_statements: target.block_required_statements,
         block_required_by_end: target.block_required_owners.iter().fold(
             std::collections::BTreeMap::new(),
             |mut by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>, owner| {
