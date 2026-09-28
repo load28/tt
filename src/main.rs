@@ -137,7 +137,24 @@ Tooling options (bundler plugins, editors):
                         editor can ask about text it has not saved; needs
                         --check-types (not --types, which writes)
   --tt-only             report the tt layer of --check-types and leave the
-                        type layer to TypeScript (not --types, which writes)"
+                        type layer to TypeScript (not --types, which writes)
+  --json-report         with --types (not --watch): print one JSON object on
+                        stdout, {{\"checked\", \"diagnostics\", \"written\",
+                        \"failed\"}}: whether the check ran, how many
+                        diagnostics it reported, the absolute path of every
+                        file written, and {{\"path\", \"error\"}} for every
+                        file that was not; no object means nothing was written
+
+Exit status of --check-types and --types:
+  0    checked; nothing reported; --types wrote every file
+  1    diagnostics reported; --types wrote every file all the same
+  2    the check could not run (a tt-level error left nothing to lower, the
+       project could not be opened, or TypeScript did not run); nothing was
+       written and earlier outputs stand
+  3    --types: the check ran, and one or more files could not be written;
+       the others were (stderr, or the report, names each one)
+  101  internal compiler error
+  An invalid command line exits 1 before anything runs."
     ));
 }
 

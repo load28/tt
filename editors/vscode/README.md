@@ -144,7 +144,7 @@ highlighting does not require a working compiler.
 | `tt.verify` | `true` | Verify emitted syntax during syntax checks. |
 | `tt.typeDiagnostics` | `true` | Include TypeScript type diagnostics for tt documents. |
 | `tt.typedChecks` | `true` | Include type-dependent tt checks. |
-| `tt.sidecar` | `"refresh"` | On save, refresh existing sidecars; `always` creates them, `off` disables refresh. |
+| `tt.sidecar` | `"refresh"` | On save, refresh existing sidecars; `always` creates them, `off` disables refresh. A file counts as refreshed only when `ttc --types --json-report` names it as written; a check that could not run, a partial write, or a compiler that was terminated is logged in the output channel and the earlier file stays. |
 | `tt.sidecarDir` | `""` | Sidecar directory relative to the workspace; empty means adjacent to sources. The directory mirrors the source tree the way `ttc --types` writes it: an existing sidecar whose map names the saved file (for example `.tt-types/a/x.tt.d.ts` from `ttc --types src`) is refreshed where it is, and `always` creates a missing one at the file's path relative to its workspace folder (`.tt-types/src/a/x.tt.d.ts`). A relative path is skipped, with a note in the output channel, for a file in no workspace folder. |
 | `tt.trace.server` | `"off"` | LSP trace level. |
 

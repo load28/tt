@@ -10,6 +10,7 @@ enum CliOption {
     CheckTypes,
     Types,
     TtOnly,
+    JsonReport,
     Server,
     ContentMapper,
     Overlay,
@@ -37,6 +38,7 @@ impl CliOption {
             Self::CheckTypes => "--check-types",
             Self::Types => "--types",
             Self::TtOnly => "--tt-only",
+            Self::JsonReport => "--json-report",
             Self::Server => "--server",
             Self::ContentMapper => "--content-mapper",
             Self::Overlay => "--overlay",
@@ -138,6 +140,7 @@ pub(super) fn run() -> ExitCode {
     let mut types = false;
     let mut overlay_path: Option<PathBuf> = None;
     let mut tt_only = false;
+    let mut json_report = false;
     let mut project: Option<PathBuf> = None;
     let mut banner = true;
     let mut verify = true;
@@ -188,6 +191,10 @@ pub(super) fn run() -> ExitCode {
             "--tt-only" => {
                 seen.push(CliOption::TtOnly);
                 tt_only = true;
+            }
+            "--json-report" => {
+                seen.push(CliOption::JsonReport);
+                json_report = true;
             }
             "--server" => {
                 seen.push(CliOption::Server);
@@ -424,6 +431,7 @@ pub(super) fn run() -> ExitCode {
         &[
             CliOption::Types,
             CliOption::Watch,
+            CliOption::JsonReport,
             CliOption::Project,
             CliOption::Node,
             CliOption::OutDir,
@@ -524,6 +532,10 @@ pub(super) fn run() -> ExitCode {
 
     // A watch re-reads the files it is watching; text pinned on stdin would
     // stay the same forever, so the pair has no coherent meaning.
+    if json_report && watch {
+        eprintln!("ttc: --json-report does not combine with --watch");
+        return ExitCode::FAILURE;
+    }
     if overlay_path.is_some() && watch {
         eprintln!("ttc: --overlay does not combine with --watch");
         return ExitCode::FAILURE;
@@ -586,6 +598,7 @@ pub(super) fn run() -> ExitCode {
                 overlay: &overlay,
                 tt_only,
                 inputs: &inputs,
+                json_report,
             },
         );
     }

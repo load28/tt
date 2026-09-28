@@ -2129,3 +2129,32 @@ fn an_invalid_file_reports_the_same_diagnostic_with_typescript_installed() {
         assert_eq!(reports[0], reports[1]);
     }
 }
+
+#[test]
+fn json_report_belongs_to_one_types_run() {
+    let dir = tmpdir();
+    let file = dir.join("a.tt");
+    fs::write(&file, "export const n = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (args, expected) in [
+        (
+            vec!["--types", "--json-report", "--watch", path],
+            "--json-report does not combine with --watch",
+        ),
+        (
+            vec!["--check-types", "--json-report", path],
+            "--check-types does not combine with --json-report",
+        ),
+        (
+            vec!["--json-report", path],
+            "build mode does not combine with --json-report",
+        ),
+    ] {
+        let out = ttc(&args);
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(1), "{args:?}:\n{err}");
+        assert!(out.stdout.is_empty(), "{args:?} prints no report");
+        assert!(err.contains(expected), "{args:?}:\n{err}");
+    }
+}
