@@ -1297,11 +1297,7 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("arrow return rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        if rewrite.parenthesized {
-            out.push_lit("(() => {");
-        } else {
-            out.push_lit("{");
-        }
+        out.push_lit("{");
         out.push_break(1);
         if rewrite.contextual_type.is_some() {
             out.push_lit(format!("let {}", rewrite.slot));
@@ -1319,7 +1315,7 @@ impl<'a> Emitter<'a> {
         out.push_break(1);
         out.push_lit(format!("return {};", rewrite.slot));
         out.push_break(0);
-        out.push_lit(if rewrite.parenthesized { "})()" } else { "}" });
+        out.push_lit("}");
         Rope::scoped(out)
     }
 }

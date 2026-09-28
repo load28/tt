@@ -486,3 +486,23 @@ fn a_type_assertion_on_the_line_after_a_pipeline_is_rejected_as_typescript_rejec
     let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(codes, [DiagnosticCode::SourceNotTypeScript], "{:#?}", report.diagnostics);
 }
+
+#[test]
+fn a_wrapped_concise_arrow_value_lowers_to_a_block_body_not_an_iife() {
+    let out = compact(&ok("variant V { A(n: number), B }\nconst g = async (p: Promise<V>) => match (await p) { A(n) => n, B => 0 } as number;\nconst h = (v: V) => match (v) { A(n) => n, B => 0 } satisfies number;\nconst i = (v: V) => (match (v) { A(n) => n, B => 0 }) as number;\nconst j = (v: V) => (match (v) { A(n) => n, B => 0 });\n"));
+    assert!(!out.contains("})()"), "{out}");
+    assert!(out.contains("const g = async (p: Promise<V>) => { let $tt_v0: number; { const $tt_m = await p;"), "{out}");
+    assert!(out.contains("return $tt_v0 as number; };"), "{out}");
+    assert!(out.contains("return $tt_v1 satisfies number; };"), "{out}");
+    assert!(out.contains("return ($tt_v2) as number; };"), "{out}");
+    assert!(out.contains("return ($tt_v3); };"), "{out}");
+}
+
+#[test]
+fn a_wrapped_value_in_a_parenthesized_step_arrow_stays_inside_that_arrow() {
+    let out = compact(&ok("type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\nvariant V { A(n: number), B }\ndeclare function next(): R<number>;\ndeclare const value: number;\nconst f = value |> (x => (try next()));\nconst h = value |> ((v: number) => (match (V.A(v)) { A(n) => n, B => 0 }) as number);\n"));
+    assert!(out.contains("const f = $tt_ap(value, ((x => { let $tt_v0:"), "{out}");
+    assert!(out.contains("return ($tt_v0); })));"), "{out}");
+    assert!(out.contains("const h = $tt_ap(value, (((v: number) => { let $tt_v1: number;"), "{out}");
+    assert!(out.contains("return ($tt_v1) as number; })));"), "{out}");
+}

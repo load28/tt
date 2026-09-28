@@ -237,6 +237,7 @@ impl ParentCollector {
                         function_return_awaited: found.function_return_awaited,
                         ambient: found.ambient,
                         decorated_classes: found.decorated_classes,
+                        value_is_owner: span == entry.source,
                     },
                 ),
                 // A frame outside the host owner is not this owner's

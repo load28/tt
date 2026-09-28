@@ -1046,3 +1046,27 @@ console.log(d, e, g, h, k(7), l, m);
 "#);
     assert_eq!(out, ["1 4 4 1 14 5 6"]);
 }
+
+#[test]
+fn runtime_a_wrapped_concise_arrow_value_runs_in_its_own_async_body() {
+    require_toolchain!();
+    let out = run(r#"
+variant V { A(n: number), B }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const load = async (n: number): Promise<R<number>> => n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "neg" };
+const g = async (p: Promise<V>) => match (await p) { A(n) => n, B => 0 } as number;
+const h = (v: V) => match (v) { A(n) => n, B => 0 } satisfies number;
+const i = async (p: Promise<V>) => (match (await p) { A(n) => n * 2, B => 0 }) as number;
+const j = (v: V) => (match (v) { A(n) => n, B => -1 });
+const r = async (n: number) => result { const v = try await load(n); return v + 1; } as R<number>;
+console.log(await g(Promise.resolve(V.A(3))), h(V.B), await i(Promise.resolve(V.A(4))), j(V.B));
+console.log(JSON.stringify(await r(1)), JSON.stringify(await r(-1)));
+"#);
+    assert_eq!(
+        out,
+        [
+            "3 0 8 -1",
+            r#"{"kind":"Ok","value":2} {"kind":"Err","error":"neg"}"#
+        ]
+    );
+}

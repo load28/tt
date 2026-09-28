@@ -462,6 +462,7 @@
 | TASK-452 | Claim a `val` parameter modifier only inside a proven parameter list | Complete | 2026-09-28 | 2026-09-28 | [TASK-452](./TASK-452-val-parameter-list-context.md) |
 | TASK-453 | Never read a tt keyword out of the middle of a non-ASCII identifier | Complete | 2026-09-28 | 2026-09-28 | [TASK-453](./TASK-453-non-ascii-identifier-boundaries.md) |
 | TASK-454 | Apply a type assertion after a pipeline step to the whole pipeline | Complete | 2026-09-28 | 2026-09-28 | [TASK-454](./TASK-454-pipeline-step-type-assertion.md) |
+| TASK-455 | Lower a wrapped concise-arrow value to a block body | Complete | 2026-09-28 | 2026-09-28 | [TASK-455](./TASK-455-wrapped-arrow-value-block-body.md) |
 | TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
 | TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
 

@@ -725,6 +725,7 @@ pub(crate) struct OverlayFacts {
     pub(crate) function_return_awaited: bool,
     pub(crate) ambient: bool,
     pub(crate) decorated_classes: Vec<usize>,
+    pub(crate) value_is_owner: bool,
 }
 
 impl EvaluationContext {
@@ -745,6 +746,7 @@ impl EvaluationContext {
             function_return_awaited,
             ambient,
             decorated_classes,
+            value_is_owner,
         } = facts;
         let (mut owner, owner_edge) = evaluation_owner(parents, &decorated_classes);
         // The AST path owns local positions such as parameters and class
@@ -778,7 +780,10 @@ impl EvaluationContext {
         let local_path = &parents[owner_edge..];
         let value_role = value_role(local_path);
         let frequency = frequency_within_owner(parents, owner_edge);
-        let continuation = host_continuation(local_path);
+        let continuation = match host_continuation(local_path) {
+            HostContinuation::ArrowReturn if !value_is_owner => HostContinuation::Compose,
+            continuation => continuation,
+        };
         let uses_function_return = matches!(
             continuation,
             HostContinuation::Return | HostContinuation::ArrowReturn

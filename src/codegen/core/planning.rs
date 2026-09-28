@@ -432,7 +432,6 @@ pub(super) struct ArrowReturnRewrite {
     pub(super) source: SourceSpan,
     pub(super) expr: ExprId,
     pub(super) slot: String,
-    pub(super) parenthesized: bool,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
 }
@@ -887,7 +886,6 @@ impl TargetRewritePlan {
                         source: value.source,
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
-                        parenthesized: rewrite.owner.span != value.source,
                         contextual_type: value.context.contextual_type,
                         contextual_type_awaited: value.context.contextual_type_awaited,
                     })
@@ -1277,7 +1275,7 @@ impl TargetRewritePlan {
                     end: rewrite.body.start,
                 }))
             }))
-            // Concise-arrow rewrites emit host grouping as block/IIFE
+            // Concise-arrow rewrites emit host grouping as block
             // delimiters. Claim only frames outside their Core values;
             // source between and inside values remains exactly preserved.
             .chain(arrow_return_frames)

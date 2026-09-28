@@ -324,6 +324,31 @@ fn an_expression_bodied_arrow_has_an_arrow_return_continuation() {
 }
 
 #[test]
+fn an_arrow_body_that_wraps_its_value_composes_the_value() {
+    for body in [
+        "match (e) { A => 1, B => 2 } as number",
+        "match (e) { A => 1, B => 2 } satisfies number",
+        "(match (e) { A => 1, B => 2 })",
+        "match (e) { A => 1, B => 2 }!",
+    ] {
+        let syntax = syntax(&format!(
+            "variant E {{ A, B }}\nconst f = (e: E) => {body};\n"
+        ));
+        let entry = syntax
+            .overlay
+            .iter()
+            .find(|entry| entry.category == SyntaxCategory::Expression)
+            .expect("match overlay");
+        assert_eq!(
+            entry.context.continuation,
+            HostContinuation::Compose,
+            "{body}: {:?}",
+            entry.parents
+        );
+    }
+}
+
+#[test]
 fn semicolon_free_concise_arrow_ends_before_the_next_try_statement() {
     let source = "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\n\
             declare const flag: boolean; declare function load(): R<number>;\n\
