@@ -1063,7 +1063,10 @@ impl<'a> ProjectionBuilder<'a> {
                     self.body_contains_propagation(*body)
                 }
             }) || region.value.is_some_and(|value| self.expr_contains_propagation(value)),
-            Expr::Opaque(_) | Expr::Template(_) => false,
+            Expr::Template(template) => template.parts.iter().any(|part| {
+                matches!(part, TemplatePart::Interpolation(expr) if self.expr_contains_propagation(*expr))
+            }),
+            Expr::Opaque(_) => false,
         }
     }
 

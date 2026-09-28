@@ -35,3 +35,16 @@ export const c: number = { list: [1, 2] } |> .list[match (flag) { true => 0, fal
 export const d: Box | undefined = (new Box(1) as Box | undefined) |> ?.add(match (flag) { true => 1, false => 2 });\n",
     );
 }
+
+#[test]
+fn a_try_in_a_template_in_a_pipeline_type_checks() {
+    require_tsgo!();
+    assert_type_checks(
+        "type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+type S = { kind: \"Ok\"; value: string } | { kind: \"Err\"; error: string };\n\
+declare function read(): R;\n\
+declare function wrap(value: number): string;\n\
+export function head(): S {\n  const value = `${wrap(try read())}!` |> String;\n  return { kind: \"Ok\", value };\n}\n\
+export function step(): S {\n  const value = \"v\" |> ((tail: string) => (v: string) => v + tail)(`${wrap(try read())}`);\n  return { kind: \"Ok\", value };\n}\n",
+    );
+}

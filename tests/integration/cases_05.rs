@@ -973,3 +973,48 @@ console.log(lengths, text, count, kind, mapped.join(","));
 "#);
     assert_eq!(out, ["1 2 2 a 2"]);
 }
+
+#[test]
+fn a_try_in_a_template_in_a_pipeline_runs_after_the_callee_it_is_an_argument_of() {
+    require_toolchain!();
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+type S = { kind: "Ok"; value: string } | { kind: "Err"; error: string };
+const order: string[] = [];
+const wrap = (value: number) => { order.push("call"); return `<${value}>`; };
+const callee = () => { order.push("callee"); return wrap; };
+const suffix = (tail: string) => { order.push("step"); return (value: string) => { order.push("apply"); return value + tail; }; };
+const okay = (name: string, value: number): R => { order.push(name); return { kind: "Ok", value }; };
+const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
+const report = (value: S) => { console.log(order.join(","), value.kind === "Ok" ? value.value : value.error); order.length = 0; };
+function head(ok: boolean): S {
+  const value = `${callee()(try (ok ? okay("try", 1) : fail("err")))}!` |> String;
+  return { kind: "Ok", value };
+}
+function step(ok: boolean): S {
+  const value = "v" |> suffix(`${callee()(try (ok ? okay("try", 2) : fail("err")))}`);
+  return { kind: "Ok", value };
+}
+function nested(ok: boolean): S {
+  const value = callee()(`${callee()(try (ok ? okay("try", 3) : fail("err")))}`.length) |> String;
+  return { kind: "Ok", value };
+}
+report(head(true));
+report(head(false));
+report(step(true));
+report(step(false));
+report(nested(true));
+report(nested(false));
+"#);
+    assert_eq!(
+        out,
+        [
+            "callee,try,call <1>!",
+            "callee,err err",
+            "callee,try,call,step,apply v<2>",
+            "callee,err err",
+            "callee,callee,try,call,call <3>",
+            "callee,callee,err err",
+        ]
+    );
+}

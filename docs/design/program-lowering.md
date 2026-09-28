@@ -342,6 +342,12 @@ TypeScript owner, bounded by the enclosing value instead of the owner:
   operand with several values, or a value under a call, a template, or a
   logical operator, has exactly one emitter for every source byte.
 
+The projection shows a pipeline operand's TypeScript structure to the
+collector whenever the operand contains a tt value, and a template is such an
+operand when any of its interpolations contains one, a value-form `try`
+included (TASK-506): `` `${f(try g())}` |> String `` schedules the capture of
+`f` before `g()` runs, as every other owner of the same `try` does.
+
 A postfix step (`x |> .m(match ...)`, `x |> ?.m(...)`) applies its tail to
 the piped value, which the pipeline has already evaluated into a slot. The
 projection writes that value as a placeholder in front of

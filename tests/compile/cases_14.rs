@@ -301,3 +301,23 @@ fn a_member_step_captures_its_method_from_the_piped_value_before_the_argument() 
     assert!(head < method && method < region, "{out}");
     assert_eq!(out.matches("= g()").count(), 1, "{out}");
 }
+
+#[test]
+fn a_try_in_a_template_in_a_pipeline_operand_keeps_its_callee_before_it() {
+    for expression in [
+        "`${f(try r())}` |> String",
+        "1 |> f(`${f(try r())}`)",
+        "f(`a${f(try r())}b`) |> String",
+        "`${`${f(try r())}`}` |> String",
+    ] {
+        let source = format!(
+            "{TASK_501_PRELUDE}export function h(): R {{\n  const v = {expression};\n  return {{ kind: \"Ok\", value: v }};\n}}\n"
+        );
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        assert!(diagnostics.is_empty(), "{source}\n{diagnostics:?}");
+        let out = ok(&source);
+        let callee = out.rfind("= (f);").expect("the callee is captured");
+        let region = out.find("= r();").expect("the try follows");
+        assert!(callee < region, "{source}\n{out}");
+    }
+}
