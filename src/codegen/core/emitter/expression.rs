@@ -663,11 +663,22 @@ impl<'a> Emitter<'a> {
             inner.push_break(1);
             inner.push_value_declaration(accumulator);
         }
+        let piped = self
+            .piped_slots
+            .get(&expr)
+            .filter(|slots| slots.len() == apply.steps.len())
+            .unwrap_or_else(|| crate::ice::bug!("structured apply has no piped slots"));
+        let push_target = |inner: &mut Rope<'a>, index: usize| match piped.get(index + 1) {
+            Some(next) => inner.push_value_definition(next),
+            None => inner.push_lit(format!("{accumulator} = ")),
+        };
         inner.push_break(1);
         if self.nested_structured_value_slot(head).is_some() {
+            inner.push_value_declaration(&piped[0]);
+            inner.push_break(1);
             inner.append(Rope::indented(
                 1,
-                self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
+                self.emit_continued_expr(head, &ValueContinuation::assign(&piped[0]))
                     .unwrap_or_else(|| crate::ice::bug!("structured apply head was not emitted")),
             ));
         } else {
@@ -679,7 +690,7 @@ impl<'a> Emitter<'a> {
                 }
                 None => self.emit_expr(head),
             };
-            inner.push_lit(format!("{accumulator} = "));
+            inner.push_value_definition(&piped[0]);
             push_grouped(
                 &mut inner,
                 guard_line_comment(value.trim(), 1, self.source_kind),
@@ -687,18 +698,16 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
-        let mut produced = self.span(apply.node);
-        for step in &apply.steps {
+        for (index, step) in apply.steps.iter().enumerate() {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
             let operand = match (step.mode, self.emit_nested_operand(step.value)) {
                 (ApplyMode::Postfix { .. }, Some((prelude, value))) => {
                     inner.push_break(1);
                     inner.append(Rope::indented(1, prelude.trim_end()));
                     inner.push_break(1);
-                    inner.push_lit(format!("{accumulator} = "));
+                    push_target(&mut inner, index);
                     inner.append(guard_line_comment(value.trim(), 1, self.source_kind));
                     inner.push_lit(";");
-                    produced = self.span(step.node);
                     continue;
                 }
                 (_, operand) => operand,
@@ -728,46 +737,21 @@ impl<'a> Emitter<'a> {
                 guard_line_comment(self.emit_expr(step.value).trim(), 1, self.source_kind)
             };
             inner.push_break(1);
-            let step_span = self.span(step.node);
-            let context = Some((produced.start, produced.end));
-            // The re-piped accumulator is the value this step consumes — a
-            // mismatch on it belongs to this step (see `emit_apply`).
-            let mut input = Rope::new();
-            input.push_lit(accumulator.clone());
+            let input = self.pipe_input(apply, index, &piped[index]);
+            push_target(&mut inner, index);
             match step.mode {
                 ApplyMode::Postfix { .. } => {
-                    inner.push_lit(format!("{accumulator} = "));
-                    inner.anchored_with_context(
-                        AnchorKind::Pipe,
-                        step_span.start,
-                        step_span.end,
-                        end,
-                        context,
-                        input,
-                    );
+                    inner.append(input);
                     inner.append(step_value);
                     inner.push_lit(";");
                 }
                 ApplyMode::Call => {
-                    // The accumulator has already been evaluated into a
-                    // collision-free compiler slot. Reading that slot is
-                    // unobservable, so the callee can occupy its natural
-                    // call position without changing source evaluation.
-                    inner.push_lit(format!("{accumulator} = "));
                     push_grouped(&mut inner, step_value, self.source_kind);
                     inner.push_lit("(");
-                    inner.anchored_with_context(
-                        AnchorKind::Pipe,
-                        step_span.start,
-                        step_span.end,
-                        end,
-                        context,
-                        input,
-                    );
+                    inner.append(input);
                     inner.push_lit(");");
                 }
             }
-            produced = step_span;
         }
         inner.push_break(1);
         if continuation.is_unwrapped_assignment_to(accumulator) {

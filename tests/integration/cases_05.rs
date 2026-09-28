@@ -957,3 +957,19 @@ report(second.kind === "Ok" ? second.value.n : second.error);
         ]
     );
 }
+
+#[test]
+fn a_pipeline_whose_steps_change_the_value_type_compiles_and_runs() {
+    require_toolchain!();
+    let out = run(r#"
+const flag = Math.random() >= 0;
+const pick = (value: { kind: "a" } | { kind: "b" }): string => value.kind;
+const lengths = match (1) { _ => [1] } |> (p => p.length);
+const text: string = match (flag) { true => [1, 2], false => [3] } |> (p => p.length) |> String;
+const count: number = match (flag) { true => "xy", false => "z" } |> .length |> (n => [n, n]) |> .length;
+const kind = match (flag) { true => ({ kind: "a" }), false => ({ kind: "b" }) } |> pick;
+const mapped: string[] = [match (flag) { true => 1, false => 2 }] |> .map(n => n + 1) |> .map(String);
+console.log(lengths, text, count, kind, mapped.join(","));
+"#);
+    assert_eq!(out, ["1 2 2 a 2"]);
+}

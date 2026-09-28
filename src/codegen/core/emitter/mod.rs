@@ -36,6 +36,7 @@ pub(super) struct Emitter<'a> {
     pub(super) arrow_returns_by_expr: HashMap<ExprId, usize>,
     pub(super) slot_exprs: HashMap<ExprId, String>,
     pub(super) value_slots: HashMap<ExprId, String>,
+    pub(super) piped_slots: HashMap<ExprId, Vec<String>>,
     pub(super) scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     pub(super) result_failures: RefCell<HashMap<ResultRegionId, ResultFailure>>,
     pub(super) value_exits: HashMap<ExprId, Vec<HostExit>>,

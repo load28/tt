@@ -343,17 +343,35 @@ TypeScript owner, bounded by the enclosing value instead of the owner:
   logical operator, has exactly one emitter for every source byte.
 
 A postfix step (`x |> .m(match ...)`, `x |> ?.m(...)`) applies its tail to
-the piped value, which the pipeline has already evaluated into its
-accumulator. The projection writes that value as a placeholder in front of
+the piped value, which the pipeline has already evaluated into a slot. The
+projection writes that value as a placeholder in front of
 the step's tail and maps it to the empty source span where the tail begins
 (TASK-504), so the step's evaluation structure is TypeScript's own:
 `P.m(match ...)` captures the method reference `P.m` with its receiver `P`
 before the argument, and `P?.m(...)` is an optional call the pipeline owns as
 a conditional operation. Every input that contains the piped value starts at
 the step, inside the pipeline's extent, and the target prints the piped value
-as the pipeline's accumulator wherever such an input or the step's operand is
+as the slot that holds it wherever such an input or the step's operand is
 delivered. A step never re-projects the head or an earlier step, so each tt
 value in a pipeline has one host.
+
+Each step changes the value's type, so a structured pipeline does not reuse
+one slot across its steps (TASK-505). The Evaluation IR plans one slot per
+value piped into a step (`LoweringPlan::piped_slots`): the head's value, then
+each step's result but the last, which is delivered to the pipeline's own
+value slot. A slot is written once, so its type is the contextual type of
+the step that consumes it or, without one, the type of the one value written
+to it (`docs/design/contextual-type-materialization.md`); the pipeline's
+value slot carries only the pipeline's result type.
+
+```ts
+let $tt_v0: number;
+do {
+  let $tt_v2: number[];
+  // the head's match writes $tt_v2 in each arm
+  $tt_v0 = (p => p.length)($tt_v2);
+} while (false);
+```
 
 ## 8. 전체 tt 표면의 공통 배치
 

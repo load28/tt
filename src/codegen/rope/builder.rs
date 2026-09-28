@@ -119,6 +119,15 @@ impl<'a> Rope<'a> {
         self.push_lit(";");
     }
 
+    pub(crate) fn push_value_definition(&mut self, name: &str) {
+        self.push_lit(format!("const {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(" = ");
+    }
+
     /// Starts a captured value while retaining its contextual annotation site.
     pub(crate) fn push_value_capture(&mut self, name: &str) {
         self.push_lit(format!("const {name}"));

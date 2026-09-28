@@ -447,7 +447,7 @@ fn an_inert_pipeline_input_uses_a_direct_call() {
 fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
     let out = ok("variant E { A(value: number), B }\n\
          const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
-    assert!(out.contains("$tt_v0$value = String($tt_v0$value);"), "{out}");
+    assert!(out.contains("$tt_v0$value = String($tt_v2);"), "{out}");
     assert!(!out.contains("$tt_ap"), "{out}");
 }
 
@@ -483,7 +483,7 @@ fn pipeline_head_reclaims_a_lifted_match() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("$tt_v0$a = double($tt_v0$a);"), "{out}");
+    assert!(out.contains("$tt_v0$a = double($tt_v2);"), "{out}");
     assert!(out.contains("const a = $tt_v0$a;"), "{out}");
 }
 

@@ -133,6 +133,7 @@ pub(crate) struct LoweringPlan {
     /// Earlier materializations substituted when an enclosing source is captured.
     capture_dependencies: HashMap<ValueSlotId, Vec<(SourceSpan, ValueSlotId)>>,
     value_slots: HashMap<ExprId, ValueSlotId>,
+    piped_slots: HashMap<ExprId, Vec<ValueSlotId>>,
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
     nested_operations: Vec<PlannedConditionalOperation>,
@@ -504,6 +505,18 @@ impl LoweringPlan {
         self.value_slots
             .iter()
             .map(|(expr, slot)| (*expr, self.slot_name(*slot)))
+    }
+
+    pub(crate) fn piped_slot_names(&self) -> impl Iterator<Item = (ExprId, Vec<String>)> + '_ {
+        self.piped_slots.iter().map(|(expr, slots)| {
+            (
+                *expr,
+                slots
+                    .iter()
+                    .map(|slot| self.slot_name(*slot).to_owned())
+                    .collect(),
+            )
+        })
     }
 
     pub(crate) fn nested_value_exits(&self) -> impl Iterator<Item = (ExprId, &[HostExit])> {

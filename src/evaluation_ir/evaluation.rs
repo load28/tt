@@ -432,6 +432,24 @@ impl EvaluationFile {
             slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             value_slots.insert(expr, slot);
         }
+        let mut pipelines: Vec<_> = value_slots
+            .iter()
+            .filter_map(|(expr, slot)| match &core.exprs[expr.index()] {
+                Expr::Apply(apply) if apply.head.is_some() && core.has_statement_form(*expr) => {
+                    Some((*slot, *expr, apply.steps.len()))
+                }
+                _ => None,
+            })
+            .collect();
+        pipelines.sort_unstable_by_key(|(slot, ..)| slot.0);
+        let mut piped_slots = HashMap::new();
+        for (_, expr, steps) in pipelines {
+            let slots = (0..steps)
+                .map(|_| allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names))
+                .collect::<Result<Vec<_>, _>>()?;
+            slot_anchors.resize(slot_names.len(), None);
+            piped_slots.insert(expr, slots);
+        }
         let nested_sources: HashMap<_, _> = self
             .regions
             .iter()
@@ -1038,6 +1056,7 @@ impl EvaluationFile {
             slot_names,
             capture_dependencies,
             value_slots,
+            piped_slots,
             nested_schedules,
             nested_operations,
             nested_values: self

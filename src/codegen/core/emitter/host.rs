@@ -1070,16 +1070,16 @@ impl<'a> Emitter<'a> {
                     return None;
                 };
                 apply.head?;
-                let accumulator = self.value_slots.get(&ExprId::new(index))?;
+                let piped = self.piped_slots.get(&ExprId::new(index))?;
                 let step = apply.steps.iter().position(|step| {
                     matches!(step.mode, ApplyMode::Postfix { .. })
                         && self.span(step.node).start == position
                 })?;
-                Some(self.pipe_input(apply, step, accumulator))
+                Some(self.pipe_input(apply, step, piped.get(step)?))
             })
     }
 
-    pub(super) fn pipe_input(&self, apply: &Apply, step: usize, accumulator: &str) -> Rope<'a> {
+    pub(super) fn pipe_input(&self, apply: &Apply, step: usize, piped: &str) -> Rope<'a> {
         let end = apply.steps.last().map_or_else(
             || self.span(apply.node).end,
             |step| self.span(step.node).end,
@@ -1090,7 +1090,7 @@ impl<'a> Emitter<'a> {
         );
         let step_span = self.span(apply.steps[step].node);
         let mut input = Rope::new();
-        input.push_lit(accumulator.to_owned());
+        input.push_lit(piped.to_owned());
         let mut out = Rope::new();
         out.anchored_with_context(
             AnchorKind::Pipe,

@@ -30,6 +30,11 @@ before the remaining union is serialized at the declaration. For example,
 inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
 `unknown` inputs do not provide a definite annotation in that round.
 
+A slot therefore holds values of one type. A structured pipeline writes the
+value piped into each step to a slot of its own and only its result to the
+pipeline's value slot (TASK-505), so no annotation has to cover the values of
+several steps.
+
 ## Project and output coordinates
 
 Project snapshots include lowered tt files, TypeScript sources and unsaved host
