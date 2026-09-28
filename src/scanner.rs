@@ -108,6 +108,33 @@ fn space_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
     (c.is_whitespace() || c == '\u{FEFF}').then_some(len)
 }
 
+/// The index just past the line break at `i` — one line terminator, or a
+/// CR LF pair as one break — or `None` when none starts there.
+pub(crate) fn line_break_end(src: &[u8], i: usize, end: usize) -> Option<usize> {
+    if src.get(i..(i + 2).min(end)) == Some(b"\r\n") {
+        return Some(i + 2);
+    }
+    line_terminator_len(src, i, end).map(|len| i + len)
+}
+
+/// Skips white space from `i`; line terminators too when `lines` is set.
+/// Comments are not skipped.
+pub(crate) fn skip_space(src: &[u8], mut i: usize, end: usize, lines: bool) -> usize {
+    while let Some(len) = space_len(src, i, end) {
+        if !lines && line_terminator_len(src, i, end).is_some() {
+            break;
+        }
+        i += len;
+    }
+    i
+}
+
+/// The index just past the `/* … */` comment starting at `i`, or `end`
+/// when it is unterminated.
+pub(crate) fn block_comment_end(src: &[u8], i: usize, end: usize) -> usize {
+    find_subslice(src, b"*/", i + 2, end).map_or(end, |close| close + 2)
+}
+
 /// Skips trivia — white space, line terminators, and comments — from `i`.
 /// Returns the index of the next significant byte and whether a line
 /// terminator was crossed, inside a block comment included (ECMA-262
@@ -125,10 +152,7 @@ pub(crate) fn skip_trivia(src: &[u8], mut i: usize, end: usize) -> (usize, bool)
             continue;
         }
         if at(src, i, end) == Some(b'/') && at(src, i + 1, end) == Some(b'*') {
-            let close = match find_subslice(src, b"*/", i + 2, end) {
-                Some(e) => e + 2,
-                None => end,
-            };
+            let close = block_comment_end(src, i, end);
             line_break |= contains_line_terminator(src, i, close);
             i = close;
             continue;

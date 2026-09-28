@@ -14,28 +14,23 @@ use super::*;
 /// follows the directive on its own line, the import is written right after
 /// the directive statement on a line of its own.
 ///
-/// ASCII bytes decide, and multi-byte UTF-8 is opaque.
+/// Line terminators and white space are the scanner's (`crate::scanner`).
 pub(super) fn module_import_position(source: &str, directive_end: Option<usize>) -> (usize, bool) {
     let bytes = source.as_bytes();
     let Some(end) = directive_end else {
         return (program_start(source), false);
     };
+    let len = bytes.len();
     let mut at = end;
     loop {
+        at = crate::scanner::skip_space(bytes, at, len, false);
+        if let Some(next_line) = crate::scanner::line_break_end(bytes, at, len) {
+            return (next_line, false);
+        }
         match (bytes.get(at), bytes.get(at + 1)) {
             (None, _) => return (at, false),
-            (Some(b'\n'), _) => return (at + 1, false),
-            (Some(b' ' | b'\t' | b'\r'), _) => at += 1,
-            (Some(b'/'), Some(b'/')) => {
-                at = bytes[at..]
-                    .iter()
-                    .position(|&b| b == b'\n')
-                    .map_or(bytes.len(), |nl| at + nl);
-            }
-            (Some(b'/'), Some(b'*')) => match bytes[at + 2..].windows(2).position(|w| w == b"*/") {
-                Some(close) => at += 2 + close + 2,
-                None => return (bytes.len(), false),
-            },
+            (Some(b'/'), Some(b'/')) => at = crate::scanner::line_end(bytes, at, len),
+            (Some(b'/'), Some(b'*')) => at = crate::scanner::block_comment_end(bytes, at, len),
             _ => return (end, true),
         }
     }
@@ -47,10 +42,10 @@ fn program_start(source: &str) -> usize {
     } else {
         0
     };
-    if source.as_bytes()[at..].starts_with(b"#!") {
-        source[at..]
-            .find('\n')
-            .map_or(source.len(), |nl| at + nl + 1)
+    let bytes = source.as_bytes();
+    if bytes[at..].starts_with(b"#!") {
+        let line = crate::scanner::line_end(bytes, at, bytes.len());
+        crate::scanner::line_break_end(bytes, line, bytes.len()).unwrap_or(bytes.len())
     } else {
         at
     }

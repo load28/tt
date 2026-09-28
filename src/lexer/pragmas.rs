@@ -1,3 +1,10 @@
+//! File pragmas among a file's leading comments: triple-slash directives,
+//! `@ts-check`/`@ts-nocheck`, and JSX pragmas. Trivia — white space, line
+//! terminators, and comment ends — is the scanner's (`crate::scanner`), the
+//! same the lexer and its token facts read.
+
+use crate::scanner::{block_comment_end, line_break_end, line_end, skip_space};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LeadingComment {
     pub(crate) start: usize,
@@ -16,22 +23,14 @@ pub(crate) fn leading_comments(src: &str, mut at: usize) -> Vec<LeadingComment> 
     let bytes = src.as_bytes();
     let mut comments = Vec::new();
     loop {
-        while bytes.get(at).is_some_and(u8::is_ascii_whitespace) {
-            at += 1;
-        }
+        at = skip_space(bytes, at, bytes.len(), true);
         let (end, pragma) = match (bytes.get(at), bytes.get(at + 1)) {
             (Some(b'/'), Some(b'/')) => {
-                let end = bytes[at..]
-                    .iter()
-                    .position(|&b| b == b'\n' || b == b'\r')
-                    .map_or(bytes.len(), |line_end| at + line_end);
+                let end = line_end(bytes, at, bytes.len());
                 (end, line_pragma(&bytes[at..end]))
             }
             (Some(b'/'), Some(b'*')) => {
-                let end = bytes[at + 2..]
-                    .windows(2)
-                    .position(|w| w == b"*/")
-                    .map_or(bytes.len(), |close| at + 2 + close + 2);
+                let end = block_comment_end(bytes, at, bytes.len());
                 (end, block_pragma(&bytes[at..end]))
             }
             _ => return comments,
@@ -52,14 +51,8 @@ pub(crate) fn after_file_pragmas(src: &str, at: usize) -> usize {
         .rev()
         .find(|comment| comment.pragma.is_some())
         .map_or(at, |pragma| {
-            let mut end = pragma.end;
-            while matches!(bytes.get(end), Some(b' ' | b'\t' | b'\r')) {
-                end += 1;
-            }
-            match bytes.get(end) {
-                Some(b'\n') => end + 1,
-                _ => pragma.end,
-            }
+            let end = skip_space(bytes, pragma.end, bytes.len(), false);
+            line_break_end(bytes, end, bytes.len()).unwrap_or(pragma.end)
         })
 }
 
@@ -157,6 +150,8 @@ mod tests {
         let src = "/** Docs. */\nlet x;";
         assert_eq!(after_file_pragmas(src, 0), 0);
         let src = "\r\n// @ts-nocheck\r\nlet x;";
+        assert_eq!(&src[after_file_pragmas(src, 0)..], "let x;");
+        let src = "// @ts-nocheck\u{2028}/// <reference path=\"a\" />\u{2029}let x;";
         assert_eq!(&src[after_file_pragmas(src, 0)..], "let x;");
     }
 }

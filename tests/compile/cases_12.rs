@@ -95,3 +95,20 @@ fn a_block_after_a_call_opens_no_function() {
                   if let Some(v) = f() { try g(); }\n";
     assert_eq!(codes(source), [DiagnosticCode::TryPlacement]);
 }
+
+#[test]
+fn generated_text_follows_a_line_ended_by_any_line_terminator() {
+    let tail = "declare const o: { p: number };\nexport const a = o.p |> String;\n";
+    for terminator in ["\r\n", "\u{2028}", "\u{2029}"] {
+        for head in [
+            format!("\"use client\" // client{terminator}"),
+            format!("#!/usr/bin/env node{terminator}"),
+        ] {
+            let out = ok(&format!("{head}{tail}"));
+            assert!(
+                out.contains(&format!("{head}import {{ $tt_ap }} from ")),
+                "{terminator:?}\n{out}"
+            );
+        }
+    }
+}
