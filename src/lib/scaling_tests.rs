@@ -57,6 +57,53 @@ fn tt_matches_never_need_more_host_parses_as_they_multiply() {
     assert_eq!(small.get("host parses"), large.get("host parses"));
 }
 
+fn variant_module(count: usize) -> String {
+    let mut out = String::from("import { helper } from \"./helper.js\";\n\n");
+    for n in 0..count {
+        out.push_str(&format!(
+            "export variant Shape{n} {{\n  Circle(radius: number),\n  Rect(width: number, height: number),\n  Empty,\n}}\n\n\
+             export function area{n}(s: Shape{n}): number {{\n  return match (s) {{\n    Circle(radius) => Math.PI * radius ** 2,\n    Rect(width, height) => width * height,\n    Empty => 0,\n  }};\n}}\n\n\
+             export const label{n} = (s: Shape{n}): string => {{\n  if let Circle(radius) = s {{\n    return radius.toFixed(1);\n  }}\n  return helper(String(s.kind));\n}};\n\n"
+        ));
+    }
+    out
+}
+
+#[test]
+fn compiling_a_file_lexes_its_source_projection_and_output_once_each() {
+    for count in [1, 4, 8] {
+        let source = variant_module(count);
+        let work = measure(|| {
+            crate::compile_mapped(
+                &source,
+                &crate::Options {
+                    defer_to_checker: true,
+                    ..crate::Options::default()
+                },
+            )
+            .expect("the module compiles")
+        });
+        assert_eq!(work["source parses"], 1, "{count} variants");
+        assert_eq!(work["whole-text lexes"], 3, "{count} variants");
+    }
+}
+
+#[test]
+fn projecting_a_file_for_a_snapshot_parses_it_once() {
+    for count in [1, 4, 8] {
+        let source = variant_module(count);
+        let work = measure(|| {
+            crate::engine::ProjectedDocument::project_for_snapshot(
+                Path::new("/scaling/module.tt"),
+                source.clone(),
+            )
+            .expect("the module projects")
+        });
+        assert_eq!(work["source parses"], 1, "{count} variants");
+        assert_eq!(work["whole-text lexes"], 3, "{count} variants");
+    }
+}
+
 #[test]
 fn many_utf16_offsets_answer_what_one_offset_answers() {
     for source in [

@@ -434,7 +434,11 @@ mod tests {
     fn lower(source: &str) -> CoreFile {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-        lower_semantic(&semantic, source)
+        lower_semantic(
+            &semantic,
+            source,
+            &crate::lexer::lex(source, 0, source.len()),
+        )
     }
 
     #[test]

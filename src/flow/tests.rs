@@ -498,3 +498,48 @@ fn outward_jump_labels_name_every_jump_target_outside_the_body() {
         None
     );
 }
+
+#[test]
+fn the_function_target_index_answers_every_position_as_the_scan_does() {
+    let sources = [
+        "function* outer() { const step = (_: unknown) => (try load()); }",
+        "function* outer() {\n  const step = () => flag ? 1 : 2\n  try load();\n}",
+        "function* outer() { const r = match (s) { A => match (yield 1) { B => { const k = match (s) { C => 1 }; } } }; }",
+        "class C { constructor() { const f = x => x + 1, g = function* () { yield (y) => { z; }; }; } m() { return a => b => { c; }; } }\n}}\n{",
+        "const a = (b) => (c) => d, e = [f => g, h => { i }]; function j() { k(l => m); }",
+    ];
+    for source in sources {
+        let tokens = crate::lexer::lex(source, 0, source.len());
+        let positions = |wanted: fn(&TokenKind) -> bool| -> Vec<usize> {
+            tokens
+                .iter()
+                .enumerate()
+                .filter(|(_, token)| wanted(&token.kind))
+                .map(|(index, _)| index)
+                .collect()
+        };
+        let arrows = positions(|kind| matches!(kind, TokenKind::Arrow));
+        let braces = positions(|kind| matches!(kind, TokenKind::Punct(b'{')));
+        let owned_sets: [std::collections::HashSet<usize>; 3] = [
+            std::collections::HashSet::new(),
+            arrows.iter().step_by(2).copied().collect(),
+            braces
+                .iter()
+                .skip(1)
+                .step_by(2)
+                .chain(arrows.iter().skip(1).step_by(3))
+                .copied()
+                .collect(),
+        ];
+        for owned in &owned_sets {
+            let index = FunctionTargets::new(&tokens, owned);
+            for at in 0..tokens.len() + 3 {
+                assert_eq!(
+                    index.at(at),
+                    user_function_target_at(&tokens, at, owned),
+                    "{source:?} at token {at} with {owned:?}"
+                );
+            }
+        }
+    }
+}

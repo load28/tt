@@ -421,9 +421,11 @@ impl Machine<'_> {
     fn statement_word(&mut self, tok: &Tok<'_>, begin: usize, modified: bool) -> Out {
         let peek = self.peek(tok.span.end);
         let next = self.byte(peek.at);
-        let next_word = self.word_at(peek);
-        let same_line_word = !peek.line_break && next_word.is_some();
-        let same_line_name = same_line_word && !next_word.is_some_and(reserved);
+        let next_word = || self.word_at(peek);
+        let same_line_name = || {
+            let next_word = next_word();
+            !peek.line_break && next_word.is_some() && !next_word.is_some_and(reserved)
+        };
         let var = |m: &mut Self| {
             m.stmt_frame(Stmt::Var(Var {
                 start: begin,
@@ -442,17 +444,17 @@ impl Machine<'_> {
             Out::Consumed
         };
         match tok.text {
-            "const" if next_word == Some("enum") => modifier(self),
+            "const" if next_word() == Some("enum") => modifier(self),
             "var" | "const" => var(self),
-            "let" if next_word.is_some() || matches!(next, Some(b'[' | b'{')) => var(self),
-            "using" if same_line_name => var(self),
-            "await" if !peek.line_break && next_word == Some("using") => modifier(self),
-            "async" if !peek.line_break && next_word == Some("function") => modifier(self),
-            "abstract" if !peek.line_break && next_word == Some("class") => modifier(self),
-            "declare" if !peek.line_break && next_word.is_some_and(declaration_follows) => {
+            "let" if next_word().is_some() || matches!(next, Some(b'[' | b'{')) => var(self),
+            "using" if same_line_name() => var(self),
+            "await" if !peek.line_break && next_word() == Some("using") => modifier(self),
+            "async" if !peek.line_break && next_word() == Some("function") => modifier(self),
+            "abstract" if !peek.line_break && next_word() == Some("class") => modifier(self),
+            "declare" if !peek.line_break && next_word().is_some_and(declaration_follows) => {
                 modifier(self)
             }
-            "val" if !peek.line_break && matches!(next_word, Some("const" | "let" | "var")) => {
+            "val" if !peek.line_break && matches!(next_word(), Some("const" | "let" | "var")) => {
                 modifier(self)
             }
             "function" => {
@@ -463,12 +465,12 @@ impl Machine<'_> {
                 self.push_frame(Frame::Decl(Decl::class(Some(begin))));
                 Out::Consumed
             }
-            "interface" if same_line_name => decl(self, DeclKind::Interface),
-            "type" if same_line_name => decl(self, DeclKind::Alias),
+            "interface" if same_line_name() => decl(self, DeclKind::Interface),
+            "type" if same_line_name() => decl(self, DeclKind::Alias),
             "enum" => decl(self, DeclKind::Enum),
             "namespace" | "module"
                 if !peek.line_break
-                    && (next_word.is_some_and(|word| !keyword(word))
+                    && (next_word().is_some_and(|word| !keyword(word))
                         || matches!(next, Some(b'"' | b'\''))) =>
             {
                 decl(self, DeclKind::Namespace)
@@ -482,7 +484,7 @@ impl Machine<'_> {
                 }));
                 Out::Consumed
             }
-            "variant" if same_line_name => decl(self, DeclKind::Variant),
+            "variant" if same_line_name() => decl(self, DeclKind::Variant),
             "export" => {
                 self.stmt_frame(Stmt::Export {
                     start: begin,

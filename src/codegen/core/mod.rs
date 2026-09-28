@@ -64,8 +64,9 @@ pub(crate) fn lowering_plan(
     core: &CoreFile,
     source: &str,
     source_kind: SourceKind,
+    tokens: &[crate::lexer::Token],
 ) -> Result<LoweringPlan, LoweringFailure> {
-    lowering_plan_with(semantic, core, source, source_kind, false)
+    lowering_plan_with(semantic, core, source, source_kind, tokens, false)
 }
 
 pub(crate) fn lowering_plan_with(
@@ -73,6 +74,7 @@ pub(crate) fn lowering_plan_with(
     core: &CoreFile,
     source: &str,
     source_kind: SourceKind,
+    tokens: &[crate::lexer::Token],
     tolerant: bool,
 ) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() {
@@ -94,6 +96,7 @@ pub(crate) fn lowering_plan_with(
         core,
         source,
         source_kind,
+        tokens,
         tolerant,
     ) {
         Ok(syntax) => syntax,

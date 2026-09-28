@@ -47,9 +47,11 @@ use crate::lexer::{Token, TokenKind};
 
 use scanner::*;
 
+#[cfg(test)]
+use syntax::user_function_target_at;
 pub(crate) use syntax::{
-    FunctionTarget, function_depth_at, function_target_at, in_function_body, in_static_block,
-    user_function_depth_at, user_function_target_at,
+    FunctionTarget, FunctionTargets, function_depth_at, function_target_at, in_function_body,
+    in_static_block, user_function_depth_at,
 };
 
 /// One body's control-flow graph.

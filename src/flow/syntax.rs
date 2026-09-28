@@ -124,6 +124,67 @@ pub(crate) enum FunctionTarget {
     Generator,
 }
 
+pub(crate) struct FunctionTargets {
+    braced: Vec<Option<(usize, FunctionTarget)>>,
+    arrows: Vec<(usize, usize)>,
+}
+
+impl FunctionTargets {
+    pub(crate) fn new(tokens: &[Token], tt_owned: &std::collections::HashSet<usize>) -> Self {
+        let mut braced = Vec::with_capacity(tokens.len() + 1);
+        let mut stack: Vec<Option<(usize, FunctionTarget)>> = Vec::new();
+        braced.push(None);
+        for (index, token) in tokens.iter().enumerate() {
+            match token.kind {
+                TokenKind::Punct(b'{') => {
+                    let own = (!tt_owned.contains(&index)
+                        && !index
+                            .checked_sub(1)
+                            .is_some_and(|previous| tt_owned.contains(&previous)))
+                    .then(|| function_target_brace(tokens, index))
+                    .flatten()
+                    .map(|target| (index, target));
+                    let innermost = own.or_else(|| stack.last().copied().flatten());
+                    stack.push(innermost);
+                }
+                TokenKind::Punct(b'}') => {
+                    stack.pop();
+                }
+                _ => {}
+            }
+            braced.push(stack.last().copied().flatten());
+        }
+        let arrows = tokens
+            .iter()
+            .enumerate()
+            .filter(|(arrow, token)| {
+                matches!(token.kind, TokenKind::Arrow) && !tt_owned.contains(arrow)
+            })
+            .map(|(arrow, _)| (arrow, concise_arrow_end(tokens, arrow + 1)))
+            .collect();
+        FunctionTargets { braced, arrows }
+    }
+
+    pub(crate) fn at(&self, at: usize) -> Option<FunctionTarget> {
+        let braced = self.braced[at.min(self.braced.len() - 1)];
+        let before = self.arrows.partition_point(|(arrow, _)| *arrow < at);
+        let concise_arrow = self.arrows[..before]
+            .iter()
+            .rev()
+            .find(|(_, end)| *end > at)
+            .map(|(arrow, _)| (*arrow, FunctionTarget::Ordinary));
+        match (braced, concise_arrow) {
+            (Some(braced), Some(arrow)) => Some(if braced.0 > arrow.0 {
+                braced.1
+            } else {
+                arrow.1
+            }),
+            (Some((_, target)), None) | (None, Some((_, target))) => Some(target),
+            (None, None) => None,
+        }
+    }
+}
+
 /// Returns the innermost user function enclosing `at`.
 pub(crate) fn function_target_at(tokens: &[Token], at: usize) -> Option<FunctionTarget> {
     user_function_target_at(tokens, at, &std::collections::HashSet::new())

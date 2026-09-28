@@ -85,6 +85,7 @@ pub(crate) fn check_all(
     verify: bool,
     defer_to_checker: bool,
     semantic: &crate::analysis::SemanticFile,
+    tokens: &[crate::lexer::Token],
 ) -> Vec<TtError> {
     let result_completions = semantic
         .hir
@@ -102,8 +103,8 @@ pub(crate) fn check_all(
         })
         .collect();
     let mut checker = Checker {
-        source: source.to_owned(),
-        tokens: crate::lexer::lex(source, 0, source.len()),
+        source,
+        tokens,
         verify,
         errors: Vec::new(),
         coverage_suppressed: Vec::new(),
@@ -198,9 +199,9 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
     errors
 }
 
-struct Checker {
-    source: String,
-    tokens: Vec<crate::lexer::Token>,
+struct Checker<'a> {
+    source: &'a str,
+    tokens: &'a [crate::lexer::Token],
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,

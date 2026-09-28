@@ -125,9 +125,12 @@ pub fn payload_probes(source: &str) -> Vec<PayloadProbe> {
 
 /// [`payload_probes`] under an explicit TypeScript surface kind.
 pub fn payload_probes_with_kind(source: &str, source_kind: crate::SourceKind) -> Vec<PayloadProbe> {
-    let program = crate::parser::parse_with_kind(source, source_kind);
+    payload_probes_of(&crate::parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn payload_probes_of(program: &Program) -> Vec<PayloadProbe> {
     let mut out = Vec::new();
-    payload_walk(&program, &mut out);
+    payload_walk(program, &mut out);
     out.sort_by_key(|p| p.offset);
     out
 }
@@ -260,9 +263,12 @@ pub fn tag_matches(source: &str) -> Vec<TagMatch> {
 
 /// [`tag_matches`] under an explicit TypeScript surface kind.
 pub fn tag_matches_with_kind(source: &str, source_kind: crate::SourceKind) -> Vec<TagMatch> {
-    let program = crate::parser::parse_with_kind(source, source_kind);
+    tag_matches_of(source, &crate::parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn tag_matches_of(source: &str, program: &Program) -> Vec<TagMatch> {
     let mut out = Probes::default();
-    walk(&program, source, &mut out);
+    walk(program, source, &mut out);
     out.tags
 }
 
@@ -292,9 +298,12 @@ pub fn literal_matches_with_kind(
     source: &str,
     source_kind: crate::SourceKind,
 ) -> Vec<LiteralMatch> {
-    let program = crate::parser::parse_with_kind(source, source_kind);
+    literal_matches_of(source, &crate::parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn literal_matches_of(source: &str, program: &Program) -> Vec<LiteralMatch> {
     let mut out = Probes::default();
-    walk(&program, source, &mut out);
+    walk(program, source, &mut out);
     out.literals
 }
 

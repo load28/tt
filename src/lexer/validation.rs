@@ -4,11 +4,39 @@ use super::*;
 
 /// Shares lexical rejection across output, projection, and expression parsing.
 pub(crate) fn host_syntax_error(src: &str, kind: SourceKind) -> Option<(Span, &'static str)> {
-    if ["=======", "<<<<<<<", ">>>>>>>", "|||||||"]
+    let markers = has_conflict_marker_text(src);
+    if markers
+        || src
+            .bytes()
+            .any(|byte| matches!(byte, b'(' | b')' | b'[' | b']' | b'{' | b'}'))
+    {
+        lexical_error(src, kind, markers, &lex_with_kind(src, 0, src.len(), kind))
+    } else {
+        lexical_error(src, kind, markers, &[])
+    }
+}
+
+fn has_conflict_marker_text(src: &str) -> bool {
+    ["=======", "<<<<<<<", ">>>>>>>", "|||||||"]
         .iter()
         .any(|marker| src.contains(marker))
-        && let Some(span) = conflict_marker(src, &lex_with_kind(src, 0, src.len(), kind))
-    {
+}
+
+pub(crate) fn host_syntax_error_in(
+    src: &str,
+    kind: SourceKind,
+    tokens: &[Token],
+) -> Option<(Span, &'static str)> {
+    lexical_error(src, kind, has_conflict_marker_text(src), tokens)
+}
+
+fn lexical_error(
+    src: &str,
+    kind: SourceKind,
+    markers: bool,
+    tokens: &[Token],
+) -> Option<(Span, &'static str)> {
+    if markers && let Some(span) = conflict_marker(src, tokens) {
         return Some((span, "merge conflict marker encountered"));
     }
     if kind.is_tsx()
@@ -19,7 +47,7 @@ pub(crate) fn host_syntax_error(src: &str, kind: SourceKind) -> Option<(Span, &'
             "a JSX namespace name cannot be followed by member access",
         ));
     }
-    if let Some(span) = unbalanced_delimiter(src, kind) {
+    if let Some(span) = unbalanced_delimiter(tokens) {
         return Some((span, "unbalanced TypeScript delimiter"));
     }
     None
@@ -27,7 +55,7 @@ pub(crate) fn host_syntax_error(src: &str, kind: SourceKind) -> Option<(Span, &'
 
 /// Finds an unmatched `()`, `[]`, or `{}` delimiter without interpreting
 /// delimiters inside strings, comments, templates, regexes, or JSX text.
-fn unbalanced_delimiter(src: &str, kind: SourceKind) -> Option<Span> {
+fn unbalanced_delimiter(tokens: &[Token]) -> Option<Span> {
     fn walk(tokens: &[Token], stack: &mut Vec<(u8, Span)>) -> Option<Span> {
         for token in tokens {
             match &token.kind {
@@ -59,7 +87,7 @@ fn unbalanced_delimiter(src: &str, kind: SourceKind) -> Option<Span> {
     }
 
     let mut stack = Vec::new();
-    if let Some(span) = walk(&lex_with_kind(src, 0, src.len(), kind), &mut stack) {
+    if let Some(span) = walk(tokens, &mut stack) {
         return Some(span);
     }
     stack.last().map(|(_, span)| *span)

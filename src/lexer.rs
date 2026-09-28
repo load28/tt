@@ -39,7 +39,7 @@ pub(crate) use queries::{
     AutomaticSemicolon, automatic_semicolons, contains_await, continues_statement,
     has_top_level_comma, is_primary_expression, statement_continues_after, type_parameter_names,
 };
-pub(crate) use validation::host_syntax_error;
+pub(crate) use validation::{host_syntax_error, host_syntax_error_in};
 
 /// One significant token.
 #[derive(Debug)]
@@ -123,6 +123,28 @@ pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
     lex_with_kind(src_str, start, end, SourceKind::TypeScript)
 }
 
+pub(crate) enum TypeScriptTokens<'a> {
+    Shared(&'a [Token]),
+    Lexed(Vec<Token>),
+}
+
+impl<'a> TypeScriptTokens<'a> {
+    pub(crate) fn of(src: &str, kind: SourceKind, tokens: &'a [Token]) -> Self {
+        if kind == SourceKind::TypeScript {
+            TypeScriptTokens::Shared(tokens)
+        } else {
+            TypeScriptTokens::Lexed(lex(src, 0, src.len()))
+        }
+    }
+
+    pub(crate) fn tokens(&self) -> &[Token] {
+        match self {
+            TypeScriptTokens::Shared(tokens) => tokens,
+            TypeScriptTokens::Lexed(tokens) => tokens,
+        }
+    }
+}
+
 /// Lexes a source range under its TypeScript surface kind.
 pub(crate) fn lex_with_kind(
     src_str: &str,
@@ -130,6 +152,9 @@ pub(crate) fn lex_with_kind(
     end: usize,
     source_kind: SourceKind,
 ) -> Vec<Token> {
+    if start == 0 && end == src_str.len() {
+        crate::work::tick("whole-text lexes");
+    }
     lex_region(
         src_str,
         start,
@@ -262,9 +287,10 @@ fn lex_region(
     let mut machine = facts::Machine::new(src_str, end, mode, trace.is_some());
     let mut brace_depth = 0usize;
     // Significant tokens run about one per six source bytes across real
-    // TypeScript, so sizing up front spares the repeated doubling that
-    // dominated lexing on large files.
-    let mut tokens: Vec<Token> = Vec::with_capacity((end - start) / 6 + 8);
+    // TypeScript and one per four in tt source and the TypeScript the
+    // compiler generates, so sizing up front for one per three spares the
+    // repeated doubling that dominated lexing on large files.
+    let mut tokens: Vec<Token> = Vec::with_capacity((end - start) / 3 + 8);
     let mut i = start;
     if start == 0 && !braced && src.starts_with(b"#!") {
         i = line_end(src, 0, end);

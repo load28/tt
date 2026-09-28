@@ -6,15 +6,19 @@ use crate::resolve::{Res, Resolution};
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile {
+pub(crate) fn lower_semantic(
+    semantic: &SemanticFile,
+    source: &str,
+    tokens: &[crate::lexer::Token],
+) -> CoreFile {
     let temp_ordinals = temp_ordinals(semantic);
-    let tokens = crate::lexer::lex(source, 0, source.len());
-    let tt_owned = tt_owned_tokens(semantic, &tokens);
+    let tt_owned = tt_owned_tokens(semantic, tokens);
     let mut cx = Lowering {
         semantic,
         source,
         tokens,
         tt_owned,
+        function_targets: std::cell::OnceCell::new(),
         temp_ordinals,
     };
     let bodies = semantic
@@ -53,8 +57,9 @@ pub(crate) fn lower_semantic(semantic: &SemanticFile, source: &str) -> CoreFile 
 struct Lowering<'a> {
     semantic: &'a SemanticFile,
     source: &'a str,
-    tokens: Vec<crate::lexer::Token>,
+    tokens: &'a [crate::lexer::Token],
     tt_owned: HashSet<usize>,
+    function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
     temp_ordinals: HashMap<NodeId, u32>,
 }
 
@@ -599,7 +604,9 @@ impl Lowering<'_> {
         let at = self
             .tokens
             .partition_point(|token| token.span.start < span.start);
-        crate::flow::user_function_target_at(&self.tokens, at, &self.tt_owned)
+        self.function_targets
+            .get_or_init(|| crate::flow::FunctionTargets::new(self.tokens, &self.tt_owned))
+            .at(at)
             == Some(crate::flow::FunctionTarget::Generator)
     }
 }

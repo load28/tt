@@ -129,7 +129,8 @@ impl ProjectedDocument {
             ..Options::default()
         };
         let source_kind = options.source_kind;
-        let report = crate::compile_projection_report(&source, &options);
+        let (program, tokens) = crate::parser::lex_and_parse_with_kind(&source, source_kind);
+        let report = crate::compile_projection_report_parsed(&source, &options, &program, &tokens);
         let Some(emit) = report.emit else {
             return Err(BlockedFile::new(
                 source_path.to_path_buf(),
@@ -137,15 +138,15 @@ impl ProjectedDocument {
                 report.diagnostics,
             ));
         };
-        let scan = crate::scan_module_with_kind(&source, source_kind);
+        let scan = crate::scan_module_of(&source, &program);
         Ok(ProjectedDocument {
             module_path: module_path_of(source_path),
             imports_std: scan.imports_std,
             uses_pipeline: scan.uses_pipeline,
-            literal_probes: crate::literal_matches_with_kind(&source, source_kind),
-            tag_probes: crate::tag_matches_with_kind(&source, source_kind),
-            payload_probes: crate::payload_probes_with_kind(&source, source_kind),
-            val: crate::val_probes_with_emit(&source, source_kind, &emit),
+            literal_probes: crate::probe::literal_matches_of(&source, &program),
+            tag_probes: crate::probe::tag_matches_of(&source, &program),
+            payload_probes: crate::probe::payload_probes_of(&program),
+            val: crate::val_probes_with_emit(&source, source_kind, &program, &tokens, &emit),
             source_path: source_path.to_path_buf(),
             source,
             emit,

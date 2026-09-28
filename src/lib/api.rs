@@ -211,9 +211,12 @@ pub fn scan_module(source: &str) -> ModuleScan {
 
 /// [`scan_module`] under an explicit TypeScript surface kind.
 pub fn scan_module_with_kind(source: &str, source_kind: SourceKind) -> ModuleScan {
-    let program = parser::parse_with_kind(source, source_kind);
+    scan_module_of(source, &parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn scan_module_of(source: &str, program: &ast::Program) -> ModuleScan {
     let mut scan = ModuleScan {
-        uses_pipeline: program_uses_pipeline(&program),
+        uses_pipeline: program_uses_pipeline(program),
         ..ModuleScan::default()
     };
     for segment in &program.segments {

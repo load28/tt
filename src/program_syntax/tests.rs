@@ -176,14 +176,22 @@ fn syntax(source: &str) -> ProgramSyntax {
 fn syntax_kind(source: &str, source_kind: crate::SourceKind) -> ProgramSyntax {
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
     ProgramSyntax::build(&semantic, &core, source, source_kind).expect("projection should parse")
 }
 
 fn build_error(source: &str) -> ProgramSyntaxError {
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
     ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
         .expect_err("projection should not parse")
 }
@@ -228,11 +236,19 @@ fn a_projected_byte_maps_only_through_copied_segments() {
     let source = "const value = match (s) { A(v) => v, _ => 0 };\n";
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
-    let projection =
-        ProjectionBuilder::new(&semantic, &core, source, crate::SourceKind::TypeScript)
-            .build()
-            .expect("projection");
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
+    let projection = ProjectionBuilder::new(
+        &semantic,
+        &core,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    )
+    .build()
+    .expect("projection");
     let segments = &projection.source_segments;
     let placeholder = segments
         .iter()

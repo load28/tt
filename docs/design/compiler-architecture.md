@@ -119,6 +119,20 @@ exactly where SWC parses one (`lexer/facts/tests.rs`, over the repository's Type
 tt fixtures and the installed TypeScript package; `TTC_FACTS_CORPUS` adds
 trees).
 
+**One lexing per text (TASK-510).** Driving the machine makes a lexing
+several times as expensive as the byte scan it replaced, so a compile lexes
+each text once: the token stream the parse produced is the one Core
+lowering, the semantic checks, and the program-syntax projection read (Core
+lowering and the checks read the TypeScript-kind lexing, which is the same
+stream for a `.tt` file and a second lexing only for `.ttx`), and the
+engine's projection of a file parses it once for the compile and every
+probe it records. The remaining whole-text lexings are of the host
+projection and of the output, which the host syntax self-checks read. A
+lexical question answers from the bytes alone where no token could change
+the answer — no delimiter byte, no `await`, no `//` — without lexing.
+`scaling_tests.rs` counts the parses and whole-text lexings of a compile and
+of a projection.
+
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로
 스캔한다. 태그·속성 이름·텍스트는 `JsxRaw`로 불투명하게 보존하고 `{...}`

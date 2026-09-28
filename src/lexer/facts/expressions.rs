@@ -375,7 +375,6 @@ impl Machine<'_> {
     }
 
     fn operand_word(&mut self, mut e: Expr, tok: &Tok<'_>) -> Out {
-        let (next, next_word, next_break) = self.next_after(tok);
         match tok.text {
             "function" => {
                 e.after(After::Primary);
@@ -390,18 +389,21 @@ impl Machine<'_> {
                 Out::Consumed
             }
             "async"
-                if !next_break
-                    && (next == Some(b'(')
-                        || (next_word.is_some()
-                            && !matches!(
-                                next_word,
-                                Some("in" | "instanceof" | "as" | "satisfies")
-                            ))) =>
+                if {
+                    let (next, next_word, next_break) = self.next_after(tok);
+                    !next_break
+                        && (next == Some(b'(')
+                            || (next_word.is_some()
+                                && !matches!(
+                                    next_word,
+                                    Some("in" | "instanceof" | "as" | "satisfies")
+                                )))
+                } =>
             {
                 self.push_frame(Frame::Expr(e));
                 Out::Consumed
             }
-            "new" if next != Some(b'.') => {
+            "new" if self.next_after(tok).0 != Some(b'.') => {
                 self.push_frame(Frame::Expr(e));
                 Out::Consumed
             }
@@ -410,6 +412,7 @@ impl Machine<'_> {
                 Out::Consumed
             }
             "await" | "yield" if tok.text == "await" || self.yield_operator() => {
+                let (next, next_word, next_break) = self.next_after(tok);
                 let operand = !(next.is_none()
                     || matches!(next, Some(b')' | b']' | b'}' | b',' | b';' | b':'))
                     || (tok.text == "yield" && next_break)
@@ -433,7 +436,7 @@ impl Machine<'_> {
                 Out::Consumed
             }
             "let" => self.atom(e),
-            word if statement_only_keyword(word) && e.cfg.statement => Out::Retry,
+            word if e.cfg.statement && statement_only_keyword(word) => Out::Retry,
             "match" => {
                 e.after(After::Primary);
                 e.head = Head::MatchWord;

@@ -353,6 +353,9 @@ impl<'a> Rope<'a> {
                 text.push_str(piece.text());
             }
         }
+        if !text.contains("//") {
+            return false;
+        }
         let tokens = crate::lexer::lex_with_kind(&text, 0, text.len(), source_kind);
         let mut at = tokens.last().map_or(0, |token| token.span.end);
         let bytes = text.as_bytes();

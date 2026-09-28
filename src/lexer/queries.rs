@@ -36,6 +36,14 @@ fn close_of(tokens: &[Token], open: usize) -> Option<usize> {
 /// *keep* parentheses, so erring that way costs a pair of parentheses and
 /// never a meaning.
 pub(crate) fn has_top_level_comma(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    if !src.as_bytes()[from..end].iter().any(|byte| {
+        matches!(
+            byte,
+            b',' | b'(' | b')' | b'[' | b']' | b'{' | b'}' | b'<' | b'>'
+        )
+    }) {
+        return false;
+    }
     let mut depth = 0usize;
     for token in &lex_with_kind(src, from, end, kind) {
         match token.kind {
@@ -151,6 +159,12 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
 /// interpolations included, outside the bodies of nested functions and
 /// classes, where an `await` belongs to them.
 pub(crate) fn contains_await(src: &str, from: usize, end: usize) -> bool {
+    if !src.as_bytes()[from..end]
+        .windows("await".len())
+        .any(|window| window == b"await")
+    {
+        return false;
+    }
     fn scan(src: &str, tokens: &[Token]) -> bool {
         let mut at = 0usize;
         while let Some(token) = tokens.get(at) {

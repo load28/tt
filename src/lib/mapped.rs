@@ -254,14 +254,15 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 /// [`emit_mapped`] under an explicit TypeScript surface kind.
 pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
+    let typescript_tokens = crate::lexer::TypeScriptTokens::of(source, source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, &[]);
-    let core = core_ir::lower_semantic(&semantics, source);
+    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
     // host rewrites to plan, so every tt value the plan cannot own emits as
     // a recovery placeholder anchored to its construct — the same values
     // the plan refuses by placement. Reporting stays [`compile`]'s job.
-    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind)
+    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind, &tokens)
         .unwrap_or_else(|_| crate::evaluation_ir::LoweringPlan::without_owner_model());
     let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
     let flat = codegen::emit_with_map(
@@ -355,9 +356,15 @@ pub fn val_probes_with_kind(source: &str, source_kind: SourceKind) -> ValProbes 
 pub(crate) fn val_probes_with_emit(
     source: &str,
     source_kind: SourceKind,
+    program: &ast::Program,
+    tokens: &[crate::lexer::Token],
     emit: &MappedEmit,
 ) -> ValProbes {
-    with_method_calls(val_syntax_probes(source, source_kind), emit, source_kind)
+    with_method_calls(
+        val::probes(source, tokens, &parser::val_modifiers(program)),
+        emit,
+        source_kind,
+    )
 }
 
 fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {

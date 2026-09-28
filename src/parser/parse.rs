@@ -24,6 +24,7 @@ pub(crate) fn lex_and_parse_with_kind(
     src: &str,
     source_kind: crate::SourceKind,
 ) -> (Program, Vec<Token>) {
+    crate::work::tick("source parses");
     let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
     let parse = |host_rejected_vals: &[usize], host_owned_matches: Vec<Span>| {
         Parser {

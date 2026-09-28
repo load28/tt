@@ -517,6 +517,7 @@
 | TASK-507 | Judge path containment by path segments and canonical identity | Complete | 2026-09-28 | 2026-09-28 | [TASK-507](./TASK-507-path-containment-by-segments.md) |
 | TASK-508 | Hold the start config and every written file to the project boundary | Complete | 2026-09-28 | 2026-09-28 | [TASK-508](./TASK-508-init-start-config-and-write-boundary.md) |
 | TASK-509 | Report `--types` writes per file and settle editor sidecars from the report | Complete | 2026-09-28 | 2026-09-28 | [TASK-509](./TASK-509-types-write-report-contract.md) |
+| TASK-510 | Restore compile throughput lost on the branch | Complete | 2026-09-28 | 2026-09-28 | [TASK-510](./TASK-510-compile-throughput.md) |
 | TASK-511 | Give test temporary directories one owner per language | Complete | 2026-09-28 | 2026-09-28 | [TASK-511](./TASK-511-test-temp-dir-ownership.md) |
 
 ## Next task number

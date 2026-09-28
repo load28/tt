@@ -123,7 +123,8 @@ impl ProgramSyntax {
         source: &str,
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
-        Self::build_with(semantic, core, source, source_kind, false)
+        let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), source_kind);
+        Self::build_with(semantic, core, source, source_kind, &tokens, false)
     }
 
     pub(crate) fn build_with(
@@ -131,15 +132,18 @@ impl ProgramSyntax {
         core: &CoreFile,
         source: &str,
         source_kind: crate::SourceKind,
+        tokens: &[crate::lexer::Token],
         tolerant: bool,
     ) -> Result<Self, ProgramSyntaxError> {
-        if let Some((span, message)) = crate::lexer::host_syntax_error(source, source_kind) {
+        if let Some((span, message)) =
+            crate::lexer::host_syntax_error_in(source, source_kind, tokens)
+        {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
                 message: message.to_string(),
                 source: span.start,
             });
         }
-        let projection = ProjectionBuilder::new(semantic, core, source, source_kind).build()?;
+        let projection = ProjectionBuilder::new(semantic, core, source, tokens).build()?;
         let parsed = parse_module(
             &projection.code,
             &projection.source_segments,
@@ -570,7 +574,7 @@ impl<'a> ProjectionBuilder<'a> {
         semantic: &'a SemanticFile,
         core: &'a CoreFile,
         source: &'a str,
-        source_kind: crate::SourceKind,
+        tokens: &[crate::lexer::Token],
     ) -> Self {
         Self {
             arm_blocks: HashMap::new(),
@@ -581,12 +585,7 @@ impl<'a> ProjectionBuilder<'a> {
             pending: Vec::new(),
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
-            automatic_semicolons: crate::lexer::automatic_semicolons(&crate::lexer::lex_with_kind(
-                source,
-                0,
-                source.len(),
-                source_kind,
-            )),
+            automatic_semicolons: crate::lexer::automatic_semicolons(tokens),
         }
     }
 

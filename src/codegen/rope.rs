@@ -545,21 +545,25 @@ impl<'a> TargetFile<'a> {
             .source
             .expect("flatten installs the source before validating against it");
         // Rope trimming follows `str::trim`, which recognizes Unicode
-        // whitespace. Mark every byte of those scalar values so this
-        // validator uses the same classification, including ASCII vertical
-        // tab and multibyte spaces. Classifying one byte at a time would
-        // reject continuation bytes after trimming had legitimately removed
-        // the complete character.
-        let mut whitespace = vec![false; source.len()];
-        for (start, character) in source.char_indices() {
-            if character.is_whitespace() {
-                whitespace[start..start + character.len_utf8()].fill(true);
-            }
-        }
+        // whitespace. A byte counts as whitespace when the scalar value it
+        // belongs to does, so this validator uses the same classification,
+        // including ASCII vertical tab and multibyte spaces. Classifying one
+        // byte at a time would reject continuation bytes after trimming had
+        // legitimately removed the complete character.
+        let whitespace = |at: usize| {
+            let start = (0..=at)
+                .rev()
+                .find(|&start| source.is_char_boundary(start))
+                .unwrap_or(0);
+            source[start..]
+                .chars()
+                .next()
+                .is_some_and(char::is_whitespace)
+        };
         for span in &preservation.owned {
             let clipped = span.start..span.end.min(self.source_len);
             for (at, &count) in clipped.clone().zip(&printed[clipped]) {
-                if rewritten.any_containing(at) {
+                if count == 1 || (count == 0 && whitespace(at)) || rewritten.any_containing(at) {
                     continue;
                 }
                 let byte = SourceSpan {
@@ -575,7 +579,7 @@ impl<'a> TargetFile<'a> {
                     .at(byte)
                     .with_origin(vec![*span]));
                 }
-                if count == 0 && !whitespace[at] {
+                if count == 0 {
                     return Err(InternalCompilerError::new(
                         stage,
                         Invariant::SourceOmitted,

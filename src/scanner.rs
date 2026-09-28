@@ -7,19 +7,34 @@
 //! identifier ([`identifier_char_len`]), so a keyword is never read out of
 //! the middle of a word such as `étry`.
 
+const IDENT_CHAR: [bool; 128] = {
+    let mut table = [false; 128];
+    let mut b = 0;
+    while b < 128 {
+        let c = b as u8;
+        table[b] = c.is_ascii_alphanumeric() || c == b'_' || c == b'$';
+        b += 1;
+    }
+    table
+};
+
+#[inline]
 pub(crate) fn is_ident_start(b: u8) -> bool {
     b.is_ascii_alphabetic() || b == b'_' || b == b'$'
 }
 
+#[inline]
 pub(crate) fn is_ident_char(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_' || b == b'$'
+    b.is_ascii() && IDENT_CHAR[b as usize]
 }
 
+#[inline]
 pub(crate) fn is_ws(b: u8) -> bool {
     matches!(b, b' ' | b'\t' | b'\n' | b'\r' | 0x0b | 0x0c)
 }
 
 /// The byte at `i`, or None at or past `end`.
+#[inline]
 pub(crate) fn at(src: &[u8], i: usize, end: usize) -> Option<u8> {
     if i < end { Some(src[i]) } else { None }
 }
@@ -38,11 +53,16 @@ pub(crate) fn starts_identifier(src: &[u8], i: usize, end: usize) -> bool {
 /// TypeScript is either identifier material or one of ECMA-262's
 /// non-ASCII `WhiteSpace`/`LineTerminator` code points, so only those
 /// separate; the code point is consumed whole.
+#[inline]
 pub(crate) fn identifier_char_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
     let b = at(src, i, end)?;
     if b.is_ascii() {
         return is_ident_char(b).then_some(1);
     }
+    non_ascii_identifier_char_len(src, b, i, end)
+}
+
+fn non_ascii_identifier_char_len(src: &[u8], b: u8, i: usize, end: usize) -> Option<usize> {
     let len = match b {
         0xC0..=0xDF => 2,
         0xE0..=0xEF => 3,
@@ -57,10 +77,22 @@ pub(crate) fn identifier_char_len(src: &[u8], i: usize, end: usize) -> Option<us
 }
 
 /// Reads the identifier starting at `i`; returns the end index (exclusive).
+#[inline]
 pub(crate) fn ident_end(src: &[u8], i: usize, end: usize) -> usize {
+    let bytes = &src[..end.min(src.len())];
     let mut j = i + identifier_char_len(src, i, end).unwrap_or(1);
-    while let Some(len) = identifier_char_len(src, j, end) {
-        j += len;
+    while let Some(&b) = bytes.get(j) {
+        if b.is_ascii() {
+            if !IDENT_CHAR[b as usize] {
+                break;
+            }
+            j += 1;
+            continue;
+        }
+        match non_ascii_identifier_char_len(src, b, j, end) {
+            Some(len) => j += len,
+            None => break,
+        }
     }
     j
 }
@@ -73,6 +105,7 @@ pub(crate) fn skip_ws_comments(src: &[u8], i: usize, end: usize) -> usize {
 /// The byte length of the ECMA-262 `LineTerminator` (§12.3) at `i`: LF, CR,
 /// U+2028 LINE SEPARATOR, or U+2029 PARAGRAPH SEPARATOR. A CR LF pair is two
 /// terminators, which answers every question asked of them the same way.
+#[inline]
 pub(crate) fn line_terminator_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
     match at(src, i, end)? {
         b'\n' | b'\r' => Some(1),
@@ -83,18 +116,23 @@ pub(crate) fn line_terminator_len(src: &[u8], i: usize, end: usize) -> Option<us
 
 /// Whether `src[from..to]` contains a line terminator.
 pub(crate) fn contains_line_terminator(src: &[u8], from: usize, to: usize) -> bool {
-    (from..to).any(|i| line_terminator_len(src, i, to).is_some())
+    line_end(src, from, to) < to
 }
 
 /// The byte length of the white space or line terminator at `i`: the ASCII
 /// ones, and the non-ASCII code points that cannot belong to an identifier
 /// ([`identifier_char_len`]), which are ECMA-262 `WhiteSpace` and
 /// `LineTerminator` and the byte-order mark.
+#[inline]
 fn space_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
     let b = at(src, i, end)?;
     if b.is_ascii() {
         return is_ws(b).then_some(1);
     }
+    non_ascii_space_len(src, b, i, end)
+}
+
+fn non_ascii_space_len(src: &[u8], b: u8, i: usize, end: usize) -> Option<usize> {
     let len = match b {
         0xC0..=0xDF => 2,
         0xE0..=0xEF => 3,
@@ -139,26 +177,56 @@ pub(crate) fn block_comment_end(src: &[u8], i: usize, end: usize) -> usize {
 /// Returns the index of the next significant byte and whether a line
 /// terminator was crossed, inside a block comment included (ECMA-262
 /// §12.4: a multi-line comment containing a line terminator is one).
+#[inline]
 pub(crate) fn skip_trivia(src: &[u8], mut i: usize, end: usize) -> (usize, bool) {
+    let bytes = &src[..end.min(src.len())];
     let mut line_break = false;
     loop {
-        if let Some(len) = space_len(src, i, end) {
-            line_break |= line_terminator_len(src, i, end).is_some();
-            i += len;
-            continue;
+        match bytes.get(i) {
+            Some(b' ' | b'\t' | 0x0b | 0x0c) => i += 1,
+            Some(b'\n' | b'\r') => {
+                line_break = true;
+                i += 1;
+            }
+            Some(&b) if b == b'/' || !b.is_ascii() => {
+                return skip_comments_and_spaces(src, i, end, line_break);
+            }
+            _ => return (i, line_break),
         }
-        if at(src, i, end) == Some(b'/') && at(src, i + 1, end) == Some(b'/') {
-            i = line_end(src, i, end);
-            continue;
-        }
-        if at(src, i, end) == Some(b'/') && at(src, i + 1, end) == Some(b'*') {
-            let close = block_comment_end(src, i, end);
-            line_break |= contains_line_terminator(src, i, close);
-            i = close;
-            continue;
-        }
-        return (i, line_break);
     }
+}
+
+fn skip_comments_and_spaces(
+    src: &[u8],
+    mut i: usize,
+    end: usize,
+    mut line_break: bool,
+) -> (usize, bool) {
+    let bytes = &src[..end.min(src.len())];
+    while let Some(&b) = bytes.get(i) {
+        match b {
+            b' ' | b'\t' | 0x0b | 0x0c => i += 1,
+            b'\n' | b'\r' => {
+                line_break = true;
+                i += 1;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'/') => i = line_end(src, i, end),
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                let close = block_comment_end(src, i, end);
+                line_break |= contains_line_terminator(src, i, close);
+                i = close;
+            }
+            b if b.is_ascii() => break,
+            b => match non_ascii_space_len(src, b, i, end) {
+                Some(len) => {
+                    line_break |= line_terminator_len(src, i, end).is_some();
+                    i += len;
+                }
+                None => break,
+            },
+        }
+    }
+    (i, line_break)
 }
 
 pub(crate) fn find_subslice(src: &[u8], needle: &[u8], from: usize, end: usize) -> Option<usize> {
@@ -174,9 +242,15 @@ pub(crate) fn find_subslice(src: &[u8], needle: &[u8], from: usize, end: usize) 
 /// The index of the line terminator ending the line that contains `from`,
 /// or `end`.
 pub(crate) fn line_end(src: &[u8], from: usize, end: usize) -> usize {
-    (from..end)
-        .find(|&i| line_terminator_len(src, i, end).is_some())
-        .unwrap_or(end)
+    let mut i = from;
+    while i < end {
+        match src[i] {
+            b'\n' | b'\r' => return i,
+            0xE2 if line_terminator_len(src, i, end).is_some() => return i,
+            _ => i += 1,
+        }
+    }
+    end
 }
 
 /// `src[i]` is `'` or `"` — returns the index just past the closing quote.
