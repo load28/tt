@@ -349,6 +349,7 @@ pub(crate) struct IfLetStmt {
     /// fact only matters in expression regions: a function written there
     /// provides the statement position the construct needs.
     pub in_function: bool,
+    pub expression_position: bool,
 }
 
 /// The `else` continuation of an [`IfLetStmt`].

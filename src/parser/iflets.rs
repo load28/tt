@@ -23,7 +23,22 @@
 
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{IfLetElse, IfLetStmt, Span, TagPattern};
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind};
+
+pub(super) fn if_let_end(parser: &super::Parser, tokens: &[Token], k: usize) -> Option<usize> {
+    let keyword = tokens.get(k)?;
+    if !matches!(keyword.kind, TokenKind::Ident)
+        || &parser.src[keyword.span.start..keyword.span.end] != "if"
+        || dotted_at(tokens, 0, k)
+    {
+        return None;
+    }
+    let range_end = tokens
+        .last()
+        .map_or(keyword.span.end, |token| token.span.end);
+    parse_if_let(Cursor::new(parser, tokens, k + 1, range_end), keyword.span)
+        .map(|(cur, _, _)| cur.idx)
+}
 
 /// `cur` is positioned just past an undotted `if` keyword (`kw_span`) whose
 /// next token is `let` (the caller pre-checked). On success returns the
@@ -157,6 +172,7 @@ pub(super) fn parse_if_let<'t>(
             // `else if let` is never in expression position, so only the
             // outer one's placement is ever judged).
             in_function: false,
+            expression_position: false,
         },
     ))
 }

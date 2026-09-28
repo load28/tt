@@ -487,6 +487,7 @@
 | TASK-477 | The typed `val` check sees every spelling of a member call | Complete | 2026-09-28 | 2026-09-28 | [TASK-477](./TASK-477-val-member-call-probes.md) |
 | TASK-478 | Decide a guarded all-wildcard arm by its guard alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-478](./TASK-478-guarded-wildcard-tuple-arm.md) |
 | TASK-479 | Separate hover documentation from the signature | Complete | 2026-09-28 | 2026-09-28 | [TASK-479](./TASK-479-hover-documentation-split.md) |
+| TASK-480 | Report an `if let` in any expression position as `if-let-placement` alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-480](./TASK-480-if-let-expression-position.md) |
 
 ## Next task number
 

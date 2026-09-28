@@ -678,9 +678,96 @@ fn explained_examples_behave_as_their_explanations_say() {
     );
 }
 
+/* ------------------------------------------------------------------ */
+/* TASK-480 `if let` in expression position                            */
+/* ------------------------------------------------------------------ */
+
 #[test]
 fn a_guarded_all_wildcard_tuple_arm_is_tested_by_its_guard_alone() {
     let out = ok("variant T { A, B }\nfunction f(a: T, b: T, cond: boolean): number {\n  return match (a, b) {\n    (A, _) => 1,\n    (_, _) if cond => 2,\n    _ => 3,\n  };\n}\n");
     assert!(!out.contains("if ()"), "{out}");
     assert!(out.contains("      if (cond) {\n        $tt_v0 = 2;\n        break;\n      }\n      $tt_v0 = 3;"), "{out}");
+}
+
+#[test]
+fn an_if_let_in_any_expression_position_reports_only_its_placement() {
+    let prelude = "variant O { Some(value: number), None }\n\
+                   declare const o: O;\n\
+                   declare const c: boolean;\n\
+                   declare function g(x: unknown): number;\n";
+    for body in [
+        "function f() { const x = if let Some(value) = o { value }; return x; }",
+        "const x = if let Some(value) = o { value };",
+        "function f() { const x = `${if let Some(value) = o { value }}`; return x; }",
+        "function f() { g(if let Some(value) = o { value }); }",
+        "const h = () => if let Some(value) = o { value };",
+        "function f() { return if let Some(value) = o { value }; }",
+        "function f() { throw if let Some(value) = o { value }; }",
+        "function f() { return (\n  if let Some(value) = o { value }); }",
+        "const x = 1 + if let Some(value) = o { value } else { 0 };",
+        "const x = [if let Some(value) = o { value }];",
+        "const x = { a: if let Some(value) = o { value } };",
+        "const x = c ? if let Some(value) = o { value } : 1;",
+        "for (let i = 0; i < 1; if let Some(value) = o { value }) {}",
+        "class C { m() { const x = if let Some(value) = o { value }; } }",
+        "const x = match (o) { Some(value) => if let Some(value: v) = o { v }, None => 0 };",
+        "const x = match (if let Some(value) = o { value }) { Some(value) => 1, None => 0 };",
+        "const x = if let Some(value) = o { value } |> g;",
+        "const x = o |> if let Some(value) = o { value };",
+        "const x = (if let Some(value) = o { value }) |> g;",
+        "function f() { const x = try if let Some(value) = o { value }; }",
+        "function f() { g(try if let Some(value) = o { value }); }",
+        "function f() { try if let Some(value) = o { value }; }",
+    ] {
+        let source = format!("{prelude}{body}\n");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
+        assert_eq!(
+            codes,
+            [DiagnosticCode::IfLetPlacement],
+            "{body}\n{diagnostics:#?}"
+        );
+        let at = diagnostics[0].start.expect("located");
+        assert!(
+            source[at..].starts_with("if let"),
+            "{body}: {:?}",
+            &source[at..]
+        );
+    }
+}
+
+#[test]
+fn an_if_let_that_starts_a_statement_stays_a_statement() {
+    let prelude = "variant O { Some(value: number), None }\n\
+                   declare const o: O;\n\
+                   declare function g(x: unknown): number;\n";
+    for body in [
+        "const x = 1\nif let Some(value) = o { g(value); }",
+        "const h = () => 1\nif let Some(value) = o { g(value); }",
+        "if (o) if let Some(value) = o { g(value); }",
+        "outer: if let Some(value) = o { g(value); }",
+        "const x = `${(() => { if let Some(value) = o { return value; } return 0; })()}`;",
+        "const x = match (o) { Some(value) => { if let Some(value: v) = o { g(v); } return 1; }, None => 0 };",
+    ] {
+        let source = format!("{prelude}{body}\n");
+        assert_eq!(codes(&source), vec![], "{body}");
+        let out = ok(&source);
+        assert!(out.contains(".kind === \"Some\""), "{out}");
+    }
+}
+
+#[test]
+fn a_try_operand_never_starts_with_a_statement_keyword() {
+    assert_eq!(
+        codes("declare function f(): any;\nfunction g() { const x = try if (f()) {}; }\n"),
+        codes("declare function f(): any;\nfunction g() { const x = if (f()) {}; }\n"),
+    );
+}
+
+#[test]
+fn if_let_placement_explanation_names_value_positions() {
+    let text = DiagnosticCode::IfLetPlacement.explanation();
+    for position in ["initializer", "argument", "concise arrow body", "`return`"] {
+        assert!(text.contains(position), "{position}: {text}");
+    }
 }

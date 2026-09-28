@@ -605,9 +605,15 @@ where both halves diverge all count."
                 "\
 An `if let` was written in expression position.
 
-`if let` is a statement — it lowers to an `if` with a narrowing test.
-Inside an expression region it is allowed only within a function you write
-there, which is the same control-flow rule `try` and let-else follow."
+`if let` is a statement — it lowers to an `if` with a narrowing test and
+produces no value. Its `if` must start a statement, so it cannot be a
+variable initializer, an argument, an operand, a `return` or `throw`
+operand, a concise arrow body, a template interpolation, a scrutinee or
+guard, an expression arm body, a `try` expression, or a pipeline. Inside
+such an expression region it is allowed only as a statement of a function
+you write there, which is the same control-flow rule `try` and let-else
+follow. Use `match` for a value, or declare the variable before the
+statement and assign it in the bodies."
             }
 
             DiagnosticCode::VariantDuplicateCase => {
@@ -950,6 +956,7 @@ look up."
             DiagnosticCode::StrayPipe
                 | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
+                | DiagnosticCode::IfLetPlacement
                 | DiagnosticCode::StrayResult
                 | DiagnosticCode::MalformedVariant
                 | DiagnosticCode::VariantDefaultExport

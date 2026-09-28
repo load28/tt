@@ -293,20 +293,19 @@ impl Checker {
     /// places `try`, judged from the other side: no value boundary to escape, just
     /// a statement stream to stand in).
     fn check_if_let(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
-        if ctx == Ctx::Expr && !stmt.in_function {
+        if stmt.expression_position || (ctx == Ctx::Expr && !stmt.in_function) {
             self.error(
                 TtError::span(
                     stmt.head_span.start,
                     stmt.head_span.end,
-                    "`if let` cannot be used in expression position (a template \
-                     interpolation, a scrutinee or guard, an expression arm body, a `try` \
-                     expression, or a pipeline) — it compiles to a block statement"
+                    "`if let` cannot be used in expression position — it is a statement and \
+                     produces no value"
                         .to_string(),
                 )
                 .code(DiagnosticCode::IfLetPlacement)
                 .help(
-                    "write it inside a function here (an `if let` in one is fine), or \
-                     `match` on the value instead",
+                    "`match` on the value instead, or write the `if let` as a statement \
+                     (inside an expression region, in a function written there)",
                 ),
             );
         }

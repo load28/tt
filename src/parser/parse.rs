@@ -799,11 +799,25 @@ impl Parser<'_> {
                     iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
                     stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                    stmt.expression_position = (expression_root && i == 0)
+                        || !(crate::flow::asi_boundary_at(self.src, tokens, i)
+                            || starts_statement(self.src, tokens, &arrow_boundaries, i, expr.1))
+                        || in_for_update(self.src, tokens, i)
+                        || follows_object_member_colon(self.src, tokens, i);
+                    if stmt.expression_position {
+                        recoveries.push(RecoveryNode {
+                            span: stmt.owner_span,
+                            kind: RecoveryKind::Expression,
+                        });
+                    }
+                    let expression_position = stmt.expression_position;
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
                     segments.push(Segment::IfLet(stmt));
                     seg_start = byte_end;
                     i = cur.idx;
-                    expr = (i, false);
+                    if !expression_position {
+                        expr = (i, false);
+                    }
                     continue;
                 }
                 stray_if_lets.push(tok.span.start);

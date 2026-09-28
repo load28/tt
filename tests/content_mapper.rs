@@ -398,6 +398,10 @@ fn recovered_syntax_reports_its_tt_diagnostic_instead_of_a_rejected_mapping() {
             "declare function f(): any;\nconst v = try f();\nexport const a = 1;\n",
             "b.tt(2,11): error tt11",
         ),
+        (
+            "declare const o: any;\nconst v = if let Some(value) = o { value };\nexport const a = 1;\n",
+            "b.tt(2,11): error tt14",
+        ),
     ];
     for (source, expected) in cases {
         let project = mapper_project(false);

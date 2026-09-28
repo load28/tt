@@ -109,6 +109,13 @@ pub(super) fn parse_pipeline(
             if depth == 0 && k > step_from && crate::flow::asi_boundary_at(parser.src, tokens, k) {
                 break;
             }
+            if depth == 0
+                && k == step_from
+                && let Some(past) = super::iflets::if_let_end(parser, tokens, k)
+            {
+                k = past;
+                continue;
+            }
             match &t.kind {
                 TokenKind::PipeOp if depth == 0 => break,
                 TokenKind::JsxRaw if depth == 0 => break,

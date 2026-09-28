@@ -121,6 +121,12 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         k += 1;
     }
     let head = cur.tokens.get(k)?;
+    if matches!(head.kind, TokenKind::Ident)
+        && !dotted_at(cur.tokens, cur.idx, k)
+        && STMT_ONLY_WORDS.contains(&cur.text(head))
+    {
+        return None;
+    }
     let operand_start = head.span.start;
     let mut operand_end = None;
     let mut operand_token_end = cur.idx;
