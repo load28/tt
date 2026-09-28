@@ -25,12 +25,7 @@ pub(crate) fn lex_and_parse_with_kind(
     source_kind: crate::SourceKind,
 ) -> (Program, Vec<Token>) {
     let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
-    let parser = Parser {
-        src,
-        bytes: src.as_bytes(),
-        host_owned_matches: Vec::new(),
-        flow_queries: crate::flow::FlowBodyQueries::default(),
-    };
+    let parser = Parser::new(src);
     let mut program = parser.parse_tokens(&tokens, 0, src.len());
     let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
     if !host_owned_matches.is_empty() {
@@ -168,6 +163,17 @@ pub(crate) struct Parser<'a> {
     pub bytes: &'a [u8],
     host_owned_matches: Vec<Span>,
     flow_queries: crate::flow::FlowBodyQueries,
+}
+
+impl<'a> Parser<'a> {
+    pub(super) fn new(src: &'a str) -> Self {
+        Parser {
+            src,
+            bytes: src.as_bytes(),
+            host_owned_matches: Vec::new(),
+            flow_queries: crate::flow::FlowBodyQueries::default(),
+        }
+    }
 }
 
 impl Parser<'_> {
@@ -416,6 +422,15 @@ fn follows_object_member_colon(src: &str, tokens: &[Token], idx: usize) -> bool 
 /// A spread operand begins with three adjacent dot tokens. The last dot is
 /// not member access, even though the generic property-name test sees it
 /// immediately before the operand keyword.
+/// Whether the token at `k` is a `match` keyword that may start a tt match:
+/// undotted, or the operand of a spread, whose third dot is punctuation.
+pub(super) fn match_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
+    let token = &tokens[k];
+    matches!(token.kind, TokenKind::Ident)
+        && &src[token.span.start..token.span.end] == "match"
+        && (!cursor::dotted_at(tokens, 0, k) || follows_spread_operator(tokens, k))
+}
+
 fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
     idx >= 3
         && tokens[idx - 3..idx]
@@ -672,10 +687,7 @@ impl Parser<'_> {
             // A spread's third dot is punctuation in the host grammar, not
             // member access. Keep the same structural distinction used for
             // `try` so every spread-capable host can own a match operand.
-            if (!dotted || follows_spread_operator(tokens, i))
-                && word == "match"
-                && !self.host_owns_match_name(tok.span)
-            {
+            if match_keyword_at(self.src, tokens, i) && !self.host_owns_match_name(tok.span) {
                 let host_ambiguous =
                     match_may_be_host_owned(self.src, tokens, &arrow_boundaries, i, expr);
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
@@ -773,8 +785,9 @@ impl Parser<'_> {
                     expr = (i, false);
                     continue;
                 }
-                if let Some((cur, byte_end, mut stmt)) =
-                    lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
+                if lets::let_else_pattern(self.src, tokens, i).is_some()
+                    && let Some((cur, byte_end, mut stmt)) =
+                        lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
                     stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
@@ -789,12 +802,7 @@ impl Parser<'_> {
             // `if let ...` — an undotted `if` followed by `let` is never
             // valid TypeScript, so a candidate that fails to parse cannot
             // be passed through either; it is recorded for sema.
-            if !dotted
-                && word == "if"
-                && matches!(tokens.get(i + 1),
-                    Some(t) if matches!(t.kind, TokenKind::Ident)
-                        && &self.src[t.span.start..t.span.end] == "let")
-            {
+            if iflets::if_let_pattern(self.src, tokens, i).is_some() {
                 if let Some((cur, byte_end, mut stmt)) =
                     iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {

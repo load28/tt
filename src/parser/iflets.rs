@@ -25,14 +25,22 @@ use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{IfLetElse, IfLetStmt, Span, TagPattern};
 use crate::lexer::{Token, TokenKind};
 
+/// The token index where an `if let`'s pattern starts, when the token at
+/// `k` is an undotted `if` followed by `let` — a sequence TypeScript never
+/// writes.
+pub(super) fn if_let_pattern(src: &str, tokens: &[Token], k: usize) -> Option<usize> {
+    let word = |at: usize| {
+        tokens
+            .get(at)
+            .filter(|token| matches!(token.kind, TokenKind::Ident))
+            .map(|token| &src[token.span.start..token.span.end])
+    };
+    (word(k)? == "if" && word(k + 1)? == "let" && !dotted_at(tokens, 0, k)).then_some(k + 2)
+}
+
 pub(super) fn if_let_end(parser: &super::Parser, tokens: &[Token], k: usize) -> Option<usize> {
-    let keyword = tokens.get(k)?;
-    if !matches!(keyword.kind, TokenKind::Ident)
-        || &parser.src[keyword.span.start..keyword.span.end] != "if"
-        || dotted_at(tokens, 0, k)
-    {
-        return None;
-    }
+    if_let_pattern(parser.src, tokens, k)?;
+    let keyword = &tokens[k];
     let range_end = tokens
         .last()
         .map_or(keyword.span.end, |token| token.span.end);

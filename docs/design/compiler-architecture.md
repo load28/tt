@@ -85,6 +85,15 @@ expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍�
 tt 수준 *에러*(중복 케이스 등)는 전부 sema의 몫이다. 중첩 코드(스크루티니,
 arm body, 보간)는 같은 토큰 스트림의 부분 슬라이스로 재귀 파싱된다.
 
+Editor features that ask about text still being typed read the parser's own
+grammar, never a copy of it (TASK-492). `parser/partial.rs` answers which
+pattern a token position is in — a match arm's pattern or the alternatives of
+an `if let` or let-else — and which arms of a match body are already written.
+It uses the same match head (`matches::match_body_open`), arm walk
+(`matches::outline_arms`, which also delimits the strict and recovering arm
+lists), arm pattern grammar, and single-pattern heads (`iflets::if_let_pattern`,
+`lets::let_else_pattern`) that the sub-parsers commit with.
+
 TypeScript `enum` 통과와 tt `variant` 소유권 규칙을 구분한다.
 `const enum`/`declare enum`을 포함한 TypeScript 선언과 예약어 규칙도 파서 소관이다.
 

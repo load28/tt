@@ -1,5 +1,7 @@
 # TASK-462: Offer case tags only at arm positions, never in arm bodies or comments
 
+> **Superseded in part by TASK-492.** Decision 1's `arm_start` walk in `src/engine/completions.rs` no longer exists. The arm walk for unfinished text is the parser's `matches::outline_arms`, read through `parser::pattern_site_at` and `parser::arm_headers`.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

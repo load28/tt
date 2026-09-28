@@ -7,7 +7,7 @@
 //! The scrutinee and every arm body are recursively parsed sub-programs.
 
 use super::Claim;
-use super::cursor::Cursor;
+use super::cursor::{Cursor, find_close_at};
 use super::is_reserved;
 use super::literals::{at_literal, parse_literal_alternatives};
 use crate::ast::{
@@ -36,26 +36,8 @@ pub(super) fn parse_match<'t>(
     if let Some(parsed) = parse_match_complete(cur, kw_span) {
         return Claim::Parsed(parsed);
     }
-    let committed = match cur.peek() {
-        Some(token) if matches!(token.kind, TokenKind::Ident) => (cur.idx..cur.tokens.len())
-            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
-            .is_some_and(|open| body_reads_as_arms(cur.parser.src, cur.tokens, open)),
-        Some(token) if matches!(token.kind, TokenKind::Punct(b'(')) => cur
-            .find_close()
-            .filter(|close| {
-                matches!(
-                    cur.tokens.get(*close + 1).map(|token| &token.kind),
-                    Some(TokenKind::Punct(b'{'))
-                )
-            })
-            .is_some_and(|close| body_reads_as_arms(cur.parser.src, cur.tokens, close + 1)),
-        _ => false,
-    };
-    if committed {
-        // The token index of the `{` that opens the body — the end of the
-        // scrutinee text, and the start of the range the recovery covers.
-        let body_open = (cur.idx..cur.tokens.len())
-            .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')));
+    let body_open = match_body_open(cur.tokens, cur.idx);
+    if body_open.is_some_and(|open| body_reads_as_arms(cur.parser.src, cur.tokens, open)) {
         let end = body_open
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
@@ -127,6 +109,23 @@ pub(super) fn parse_match<'t>(
         }
     } else {
         Claim::NotTt
+    }
+}
+
+/// The token index of the `{` that opens a match body, for the `match`
+/// keyword whose next token is at `after_keyword`: the brace right after a
+/// parenthesized scrutinee, `match (…) {`, or the first brace after an
+/// identifier scrutinee, `match user {`, which the parser commits to and
+/// reports with a fix.
+pub(super) fn match_body_open(tokens: &[Token], after_keyword: usize) -> Option<usize> {
+    match tokens.get(after_keyword)?.kind {
+        TokenKind::Punct(b'(') => {
+            let open = find_close_at(tokens, after_keyword)? + 1;
+            matches!(tokens.get(open)?.kind, TokenKind::Punct(b'{')).then_some(open)
+        }
+        TokenKind::Ident => (after_keyword..tokens.len())
+            .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b'{'))),
+        _ => None,
     }
 }
 
@@ -486,44 +485,133 @@ fn generic_angle_close(tokens: &[Token], open: usize, limit: usize) -> Option<us
     None
 }
 
-/// Parse independently recoverable list elements. A failed arm owns bytes up
-/// to the next comma at this list's delimiter depth, including that separator.
-/// Valid arms use their grammar's expression scanner, so generic argument and
-/// nested expression commas are never mistaken for arm separators.
-fn parse_arm_list<'t, T>(
+/// Where an arm is in the arm grammar: its pattern, its `if` guard, or its
+/// body after `=>`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ArmPart {
+    Pattern,
+    Guard,
+    Body,
+}
+
+/// One arm of a match body as the arm grammar delimits it, before and
+/// whether or not the arm itself parses. Indices are into the body's
+/// tokens: `start` is the arm's first token, `guard` its top-level `if`,
+/// `arrow` its top-level `=>`, and `end` the `,` that separates it from the
+/// next arm, or the body's length for the last arm.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct ArmOutline {
+    pub(super) start: usize,
+    pub(super) guard: Option<usize>,
+    pub(super) arrow: Option<usize>,
+    pub(super) end: usize,
+}
+
+impl ArmOutline {
+    /// The part of the arm the token at `index` is in.
+    pub(super) fn part_at(&self, index: usize) -> ArmPart {
+        if self.arrow.is_some_and(|arrow| arrow < index) {
+            ArmPart::Body
+        } else if self.guard.is_some_and(|guard| guard < index) {
+            ArmPart::Guard
+        } else {
+            ArmPart::Pattern
+        }
+    }
+
+    /// The token just past the arm's pattern.
+    pub(super) fn pattern_end(&self) -> usize {
+        self.guard.or(self.arrow).unwrap_or(self.end)
+    }
+}
+
+/// The arms of a match body, `tokens` being the text between its braces —
+/// or up to the end of the input while the closing brace is unwritten.
+///
+/// This is the one walk that delimits arms, for the parser's strict and
+/// recovering arm lists and for any reader of an unfinished body. An arm is
+/// a pattern, an optional `if` guard, `=>`, and a body; it ends at the next
+/// `,` outside every bracket, whether or not it reached its `=>`. A bracket
+/// left open runs to the end, so the text inside a pattern or an argument
+/// list being typed stays in its arm. A `,` after the last arm leaves an
+/// empty final arm, the slot where the next one would be written.
+pub(super) fn outline_arms(src: &str, tokens: &[Token]) -> Vec<ArmOutline> {
+    let open_arm = |start| ArmOutline {
+        start,
+        guard: None,
+        arrow: None,
+        end: tokens.len(),
+    };
+    let mut arms = Vec::new();
+    let mut arm = open_arm(0);
+    let mut depth = 0usize;
+    for (index, token) in tokens.iter().enumerate() {
+        match token.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if depth > 0 => {}
+            TokenKind::Punct(b',') => {
+                arm.end = index;
+                arms.push(arm);
+                arm = open_arm(index + 1);
+            }
+            TokenKind::Arrow if arm.arrow.is_none() => arm.arrow = Some(index),
+            TokenKind::Ident
+                if arm.arrow.is_none()
+                    && arm.guard.is_none()
+                    && &src[token.span.start..token.span.end] == "if" =>
+            {
+                arm.guard = Some(index);
+            }
+            _ => {}
+        }
+    }
+    arms.push(arm);
+    arms
+}
+
+/// The arms of the list under `cur`, each with a cursor over its own tokens
+/// whose open-ended scans stop where its separator starts. The empty slot
+/// after a final `,` is not an arm.
+fn list_arms<'t>(cur: &Cursor<'t>) -> impl Iterator<Item = (ArmOutline, Cursor<'t>)> {
+    let list = cur.sub(cur.idx, cur.tokens.len(), cur.range_end);
+    outline_arms(cur.parser.src, list.tokens)
+        .into_iter()
+        .filter(move |arm| arm.start < list.tokens.len())
+        .map(move |arm| {
+            (
+                arm,
+                list.sub(arm.start, arm.end, list.stop_byte_at(arm.end)),
+            )
+        })
+}
+
+/// Parses one arm from its own tokens: the arm grammar must consume them
+/// all.
+fn parse_whole_arm<'t, T>(
     mut cur: Cursor<'t>,
     parse: fn(&mut Cursor<'t>) -> Option<T>,
+) -> Option<T> {
+    parse(&mut cur).filter(|_| cur.peek().is_none())
+}
+
+/// Parse independently recoverable list elements. A failed arm owns the
+/// bytes [`outline_arms`] gives it, up to and including its separator.
+fn parse_arm_list<'t, T>(
+    cur: Cursor<'t>,
+    parse: fn(&mut Cursor<'t>) -> Option<T>,
 ) -> (Vec<T>, Vec<Span>) {
+    let list = cur.sub(cur.idx, cur.tokens.len(), cur.range_end);
     let mut arms = Vec::new();
     let mut errors = Vec::new();
-    while let Some(first) = cur.peek() {
-        let start = first.span.start;
-        let before = cur;
-        if let Some(arm) = parse(&mut cur)
-            && (cur.peek().is_none() || cur.at_punct(b','))
-        {
-            arms.push(arm);
-            cur.eat_punct(b',');
-            continue;
+    for (outline, arm) in list_arms(&list) {
+        match parse_whole_arm(arm, parse) {
+            Some(parsed) => arms.push(parsed),
+            None => errors.push(Span {
+                start: list.stop_byte_at(outline.start),
+                end: list.stop_byte_at((outline.end + 1).min(list.tokens.len())),
+            }),
         }
-        cur = before;
-        while let Some(token) = cur.peek() {
-            if cur.at_punct(b',') {
-                cur.bump();
-                break;
-            }
-            if matches!(token.kind, TokenKind::Punct(b'(' | b'[' | b'{'))
-                && let Some(close) = cur.find_close()
-            {
-                cur.idx = close + 1;
-            } else {
-                cur.bump();
-            }
-        }
-        errors.push(Span {
-            start,
-            end: cur.stop_byte_at(cur.idx),
-        });
     }
     (arms, errors)
 }
@@ -564,18 +652,12 @@ fn recover_match_arms(mut cur: Cursor) -> Option<Vec<Span>> {
 /// Strict recognition never recovers past a rejected candidate. Arm bodies
 /// remain token slices until the enclosing match selects a complete grammar.
 fn parse_strict_arm_list<'t, T>(
-    mut cur: Cursor<'t>,
+    cur: Cursor<'t>,
     parse: fn(&mut Cursor<'t>) -> Option<T>,
 ) -> Option<Vec<T>> {
-    let mut arms = Vec::new();
-    while cur.peek().is_some() {
-        arms.push(parse(&mut cur)?);
-        if cur.peek().is_none() {
-            break;
-        }
-        cur.eat_punct(b',')?;
-    }
-    Some(arms)
+    list_arms(&cur)
+        .map(|(_, arm)| parse_whole_arm(arm, parse))
+        .collect()
 }
 
 /// Where a fully parsed arm list ends. The list's tokens are exactly the
@@ -599,22 +681,8 @@ fn parse_arms(cur: Cursor<'_>) -> Option<Vec<ArmSyntax<'_, Pattern>>> {
 }
 
 fn parse_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, Pattern>> {
-    let first = cur.peek()?;
-    let pattern_start = first.span.start;
-
-    // pattern
-    let pattern = match first.kind {
-        TokenKind::Ident if cur.text(first) == "_" => {
-            cur.bump();
-            Pattern::Wildcard
-        }
-        _ if at_literal(cur) => Pattern::Literals(parse_literal_alternatives(cur)?),
-        TokenKind::Ident if cur.text(first) == "is" => {
-            Pattern::Instances(parse_instance_alternatives(cur)?)
-        }
-        TokenKind::Ident => Pattern::Tags(parse_tag_alternatives(cur)?),
-        _ => return None,
-    };
+    let pattern_start = cur.peek()?.span.start;
+    let pattern = parse_arm_pattern(cur)?;
     let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
 
     // Only tag and literal patterns take a guard — `_ if` never parses,
@@ -629,6 +697,24 @@ fn parse_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, Pattern>> {
             end: pattern_end,
         },
         tail,
+    })
+}
+
+/// Parses a single match arm's pattern at the cursor: `_`, literal
+/// alternatives, `is` alternatives, or tag alternatives.
+pub(super) fn parse_arm_pattern(cur: &mut Cursor) -> Option<Pattern> {
+    let first = cur.peek()?;
+    Some(match first.kind {
+        TokenKind::Ident if cur.text(first) == "_" => {
+            cur.bump();
+            Pattern::Wildcard
+        }
+        _ if at_literal(cur) => Pattern::Literals(parse_literal_alternatives(cur)?),
+        TokenKind::Ident if cur.text(first) == "is" => {
+            Pattern::Instances(parse_instance_alternatives(cur)?)
+        }
+        TokenKind::Ident => Pattern::Tags(parse_tag_alternatives(cur)?),
+        _ => return None,
     })
 }
 

@@ -21,27 +21,37 @@
 
 use super::cursor::{Cursor, brace_begins_expression, dotted_at, skip_braced_construct};
 use crate::ast::{LetElseStmt, Span};
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind};
+
+/// The token index where a let-else's pattern starts, when the token at
+/// `k` is an undotted `const`, `let`, or `var` followed by `Tag(`: a
+/// declaration keyword is never followed by `<ident>(` in valid
+/// TypeScript, and a reserved tag (`const enum`) is TypeScript's own.
+pub(super) fn let_else_pattern(src: &str, tokens: &[Token], k: usize) -> Option<usize> {
+    let word = |at: usize| {
+        tokens
+            .get(at)
+            .filter(|token| matches!(token.kind, TokenKind::Ident))
+            .map(|token| &src[token.span.start..token.span.end])
+    };
+    let tag = word(k + 1)?;
+    (matches!(word(k)?, "const" | "let" | "var")
+        && !dotted_at(tokens, 0, k)
+        && tag.is_ascii()
+        && !super::is_reserved(tag)
+        && matches!(tokens.get(k + 2)?.kind, TokenKind::Punct(b'(')))
+    .then_some(k + 1)
+}
 
 /// `cur` is positioned just past a `const`/`let`/`var` keyword
-/// (`kw_span`). Parses `Tag(bindings...) = <expr> else { ... };`; on
-/// success returns the advanced cursor, the byte just past the `;`, and
-/// the parsed statement.
+/// (`kw_span`) whose [`let_else_pattern`] the caller found. Parses
+/// `Tag(bindings...) = <expr> else { ... };`; on success returns the
+/// advanced cursor, the byte just past the `;`, and the parsed statement.
 pub(super) fn parse_let_else<'t>(
     mut cur: Cursor<'t>,
     kw_span: crate::ast::Span,
 ) -> Option<(Cursor<'t>, usize, LetElseStmt)> {
-    // pattern: `Tag(bindings...) (| Tag[(bindings...)])*` — the first
-    // alternative's parens claim the construct (a declaration keyword is
-    // never followed by `<ident>(` in valid TypeScript); later ones may be
-    // bare. `||` lexes as one OrOr token, so it never separates.
     let (tag, tag_span) = cur.eat_ident()?;
-    if super::is_reserved(tag) {
-        return None; // `const enum E { ... }` and friends
-    }
-    if !cur.at_punct(b'(') {
-        return None;
-    }
     let open = cur.idx;
     let close = cur.find_close()?;
     let bindings = super::matches::parse_bindings(

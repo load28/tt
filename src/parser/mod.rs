@@ -27,8 +27,11 @@
 //! [`tries`] parses `try` statements; [`lets`] parses let-else statements;
 //! [`results`] parses `result { ... }` computation blocks;
 //! [`imports`] lifts relative `.tt` module specifiers out of static
-//! import/re-export statements. The `val` binding modifier is recognized
-//! here too, through the shared structural rule in [`crate::val`].
+//! import/re-export statements; [`partial`] answers which pattern a
+//! position is in while the construct around it does not parse yet, with
+//! the same arm walk and heads the sub-parsers commit with. The `val`
+//! binding modifier is recognized here too, through the shared structural
+//! rule in [`crate::val`].
 
 mod cursor;
 mod host;
@@ -39,6 +42,7 @@ mod lets;
 mod literals;
 mod matches;
 mod parse;
+mod partial;
 mod pipes;
 mod results;
 mod tries;
@@ -62,6 +66,7 @@ pub(crate) use parse::{
     Parser, lex_and_parse_with_kind, parse, parse_with_kind, projection_recoveries,
     unclaimed_candidates,
 };
+pub(crate) use partial::{PatternSite, arm_headers, pattern_site_at};
 
 pub(super) enum Claim<T> {
     Parsed(T),

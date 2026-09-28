@@ -1,5 +1,7 @@
 # TASK-461: Offer payload field completions only inside a pattern
 
+> **Superseded in part by TASK-492.** Decision 1's token-stream reading in `src/engine/completions.rs` (`unclaimed_site`, `arm_start`, `pattern_head`, `match_body`) moved into the parser as `parser::pattern_site_at` and `parser::arm_headers`, which use the parser's own match head, arm walk, and pattern heads. A match with an identifier scrutinee now has arm positions too.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28
