@@ -50,8 +50,8 @@ pub enum Literal {
     String(String),
     /// A number literal, as the `f64` JavaScript compares (`-0` is `0`).
     Number(f64),
-    /// Decimal digits. A BigInt is never a member of a finite literal union
-    /// TypeScript would report, so a match covering one is left unchecked.
+    /// A BigInt literal, as its decimal digits with a leading `-` when
+    /// negative (`-0n` is `0`).
     BigInt(String),
     /// `true` / `false`.
     Boolean(bool),

@@ -1061,6 +1061,7 @@ function batched(name, batch, single) {
 function literalValue(type) {
   const v = type.value;
   if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return v;
+  if (typeof v === "bigint") return { bigint: v.toString() };
   return undefined;
 }
 

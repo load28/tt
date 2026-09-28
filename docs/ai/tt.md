@@ -44,7 +44,7 @@ const area = match (shape) {
 - Bindings by field name, NEVER position; subset ok, any order.
 - Arm body: expr, or block `{ ... return v; }` (no return → undefined; a block whose every path returns or throws gets no fall-through in the output). Object literal body needs parens: `Tag => ({a: 1})`.
 - `_` arm must be LAST.
-- Literal patterns: string/number/boolean literals match the scrutinee VALUE (`===`), e.g. `match (dir) { "north" => "N", _ => "?" }`. Literal and `is` patterns may share an ordered match; neither may mix with tag patterns. `_` works in every family. See "literal match" below.
+- Literal patterns: string/number/bigint/boolean literals match the scrutinee VALUE (`===`), e.g. `match (dir) { "north" => "N", _ => "?" }`. Literal and `is` patterns may share an ordered match; neither may mix with tag patterns. `_` works in every family. See "literal match" below.
 - or-pattern: `A | B => body` (never `||`); all alternatives must bind same (field,name) set.
 - guard: `Some(v) if v > 0 => v`; guard false → falls to next arm; a guard may contain a tt value (`if match (...) {...} =>`, `if v > 0 && match (...) {...} =>`), lowered before the guard test with the same ordering and short-circuit rules as any host operation; guarded arms may repeat a tag; re-matching a tag already covered by an unguarded arm = duplicate-arm error. A dead arm the duplicate rule misses (nested pattern or tuple combination already covered) is NOT an error — it compiles, and the editor dims it (engine `ttHints`).
 - nested: `Ok(value: Some(v)) => v`; inner UNIT case needs parens `field: None()` (`field: name` = alias); no combining with or-patterns; same binding name twice in a pattern = error (alias one); inner mismatch falls through.
@@ -63,7 +63,7 @@ match (flag) { true => "yes", false => "no" }
 - Literals: string (`"a"`/`'a'`), number (`404`, `-1`, `0xff`, `1_000`, `1.5e2`, `10n`), `true`/`false`. No bindings. or-pattern alternatives must all be the SAME kind (`"a" | 1` = error). Guards allowed, same rules as tags.
 - Duplicates compared BY VALUE: `200` and `0xc8` are the same arm → duplicate-arm error. `1n` ≠ `1`.
 - NOT allowed inside tuple patterns (v1) — tuple elements are tag patterns or `_`.
-- Exhaustiveness: the DEFAULT compile path does NOT check it (ttc has no TS types) — `_`-less literal match just gets a runtime `throw` guard. `ttc --check-types`/`--types` DO check it via the TypeScript checker, but only when the scrutinee type is a finite literal union (`"a" | "b"`, `1 | 2`, `boolean`, `typeof arr[number]`); `string`/`number`/`unknown`/`any`/`T`/`"a" | string` are never diagnosed. Reported at the `.tt` `match` keyword.
+- Exhaustiveness: the DEFAULT compile path does NOT check it (ttc has no TS types) — `_`-less literal match just gets a runtime `throw` guard. `ttc --check-types`/`--types` DO check it via the TypeScript checker, but only when the scrutinee type is a finite literal union (`"a" | "b"`, `1 | 2`, `1n | -2n`, `boolean`, `typeof arr[number]`); `string`/`number`/`unknown`/`any`/`T`/`"a" | string` are never diagnosed. Reported at the `.tt` `match` keyword.
 
 Tuple match (product exhaustiveness — missing COMBINATIONS are errors):
 ```tt

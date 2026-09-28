@@ -774,3 +774,29 @@ fn variant_case_and_field_docs_reach_hover_and_signature_help() {
         .unwrap();
     assert!(format!("{help:?}").contains("Width in pixels."), "{help:?}");
 }
+
+#[test]
+fn bigint_literal_unions_are_checked_for_exhaustiveness() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/big.tt",
+        "export function one(n: 1n | 2n) { return match (n) { 1n => \"a\" }; }\n\
+         export function signed(n: -1n | 2n | 0x10n) { return match (n) { 2n => \"a\" }; }\n\
+         export function full(n: -1n | 2n) { return match (n) { -1n => \"a\", 2n => \"b\" }; }\n\
+         export function mixed(n: 1n | 2) { return match (n) { 2 => \"a\" }; }\n\
+         export function narrowed(n: 1n | 2n) { if (n === 1n) return \"a\"; return match (n) { 2n => \"b\" }; }\n",
+    )]);
+    let out = check(&dir);
+    assert!(
+        out.contains("match on literal union is not exhaustive: missing 2n\n"),
+        "{out}"
+    );
+    assert!(out.contains("missing -1n, 16n\n"), "{out}");
+    assert!(out.contains("missing 1n\n"), "{out}");
+    assert!(out.contains("`, -1n => undefined, 16n => undefined,`"), "{out}");
+    assert_eq!(
+        out.matches("error[match-not-exhaustive]").count(),
+        3,
+        "{out}"
+    );
+}

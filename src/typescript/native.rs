@@ -296,10 +296,7 @@ fn literal_json(literal: &crate::Literal) -> serde_json::Value {
         crate::Literal::String(s) => json!(s),
         crate::Literal::Number(n) => json!(n),
         crate::Literal::Boolean(b) => json!(b),
-        // No finite literal union TypeScript reports holds a BigInt, so a
-        // match covering one is never asked about; carried as text for
-        // completeness.
-        crate::Literal::BigInt(d) => json!(d),
+        crate::Literal::BigInt(d) => json!({ "bigint": d }),
     }
 }
 
@@ -482,6 +479,10 @@ fn json_literal(value: &serde_json::Value) -> Option<crate::Literal> {
         serde_json::Value::String(s) => Some(crate::Literal::String(s.clone())),
         serde_json::Value::Number(n) => n.as_f64().map(crate::Literal::Number),
         serde_json::Value::Bool(b) => Some(crate::Literal::Boolean(*b)),
+        serde_json::Value::Object(o) => o
+            .get("bigint")
+            .and_then(|d| d.as_str())
+            .map(|d| crate::Literal::BigInt(d.to_string())),
         _ => None,
     }
 }

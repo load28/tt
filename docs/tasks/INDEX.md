@@ -477,6 +477,7 @@
 | TASK-467 | Rewrite every literal relative .tt/.ttx module reference | Complete | 2026-09-28 | 2026-09-28 | [TASK-467](./TASK-467-module-reference-rewrite.md) |
 | TASK-468 | Keep comments written inside a variant body | Complete | 2026-09-28 | 2026-09-28 | [TASK-468](./TASK-468-variant-body-comments.md) |
 | TASK-469 | Report a literal or `is` tuple element as what it is | Complete | 2026-09-28 | 2026-09-28 | [TASK-469](./TASK-469-tuple-value-element-diagnostic.md) |
+| TASK-470 | Check exhaustiveness of a bigint literal union | Complete | 2026-09-28 | 2026-09-28 | [TASK-470](./TASK-470-bigint-literal-union-exhaustiveness.md) |
 
 ## Next task number
 

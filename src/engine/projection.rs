@@ -258,15 +258,6 @@ pub(crate) fn assemble(
             {
                 continue;
             }
-            // A BigInt is never a member of a finite literal union
-            // TypeScript reports, so such a match is left unchecked.
-            if probe
-                .covered
-                .iter()
-                .any(|l| matches!(l, crate::Literal::BigInt(_)))
-            {
-                continue;
-            }
             let Some(position) = scrutinee_position(&file.emit, probe.offset) else {
                 continue;
             };
