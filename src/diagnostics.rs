@@ -16,7 +16,8 @@ mod suggestions;
 #[cfg(test)]
 mod tests;
 
-use crate::error::{TtError, line_col};
+use crate::error::TtError;
+use crate::lines::line_col;
 
 pub(crate) use suggestions::{
     MatchSite, NON_EXHAUSTIVE_HELP, NON_EXHAUSTIVE_WILDCARD_HELP, non_exhaustive_message,

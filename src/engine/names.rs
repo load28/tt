@@ -411,10 +411,10 @@ mod tests {
 
     fn at(source: &str, needle: &str, delta: usize) -> Position {
         let offset = source.find(needle).expect("needle") + delta;
-        let before = &source[..offset];
+        let (line, character) = crate::lines::LineMap::lsp(source).utf16_position(offset);
         Position {
-            line: before.matches('\n').count() as u32,
-            character: (offset - before.rfind('\n').map_or(0, |n| n + 1)) as u32,
+            line: line as u32,
+            character: character as u32,
         }
     }
 
@@ -454,6 +454,36 @@ mod tests {
         // ...and points at the declaration.
         let definition = case.definition.expect("declared in this file");
         assert_eq!(definition.range.start.line, 0);
+    }
+
+    #[test]
+    fn protocol_positions_count_the_protocols_line_breaks() {
+        const DECLARATION: &str = "variant Shape { Circle(radius: number), Point }";
+        const USE: &str = "const a = match (s) { Circle(radius) => radius, Point => 0 };";
+        for (separator, position) in [
+            ("\r", (1, 22)),
+            ("\r\n", (1, 22)),
+            ("\u{2028}", (0, DECLARATION.len() + 1 + 22)),
+            ("\u{2029}\r", (1, 22)),
+        ] {
+            let source = format!("\u{feff}{DECLARATION}{separator}{USE}{separator}");
+            let position = Position {
+                line: position.0 as u32,
+                character: position.1 as u32,
+            };
+            let case = tt_symbol_at(Path::new("/p/a.tt"), &source, position)
+                .unwrap_or_else(|| panic!("no symbol in {source:?}"));
+            assert_eq!(case.signature, "Shape.Circle(radius: number)");
+            let definition = case.definition.expect("declared in this file");
+            assert_eq!(
+                (
+                    definition.range.start.line,
+                    definition.range.start.character
+                ),
+                (0, 16),
+                "{source:?}"
+            );
+        }
     }
 
     #[test]

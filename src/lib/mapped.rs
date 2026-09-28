@@ -377,30 +377,18 @@ fn with_method_calls(
 }
 
 /// Converts a byte offset into `source` to a 1-based `(line, column)` —
-/// the same mapping [`CompileError`] positions use (column counted in
-/// UTF-8 code points). Offsets past the end clamp to the last position.
+/// the same mapping [`CompileError`] positions use: ECMA-262's line
+/// terminators (LF, CR, CR LF, U+2028, U+2029), as `tsc` counts lines, and
+/// the column counted in code points. Offsets past the end clamp to the
+/// last position. [`lines::LineMap`] measures a text once for many
+/// conversions, and under the editor protocol's line breaks.
+///
+/// ```
+/// let source = "export {};\rconst b = 1;\r";
+/// assert_eq!(ttc::line_col(source, source.find('b').unwrap()), (2, 7));
+/// ```
 pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
-    error::line_col(source, offset)
-}
-
-/// A [`line_col`] column, counted in UTF-16 code units instead of code
-/// points — what an editor protocol means by a character.
-///
-/// The two differ by one for every astral character earlier on the line, so
-/// a surface that speaks to an editor converts here rather than passing a
-/// code-point column off as a protocol one. A position the text does not
-/// have answers with the column it was given.
-///
-/// ```
-/// // An emoji is one code point and two UTF-16 code units.
-/// let source = "const e = \"🎉\"; const x = 1;\n";
-/// let at = source.find("x").unwrap();
-/// let (line, column) = ttc::line_col(source, at);
-/// assert_eq!((line, column), (1, 22));
-/// assert_eq!(ttc::utf16_column(source, line, column), 23);
-/// ```
-pub fn utf16_column(source: &str, line: usize, column: usize) -> usize {
-    error::utf16_column(source, line, column)
+    lines::line_col(source, offset)
 }
 
 /// A byte offset into `source` as a UTF-16 code-unit offset — the offset an

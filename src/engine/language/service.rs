@@ -1,6 +1,7 @@
 //! Service projections, coordinate mapping, and TypeScript response conversion.
 
 use super::*;
+use crate::lines::LineMap;
 
 pub(super) fn projection_accepts_diagnostics(code: &str, source_kind: crate::SourceKind) -> bool {
     crate::verify::verify_output(code, source_kind).is_ok()
@@ -193,7 +194,7 @@ pub(super) fn ts_completions(
 /// The source byte a position names — the analysis speaks bytes, the
 /// protocol UTF-16.
 pub(in super::super) fn source_byte(source: &str, position: Position) -> usize {
-    mapper::from_utf16(source, u16_offset(source, position))
+    byte_at(&LineMap::lsp(source), position)
 }
 
 /// The match analysis of one file as a stand-alone question: imported
@@ -214,11 +215,11 @@ pub(in super::super) fn analyses_for(path: &Path, source: &str) -> crate::Patter
 /// A byte span of `text` as a [`Range`] — the byte↔UTF-16 conversion every
 /// answer crosses on its way out.
 pub(in super::super) fn span_range(text: &str, start: usize, end: usize) -> Range {
-    source_range(
-        text,
-        mapper::to_utf16(text, start),
-        mapper::to_utf16(text, end),
-    )
+    let lines = LineMap::lsp(text);
+    Range {
+        start: byte_position(&lines, start),
+        end: byte_position(&lines, end),
+    }
 }
 
 /// The variant declarations a file's direct relative `.tt` imports bring into
@@ -601,56 +602,29 @@ pub(super) fn source_range(text: &str, start: usize, end: usize) -> Range {
 }
 
 /// The UTF-16 offset a zero-based line/character names in `text` — the LSP
-/// convention (3.17, `Position`): a character past the line's end defaults
-/// back to the line's length, and a line past the text's end clamps to the
-/// text's end.
+/// convention (3.17): its line breaks, a character past the line's end
+/// defaulting back to the line's length, and a line past the text's end
+/// clamping to the text's end.
 pub(crate) fn u16_offset(text: &str, position: Position) -> usize {
-    let text = crate::error::decoded(text);
-    let mut line = 0u32;
-    let mut u16 = 0usize;
-    let mut line_start = 0usize;
-    let mut line_start_byte = 0usize;
-    if position.line > 0 {
-        for (byte, ch) in text.char_indices() {
-            u16 += ch.len_utf16();
-            if ch == '\n' {
-                line += 1;
-                line_start = u16;
-                line_start_byte = byte + 1;
-                if line == position.line {
-                    break;
-                }
-            }
-        }
-        if line < position.line {
-            return text.encode_utf16().count();
-        }
-    }
-    let rest = &text[line_start_byte..];
-    let content = rest.split('\n').next().unwrap_or_default();
-    let content = content.strip_suffix('\r').unwrap_or(content);
-    line_start + (position.character as usize).min(content.encode_utf16().count())
+    mapper::to_utf16(text, byte_at(&LineMap::lsp(text), position))
 }
 
 /// The zero-based line/character a UTF-16 offset names in `text`.
 pub(crate) fn u16_position(text: &str, offset: usize) -> Position {
-    let text = crate::error::decoded(text);
-    let mut u16 = 0usize;
-    let mut line = 0u32;
-    let mut line_start = 0usize;
-    for ch in text.chars() {
-        if u16 >= offset {
-            break;
-        }
-        u16 += ch.len_utf16();
-        if ch == '\n' {
-            line += 1;
-            line_start = u16;
-        }
-    }
+    byte_position(&LineMap::lsp(text), mapper::from_utf16(text, offset))
+}
+
+/// The byte a protocol position names over measured lines.
+pub(in super::super) fn byte_at(lines: &LineMap<'_>, position: Position) -> usize {
+    lines.utf16_offset(position.line as usize, position.character as usize)
+}
+
+/// A byte as a protocol position over measured lines.
+pub(in super::super) fn byte_position(lines: &LineMap<'_>, byte: usize) -> Position {
+    let (line, character) = lines.utf16_position(byte);
     Position {
-        line,
-        character: (u16.min(offset).max(line_start) - line_start) as u32,
+        line: line as u32,
+        character: character as u32,
     }
 }
 

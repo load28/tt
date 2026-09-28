@@ -727,6 +727,7 @@ include!("native/cases_01.rs");
 include!("native/cases_02.rs");
 include!("native/cases_03.rs");
 include!("native/cases_04.rs");
+include!("native/cases_05.rs");
 
 #[test]
 fn scoped_contextual_values_cross_all_mixed_source_edges() {

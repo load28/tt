@@ -416,9 +416,7 @@ impl<'a> Emitter<'a> {
                 structured_returns.push((exit, expr));
                 continue;
             }
-            let line_start = self.source[..exit.statement.start]
-                .rfind('\n')
-                .map_or(0, |index| index + 1);
+            let line_start = crate::lines::line_start_before(self.source, exit.statement.start);
             let line_indent = &self.source[line_start..exit.statement.start];
             let starts_own_line = line_indent.bytes().all(|byte| matches!(byte, b' ' | b'\t'));
             match exit.argument {

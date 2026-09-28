@@ -97,7 +97,9 @@ fn conflict_marker(src: &str, tokens: &[Token]) -> Option<Span> {
         let previous_end = index
             .checked_sub(1)
             .map_or(0, |previous| tokens[previous].span.end);
-        if index == 0 || src[previous_end..start].contains(['\n', '\r']) {
+        if index == 0
+            || crate::scanner::contains_line_terminator(src.as_bytes(), previous_end, start)
+        {
             return Some(Span {
                 start,
                 end: start + 7,

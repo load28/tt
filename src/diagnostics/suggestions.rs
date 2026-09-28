@@ -136,7 +136,7 @@ fn insert_arms(source: &str, site: MatchSite, arms: &[String]) -> Option<Edit> {
     {
         return None;
     }
-    let line_start = |at: usize| source[..at].rfind('\n').map_or(0, |nl| nl + 1);
+    let line_start = |at: usize| crate::lines::line_start_before(source, at);
     let leading = |at: usize| -> Option<&str> {
         let prefix = &source[line_start(at)..at];
         prefix

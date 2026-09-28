@@ -274,7 +274,10 @@ pub fn render(report: &Report<'_>, source: Option<&str>, styles: Styles) -> Stri
         return out;
     };
 
-    let lines: Vec<&str> = crate::error::decoded(source).split('\n').collect();
+    let line_map = crate::lines::LineMap::ecma(source);
+    let lines: Vec<&str> = (0..line_map.len())
+        .filter_map(|line| line_map.line_text(line))
+        .collect();
     let start = span.start;
     let end = span.end.unwrap_or(Position {
         line: start.line,
@@ -488,22 +491,17 @@ pub fn engine_diagnostic(
     )
 }
 
-/// The text of a 1-based line, with tabs expanded and any `\r` dropped.
+/// The text of a 1-based line, with tabs expanded.
 fn shown_line(lines: &[&str], line: usize) -> String {
     let raw = lines.get(line.wrapping_sub(1)).copied().unwrap_or("");
-    raw.trim_end_matches('\r')
-        .replace('\t', &" ".repeat(TAB_WIDTH))
+    raw.replace('\t', &" ".repeat(TAB_WIDTH))
 }
 
 /// The display column a 1-based character column sits at, once tabs are
 /// expanded. Columns past the end of the line clamp to just past it, so a
 /// span that outruns a stale buffer still points somewhere real.
 fn display_col(lines: &[&str], line: usize, col: usize) -> usize {
-    let raw = lines
-        .get(line.wrapping_sub(1))
-        .copied()
-        .unwrap_or("")
-        .trim_end_matches('\r');
+    let raw = lines.get(line.wrapping_sub(1)).copied().unwrap_or("");
     let mut at = 1;
     for (index, ch) in raw.chars().enumerate() {
         if index + 1 >= col {

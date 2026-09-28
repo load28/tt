@@ -578,10 +578,10 @@ mod tests {
 
     fn at(source: &str, needle: &str) -> Position {
         let offset = source.find(needle).expect("needle") + needle.len();
-        let before = &source[..offset];
+        let (line, character) = crate::lines::LineMap::lsp(source).utf16_position(offset);
         Position {
-            line: before.matches('\n').count() as u32,
-            character: (offset - before.rfind('\n').map_or(0, |n| n + 1)) as u32,
+            line: line as u32,
+            character: character as u32,
         }
     }
 

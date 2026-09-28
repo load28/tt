@@ -500,6 +500,7 @@
 | TASK-490 | Decide the `val` modifier structurally, once, in the parser | Complete | 2026-09-28 | 2026-09-28 | [TASK-490](./TASK-490-val-modifier-decided-once-in-the-parser.md) |
 | TASK-491 | Model statement boundaries once, as token facts owned by the lexer | Complete | 2026-09-28 | 2026-09-28 | [TASK-491](./TASK-491-token-facts-statement-boundaries.md) |
 | TASK-492 | Completion reads the parser's arm structure | Complete | 2026-09-28 | 2026-09-28 | [TASK-492](./TASK-492-completion-reads-parser-arm-structure.md) |
+| TASK-498 | Count lines once, under the line breaks each consumer speaks | Complete | 2026-09-28 | 2026-09-28 | [TASK-498](./TASK-498-one-line-model.md) |
 
 ## Next task number
 

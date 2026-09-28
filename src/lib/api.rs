@@ -438,18 +438,24 @@ fn program_variant_symbols(program: &ast::Program) -> Vec<VariantSymbol> {
         .collect()
 }
 
-/// The line terminator a file is written with: `"\r\n"` when its first line
-/// break is one, `"\n"` otherwise. Generated text joins a file with the
-/// terminator the file already uses.
+/// The line terminator a file is written with: its first line ending —
+/// `"\r\n"`, `"\r"` or `"\n"` — and `"\n"` in a file with none. Generated
+/// text joins a file with the terminator the file already uses. U+2028 and
+/// U+2029 end ECMAScript lines but are not a way of ending a file's lines,
+/// so the endings looked at are the editor protocol's
+/// ([`lines::LineBreaks::Lsp`]).
 ///
 /// ```
 /// assert_eq!(ttc::line_ending("a\r\nb\n"), "\r\n");
 /// assert_eq!(ttc::line_ending("a\nb\r\n"), "\n");
+/// assert_eq!(ttc::line_ending("a\rb\r"), "\r");
+/// assert_eq!(ttc::line_ending("a\u{2028}b\r\n"), "\r\n");
 /// assert_eq!(ttc::line_ending("a"), "\n");
 /// ```
 pub fn line_ending(source: &str) -> &'static str {
-    match source.find('\n') {
-        Some(at) if at > 0 && source.as_bytes()[at - 1] == b'\r' => "\r\n",
+    match lines::LineMap::lsp(source).line_break(0) {
+        Some("\r\n") => "\r\n",
+        Some("\r") => "\r",
         _ => "\n",
     }
 }

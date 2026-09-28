@@ -584,25 +584,22 @@ pub(super) struct BannerPlacement {
 /// `"use client"` — a comment may precede, because a comment is not a
 /// statement and does not end a prologue.
 pub(super) fn write_banner(code: &mut String, banner: &str) -> BannerPlacement {
-    let mut at = 0;
-    if code.starts_with('\u{feff}') {
-        at += '\u{feff}'.len_utf8();
-    }
+    let line_map = ttc::lines::LineMap::ecma(code);
+    let mut at = line_map.line_start(0).unwrap_or(0);
+    let mut at_line = 0;
     let mut lines = 1;
     let mut prefix_newline = false;
     if code[at..].starts_with("#!") {
-        match code[at..].find('\n') {
-            Some(newline) => at += newline + 1,
-            None => {
-                // A shebang that runs to the end of the file: the banner
-                // needs a line of its own to sit on.
-                at = code.len();
-                prefix_newline = true;
-                lines += 1;
-            }
+        at = line_map.line_end(0).unwrap_or(code.len());
+        if line_map.len() > 1 {
+            at_line = 1;
+        } else {
+            // A shebang that runs to the end of the file: the banner
+            // needs a line of its own to sit on.
+            prefix_newline = true;
+            lines += 1;
         }
     }
-    let at_line = code[..at].matches('\n').count();
     let mut written = String::with_capacity(code.len() + banner.len() + 1);
     written.push_str(&code[..at]);
     if prefix_newline {

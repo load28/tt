@@ -1214,6 +1214,7 @@ fn check_sees_a_variant_exported_through_a_specifier() {
 }
 
 include!("cli/cases_01.rs");
+include!("cli/line_breaks.rs");
 
 /// A `#!` line and a byte-order mark are only themselves when they come
 /// first, so the generated banner is written after them (TASK-336). A

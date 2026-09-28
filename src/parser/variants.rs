@@ -11,6 +11,7 @@ use crate::ast::{
     Comment, Comments, Field, RecoveryKind, RecoveryNode, Span, VariantCase, VariantDecl,
 };
 use crate::lexer::TokenKind;
+use crate::scanner;
 
 /// `cur` is positioned just past the `variant` keyword. On success returns
 /// the advanced cursor, the byte just past the closing brace, and the
@@ -363,17 +364,14 @@ fn gap_comments(src: &str, start: usize, end: usize) -> Vec<(Comment, bool)> {
     let mut line_break = false;
     let mut after_break = false;
     while index < end {
+        if let Some(len) = scanner::line_terminator_len(bytes, index, end) {
+            line_break = true;
+            after_break = true;
+            index += len;
+            continue;
+        }
         let stop = match (bytes[index], bytes.get(index + 1)) {
-            (b'\n' | b'\r', _) => {
-                line_break = true;
-                after_break = true;
-                index += 1;
-                continue;
-            }
-            (b'/', Some(b'/')) => bytes[index..end]
-                .iter()
-                .position(|&byte| byte == b'\n' || byte == b'\r')
-                .map_or(end, |offset| index + offset),
+            (b'/', Some(b'/')) => scanner::line_end(bytes, index, end),
             (b'/', Some(b'*')) => src[index + 2..end]
                 .find("*/")
                 .map_or(end, |offset| index + 2 + offset + 2),
@@ -382,7 +380,7 @@ fn gap_comments(src: &str, start: usize, end: usize) -> Vec<(Comment, bool)> {
                 continue;
             }
         };
-        let line_start = src[..index].rfind(['\n', '\r']).map_or(0, |at| at + 1);
+        let line_start = crate::lines::line_start_before(src, index);
         comments.push((
             Comment {
                 text: src[index..stop].to_string(),

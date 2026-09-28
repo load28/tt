@@ -734,10 +734,7 @@ fn push_generated(out: &mut String, text: &str, newline: &str) {
 /// The whitespace a line starts with — the base a lowering's generated
 /// block structure is laid out from.
 fn line_indent(out: &str) -> &str {
-    let line = match out.rfind('\n') {
-        Some(newline) => &out[newline + 1..],
-        None => out,
-    };
+    let line = &out[crate::lines::line_start_before(out, out.len())..];
     let end = line
         .find(|byte: char| byte != ' ' && byte != '\t')
         .unwrap_or(line.len());
@@ -763,7 +760,7 @@ impl<'a> Piece<'a> {
     fn ends_line(&self) -> bool {
         match self {
             Piece::Break { .. } => true,
-            piece => piece.text().ends_with('\n'),
+            piece => crate::lines::ends_with_line_break(piece.text()),
         }
     }
 

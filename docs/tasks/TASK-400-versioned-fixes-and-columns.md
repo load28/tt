@@ -1,5 +1,7 @@
 # TASK-400: Version quick-fix edits and convert fallback diagnostic columns
 
+> **Superseded in part by [TASK-498](./TASK-498-one-line-model.md):** the column conversion no longer splits lines on `\n`. `utf16Column` became `protocolPosition`, which converts a whole position from the compiler's ECMA-262 lines to the protocol's LF/CR LF/CR lines, mirroring `ttc::lines::ProtocolPositions`; `src/error.rs` `utf16_column` and `src/server.rs` `protocol_position` were removed.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

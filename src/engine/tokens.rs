@@ -24,7 +24,7 @@ use crate::ast::{
     TemplateChunk, TuplePattern,
 };
 use crate::lexer::{self, Token, TokenKind as Lex};
-use crate::typescript::mapper;
+use crate::lines::LineMap;
 
 /// What one token *is*, in the parser's judgement. Names follow the LSP
 /// standard token types so an adapter maps them one to one.
@@ -100,13 +100,13 @@ pub fn semantic_tokens_with_kind(
     source: &str,
     source_kind: crate::SourceKind,
 ) -> Vec<SemanticToken> {
-    let lines = LineIndex::new(source);
+    let lines = LineMap::lsp(source);
     scan_with_kind(source, source_kind)
         .into_iter()
         .map(|(start, len, kind)| SemanticToken {
             range: Range {
-                start: lines.position(source, start),
-                end: lines.position(source, start + len),
+                start: position(&lines, start),
+                end: position(&lines, start + len),
             },
             kind,
         })
@@ -358,30 +358,12 @@ fn deny_in(
     }
 }
 
-/// Line starts, for byte-offset → line / UTF-16-column conversion.
-struct LineIndex {
-    starts: Vec<usize>,
-}
-
-impl LineIndex {
-    fn new(text: &str) -> Self {
-        let mut starts = vec![0];
-        starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter(|&(_, b)| b == b'\n')
-                .map(|(i, _)| i + 1),
-        );
-        LineIndex { starts }
-    }
-
-    fn position(&self, text: &str, byte: usize) -> Position {
-        let line = self.starts.partition_point(|&start| start <= byte) - 1;
-        let line_start = self.starts[line];
-        Position {
-            line: line as u32,
-            character: mapper::to_utf16(&text[line_start..], byte - line_start) as u32,
-        }
+/// A byte of `source` as the editor protocol's line and UTF-16 column.
+fn position(lines: &LineMap<'_>, byte: usize) -> Position {
+    let (line, character) = lines.utf16_position(byte);
+    Position {
+        line: line as u32,
+        character: character as u32,
     }
 }
 
@@ -486,5 +468,21 @@ mod tests {
         assert_eq!(token.range.start.line, 1);
         assert_eq!(token.range.start.character, 10);
         assert_eq!(token.range.end.character, 15);
+    }
+
+    #[test]
+    fn positions_count_the_protocols_line_breaks() {
+        for (src, line, character) in [
+            ("const x = 1;\rconst a = match(x);\r", 1, 10),
+            ("const x = 1;\r\nconst a = match(x);\r\n", 1, 10),
+            ("\u{feff}\u{1F389};\rconst a = match(x);\n", 1, 10),
+            ("const x = 1;\u{2028}const a = match(x);\n", 0, 23),
+            ("const x = 1;\u{2029}\rconst a = match(x);\n", 1, 10),
+        ] {
+            let tokens = semantic_tokens(src);
+            assert_eq!(tokens.len(), 1, "{src:?}");
+            assert_eq!(tokens[0].range.start.line, line, "{src:?}");
+            assert_eq!(tokens[0].range.start.character, character, "{src:?}");
+        }
     }
 }

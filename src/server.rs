@@ -67,6 +67,7 @@ use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use ttc::lines::ProtocolPositions;
 
 use ttc::engine::{
     CheckRequest, CompletionAnswer, Engine, Location, Position, Project, ProjectOptions, Range,
@@ -413,18 +414,6 @@ fn close_document(
     Ok(serde_json::json!({}))
 }
 
-/// One position as the protocol counts it.
-///
-/// Every column that leaves this server is a UTF-16 one
-/// (`docs/design/lsp-architecture.md` §C). The compiler measures columns in
-/// code points, because that is what its own rendered caret lines up with,
-/// and the two differ by one for every astral character earlier on the line
-/// — enough for an offered edit to land on the code beside the one it names.
-/// The conversion happens here, at the boundary that speaks the protocol.
-fn protocol_position(source: &str, at: (usize, usize)) -> (usize, usize) {
-    (at.0, ttc::utf16_column(source, at.0, at.1))
-}
-
 /// A diagnostic's suggestions as the JSON the protocol speaks.
 ///
 /// The edit's byte offsets become the same 1-based line/column the
@@ -434,21 +423,26 @@ fn protocol_position(source: &str, at: (usize, usize)) -> (usize, usize) {
 /// shows the message either way and only offers a fix when there is one.
 fn suggestions_json(suggestions: &[ttc::Suggestion], source: Option<&str>) -> serde_json::Value {
     use serde_json::json;
+    let positions = source.map(ProtocolPositions::new);
+    let positions = positions.as_ref();
     suggestions
         .iter()
         .map(|suggestion| {
-            let edit = suggestion.edit.as_ref().zip(source).map(|(edit, source)| {
-                let (line, col) = protocol_position(source, ttc::line_col(source, edit.start));
-                let (end_line, end_col) =
-                    protocol_position(source, ttc::line_col(source, edit.end));
-                json!({
-                    "line": line,
-                    "col": col,
-                    "endLine": end_line,
-                    "endCol": end_col,
-                    "replacement": edit.replacement,
-                })
-            });
+            let edit = suggestion
+                .edit
+                .as_ref()
+                .zip(positions)
+                .map(|(edit, positions)| {
+                    let (line, col) = positions.of_byte(edit.start);
+                    let (end_line, end_col) = positions.of_byte(edit.end);
+                    json!({
+                        "line": line,
+                        "col": col,
+                        "endLine": end_line,
+                        "endCol": end_col,
+                        "replacement": edit.replacement,
+                    })
+                });
             json!({ "message": suggestion.message, "edit": edit })
         })
         .collect::<Vec<_>>()
@@ -493,19 +487,20 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     let report = ttc::ice::working_on(Path::new(filename.unwrap_or("<buffer>")), || {
         ttc::compile_report(text, &options)
     });
+    let positions = ProtocolPositions::new(text);
     let diagnostics: Vec<_> = report
         .diagnostics
         .iter()
         .map(|d| {
-            let e = d.to_compile_error(text, filename);
-            let (line, col) = protocol_position(text, (e.line, e.col));
-            let (end_line, end_col) = protocol_position(text, (e.end_line, e.end_col));
+            let at = |offset: Option<usize>| offset.map_or((0, 0), |at| positions.of_byte(at));
+            let (line, col) = at(d.start);
+            let (end_line, end_col) = at(d.end);
             json!({
                 "line": line,
                 "col": col,
                 "endLine": end_line,
                 "endCol": end_col,
-                "message": e.message,
+                "message": d.message,
                 "code": d.code.as_str(),
                 "suggestions": suggestions_json(&d.suggestions, Some(text)),
             })
@@ -734,7 +729,8 @@ fn typed_check(
         .as_str()
         .ok_or_else(|| "typedCheck needs a \"path\"".to_string())?
         .to_string();
-    let text = text_param(params)?.to_string();
+    let buffer = text_param(params)?;
+    let text = buffer.to_string();
     let include_types = params["includeTypes"].as_bool().unwrap_or(false);
     let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
     // A document the consumer holds open keeps its overlay after the check;
@@ -753,17 +749,26 @@ fn typed_check(
     };
     let outcome = project.update(&files);
     let response = match outcome {
-        Err(blocked) => json!({
-            "blocked": true,
-            "diagnostics": [{
-                "path": blocked.path,
-                "line": blocked.error.line,
-                "col": blocked.error.col,
-                "endLine": blocked.error.end_line,
-                "endCol": blocked.error.end_col,
-                "message": blocked.error.message,
-            }],
-        }),
+        Err(blocked) => {
+            let positions = (blocked.path == canonical).then(|| ProtocolPositions::new(buffer));
+            let at = |position: (usize, usize)| match &positions {
+                Some(positions) => positions.of_position(position),
+                None => position,
+            };
+            let (line, col) = at((blocked.error.line, blocked.error.col));
+            let (end_line, end_col) = at((blocked.error.end_line, blocked.error.end_col));
+            json!({
+                "blocked": true,
+                "diagnostics": [{
+                    "path": blocked.path,
+                    "line": line,
+                    "col": col,
+                    "endLine": end_line,
+                    "endCol": end_col,
+                    "message": blocked.error.message,
+                }],
+            })
+        }
         Ok(snapshot) => {
             let checked = project.check(
                 &snapshot,
@@ -784,10 +789,11 @@ fn typed_check(
                         .diagnostics
                         .iter()
                         .map(|d| {
-                            let source = snapshot.source_of(&d.path);
-                            let at = |position: Option<(usize, usize)>| match (position, source) {
-                                (Some(position), Some(source)) => {
-                                    protocol_position(source, position)
+                            let positions = snapshot.source_of(&d.path).map(ProtocolPositions::new);
+                            let at = |position: Option<(usize, usize)>| match (position, &positions)
+                            {
+                                (Some(position), Some(positions)) => {
+                                    positions.of_position(position)
                                 }
                                 (Some(position), None) => position,
                                 (None, _) => (0, 0),
@@ -859,9 +865,10 @@ fn labels_json<'a>(
             // A label carries a path only when it points into another
             // file, so its column is counted against that file's text and
             // otherwise against the diagnostic's own.
-            let source = source_of(label.path.as_deref().unwrap_or(default_path));
-            let at = |position: (usize, usize)| match source {
-                Some(source) => protocol_position(source, position),
+            let positions = source_of(label.path.as_deref().unwrap_or(default_path))
+                .map(ProtocolPositions::new);
+            let at = |position: (usize, usize)| match &positions {
+                Some(positions) => positions.of_position(position),
                 None => position,
             };
             let (line, col) = at(label.position);

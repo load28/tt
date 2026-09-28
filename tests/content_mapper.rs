@@ -798,3 +798,35 @@ fn the_mapper_process_answers_the_protocol_directly() {
             .exists()
     );
 }
+
+/// The mapper speaks byte offsets, so the checker counts the lines itself —
+/// ECMA-262's, whichever terminator a `.tt` file uses, and UTF-16 columns
+/// after a byte-order mark (TASK-498).
+#[test]
+fn a_tt_diagnostic_lands_on_the_line_every_terminator_starts() {
+    let tsc = require_mapper_toolchain!();
+    for (name, separator) in [
+        ("lf", "\n"),
+        ("crlf", "\r\n"),
+        ("cr", "\r"),
+        ("ls", "\u{2028}"),
+        ("ps", "\u{2029}"),
+    ] {
+        let project = mapper_project(false);
+        let source = format!(
+            "\u{feff}declare const s: any;{separator}{separator}\"\u{1F389}\"; const v = try f();{separator}export const a = 1;{separator}"
+        );
+        fs::write(project.path().join("src/b.tt"), source).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { a } from \"./b.tt\";\nconst x: number = a;\n",
+        )
+        .unwrap();
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok, "{name}");
+        assert!(
+            text.contains("b.tt(3,17): error tt11"),
+            "{name}: expected the diagnostic at its source line, got:\n{text}"
+        );
+    }
+}

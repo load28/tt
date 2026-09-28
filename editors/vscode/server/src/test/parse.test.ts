@@ -7,7 +7,7 @@
 import * as assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseStderr, utf16Column } from "../ttc";
+import { parseStderr, protocolPosition } from "../ttc";
 
 const RENDERED = [
   'error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Square"',
@@ -103,10 +103,23 @@ test("a warning is a diagnostic too", () => {
 
 test("a compiler column counts characters, the protocol counts UTF-16 code units", () => {
   const text = 'plain\nconst e = "\u{1F600}"; bad\n\u{1F600}';
-  assert.equal(utf16Column(text, 1, 3), 3);
-  assert.equal(utf16Column(text, 2, 16), 17);
-  assert.equal(utf16Column(text, 2, 12), 12);
-  assert.equal(utf16Column(text, 3, 2), 3, "the end of the line is a position");
-  assert.equal(utf16Column(text, 3, 5), 5, "past the end is left as reported");
-  assert.equal(utf16Column(text, 9, 4), 4, "a line the text does not have is left as reported");
+  const col = (line: number, column: number) => protocolPosition(text, line, column).col;
+  assert.equal(col(1, 3), 3);
+  assert.equal(col(2, 16), 17);
+  assert.equal(col(2, 12), 12);
+  assert.equal(col(3, 2), 3, "the end of the line is a position");
+  assert.equal(col(3, 5), 5, "past the end is left as reported");
+  assert.equal(col(9, 4), 4, "a line the text does not have is left as reported");
+});
+
+test("a compiler line ends at every ECMAScript terminator, a protocol line at LF, CR LF and CR", () => {
+  for (const [text, expected] of [
+    ["a\rb\rc = 1;", { line: 3, col: 1 }],
+    ["a\r\nb\r\nc = 1;", { line: 3, col: 1 }],
+    ["\uFEFFa\nb\nc = 1;", { line: 3, col: 1 }],
+    ["a\u2028b\u2029c = 1;", { line: 1, col: 5 }],
+    ["a\r\n\u{1F600}\u2028c = 1;", { line: 2, col: 4 }],
+  ] as const) {
+    assert.deepEqual(protocolPosition(text, 3, 1), expected, JSON.stringify(text));
+  }
 });

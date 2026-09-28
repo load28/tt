@@ -236,6 +236,32 @@ lowering 안쪽 depth만큼에서 다시 시작"이라는 뜻이고, 실제 들�
   두 입력이 같은 출력 경로를 다투는 경우에만 쓰기를 부모 스레드로 되돌려
   순서를 지킨다 — **관측 가능한 결과는 스레드 수와 무관하게 동일하다.**
 
+## Positions and lines (TASK-498)
+
+Every stage reports byte offsets; a line and column exist only at a public
+boundary, and every boundary converts through one line model,
+`src/lines.rs`. It measures a text once (`LineMap`) under an explicit
+policy, because which code points end a line is two facts, not one:
+
+- `LineBreaks::Ecma` — ECMA-262's `LineTerminatorSequence`: LF, CR, CR LF,
+  U+2028, U+2029. `tsc` reports diagnostics on these lines and ECMA-426
+  source maps count them (§11.1.2.1), so compile errors, `ttc::line_col`,
+  the typed engine's `Diagnostic` positions, the CLI renderer, source maps,
+  sidecar maps, the banner's placement after a `#!` line, and indentation
+  lookups (`line_start_before`) use them.
+- `LineBreaks::Lsp` — LSP 3.17's end-of-line set: LF, CR LF, CR. Every
+  position that goes to an editor or to the TypeScript language server
+  (engine `Position`s, semantic tokens, hints, tt symbols and completions,
+  the `--server` protocol) uses it, and `line_ending` reads a file's line
+  ending from it.
+
+Positions are measured in the decoded text (a byte-order mark is not a
+column). The compiler's own column counts code points (what a rendered caret
+lines up with); protocol and source-map columns count UTF-16 units.
+`ProtocolPositions` converts a compiler position to a protocol one through
+the byte both name. The line terminators themselves are recognized by the
+scanner's ECMA-262 primitives, so multibyte text stays opaque.
+
 ## 타입 검사 실행 (엔진)
 
 typed 모드(`--check-types`/`--types`/`--server`)는 배치 드라이버가 아니라

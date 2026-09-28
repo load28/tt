@@ -70,6 +70,7 @@ pub mod hir;
 mod host_input;
 pub mod ice;
 mod lexer;
+pub mod lines;
 #[path = "lib/mapped.rs"]
 mod mapped;
 mod parser;

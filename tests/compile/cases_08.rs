@@ -595,6 +595,39 @@ fn authored_arm_lines_end_with_the_line_ending_of_a_crlf_file() {
     }
 }
 
+/// A CR-only file's arm lines are found by the same line model the
+/// positions use, and the authored lines end with CR (TASK-498).
+#[test]
+fn authored_arm_lines_end_with_the_line_ending_of_a_cr_file() {
+    let src = "variant Shape { Circle(r: number), Point }\rdeclare const s: Shape;\rfunction f() {\r\tconst a = match (s) {\r\t\tCircle(r) => r,\r\t};\r}\r";
+    let d = hole(src);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(edit.replacement, "\t\tPoint => undefined,\r");
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "variant Shape { Circle(r: number), Point }\rdeclare const s: Shape;\rfunction f() {\r\tconst a = match (s) {\r\t\tCircle(r) => r,\r\t\tPoint => undefined,\r\t};\r}\r"
+    );
+    for which in 0..d.suggestions.len() {
+        let fixed = with_suggestion_applied(src, &d, which);
+        assert!(!fixed.contains('\n'), "{fixed:?}");
+        assert!(
+            ttc::analyze(&fixed, &Options::default()).is_empty(),
+            "{fixed:?}"
+        );
+    }
+}
+
+/// A CR-only file is laid out like any other: generated lines end with CR
+/// and take their indentation from the line they replace (TASK-498).
+#[test]
+fn a_cr_file_emits_the_same_layout_with_its_own_line_ending() {
+    let lf = "variant Shape { Circle(r: number), Point }\ndeclare const s: Shape;\nfunction f() {\n  const a = match (s) {\n    Circle(r) => r,\n    Point => 0,\n  };\n  return a |> String;\n}\n";
+    let cr = lf.replace('\n', "\r");
+    let emitted = ok(&cr);
+    assert!(!emitted.contains('\n'), "{emitted:?}");
+    assert_eq!(emitted, ok(lf).replace('\n', "\r"));
+}
+
 #[test]
 fn misspelled_field_names_the_field_meant() {
     let e = err(r#"variant Shape { Circle(radius: number), Empty }
