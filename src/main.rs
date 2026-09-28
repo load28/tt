@@ -248,7 +248,7 @@ fn run_explain(args: &[String]) -> ExitCode {
             out::line("ttc explain <code> — what a diagnostic's rule is and why\n");
             out::line("Codes:");
             for code in ttc::DiagnosticCode::ALL {
-                out::line(&format!("  {}", code.as_str()));
+                out::line(&format!("  {:<32} tt{}", code.as_str(), code.number()));
             }
             return ExitCode::SUCCESS;
         }
@@ -266,11 +266,23 @@ fn run_explain(args: &[String]) -> ExitCode {
         .trim_start_matches("error[")
         .trim_start_matches("warning[")
         .trim_end_matches(']');
-    match ttc::DiagnosticCode::parse(code) {
+    let code = code
+        .strip_prefix("error ")
+        .unwrap_or(code)
+        .trim()
+        .trim_end_matches(':');
+    match ttc::DiagnosticCode::lookup(code) {
         Some(code) => {
-            out::line(&format!("error[{}]\n", code.as_str()));
+            out::line(&format!("error[{}] (tt{})\n", code.as_str(), code.number()));
             out::line(code.explanation());
             ExitCode::SUCCESS
+        }
+        None if let Some(name) = ttc::DiagnosticCode::retired(code) => {
+            eprintln!(
+                "ttc: diagnostic code \"{code}\" ({name}) is retired and no longer reported \
+                 (run `ttc explain` for the list)"
+            );
+            ExitCode::FAILURE
         }
         None => {
             eprintln!("ttc: unknown diagnostic code \"{code}\" (run `ttc explain` for the list)");

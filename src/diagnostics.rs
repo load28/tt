@@ -150,6 +150,84 @@ pub enum DiagnosticCode {
     Other,
 }
 
+/// One slot of [`NUMBERED_CODES`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Numbered {
+    Active(DiagnosticCode),
+    Retired(&'static str),
+}
+
+/// Every numbered code, in number order from `1`.
+///
+/// Append-only: a new code takes the next number, and a retired code keeps
+/// its slot so every later number stays what `tsc` has already printed.
+const NUMBERED_CODES: [Numbered; 50] = [
+    Numbered::Active(DiagnosticCode::StrayPipe),
+    Numbered::Active(DiagnosticCode::MalformedPipelinePostfix),
+    Numbered::Active(DiagnosticCode::InvalidOptionalReceiver),
+    Numbered::Active(DiagnosticCode::StrayIfLet),
+    Numbered::Active(DiagnosticCode::StrayResult),
+    Numbered::Active(DiagnosticCode::MalformedVariant),
+    Numbered::Active(DiagnosticCode::MalformedMatch),
+    Numbered::Retired("result-missing-keyword"),
+    Numbered::Retired("result-nested-binding"),
+    Numbered::Active(DiagnosticCode::FlowFirstStepMethod),
+    Numbered::Active(DiagnosticCode::TryPlacement),
+    Numbered::Active(DiagnosticCode::LetElsePlacement),
+    Numbered::Active(DiagnosticCode::LetElseNotDiverging),
+    Numbered::Active(DiagnosticCode::IfLetPlacement),
+    Numbered::Active(DiagnosticCode::VariantDuplicateCase),
+    Numbered::Active(DiagnosticCode::VariantInvalidFieldType),
+    Numbered::Active(DiagnosticCode::PatternDuplicateBinding),
+    Numbered::Active(DiagnosticCode::MatchMixedPatterns),
+    Numbered::Active(DiagnosticCode::MatchWildcardNotLast),
+    Numbered::Active(DiagnosticCode::MatchOrLiteralKindMismatch),
+    Numbered::Active(DiagnosticCode::MatchDuplicateArm),
+    Numbered::Active(DiagnosticCode::MatchNestedInOrPattern),
+    Numbered::Active(DiagnosticCode::MatchOrBindingMismatch),
+    Numbered::Active(DiagnosticCode::MatchTupleArity),
+    Numbered::Active(DiagnosticCode::UnknownCase),
+    Numbered::Active(DiagnosticCode::UnknownField),
+    Numbered::Active(DiagnosticCode::MatchNotExhaustive),
+    Numbered::Active(DiagnosticCode::ValMutation),
+    Numbered::Active(DiagnosticCode::ValPass),
+    Numbered::Active(DiagnosticCode::VerifyFailed),
+    Numbered::Active(DiagnosticCode::SourceNotTypeScript),
+    Numbered::Active(DiagnosticCode::Other),
+    Numbered::Retired("result-tail-semicolon"),
+    Numbered::Active(DiagnosticCode::LoweringPlanFailed),
+    Numbered::Active(DiagnosticCode::ResultNoSuccessValue),
+    Numbered::Active(DiagnosticCode::ResultValueDiscarded),
+    Numbered::Active(DiagnosticCode::ResultReturnNested),
+    Numbered::Active(DiagnosticCode::ResultBreakCrossing),
+    Numbered::Active(DiagnosticCode::ResultContinueCrossing),
+    Numbered::Active(DiagnosticCode::ResultYieldCrossing),
+    Numbered::Active(DiagnosticCode::ResultLabelCrossing),
+    Numbered::Active(DiagnosticCode::TryCrossesValueRegion),
+    Numbered::Active(DiagnosticCode::MatchIsWildcardRequired),
+    Numbered::Active(DiagnosticCode::MatchIsEmptyBindings),
+    Numbered::Active(DiagnosticCode::MatchIsOrBindings),
+    Numbered::Active(DiagnosticCode::MatchPlacement),
+    Numbered::Active(DiagnosticCode::MatchControlCrossing),
+    Numbered::Active(DiagnosticCode::VariantFieldShadowsTag),
+    Numbered::Active(DiagnosticCode::VariantRequiredAfterOptional),
+    Numbered::Active(DiagnosticCode::VariantDefaultExport),
+];
+
+/// The numbered slot a code reference names: a name, `tt<number>`, or a
+/// bare number.
+fn numbered(text: &str) -> Option<Numbered> {
+    let digits = text.strip_prefix("tt").unwrap_or(text);
+    if !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        let number: usize = digits.parse().ok()?;
+        return NUMBERED_CODES.get(number.checked_sub(1)?).copied();
+    }
+    NUMBERED_CODES.iter().copied().find(|slot| match slot {
+        Numbered::Active(code) => code.as_str() == text,
+        Numbered::Retired(name) => *name == text,
+    })
+}
+
 impl DiagnosticCode {
     /// The code's stable wire form, e.g. `"match-not-exhaustive"`.
     pub fn as_str(self) -> &'static str {
@@ -265,6 +343,38 @@ impl DiagnosticCode {
             .iter()
             .copied()
             .find(|code| code.as_str() == text)
+    }
+
+    /// The code's stable number, e.g. `27` for `match-not-exhaustive`.
+    ///
+    /// TypeScript's content mapper protocol carries a numeric diagnostic
+    /// code, which `tsc` prints as `tt<number>`. Numbers come from
+    /// [`NUMBERED_CODES`], which is append-only, so a number never changes
+    /// meaning.
+    pub fn number(self) -> u32 {
+        NUMBERED_CODES
+            .iter()
+            .position(|slot| *slot == Numbered::Active(self))
+            .map_or(0, |index| index as u32 + 1)
+    }
+
+    /// The active code a reference names: its name (`match-not-exhaustive`),
+    /// its number as `tsc` prints it (`tt27`), or the bare number (`27`).
+    pub fn lookup(text: &str) -> Option<DiagnosticCode> {
+        match numbered(text)? {
+            Numbered::Active(code) => Some(code),
+            Numbered::Retired(_) => None,
+        }
+    }
+
+    /// The name of a retired code a reference names, in any form
+    /// [`DiagnosticCode::lookup`] accepts. A retired code keeps its number
+    /// but is no longer reported.
+    pub fn retired(text: &str) -> Option<&'static str> {
+        match numbered(text)? {
+            Numbered::Active(_) => None,
+            Numbered::Retired(name) => Some(name),
+        }
     }
 
     /// What the rule is, why tt has it, and what to write instead — the

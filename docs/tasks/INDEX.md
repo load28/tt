@@ -481,6 +481,7 @@
 | TASK-471 | Show any unexpected value in a match's runtime guard | Complete | 2026-09-28 | 2026-09-28 | [TASK-471](./TASK-471-match-guard-value-display.md) |
 | TASK-474 | std combinators keep the side a callback never returns | Complete | 2026-09-28 | 2026-09-28 | [TASK-474](./TASK-474-std-empty-side-defaults.md) |
 | TASK-475 | `ttc explain` texts match what the compiler does | Complete | 2026-09-28 | 2026-09-28 | [TASK-475](./TASK-475-explain-text-audit.md) |
+| TASK-476 | `ttc explain` accepts the number `tsc` prints | Complete | 2026-09-28 | 2026-09-28 | [TASK-476](./TASK-476-explain-numeric-codes.md) |
 
 ## Next task number
 

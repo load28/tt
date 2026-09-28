@@ -73,67 +73,6 @@ const SPAN_ATOM: u64 = 1;
 /// feature-gated) and nothing else.
 const FEATURES_NONE: u64 = 0;
 
-/// The stable numeric form of a tt diagnostic code on this wire.
-///
-/// `MapperDiagnostic.code` is a number, [`ttc::DiagnosticCode::as_str`] is
-/// a name; this table joins them. It is append-only: a code keeps its
-/// number for as long as the mapper exists, and a name this table does not
-/// know yet reports as `0` rather than shifting its neighbours.
-const CODE_NUMBERS: [&str; 50] = [
-    "stray-pipe",
-    "malformed-pipeline-postfix",
-    "invalid-optional-receiver",
-    "stray-if-let",
-    "stray-result",
-    "malformed-variant",
-    "malformed-match",
-    // Retired codes remain reserved so every following wire number stays stable.
-    "result-missing-keyword",
-    "result-nested-binding",
-    "flow-first-step-method",
-    "try-placement",
-    "let-else-placement",
-    "let-else-not-diverging",
-    "if-let-placement",
-    "variant-duplicate-case",
-    "variant-invalid-field-type",
-    "pattern-duplicate-binding",
-    "match-mixed-patterns",
-    "match-wildcard-not-last",
-    "match-or-literal-kind-mismatch",
-    "match-duplicate-arm",
-    "match-nested-in-or-pattern",
-    "match-or-binding-mismatch",
-    "match-tuple-arity",
-    "unknown-case",
-    "unknown-field",
-    "match-not-exhaustive",
-    "val-mutation",
-    "val-pass",
-    "verify-failed",
-    "source-not-typescript",
-    "other",
-    // Retired code; keep its published slot.
-    "result-tail-semicolon",
-    "lowering-plan-failed",
-    "result-no-success-value",
-    "result-value-discarded",
-    "result-return-nested",
-    "result-break-crossing",
-    "result-continue-crossing",
-    "result-yield-crossing",
-    "result-label-crossing",
-    "try-crosses-value-region",
-    "match-is-wildcard-required",
-    "match-is-empty-bindings",
-    "match-is-or-bindings",
-    "match-placement",
-    "match-control-crossing",
-    "variant-field-shadows-tag",
-    "variant-required-after-optional",
-    "variant-default-export",
-];
-
 /// Everything the mapper keeps between requests.
 struct Session {
     /// Handles TypeScript has opened and not yet closed. The tt transform
@@ -388,17 +327,8 @@ fn mapper_diagnostic(diagnostic: &Diagnostic) -> serde_json::Value {
         "messageText": message,
         "start": start,
         "length": length,
-        "code": code_number(diagnostic.code.as_str()),
+        "code": diagnostic.code.number(),
     })
-}
-
-/// The wire number of a tt diagnostic code name (see [`CODE_NUMBERS`]).
-fn code_number(name: &str) -> u64 {
-    CODE_NUMBERS
-        .iter()
-        .position(|known| *known == name)
-        .map(|index| index as u64 + 1)
-        .unwrap_or(0)
 }
 
 /// The span map of one emission: verbatim chunks as `Verbatim`, glue as

@@ -411,6 +411,28 @@ fn explain_accepts_a_code_pasted_from_a_build_log() {
 }
 
 #[test]
+fn explain_accepts_the_number_tsc_prints() {
+    for reference in ["tt27", "27", "error tt27:"] {
+        let out = ttc(&["explain", reference]);
+        assert!(out.status.success(), "{reference}: {out:?}");
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(
+            text.starts_with("error[match-not-exhaustive] (tt27)"),
+            "{reference}: {text}"
+        );
+    }
+    let out = ttc(&["explain", "tt33"]);
+    assert!(!out.status.success(), "{out:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("result-tail-semicolon"), "{err}");
+    assert!(err.contains("retired"), "{err}");
+    let out = ttc(&["explain", "tt999"]);
+    assert!(!out.status.success(), "{out:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("unknown diagnostic code"), "{err}");
+}
+
+#[test]
 fn explain_with_no_code_lists_every_rule() {
     let out = ttc(&["explain"]);
     assert!(out.status.success(), "{out:?}");

@@ -52,23 +52,10 @@ fn glue_maps_to_its_construct_without_features() {
     }
 }
 
-#[test]
-fn code_numbers_are_stable_and_start_at_one() {
-    assert_eq!(code_number("stray-pipe"), 1);
-    assert_eq!(code_number("match-not-exhaustive"), 27);
-    assert_eq!(code_number("result-tail-semicolon"), 33);
-    assert_eq!(code_number("lowering-plan-failed"), 34);
-    assert_eq!(code_number("result-no-success-value"), 35);
-    assert_eq!(code_number("try-crosses-value-region"), 42);
-    for code in ttc::DiagnosticCode::ALL {
-        assert_ne!(
-            code_number(code.as_str()),
-            0,
-            "active diagnostic {} has no mapper wire number",
-            code.as_str()
-        );
-    }
-    assert_eq!(code_number("never-heard-of-it"), 0);
+fn code_number(name: &str) -> u32 {
+    ttc::DiagnosticCode::parse(name)
+        .unwrap_or_else(|| panic!("{name} is not a diagnostic code"))
+        .number()
 }
 
 /// A scratch directory for one case, removed on drop.
@@ -306,7 +293,11 @@ fn transform_reads_one_hop_imports_for_exhaustiveness() {
     .unwrap();
     let diagnostics = result["diagnostics"].as_array().unwrap();
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-    assert_eq!(diagnostics[0]["code"], code_number("match-not-exhaustive"));
+    assert_eq!(diagnostics[0]["code"], 27);
+    assert_eq!(
+        ttc::DiagnosticCode::lookup("tt27"),
+        Some(ttc::DiagnosticCode::MatchNotExhaustive)
+    );
     let message = diagnostics[0]["messageText"].as_str().unwrap();
     assert!(message.contains("not exhaustive"), "{message}");
     assert!(

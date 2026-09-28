@@ -60,6 +60,52 @@ fn an_unknown_code_has_no_rule() {
 }
 
 #[test]
+fn code_numbers_are_stable_and_start_at_one() {
+    assert_eq!(DiagnosticCode::StrayPipe.number(), 1);
+    assert_eq!(DiagnosticCode::MatchNotExhaustive.number(), 27);
+    assert_eq!(DiagnosticCode::LoweringPlanFailed.number(), 34);
+    assert_eq!(DiagnosticCode::ResultNoSuccessValue.number(), 35);
+    assert_eq!(DiagnosticCode::TryCrossesValueRegion.number(), 42);
+    assert_eq!(DiagnosticCode::VariantDefaultExport.number(), 50);
+    assert_eq!(
+        DiagnosticCode::retired("tt8"),
+        Some("result-missing-keyword")
+    );
+    assert_eq!(DiagnosticCode::retired("33"), Some("result-tail-semicolon"));
+    let mut seen = std::collections::HashSet::new();
+    for code in DiagnosticCode::ALL {
+        let number = code.number();
+        assert_ne!(number, 0, "{} has no number", code.as_str());
+        assert!(seen.insert(number), "{} shares a number", code.as_str());
+    }
+}
+
+#[test]
+fn a_code_is_looked_up_by_name_or_number() {
+    for code in DiagnosticCode::ALL {
+        let number = code.number();
+        assert_eq!(DiagnosticCode::lookup(code.as_str()), Some(*code));
+        assert_eq!(DiagnosticCode::lookup(&format!("tt{number}")), Some(*code));
+        assert_eq!(DiagnosticCode::lookup(&number.to_string()), Some(*code));
+        assert_eq!(DiagnosticCode::retired(&format!("tt{number}")), None);
+    }
+    for text in [
+        "tt8",
+        "8",
+        "result-missing-keyword",
+        "tt0",
+        "0",
+        "tt51",
+        "tt",
+        "",
+        "tt-1",
+        "ts27",
+    ] {
+        assert_eq!(DiagnosticCode::lookup(text), None, "{text}");
+    }
+}
+
+#[test]
 fn a_diagnostic_converts_to_the_cli_error_form() {
     let d = Diagnostic {
         code: DiagnosticCode::MatchDuplicateArm,

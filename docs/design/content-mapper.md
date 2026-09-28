@@ -47,7 +47,7 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
   innermost-first로 빈 구간만 채운다.
 - **진단**: tt 수준 규칙(`ttc --check`와 같은 [`ttc::compile_report`]의
   진단)을 `diagnosticSource: "tt"`로 반환한다. 코드는
-  `CODE_NUMBERS`(append-only 표)의 안정 번호 — `match-not-exhaustive`는
+  `DiagnosticCode::number`(append-only 표)의 안정 번호 — `match-not-exhaustive`는
   `tt27`로 렌더된다. 타입 오류는 TypeScript의 것 — 에러 계층 계약(§2)이
   프로토콜 위에서 그대로 성립한다. 한 파일에 tt 진단이 있으면 TypeScript는
   그 파일을 구문 오류가 있는 파일처럼 다루어 의미 검사를 건너뛴다(실측).
