@@ -68,7 +68,7 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
    break;
      }
      default: {
-       throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+       throw new Error("tt match: unexpected case " + $tt_show($tt_m));
      }
    }
  }
@@ -87,4 +87,22 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
    }
  }
  return <section>{$tt_v2}{$tt_v0}<footer>{$tt_v1} items</footer></section>;
+}
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
 }

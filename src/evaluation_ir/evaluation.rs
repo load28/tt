@@ -696,6 +696,7 @@ impl EvaluationFile {
         }));
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
+        let match_show_name = allocate_generated_name("$tt_show", &mut occupied_names)?;
         let mut match_subject_names = HashMap::new();
         let mut taken_subject_names = 0;
         for rewrite in &rewrites {
@@ -721,7 +722,7 @@ impl EvaluationFile {
             .difference(&self.occupied_names)
             .cloned()
             .collect();
-        let shadowed_globals = ["Error", "JSON"]
+        let shadowed_globals = ["Error", "JSON", "String"]
             .into_iter()
             .filter(|name| {
                 self.declared_names.contains(*name)
@@ -793,6 +794,7 @@ impl EvaluationFile {
                 allocated_names,
             )),
             match_raise_name,
+            match_show_name,
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,

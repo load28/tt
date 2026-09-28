@@ -122,7 +122,7 @@ const step = match (dir, speed) {
         compact(&out).contains("if ($tt_m0.kind === \"South\") { $tt_v0 = -1; break; }"),
         "{out}"
     );
-    assert!(out.contains("JSON.stringify([$tt_m0, $tt_m1])"), "{out}");
+    assert!(out.contains(r#""[" + $tt_show($tt_m0) + "," + $tt_show($tt_m1) + "]""#), "{out}");
 }
 
 #[test]

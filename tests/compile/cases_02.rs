@@ -316,7 +316,7 @@ const grade = match (s) {
     );
     // the same fail-fast runtime guard as the switch emission
     assert!(
-        out.contains("throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"),
+        out.contains("throw new Error(\"tt match: unexpected case \" + $tt_show($tt_m));"),
         "{out}"
     );
 }

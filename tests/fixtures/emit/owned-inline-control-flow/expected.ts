@@ -25,7 +25,7 @@ export function pick(o: Opt): number {
         break;
       }
       default: {
-        throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+        throw new Error("tt match: unexpected case " + $tt_show($tt_m));
       }
     }
   }
@@ -70,7 +70,7 @@ export const strings = [1].map(x => {
         break;
       }
       default: {
-        throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+        throw new Error("tt match: unexpected case " + $tt_show($tt_m));
       }
     }
   }
@@ -90,8 +90,26 @@ let $tt_v5: number[];
       break;
     }
     default: {
-      throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
     }
   }
 }
 export const values = $tt_v5;
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}

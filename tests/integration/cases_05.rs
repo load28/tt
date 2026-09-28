@@ -684,3 +684,114 @@ console.log(show(k4(true, "7", "8")), show(k4(false, "7", "8")));
         ]
     );
 }
+
+#[test]
+fn an_unexpected_value_guard_reports_every_scrutinee_type() {
+    require_toolchain!();
+    let out = run(r#"
+variant V { A, B }
+const cyclic: { kind: string; self?: unknown } = { kind: "Z" };
+cyclic.self = cyclic;
+const values: unknown[] = [
+  2n, -5n, Symbol("s"), "zz", 3, NaN, undefined, null, true,
+  { toJSON() { throw new Error("toJSON"); } }, cyclic, () => 1, { kind: "Q" },
+];
+function statement(n: unknown): string {
+  return match (n) { 1n => "one", "a" => "a" };
+}
+function chain(n: unknown, ok: boolean): string {
+  return match (n) { 1n if ok => "one", "a" => "a" };
+}
+type Item = { run: (x: number) => number };
+const pair2 = (a: Item, b: Item) => a.run(1) + b.run(1);
+function inline(n: unknown): number {
+  return pair2(
+    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
+    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
+  );
+}
+function kind(v: V): string {
+  return match (v) { A => "a", B => "b" };
+}
+function pair(a: V, b: V): string {
+  return match (a, b) { (A, A) => "aa", (B, _) => "b", (A, B) => "ab" };
+}
+const report = (run: () => unknown) => {
+  try { run(); console.log("returned"); }
+  catch (error) { console.log(error instanceof Error ? error.message : "not an Error: " + String(error)); }
+};
+for (const value of values) {
+  report(() => statement(value));
+  report(() => chain(value, true));
+  report(() => inline(value));
+  if (value !== null && value !== undefined) report(() => kind(value as V));
+}
+report(() => pair(V.A, 7n as unknown as V));
+report(() => pair(V.A, { kind: "Nope" } as unknown as V));
+"#);
+    let unexpected: Vec<&str> = out
+        .iter()
+        .map(String::as_str)
+        .filter(|line| !line.starts_with("tt match: unexpected "))
+        .collect();
+    assert!(unexpected.is_empty(), "{out:#?}");
+    for shown in [
+        "2n",
+        "-5n",
+        "Symbol(s)",
+        "\"zz\"",
+        "3",
+        "NaN",
+        "undefined",
+        "null",
+        "true",
+        "object",
+        "function",
+        "{\"kind\":\"Q\"}",
+    ] {
+        assert!(
+            out.contains(&format!("tt match: unexpected literal {shown}")),
+            "{shown}: {out:#?}"
+        );
+    }
+    assert!(out.contains(&"tt match: unexpected case 2n".to_string()), "{out:#?}");
+    assert!(
+        out.contains(&"tt match: unexpected case {\"kind\":\"Q\"}".to_string()),
+        "{out:#?}"
+    );
+    assert!(
+        out.contains(&"tt match: unexpected case [{\"kind\":\"A\"},7n]".to_string()),
+        "{out:#?}"
+    );
+    assert!(
+        out.contains(&"tt match: unexpected case [{\"kind\":\"A\"},{\"kind\":\"Nope\"}]".to_string()),
+        "{out:#?}"
+    );
+}
+
+#[test]
+fn an_unexpected_value_guard_survives_shadowed_globals() {
+    require_toolchain!();
+    let out = run(r#"
+const String = "shadow";
+const JSON = 1;
+function pick(n: unknown): number {
+  return match (n) { 1n => 1 };
+}
+for (const value of [2n, Symbol("s"), 3, "a", { a: 1 }]) {
+  try { pick(value); } catch (error) { console.log((error as Error).message); }
+}
+console.log(String, JSON);
+"#);
+    assert_eq!(
+        out,
+        [
+            "tt match: unexpected literal 2n",
+            "tt match: unexpected literal Symbol(s)",
+            "tt match: unexpected literal 3",
+            "tt match: unexpected literal \"a\"",
+            "tt match: unexpected literal {\"a\":1}",
+            "shadow 1",
+        ]
+    );
+}

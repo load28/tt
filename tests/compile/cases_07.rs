@@ -342,7 +342,7 @@ fn literal_match_keeps_the_number_spelling_of_the_source() {
 fn literal_match_without_a_wildcard_gets_a_runtime_guard() {
     let out = ok(r#"const label = match (dir) { "a" => 1, "b" => 2 };"#);
     assert!(compact(&out).contains(
-        r#"default: { throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m)); }"#
+        r#"default: { throw new Error("tt match: unexpected literal " + $tt_show($tt_m)); }"#
     ));
 }
 
@@ -409,7 +409,7 @@ fn literal_match_without_a_wildcard_has_no_if_chain_case_guard() {
     let out = ok("const v = match (code) { 200 if ok => 1, 404 => 2 };");
     assert!(
         out.contains(
-            r#"throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m));"#
+            r#"throw new Error("tt match: unexpected literal " + $tt_show($tt_m));"#
         )
     );
 }

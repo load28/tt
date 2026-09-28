@@ -235,17 +235,19 @@ impl<'a> Emitter<'a> {
             self.used_match_raise.set(true);
             let (kind, value) = match decision.miss {
                 MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
-                    ("literal", names[0].clone())
+                    ("literal", self.shown(&names[0]))
                 }
-                MissAction::ThrowUnexpected(UnexpectedKind::Case) => ("case", names[0].clone()),
+                MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
+                    ("case", self.shown(&names[0]))
+                }
                 MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
-                    ("case", format!("[{}]", names.join(", ")))
+                    ("case", self.shown_tuple(names))
                 }
                 _ => crate::ice::bug!("inline match has no failure completion"),
             };
             out.push_lit(format!(
-                "{}(new {}(\"tt match: unexpected {kind} \" + {}.stringify({value})))",
-                self.match_raise_name, self.host_error, self.host_json
+                "{}(new {}(\"tt match: unexpected {kind} \" + {value}))",
+                self.match_raise_name, self.host_error
             ));
         }
         out.push_lit(")");
@@ -947,30 +949,37 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn unexpected_throw(&self, decision: &Decision) -> String {
-        match decision.miss {
+        let (kind, shown) = match decision.miss {
             MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
                 let temps = (0..decision.subjects.len())
                     .map(|subject| self.subject_reference(decision, subject))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "throw new {}(\"tt match: unexpected case \" + {}.stringify([{temps}]));",
-                    self.host_error, self.host_json
-                )
+                    .collect::<Vec<_>>();
+                ("case", self.shown_tuple(&temps))
             }
-            MissAction::ThrowUnexpected(UnexpectedKind::Literal) => format!(
-                "throw new {}(\"tt match: unexpected literal \" + {}.stringify({}));",
-                self.host_error,
-                self.host_json,
-                self.subject_reference(decision, 0)
-            ),
-            MissAction::ThrowUnexpected(UnexpectedKind::Case) => format!(
-                "throw new {}(\"tt match: unexpected case \" + {}.stringify({}));",
-                self.host_error,
-                self.host_json,
-                self.subject_reference(decision, 0)
-            ),
+            MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
+                ("literal", self.shown(&self.subject_reference(decision, 0)))
+            }
+            MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
+                ("case", self.shown(&self.subject_reference(decision, 0)))
+            }
             _ => crate::ice::bug!("match has non-match miss action"),
-        }
+        };
+        format!(
+            "throw new {}(\"tt match: unexpected {kind} \" + {shown});",
+            self.host_error
+        )
+    }
+
+    fn shown(&self, value: &str) -> String {
+        self.used_match_show.set(true);
+        format!("{}({value})", self.match_show_name)
+    }
+
+    fn shown_tuple(&self, values: &[String]) -> String {
+        let parts = values
+            .iter()
+            .map(|value| self.shown(value))
+            .collect::<Vec<_>>();
+        format!("\"[\" + {} + \"]\"", parts.join(" + \",\" + "))
     }
 }

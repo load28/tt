@@ -48,8 +48,10 @@ pub(super) struct Emitter<'a> {
     pub(super) recovered_sources: RefCell<Vec<SourceSpan>>,
     pub(super) expression_boundary_name: String,
     pub(super) match_raise_name: String,
+    pub(super) match_show_name: String,
     pub(super) host_error: String,
     pub(super) host_json: String,
+    pub(super) host_string: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
     pub(super) block_required_statements: HashSet<NodeId>,
     /// Statement owners that must open a block before their first hoisted
@@ -66,6 +68,7 @@ pub(super) struct Emitter<'a> {
     pub(super) emitting_owner_preludes: RefCell<Vec<SourceSpan>>,
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) used_match_raise: Cell<bool>,
+    pub(super) used_match_show: Cell<bool>,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.

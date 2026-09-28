@@ -261,8 +261,10 @@ pub(crate) fn emit_with_map<'a>(
         recovered_sources: RefCell::new(Vec::new()),
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
+        match_show_name: target.match_show_name,
         host_error: target.host_error,
         host_json: target.host_json,
+        host_string: target.host_string,
         inline_subjects: target.inline_subjects,
         block_required_statements: target.block_required_statements,
         block_required_by_end: target.block_required_owners.iter().fold(
@@ -278,6 +280,7 @@ pub(crate) fn emit_with_map<'a>(
         emitting_owner_preludes: RefCell::new(Vec::new()),
         ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
+        used_match_show: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
         active_scheduled_exprs: ActiveExprStack::default(),
@@ -333,6 +336,17 @@ pub(crate) fn emit_with_map<'a>(
         output.push_lit(format!(
             "function {}(error: unknown): never {{ throw error; }}\n",
             emitter.match_raise_name
+        ));
+    }
+    if emitter.used_match_show.get() {
+        if !output.ends_with_newline() {
+            output.push_lit("\n");
+        }
+        output.push_lit(format!(
+            "function {name}(value: unknown): string {{\n  if (typeof value === \"string\") {{\n    return {json}.stringify(value);\n  }}\n  if (typeof value === \"bigint\") {{\n    return {string}(value) + \"n\";\n  }}\n  if (typeof value === \"object\" || typeof value === \"function\") {{\n    try {{\n      const text = {json}.stringify(value);\n      if (typeof text === \"string\") {{\n        return text;\n      }}\n    }} catch {{}}\n    return typeof value;\n  }}\n  return {string}(value);\n}}\n",
+            name = emitter.match_show_name,
+            json = emitter.host_json,
+            string = emitter.host_string,
         ));
     }
     if emitter.used_expression_boundary.get() {

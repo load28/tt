@@ -439,7 +439,7 @@ const area = match (shape) {
     assert!(compact.contains("case \"Point\": { $tt_v0 = 0; break; }"));
     // The output is plain TypeScript: a runtime guard, no type-level tricks.
     assert!(compact.contains(
-        "default: { throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m)); }"
+        "default: { throw new Error(\"tt match: unexpected case \" + $tt_show($tt_m)); }"
     ));
     assert!(!out.contains("never"));
 }
