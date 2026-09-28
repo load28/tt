@@ -24,6 +24,10 @@
 //! the shape of the tokens around the cursor alone (TASK-461). The
 //! *declarations* always come from the parse; a declaration elsewhere in
 //! the file is complete even while a match is being typed.
+//!
+//! A comment or a literal is never a pattern position, however its text
+//! reads: the lexer's trivia and literal tokens say where they are, before
+//! any construct is asked (TASK-462).
 
 use std::path::Path;
 
@@ -164,6 +168,9 @@ enum Site {
 }
 
 fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> Option<Context> {
+    if inside_text(source, tokens, offset) {
+        return None;
+    }
     // The identifier being typed is not context — step over it.
     let cursor = tokens
         .iter()
@@ -254,6 +261,26 @@ fn site_context(
         });
     }
     None
+}
+
+/// Whether `offset` is inside a comment or inside a literal token — a
+/// string, template, regex, or JSX text. That is prose or data, not code:
+/// no tt name is written there, whatever the words in it look like
+/// (TASK-462).
+fn inside_text(source: &str, tokens: &[Token], offset: usize) -> bool {
+    let next = token_at(tokens, offset);
+    if let Some(previous) = next.checked_sub(1)
+        && offset < tokens[previous].span.end
+    {
+        return !matches!(tokens[previous].kind, TokenKind::Ident);
+    }
+    let from = next
+        .checked_sub(1)
+        .map_or(0, |previous| tokens[previous].span.end);
+    let to = tokens
+        .get(next)
+        .map_or(source.len(), |token| token.span.start);
+    crate::lexer::comment_at(source, from, to, offset)
 }
 
 /// Whether the token at `index` is the identifier the cursor sits in — the
@@ -1102,5 +1129,75 @@ mod tests {
         ] {
             assert_eq!(labels(&source, needle), ["w", "h"], "{needle}");
         }
+    }
+
+    #[test]
+    fn arm_bodies_and_guards_are_expressions() {
+        let head = format!("{DECL}const a = match (s) {{ Circle(radius) ");
+        for (arm, needle) in [
+            ("=> [1, ], _ => 2 };\n", "=> [1, "),
+            ("=> [1, ", "=> [1, "),
+            ("=> radius | , _ => 2 };\n", "radius | "),
+            ("=> radius | ", "radius | "),
+            ("=> radius || ", "radius || "),
+            ("=> (x: number, ) => 1, _ => 2 };\n", "(x: number, "),
+            ("=> (x: number, ", "(x: number, "),
+            ("=> ({ a: 1, }), _ => 2 };\n", "{ a: 1, "),
+            ("=> { return [radius, ]; }, _ => 2 };\n", "[radius, "),
+            ("=> { let x = 1, }, _ => 2 };\n", "let x = 1, "),
+            ("=> { if (radius) { } }, _ => 2 };\n", "if (radius) { "),
+            ("if radius | ", "radius | "),
+            ("if radius > 0 => 1, Rect(w, h) if w > h ", "w > h "),
+        ] {
+            let source = format!("{head}{arm}");
+            assert!(
+                labels(&source, needle).is_empty(),
+                "{source}: {:?}",
+                labels(&source, needle)
+            );
+        }
+        let source = format!("{head}=> [1, 2], ");
+        assert_eq!(
+            labels(&source, "[1, 2], "),
+            ["Circle", "Rect", "Point", "_"],
+            "a finished arm's comma still opens the next arm"
+        );
+        let source = format!("{head}=> {{ return 1; }}, ");
+        assert_eq!(labels(&source, "}, "), ["Circle", "Rect", "Point", "_"]);
+    }
+
+    #[test]
+    fn comments_and_literals_are_not_completion_sites() {
+        let head = format!("{DECL}const a = match (s) {{ Circle(radius) => 1,");
+        for (rest, needle) in [
+            ("\n  // note: Rect(\n  _ => 2 };\n", "// note: Rect("),
+            ("\n  // note: ", "// note: "),
+            (" /* Rect( */ _ => 2 };\n", "/* Rect("),
+            (" /* ", "/* "),
+            (" _ => \"Rect(\" };\n", "\"Rect("),
+            (" _ => `x ${1}, ` };\n", "${1}, "),
+            (" _ => /Rect(/ };\n", "/Rect("),
+        ] {
+            let source = format!("{head}{rest}");
+            assert!(
+                labels(&source, needle).is_empty(),
+                "{source}: {:?}",
+                labels(&source, needle)
+            );
+        }
+        let source = format!("{DECL}// if let \nconst t = \"if let \";\n");
+        assert!(labels(&source, "// if let ").is_empty());
+        assert!(labels(&source, "\"if let ").is_empty());
+        let source = format!("{head} /* note */ ");
+        assert_eq!(
+            labels(&source, "/* note */ "),
+            ["Circle", "Rect", "Point", "_"],
+            "a closed comment ends before the arm slot"
+        );
+        let source = format!("{head} // note\n  ");
+        assert_eq!(
+            labels(&source, "// note\n  "),
+            ["Circle", "Rect", "Point", "_"]
+        );
     }
 }

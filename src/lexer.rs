@@ -97,6 +97,37 @@ pub(crate) fn lex_with_kind(
     lex_region(src_str, start, end, source_kind, false).0
 }
 
+/// Whether `offset` lies inside a comment of `src[start..end]`, a range
+/// between two significant tokens and therefore trivia only — the same
+/// comment rules [`lex_with_kind`] skips by. A position is inside a comment
+/// after its opening delimiter and up to its end: a line comment's end of
+/// line, a block comment's `*/`, or `end` for an unterminated block comment.
+pub(crate) fn comment_at(src: &str, start: usize, end: usize, offset: usize) -> bool {
+    let bytes = src.as_bytes();
+    let mut i = start;
+    while i < end {
+        if bytes[i] == b'/' && at(bytes, i + 1, end) == Some(b'/') {
+            let close = line_end(bytes, i, end);
+            if i < offset && offset <= close {
+                return true;
+            }
+            i = close;
+        } else if bytes[i] == b'/' && at(bytes, i + 1, end) == Some(b'*') {
+            let (close, inside) = match find_subslice(bytes, b"*/", i + 2, end) {
+                Some(e) => (e + 2, offset < e + 2),
+                None => (end, offset <= end),
+            };
+            if i < offset && inside {
+                return true;
+            }
+            i = close;
+        } else {
+            i += 1;
+        }
+    }
+    false
+}
+
 /// Lex a JavaScript expression container in the same lexical mode as its file.
 /// Nested JSX, templates, strings and regexes own their delimiters.
 fn lex_region(

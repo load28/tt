@@ -469,6 +469,7 @@
 | TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
 | TASK-460 | Write the separator a missing-arm edit needs after the last written arm | Complete | 2026-09-28 | 2026-09-28 | [TASK-460](./TASK-460-missing-arm-edit-after-unseparated-arm.md) |
 | TASK-461 | Offer payload field completions only inside a pattern | Complete | 2026-09-28 | 2026-09-28 | [TASK-461](./TASK-461-payload-completions-only-in-patterns.md) |
+| TASK-462 | Offer case tags only at arm positions, never in arm bodies or comments | Complete | 2026-09-28 | 2026-09-28 | [TASK-462](./TASK-462-arm-bodies-and-comments-are-not-case-positions.md) |
 
 ## Next task number
 
