@@ -907,6 +907,23 @@ console.log(log.join(\",\"))\n");
 }
 
 #[test]
+fn an_operator_line_after_a_block_bodied_arrow_function_is_its_own_statement() {
+    require_toolchain!();
+    let lines = run("const log: string[] = []\n\
+const f = () => {}\n\
+/x/g.exec(\"x\") |> String |> log.push\n\
+const g = async () => {}\n\
+/y/.test(\"y\") |> String |> log.push\n\
+const h = (): void => {}\n\
+-1 |> String |> log.push\n\
+const k = () => {}\n\
+(2) |> String |> log.push\n\
+f(); g(); h(); k()\n\
+console.log(log.join(\",\"))\n");
+    assert_eq!(lines, ["x,true,-1,2"]);
+}
+
+#[test]
 fn a_semicolon_free_brace_after_an_expression_is_a_diverging_block() {
     require_toolchain!();
     let lines = run(

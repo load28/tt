@@ -391,11 +391,12 @@ impl Machine<'_> {
             }
             "async"
                 if !next_break
-                    && (next_word.is_some()
-                        && !matches!(
-                            next_word,
-                            Some("in" | "instanceof" | "as" | "satisfies")
-                        )) =>
+                    && (next == Some(b'(')
+                        || (next_word.is_some()
+                            && !matches!(
+                                next_word,
+                                Some("in" | "instanceof" | "as" | "satisfies")
+                            ))) =>
             {
                 self.push_frame(Frame::Expr(e));
                 Out::Consumed

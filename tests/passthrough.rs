@@ -787,3 +787,28 @@ fn type_arguments_with_commas_pass_through() {
         "declare function f<A, B>(v: unknown): unknown;\ntype A = 1;\ntype B = 2;\nconst m = new Map<A, B>();\nconst r = f<A, B>(m), s = f<B, A>;\nlet t = (f<A, Map<A, B>>(r), s);\n",
     );
 }
+
+#[test]
+fn an_automatic_semicolon_ends_a_block_bodied_arrow_function_before_an_operator_line() {
+    for arrow in [
+        "export const f = () => {}",
+        "export const f = async () => {}",
+        "export const f = (): void => {}",
+        "export const f = <T,>(a: T) => {}",
+        "declare let x: unknown; x = () => {}",
+    ] {
+        for line in [
+            "/x/g.exec(\"x\")",
+            "/=x/.test(\"=x\")",
+            "+1",
+            "-1",
+            "(1)",
+            "[1]",
+            "`t`",
+        ] {
+            let source = format!("{arrow}\n{line}\n");
+            assert_passthrough(&source);
+            assert_tsx_passthrough(&source);
+        }
+    }
+}

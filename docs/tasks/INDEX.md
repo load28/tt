@@ -503,6 +503,7 @@
 | TASK-494 | Expect an operand after a statement the grammar has completed | Complete | 2026-09-28 | 2026-09-28 | [TASK-494](./TASK-494-operand-goal-after-finished-statements.md) |
 | TASK-495 | Balance type-argument brackets through one token fact | Complete | 2026-09-28 | 2026-09-28 | [TASK-495](./TASK-495-type-argument-bracket-facts.md) |
 | TASK-496 | Keep the source's automatic semicolons when generated code starts a statement | Complete | 2026-09-28 | 2026-09-28 | [TASK-496](./TASK-496-statement-boundaries-survive-lowering.md) |
+| TASK-497 | Let an automatic semicolon end a block-bodied arrow function before an operator line | Complete | 2026-09-28 | 2026-09-28 | [TASK-497](./TASK-497-arrow-body-automatic-semicolon.md) |
 | TASK-498 | Count lines once, under the line breaks each consumer speaks | Complete | 2026-09-28 | 2026-09-28 | [TASK-498](./TASK-498-one-line-model.md) |
 
 ## Next task number

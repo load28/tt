@@ -2782,10 +2782,8 @@ impl<I: Tokens> Parser<I> {
             };
             if let ArrowFunctionBody::FunctionBody(..) = &*arrow_expr.body {
                 let cur = self.input().cur();
-                let should_parse_bin_op_after_arrow = cur.is_bin_op()
-                    && !(self.syntax().flow()
-                        && self.input().had_line_break_before_cur()
-                        && cur == Token::Lt);
+                let should_parse_bin_op_after_arrow =
+                    cur.is_bin_op() && !self.input().had_line_break_before_cur();
                 if should_parse_bin_op_after_arrow {
                     // ) is required
                     self.emit_err(self.input().cur_span(), SyntaxError::TS1005);

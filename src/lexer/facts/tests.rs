@@ -175,6 +175,8 @@ fn assert_agrees(src: &str, kind: SourceKind) {
 const KNOWN: &[&str] = &[
     "declare const o: unknown\nconst a = o as Array<number>\nconsole.log(a)\n",
     "let f: () => void\nf = () => {}\n",
+    "const f = () => {}\n/x/g.exec(\"x\")\nconst g = async (): Promise<void> => {}\n-1\n",
+    "declare function async(x: number): (y: number) => void\nasync(1)\n(2)\nasync (y: number): Promise<void> => {}\n",
     "let p: Promise<void>\n(p)\n",
     "type K = string\ndeclare const x: object\nx satisfies Record<K, unknown>\nthrow x\n",
     "const of = 1\nconst async = 2\nconst let_ = of\nasync\nlet_\n",

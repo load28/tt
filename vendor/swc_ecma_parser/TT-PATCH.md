@@ -20,7 +20,23 @@ through `maybe_grow` the way `parse_stmt` already does, so expression nesting
 rather than by the calling thread's stack. `tests/cli.rs` in the parent
 repository covers deeply nested input end to end.
 
-`tests/jsx_entities.rs` in the parent repository tests the dependency directly.
+Local change: `src/parser/expr.rs`, `parse_paren_expr_or_arrow_fn` continues
+a block-bodied arrow function with a binary operator (reporting TS1005, as
+TypeScript does for `() => {} / 2`) only when no line break precedes the
+operator. Upstream made the exception only for Flow and `<`. An
+`ArrowFunction` is an `AssignmentExpression`, never the left operand of a
+binary operator (ECMA-262 §15.3), so after a line break the operator is the
+offending token of §12.10.1 and an automatic semicolon ends the statement:
+`() => {}⏎/x/g.exec("x")` is two statements, the second starting with a
+regular expression, and `() => {}⏎+1` likewise. TypeScript's parser accepts
+both (`canParseSemicolon` after the arrow function). Upstream rejected them
+with "Expected a semicolon"; the ident-parameter form (`x => {}`) already
+returned before the operator. acorn had the same defect
+(acornjs/acorn#475). `tests/swc_arrow_asi.rs` and `tests/passthrough.rs` in
+the parent repository cover it (TASK-497).
+
+`tests/jsx_entities.rs` and `tests/swc_arrow_asi.rs` in the parent repository
+test the dependency directly.
 The direct path dependency also applies when ttc is built by the standalone
 fuzz workspace. Remove this vendored copy only after an upstream version
 passes these regressions without the patch. This copy retains upstream source,
