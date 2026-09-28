@@ -82,6 +82,12 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
 - **정적 identity**: `dynamicConfig` 없음, `compilerOptions` 요구 없음 —
   tt의 변환은 프로젝트 설정과 무관하다. incremental/`--build`의 up-to-date
   판정이 매퍼 프로세스를 스폰하지 않고 끝난다.
+- **Lowered input (TASK-484)**: the ttc editor service also runs this mapper,
+  in projects whose `tsconfig.json` names it and that have it installed. It
+  serves each `.tt` document's already-lowered TypeScript as the document's
+  content. By the passthrough contract, the transform then returns the same
+  text with verbatim mappings. See
+  [`tsgo-native-backend.md`](./tsgo-native-backend.md) (TASK-484 update).
 
 ## 실측으로 확인한 것 (2026-08-27, 7.1.0-dev.20260826.1)
 

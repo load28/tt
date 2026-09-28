@@ -130,6 +130,14 @@ impl Project {
         }
     }
 
+    pub(crate) fn service_arrangement(&self) -> crate::typescript::service::Arrangement {
+        crate::typescript::service::Arrangement::of_project(
+            self.backend.as_ref().ok(),
+            self.tsconfig.as_deref(),
+            &self.root,
+        )
+    }
+
     /// The project root — the directory the compiler runs in.
     pub fn root(&self) -> &Path {
         &self.root

@@ -202,6 +202,44 @@ impl NativeBackend {
     }
 }
 
+impl NativeBackend {
+    pub(crate) fn configured_mappers(
+        &self,
+        tsconfig: &Path,
+        root: &Path,
+    ) -> Result<Vec<serde_json::Value>, Failure> {
+        let wanted = (Some(tsconfig.to_path_buf()), root.to_path_buf());
+        let mut slot = self.session.borrow_mut();
+        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            *slot = Some(self.start(Some(tsconfig), root)?);
+        }
+        let session = slot.as_mut().expect("started");
+        let line = match exchange(session, r#"{"configuredMappers":true}"#) {
+            Ok(line) => line,
+            Err(_) => {
+                let mut session = slot.take().expect("started");
+                return Err(host_died(&mut session.child));
+            }
+        };
+        let value: serde_json::Value = serde_json::from_str(line.trim()).map_err(|e| {
+            Failure::internal(format!(
+                "the TypeScript backend answered with malformed JSON: {e}"
+            ))
+        })?;
+        if let Some(error) = value["error"].as_str() {
+            return Err(Failure::internal(format!(
+                "the TypeScript backend failed:\n{error}"
+            )));
+        }
+        value["contentMappers"].as_array().cloned().ok_or_else(|| {
+            Failure::internal("the TypeScript backend answer omitted contentMappers")
+        })
+    }
+}
+
 impl TypeScriptBackend for NativeBackend {
     fn ask(&self, tsconfig: Option<&Path>, root: &Path, query: &Query) -> Result<Answers, Failure> {
         let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());

@@ -564,3 +564,61 @@ test("a live match has no hints", { skip: skipTtOnly }, async () => {
   fs.writeFileSync(live, text);
   assert.deepEqual(await engine.ttHints(COMPILER, live, text), []);
 });
+
+const ESM_MAIN = [
+  'import { Shape, dbl } from "./x.tt";',
+  "const s: Shape = Shape.Circle(1);",
+  "const a = match (s) { Circle(radius) => dbl(radius), Point => 0 };",
+  "const b: string = dbl(2);",
+  "export { a, b };",
+  "",
+].join("\n");
+const ESM_USE = 'import { dbl } from "./x.tt";\nexport const c: string = dbl(3);\n';
+
+function esmWorkspace(): { main: string; use: string } {
+  const dir = caseDir("tt-engine-esm-test-");
+  fs.mkdirSync(path.join(dir, "src"));
+  fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ type: "module" }));
+  fs.writeFileSync(
+    path.join(dir, "tsconfig.json"),
+    JSON.stringify({
+      compilerOptions: { strict: true, target: "es2022", module: "node16", moduleResolution: "node16", noEmit: true },
+      include: ["src"],
+      contentMappers: [{ package: "@openload28/tt-lang", extensions: [".tt", ".ttx"] }],
+    }),
+  );
+  const mapper = path.join(dir, "node_modules/@openload28/tt-lang");
+  fs.mkdirSync(mapper, { recursive: true });
+  fs.writeFileSync(
+    path.join(mapper, "package.json"),
+    JSON.stringify({
+      name: "@openload28/tt-lang",
+      version: "0.0.0-test",
+      typescript: {
+        contentMapper: {
+          exec: [COMPILER.includes(path.sep) ? path.resolve(COMPILER) : COMPILER, "--content-mapper"],
+        },
+      },
+    }),
+  );
+  fs.writeFileSync(
+    path.join(dir, "src/x.tt"),
+    "export variant Shape { Circle(radius: number), Point }\n/** doubles */\nexport function dbl(n: number): number { return n * 2; }\n",
+  );
+  const main = path.join(dir, "src/main.tt");
+  fs.writeFileSync(main, ESM_MAIN);
+  const use = path.join(dir, "src/use.ts");
+  fs.writeFileSync(use, ESM_USE);
+  return { main, use };
+}
+
+test("node16 ES modules reach .tt imports through the installed content mapper", { skip }, async () => {
+  const { main, use } = esmWorkspace();
+  const diagnostics = answered(await engine.tsDiagnostics(COMPILER, main), "tsDiagnostics");
+  assert.deepEqual(diagnostics.map((d) => d.code), [2322], JSON.stringify(diagnostics));
+  assert.equal(sliceOf(ESM_MAIN, diagnostics[0].range), "b");
+  const info = await engine.hover(COMPILER, use, positionAt(ESM_USE, ESM_USE.lastIndexOf("dbl")));
+  assert.ok(info, "hover has an answer");
+  assert.match(info!.signature, /dbl\(n: number\): number/);
+  assert.equal(sliceOf(ESM_USE, info!.range), "dbl");
+});

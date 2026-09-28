@@ -211,6 +211,7 @@ pub(crate) struct ServiceSession {
     /// The text last served for each `.tt` file — the emitted TypeScript,
     /// or a probe standing in for it.
     served: HashMap<PathBuf, String>,
+    uris: HashMap<PathBuf, String>,
     /// Unprojected host buffers served at their authored paths.
     host_served: HashMap<PathBuf, String>,
     /// Service projections by source path, reused while the text matches.

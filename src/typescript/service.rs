@@ -38,6 +38,80 @@ use std::time::{Duration, Instant};
 /// never a successful request whose result happened to be empty.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(8);
 
+const TT_CONTENT_MAPPER: &str = "@openload28/tt-lang";
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct Arrangement {
+    inferred_mapper: Option<serde_json::Value>,
+}
+
+impl Arrangement {
+    pub(crate) fn of_configuration(configured: &[serde_json::Value], config: &Path) -> Arrangement {
+        let names_tt = |entry: &serde_json::Value| {
+            entry["package"].as_str() == Some(TT_CONTENT_MAPPER)
+                && entry["extensions"].as_array().is_some_and(|extensions| {
+                    !extensions.is_empty()
+                        && extensions
+                            .iter()
+                            .all(|extension| matches!(extension.as_str(), Some(".tt" | ".ttx")))
+                })
+        };
+        if configured.is_empty() || !configured.iter().all(names_tt) {
+            return Arrangement::default();
+        }
+        Arrangement {
+            inferred_mapper: config.parent().and_then(installed_mapper).map(
+                |(directory, manifest)| {
+                    serde_json::json!({
+                        "contributorId": "tt",
+                        "extensions": [".tt", ".ttx"],
+                        "inferredProjectContribution": {
+                            "manifest": {
+                                "name": TT_CONTENT_MAPPER,
+                                "version": manifest["version"].as_str().unwrap_or("0.0.0"),
+                                "exec": manifest["typescript"]["contentMapper"]["exec"],
+                                "cwd": directory,
+                            },
+                        },
+                    })
+                },
+            ),
+        }
+    }
+}
+
+impl Arrangement {
+    pub(crate) fn of_project(
+        backend: Option<&super::native::NativeBackend>,
+        tsconfig: Option<&Path>,
+        root: &Path,
+    ) -> Arrangement {
+        let (Some(backend), Some(config)) = (backend, tsconfig) else {
+            return Arrangement::default();
+        };
+        match backend.configured_mappers(config, root) {
+            Ok(configured) => Arrangement::of_configuration(&configured, config),
+            Err(_) => Arrangement::default(),
+        }
+    }
+}
+
+fn installed_mapper(from: &Path) -> Option<(PathBuf, serde_json::Value)> {
+    let directory = from
+        .ancestors()
+        .map(|dir| dir.join("node_modules").join(TT_CONTENT_MAPPER))
+        .find(|dir| dir.join("package.json").is_file())?;
+    let directory = std::fs::canonicalize(&directory).ok()?;
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(directory.join("package.json")).ok()?)
+            .ok()?;
+    let exec = manifest["typescript"]["contentMapper"]["exec"].as_array()?;
+    if exec.is_empty() || !exec.iter().all(serde_json::Value::is_string) {
+        return None;
+    }
+    Some((directory, manifest))
+}
+
 /// A running `tsgo --lsp`, and the conversation with it.
 pub(crate) struct Service {
     child: Child,
@@ -50,6 +124,7 @@ pub(crate) struct Service {
     /// Versions of the documents we serve, by URI.
     opened: HashMap<String, i64>,
     alive: bool,
+    serves_sources: bool,
 }
 
 /// One answer from the server: the result, or the error it gave instead.
@@ -77,7 +152,11 @@ impl std::fmt::Debug for Service {
 impl Service {
     /// Starts the server and completes the LSP handshake. `root` is the
     /// workspace the server opens.
-    pub(crate) fn start(binary: &Path, root: &Path) -> Result<Service, String> {
+    pub(crate) fn start(
+        binary: &Path,
+        root: &Path,
+        arrangement: &Arrangement,
+    ) -> Result<Service, String> {
         let mut child = Command::new(binary)
             .args(["--lsp", "-stdio"])
             .current_dir(root)
@@ -108,32 +187,53 @@ impl Service {
             next_id: 1,
             opened: HashMap::new(),
             alive: true,
+            serves_sources: arrangement.inferred_mapper.is_some(),
         };
 
         let root_uri = file_uri(root);
-        service.request(
-            "initialize",
-            serde_json::json!({
-                "processId": std::process::id(),
-                "rootUri": root_uri,
-                "workspaceFolders": [{ "uri": root_uri, "name": "tt" }],
-                "capabilities": {
-                    "textDocument": {
-                        "synchronization": { "dynamicRegistration": true },
-                        "hover": { "contentFormat": ["markdown", "plaintext"] },
-                        "definition": {},
-                        "references": {},
-                        "completion": { "completionItem": { "labelDetailsSupport": true } },
-                        "signatureHelp": {},
-                        "rename": { "prepareSupport": true },
-                        "diagnostic": {},
-                    },
-                    "workspace": { "configuration": true, "workspaceFolders": true },
+        let mut initialize = serde_json::json!({
+            "processId": std::process::id(),
+            "rootUri": root_uri,
+            "workspaceFolders": [{ "uri": root_uri, "name": "tt" }],
+            "capabilities": {
+                "textDocument": {
+                    "synchronization": { "dynamicRegistration": true },
+                    "hover": { "contentFormat": ["markdown", "plaintext"] },
+                    "definition": {},
+                    "references": {},
+                    "completion": { "completionItem": { "labelDetailsSupport": true } },
+                    "signatureHelp": {},
+                    "rename": { "prepareSupport": true },
+                    "diagnostic": {},
                 },
-            }),
-        )?;
+                "workspace": { "configuration": true, "workspaceFolders": true },
+            },
+        });
+        if service.serves_sources {
+            initialize["initializationOptions"] = serde_json::json!({ "runExternalCode": true });
+        }
+        service.request("initialize", initialize)?;
         service.notify("initialized", serde_json::json!({}));
+        if let Some(contribution) = &arrangement.inferred_mapper {
+            service.request(
+                "custom/setContentMapperContributions",
+                serde_json::json!({ "contributions": [contribution], "openDocuments": [] }),
+            )?;
+        }
         Ok(service)
+    }
+
+    pub(crate) fn document_uri(
+        &self,
+        source: &Path,
+        lowered: &Path,
+        verbatim: impl FnOnce() -> bool,
+    ) -> String {
+        if self.serves_sources && verbatim() {
+            file_uri(source)
+        } else {
+            file_uri(lowered)
+        }
     }
 
     /// Whether the server is still there to answer.
@@ -278,7 +378,7 @@ fn wait_for_response(
 /// LSP document kind for a lowered TypeScript-family module. The projected
 /// URI owns this decision: `.tt` is served as `.tt.ts`, `.ttx` as `.ttx.tsx`.
 fn language_id(uri: &str) -> &'static str {
-    if uri.ends_with(".tsx") {
+    if uri.ends_with(".tsx") || uri.ends_with(".ttx") {
         "typescriptreact"
     } else {
         "typescript"
@@ -428,7 +528,7 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::time::Duration;
 
-    use super::{Response, ResponseFailure, language_id, wait_for_response};
+    use super::{Arrangement, Response, ResponseFailure, language_id, wait_for_response};
 
     #[test]
     fn projected_ttx_documents_open_as_typescript_react() {
@@ -437,6 +537,100 @@ mod tests {
             "typescriptreact"
         );
         assert_eq!(language_id("file:///project/model.tt.ts"), "typescript");
+        assert_eq!(language_id("file:///project/view.ttx"), "typescriptreact");
+        assert_eq!(language_id("file:///project/model.tt"), "typescript");
+    }
+
+    fn mapper_project(manifest: Option<serde_json::Value>) -> std::path::PathBuf {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "tt-service-arrangement-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("app")).unwrap();
+        if let Some(manifest) = manifest {
+            let package = dir.join("node_modules/@openload28/tt-lang");
+            std::fs::create_dir_all(&package).unwrap();
+            std::fs::write(package.join("package.json"), manifest.to_string()).unwrap();
+        }
+        dir
+    }
+
+    fn tt_lang(extensions: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({ "package": "@openload28/tt-lang", "extensions": extensions })
+    }
+
+    #[test]
+    fn only_a_configuration_naming_the_installed_tt_mapper_alone_serves_sources() {
+        let installed = serde_json::json!({
+            "name": "@openload28/tt-lang",
+            "version": "1.2.3",
+            "typescript": { "contentMapper": { "exec": ["node", "bin/ttc.js", "--content-mapper"] } },
+        });
+        let dir = mapper_project(Some(installed));
+        let config = dir.join("app/tsconfig.json");
+        let package = std::fs::canonicalize(dir.join("node_modules/@openload28/tt-lang")).unwrap();
+
+        let mapped =
+            Arrangement::of_configuration(&[tt_lang(serde_json::json!([".tt", ".ttx"]))], &config);
+        assert_eq!(
+            mapped.inferred_mapper,
+            Some(serde_json::json!({
+                "contributorId": "tt",
+                "extensions": [".tt", ".ttx"],
+                "inferredProjectContribution": {
+                    "manifest": {
+                        "name": "@openload28/tt-lang",
+                        "version": "1.2.3",
+                        "exec": ["node", "bin/ttc.js", "--content-mapper"],
+                        "cwd": package,
+                    },
+                },
+            }))
+        );
+        assert!(
+            Arrangement::of_configuration(&[tt_lang(serde_json::json!([".tt"]))], &config)
+                .inferred_mapper
+                .is_some()
+        );
+
+        for configured in [
+            vec![],
+            vec![tt_lang(serde_json::json!([]))],
+            vec![tt_lang(serde_json::json!([".tt", ".foo"]))],
+            vec![
+                tt_lang(serde_json::json!([".tt", ".ttx"])),
+                serde_json::json!({ "package": "foo-mapper", "extensions": [".foo"] }),
+            ],
+            vec![serde_json::json!({ "package": "other-tt", "extensions": [".tt"] })],
+        ] {
+            assert_eq!(
+                Arrangement::of_configuration(&configured, &config),
+                Arrangement::default(),
+                "{configured:?}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+
+        for manifest in [
+            None,
+            Some(serde_json::json!({ "name": "@openload28/tt-lang" })),
+            Some(serde_json::json!({ "typescript": { "contentMapper": { "exec": [] } } })),
+            Some(serde_json::json!({ "typescript": { "contentMapper": { "exec": ["node", 1] } } })),
+        ] {
+            let dir = mapper_project(manifest.clone());
+            assert_eq!(
+                Arrangement::of_configuration(
+                    &[tt_lang(serde_json::json!([".tt", ".ttx"]))],
+                    &dir.join("app/tsconfig.json"),
+                ),
+                Arrangement::default(),
+                "{manifest:?}"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
     }
 
     #[test]

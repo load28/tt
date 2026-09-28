@@ -726,6 +726,7 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
 include!("native/cases_01.rs");
 include!("native/cases_02.rs");
 include!("native/cases_03.rs");
+include!("native/cases_04.rs");
 
 #[test]
 fn scoped_contextual_values_cross_all_mixed_source_edges() {

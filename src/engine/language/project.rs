@@ -52,7 +52,7 @@ impl Project {
         let Some(at) = to_service(&doc, position) else {
             return Ok(None);
         };
-        let uri = served_uri(&path);
+        let uri = served_uri(session, &path);
         let hover = session.client.request(
             "textDocument/hover",
             serde_json::json!({
@@ -143,9 +143,9 @@ impl Project {
     ) -> Option<HoverInfo> {
         let (code, offset) = isolate_alternative(path, &doc.source, binding, byte)?;
 
-        let uri = served_uri(path);
         let session = self.session();
-        session.client.open(&uri, &code);
+        open_served(session, path, &code);
+        let uri = served_uri(session, path);
         let answer = session.client.request(
             "textDocument/hover",
             serde_json::json!({
@@ -155,8 +155,7 @@ impl Project {
         );
         // The stand-in answered one question; the real projection is served
         // back before the answer is even read.
-        session.client.open(&uri, &doc.code);
-        session.served.insert(path.to_path_buf(), doc.code.clone());
+        open_served(session, path, &doc.code);
 
         let hover = answer.ok()?;
         let (signature, documentation) = split_hover(&hover["contents"]);
@@ -281,7 +280,7 @@ impl Project {
             return Ok(Vec::new());
         };
         let mut params = serde_json::json!({
-            "textDocument": { "uri": served_uri(&path) },
+            "textDocument": { "uri": served_uri(session, &path) },
             "position": lsp_position(u16_position(&doc.code, at)),
         });
         if let (Some(into), Some(from)) = (params.as_object_mut(), extra.as_object()) {
@@ -365,8 +364,7 @@ impl Project {
             });
         };
         session.probe_count += 1;
-        session.client.open(&served_uri(&path), &probe.code);
-        session.served.insert(path.clone(), probe.code.clone());
+        open_served(session, &path, &probe.code);
         let mut probed = ts_completions(
             session,
             &path,
@@ -406,8 +404,7 @@ impl Project {
                 else {
                     return Ok(None);
                 };
-                session.client.open(&served_uri(&path), &installed.code);
-                session.served.insert(path.clone(), installed.code.clone());
+                open_served(session, &path, &installed.code);
                 (installed.offset, installed.generated_names)
             }
             None => match to_service(&doc, position) {
@@ -458,7 +455,7 @@ impl Project {
         let Some(at) = to_service_name(&doc, position) else {
             return Ok(None);
         };
-        let uri = served_uri(&path);
+        let uri = served_uri(session, &path);
         let lsp_at = lsp_position(u16_position(&doc.code, at));
 
         // The server's own "can this be renamed?" — a keyword or a literal
@@ -550,7 +547,7 @@ impl Project {
         let help = session.client.request(
             "textDocument/signatureHelp",
             serde_json::json!({
-                "textDocument": { "uri": served_uri(&path) },
+                "textDocument": { "uri": served_uri(session, &path) },
                 "position": lsp_position(u16_position(&doc.code, at)),
             }),
         )?;
@@ -604,9 +601,10 @@ impl Project {
         let session = self.session();
         let answer = session.client.request(
             "textDocument/diagnostic",
-            serde_json::json!({ "textDocument": { "uri": served_uri(&path) } }),
+            serde_json::json!({ "textDocument": { "uri": served_uri(session, &path) } }),
         )?;
         let items = answer["items"].as_array().cloned().unwrap_or_default();
+        let served = served_uri(session, &path);
         let mut out = Vec::new();
         // The declaration table a translated message names its types from,
         // built on the first translation of this pass: most passes
@@ -663,7 +661,6 @@ impl Project {
             // The tsgo preview omits `relatedInformation` from pull
             // diagnostics today; when it starts sending it, these entries
             // become labels with no further work here.
-            let served = served_uri(&path);
             for entry in item["relatedInformation"].as_array().into_iter().flatten() {
                 if entry["location"]["uri"].as_str() != Some(served.as_str()) {
                     continue;
@@ -778,10 +775,12 @@ impl Project {
             ensure_std_module(&self.root);
             ensure_runtime_module(&self.root);
             let binary = service_binary(&self.root)?;
-            let client = Service::start(&binary, &self.root)?;
+            let arrangement = self.service_arrangement();
+            let client = Service::start(&binary, &self.root, &arrangement)?;
             self.service = Some(ServiceSession {
                 client,
                 served: HashMap::new(),
+                uris: HashMap::new(),
                 host_served: HashMap::new(),
                 docs: HashMap::new(),
                 last_completion: HashMap::new(),
@@ -856,10 +855,7 @@ impl Project {
         for projected in snapshot.files {
             let path = &projected.source_path;
             if session.served.get(path) != Some(&projected.emit.code) {
-                session.client.open(&served_uri(path), &projected.emit.code);
-                session
-                    .served
-                    .insert(path.clone(), projected.emit.code.clone());
+                open_served(session, path, &projected.emit.code);
             }
             session.docs.insert(
                 path.clone(),

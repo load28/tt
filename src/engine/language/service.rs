@@ -76,21 +76,71 @@ pub(super) fn serve_one(
     };
     if !crate::engine::project::is_host_source(path) && session.served.get(path) != Some(&doc.code)
     {
-        session.client.open(&served_uri(path), &doc.code);
-        session.served.insert(path.to_path_buf(), doc.code.clone());
+        open_served(session, path, &doc.code);
     }
     Some(doc)
 }
 
-/// The URI a file is served under. An `.tt` file is served as the lowered
-/// module's name, which is what an `import "./x.tt"` resolves to; a
-/// hand-written TypeScript file is its own module, served as the buffer the
-/// session opened (or read from disk) under its own name.
-pub(super) fn served_uri(path: &Path) -> String {
+pub(super) fn open_served(session: &mut ServiceSession, path: &Path, code: &str) {
+    let uri = if crate::engine::project::is_host_source(path) {
+        file_uri(path)
+    } else {
+        session
+            .client
+            .document_uri(path, &module_path_of(path), || {
+                lowering_reproduces(path, code)
+            })
+    };
+    if let Some(previous) = session.uris.insert(path.to_path_buf(), uri.clone())
+        && previous != uri
+    {
+        session.client.close(&previous);
+    }
+    session.client.open(&uri, code);
+    session.served.insert(path.to_path_buf(), code.to_string());
+}
+
+fn lowering_reproduces(path: &Path, code: &str) -> bool {
+    let report = crate::compile_projection_report(
+        code,
+        &crate::Options {
+            filename: path.to_str(),
+            source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+            rewrite_imports: crate::ImportRewrite::Off,
+            ..crate::Options::default()
+        },
+    );
+    report.emit.is_some_and(|emit| emit.code == code)
+        && report
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != crate::Severity::Error)
+}
+
+/// The URI a file is served under. An `.tt` file is served under the name
+/// [`open_served`] last opened it as; a hand-written TypeScript file is its
+/// own module, served as the buffer the session opened (or read from disk)
+/// under its own name.
+pub(super) fn served_uri(session: &ServiceSession, path: &Path) -> String {
     if crate::engine::project::is_host_source(path) {
         return file_uri(path);
     }
-    file_uri(&module_path_of(path))
+    match session.uris.get(path) {
+        Some(uri) => uri.clone(),
+        None => session
+            .client
+            .document_uri(path, &module_path_of(path), || true),
+    }
+}
+
+fn tt_document(path: &Path) -> Option<PathBuf> {
+    let name = path.to_string_lossy();
+    let source = name
+        .strip_suffix(".tsx")
+        .filter(|n| n.ends_with(".ttx"))
+        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")))
+        .or_else(|| (name.ends_with(".tt") || name.ends_with(".ttx")).then_some(&*name))?;
+    Some(PathBuf::from(source))
 }
 
 /// Completions at a service offset, with the raw items cached for resolve.
@@ -104,7 +154,7 @@ pub(super) fn ts_completions(
     let answer = session.client.request(
         "textDocument/completion",
         serde_json::json!({
-            "textDocument": { "uri": served_uri(path) },
+            "textDocument": { "uri": served_uri(session, path) },
             "position": lsp_position(u16_position(code, at)),
         }),
     )?;
@@ -361,13 +411,7 @@ pub(super) fn map_target(
         start: position_of(&range["start"]),
         end: position_of(&range["end"]),
     };
-    let name = path.to_string_lossy();
-    let source_name = name
-        .strip_suffix(".tsx")
-        .filter(|n| n.ends_with(".ttx"))
-        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")));
-    if let Some(tt) = source_name {
-        let tt_path = PathBuf::from(tt);
+    if let Some(tt_path) = tt_document(&path) {
         let doc = serve_doc_only(session, overlays, &tt_path)?;
         let start = u16_offset(&doc.code, lsp_range.start);
         let end = u16_offset(&doc.code, lsp_range.end);
@@ -446,13 +490,7 @@ pub(super) fn map_shared_target(
     uri: &str,
     range: &serde_json::Value,
 ) -> Option<(String, Vec<SharedTarget>)> {
-    let path = uri_path(uri)?;
-    let name = path.to_string_lossy();
-    let tt = name
-        .strip_suffix(".tsx")
-        .filter(|n| n.ends_with(".ttx"))
-        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")))?;
-    let tt_path = PathBuf::from(tt);
+    let tt_path = tt_document(&uri_path(uri)?)?;
     let doc = serve_doc_only(session, overlays, &tt_path)?;
     let start = mapper::from_utf16(
         &doc.code,

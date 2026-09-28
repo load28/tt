@@ -286,6 +286,8 @@ async function main() {
         const job = JSON.parse(line);
         if (job.diskGeneration) {
           answer = detectDisk();
+        } else if (job.configuredMappers) {
+          answer = configuredMappers();
         } else {
           answer = handle(job);
           opened = true;
@@ -321,6 +323,18 @@ async function main() {
     }
     if (found) diskGeneration += 1;
     return { diskGeneration };
+  }
+
+  function configuredMappers() {
+    if (!open.tsconfig) return { contentMappers: [] };
+    const served = new Map(configFiles);
+    configFiles.clear();
+    try {
+      const mappers = api.parseConfigFile(open.tsconfig)?.raw?.contentMappers;
+      return { contentMappers: Array.isArray(mappers) ? mappers : [] };
+    } finally {
+      for (const [file, text] of served) configFiles.set(file, text);
+    }
   }
 
   /** The name a module is served under in the current arrangement. */
