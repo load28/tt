@@ -1478,8 +1478,9 @@ connection.onRenameRequest(async (params) => {
   // tt names (variants, case tags, payload fields) are compiled into emitted
   // `kind` strings and destructuring keys — renaming one needs tt-aware
   // rewriting across both worlds, so refuse rather than let TypeScript do
-  // half the job. The engine decides what is a tt name; this server does
-  // not keep a second opinion.
+  // half the job — unless the name also declares a binding (`binds`), which
+  // renames like any use of it. The engine decides what is a tt name; this
+  // server does not keep a second opinion.
   const sym = await engine.ttSymbol(
     await compilerOf(doc),
     fsPath,
@@ -1487,7 +1488,7 @@ connection.onRenameRequest(async (params) => {
     params.position,
     logEngine,
   );
-  if (sym) return null;
+  if (sym && !sym.binds) return null;
 
   // The engine owns the safety rule: an edit that cannot be mapped back to
   // source would corrupt the rename, so such a rename comes back null —

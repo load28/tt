@@ -629,6 +629,7 @@ fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             "path": location.path.to_string_lossy(),
             "range": range_json(location.range),
         })),
+        "binds": symbol.binds,
     }))
 }
 

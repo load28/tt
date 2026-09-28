@@ -1004,6 +1004,55 @@ test("references, rename, signature help, and document symbols cross the LSP ada
   }
 });
 
+test("renaming a shorthand pattern binding at its declaration renames the binding", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Rect(width: number, height: number), Point }",
+    "export function area(s: Shape): number {",
+    "  const a = match (s) { Circle(radius) => radius * 2, Rect(width: w, height) => w * height, Point => 0 };",
+    "  let Rect(width, height: h) = s else { return a; };",
+    "  return width + h;",
+    "}",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  const renamed = async (needle: string) => {
+    const answer = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, needle),
+      newName: "zz",
+    });
+    if (answer.result === null) return null;
+    const edits = [...answer.result.changes[uri]].sort(
+      (a: any, b: any) => b.range.start.line - a.range.start.line || b.range.start.character - a.range.start.character,
+    );
+    const lines = source.split("\n");
+    const offset = (p: { line: number; character: number }) =>
+      lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
+    let text = source;
+    for (const edit of edits) {
+      text = text.slice(0, offset(edit.range.start)) + edit.newText + text.slice(offset(edit.range.end));
+    }
+    return text;
+  };
+  try {
+    assert.equal(
+      await renamed("(s) { Circle("),
+      source.replace("Circle(radius) => radius * 2", "Circle(radius: zz) => zz * 2"),
+    );
+    assert.equal(
+      await renamed("let Rect("),
+      source
+        .replace("Rect(width, height: h)", "Rect(width: zz, height: h)")
+        .replace("return width + h", "return zz + h"),
+    );
+    assert.equal(await renamed("Shape { Circle("), null);
+    assert.equal(await renamed("radius * 2, Rect("), null);
+    assert.equal(await renamed("(s) { "), null);
+  } finally {
+    stop();
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* diagnostic ranges (TASK-116)                                        */
 /* ------------------------------------------------------------------ */

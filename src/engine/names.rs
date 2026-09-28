@@ -62,6 +62,9 @@ pub struct TtSymbol {
     pub detail: String,
     /// Where it is declared, when that is a place the editor can open.
     pub definition: Option<Location>,
+    /// Whether the identifier also declares a local binding — a shorthand
+    /// payload pattern (`Circle(radius)`), whose rename is the binding's.
+    pub binds: bool,
 }
 
 /// The tt name at `position`, or `None` when the position is not on one.
@@ -93,6 +96,10 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
         .declarations
         .iter()
         .find(|d| d.name == resolved.variant_name)?;
+    let binds = resolved.kind == NameKind::Field
+        && analyses
+            .binding_at(resolved.start)
+            .is_some_and(|binding| binding.start == resolved.start && binding.end == resolved.end);
     let (kind, signature, detail, definition) = match resolved.kind {
         NameKind::Case => {
             let constructor = declared
@@ -134,6 +141,7 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
         signature,
         detail,
         definition,
+        binds,
     })
 }
 
@@ -166,6 +174,7 @@ fn declaration_at(
                          object of the same name"
                     .to_string(),
                 definition: Some(here),
+                binds: false,
             });
         }
         for case in &declaration.cases {
@@ -198,6 +207,7 @@ fn declaration_at(
                             path: path.to_path_buf(),
                             range,
                         }),
+                        binds: false,
                     });
                 }
             }
@@ -237,6 +247,7 @@ fn symbol_of_local_case(
             path: path.to_path_buf(),
             range,
         }),
+        binds: false,
     }
 }
 
@@ -453,6 +464,35 @@ mod tests {
         let field = symbol(SRC, "radius: r)", 0);
         assert_eq!(field.kind, TtSymbolKind::Field);
         assert_eq!(field.signature, "radius: number");
+    }
+
+    #[test]
+    fn a_shorthand_payload_binding_is_a_field_that_also_binds() {
+        let src = "variant Shape { Circle(radius: number), Rect(width: number, height: number) }\n\
+                   const a = match (s) { Circle(radius) => radius, Rect(width: w, height) => w };\n\
+                   let Rect(width, height: h) = s else { throw 0; };\n\
+                   if let Circle(radius: r) = s { use(r); }\n";
+        for (needle, delta) in [
+            ("radius) =>", 0),
+            ("height) =>", 0),
+            ("width, height: h", 0),
+        ] {
+            let shorthand = symbol(src, needle, delta);
+            assert_eq!(shorthand.kind, TtSymbolKind::Field, "{needle}");
+            assert!(shorthand.binds, "{needle}");
+            assert!(shorthand.definition.is_some(), "{needle}");
+        }
+        for (needle, delta) in [
+            ("width: w", 0),
+            ("height: h", 0),
+            ("radius: r", 0),
+            ("radius: number", 0),
+            ("width: number", 0),
+            ("Circle(radius) =>", 0),
+            ("Shape {", 0),
+        ] {
+            assert!(!symbol(src, needle, delta).binds, "{needle}");
+        }
     }
 
     #[test]
