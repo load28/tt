@@ -315,11 +315,12 @@ pub(crate) fn emit_with_map<'a>(
         // Which helpers the file needs is only known once the whole file
         // is emitted, but where an import belongs is the top — after
         // anything that has to come before one (TASK-219).
-        let at = directive_prologue_end(source);
+        let (at, after_code) =
+            module_import_position(source, lowering_plan.directive_prologue_end());
         // A prologue that runs to the end of the file leaves nothing to
         // insert before, so the import lands at the end and needs the
         // line break the source did not write.
-        let separator = if at >= source.len() && !output.ends_with_newline() {
+        let separator = if after_code || (at >= source.len() && !output.ends_with_newline()) {
             "\n"
         } else {
             ""

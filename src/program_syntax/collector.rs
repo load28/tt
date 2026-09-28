@@ -41,6 +41,47 @@ pub(super) fn parse_module(
     Ok(ParsedModule { module, start })
 }
 
+pub(super) fn directive_prologue_end(
+    module: &Module,
+    start: HostOrigin,
+    segments: &[ProjectionSourceSegment],
+) -> Result<Option<usize>, ProgramSyntaxError> {
+    let Some((statement, literal)) = module
+        .body
+        .iter()
+        .map_while(|item| match item {
+            ModuleItem::Stmt(Stmt::Expr(statement)) => match &*statement.expr {
+                swc_ecma_ast::Expr::Lit(swc_ecma_ast::Lit::Str(literal)) => {
+                    Some((statement.span, literal.span))
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .last()
+    else {
+        return Ok(None);
+    };
+    let copied_end = |span: swc_common::Span| {
+        let hi = start.byte(span.hi);
+        hi.checked_sub(1).and_then(|last| {
+            segments.iter().find_map(|segment| {
+                (segment.kind == ProjectionSegmentKind::Copied
+                    && segment.projected.start.0 <= last
+                    && last < segment.projected.end.0)
+                    .then(|| segment.source.start + last - segment.projected.start.0 + 1)
+            })
+        })
+    };
+    copied_end(statement)
+        .or_else(|| copied_end(literal))
+        .map(Some)
+        .ok_or(ProgramSyntaxError::UnmappedEvaluationSpan {
+            start: start.byte(statement.lo),
+            end: start.byte(statement.hi),
+        })
+}
+
 /// Classifies a projection parse failure by the byte it stopped at.
 ///
 /// The projection is a sequence of two kinds of bytes: text copied from the

@@ -57,6 +57,7 @@ impl EvaluationFile {
             regions: builder.regions,
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
             declared_names: syntax.declared_names(),
+            directive_prologue_end: syntax.directive_prologue_end(),
             tt_spans: syntax
                 .core_contexts()
                 .map(|(_, _, _, _, source, _, _)| source)
@@ -789,6 +790,7 @@ impl EvaluationFile {
             .collect();
         Ok(LoweringPlan {
             shadowed_globals,
+            directive_prologue_end: self.directive_prologue_end,
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
                 occupied_names,
                 allocated_names,

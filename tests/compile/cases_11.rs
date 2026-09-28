@@ -930,3 +930,56 @@ fn a_line_break_inside_an_expression_still_continues_it() {
         assert_eq!(codes(&source), [DiagnosticCode::IfLetPlacement], "{body}");
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-486 runtime import after the parsed directive prologue          */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn the_runtime_import_follows_a_directive_and_its_trailing_comment() {
+    let tail = "declare const o: { p: number };\nexport const a = o.p |> String;\n";
+    for (head, expected) in [
+        (
+            "\"use client\" // client component\n",
+            "\"use client\" // client component\nimport { $tt_ap } from ",
+        ),
+        (
+            "\"use client\" /* c */;\n",
+            "\"use client\" /* c */;\nimport { $tt_ap } from ",
+        ),
+        (
+            "\"use client\" /* a\n b */\n",
+            "\"use client\" /* a\n b */\nimport { $tt_ap } from ",
+        ),
+        (
+            "\"use strict\"; 'use client' // x\n'b'\n",
+            "\"use strict\"; 'use client' // x\n'b'\nimport { $tt_ap } from ",
+        ),
+        ("\"use client\";", "\"use client\";\nimport { $tt_ap } from "),
+        (
+            "\"use client\"\nvariant V { A, B }\n",
+            "\"use client\"\nimport { $tt_ap } from ",
+        ),
+    ] {
+        let out = ok(&format!("{head}{tail}"));
+        assert!(out.starts_with(expected), "{head:?}\n{out}");
+    }
+}
+
+#[test]
+fn a_string_that_continues_into_an_expression_is_not_a_directive() {
+    let tail = "declare const o: { p: number };\nexport const a = o.p |> String;\n";
+    for head in [
+        "\"use client\"\n.length;\n",
+        "\"use client\"\n+ 1;\n",
+        "(\"use client\");\n",
+    ] {
+        let out = ok(&format!("{head}{tail}"));
+        assert!(
+            out.starts_with(&format!(
+                "import {{ $tt_ap }} from \"@tt/runtime\";\n{head}"
+            )),
+            "{head:?}\n{out}"
+        );
+    }
+}

@@ -114,6 +114,7 @@ pub(crate) struct EvaluationFile {
     regions: Vec<EvalRegion>,
     occupied_names: HashSet<String>,
     declared_names: HashSet<String>,
+    directive_prologue_end: Option<usize>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
@@ -138,6 +139,7 @@ pub(crate) struct LoweringPlan {
     match_show_name: String,
     generated_names: Option<crate::generated_names::GeneratedNames>,
     shadowed_globals: HashSet<String>,
+    directive_prologue_end: Option<usize>,
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
@@ -540,6 +542,10 @@ impl LoweringPlan {
         } else {
             name.to_owned()
         }
+    }
+
+    pub(crate) fn directive_prologue_end(&self) -> Option<usize> {
+        self.directive_prologue_end
     }
 
     pub(crate) fn generated_names(&self) -> Option<&crate::generated_names::GeneratedNames> {

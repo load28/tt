@@ -2,102 +2,58 @@
 
 use super::*;
 
-/// The byte offset a generated `import` may be written at: past a
-/// byte-order mark, a shebang, and the file's directive prologue.
+/// Where a generated module-top `import` is written, and whether it needs a
+/// line break before it: past a byte-order mark, a hashbang comment
+/// (ECMA-262 §12.5), and the directive prologue the parsed program reports
+/// (ECMA-262 §11.2.1).
 ///
-/// A directive (`"use client"`, `"use strict"`) is only a directive while
-/// it is the first thing in the file, so an import written above one would
-/// silently turn it into a string expression — a bundler would stop seeing
-/// the boundary the author declared. Everything else about the top of a
-/// file (a license comment, a blank line) is ordinary text an import may
-/// precede, so the scan stops at the first statement that is not one of
-/// these two.
+/// An import written above a directive would demote it to a string
+/// expression, so a bundler would stop seeing the boundary the author
+/// declared. After the last directive, the rest of its line — whitespace and
+/// comments — stays with it, and the import opens the next line. When code
+/// follows the directive on its own line, the import is written right after
+/// the directive statement on a line of its own.
 ///
-/// ASCII bytes decide, and multi-byte UTF-8 is opaque: a string's contents
-/// are skipped by its quotes, not read.
-pub(super) fn directive_prologue_end(source: &str) -> usize {
+/// ASCII bytes decide, and multi-byte UTF-8 is opaque.
+pub(super) fn module_import_position(source: &str, directive_end: Option<usize>) -> (usize, bool) {
     let bytes = source.as_bytes();
-    let mut at = if source.starts_with('\u{feff}') {
+    let Some(end) = directive_end else {
+        return (program_start(source), false);
+    };
+    let mut at = end;
+    loop {
+        match (bytes.get(at), bytes.get(at + 1)) {
+            (None, _) => return (at, false),
+            (Some(b'\n'), _) => return (at + 1, false),
+            (Some(b' ' | b'\t' | b'\r'), _) => at += 1,
+            (Some(b'/'), Some(b'/')) => {
+                at = bytes[at..]
+                    .iter()
+                    .position(|&b| b == b'\n')
+                    .map_or(bytes.len(), |nl| at + nl);
+            }
+            (Some(b'/'), Some(b'*')) => match bytes[at + 2..].windows(2).position(|w| w == b"*/") {
+                Some(close) => at += 2 + close + 2,
+                None => return (bytes.len(), false),
+            },
+            _ => return (end, true),
+        }
+    }
+}
+
+fn program_start(source: &str) -> usize {
+    let at = if source.starts_with('\u{feff}') {
         '\u{feff}'.len_utf8()
     } else {
         0
     };
-    // A shebang is not a statement, but nothing may precede it either.
-    if bytes[at..].starts_with(b"#!") {
-        at = source[at..]
+    if source.as_bytes()[at..].starts_with(b"#!") {
+        source[at..]
             .find('\n')
-            .map_or(bytes.len(), |nl| at + nl + 1);
+            .map_or(source.len(), |nl| at + nl + 1)
+    } else {
+        at
     }
-    let mut end = at;
-    loop {
-        let open = skip_trivia(bytes, at);
-        let Some(&quote) = bytes.get(open) else { break };
-        if quote != b'"' && quote != b'\'' {
-            break;
-        }
-        let Some(close) = string_literal_end(bytes, open) else {
-            break;
-        };
-        // What follows decides whether that string was a directive or the
-        // start of an expression (`"a" + b`).
-        let mut after = close;
-        while matches!(bytes.get(after), Some(b' ' | b'\t' | b'\r')) {
-            after += 1;
-        }
-        let directive_end = match bytes.get(after) {
-            Some(b';') => after + 1,
-            None | Some(b'\n') => close,
-            _ => break,
-        };
-        // Past the rest of that line, so what is written next opens a line
-        // of its own rather than trailing the directive.
-        end = match bytes[directive_end..].iter().position(|&b| b == b'\n') {
-            Some(nl) => directive_end + nl + 1,
-            None => bytes.len(),
-        };
-        at = end;
-    }
-    end
-}
-
-/// The offset past whitespace and comments starting at `at`.
-pub(super) fn skip_trivia(bytes: &[u8], mut at: usize) -> usize {
-    loop {
-        while matches!(bytes.get(at), Some(b) if b.is_ascii_whitespace()) {
-            at += 1;
-        }
-        match (bytes.get(at), bytes.get(at + 1)) {
-            (Some(b'/'), Some(b'/')) => {
-                at = match bytes[at..].iter().position(|&b| b == b'\n') {
-                    Some(nl) => at + nl + 1,
-                    None => bytes.len(),
-                };
-            }
-            (Some(b'/'), Some(b'*')) => {
-                at = match bytes[at + 2..].windows(2).position(|w| w == b"*/") {
-                    Some(close) => at + 2 + close + 2,
-                    None => bytes.len(),
-                };
-            }
-            _ => return at,
-        }
-    }
-}
-
-/// The offset just past the string literal opening at `at`, or `None` when
-/// it is unterminated.
-pub(super) fn string_literal_end(bytes: &[u8], at: usize) -> Option<usize> {
-    let quote = bytes[at];
-    let mut i = at + 1;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\\' => i += 2,
-            b'\n' => return None,
-            b if b == quote => return Some(i + 1),
-            _ => i += 1,
-        }
-    }
-    None
 }
 
 /// Inline `$tt_ap(v, f)` as `f(v)` exactly when moving the input behind the

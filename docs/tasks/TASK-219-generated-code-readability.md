@@ -1,5 +1,7 @@
 # TASK-219: 방출 코드 가독성 — 블록 암 들여쓰기와 런타임 import 위치
 
+> Superseded in part by [TASK-486](./TASK-486-directive-prologue-import-placement.md): the directive prologue is now read from the parsed program, not found by the `directive_prologue_end` byte scan described below, and a comment on the directive's line stays before the import.
+
 - **상태**: 완료
 - **시작일**: 2026-08-25
 - **완료일**: 2026-08-25

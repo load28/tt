@@ -11,6 +11,7 @@ pub(crate) struct ProgramSyntax {
     pub(super) overlay: Vec<OverlayEntry>,
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
+    pub(super) directive_prologue_end: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -156,7 +157,10 @@ impl ProgramSyntax {
         collected
             .occupied_names
             .extend(crate::generated_names::source_names(source, source_kind));
+        let directive_prologue_end =
+            directive_prologue_end(&parsed.module, parsed.start, &projection.source_segments)?;
         let syntax = Self {
+            directive_prologue_end,
             source_len: source.len(),
             projection: projection.code,
             module: parsed.module,
@@ -197,6 +201,10 @@ impl ProgramSyntax {
 
     pub(crate) fn owners(&self) -> impl Iterator<Item = &HostOwnerSyntax> {
         self.owners.iter()
+    }
+
+    pub(crate) fn directive_prologue_end(&self) -> Option<usize> {
+        self.directive_prologue_end
     }
 
     pub(crate) fn occupied_names(&self) -> impl Iterator<Item = &str> {
