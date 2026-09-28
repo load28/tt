@@ -779,10 +779,10 @@ impl Machine<'_> {
                     return Out::Retry;
                 }
                 self.stmt_frame(Stmt::ForHead(state));
-                self.push_expr(expr);
-                if tok.is(b';') {
+                if matches!(tok.kind, Tk::Punct(b';' | b',' | b':')) {
                     return Out::Consumed;
                 }
+                self.push_expr(expr);
                 Out::Retry
             }
         }

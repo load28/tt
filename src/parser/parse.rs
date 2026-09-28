@@ -684,9 +684,7 @@ impl Parser<'_> {
 
             // `try <expr>;` — never valid TypeScript in expression
             // position (`try { ... }` blocks and member names are
-            // structurally excluded by the sub-parser). A member name the
-            // lexer recognized is never an operand, so it is not the value
-            // form either.
+            // structurally excluded by the sub-parser).
             if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
                 let misplaced = !tok.facts.member()
                     && !(tok.facts.statement_start()

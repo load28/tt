@@ -1,5 +1,7 @@
 # TASK-391: Honour automatic semicolon insertion around pipelines and statement constructs
 
+> Superseded in part by [TASK-491](./TASK-491-token-facts-statement-boundaries.md): the shared `asi_boundary_at` predicate of Decision 1 is deleted. Automatic semicolons, statement starts, and the rest of Decision 1's rule are recorded once per token by the lexer (`crate::lexer::TokenFacts`), and the pipeline scans (Decision 2) and the projection's boundary semicolon (Decision 3) read those facts. The behavior these decisions describe still holds.
+>
 > Updated by [TASK-451](./TASK-451-brace-after-expression-starts-block.md): flow statement splitting now ends a statement before a line-broken `{` that follows a complete expression unless a head in the statement still owes its body. Decision 1 still holds for the shared `asi_boundary_at` predicate.
 
 - **Status**: Complete

@@ -57,15 +57,43 @@ Span/오프셋은 원본 소스의 절대 바이트 위치다 — 이것이 의�
 
 ### 2. `lexer` — 토큰화
 
-swc가 TypeScript를 렉서 → 파서로 처리하듯, 소스는 먼저 **유의 토큰
-스트림**으로 변환된다: 공백·주석은 트리비아로 토큰을 만들지 않고(verbatim
-방출은 원본 바이트를 복사하므로 표현이 필요 없다), 문자열·템플릿·정규식은
-원자 토큰이 된다. 정규식-대-나눗셈 판정(직전 토큰 휴리스틱)이 여기 한
-곳에만 있고, 템플릿은 계층적으로 렉싱되어 각 `${ }` 보간의 토큰 스트림을
-토큰 안에 품는다. 파서가 단위로 소비해야 하는 `=>`/`||`/`?.`/`??` 네
-연산자만 융합 토큰이고 나머지 유의 바이트는 1바이트 `Punct`다. 바이트
-프리미티브(문자열/정규식 스캔, 괄호 매칭)는 `scanner.rs`가 계속 담당하며
-렉서와 codegen(`contains_await` 등)이 공유한다.
+As swc lexes TypeScript before parsing it, the source first becomes a
+**stream of significant tokens**: white space and comments are trivia and
+produce no tokens (verbatim emission copies the original bytes, so they need
+no representation), and strings, templates, and regular expressions are
+atomic tokens. Templates are lexed hierarchically: each `${ }`
+interpolation's token stream rides inside its template token. Only the
+operators the parser must consume as units are fused (`=>`, `||`, `?.`,
+`??`, `|>`); every other significant byte is a one-byte `Punct`. The byte
+primitives — string, regular-expression, and trivia scanning, and the
+ECMA-262 `LineTerminator` set (LF, CR, U+2028, U+2029) — live in
+`scanner.rs`. The questions codegen asks of text it emits
+(`contains_await`, `is_primary_expression`, `has_top_level_comma`) are
+answered over tokens in `lexer/queries.rs`.
+
+**Token facts (TASK-491).** Statement boundaries are modeled once, in the
+lexer layer. `lexer/facts.rs` is a push-down recognizer for TypeScript's
+statement and expression skeleton — statement lists, statements,
+expressions, bracketed groups, object, class, and interface bodies, and a
+small type grammar entered after annotations, `as`/`satisfies`, type
+arguments, heritage clauses, and type aliases — that the lexer drives one
+token at a time. It records `TokenFacts` on every token: a line terminator
+before it, whether it completes an operand, whether an automatic semicolon
+precedes it (§12.10.1, restricted productions included), whether it starts
+a statement, whether it is a label or a member name, and, on a `{`, whether
+it opens a function body (a generator's or a constructor's). The lexer's own
+regular-expression and JSX decisions are the machine's "an operand is
+expected here". It also knows tt's statement-shaped constructs (`if let`,
+let-else, `match` arms, `variant` bodies, construct bodies), whose shapes
+TypeScript never has. Every consumer reads the facts instead of deriving a
+boundary from the tokens around it: flow statement splitting and
+function-scope queries, the parser's statement starts, `try`/`if let`
+expression positions, pipeline heads and steps, and `match` host ambiguity,
+the program-syntax projection's boundary semicolon, and `val`'s same-line
+rule. The machine's oracle is SWC: for TypeScript input its statement spans
+equal SWC's (`lexer/facts/tests.rs`, over the repository's TypeScript and
+tt fixtures and the installed TypeScript package; `TTC_FACTS_CORPUS` adds
+trees).
 
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로
@@ -225,7 +253,7 @@ TT-owned 타입으로 돌아온다. 설계 근거와 typescript-go 비교는
 | 새 구문 | `ast`에 노드 추가 → `parser`에 구조 파싱 → `codegen`에 방출 (+ sema 검사 필요 시) |
 | 새 의미 규칙/에러 | `sema`만 (통과 영역의 바인딩·식이 대상이면 `val`) |
 | 방출 코드 형태 변경 | `codegen`만 (+ `docs/reference/language.md` 갱신) |
-| 새 토큰 수준 인식 | `lexer` (토큰 종류/융합) 또는 `scanner` (바이트 프리미티브) |
+| New token-level recognition | `lexer` (token kinds and fusion, token facts) or `scanner` (byte primitives) |
 
 어느 경우든 CLAUDE.md의 세 계층 테스트(compile / passthrough /
 integration)와 레퍼런스 문서 갱신 규칙을 따른다.

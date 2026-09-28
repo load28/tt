@@ -1,7 +1,3 @@
-/* ------------------------------------------------------------------ */
-/* TASK-491 statement boundaries are the lexer's token facts           */
-/* ------------------------------------------------------------------ */
-
 /// Lines that end a statement at their line break although their last
 /// token was once read as unfinished: a type ending in `>` or `void`,
 /// contextual keywords used as names, and line terminators other than LF.
@@ -94,8 +90,6 @@ fn a_statement_match_after_a_line_ending_in_a_type_keeps_both_statements() {
 
 #[test]
 fn a_block_after_a_call_opens_no_function() {
-    // The brace after an `if let` scrutinee that ends in a call is a block;
-    // only a brace after a parameter list or `=>` opens a function body.
     let source = "declare function f(): Option<number>;\n\
                   declare function g(): Result<number, string>;\n\
                   if let Some(v) = f() { try g(); }\n";

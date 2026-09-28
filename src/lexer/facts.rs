@@ -318,7 +318,8 @@ impl<'s> Machine<'s> {
                 Out::Consumed => break,
                 Out::Retry => {
                     guard += 1;
-                    if guard > 4096 {
+                    debug_assert!(guard < 4096, "the facts machine made no progress");
+                    if guard >= 4096 {
                         break;
                     }
                 }

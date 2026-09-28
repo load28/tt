@@ -1,5 +1,7 @@
 # TASK-480: Report an `if let` in any expression position as `if-let-placement` alone
 
+> Updated by [TASK-491](./TASK-491-token-facts-statement-boundaries.md): Decision 1's test (`starts_statement`, an automatic-semicolon boundary, `in_for_update`, and `follows_object_member_colon`) is replaced by the lexer's statement-start fact on the `if` token (`crate::lexer::TokenFacts::statement_start`). The position rule is unchanged.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

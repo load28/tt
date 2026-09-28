@@ -1,5 +1,7 @@
 # TASK-451: Start a block at a line-broken brace after a complete expression
 
+> Superseded by [TASK-491](./TASK-491-token-facts-statement-boundaries.md): `brace_starts_statement`, `head_owes_body`, and `brace_opens_statement` are deleted. Flow statement splitting ends a statement where the lexer's token facts record a statement start or an automatic semicolon; a head that owes its body (a function, class, interface, namespace, or enum head) consumes its `{` in the lexer's statement model, so Decision 1's behavior holds without a walk over the statement.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

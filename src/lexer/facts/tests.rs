@@ -153,6 +153,31 @@ fn the_machine_reads_known_shapes_as_swc_does() {
     }
 }
 
+/// Malformed text — every prefix and suffix of the known shapes, and
+/// tokens no frame expects — always makes progress (the machine asserts
+/// it in debug builds) and yields one fact set per token.
+#[test]
+fn the_machine_makes_progress_on_malformed_text() {
+    let garbage = [
+        "for (;; , :) }",
+        "f<@#, => ?.>(x)",
+        ") ] } , : ;",
+        "a<b<c",
+        "if let",
+        "let x: A<@ => # || ?? |> ~>;",
+    ];
+    for case in KNOWN.iter().chain(garbage.iter()) {
+        for (at, _) in case.char_indices() {
+            for piece in [&case[..at], &case[at..]] {
+                for kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+                    let tokens = lex_with_kind(piece, 0, piece.len(), kind);
+                    assert!(tokens.iter().all(|token| token.span.end <= piece.len()));
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn the_machine_reads_jsx_containers_as_swc_does() {
     for case in [

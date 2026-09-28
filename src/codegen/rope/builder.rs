@@ -355,7 +355,7 @@ impl<'a> Rope<'a> {
                 return false;
             }
             if bytes[at..].starts_with(b"//") {
-                return !bytes[at..].contains(&b'\n');
+                return crate::scanner::line_end(bytes, at, bytes.len()) == bytes.len();
             }
             if bytes[at..].starts_with(b"/*") {
                 let Some(close) = crate::scanner::find_subslice(bytes, b"*/", at + 2, bytes.len())

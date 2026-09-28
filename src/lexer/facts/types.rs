@@ -191,14 +191,19 @@ impl Machine<'_> {
                 self.open_type();
                 Out::Consumed
             }
-            Tk::Punct(b'?' | b'.' | b'-' | b'+' | b'!') => {
-                self.push_frame(Frame::TypeGroup(group));
-                Out::Consumed
-            }
-            _ => {
+            Tk::Word
+            | Tk::Str
+            | Tk::Number
+            | Tk::Template
+            | Tk::Regex
+            | Tk::Punct(b'(' | b'[' | b'{' | b'<' | b'|' | b'&' | b'*') => {
                 self.push_frame(Frame::TypeGroup(group));
                 self.open_type();
                 Out::Retry
+            }
+            _ => {
+                self.push_frame(Frame::TypeGroup(group));
+                Out::Consumed
             }
         }
     }

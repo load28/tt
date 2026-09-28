@@ -1,8 +1,8 @@
 # TASK-491: Model statement boundaries once, as token facts owned by the lexer
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-09-28
-- **Completed**: —
+- **Completed**: 2026-09-28
 - **Commit**: —
 
 ## Purpose
@@ -61,6 +61,11 @@ An architecture audit found that statement boundaries and automatic semicolon in
 - **Alternatives considered**: Feed the byte scans a machine. They produce no tokens, so each would need its own driver.
 - **Decision and rationale**: The questions are answered over the lexer's tokens (`src/lexer/queries.rs`: `has_top_level_comma`, `is_primary_expression`, `contains_await`, `type_parameter_names`), lexed with the file's `SourceKind` so JSX in emitted `.tsx` is read as JSX. `regex_allowed`, `find_matching`, `skip_template`, `scan_type_end`, and the byte versions are deleted; `scanner.rs` keeps only byte primitives. The parser carries its `SourceKind` for the one query it asks (`try` operand ends).
 
+### Decision 9: Lexical corrections the model depends on
+
+- **Context**: Line-break facts are only as right as the trivia the lexer skips.
+- **Decision and rationale**: `scanner::skip_trivia` is the one trivia skipper and reports whether it crossed a line terminator (`line_terminator_len`: LF, CR, U+2028, U+2029). A `//` comment ends at any of them (`line_end`), so CR-only files no longer lex as one comment. Non-ASCII white space and the byte-order mark are trivia rather than three one-byte `Punct` tokens. A hashbang line at a file's start is trivia (ECMA-262 `HashbangComment`). `?.` followed by a digit is `?` and a numeric literal (`a?.5:1`), as ECMA-262's `OptionalChainingPunctuator` lookahead requires. A regular expression literal stops at any line terminator.
+
 ## Work log
 
 - 2026-09-28: Verified the audit. Reproduced with `ttc --check`/`ttc -p`: a let-else `else` block whose line before `throw e` ends in `o as Array<number>`, `let g: () => void`, `let p: Promise<void>`, `x satisfies Record<K, unknown>`, or ends with a CR or U+2028 line break reports `let-else-not-diverging`; `let p: Promise<void>` followed by an `if let` reports `if-let-placement`; a pipeline on the line after such a type claims the previous line as its head (`generated TypeScript failed to parse`); a `try` statement after one compiles as a value-form `try`.
@@ -68,6 +73,8 @@ An architecture audit found that statement boundaries and automatic semicolon in
 - 2026-09-28: Moved every consumer onto the facts: flow statement splitting and labels (`src/flow/scanner.rs`), concise-arrow ends (`src/flow/syntax.rs`), the parser's statement starts, `try`/`if let` expression positions, pipeline heads and steps, `match` host ambiguity, and the brace-continuation test (`src/parser/`), the projection's boundary semicolon (`src/program_syntax/projection.rs`), and `val`'s same-line rule (`src/parser/vals.rs`). Deleted `asi_boundary_at` and its helpers, `ConciseArrowBoundaries`, `brace_opens_statement`, `brace_starts_statement`, `head_owes_body`, `NON_VALUE_WORDS`, `NON_LABEL_WORDS`, `TYPE_OPERATOR_WORDS`, `BLOCK_STMT_WORDS`, `EXPR_BRACE_WORDS`, `starts_statement`, `in_for_update`, `follows_object_member_colon`, `STMT_ONLY_WORDS`, and the cursor's `line_break_before`/`ends_expression`. Added `tests/compile/cases_12.rs`.
 - 2026-09-28: Recorded function-body facts (`function_body`, `generator_body`, `constructor_body`) and moved flow's function-scope queries onto them (`src/flow/syntax.rs`; callers in `src/parser/`, `src/sema/checker.rs`, `src/core_ir/lower.rs`). Deleted the return-type walk and its word lists. Added `a_brace_records_the_function_body_it_opens` and `a_block_after_a_call_opens_no_function`.
 - 2026-09-28: Moved codegen's text queries onto tokens (`src/lexer/queries.rs`), threaded the `SourceKind` through `push_grouped`, `push_receiver`, `needs_grouping`, and `grouping_required` (`src/codegen/core/emitter/`), and deleted the scanner's regex guess and bracket matcher. Two emit snapshots changed (Issue 3); reviewed with `UPDATE_EXPECT=1 cargo test --test snapshot`.
+- 2026-09-28: Reviewed the machine for frames that hand a token back and forth without consuming it (Issue 4) and added `the_machine_makes_progress_on_malformed_text`. The line-comment test in `src/codegen/rope/builder.rs` now ends a comment at every line terminator (`scanner::line_end`). Updated `docs/design/compiler-architecture.md` (in English) and noted the superseded predicates at the top of the TASK-391, TASK-451, TASK-480, and TASK-482 records.
+- 2026-09-28: Ran the oracle on a wider corpus: `TTC_FACTS_CORPUS=/opt/node22/lib/node_modules:/opt/node22/lib/node_modules/npm/node_modules:/opt/node22/lib/node_modules/eslint/node_modules:/opt/node22/lib/node_modules/ts-node/node_modules cargo test --lib the_machine_reads_the_corpus` — statement spans agree on all 2931 files SWC parses (3013 files; npm's semicolon-free JavaScript, TypeScript 5's compiler and library declarations, eslint, prettier, pnpm, yarn, playwright). The default corpus agrees on all 510 of 570 files SWC parses.
 
 ## Issues and resolutions
 
@@ -89,6 +96,25 @@ An architecture audit found that statement boundaries and automatic semicolon in
 - **Cause**: The byte scanner read the `/` of a JSX closing tag (`</button>`) as the start of a regular expression, lost the bracket balance, and answered "top-level comma" for a value that has none. The rule (`docs/ai/tt.md`) keeps parentheses around a lowered value only where they group it.
 - **Resolution**: A real fix; the fixtures were updated and the diff is exactly the two parenthesis pairs.
 
+### Issue 4: Two frames could hand a malformed token back and forth
+
+- **Symptom**: None observed; found by review. A type-argument list meeting a token no type can start (`A<@>`), and a `for` head's test or update meeting a stray `,` or `:`, pushed a child that returned the token unconsumed, then pushed the child again. Only the machine's retry bound ended the loop.
+- **Cause**: Their fallback pushed a child for every token, not only for tokens the child can start with.
+- **Resolution**: Both frames consume a token their child cannot start with. The retry bound is now a debug assertion as well, so a regression fails the tests instead of degrading silently; `the_machine_makes_progress_on_malformed_text` lexes every prefix and suffix of the known shapes and of malformed text in both source kinds.
+
 ## Verification
 
+- [x] `cargo fmt --check`: exit 0.
+- [x] `cargo clippy --all-targets -- -D warnings`: exit 0.
+- [x] `TTC_REQUIRE_TSGO=1 cargo test`: exit 0; 40 suites, 1470 tests, 0 failures. The TASK-391, TASK-451, TASK-480, TASK-482, and TASK-490 tests are unchanged and green.
+- [x] `./scripts/ci extension`: exit 0; 208 extension tests passed, none skipped.
+- [x] `scripts/check-task-index`: the index and the records agree.
+- [x] Snapshots: two emit fixtures changed, each by one redundant pair of parentheses (Issue 3); no other snapshot changed.
+- [x] The oracle (`src/lexer/facts/tests.rs`): statement spans equal SWC's on every known shape, the TSX shapes, all 510 corpus files SWC parses by default, and all 2931 files of the wider corpus in the work log.
+- [x] The regressions in `tests/compile/cases_12.rs` are the shapes reproduced with the previous `ttc` in the first work-log entry (a let-else, `if let`, pipeline head, `try` statement, and statement `match` after a line ending in a type or a contextual name, and CR, CR LF, U+2028, U+2029, and a CR-terminated comment as line terminators), plus the module-level `try` in an `if let` body (Decision 7).
+
 ## Result
+
+Added `src/lexer/facts.rs`, `src/lexer/facts/{statements,expressions,types,tests}.rs`, `src/lexer/queries.rs`, and `tests/compile/cases_12.rs`. Changed `src/lexer.rs`, `src/scanner.rs`, `src/flow/{mod,scanner,syntax,tests}.rs`, `src/parser/{cursor,iflets,lets,parse,pipes,results,tries,vals}.rs`, `src/program_syntax/projection.rs`, `src/sema/checker.rs`, `src/core_ir/lower.rs`, `src/codegen/core/mod.rs`, `src/codegen/core/emitter/{expression,helpers,host,pattern,result,source}.rs`, `src/codegen/rope/builder.rs`, `tests/compile.rs`, two fixtures under `tests/fixtures/emit/`, `docs/design/compiler-architecture.md`, the TASK-391, TASK-451, TASK-480, and TASK-482 records, `docs/tasks/INDEX.md`, and this record.
+
+Statement boundaries, automatic semicolons, labels, member names, and function-body braces are decided once per token stream by the lexer and read everywhere else; the flow word lists, the lexer's and the scanner's previous-token rules, and the predicates they served are gone, and the one keyword table the parser still consults (`statement_only_keyword`) lives in the lexer. Follow-ups: measure the lexing cost with `scripts/bench-compare` against `d19a479` (a `Token` is 8 bytes larger and every token passes through the machine), and move the let-else divergence check onto an SWC control-flow graph (the later phase this task excluded).

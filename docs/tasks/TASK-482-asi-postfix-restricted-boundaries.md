@@ -1,5 +1,7 @@
 # TASK-482: End a statement at a line break after a postfix operator or a restricted production
 
+> Superseded by [TASK-491](./TASK-491-token-facts-statement-boundaries.md): `asi_boundary_at`, `expression_ends_at`, `word_ends_expression`, and `restricted_production_ends_at` are deleted; the lexer records automatic semicolons, restricted productions included, on each token. The excluded follow-up (a type-argument `>` that ends an `as` type) is fixed there: the lexer's type grammar knows where a type ends.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28
