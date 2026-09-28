@@ -1,6 +1,7 @@
 //! Whole-file parsing, recovery collection, and parser implementation.
 
 use std::cell::OnceCell;
+use std::collections::HashMap;
 
 use super::*;
 
@@ -25,19 +26,41 @@ pub(crate) fn lex_and_parse_with_kind(
     source_kind: crate::SourceKind,
 ) -> (Program, Vec<Token>) {
     let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
-    let parser = Parser::new(src);
-    let mut program = parser.parse_tokens(&tokens, 0, src.len());
-    let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
-    if !host_owned_matches.is_empty() {
-        program = Parser {
+    let parse = |host_rejected_vals: &[usize], host_owned_matches: Vec<Span>| {
+        Parser {
             src,
             bytes: src.as_bytes(),
             host_owned_matches,
+            host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
         }
-        .parse_tokens(&tokens, 0, src.len());
+        .parse_tokens(&tokens, 0, src.len())
+    };
+    let mut program = parse(&[], Vec::new());
+    let host_rejected_vals = host::rejected_val_candidates(src, source_kind, &program);
+    if !host_rejected_vals.is_empty() {
+        program = parse(&host_rejected_vals, Vec::new());
+    }
+    let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
+    if !host_owned_matches.is_empty() {
+        program = parse(&host_rejected_vals, host_owned_matches);
     }
     (program, tokens)
+}
+
+/// Every `val` modifier of the parse, keyed by the keyword's byte offset —
+/// the parser's decision, which the `val` analysis reads over the token
+/// stream instead of re-deriving it.
+pub(crate) fn val_modifiers(program: &Program) -> HashMap<usize, ValModifier> {
+    let mut modifiers = HashMap::new();
+    visit_programs(program, &mut |region| {
+        for segment in &region.segments {
+            if let Segment::ValModifier(modifier) = segment {
+                modifiers.insert(modifier.span.start, *modifier);
+            }
+        }
+    });
+    modifiers
 }
 
 /// Visits every recursively nested parse region exactly once.
@@ -162,6 +185,9 @@ pub(crate) struct Parser<'a> {
     pub src: &'a str,
     pub bytes: &'a [u8],
     host_owned_matches: Vec<Span>,
+    /// Keyword offsets of parameter-shaped `val` candidates whose binding
+    /// the host grammar does not read as a formal parameter, sorted.
+    host_rejected_vals: Vec<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
 }
 
@@ -171,12 +197,37 @@ impl<'a> Parser<'a> {
             src,
             bytes: src.as_bytes(),
             host_owned_matches: Vec::new(),
+            host_rejected_vals: Vec::new(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
         }
     }
 }
 
 impl Parser<'_> {
+    /// The modifier kind of the undotted identifier `val` at token index
+    /// `idx`, recording a parameter-shaped one as a host candidate.
+    fn val_modifier_at(
+        &self,
+        tokens: &[Token],
+        idx: usize,
+        candidates: &mut Vec<Span>,
+    ) -> Option<ValModifierKind> {
+        match vals::shape(self.src, tokens, idx)? {
+            vals::ValShape::Declaration => Some(ValModifierKind::Declaration),
+            vals::ValShape::Parameter => {
+                let keyword = tokens[idx].span.start;
+                if self.host_rejected_vals.binary_search(&keyword).is_ok() {
+                    return None;
+                }
+                candidates.push(Span {
+                    start: keyword,
+                    end: tokens[idx + 1].span.start,
+                });
+                Some(ValModifierKind::Parameter)
+            }
+        }
+    }
+
     fn host_owns_match_name(&self, candidate: Span) -> bool {
         let preceding = self
             .host_owned_matches
@@ -223,7 +274,7 @@ fn segment_start(seg: &Segment) -> usize {
         },
         Segment::Pipe(p) => p.head_span.start,
         Segment::ResultBlock(b) => b.keyword_off,
-        Segment::ValModifier(span) => span.start,
+        Segment::ValModifier(modifier) => modifier.span.start,
     }
 }
 
@@ -486,7 +537,7 @@ impl Parser<'_> {
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
-        let mut host_match_candidates = Vec::new();
+        let mut host_candidates = HostCandidates::default();
         let mut stray_pipes: Vec<usize> = Vec::new();
         let mut stray_if_lets: Vec<usize> = Vec::new();
         let stray_results: Vec<usize> = Vec::new();
@@ -693,7 +744,7 @@ impl Parser<'_> {
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
                         if host_ambiguous {
-                            host_match_candidates.push(Span {
+                            host_candidates.matches.push(Span {
                                 start: tok.span.start,
                                 end: byte_end,
                             });
@@ -709,7 +760,7 @@ impl Parser<'_> {
                     }
                     Claim::Malformed { error, recovery } => {
                         if host_ambiguous {
-                            host_match_candidates.push(recovery.span);
+                            host_candidates.matches.push(recovery.span);
                         }
                         malformed.push(error);
                         recoveries.push(recovery);
@@ -857,17 +908,22 @@ impl Parser<'_> {
                 }
             }
 
-            // `val` — a binding modifier, dropped from the output. The
-            // two accepted shapes (`val const|let|var` on one line, and
-            // `val <binding>` at the start of a proven parameter-list entry)
-            // cannot occur in valid TypeScript, so every other `val` is
-            // an ordinary identifier and stays verbatim.
-            if !dotted && word == "val" && val::modifier_at(self.src, tokens, i).is_some() {
+            // `val` — a binding modifier, dropped from the output. Its
+            // shapes are in `vals`; a parameter-shaped one stays a modifier
+            // only when the host grammar reads its binding as a formal
+            // parameter. Every other `val` is an ordinary identifier.
+            if !dotted
+                && word == "val"
+                && let Some(kind) = self.val_modifier_at(tokens, i, &mut host_candidates.vals)
+            {
                 flush_verbatim(&mut segments, seg_start, tok.span.start);
-                let end = val::modifier_end(self.src, tok.span.end);
-                segments.push(Segment::ValModifier(Span {
-                    start: tok.span.start,
-                    end,
+                let end = vals::modifier_end(self.src, tok.span.end);
+                segments.push(Segment::ValModifier(ValModifier {
+                    span: Span {
+                        start: tok.span.start,
+                        end,
+                    },
+                    kind,
                 }));
                 seg_start = end;
                 i += 1;
@@ -885,7 +941,9 @@ impl Parser<'_> {
             span: Span { start, end },
             expression_root,
             segments,
-            host_match_candidates,
+            host_candidates: (!host_candidates.matches.is_empty()
+                || !host_candidates.vals.is_empty())
+            .then(|| Box::new(host_candidates)),
             unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),
             recoveries,
             malformed,

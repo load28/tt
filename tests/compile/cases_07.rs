@@ -624,6 +624,22 @@ fn val_array_pattern_parameter_is_erased_in_every_parameter_list() {
             "function over(val [x]: number[]): void;\nfunction over(val [x]: number[]) {}\n",
             "function over([x]: number[]): void;\nfunction over([x]: number[]) {}\n",
         ),
+        (
+            "const e = c ? (val [x]: number[]) => x : (w: number[]) => w;\n",
+            "const e = c ? ([x]: number[]) => x : (w: number[]) => w;\n",
+        ),
+        (
+            "class S { set s(val [v]: number[]) {} get g() { return 1; } }\n",
+            "class S { set s([v]: number[]) {} get g() { return 1; } }\n",
+        ),
+        (
+            "interface I { m(val [x]: number[]): void; new (val y: number): I; (val z: number): void }\ntype F = (val [x]: number[]) => void;\n",
+            "interface I { m([x]: number[]): void; new (y: number): I; (z: number): void }\ntype F = ([x]: number[]) => void;\n",
+        ),
+        (
+            "const t = `${(val [x]: number[]) => x}`;\n",
+            "const t = `${([x]: number[]) => x}`;\n",
+        ),
     ];
     for (src, expected) in cases {
         assert_eq!(ok(src), expected, "{src}");

@@ -29,9 +29,9 @@ pub(crate) struct Program {
     /// statement stream.
     pub expression_root: bool,
     pub segments: Vec<Segment>,
-    /// `match` constructs whose parser position can also be a host declaration.
-    /// Only these spans require ownership proof from the TypeScript AST.
-    pub host_match_candidates: Vec<Span>,
+    /// Parser positions the host grammar settles; `None` when the region
+    /// has none, which keeps them out of every nested region's inline size.
+    pub host_candidates: Option<Box<HostCandidates>>,
     /// Structurally recognized tt intent that did not fully parse and was
     /// therefore left verbatim. Unlike [`Self::malformed`], these facts do
     /// not diagnose by themselves: output verification consumes them only
@@ -69,6 +69,34 @@ pub(crate) struct UnclaimedTtCandidate {
     pub extent: Span,
 }
 
+/// Positions of one region whose reading the TypeScript AST decides.
+#[derive(Debug, Default)]
+pub(crate) struct HostCandidates {
+    /// `match` constructs whose parser position can also be a host
+    /// declaration. Only these spans require ownership proof from the
+    /// TypeScript AST.
+    pub matches: Vec<Span>,
+    /// Parameter-shaped `val` modifiers this region lifted before the host
+    /// grammar confirmed them: each span runs from the keyword to the start
+    /// of the binding it modifies. The host parse keeps only the ones whose
+    /// binding it reads as a formal parameter ([`ValModifierKind::Parameter`]).
+    pub vals: Vec<Span>,
+}
+
+impl Program {
+    pub(crate) fn host_match_candidates(&self) -> &[Span] {
+        self.host_candidates
+            .as_deref()
+            .map_or(&[], |candidates| &candidates.matches)
+    }
+
+    pub(crate) fn host_val_candidates(&self) -> &[Span] {
+        self.host_candidates
+            .as_deref()
+            .map_or(&[], |candidates| &candidates.vals)
+    }
+}
+
 /// Rare rollback facts kept out of every nested [`Program`]'s inline size.
 #[derive(Debug)]
 pub(crate) struct UnclaimedTtCandidates(pub Vec<UnclaimedTtCandidate>);
@@ -76,6 +104,26 @@ pub(crate) struct UnclaimedTtCandidates(pub Vec<UnclaimedTtCandidate>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnclaimedTtKind {
     Try,
+}
+
+/// A `val` binding modifier: the keyword plus the spaces and tabs after it
+/// (the bytes codegen drops), and what it modifies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ValModifier {
+    pub span: Span,
+    pub kind: ValModifierKind,
+}
+
+/// What a [`ValModifier`] modifies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ValModifierKind {
+    /// `val const|let|var <binding> ...` on one line — a variable
+    /// declaration.
+    Declaration,
+    /// `val <binding>` at the start of an entry that the host grammar
+    /// parses as a formal parameter (a function, arrow, method, accessor,
+    /// constructor, or signature parameter, or a `catch` parameter).
+    Parameter,
 }
 
 /// A parser-owned error node used only by the typed projection.
@@ -131,13 +179,13 @@ pub(crate) enum Segment {
     /// [`crate::ImportRewrite`]. The clause's imported names are recorded
     /// for the declaration-collection API ([`crate::tt_imports`]).
     TtImport(TtImportDecl),
-    /// A lifted `val` binding modifier (the keyword plus the spaces after
-    /// it). `val` is a compile-time-only modifier — codegen emits nothing
-    /// for this segment, so `val const x = 1;` becomes `const x = 1;`.
-    /// Which occurrences of the identifier `val` are modifiers is decided
-    /// structurally by [`crate::val::modifier_at`]; every other one stays
-    /// verbatim.
-    ValModifier(Span),
+    /// A lifted `val` binding modifier. `val` is a compile-time-only
+    /// modifier — codegen emits nothing for this segment, so
+    /// `val const x = 1;` becomes `const x = 1;`. The parser decides once
+    /// which occurrences of the identifier `val` are modifiers and of what
+    /// kind; every later phase reads this node instead of re-deriving it,
+    /// and every other `val` stays verbatim.
+    ValModifier(ValModifier),
     /// A template literal; its interpolations are recursively parsed.
     Template(Template),
     /// A tt pipeline expression (`head |> step |> ...`).

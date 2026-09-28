@@ -30,6 +30,17 @@ fn val_parameter_positions_beyond_plain_identifiers() {
 }
 
 #[test]
+fn val_parameter_beside_an_element_access_of_a_variable_named_val() {
+    let e = err(
+        "const g = c ? (val [0]) : w => w;\nfunction read(val [user]: User[]) {\n  user.name = \"x\";\n}\n",
+    );
+    assert_eq!((e.line, e.col), (3, 3));
+    assert!(e.message.contains("val binding `user`"));
+    let src = "const g = c ? (val [0]) : w => w;\nf(val [0])\n{\n  val.name = 1;\n}\n";
+    assert_eq!(ok(src), src);
+}
+
+#[test]
 fn val_argument_may_only_reach_a_val_parameter() {
     let src = "\
 function read(val user: User) { log(user.name); }

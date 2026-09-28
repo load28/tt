@@ -1,5 +1,7 @@
 # TASK-452: Claim a `val` parameter modifier only inside a proven parameter list
 
+> **Superseded by [TASK-490](./TASK-490-val-modifier-decided-once-in-the-parser.md).** The token classifier recorded here (`opens_parameter_list`, `follows_function_keyword`, `operand_expected_before`, `enclosing_open`) was deleted. The parser now keeps a parameter-shaped `val` only when the host parse of the region puts a formal parameter at its binding, and records the decision in the AST. Decision 2 is reversed too: signature parameters are now parameters. The known limits listed under Result are fixed.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

@@ -253,7 +253,11 @@ fn tt_errors(
         semantics,
     );
     if !options.defer_to_checker {
-        errors.extend(val::check_all(source, tokens));
+        errors.extend(val::check_all(
+            source,
+            tokens,
+            &parser::val_modifiers(program),
+        ));
     }
     // One order for every producer: where the reader's eye goes, top to
     // bottom. Stable, so equal positions keep their category order.

@@ -7,6 +7,8 @@ use super::*;
 /// The `val` checker's walk state.
 pub(super) struct Checker<'a> {
     pub(super) src: &'a str,
+    /// The parser's `val` modifiers.
+    pub(super) modifiers: &'a Modifiers,
     pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
     /// Probe mode: collect method calls instead of reporting violations.
     /// The violations are the same either way — the file has already been
@@ -17,6 +19,17 @@ pub(super) struct Checker<'a> {
 impl<'a> Checker<'a> {
     fn text(&self, tok: &Token) -> &'a str {
         &self.src[tok.span.start..tok.span.end]
+    }
+
+    /// The probe node for a `val` binding.
+    fn val_binding(&self, var: &Var<'a>) -> ValBinding {
+        let val_at = var.val_at.expect("filtered val binding");
+        ValBinding {
+            name: var.name.to_string(),
+            val_at,
+            modifier_end: self.modifiers[&val_at].span.end,
+            ident: var.ident,
+        }
     }
 
     /// The offset of the `val` keyword that declared `name`, or `None`
@@ -82,11 +95,7 @@ impl<'a> Checker<'a> {
                             sink.borrow_mut().bindings.extend(
                                 vars.iter()
                                     .filter(|v| v.val_at.is_some())
-                                    .map(|v| ValBinding {
-                                        name: v.name.to_string(),
-                                        ident: v.ident,
-                                        val_at: v.val_at.expect("filtered val binding"),
-                                    }),
+                                    .map(|v| self.val_binding(v)),
                             );
                         }
                         pending.push((start, end, vars, var_scope));
@@ -118,13 +127,11 @@ impl<'a> Checker<'a> {
             return i + 1;
         }
 
-        if word == "val"
-            && let Some(kind) = modifier_at(self.src, tokens, i)
-        {
+        if let Some(kind) = modifier_of(self.modifiers, &tokens[i]) {
             return match kind {
                 // the parameter's scope is registered at its `(`
-                ValModifier::Parameter => i + 1,
-                ValModifier::Declaration => {
+                ValModifierKind::Parameter => i + 1,
+                ValModifierKind::Declaration => {
                     if self.text(&tokens[i + 1]) != "var" {
                         let names = collect_decl_names(self.src, tokens, i + 2);
                         self.declare(frames, names, Some(tokens[i].span.start));
@@ -246,9 +253,8 @@ impl<'a> Checker<'a> {
                 let val_at = k
                     .checked_sub(1)
                     .filter(|&at| {
-                        matches!(tokens[at].kind, TokenKind::Ident)
-                            && self.text(&tokens[at]) == "val"
-                            && modifier_at(self.src, tokens, at) == Some(ValModifier::Declaration)
+                        modifier_of(self.modifiers, &tokens[at])
+                            == Some(ValModifierKind::Declaration)
                     })
                     .map(|at| tokens[at].span.start);
                 let names = collect_decl_names(self.src, tokens, k + 1);
@@ -406,11 +412,7 @@ impl<'a> Checker<'a> {
                     .vars
                     .iter()
                     .filter(|v| v.val_at == val_at)
-                    .map(|v| ValBinding {
-                        name: v.name.to_string(),
-                        ident: v.ident,
-                        val_at: v.val_at.expect("filtered val binding"),
-                    }),
+                    .map(|v| self.val_binding(v)),
             );
         }
     }
@@ -428,7 +430,7 @@ impl<'a> Checker<'a> {
         arms: &HashSet<usize>,
     ) -> Option<(usize, usize, Vec<Var<'a>>, bool)> {
         let (start, end, var_scope) = self.function_body(tokens, open, arms)?;
-        let vars = parse_params(self.src, tokens, open)
+        let vars = parse_params(self.src, tokens, self.modifiers, open)
             .into_iter()
             .zip(list_entries(tokens, open))
             .flat_map(|(param, (start, end))| {
@@ -436,8 +438,9 @@ impl<'a> Checker<'a> {
                 let mut names = Vec::new();
                 let mut k = start;
                 while k < end
-                    && (matches!(&tokens[k].kind, TokenKind::Ident
-                        if self.text(&tokens[k]) == "val" || is_param_modifier(self.text(&tokens[k])))
+                    && (modifier_of(self.modifiers, &tokens[k]).is_some()
+                        || matches!(&tokens[k].kind, TokenKind::Ident
+                            if is_param_modifier(self.text(&tokens[k])))
                         || matches!(tokens[k].kind, TokenKind::Punct(b'.')))
                 {
                     k += 1;

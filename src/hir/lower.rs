@@ -77,8 +77,8 @@ impl Lower<'_> {
                     let node = self.node(Self::span(*span), AstOrigin::Verbatim);
                     stmts.push(Stmt::Opaque(node));
                 }
-                ast::Segment::ValModifier(span) => {
-                    let node = self.node(Self::span(*span), AstOrigin::ValModifier);
+                ast::Segment::ValModifier(modifier) => {
+                    let node = self.node(Self::span(modifier.span), AstOrigin::ValModifier);
                     stmts.push(Stmt::Opaque(node));
                 }
                 ast::Segment::Variant(decl) => {

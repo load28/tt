@@ -722,6 +722,22 @@ fn val_element_access_in_arguments_and_elements() {
 }
 
 #[test]
+fn val_element_access_never_becomes_a_parameter_by_its_surroundings() {
+    assert_passthrough("const v = c ? (val [0]) : w => w;\n");
+    assert_passthrough("const v = c ? (val [0]) : (w: number): number => w;\n");
+    assert_passthrough("f(val [0])\n{\n  log(1);\n}\n");
+    assert_passthrough("g(1, val [0])\n{ }\n");
+    assert_passthrough("type T = [val [number]];\nlet t: (val [number]) | undefined;\n");
+}
+
+#[test]
+fn val_decorators_stay_decorators() {
+    assert_passthrough(
+        "class D {\n  @val x = 1;\n  @val [k]() {}\n  constructor(@val y: number, @val private z: number) {}\n}\n",
+    );
+}
+
+#[test]
 fn untyped_try_method_signatures_remain_host_members() {
     assert_passthrough("interface X { try(x); }\ntype Y = { try(x); };\n");
 }

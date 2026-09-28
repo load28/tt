@@ -49,7 +49,7 @@ use scanner::*;
 use syntax::*;
 pub(crate) use syntax::{
     ConciseArrowBoundaries, FunctionTarget, asi_boundary_at, brace_opens_statement,
-    function_depth_at, function_target_at, in_function_body, in_static_block, opens_parameter_list,
+    function_depth_at, function_target_at, in_function_body, in_static_block,
     user_function_depth_at, user_function_target_at,
 };
 

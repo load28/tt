@@ -349,7 +349,7 @@ pub(crate) fn assemble(
                     offset: binding.val_at,
                     end: binding.val_at + "val".len(),
                 },
-                modifier_end: crate::val::modifier_end(&file.source, binding.val_at + "val".len()),
+                modifier_end: binding.modifier_end,
             });
         }
         for mutation in &val.mutations {

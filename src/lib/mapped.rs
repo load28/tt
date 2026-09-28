@@ -357,8 +357,8 @@ pub(crate) fn val_probes_with_emit(
 }
 
 fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
-    let tokens = lexer::lex_with_kind(source, 0, source.len(), source_kind);
-    val::probes(source, &tokens)
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
+    val::probes(source, &tokens, &parser::val_modifiers(&program))
 }
 
 fn with_method_calls(

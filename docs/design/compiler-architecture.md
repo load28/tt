@@ -123,17 +123,21 @@ tsc에 위임하지 않는다.
 코드 안에 있다. 그래서 이 검사만 AST가 아니라 **렉서가 만든 토큰 스트림**
 위에서 돈다 (`val.rs`).
 
-- 파서는 `val::modifier_at`로 "이 `val`이 수식자인가"만 **구조적으로**
-  판정해 `Segment::ValModifier`로 들어올린다 — 파서가 무오류라는 성질도,
-  통과 계약도 그대로다 (수식자 두 형태는 유효한 TS에 존재할 수 없고,
-  그 밖의 `val`은 평범한 식별자로 통과한다).
+- The parser decides once whether a `val` is a modifier and records it as
+  `Segment::ValModifier` with its kind (TASK-490). `val const|let|var` on
+  one line is claimed from its tokens (`parser/vals.rs`). A `val <binding>`
+  at the start of a `(`/`,` entry is a candidate; the host parse of the
+  region's tt projection (`parser/host.rs`) keeps it only when the binding
+  lands on a formal parameter, so `f(val [0])` and `c ? (val [0]) : w => w`
+  stay TypeScript. `val::check`, the probes, and the engine read the AST's
+  decision through `parser::val_modifiers` instead of re-deriving it.
 - `val::check`는 같은 토큰 스트림을 한 번 훑으며 렉시컬 스코프 스택을
   쌓고(블록·함수 매개변수·`for` 머리·`catch`), 변경 경로의 루트 식별자를
   해석하고, 같은 파일에서 이름으로 선언된 함수의 시그니처로 호출 시점의
   변경 권한을 검사한다. 에러는 sema와 같은 `TtError`(바이트 오프셋)다.
-- 토큰 스트림은 `parser::lex_and_parse`가 파싱과 함께 돌려주므로 렉싱은
-  파일당 여전히 한 번이고, `val` 수식자가 하나도 없는 파일은 선형 스캔
-  한 번으로 즉시 끝난다.
+- `parser::lex_and_parse` returns the token stream with the parse, so a
+  file is still lexed once, and a file whose AST has no `val` modifier skips
+  the pass entirely.
 - **메서드 호출은 이 단계가 판정하지 않는다**(TASK-071). `x.set(k)`가 값을
   바꾸는지는 `x`의 타입에 대한 사실이고, 여기에는 타입이 없다 — 이름으로
   추측하면 같은 이름의 사용자 정의 API가 오탐으로 막힌다. 그래서 같은 워크가

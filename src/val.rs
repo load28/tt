@@ -9,14 +9,11 @@
 //! stream ([`crate::ast::Segment::ValModifier`]) and codegen emits nothing
 //! for it, so `val const x = 1;` compiles to `const x = 1;`.
 //!
-//! Two halves live here:
+//! Which `val` identifiers are modifiers is not decided here: the parser
+//! decides it once and records each one in the AST
+//! ([`crate::ast::ValModifier`]), and both halves below read that decision
+//! ([`crate::parser::val_modifiers`]) over the token stream.
 //!
-//! - [`modifier_at`] — the *structural* rule the parser uses to decide
-//!   whether a `val` identifier is a modifier at all. It is deliberately
-//!   narrow so the passthrough contract holds: the two shapes it accepts
-//!   (`val const|let|var` on one line, and `val <binding>` at the start of
-//!   an entry of a structurally proven parameter list) cannot occur in
-//!   valid TypeScript, so no working TypeScript file changes meaning.
 //! - [`check`] — the *semantic* pass. Unlike [`crate::sema`] it works on
 //!   the token stream rather than the AST, because the bindings and the
 //!   mutations it reasons about live in passthrough TypeScript, which the
@@ -48,152 +45,23 @@ pub(crate) use calls::method_calls;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::ast::{ValModifier, ValModifierKind};
 use crate::error::TtError;
 use crate::lexer::{Token, TokenKind, TplPart};
-use crate::parser::{dotted_at, find_close_at, is_reserved};
+use crate::parser::{dotted_at, find_close_at, is_param_modifier, is_reserved};
 
 use checker::*;
 
-/// What the `val` keyword modifies at a given token index.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ValModifier {
-    /// `val const|let|var <binding> ...` — a variable declaration.
-    Declaration,
-    /// `val <binding>` at the start of a parameter-list entry (a function
-    /// or method parameter, an arrow parameter, or a `catch` clause).
-    Parameter,
-}
+/// The parser's `val` modifiers, keyed by the keyword's byte offset
+/// ([`crate::parser::val_modifiers`]).
+pub(crate) type Modifiers = HashMap<usize, ValModifier>;
 
-/// Words that may sit between a parameter-list entry's start and its
-/// binding — TypeScript's parameter property modifiers. `val` is allowed
-/// after them (`constructor(private val x: X)`).
-fn is_param_modifier(word: &str) -> bool {
-    matches!(
-        word,
-        "public" | "private" | "protected" | "readonly" | "override"
-    )
-}
-
-/// Words that turn `val <word>` into a valid TypeScript expression, so a
-/// `val` in front of one is an ordinary identifier and never a modifier:
-/// `(val as User)`, `for (val of items)`, `(val in obj)`, ...
-fn is_operator_word(word: &str) -> bool {
-    is_reserved(word)
-        || matches!(
-            word,
-            "as" | "satisfies"
-                | "is"
-                | "keyof"
-                | "infer"
-                | "asserts"
-                | "implements"
-                | "readonly"
-                | "out"
-                | "unique"
-        )
-}
-
-/// True when nothing but spaces and tabs separates the two byte offsets —
-/// the "same line" rule. `val` only modifies what follows it on its own
-/// line, so an ASI-separated `val\nconst x = 1;` (an expression statement
-/// naming a variable `val`, then a declaration — valid TypeScript) keeps
-/// its meaning.
-fn same_line(src: &str, from: usize, to: usize) -> bool {
-    !src[from..to].contains('\n')
-}
-
-/// Whether the identifier token at `idx` (which the caller has checked is
-/// the word `val`) is a tt binding modifier — see the module docs for the
-/// contract argument behind the two accepted shapes.
-pub(crate) fn modifier_at(src: &str, tokens: &[Token], idx: usize) -> Option<ValModifier> {
-    if dotted_at(tokens, 0, idx) {
-        return None; // a property named `val`
-    }
-    let val = tokens.get(idx)?;
-    let next = tokens.get(idx + 1)?;
-    if !same_line(src, val.span.end, next.span.start) {
-        return None;
-    }
-
-    // `val const|let|var ...`
-    if let TokenKind::Ident = next.kind {
-        let word = &src[next.span.start..next.span.end];
-        if matches!(word, "const" | "let" | "var") {
-            return Some(ValModifier::Declaration);
-        }
-    }
-
-    // `( val <binding>` / `, val <binding>`, optionally after TypeScript's
-    // parameter property modifiers.
-    let binding_follows = match &next.kind {
-        TokenKind::Ident => !is_operator_word(&src[next.span.start..next.span.end]),
-        TokenKind::Punct(b'{' | b'[') => true,
-        TokenKind::Punct(b'.') => {
-            tokens.get(idx + 1..idx + 4).is_some_and(|dots| {
-                dots.iter()
-                    .all(|dot| matches!(dot.kind, TokenKind::Punct(b'.')))
-            }) && tokens
-                .get(idx + 4)
-                .is_some_and(|binding| match &binding.kind {
-                    TokenKind::Ident => {
-                        !is_operator_word(&src[binding.span.start..binding.span.end])
-                    }
-                    TokenKind::Punct(b'{' | b'[') => true,
-                    _ => false,
-                })
-        }
-        _ => false,
-    };
-    if !binding_follows {
-        return None;
-    }
-    let mut k = idx;
-    while k > 0 {
-        match &tokens[k - 1].kind {
-            TokenKind::Ident
-                if is_param_modifier(&src[tokens[k - 1].span.start..tokens[k - 1].span.end]) =>
-            {
-                k -= 1;
-            }
-            TokenKind::Punct(b'(' | b',') => {
-                return enclosing_open(tokens, k - 1)
-                    .filter(|&open| matches!(tokens[open].kind, TokenKind::Punct(b'(')))
-                    .is_some_and(|open| crate::flow::opens_parameter_list(src, tokens, open))
-                    .then_some(ValModifier::Parameter);
-            }
-            _ => return None,
-        }
-    }
-    None
-}
-
-fn enclosing_open(tokens: &[Token], at: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for k in (0..=at).rev() {
-        match tokens[k].kind {
-            TokenKind::Punct(b')' | b']' | b'}') if k < at => depth += 1,
-            TokenKind::Punct(b'(' | b'[' | b'{') => {
-                if depth == 0 {
-                    return Some(k);
-                }
-                depth -= 1;
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
-/// The byte span the parser drops for a `val` modifier: the keyword plus
-/// the spaces and tabs right after it, so `val const x` emits `const x`
-/// rather than ` const x`. A comment after the keyword is kept.
-pub(crate) fn modifier_end(src: &str, keyword_end: usize) -> usize {
-    let bytes = src.as_bytes();
-    let mut end = keyword_end;
-    while end < bytes.len() && (bytes[end] == b' ' || bytes[end] == b'\t') {
-        end += 1;
-    }
-    end
+/// The modifier kind of the token, when the parser lifted it as a `val`
+/// modifier.
+fn modifier_of(modifiers: &Modifiers, token: &Token) -> Option<ValModifierKind> {
+    modifiers
+        .get(&token.span.start)
+        .map(|modifier| modifier.kind)
 }
 
 /// Whether `name` is a method tt treats as **mutating when it is a
@@ -390,6 +258,9 @@ pub struct ValBinding {
     /// start of the edit that removes the capability when mutation is
     /// intentional.
     pub val_at: usize,
+    /// Byte offset just past the `val` modifier and the spaces and tabs
+    /// after it — the end of the edit that removes the modifier.
+    pub modifier_end: usize,
     /// Byte offset of the binding identifier. The identifier is copied
     /// verbatim into the output, so this maps through
     /// [`crate::EmitMapping`]s to the node the checker is asked about.
@@ -511,30 +382,30 @@ enum Sink<'a> {
 
 /// Runs the `val` analysis over a whole file's token stream and returns
 /// **every** violation, in walk order (statement order).
-pub(crate) fn check_all(src: &str, tokens: &[Token]) -> Vec<TtError> {
+pub(crate) fn check_all(src: &str, tokens: &[Token], modifiers: &Modifiers) -> Vec<TtError> {
     let sink = RefCell::new(Vec::new());
-    run(src, tokens, Sink::Report(&sink));
+    run(src, tokens, modifiers, Sink::Report(&sink));
     sink.into_inner()
 }
 
 /// Collects the file's `val` bindings and its mutations, unpaired — the
 /// input a checker pairs by symbol identity ([`ValProbes`]). Never reports.
-pub(crate) fn probes(src: &str, tokens: &[Token]) -> ValProbes {
+pub(crate) fn probes(src: &str, tokens: &[Token], modifiers: &Modifiers) -> ValProbes {
     let sink = RefCell::new(ValProbes::default());
-    run(src, tokens, Sink::Probes(&sink));
+    run(src, tokens, modifiers, Sink::Probes(&sink));
     sink.into_inner()
 }
 
 /// The one walk both halves share. With a probe sink the walk is in probe
 /// mode: it reports nothing and collects instead.
-fn run(src: &str, tokens: &[Token], sink: Sink) {
+fn run(src: &str, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
     // Files that do not use the modifier — the overwhelming majority —
-    // pay one linear scan and nothing else.
-    if !uses_val(src, tokens) {
+    // pay nothing.
+    if modifiers.is_empty() {
         return;
     }
     let mut declarations = Vec::new();
-    collect_declarations(src, tokens, &mut declarations);
+    collect_declarations(src, tokens, modifiers, &mut declarations);
     let mut signatures: HashMap<&str, Option<Vec<ParamSig>>> = HashMap::new();
     collect_signatures(&declarations, &mut signatures);
     // The delegated form hands every declaration over as a node: which
@@ -560,6 +431,7 @@ fn run(src: &str, tokens: &[Token], sink: Sink) {
     }
     let checker = Checker {
         src,
+        modifiers,
         signatures: &signatures,
         sink,
     };
@@ -570,30 +442,6 @@ fn run(src: &str, tokens: &[Token], sink: Sink) {
     let arms = checker.arm_arrows(tokens);
     checker.instantiate(tokens, 0, tokens.len(), &mut frames, true, &arms);
     checker.walk(tokens, &mut frames);
-}
-
-/// Whether the file uses `val` as a binding modifier anywhere.
-fn uses_val(src: &str, tokens: &[Token]) -> bool {
-    for (i, tok) in tokens.iter().enumerate() {
-        match &tok.kind {
-            TokenKind::Ident if &src[tok.span.start..tok.span.end] == "val" => {
-                if modifier_at(src, tokens, i).is_some() {
-                    return true;
-                }
-            }
-            TokenKind::Template(parts) => {
-                for part in parts.iter() {
-                    if let TplPart::Interp { tokens: inner, .. } = part
-                        && uses_val(src, inner)
-                    {
-                        return true;
-                    }
-                }
-            }
-            _ => {}
-        }
-    }
-    false
 }
 
 /// Collects the parameter signatures of the file's named functions —
@@ -609,7 +457,12 @@ struct FnDecl<'a> {
     params: Vec<ParamSig>,
 }
 
-fn collect_declarations<'a>(src: &'a str, tokens: &'a [Token], out: &mut Vec<FnDecl<'a>>) {
+fn collect_declarations<'a>(
+    src: &'a str,
+    tokens: &'a [Token],
+    modifiers: &Modifiers,
+    out: &mut Vec<FnDecl<'a>>,
+) {
     let ident_at = |idx: usize| match tokens.get(idx) {
         Some(t) if matches!(t.kind, TokenKind::Ident) => {
             Some((&src[t.span.start..t.span.end], t.span.start))
@@ -621,7 +474,7 @@ fn collect_declarations<'a>(src: &'a str, tokens: &'a [Token], out: &mut Vec<FnD
             TokenKind::Template(parts) => {
                 for part in parts.iter() {
                     if let TplPart::Interp { tokens: inner, .. } = part {
-                        collect_declarations(src, inner, out);
+                        collect_declarations(src, inner, modifiers, out);
                     }
                 }
             }
@@ -633,11 +486,11 @@ fn collect_declarations<'a>(src: &'a str, tokens: &'a [Token], out: &mut Vec<FnD
                         if punct_at(tokens, k, b'*') {
                             k += 1;
                         }
-                        ident_at(k).zip(params_after_name(src, tokens, k + 1))
+                        ident_at(k).zip(params_after_name(src, tokens, modifiers, k + 1))
                     }
                     "const" | "let" | "var" => {
                         let params = declarator_eq(tokens, i + 2)
-                            .and_then(|eq| function_value_at(src, tokens, eq));
+                            .and_then(|eq| function_value_at(src, tokens, modifiers, eq));
                         ident_at(i + 1).zip(params)
                     }
                     _ => None,
@@ -701,7 +554,12 @@ fn declarator_eq(tokens: &[Token], idx: usize) -> Option<usize> {
 
 /// The parameter list of `function name<...>(...)`, when `idx` is the
 /// token right after the name.
-fn params_after_name(src: &str, tokens: &[Token], idx: usize) -> Option<Vec<ParamSig>> {
+fn params_after_name(
+    src: &str,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+    idx: usize,
+) -> Option<Vec<ParamSig>> {
     let mut k = idx;
     if punct_at(tokens, k, b'<') {
         k = find_close_at(tokens, k)? + 1;
@@ -709,13 +567,18 @@ fn params_after_name(src: &str, tokens: &[Token], idx: usize) -> Option<Vec<Para
     if !punct_at(tokens, k, b'(') {
         return None;
     }
-    Some(parse_params(src, tokens, k))
+    Some(parse_params(src, tokens, modifiers, k))
 }
 
 /// The parameter list of a function *value* — `= (a, b) => ...` or
 /// `= function (a, b) { ... }`, `async` included — when `idx` is the `=`
 /// of the declarator.
-fn function_value_at(src: &str, tokens: &[Token], idx: usize) -> Option<Vec<ParamSig>> {
+fn function_value_at(
+    src: &str,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+    idx: usize,
+) -> Option<Vec<ParamSig>> {
     if assignment_op_at(tokens, idx) != Some(1) {
         return None;
     }
@@ -734,7 +597,7 @@ fn function_value_at(src: &str, tokens: &[Token], idx: usize) -> Option<Vec<Para
             if matches!(tokens.get(k), Some(t) if matches!(t.kind, TokenKind::Ident)) {
                 k += 1;
             }
-            params_after_name(src, tokens, k)
+            params_after_name(src, tokens, modifiers, k)
         }
         // an arrow: the parens must be followed by `=>` or a return type
         Some(t) if matches!(t.kind, TokenKind::Punct(b'(')) => {
@@ -743,7 +606,7 @@ fn function_value_at(src: &str, tokens: &[Token], idx: usize) -> Option<Vec<Para
                 tokens.get(close + 1).map(|t| &t.kind),
                 Some(TokenKind::Arrow)
             ) || punct_at(tokens, close + 1, b':');
-            arrow.then(|| parse_params(src, tokens, k))
+            arrow.then(|| parse_params(src, tokens, modifiers, k))
         }
         _ => None,
     }
@@ -782,7 +645,7 @@ fn list_entries(tokens: &[Token], open: usize) -> Vec<(usize, usize)> {
 }
 
 /// The signature of a parameter list, `open` being its `(`.
-fn parse_params(src: &str, tokens: &[Token], open: usize) -> Vec<ParamSig> {
+fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize) -> Vec<ParamSig> {
     list_entries(tokens, open)
         .into_iter()
         .map(|(start, end)| {
@@ -792,7 +655,7 @@ fn parse_params(src: &str, tokens: &[Token], open: usize) -> Vec<ParamSig> {
                 match &tokens[k].kind {
                     TokenKind::Ident => {
                         let word = &src[tokens[k].span.start..tokens[k].span.end];
-                        if word == "val" && modifier_at(src, tokens, k).is_some() {
+                        if modifier_of(modifiers, &tokens[k]).is_some() {
                             is_val = true;
                             k += 1;
                             continue;
