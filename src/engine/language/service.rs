@@ -31,6 +31,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         mappings: emit.mappings,
         anchors: emit.anchors,
         declared_names: emit.declared_names,
+        shared_bindings: emit.shared_bindings,
         recovered,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
@@ -393,6 +394,65 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
     let byte = mapper::from_utf16(&doc.source, u16);
     let out = mapper::to_output_inclusive(&doc.mappings, byte)?;
     Some(mapper::to_utf16(&doc.code, out))
+}
+
+pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    if let Some(at) = to_service(doc, position) {
+        return Some(at);
+    }
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    doc.shared_bindings.iter().find_map(|binding| {
+        let occurrence = binding
+            .occurrences
+            .iter()
+            .find(|occurrence| occurrence.src <= byte && byte <= occurrence.src_end)?;
+        let within = (byte - occurrence.src).min(binding.out_end - binding.out);
+        Some(mapper::to_utf16(&doc.code, binding.out + within))
+    })
+}
+
+pub(super) struct SharedTarget {
+    pub location: Location,
+    pub name: String,
+    pub shorthand: bool,
+}
+
+pub(super) fn map_shared_target(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    uri: &str,
+    range: &serde_json::Value,
+) -> Option<(String, Vec<SharedTarget>)> {
+    let path = uri_path(uri)?;
+    let name = path.to_string_lossy();
+    let tt = name
+        .strip_suffix(".tsx")
+        .filter(|n| n.ends_with(".ttx"))
+        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")))?;
+    let tt_path = PathBuf::from(tt);
+    let doc = serve_doc_only(session, overlays, &tt_path)?;
+    let start = mapper::from_utf16(
+        &doc.code,
+        u16_offset(&doc.code, position_of(&range["start"])),
+    );
+    let end = mapper::from_utf16(&doc.code, u16_offset(&doc.code, position_of(&range["end"])));
+    let binding = doc
+        .shared_bindings
+        .iter()
+        .find(|binding| binding.out == start && binding.out_end == end)?;
+    let targets = binding
+        .occurrences
+        .iter()
+        .map(|occurrence| SharedTarget {
+            location: Location {
+                path: tt_path.clone(),
+                range: span_range(&doc.source, occurrence.src, occurrence.src_end),
+            },
+            name: doc.source[occurrence.src..occurrence.src_end].to_string(),
+            shorthand: occurrence.shorthand,
+        })
+        .collect();
+    Some((doc.code[start..end].to_string(), targets))
 }
 
 /// A service span translated back to source UTF-16 offsets, or `None` when

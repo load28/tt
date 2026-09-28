@@ -163,6 +163,33 @@ impl<'a> Rope<'a> {
         });
     }
 
+    pub(crate) fn push_shared_binding(
+        &mut self,
+        text: impl Into<Cow<'a, str>>,
+        occurrences: &[BindingOccurrence],
+    ) {
+        self.pieces.push(Piece::Mark {
+            src: occurrences.first().map_or(0, |occurrence| occurrence.src),
+            kind: MarkKind::SharedBindingStart,
+        });
+        for occurrence in occurrences {
+            self.pieces.push(Piece::Mark {
+                src: occurrence.src,
+                kind: MarkKind::SharedBindingOccurrence {
+                    end: occurrence.src_end,
+                    shorthand: occurrence.shorthand,
+                },
+            });
+        }
+        self.push_lit(text);
+        self.pieces.push(Piece::Mark {
+            src: occurrences
+                .last()
+                .map_or(0, |occurrence| occurrence.src_end),
+            kind: MarkKind::SharedBindingEnd,
+        });
+    }
+
     /// Appends `inner` as one construct's glue. `src..src_end` is its
     /// primary display range; `src..owner_end` is the complete syntax node
     /// that owns consequences of this lowering ([`crate::EmitAnchor`]).
@@ -456,4 +483,5 @@ pub(crate) struct Flat {
     pub contextual_slots: Vec<usize>,
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
+    pub shared_bindings: Vec<SharedBinding>,
 }

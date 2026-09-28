@@ -803,7 +803,7 @@ impl<'a> Emitter<'a> {
         let mut groups: Vec<BindingGroup<'_>> = Vec::new();
         collect_binding_groups(
             selected,
-            !matches!(plan, PatternPlan::AnyOf(_)),
+            matches!(plan, PatternPlan::AnyOf(_)).then_some(plan),
             &mut groups,
         );
         let mut out = Rope::new();
@@ -822,11 +822,11 @@ impl<'a> Emitter<'a> {
             } else {
                 out.push_lit("const { ");
             }
-            for (index, (binding, mapped)) in bindings.iter().enumerate() {
+            for (index, (binding, shared)) in bindings.iter().enumerate() {
                 if index > 0 {
                     out.push_lit(", ");
                 }
-                self.emit_binding(binding, *mapped, recovery, &mut out);
+                self.emit_binding(binding, *shared, recovery, &mut out);
             }
             out.push_lit(" } = ");
             out.append(self.emit_place(&receiver, decision, None));
@@ -842,7 +842,7 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_binding(
         &self,
         binding: &Bind,
-        mapped: bool,
+        shared: Option<&PatternPlan>,
         recovery: &mut BindingRecovery,
         out: &mut Rope<'a>,
     ) {
@@ -853,22 +853,48 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| crate::ice::bug!("binding has no source field"));
         let field_node = field_node(field);
         let field_text = self.field_name(field);
-        if mapped {
+        let Some(alternatives) = shared else {
             let span = self.span(field_node);
             let (text, at) = self.source_span(span);
             out.push_src(text, at);
+            if let Some(replacement) = recovery.replacement(self, binding) {
+                out.push_lit(format!(": {replacement}"));
+            } else if binding.binding != field_node {
+                out.push_lit(": ");
+                out.append(self.source_rope(binding.binding));
+            }
+            return;
+        };
+        if let Some(replacement) = recovery.replacement(self, binding) {
+            out.push_lit(field_text);
+            out.push_lit(format!(": {replacement}"));
+            return;
+        }
+        let name = self.source_node(binding.binding).0;
+        let mut every = Vec::new();
+        every_binding(alternatives, &mut every);
+        let occurrences: Vec<crate::BindingOccurrence> = every
+            .into_iter()
+            .filter(|other| self.source_node(other.binding).0 == name)
+            .map(|other| {
+                let span = self.span(other.binding);
+                crate::BindingOccurrence {
+                    src: span.start,
+                    src_end: span.end,
+                    shorthand: other
+                        .source
+                        .fields
+                        .last()
+                        .is_some_and(|field| helpers::field_node(field) == other.binding),
+                }
+            })
+            .collect();
+        if binding.binding == field_node {
+            out.push_shared_binding(field_text, &occurrences);
         } else {
             out.push_lit(field_text);
-        }
-        if let Some(replacement) = recovery.replacement(self, binding) {
-            out.push_lit(format!(": {replacement}"));
-        } else if binding.binding != field_node {
             out.push_lit(": ");
-            if mapped {
-                out.append(self.source_rope(binding.binding));
-            } else {
-                out.push_lit(self.source_node(binding.binding).0.to_owned());
-            }
+            out.push_shared_binding(name.to_owned(), &occurrences);
         }
     }
 

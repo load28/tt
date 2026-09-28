@@ -9,9 +9,10 @@ impl Project {
     /// The service answers everything it can see — which is everything the
     /// emit-map ties to the source. What it cannot see is a pattern binding
     /// inside an or-pattern (`A(x) | B(x)`): the emitted destructuring
-    /// speaks for every alternative at once, so those spans map to nothing
-    /// (mapping them to one alternative would let a rename rewrite that one
-    /// alone). For those, [`crate::pattern_analyses`] knows the span and the
+    /// speaks for every alternative at once, so no byte mapping ties it to
+    /// one of them; navigation and rename reach it through its shared
+    /// binding, which names every alternative together, but a hover wants
+    /// the one alternative's type. For those, [`crate::pattern_analyses`] knows the span and the
     /// alternative it belongs to, and the answer is still the checker's
     /// wherever possible: the alternative is *isolated* — the same
     /// serve-a-stand-in move as the completion probe — so the service sees
@@ -213,11 +214,9 @@ impl Project {
         if !found.is_empty() {
             return Ok(found);
         }
-        // The service found nothing — for a name an or-pattern binds, the
-        // target it resolved to is compiler glue, which navigation drops.
-        // The match analysis knows the spans the user actually wrote: a
-        // body reference goes to every alternative's binding; a binding is
-        // its own declaration.
+        // The service found nothing mappable. The match analysis knows the
+        // spans the user actually wrote: a body reference goes to every
+        // alternative's binding; a binding is its own declaration.
         self.match_binding_definitions(path, position)
     }
 
@@ -289,7 +288,7 @@ impl Project {
             service, overlays, ..
         } = self;
         let session = service.as_mut().expect("serve started it");
-        let Some(at) = to_service(&doc, position) else {
+        let Some(at) = to_service_name(&doc, position) else {
             return Ok(Vec::new());
         };
         let mut params = serde_json::json!({
@@ -312,17 +311,25 @@ impl Project {
             let Some(uri) = location["uri"].as_str() else {
                 continue;
             };
-            // Anything unmappable is dropped — a reference into glue is not
-            // a place the user can go.
-            if let Some(mapped) = map_target(
+            // A shared binding stands for every alternative that writes it;
+            // anything else unmappable is dropped — a reference into glue is
+            // not a place the user can go.
+            let mapped = match map_target(
                 session,
                 overlays,
                 uri,
                 &location["range"],
                 TargetUse::Navigation,
-            ) && !out.contains(&mapped)
-            {
-                out.push(mapped);
+            ) {
+                Some(mapped) => vec![mapped],
+                None => map_shared_target(session, overlays, uri, &location["range"])
+                    .map(|(_, targets)| targets.into_iter().map(|t| t.location).collect())
+                    .unwrap_or_default(),
+            };
+            for mapped in mapped {
+                if !out.contains(&mapped) {
+                    out.push(mapped);
+                }
             }
         }
         Ok(out)
@@ -459,7 +466,7 @@ impl Project {
             service, overlays, ..
         } = self;
         let session = service.as_mut().expect("serve started it");
-        let Some(at) = to_service(&doc, position) else {
+        let Some(at) = to_service_name(&doc, position) else {
             return Ok(None);
         };
         let uri = served_uri(&path);
@@ -502,7 +509,28 @@ impl Project {
                     &one["range"],
                     TargetUse::Edit,
                 ) else {
-                    return Ok(None);
+                    let Some((generated, targets)) =
+                        map_shared_target(session, overlays, edited_uri, &one["range"])
+                    else {
+                        return Ok(None);
+                    };
+                    let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
+                    if text != RENAME_PLACEHOLDER
+                        && text != format!("{generated}: {RENAME_PLACEHOLDER}")
+                    {
+                        return Ok(None);
+                    }
+                    for target in targets {
+                        out.push(RenameEdit {
+                            location: target.location,
+                            new_text: Some(if target.shorthand {
+                                format!("{}: {RENAME_PLACEHOLDER}", target.name)
+                            } else {
+                                RENAME_PLACEHOLDER.to_string()
+                            }),
+                        });
+                    }
+                    continue;
                 };
                 let new_text = one["newText"].as_str().map(String::from);
                 if let Some(text) = &new_text
@@ -852,6 +880,7 @@ impl Project {
                     mappings: projected.emit.mappings.clone(),
                     anchors: projected.emit.anchors.clone(),
                     declared_names: projected.emit.declared_names.clone(),
+                    shared_bindings: projected.emit.shared_bindings.clone(),
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
                     generated_names: projected.emit.generated_names.clone(),

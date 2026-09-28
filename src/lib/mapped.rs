@@ -65,6 +65,20 @@ pub(crate) struct DeclaredName {
     pub out_end: usize,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SharedBinding {
+    pub out: usize,
+    pub out_end: usize,
+    pub occurrences: Vec<BindingOccurrence>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BindingOccurrence {
+    pub src: usize,
+    pub src_end: usize,
+    pub shorthand: bool,
+}
+
 /// Which tt construct a stretch of compiler-written glue belongs to.
 ///
 /// The kind is half of what turns a TypeScript diagnostic on that glue into
@@ -172,6 +186,7 @@ pub struct MappedEmit {
     pub(crate) contextual_slots: Vec<usize>,
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
+    pub(crate) shared_bindings: Vec<SharedBinding>,
 }
 
 impl MappedEmit {
@@ -267,6 +282,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         contextual_slots: flat.contextual_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
+        shared_bindings: flat.shared_bindings,
     }
 }
 

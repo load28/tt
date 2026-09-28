@@ -215,6 +215,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         contextual_slots: flat.contextual_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
+        shared_bindings: flat.shared_bindings,
     };
     if options.defer_to_checker {
         return Ok(emit);
@@ -792,6 +793,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         contextual_slots: flat.contextual_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
+        shared_bindings: flat.shared_bindings,
     };
     let mut emit = verified_emit(lowered, &program, options, &mut errors);
     if !options.defer_to_checker

@@ -21,8 +21,8 @@ use std::borrow::Cow;
 use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubject};
 use crate::program_syntax::SourceSpan;
 use crate::{
-    AnchorKind, DeclaredName, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp,
-    ScrutineeTemp, SourceKind,
+    AnchorKind, BindingOccurrence, DeclaredName, EmitAnchor, EmitMapping, PayloadTemp,
+    ResultReturnTemp, ScrutineeTemp, SharedBinding, SourceKind,
 };
 
 pub(crate) use builder::{Flat, Rope};
@@ -44,6 +44,12 @@ pub(crate) enum MarkKind {
     ResultReturnEnd,
     DeclaredNameStart,
     DeclaredNameEnd,
+    SharedBindingStart,
+    SharedBindingOccurrence {
+        end: usize,
+        shorthand: bool,
+    },
+    SharedBindingEnd,
 }
 
 enum Piece<'a> {
@@ -503,6 +509,7 @@ impl<'a> TargetFile<'a> {
         let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
         let mut contextual_slots = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
+        let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
@@ -604,6 +611,41 @@ impl<'a> TargetFile<'a> {
                     name.src_end = *src;
                     name.out_end = out.len();
                 }
+                TargetPiece::Mark {
+                    kind: MarkKind::SharedBindingStart,
+                    ..
+                } => shared_bindings.push(SharedBinding {
+                    out: out.len(),
+                    out_end: out.len(),
+                    occurrences: Vec::new(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::SharedBindingOccurrence { end, shorthand },
+                } => shared_bindings
+                    .last_mut()
+                    .filter(|binding| binding.out_end == binding.out)
+                    .unwrap_or_else(|| {
+                        crate::ice::bug!("shared binding occurrence has no open binding")
+                    })
+                    .occurrences
+                    .push(BindingOccurrence {
+                        src: *src,
+                        src_end: *end,
+                        shorthand: *shorthand,
+                    }),
+                TargetPiece::Mark {
+                    kind: MarkKind::SharedBindingEnd,
+                    ..
+                } => {
+                    shared_bindings
+                        .last_mut()
+                        .filter(|binding| binding.out_end == binding.out)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("shared binding end has no matching start")
+                        })
+                        .out_end = out.len();
+                }
                 TargetPiece::ScopeOpen => scopes.push(line_indent(&out).to_owned()),
                 TargetPiece::ScopeClose => {
                     scopes.pop();
@@ -655,6 +697,7 @@ impl<'a> TargetFile<'a> {
             contextual_slots,
             generated_names: std::collections::HashSet::new(),
             declared_names,
+            shared_bindings,
         }
     }
 }

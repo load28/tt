@@ -1053,6 +1053,76 @@ test("renaming a shorthand pattern binding at its declaration renames the bindin
   }
 });
 
+test("or-pattern bindings navigate and rename as one binding across the LSP adapter", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(size: number), Square(size: number), Point }",
+    "export function area(s: Shape): number {",
+    "  if let Circle(size: q) | Square(size: q) = s { return q; }",
+    "  let Circle(size: z) | Square(size: z) = s else { return 0; };",
+    "  const b = match (s) { Circle(size) | Square(size) => size, Point => 0 };",
+    "  return b + z;",
+    "}",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  const lines = source.split("\n");
+  const offset = (p: { line: number; character: number }) =>
+    lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
+  const renamed = async (marker: string) => {
+    const answer = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, marker),
+      newName: "zz",
+    });
+    assert.ok(answer.result, `rename at ${marker}`);
+    const edits = [...answer.result.changes[uri]].sort(
+      (a: any, b: any) => offset(b.range.start) - offset(a.range.start),
+    );
+    let text = source;
+    for (const edit of edits) {
+      text = text.slice(0, offset(edit.range.start)) + edit.newText + text.slice(offset(edit.range.end));
+    }
+    return text;
+  };
+  try {
+    const definition = await client.request("textDocument/definition", {
+      textDocument: { uri },
+      position: positionOf(source, "{ return "),
+    });
+    assert.deepEqual(
+      definition.result.map((l: any) => [l.range.start.line, covered(source, l.range)]),
+      [[2, "q"], [2, "q"]],
+      JSON.stringify(definition.result),
+    );
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(source, "return b + "),
+      context: { includeDeclaration: true },
+    });
+    assert.equal(references.result.length, 3, JSON.stringify(references.result));
+    const q = source.replace(
+      "if let Circle(size: q) | Square(size: q) = s { return q; }",
+      "if let Circle(size: zz) | Square(size: zz) = s { return zz; }",
+    );
+    assert.equal(await renamed("{ return "), q);
+    assert.equal(await renamed("if let Circle(size: "), q);
+    assert.equal(
+      await renamed("let Circle(size: z) | Square(size: "),
+      source
+        .replace("Circle(size: z) | Square(size: z)", "Circle(size: zz) | Square(size: zz)")
+        .replace("b + z;", "b + zz;"),
+    );
+    const size = source.replace(
+      "Circle(size) | Square(size) => size,",
+      "Circle(size: zz) | Square(size: zz) => zz,",
+    );
+    assert.equal(await renamed("Square(size) => "), size);
+    assert.equal(await renamed("(s) { Circle("), size);
+  } finally {
+    stop();
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* diagnostic ranges (TASK-116)                                        */
 /* ------------------------------------------------------------------ */

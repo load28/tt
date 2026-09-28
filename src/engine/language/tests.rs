@@ -153,6 +153,66 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
 }
 
 #[test]
+fn an_or_pattern_binding_stands_for_every_alternative_it_is_written_in() {
+    let src = "variant E { A(x: number), B(x: number), C }\n\
+               const v = match (e) { A(x) | B(x: x) => x, C => 0 };\n\
+               if let A(x: y) | B(x: y) = e { use(y); }\n\
+               const t = match (e, e) { (A(w), A(x) | B(x)) => w + x, _ => 0 };\n";
+    let doc = service_doc(Path::new("/p/a.tt"), src.to_string());
+    let position = |byte: usize| {
+        let u16 = mapper::to_utf16(src, byte);
+        source_range(src, u16, u16).start
+    };
+    for (needle, name, shorthand) in [
+        ("A(x) | B(x: x)", "x", vec![true, false]),
+        ("A(x: y) | B(x: y)", "y", vec![false, false]),
+        ("A(x) | B(x))", "x", vec![true, true]),
+    ] {
+        let base = src.find(needle).unwrap();
+        let occurrences: Vec<usize> = needle
+            .match_indices(name)
+            .map(|(offset, _)| base + offset)
+            .filter(|&offset| src.as_bytes()[offset + name.len()] == b')')
+            .collect();
+        let binding = doc
+            .shared_bindings
+            .iter()
+            .find(|binding| binding.occurrences[0].src == occurrences[0])
+            .unwrap_or_else(|| panic!("{needle}: {:?}", doc.shared_bindings));
+        assert_eq!(&doc.code[binding.out..binding.out_end], name, "{needle}");
+        assert_eq!(
+            binding
+                .occurrences
+                .iter()
+                .map(|occurrence| (occurrence.src, occurrence.shorthand))
+                .collect::<Vec<_>>(),
+            occurrences
+                .iter()
+                .copied()
+                .zip(shorthand)
+                .collect::<Vec<_>>(),
+            "{needle}"
+        );
+        let generated = mapper::to_utf16(&doc.code, binding.out);
+        for occurrence in occurrences {
+            assert_eq!(to_service(&doc, position(occurrence)), None, "{needle}");
+            assert_eq!(
+                to_service_name(&doc, position(occurrence)),
+                Some(generated),
+                "{needle}"
+            );
+        }
+    }
+    let single = src.find("(A(w)").unwrap() + 3;
+    assert!(
+        doc.shared_bindings
+            .iter()
+            .all(|binding| binding.occurrences.iter().all(|o| o.src != single))
+    );
+    assert!(to_service(&doc, position(single)).is_some());
+}
+
+#[test]
 fn variant_glue_names_stand_for_their_source_names_in_navigation_only() {
     for ambient in ["", "declare "] {
         let src = format!("{ambient}variant V {{ A(x: number), B }}\nconst w = V.B;\n");

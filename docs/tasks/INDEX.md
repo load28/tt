@@ -471,6 +471,7 @@
 | TASK-461 | Offer payload field completions only inside a pattern | Complete | 2026-09-28 | 2026-09-28 | [TASK-461](./TASK-461-payload-completions-only-in-patterns.md) |
 | TASK-462 | Offer case tags only at arm positions, never in arm bodies or comments | Complete | 2026-09-28 | 2026-09-28 | [TASK-462](./TASK-462-arm-bodies-and-comments-are-not-case-positions.md) |
 | TASK-463 | Rename a shorthand pattern binding from its declaration | Complete | 2026-09-28 | 2026-09-28 | [TASK-463](./TASK-463-shorthand-binding-rename.md) |
+| TASK-464 | Or-pattern bindings navigate and rename as one binding | Complete | 2026-09-28 | 2026-09-28 | [TASK-464](./TASK-464-or-pattern-binding-navigation.md) |
 
 ## Next task number
 

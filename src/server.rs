@@ -31,7 +31,7 @@
 //!
 //! → { "id": 5, "method": "ttSymbol", "params": { "path", "text", "position" } }
 //! ← { "id": 5, "result": { "kind", "range", "name", "variantName",
-//!                          "signature", "detail", "definition" } | null }
+//!                          "signature", "detail", "definition", "binds" } | null }
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
 //! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }] } }

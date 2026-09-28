@@ -238,6 +238,7 @@ pub(crate) struct ServiceDoc {
     /// every mapping is *about* (`crate::EmitAnchor`).
     anchors: Vec<crate::EmitAnchor>,
     declared_names: Vec<crate::DeclaredName>,
+    shared_bindings: Vec<crate::SharedBinding>,
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,

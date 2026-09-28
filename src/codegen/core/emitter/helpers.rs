@@ -125,11 +125,11 @@ pub(super) fn pattern_alternatives(plan: &PatternPlan) -> Vec<&PatternPlan> {
     }
 }
 
-pub(super) type BindingGroup<'a> = (Place, Vec<(&'a Bind, bool)>);
+pub(super) type BindingGroup<'a> = (Place, Vec<(&'a Bind, Option<&'a PatternPlan>)>);
 
 pub(super) fn collect_binding_groups<'a>(
     plan: &'a PatternPlan,
-    mapped: bool,
+    shared: Option<&'a PatternPlan>,
     groups: &mut Vec<BindingGroup<'a>>,
 ) {
     match plan {
@@ -140,9 +140,9 @@ pub(super) fn collect_binding_groups<'a>(
                 .iter_mut()
                 .find(|(existing, _)| same_place(existing, &receiver))
             {
-                bindings.push((binding, mapped));
+                bindings.push((binding, shared));
             } else {
-                groups.push((receiver, vec![(binding, mapped)]));
+                groups.push((receiver, vec![(binding, shared)]));
             }
         }
         PatternPlan::AllOf(parts) => {
@@ -150,18 +150,30 @@ pub(super) fn collect_binding_groups<'a>(
                 .iter()
                 .filter(|part| matches!(part, PatternPlan::Bind(_)))
             {
-                collect_binding_groups(part, mapped, groups);
+                collect_binding_groups(part, shared, groups);
             }
             for part in parts
                 .iter()
                 .filter(|part| !matches!(part, PatternPlan::Bind(_)))
             {
-                collect_binding_groups(part, mapped, groups);
+                collect_binding_groups(part, shared, groups);
             }
         }
         PatternPlan::AnyOf(parts) => {
             if let Some(first) = parts.first() {
-                collect_binding_groups(first, false, groups);
+                collect_binding_groups(first, shared.or(Some(plan)), groups);
+            }
+        }
+        PatternPlan::Any | PatternPlan::Test(_) => {}
+    }
+}
+
+pub(super) fn every_binding<'a>(plan: &'a PatternPlan, out: &mut Vec<&'a Bind>) {
+    match plan {
+        PatternPlan::Bind(binding) => out.push(binding),
+        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+            for part in parts {
+                every_binding(part, out);
             }
         }
         PatternPlan::Any | PatternPlan::Test(_) => {}
@@ -194,7 +206,7 @@ impl BindingRecovery {
         let mut groups = Vec::new();
         collect_binding_groups(
             selected,
-            !matches!(plan, PatternPlan::AnyOf(_)),
+            matches!(plan, PatternPlan::AnyOf(_)).then_some(plan),
             &mut groups,
         );
         let available = groups

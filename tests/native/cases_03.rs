@@ -344,6 +344,121 @@ fn generated_bindings_never_surface_as_user_symbols() {
     assert!(references.is_empty(), "{references:?}");
 }
 
+#[test]
+fn or_pattern_bindings_navigate_and_rename_as_one_binding() {
+    require_tsgo!();
+    let source = "export variant Shape { Circle(size: number), Square(size: number), Point }\n\
+                  export function area(s: Shape): number {\n\
+                  if let Circle(size: q) | Square(size: q) = s { return q; }\n\
+                  let Circle(size: z) | Square(size: z) = s else { return 0; };\n\
+                  const b = match (s) { Circle(size) | Square(size: size) => size, Point => 0 };\n\
+                  return b + z;\n\
+                  }\n";
+    let dir = project(&[("src/a.tt", source)]);
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[dir.join("src").to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .expect("the project opens");
+    let at = |needle: &str, len: usize| source_location(&a, source, needle, 0, len);
+    let cases = [
+        (
+            vec![at("q) | Square", 1), at("q) = s", 1)],
+            at("q; }", 1),
+            source.replace(
+                "if let Circle(size: q) | Square(size: q) = s { return q; }",
+                "if let Circle(size: zz) | Square(size: zz) = s { return zz; }",
+            ),
+        ),
+        (
+            vec![at("z) | Square", 1), at("z) = s", 1)],
+            at("z;", 1),
+            source
+                .replace(
+                    "Circle(size: z) | Square(size: z)",
+                    "Circle(size: zz) | Square(size: zz)",
+                )
+                .replace("b + z;", "b + zz;"),
+        ),
+        (
+            vec![
+                at("size) | Square(size: size)", 4),
+                at("size) => size", 4),
+            ],
+            at("size, Point", 4),
+            source.replace(
+                "Circle(size) | Square(size: size) => size,",
+                "Circle(size: zz) | Square(size: zz) => zz,",
+            ),
+        ),
+    ];
+    for (declarations, usage, renamed) in cases {
+        let shorthand = declarations
+            .iter()
+            .any(|place| place.range.end.character - place.range.start.character > 1);
+        for place in declarations.iter().chain([&usage]) {
+            let position = place.range.start;
+            let edits = project
+                .rename(&a, position)
+                .expect("rename answers")
+                .unwrap_or_else(|| panic!("{place:?} renames"));
+            assert_eq!(apply_rename(source, &edits, "zz"), renamed, "{place:?}");
+            if shorthand && place != &usage {
+                continue;
+            }
+            let found = project
+                .definition(&a, position)
+                .expect("definition answers");
+            assert_eq!(found, declarations, "{place:?}");
+            let references = project
+                .references(&a, position)
+                .expect("references answer");
+            let mut declared: Vec<_> = references
+                .iter()
+                .filter(|reference| reference.is_definition)
+                .map(|reference| reference.location.clone())
+                .collect();
+            declared.sort_by_key(|location| {
+                (location.range.start.line, location.range.start.character)
+            });
+            assert_eq!(declared, declarations, "{place:?}: {references:?}");
+            assert!(
+                references
+                    .iter()
+                    .any(|reference| reference.location == usage && !reference.is_definition),
+                "{place:?}: {references:?}"
+            );
+        }
+    }
+}
+
+fn apply_rename(source: &str, edits: &[ttc::engine::RenameEdit], name: &str) -> String {
+    let offset = |position: ttc::engine::Position| {
+        source
+            .split('\n')
+            .take(position.line as usize)
+            .map(|line| line.len() + 1)
+            .sum::<usize>()
+            + position.character as usize
+    };
+    let mut edits: Vec<_> = edits.iter().collect();
+    edits.sort_by_key(|edit| std::cmp::Reverse(offset(edit.location.range.start)));
+    let mut out = source.to_string();
+    for edit in edits {
+        let text = edit.new_text.as_deref().map_or(name.to_string(), |text| {
+            text.replace(ttc::engine::RENAME_PLACEHOLDER, name)
+        });
+        out.replace_range(
+            offset(edit.location.range.start)..offset(edit.location.range.end),
+            &text,
+        );
+    }
+    out
+}
+
 fn source_position(text: &str, needle: &str, delta: usize) -> ttc::engine::Position {
     let offset = text.find(needle).expect("needle") + delta;
     let before = &text[..offset];

@@ -378,7 +378,8 @@ const v = match (dir(), speed()) {
 fn or_pattern_bindings_are_left_unmapped() {
     // One destructuring stands for every alternative, so it belongs to no
     // single one: claiming a source position would point the editor at an
-    // arbitrary alternative (and let a rename rewrite that one alone).
+    // arbitrary alternative (and let a rename rewrite that one alone). The
+    // alternatives reach it together through its shared binding (TASK-464).
     let src = r#"variant E { A(x: number), B(x: number), C }
 declare function get(): E;
 const v = match (get()) {
