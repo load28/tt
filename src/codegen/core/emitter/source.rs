@@ -763,45 +763,150 @@ impl<'a> Emitter<'a> {
             return Some(out);
         }
 
-        let nested: Vec<_> = statements
-            .iter()
-            .filter_map(|statement| match statement {
-                Statement::Expr(inner)
-                    if self.core.has_statement_form(*inner)
-                        && !self.slot_exprs.contains_key(inner) =>
-                {
-                    self.structured_value_slot(*inner)
-                        .map(|slot| (*inner, slot.clone()))
-                }
-                _ => None,
-            })
-            .collect();
+        let (mut out, value) = self.emit_sequence_operand(body, continuation)?;
+        out.append(self.emit_value_delivery_without_region_exit(value, continuation));
+        Some(Rope::scoped(out))
+    }
+
+    pub(super) fn emit_sequence_operand(
+        &self,
+        body: hir::BodyId,
+        continuation: &ValueContinuation<'_>,
+    ) -> Option<(Rope<'a>, Rope<'a>)> {
+        let mut nested = Vec::new();
+        self.collect_operand_values(body, &mut nested);
+        self.emit_operand(self.body_extent(body), &nested, continuation)
+    }
+
+    pub(super) fn emit_template_operand(
+        &self,
+        expr: ExprId,
+        template: &Template,
+        continuation: &ValueContinuation<'_>,
+    ) -> Option<(Rope<'a>, Rope<'a>)> {
+        let mut nested = Vec::new();
+        for part in &template.parts {
+            if let TemplatePart::Interpolation(inner) = part {
+                self.collect_operand_value(*inner, &mut nested);
+            }
+        }
+        let span = structured_expr_span(self.semantic, self.core, expr)
+            .unwrap_or_else(|| crate::ice::bug!("a template has no source extent"));
+        self.emit_operand(span, &nested, continuation)
+    }
+
+    fn emit_operand(
+        &self,
+        span: SourceSpan,
+        nested: &[(ExprId, String)],
+        continuation: &ValueContinuation<'_>,
+    ) -> Option<(Rope<'a>, Rope<'a>)> {
         if nested.is_empty() {
             return None;
         }
-        let nested_exprs: Vec<_> = nested.iter().map(|(inner, _)| *inner).collect();
         let mut out = Rope::new();
+        let mut captured = HashSet::new();
+        let mut scheduled = Vec::new();
+        let mut operations: Vec<&PlannedConditionalOperation> = Vec::new();
         for (inner, slot) in nested {
-            if self.emitted_owner_rewrites.contains(inner) {
+            if self.emitted_owner_rewrites.contains(*inner) {
                 continue;
             }
-            if !continuation.is_unwrapped_assignment_to(&slot) {
-                out.push_value_declaration(&slot);
+            if let Some(operation) = self
+                .nested_operations
+                .iter()
+                .find(|operation| operation.values.contains(inner))
+            {
+                if operations.contains(&operation) {
+                    continue;
+                }
+                operations.push(operation);
+                out.push_value_declaration(self.value_slot_name(operation.result));
+                out.push_break(0);
+                let mut lowered = self.emit_conditional_operation(operation, &mut captured);
+                for step in operation.outer.iter().take_while(|step| {
+                    span.start <= step.parent.start && step.parent.end <= span.end
+                }) {
+                    lowered = self.emit_scheduled_step(step, lowered, &mut captured);
+                    scheduled.push(step);
+                }
+                out.append(lowered.trim_end());
+                out.push_break(0);
+                continue;
+            }
+            if !continuation.is_unwrapped_assignment_to(slot) {
+                out.push_value_declaration(slot);
                 out.push_break(0);
             }
-            out.append(self.emit_continued_expr(inner, &ValueContinuation::assign(&slot))?);
+            let steps = self.scheduled_steps_within(*inner, span);
+            let mut action = self.emit_continued_expr(*inner, &ValueContinuation::assign(slot))?;
+            for step in steps {
+                action = self.emit_scheduled_step(step, action, &mut captured);
+                scheduled.push(step);
+            }
+            out.append(action.trim_end());
             out.push_break(0);
         }
-        let sequence_node = self
-            .core
-            .sequence_node(body)
-            .unwrap_or_else(|| crate::ice::bug!("embedded sequence has no source extent"));
-        let span = SourceSpan::from(self.span(sequence_node));
-        out.append(self.emit_value_delivery_without_region_exit(
-            self.source_range_with_value_slots(span, &nested_exprs),
-            continuation,
-        ));
-        Some(Rope::scoped(out))
+        let values: Vec<_> = nested.iter().map(|(inner, _)| *inner).collect();
+        Some((
+            out,
+            self.source_range_with_scheduled_values(span, &values, &scheduled, &operations),
+        ))
+    }
+
+    fn body_extent(&self, body: hir::BodyId) -> SourceSpan {
+        if let Some(node) = self.core.sequence_node(body) {
+            return SourceSpan::from(self.span(node));
+        }
+        self.core.bodies[body.index()]
+            .statements
+            .iter()
+            .filter_map(|statement| match statement {
+                Statement::Opaque(node) => Some(SourceSpan::from(self.span(*node))),
+                Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
+                Statement::Adt(_)
+                | Statement::Import(_)
+                | Statement::Propagate(_)
+                | Statement::Decision(_) => None,
+            })
+            .reduce(|extent, span| SourceSpan {
+                start: extent.start.min(span.start),
+                end: extent.end.max(span.end),
+            })
+            .unwrap_or_else(|| crate::ice::bug!("an operand body has no source extent"))
+    }
+
+    fn collect_operand_values(&self, body: hir::BodyId, out: &mut Vec<(ExprId, String)>) {
+        for statement in &self.core.bodies[body.index()].statements {
+            let Statement::Expr(inner) = statement else {
+                continue;
+            };
+            self.collect_operand_value(*inner, out);
+        }
+    }
+
+    fn collect_operand_value(&self, expr: ExprId, out: &mut Vec<(ExprId, String)>) {
+        if !self.core.has_statement_form(expr) || self.slot_exprs.contains_key(&expr) {
+            return;
+        }
+        match &self.core.exprs[expr.index()] {
+            Expr::Sequence(body) => self.collect_operand_values(*body, out),
+            Expr::Template(template) => {
+                for part in &template.parts {
+                    if let TemplatePart::Interpolation(inner) = part {
+                        self.collect_operand_value(*inner, out);
+                    }
+                }
+            }
+            Expr::Decision(_) | Expr::Propagate(_) | Expr::Apply(_) => {
+                if self.structurally_nested_values.contains(&expr)
+                    && let Some(slot) = self.value_slots.get(&expr)
+                {
+                    out.push((expr, slot.clone()));
+                }
+            }
+            Expr::ResultRegion(_) | Expr::Opaque(_) => {}
+        }
     }
 
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {

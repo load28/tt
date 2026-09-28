@@ -40,6 +40,7 @@ pub(super) struct Emitter<'a> {
     pub(super) result_failures: RefCell<HashMap<ResultRegionId, ResultFailure>>,
     pub(super) value_exits: HashMap<ExprId, Vec<HostExit>>,
     pub(super) nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    pub(super) nested_operations: Vec<PlannedConditionalOperation>,
     pub(super) nested_values: HashSet<ExprId>,
     pub(super) structurally_nested_values: HashSet<ExprId>,
     pub(super) recovered_propagations: HashSet<ExprId>,
@@ -78,7 +79,6 @@ pub(super) struct Emitter<'a> {
     /// Suppress only that value's own replacement; nested structured values
     /// must still replace their host occurrences compositionally.
     pub(super) active_structured_exprs: ActiveExprStack,
-    pub(super) active_scheduled_exprs: ActiveExprStack,
     /// Owner preludes can be reached either through an opaque source prefix
     /// or through the Core expression entry. Record which path emitted the
     /// prelude so the other path contributes only the join-slot occurrence.

@@ -136,3 +136,108 @@ fn a_contextual_type_or_statement_word_is_a_name_unless_typescript_reads_a_prefi
         );
     }
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-501 hoisted values inside pipeline operands                     */
+/* ------------------------------------------------------------------ */
+
+const TASK_501_PRELUDE: &str = "declare function f(a: any, b?: any): any;\n\
+declare function g(): any;\n\
+declare class C { constructor(a: any); }\n\
+declare const n: number;\n\
+type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+declare function r(): R;\n";
+
+const TASK_501_OPERANDS: &[&str] = &[
+    "f(@)",
+    "@ + 1",
+    "1 + @",
+    "[@]",
+    "-@",
+    "(@).toFixed()",
+    "(f(@))",
+    "f(g(), @)",
+    "`a${@}b`",
+    "f(`${f(@)}`)",
+    "[@, @]",
+    "f(@) + f(@)",
+    "({ k: @ })",
+    "new C(@)",
+    "(g() && f(@))",
+    "(g() ?? f(@))",
+    "(g() ? f(@) : 0)",
+    "(1 |> f(@))",
+];
+
+const TASK_501_POSITIONS: &[&str] = &[
+    "# |> String",
+    "1 |> #",
+    "1 |> String |> # |> String",
+    "String(# |> String)",
+    "# |> # |> String",
+];
+
+#[test]
+fn a_hoisted_value_in_any_pipeline_operand_is_emitted_once() {
+    let values = [
+        ("match (n) { 0 => 1, _ => 2 }", "switch ("),
+        ("(try r())", "\"value\" in"),
+    ];
+    for (value, region) in values {
+        for position in TASK_501_POSITIONS {
+            for operand in TASK_501_OPERANDS {
+                let expression = position.replace('#', operand).replace('@', value);
+                let source = if value.contains("try") {
+                    format!(
+                        "{TASK_501_PRELUDE}export function h(): R {{\n  const v = {expression};\n  return {{ kind: \"Ok\", value: v }};\n}}\n"
+                    )
+                } else {
+                    format!("{TASK_501_PRELUDE}export const v = {expression};\n")
+                };
+                let diagnostics = ttc::analyze(&source, &Options::default());
+                assert!(diagnostics.is_empty(), "{source}\n{diagnostics:?}");
+                let out = ok(&source);
+                assert_eq!(
+                    out.matches(region).count(),
+                    expression.matches(value).count(),
+                    "{source}\n{out}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn a_hoisted_value_in_a_pipeline_operand_keeps_the_callee_before_it() {
+    let out = ok(&format!(
+        "{TASK_501_PRELUDE}export const v = f(match (n) {{ 0 => 1, _ => 2 }}) |> String;\n"
+    ));
+    let callee = out.find("= (f);").expect("the callee is captured");
+    let region = out.find("switch (").expect("the match follows");
+    assert!(callee < region, "{out}");
+    assert_eq!(out.matches("f(").count(), 1, "{out}");
+}
+
+#[test]
+fn a_conditional_operand_owns_its_branch_in_a_pipeline_head() {
+    let out = ok(&format!(
+        "{TASK_501_PRELUDE}export const v = g() && f(match (n) {{ 0 => 1, _ => 2 }}) |> String;\n"
+    ));
+    assert!(out.contains("} else {"), "{out}");
+    assert!(!out.contains("&&"), "{out}");
+}
+
+#[test]
+fn an_unstructurable_conditional_in_a_pipeline_operand_is_a_placement_diagnostic() {
+    let source = format!(
+        "{TASK_501_PRELUDE}export const v = g() && (g() && f(match (n) {{ 0 => 1, _ => 2 }})) |> String;\n"
+    );
+    let diagnostics = ttc::analyze(&source, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].code,
+        DiagnosticCode::MatchPlacement,
+        "{diagnostics:#?}"
+    );
+    assert!(compile(&source, &Options::default()).is_err());
+}

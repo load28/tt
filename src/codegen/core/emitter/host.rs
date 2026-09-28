@@ -616,9 +616,10 @@ impl<'a> Emitter<'a> {
         out.append(lowered);
         out.push_break(0);
         out.push_lit(format!("{result} = "));
+        let steps: Vec<_> = active.steps.iter().collect();
         push_grouped(
             &mut out,
-            self.source_range_with_value_slots(branch, &operation.values),
+            self.source_range_with_scheduled_values(branch, &operation.values, &steps, &[]),
             self.source_kind,
         );
         out.push_lit(";");
@@ -698,6 +699,25 @@ impl<'a> Emitter<'a> {
                     replacement.source,
                     Part::Captured(replacement.slot.as_str()),
                 ));
+            }
+        }
+        for input in self
+            .nested_schedules
+            .values()
+            .flat_map(EvaluationSchedule::steps)
+            .flat_map(|step| &step.inputs)
+        {
+            if let PlannedEvaluationInput::Source {
+                source: dependency,
+                target,
+                ..
+            } = input
+                && source.start <= dependency.start
+                && dependency.end <= source.end
+                && *dependency != source
+                && captured.contains(target)
+            {
+                parts.push((*dependency, Part::Captured(self.value_slot_name(*target))));
             }
         }
         for expr in self.value_slots.keys() {
@@ -780,89 +800,93 @@ impl<'a> Emitter<'a> {
         span: SourceSpan,
         values: &[ExprId],
     ) -> Rope<'a> {
-        let mut replacements: Vec<_> = values
-            .iter()
-            .map(|expr| {
-                let (kind, start, head_end, extent) = self.value_anchor(*expr);
-                (*expr, kind, SourceSpan { start, end: extent }, head_end)
-            })
-            .filter(|(_, _, value, _)| span.start <= value.start && value.end <= span.end)
-            .filter(|(_, _, value, _)| {
-                !self
-                    .replacements_covering(value.start, value.end)
-                    .any(|captured| {
-                        captured.anchor.is_none()
-                            && span.start <= captured.source.start
-                            && captured.source.start <= value.start
-                            && value.end <= captured.source.end
-                            && captured.source != *value
-                    })
-            })
-            .collect();
-        replacements.sort_unstable_by_key(|(_, _, value, _)| value.start);
-        let mut out = Rope::new();
-        let mut cursor = span.start;
-        for (expr, kind, value, head_end) in replacements {
-            if value.start < cursor {
-                continue;
-            }
-            if cursor < value.start {
-                out.append(self.source_range_rope(hir::Span {
-                    start: cursor,
-                    end: value.start,
-                }));
-            }
-            let mut slot = Rope::new();
-            slot.push_lit(self.value_name_of(expr).to_owned());
-            out.anchored(kind, value.start, head_end, value.end, slot);
-            cursor = value.end;
-        }
-        if cursor < span.end {
-            out.append(self.source_range_rope(hir::Span {
-                start: cursor,
-                end: span.end,
-            }));
-        }
-        out
+        self.source_range_with_scheduled_values(span, values, &[], &[])
     }
 
-    pub(super) fn source_range_with_nested_schedule(
+    pub(super) fn scheduled_steps_within(
+        &self,
+        expr: ExprId,
+        span: SourceSpan,
+    ) -> Vec<&PlannedEvaluationStep> {
+        self.nested_schedules
+            .get(&expr)
+            .map(|schedule| {
+                schedule
+                    .steps()
+                    .iter()
+                    .take_while(|step| {
+                        span.start <= step.parent.start && step.parent.end <= span.end
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn source_range_with_scheduled_values(
         &self,
         span: SourceSpan,
-        expr: ExprId,
-        schedule: &EvaluationSchedule,
+        values: &[ExprId],
+        steps: &[&PlannedEvaluationStep],
+        operations: &[&PlannedConditionalOperation],
     ) -> Rope<'a> {
-        let (kind, start, head_end, extent) = self.value_anchor(expr);
-        let mut replacements: Vec<NestedSourceReplacement> = vec![(
-            SourceSpan { start, end: extent },
-            self.value_name_of(expr).to_owned(),
-            Some((kind, head_end)),
-        )];
-        for step in schedule.steps() {
-            for input in &step.inputs {
-                if let PlannedEvaluationInput::Source { source, target, .. } = input {
-                    replacements.push((*source, self.value_slot_name(*target).to_owned(), None));
+        let mut replacements: Vec<(SourceSpan, Rope<'a>)> = operations
+            .iter()
+            .map(|operation| {
+                let primary = operation
+                    .values
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| crate::ice::bug!("conditional operation has no value"));
+                let (kind, start, head_end, extent) = self.value_anchor(primary);
+                let mut slot = Rope::new();
+                slot.push_lit(self.value_slot_name(operation.result).to_owned());
+                let mut rendered = Rope::new();
+                rendered.anchored(kind, start, head_end, extent, slot);
+                (operation.parent, rendered)
+            })
+            .collect();
+        replacements.extend(values.iter().filter_map(|expr| {
+            let (kind, start, head_end, extent) = self.value_anchor(*expr);
+            let source = SourceSpan { start, end: extent };
+            let covered = self
+                .replacements_covering(source.start, source.end)
+                .any(|captured| {
+                    captured.anchor.is_none()
+                        && span.start <= captured.source.start
+                        && captured.source.start <= source.start
+                        && source.end <= captured.source.end
+                        && captured.source != source
+                });
+            (!covered).then(|| {
+                let mut slot = Rope::new();
+                slot.push_lit(self.value_name_of(*expr).to_owned());
+                let mut rendered = Rope::new();
+                rendered.anchored(kind, start, head_end, extent, slot);
+                (source, rendered)
+            })
+        }));
+        replacements.extend(steps.iter().flat_map(|step| {
+            step.inputs.iter().filter_map(|input| match input {
+                PlannedEvaluationInput::Source { source, target, .. } => {
+                    let mut rendered = Rope::new();
+                    rendered.push_lit(self.value_slot_name(*target).to_owned());
+                    Some((*source, rendered))
                 }
-            }
-        }
-        replacements.retain(|(source, _, _)| span.start <= source.start && source.end <= span.end);
-        replacements.sort_unstable_by_key(|(source, _, _)| source.start);
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
+            })
+        }));
+        replacements.retain(|(source, _)| span.start <= source.start && source.end <= span.end);
+        replacements.sort_by_key(|(source, _)| (source.start, usize::MAX - source.end));
         let mut out = Rope::new();
         let mut cursor = span.start;
-        for (source, slot, anchor) in replacements {
+        for (source, rendered) in replacements {
             if source.start < cursor {
                 continue;
             }
             if cursor < source.start {
                 out.append(self.source_range_rope(hir::Span::new(cursor, source.start)));
             }
-            if let Some((kind, head_end)) = anchor {
-                let mut rendered = Rope::new();
-                rendered.push_lit(slot);
-                out.anchored(kind, source.start, head_end, source.end, rendered);
-            } else {
-                out.push_lit(slot);
-            }
+            out.append(rendered);
             cursor = source.end;
         }
         if cursor < span.end {

@@ -31,7 +31,9 @@ fn a_match_inside_an_arm_body_call_keeps_argument_order() {
 fn a_match_under_a_conditional_operation_in_an_arm_body_is_a_region() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\ndeclare function eff(): number;\nconst y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };\n");
     assert!(out.contains("const $tt_v2$y = (eff() > 0);\n      if ($tt_v2$y) {"), "{out}");
-    assert!(out.contains("$tt_v0$y = $tt_v2$y && $tt_v1$y;"), "{out}");
+    assert!(out.contains("$tt_v3$y = $tt_v1$y;"), "{out}");
+    assert!(out.contains("$tt_v3$y = $tt_v2$y;"), "{out}");
+    assert!(out.contains("$tt_v0$y = $tt_v3$y;"), "{out}");
 }
 
 #[test]

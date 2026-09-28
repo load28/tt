@@ -429,23 +429,29 @@ impl<'a> Emitter<'a> {
         let ArmAction::Yield { body, kind } = arm.action else {
             crate::ice::bug!("match arm does not yield")
         };
-        let body_expr = self.core.body_value_expr(body).or_else(|| {
-            // A nested schedule delivers its complete host expression, including
-            // surrounding calls and conditional operators. A child with its own
-            // function owner cannot stand in for this arm's value.
-            self.core
-                .body_tail_expr(body)
-                .filter(|expr| self.nested_schedules.contains_key(expr))
-        });
-        let structured_body = matches!(kind, ArmBodyKind::Expression)
-            .then(|| {
-                body_expr.and_then(|expr| {
-                    (!continuation.is_expression())
-                        .then(|| self.emit_continued_expr(expr, continuation))
-                        .flatten()
-                })
-            })
-            .flatten();
+        let structured_body = (matches!(kind, ArmBodyKind::Expression)
+            && !continuation.is_expression())
+        .then(|| match self.core.body_value_expr(body) {
+            Some(expr) => self.emit_continued_expr(expr, continuation),
+            None => self
+                .emit_sequence_operand(body, continuation)
+                .map(|(mut prelude, value)| {
+                    let value = value.trim();
+                    let close = value
+                        .last_line_has_line_comment(self.source_kind)
+                        .then_some(action_depth);
+                    prelude.append(self.emit_value_delivery_control(
+                        value,
+                        close,
+                        continuation,
+                        None,
+                        None,
+                        false,
+                    ));
+                    Rope::scoped(prelude)
+                }),
+        })
+        .flatten();
         // A block arm's body sits between braces this lowering writes, and
         // the author's own line break and indentation after their `{` is
         // the layout the rest of their block is written against — so it

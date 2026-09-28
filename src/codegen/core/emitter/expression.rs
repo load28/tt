@@ -557,36 +557,6 @@ impl<'a> Emitter<'a> {
         {
             self.emitted_owner_rewrites.mark(expr);
         }
-        if let Some(schedule) = self.nested_schedules.get(&expr)
-            && !schedule.steps().is_empty()
-            && !self.active_scheduled_exprs.contains(expr)
-        {
-            let slot = self
-                .value_slots
-                .get(&expr)
-                .unwrap_or_else(|| crate::ice::bug!("scheduled nested value has no slot"));
-            let _active = self.active_scheduled_exprs.enter(expr);
-            let mut action = self.emit_continued_expr(expr, &ValueContinuation::assign(slot))?;
-            let mut captured = HashSet::new();
-            for step in schedule.steps() {
-                action = self.emit_scheduled_step(step, action, &mut captured);
-            }
-            let parent = schedule
-                .steps()
-                .last()
-                .map(|step| step.parent)
-                .unwrap_or_else(|| crate::ice::bug!("nested schedule lost its parent"));
-            let mut out = Rope::new();
-            out.push_value_declaration(slot);
-            out.push_break(0);
-            out.append(action.trim_end());
-            out.push_break(0);
-            out.append(self.emit_value_delivery_without_region_exit(
-                self.source_range_with_nested_schedule(parent, expr, schedule),
-                continuation,
-            ));
-            return Some(Rope::scoped(out));
-        }
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {
                 let head = self.span(decision.head);
@@ -610,30 +580,23 @@ impl<'a> Emitter<'a> {
             Expr::Sequence(body) => self.emit_sequence_continued(*body, continuation),
             Expr::Apply(apply) => self.emit_apply_continued(expr, apply, continuation),
             Expr::Template(template) => {
-                let mut out = Rope::new();
-                for part in &template.parts {
-                    let TemplatePart::Interpolation(inner) = part else {
-                        continue;
-                    };
-                    if !self.core.has_statement_form(*inner) {
-                        continue;
-                    }
-                    let slot = self
-                        .structured_value_slot(*inner)
-                        .unwrap_or_else(|| crate::ice::bug!("nested template value has no slot"));
-                    out.push_value_declaration(slot);
-                    out.push_break(0);
-                    out.append(self.emit_continued_expr(*inner, &ValueContinuation::assign(slot))?);
-                    out.push_break(0);
-                }
-                out.append(self.emit_value_delivery(
-                    self.emit_template(template),
-                    None,
-                    continuation,
-                ));
+                let (mut out, value) = self.emit_template_operand(expr, template, continuation)?;
+                out.append(self.emit_value_delivery(value, None, continuation));
                 Some(Rope::scoped(out))
             }
             Expr::Opaque(_) => None,
+        }
+    }
+
+    fn emit_nested_operand(&self, expr: ExprId) -> Option<(Rope<'a>, Rope<'a>)> {
+        match &self.core.exprs[expr.index()] {
+            Expr::Sequence(body) => {
+                self.emit_sequence_operand(*body, &ValueContinuation::expression())
+            }
+            Expr::Template(template) if self.core.has_statement_form(expr) => {
+                self.emit_template_operand(expr, template, &ValueContinuation::expression())
+            }
+            _ => None,
         }
     }
 
@@ -696,7 +659,7 @@ impl<'a> Emitter<'a> {
             .is_some_and(|slot| slot == accumulator);
         let mut inner = Rope::new();
         inner.push_lit("do {");
-        if !accumulator_is_host_slot {
+        if !accumulator_is_host_slot && !continuation.is_unwrapped_assignment_to(accumulator) {
             inner.push_break(1);
             inner.push_value_declaration(accumulator);
         }
@@ -708,10 +671,18 @@ impl<'a> Emitter<'a> {
                     .unwrap_or_else(|| crate::ice::bug!("structured apply head was not emitted")),
             ));
         } else {
+            let value = match self.emit_nested_operand(head) {
+                Some((prelude, value)) => {
+                    inner.append(Rope::indented(1, prelude.trim_end()));
+                    inner.push_break(1);
+                    value
+                }
+                None => self.emit_expr(head),
+            };
             inner.push_lit(format!("{accumulator} = "));
             push_grouped(
                 &mut inner,
-                guard_line_comment(self.emit_expr(head).trim(), 1, self.source_kind),
+                guard_line_comment(value.trim(), 1, self.source_kind),
                 self.source_kind,
             );
             inner.push_lit(";");
@@ -719,7 +690,14 @@ impl<'a> Emitter<'a> {
         let mut produced = self.span(apply.node);
         for step in &apply.steps {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
-            let step_value = if let Some(slot) = self
+            let operand = matches!(step.mode, ApplyMode::Call)
+                .then(|| self.emit_nested_operand(step.value))
+                .flatten();
+            let step_value = if let Some((prelude, value)) = operand {
+                inner.push_break(1);
+                inner.append(Rope::indented(1, prelude.trim_end()));
+                guard_line_comment(value.trim(), 1, self.source_kind)
+            } else if let Some(slot) = self
                 .nested_structured_value_slot(step.value)
                 .filter(|_| !conditionally_reached)
             {

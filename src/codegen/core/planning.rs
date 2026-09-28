@@ -346,6 +346,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     pub(super) value_exits: HashMap<ExprId, Vec<HostExit>>,
     pub(super) nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    pub(super) nested_operations: Vec<PlannedConditionalOperation>,
     pub(super) nested_values: HashSet<ExprId>,
     /// Every value whose Evaluation IR placement is structurally nested,
     /// before target-specific slot-substitution filtering.
@@ -751,8 +752,6 @@ pub(super) struct SourceReplacement {
     pub(super) claim: bool,
 }
 
-pub(super) type NestedSourceReplacement = (SourceSpan, String, Option<(AnchorKind, usize)>);
-
 #[derive(Debug, Clone)]
 pub(super) struct LocalSourceEdit {
     pub(super) span: SourceSpan,
@@ -1102,6 +1101,48 @@ impl TargetRewritePlan {
                 .flat_map(|(_, exits)| exits.iter().filter_map(|exit| exit.argument)),
         );
         relocated_values.extend(all_operations().map(|operation| operation.parent));
+        relocated_values.extend(lowering.nested_operations().iter().flat_map(|operation| {
+            let condition = match operation.condition {
+                PlannedEvaluationInput::Source { source, .. }
+                | PlannedEvaluationInput::Stable { source, .. } => Some(source),
+                PlannedEvaluationInput::Slot { .. } => None,
+            };
+            let branches = match &operation.kind {
+                PlannedConditionalKind::Ternary {
+                    consequent,
+                    alternate,
+                } => [consequent, alternate]
+                    .into_iter()
+                    .filter_map(|branch| match branch {
+                        PlannedBranch::Source(span) => Some(*span),
+                        PlannedBranch::Value(_) => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            std::iter::once(operation.parent)
+                .chain(condition)
+                .chain(branches)
+                .chain(
+                    operation
+                        .active
+                        .iter()
+                        .flat_map(|active| &active.steps)
+                        .chain(&operation.outer)
+                        .flat_map(|step| {
+                            std::iter::once(step.parent).chain(step.inputs.iter().filter_map(
+                                |input| match input {
+                                    PlannedEvaluationInput::Source { source, .. }
+                                    | PlannedEvaluationInput::Stable { source, .. } => {
+                                        Some(*source)
+                                    }
+                                    PlannedEvaluationInput::Slot { .. } => None,
+                                },
+                            ))
+                        }),
+                )
+                .collect::<Vec<_>>()
+        }));
         relocated_values.extend(loop_tests.iter().filter_map(|rewrite| rewrite.update));
         relocated_values.extend(lowering.nested_value_schedules().flat_map(|(_, schedule)| {
             schedule.steps().iter().flat_map(|step| {
@@ -1219,6 +1260,12 @@ impl TargetRewritePlan {
         };
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
+            .chain(
+                lowering
+                    .nested_operations()
+                    .iter()
+                    .map(|operation| operation.parent),
+            )
             .chain(call_frames().map(|(span, _)| span))
             .chain(loop_tests.iter().flat_map(|rewrite| {
                 let prefix = (rewrite.kind == LoopTestKind::While).then_some(SourceSpan {
@@ -1471,6 +1518,7 @@ impl TargetRewritePlan {
             scheduled_slots,
             value_exits,
             nested_schedules,
+            nested_operations: lowering.nested_operations().to_vec(),
             nested_values,
             structurally_nested_values,
             expression_boundary_name,

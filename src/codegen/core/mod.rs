@@ -277,6 +277,7 @@ pub(crate) fn emit_with_map<'a>(
         result_failures: RefCell::new(HashMap::new()),
         value_exits: target.value_exits,
         nested_schedules: target.nested_schedules,
+        nested_operations: target.nested_operations,
         nested_values: target.nested_values,
         structurally_nested_values: target.structurally_nested_values,
         recovered_propagations: target
@@ -316,7 +317,6 @@ pub(crate) fn emit_with_map<'a>(
         used_host_error: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
-        active_scheduled_exprs: ActiveExprStack::default(),
         emitted_owner_rewrites: EmittedOwnerRewrites::default(),
         closed_compose_blocks: ClosedComposeBlocks::default(),
         emitted_compose_rewrites: ClosedComposeBlocks::default(),

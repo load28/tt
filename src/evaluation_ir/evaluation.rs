@@ -185,6 +185,8 @@ impl EvaluationFile {
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
         let mut owned_child_exits = Vec::new();
+        let mut nested_operations = Vec::new();
+        let mut unsupported_owned_children = Vec::new();
         for (owner, values) in owners {
             let assigned = values
                 .into_iter()
@@ -282,6 +284,7 @@ impl EvaluationFile {
                     .filter(|value| owned_children.contains(&value.expr) && !value.exits.is_empty())
                     .map(|value| (value.expr, value.exits.clone())),
             );
+            let mut owned_groups: Vec<(ExprId, Vec<PlannedValue>)> = Vec::new();
             for child in values
                 .iter()
                 .filter(|value| owned_children.contains(&value.expr))
@@ -309,16 +312,56 @@ impl EvaluationFile {
                     })
                     .cloned()
                     .collect();
-                if steps.is_empty() {
-                    continue;
-                }
-                owned_child_schedules.push((
+                let schedule = EvaluationSchedule {
+                    steps,
+                    call_completion: None,
+                };
+                let capability = target_capability(
+                    core,
+                    &self.tt_spans,
                     child.expr,
-                    EvaluationSchedule {
-                        steps,
-                        call_completion: None,
-                    },
-                ));
+                    child.source,
+                    &child.context,
+                    &schedule,
+                );
+                let owned = PlannedValue {
+                    schedule,
+                    capability,
+                    ..child.clone()
+                };
+                match owned_groups
+                    .iter_mut()
+                    .find(|(group, _)| *group == outer.expr)
+                {
+                    Some((_, group)) => group.push(owned),
+                    None => owned_groups.push((outer.expr, vec![owned])),
+                }
+            }
+            for (_, mut group) in owned_groups {
+                let operations = plan_conditional_operations(
+                    &mut group,
+                    &self.tt_spans,
+                    &mut next_slot,
+                    &mut slot_names,
+                    &mut occupied_names,
+                )?;
+                let consumed: HashSet<_> = operations
+                    .iter()
+                    .flat_map(|operation| operation.values.iter().copied())
+                    .collect();
+                for child in group {
+                    if let TargetCapability::ExpressionBoundary(reason) = child.capability {
+                        unsupported_owned_children.push((
+                            child.expr,
+                            child.source,
+                            child.context.owner,
+                            reason,
+                        ));
+                    } else if !consumed.contains(&child.expr) && !child.schedule.steps.is_empty() {
+                        owned_child_schedules.push((child.expr, child.schedule));
+                    }
+                }
+                nested_operations.extend(operations);
             }
             values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
@@ -408,6 +451,8 @@ impl EvaluationFile {
             .collect();
         let mut nested_source_slots = HashMap::new();
         let mut nested_schedules: HashMap<_, _> = owned_child_schedules.into_iter().collect();
+        let mut nested_groups: Vec<(SourceSpan, Option<SourceSpan>, Vec<PlannedValue>)> =
+            Vec::new();
         let planned_sources: HashMap<_, _> = rewrites
             .iter()
             .flat_map(|owner| owner.values.iter().map(|value| (value.expr, value.source)))
@@ -423,7 +468,10 @@ impl EvaluationFile {
                 continue;
             }
             let RegionPlacement::Nested {
-                parent, protocol, ..
+                parent,
+                protocol,
+                source,
+                exits,
             } = &region.placement
             else {
                 continue;
@@ -440,6 +488,10 @@ impl EvaluationFile {
                 };
                 ancestor = &self.regions[parent.0 as usize];
             };
+            let mut host = ancestor;
+            while let RegionPlacement::Nested { parent, .. } = host.placement {
+                host = &self.regions[parent.0 as usize];
+            }
             let step_count = planned_boundary.map_or(protocol.steps().len(), |boundary| {
                 protocol
                     .steps()
@@ -464,7 +516,67 @@ impl EvaluationFile {
                 false,
             )?;
             slot_anchors.resize(slot_names.len(), self.host_anchor(region));
+            if let (
+                Expr::Propagate(_),
+                Some(boundary),
+                Some(source),
+                RegionPlacement::Host { context, .. },
+                Some(slot),
+            ) = (
+                &core.exprs[expr.index()],
+                planned_boundary,
+                source,
+                &host.placement,
+                value_slots.get(&expr),
+            ) {
+                let capability =
+                    target_capability(core, &self.tt_spans, expr, *source, context, &schedule);
+                let value = PlannedValue {
+                    expr,
+                    source: *source,
+                    target: ValueTarget::Slot(*slot),
+                    context: *context,
+                    schedule,
+                    exits: exits.clone(),
+                    capability,
+                };
+                match nested_groups
+                    .iter_mut()
+                    .find(|(group, ..)| *group == boundary)
+                {
+                    Some((.., group)) => group.push(value),
+                    None => nested_groups.push((boundary, self.host_anchor(region), vec![value])),
+                }
+                continue;
+            }
             nested_schedules.insert(expr, schedule);
+        }
+        for (_, anchor, mut group) in nested_groups {
+            let operations = plan_conditional_operations(
+                &mut group,
+                &self.tt_spans,
+                &mut next_slot,
+                &mut slot_names,
+                &mut occupied_names,
+            )?;
+            slot_anchors.resize(slot_names.len(), anchor);
+            let consumed: HashSet<_> = operations
+                .iter()
+                .flat_map(|operation| operation.values.iter().copied())
+                .collect();
+            for value in group {
+                if let TargetCapability::ExpressionBoundary(reason) = value.capability {
+                    unsupported_owned_children.push((
+                        value.expr,
+                        value.source,
+                        value.context.owner,
+                        reason,
+                    ));
+                } else if !consumed.contains(&value.expr) {
+                    nested_schedules.insert(value.expr, value.schedule);
+                }
+            }
+            nested_operations.extend(operations);
         }
         let direct_capabilities: HashMap<_, _> = rewrites
             .iter()
@@ -614,6 +726,19 @@ impl EvaluationFile {
                 reason,
             });
         }
+        unsupported_expression_propagations.extend(
+            unsupported_owned_children
+                .iter()
+                .filter(|(expr, ..)| matches!(core.exprs[expr.index()], Expr::Propagate(_)))
+                .map(
+                    |&(expr, source, owner, reason)| UnsupportedExpressionPropagation {
+                        expr,
+                        source,
+                        owner,
+                        reason,
+                    },
+                ),
+        );
         let for_initializer_propagations = self
             .regions
             .iter()
@@ -715,6 +840,17 @@ impl EvaluationFile {
                 reason,
             })
         }));
+        unsupported_matches.extend(
+            unsupported_owned_children
+                .iter()
+                .filter(|(expr, ..)| matches!(core.exprs[expr.index()], Expr::Decision(_)))
+                .map(|&(expr, source, owner, reason)| UnsupportedMatch {
+                    expr,
+                    source,
+                    owner,
+                    reason,
+                }),
+        );
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
         let match_show_name = allocate_generated_name("$tt_show", &mut occupied_names)?;
@@ -903,6 +1039,7 @@ impl EvaluationFile {
             capture_dependencies,
             value_slots,
             nested_schedules,
+            nested_operations,
             nested_values: self
                 .regions
                 .iter()

@@ -135,6 +135,7 @@ pub(crate) struct LoweringPlan {
     value_slots: HashMap<ExprId, ValueSlotId>,
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    nested_operations: Vec<PlannedConditionalOperation>,
     nested_values: HashSet<ExprId>,
     structurally_owned_children: HashSet<ExprId>,
     nested_relocations: Vec<SourceSpan>,
@@ -521,6 +522,10 @@ impl LoweringPlan {
 
     pub(crate) fn nested_values(&self) -> impl Iterator<Item = ExprId> + '_ {
         self.nested_values.iter().copied()
+    }
+
+    pub(crate) fn nested_operations(&self) -> &[PlannedConditionalOperation] {
+        &self.nested_operations
     }
 
     pub(crate) fn structurally_owned_children(&self) -> impl Iterator<Item = ExprId> + '_ {

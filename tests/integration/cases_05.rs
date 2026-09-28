@@ -848,3 +848,59 @@ console.log(literal(1, true), literal(1, false), literal(3, true));
 "#);
     assert_eq!(out, ["1 2 3", "1 2 3", "1 2 3", "16 26 34", "one small other"]);
 }
+
+#[test]
+fn a_hoisted_value_inside_a_pipeline_operand_runs_once_in_source_order() {
+    require_toolchain!();
+    let out = run(r#"
+variant E { A(value: number), B }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const order: string[] = [];
+const mark = <T,>(name: string, value: T): T => { order.push(name); return value; };
+const subject = (name: string): E => { order.push(name); return E.A(1); };
+const add = (value: number) => { order.push("call"); return value + 1; };
+const callee = () => { order.push("callee"); return add; };
+const make = (n: number) => { order.push("make"); return (value: number) => { order.push("apply"); return value + n; }; };
+const step = () => { order.push("step"); return (value: number) => { order.push("apply"); return value * 10; }; };
+const okay = (name: string, value: number): R => { order.push(name); return { kind: "Ok", value }; };
+const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
+const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
+report(callee()(match (subject("head")) { A(value) => value, B => 0 }) |> step());
+report(mark("left", 1) + match (subject("right")) { A(value) => value, B => 0 } |> step());
+report(match (subject("head")) { A(value) => value, B => 0 } + mark("right", 1) |> step());
+report([mark("first", 1), match (subject("second")) { A(value) => value, B => 0 }] |> (pair => pair.map(n => n + 1)));
+report(-match (subject("head")) { A(value) => value, B => 0 } |> step());
+report((match (subject("head")) { A(value) => value, B => 0 }).toFixed(1) |> Number);
+report(`${callee()(match (subject("head")) { A(value) => value, B => 0 })}` |> Number);
+report(mark("head", 3) |> make(match (subject("arg")) { A(value) => value, B => 0 }));
+report(callee()(match (subject("one")) { A(value) => value, B => 0 }) + callee()(match (subject("two")) { A(value) => value, B => 0 }) |> step());
+report(mark("cond", true) && callee()(match (subject("branch")) { A(value) => value, B => 0 }) |> String);
+report(mark("cond", false) && callee()(match (subject("skipped")) { A(value) => value, B => 0 }) |> String);
+function lifted(ok: boolean): R {
+  const value = callee()(try (ok ? okay("try", 4) : fail("err"))) |> step();
+  return { kind: "Ok", value };
+}
+const first = lifted(true);
+report(first.kind === "Ok" ? first.value : first.error);
+const second = lifted(false);
+report(second.kind === "Ok" ? second.value : second.error);
+"#);
+    assert_eq!(
+        out,
+        [
+            "callee,head,call,step,apply 20",
+            "left,right,step,apply 20",
+            "head,right,step,apply 20",
+            "first,second 2,2",
+            "head,step,apply -10",
+            "head 1",
+            "callee,head,call 2",
+            "head,arg,make,apply 4",
+            "callee,one,call,callee,two,call,step,apply 40",
+            "cond,callee,branch,call 2",
+            "cond false",
+            "callee,try,call,step,apply 50",
+            "callee,err err",
+        ]
+    );
+}

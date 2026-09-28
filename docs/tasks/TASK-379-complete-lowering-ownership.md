@@ -1,6 +1,8 @@
 # TASK-379: Complete structurally owned lowering and the remaining audit defects
 
 > TASK-381 supersedes Decision 1 for guards: a complete guard owns its evaluation plan; selecting one nested child schedule does not cover sibling values.
+>
+> TASK-501 supersedes the rest of Decision 1: an owned child's bounded schedule now gets a target capability and conditional-operation planning like an owner value, and the enclosing operand (a pipeline head or step, a match subject, an expression arm body), not the child's continued-expression path, delivers the composed expression. The continued-expression delivery of a child's whole parent was removed.
 
 - **Status**: Complete
 - **Started**: 2026-09-15

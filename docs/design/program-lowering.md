@@ -321,6 +321,27 @@ boundary는 분석 실패 fallback이 아니라 `EvaluationOwner`가 선택하�
 capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 실제 사용 파일에 한 번만
 방출한다.
 
+### 7.5 Values inside an operand of an enclosing tt value (TASK-501)
+
+A tt value can sit inside an operand that another tt value lowers
+structurally: a pipeline head or step (`f(match ...) |> g`), a match subject,
+or an expression arm body. Such a value is planned exactly like a value of a
+TypeScript owner, bounded by the enclosing value instead of the owner:
+
+- Its schedule is the prefix of its protocol whose parents lie inside the
+  enclosing value, and its target capability is decided from that schedule
+  (`target_capability`). A conditional step is planned as a whole conditional
+  operation (`plan_conditional_operations`) among the values the same
+  enclosing value owns; one that cannot be owned whole is a placement
+  diagnostic (`match-placement`, `try-placement`), as it is for an owner.
+- The target emits the operand, not the value: each value's region runs in
+  source order behind the captures its steps take, each conditional
+  operation writes its join slot, and the operand's source is then delivered
+  once with the values, the operations, and the captured inputs replaced by
+  their slots. A value never delivers its enclosing expression itself, so an
+  operand with several values, or a value under a call, a template, or a
+  logical operator, has exactly one emitter for every source byte.
+
 ## 8. 전체 tt 표면의 공통 배치
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |
