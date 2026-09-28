@@ -204,7 +204,7 @@ fn variant_symbols_carries_positions_and_field_shapes() {
 
 #[test]
 fn pipeline_emits_nested_apply_helper_calls() {
-    let out = ok("const y = half(4) |> double |> label;\n");
+    let out = ok("const y = half(4) |> double |> label;\nexport {};\n");
     assert!(
         out.contains("const y = $tt_ap($tt_ap(half(4), double), label);"),
         "{out}"
@@ -371,9 +371,9 @@ fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
         "variant E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
     );
     let compact = compact(&out);
-    assert!(compact.contains("$tt_v0 = v + 1; break;"), "{out}");
-    assert!(compact.contains("$tt_v0 = 0; break;"), "{out}");
-    assert!(compact.contains("$tt_v1 = (v, v + 1); break;"), "{out}");
+    assert!(compact.contains("$tt_v0$plain = v + 1; break;"), "{out}");
+    assert!(compact.contains("$tt_v0$plain = 0; break;"), "{out}");
+    assert!(compact.contains("$tt_v1$seq = (v, v + 1); break;"), "{out}");
 }
 
 #[test]
@@ -411,7 +411,7 @@ fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
     );
     assert!(
         out.contains(
-            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2 = $tt_t2;\n    break $tt_v2;\n  }\n  $tt_v2 = { kind: \"Ok\" as const, value: $tt_t2.value };\n  break $tt_v2;"
+            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2$computed = $tt_t2;\n    break $tt_v2$computed;\n  }\n  $tt_v2$computed = { kind: \"Ok\" as const, value: $tt_t2.value };\n  break $tt_v2$computed;"
         ),
         "{out}"
     );
@@ -431,7 +431,7 @@ fn a_postfix_step_parenthesizes_only_a_receiver_that_needs_it() {
 
 #[test]
 fn pipeline_runtime_is_imported_once_per_file() {
-    let out = ok("const a = x |> f;\nconst b = y |> g;\n");
+    let out = ok("const a = x |> f;\nconst b = y |> g;\nexport {};\n");
     assert_eq!(out.matches("$tt_ap(").count(), 2, "{out}");
     assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }
@@ -447,7 +447,7 @@ fn an_inert_pipeline_input_uses_a_direct_call() {
 fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
     let out = ok("variant E { A(value: number), B }\n\
          const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
-    assert!(out.contains("$tt_v0 = String($tt_v0);"), "{out}");
+    assert!(out.contains("$tt_v0$value = String($tt_v0$value);"), "{out}");
     assert!(!out.contains("$tt_ap"), "{out}");
 }
 
@@ -483,8 +483,8 @@ fn pipeline_head_reclaims_a_lifted_match() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("$tt_v0 = double($tt_v0);"), "{out}");
-    assert!(out.contains("const a = $tt_v0;"), "{out}");
+    assert!(out.contains("$tt_v0$a = double($tt_v0$a);"), "{out}");
+    assert!(out.contains("const a = $tt_v0$a;"), "{out}");
 }
 
 #[test]
@@ -502,7 +502,7 @@ fn pipeline_inside_match_scrutinee_arm_and_template() {
     );
     assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
     assert!(
-        compact(&out).contains("$tt_v0 = $tt_ap(v, double); break;"),
+        compact(&out).contains("$tt_v0$r = $tt_ap(v, double); break;"),
         "{out}"
     );
     assert!(out.contains("`n=${$tt_ap(x, f)}`"), "{out}");

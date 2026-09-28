@@ -1076,3 +1076,37 @@ fn a_project_with_another_content_mapper_runs_no_external_code() {
     assert!(out.contains("ts100024"), "{out}");
     assert_eq!(error_count(&out), 2, "{out}");
 }
+
+#[test]
+fn scripts_of_one_program_check_without_colliding_generated_globals() {
+    require_tsgo!();
+    let script = |suffix: &str| {
+        format!(
+            "declare const o_{suffix}: {{ kind: \"A\"; n: number }} | {{ kind: \"B\" }};\n\
+             declare function step_{suffix}(n: number): number;\n\
+             declare function read_{suffix}(): number;\n\
+             const size_{suffix} = match (o_{suffix}) {{ A(n) => n, B => 0 }};\n\
+             var total_{suffix} = match (o_{suffix}) {{ A(n) => n, B => 0 }};\n\
+             function measure_{suffix}() {{ return match (o_{suffix}) {{ A(n) => n, B => 0 }}; }}\n\
+             match (o_{suffix}) {{ A => 1, B => 2 }};\n\
+             const A(n: first_{suffix}) = o_{suffix} else {{ throw new Error(); }};\n\
+             const piped_{suffix} = read_{suffix}() |> step_{suffix};\n\
+             const flowed_{suffix} = flow |> step_{suffix} |> step_{suffix};\n"
+        )
+    };
+    let dir = project(&[
+        ("src/a.tt", &script("a")),
+        ("src/b.ttx", &script("b")),
+        (
+            "src/use.ts",
+            "const sum: number = size_a + size_b + total_a + total_b + measure_a() + first_b + piped_a + flowed_b(1);\n\
+             const wrong: string = size_a;\n",
+        ),
+    ]);
+    let out = check(&dir);
+    assert!(
+        block(&out, "type mismatch: expected `string`").contains("--> src/use.ts"),
+        "{out}"
+    );
+    assert_eq!(error_count(&out), 1, "{out}");
+}

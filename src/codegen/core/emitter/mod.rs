@@ -99,6 +99,7 @@ pub(super) struct Emitter<'a> {
     pub(super) used_pipe: Cell<bool>,
     pub(super) used_flow: Cell<bool>,
     pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
+    pub(super) global_temps: HashMap<TempId, String>,
 }
 
 impl Emitter<'_> {
@@ -107,7 +108,13 @@ impl Emitter<'_> {
     }
 
     pub(super) fn temp_name(&self, temp: TempId) -> String {
-        self.generated_name(&temp_base(temp))
+        match self.global_temps.get(&temp) {
+            Some(binding) => self
+                .generated_names
+                .borrow_mut()
+                .stable_global(&temp_base(temp), binding),
+            None => self.generated_name(&temp_base(temp)),
+        }
     }
 
     fn exit_label(&self, target: &str) -> String {

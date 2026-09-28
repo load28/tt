@@ -1,28 +1,4 @@
-declare namespace JSX { interface IntrinsicElements { p: {children?:unknown} } }
-type State={kind:"A"}|{kind:"B"}|{kind:"C"};declare const state:State;
-let $tt_v0;
-{
-  const $tt_m = state;
-  switch ($tt_m.kind) {
-    case "A": {
-      $tt_v0 = <p>A</p>;
-      break;
-    }
-    case "B": {
-      $tt_v0 = <p>B</p>;
-      break;
-    }
-    case "C": {
-      $tt_v0 = <p>C</p>;
-      break;
-    }
-    default: {
-      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
-    }
-  }
-}
-const view=$tt_v0;
-function $tt_show(value: unknown): string {
+var $tt_show: (value: unknown) => string = function (value) {
   if (typeof value === "string") {
     return JSON.stringify(value);
   }
@@ -39,4 +15,28 @@ function $tt_show(value: unknown): string {
     return typeof value;
   }
   return String(value);
+};
+declare namespace JSX { interface IntrinsicElements { p: {children?:unknown} } }
+type State={kind:"A"}|{kind:"B"}|{kind:"C"};declare const state:State;
+let $tt_v0$view;
+{
+  const $tt_m = state;
+  switch ($tt_m.kind) {
+    case "A": {
+      $tt_v0$view = <p>A</p>;
+      break;
+    }
+    case "B": {
+      $tt_v0$view = <p>B</p>;
+      break;
+    }
+    case "C": {
+      $tt_v0$view = <p>C</p>;
+      break;
+    }
+    default: {
+      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
+    }
+  }
 }
+const view=$tt_v0$view;

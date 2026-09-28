@@ -141,6 +141,24 @@ fn span_index(spans: impl Iterator<Item = SourceSpan>) -> crate::span_index::Spa
     crate::span_index::SpanIndex::new(spans.map(|span| (span.start, span.end)))
 }
 
+fn match_show_body(json: &str, string: &str) -> String {
+    format!(
+        "{{\n  if (typeof value === \"string\") {{\n    return {json}.stringify(value);\n  }}\n  if (typeof value === \"bigint\") {{\n    return {string}(value) + \"n\";\n  }}\n  if (typeof value === \"object\" || typeof value === \"function\") {{\n    try {{\n      const text = {json}.stringify(value);\n      if (typeof text === \"string\") {{\n        return text;\n      }}\n    }} catch {{}}\n    return typeof value;\n  }}\n  return {string}(value);\n}}"
+    )
+}
+
+fn script_runtime_helper(export: &str, local: &str) -> String {
+    match export {
+        "$tt_ap" => format!(
+            "var {local}: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {{\n  return f(v);\n}};\n"
+        ),
+        "$tt_fl" => format!(
+            "var {local}: <A extends unknown[], B, C>(\n  f: (...a: A) => B,\n  g: (b: B) => C,\n) => (...a: A) => C = function (f, g) {{\n  return (...a) => g(f(...a));\n}};\n"
+        ),
+        _ => crate::ice::bug!("{export} is not a runtime helper"),
+    }
+}
+
 pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
@@ -151,6 +169,7 @@ pub(crate) fn emit_with_map<'a>(
     std_imports: StdImports<'a>,
 ) -> Flat {
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
+    let script = target.script;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
@@ -296,42 +315,84 @@ pub(crate) fn emit_with_map<'a>(
         generated_names: RefCell::new(lowering_plan.generated_names().cloned().unwrap_or_else(
             || crate::generated_names::GeneratedNames::for_source(source, source_kind),
         )),
+        global_temps: target.global_temps,
     };
     let mut output = emitter.emit_body(core.root);
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
-    let mut module_prelude = String::new();
-    if used_pipe || used_flow {
-        let names = [("$tt_ap", used_pipe), ("$tt_fl", used_flow)]
-            .into_iter()
-            .filter(|(_, used)| *used)
-            .map(|(export, _)| match emitter.generated_name(export) {
-                local if local == export => local,
-                local => format!("{export} as {local}"),
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        let runtime = std_imports
-            .get(crate::StdModule::Runtime)
-            .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
-        module_prelude.push_str(&format!("import {{ {names} }} from \"{runtime}\";\n"));
-    }
     let used_show = emitter.used_match_show.get();
-    for (global, used) in [
+    let aliases: Vec<_> = [
         ("Error", emitter.used_host_error.get()),
         ("JSON", used_show),
         ("String", used_show),
-    ] {
-        if used && let Some(alias) = lowering_plan.host_global_alias(global) {
-            module_prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
+    ]
+    .into_iter()
+    .filter(|(_, used)| *used)
+    .filter_map(|(global, _)| lowering_plan.host_global_alias(global))
+    .collect();
+    let runtime_helpers: Vec<(&str, String)> = [("$tt_ap", used_pipe), ("$tt_fl", used_flow)]
+        .into_iter()
+        .filter(|(_, used)| *used)
+        .map(|(export, _)| (export, emitter.generated_name(export)))
+        .collect();
+    let show = used_show.then(|| match_show_body(&emitter.host_json, &emitter.host_string));
+    let mut prelude = String::new();
+    if script {
+        for alias in &aliases {
+            prelude.push_str(&format!("var {} = {};\n", alias.name, alias.capture));
+        }
+        for (export, local) in &runtime_helpers {
+            prelude.push_str(&script_runtime_helper(export, local));
+        }
+        if emitter.used_match_raise.get() {
+            prelude.push_str(&format!(
+                "var {}: (error: unknown) => never = function (error) {{ throw error; }};\n",
+                emitter.match_raise_name
+            ));
+        }
+        if let Some(body) = &show {
+            prelude.push_str(&format!(
+                "var {}: (value: unknown) => string = function (value) {body};\n",
+                emitter.match_show_name
+            ));
+        }
+        if emitter.used_expression_boundary.get() {
+            prelude.push_str(&format!(
+                "var {}: <T>(run: () => T) => T = function (run) {{ return run(); }};\n",
+                emitter.expression_boundary_name
+            ));
+        }
+    } else {
+        if !runtime_helpers.is_empty() {
+            let names = runtime_helpers
+                .iter()
+                .map(|(export, local)| {
+                    if local == export {
+                        local.clone()
+                    } else {
+                        format!("{export} as {local}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let runtime = std_imports
+                .get(crate::StdModule::Runtime)
+                .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
+            prelude.push_str(&format!("import {{ {names} }} from \"{runtime}\";\n"));
+        }
+        for alias in &aliases {
+            prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
         }
     }
-    if !module_prelude.is_empty() {
+    if !prelude.is_empty() {
         // Which helpers the file needs is only known once the whole file
         // is emitted, but where an import belongs is the top — after
         // anything that has to come before one (TASK-219).
-        let (at, after_code) =
+        let (mut at, after_code) =
             module_import_position(source, lowering_plan.directive_prologue_end());
+        if script && !after_code {
+            at = crate::lexer::pragmas::after_file_pragmas(source, at);
+        }
         // A prologue that runs to the end of the file leaves nothing to
         // insert before, so the import lands at the end and needs the
         // line break the source did not write.
@@ -340,36 +401,36 @@ pub(crate) fn emit_with_map<'a>(
         } else {
             ""
         };
-        output.insert_lit_at_source(at, format!("{separator}{module_prelude}"));
+        output.insert_lit_at_source(at, format!("{separator}{prelude}"));
     }
-    if emitter.used_match_raise.get() {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
+    if !script {
+        if emitter.used_match_raise.get() {
+            if !output.ends_with_newline() {
+                output.push_lit("\n");
+            }
+            output.push_lit(format!(
+                "function {}(error: unknown): never {{ throw error; }}\n",
+                emitter.match_raise_name
+            ));
         }
-        output.push_lit(format!(
-            "function {}(error: unknown): never {{ throw error; }}\n",
-            emitter.match_raise_name
-        ));
-    }
-    if emitter.used_match_show.get() {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
+        if let Some(body) = &show {
+            if !output.ends_with_newline() {
+                output.push_lit("\n");
+            }
+            output.push_lit(format!(
+                "function {}(value: unknown): string {body}\n",
+                emitter.match_show_name
+            ));
         }
-        output.push_lit(format!(
-            "function {name}(value: unknown): string {{\n  if (typeof value === \"string\") {{\n    return {json}.stringify(value);\n  }}\n  if (typeof value === \"bigint\") {{\n    return {string}(value) + \"n\";\n  }}\n  if (typeof value === \"object\" || typeof value === \"function\") {{\n    try {{\n      const text = {json}.stringify(value);\n      if (typeof text === \"string\") {{\n        return text;\n      }}\n    }} catch {{}}\n    return typeof value;\n  }}\n  return {string}(value);\n}}\n",
-            name = emitter.match_show_name,
-            json = emitter.host_json,
-            string = emitter.host_string,
-        ));
-    }
-    if emitter.used_expression_boundary.get() {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
+        if emitter.used_expression_boundary.get() {
+            if !output.ends_with_newline() {
+                output.push_lit("\n");
+            }
+            output.push_lit(format!(
+                "function {}<T>(run: () => T): T {{ return run(); }}\n",
+                emitter.expression_boundary_name
+            ));
         }
-        output.push_lit(format!(
-            "function {}<T>(run: () => T): T {{ return run(); }}\n",
-            emitter.expression_boundary_name
-        ));
     }
     // A block arm's `return` frame (the keyword, and anything after the
     // argument) is claimed by the exit rewrite, as is the operator frame of

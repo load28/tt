@@ -608,6 +608,175 @@ impl HostOwner {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GlobalStatement {
+    Enclose,
+    Binding(String),
+}
+
+fn is_script(module: &Module) -> bool {
+    use swc_ecma_ast::{ForOfStmt, MetaPropExpr, MetaPropKind, ModuleDecl, TsModuleRef, UsingDecl};
+    use swc_ecma_visit::{Visit, VisitWith};
+
+    #[derive(Default)]
+    struct ModuleOnlySyntax {
+        found: bool,
+        function_depth: usize,
+    }
+    impl Visit for ModuleOnlySyntax {
+        fn visit_meta_prop_expr(&mut self, node: &MetaPropExpr) {
+            self.found |= node.kind == MetaPropKind::ImportMeta;
+        }
+        fn visit_await_expr(&mut self, node: &AwaitExpr) {
+            self.found |= self.function_depth == 0;
+            node.visit_children_with(self);
+        }
+        fn visit_for_of_stmt(&mut self, node: &ForOfStmt) {
+            self.found |= node.is_await && self.function_depth == 0;
+            node.visit_children_with(self);
+        }
+        fn visit_using_decl(&mut self, node: &UsingDecl) {
+            self.found |= node.is_await && self.function_depth == 0;
+            node.visit_children_with(self);
+        }
+        fn visit_function(&mut self, node: &Function) {
+            self.function_depth += 1;
+            node.visit_children_with(self);
+            self.function_depth -= 1;
+        }
+        fn visit_arrow_expr(&mut self, node: &ArrowExpr) {
+            self.function_depth += 1;
+            node.visit_children_with(self);
+            self.function_depth -= 1;
+        }
+        fn visit_class(&mut self, node: &swc_ecma_ast::Class) {
+            self.function_depth += 1;
+            node.visit_children_with(self);
+            self.function_depth -= 1;
+        }
+    }
+
+    let indicator = module.body.iter().any(|item| match item {
+        ModuleItem::ModuleDecl(ModuleDecl::TsImportEquals(import)) => {
+            import.is_export || matches!(import.module_ref, TsModuleRef::TsExternalModuleRef(_))
+        }
+        ModuleItem::ModuleDecl(_) => true,
+        ModuleItem::Stmt(_) => false,
+    });
+    if indicator {
+        return false;
+    }
+    let mut syntax = ModuleOnlySyntax::default();
+    module.visit_with(&mut syntax);
+    !syntax.found
+}
+
+fn global_statements(
+    module: &Module,
+    source_start: HostOrigin,
+) -> HashMap<ProjectedSpan, GlobalStatement> {
+    module
+        .body
+        .iter()
+        .filter_map(|item| match item {
+            ModuleItem::Stmt(statement) => Some((
+                projected_span(statement.span(), source_start),
+                global_statement(statement)?,
+            )),
+            ModuleItem::ModuleDecl(_) => None,
+        })
+        .collect()
+}
+
+fn global_statement(statement: &Stmt) -> Option<GlobalStatement> {
+    use swc_ecma_ast::{Decl, VarDeclKind};
+
+    let binding = match statement {
+        Stmt::Decl(Decl::Var(var)) if var.kind == VarDeclKind::Var => None,
+        Stmt::Decl(Decl::Var(var)) => var
+            .decls
+            .iter()
+            .find_map(|declarator| first_binding(&declarator.name)),
+        Stmt::Decl(Decl::Using(using)) => using
+            .decls
+            .iter()
+            .find_map(|declarator| first_binding(&declarator.name)),
+        Stmt::Decl(Decl::Class(class)) => Some(class.ident.sym.to_string()),
+        Stmt::Decl(Decl::Fn(function)) => Some(function.ident.sym.to_string()),
+        Stmt::Decl(
+            Decl::TsEnum(_) | Decl::TsModule(_) | Decl::TsInterface(_) | Decl::TsTypeAlias(_),
+        ) => return None,
+        _ => None,
+    };
+    Some(binding.map_or(GlobalStatement::Enclose, GlobalStatement::Binding))
+}
+
+fn first_binding(pattern: &Pat) -> Option<String> {
+    use swc_ecma_ast::ObjectPatProp;
+
+    match pattern {
+        Pat::Ident(ident) => Some(ident.id.sym.to_string()),
+        Pat::Array(array) => array.elems.iter().flatten().find_map(first_binding),
+        Pat::Object(object) => object.props.iter().find_map(|property| match property {
+            ObjectPatProp::KeyValue(property) => first_binding(&property.value),
+            ObjectPatProp::Assign(property) => Some(property.key.id.sym.to_string()),
+            ObjectPatProp::Rest(rest) => first_binding(&rest.arg),
+        }),
+        Pat::Rest(rest) => first_binding(&rest.arg),
+        Pat::Assign(assign) => first_binding(&assign.left),
+        Pat::Invalid(_) | Pat::Expr(_) => None,
+    }
+}
+
+fn let_else_global_binding(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    extent: NodeId,
+) -> Option<GlobalStatement> {
+    use crate::core_ir::{DecisionKind, PatternPlan};
+
+    fn binds(pattern: &PatternPlan, out: &mut Vec<NodeId>) {
+        match pattern {
+            PatternPlan::Bind(bind) => out.push(bind.binding),
+            PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+                for part in parts {
+                    binds(part, out);
+                }
+            }
+            PatternPlan::Any | PatternPlan::Test(_) => {}
+        }
+    }
+
+    let decision = core
+        .bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .find_map(|statement| match statement {
+            Statement::Decision(decision) if decision.extent == extent => Some(decision),
+            _ => None,
+        })?;
+    let DecisionKind::LetElse { binding_mode, .. } = decision.kind else {
+        return None;
+    };
+    if binding_mode == hir::BindingMode::Var {
+        return Some(GlobalStatement::Enclose);
+    }
+    let mut nodes = Vec::new();
+    for arm in &decision.arms {
+        binds(&arm.pattern, &mut nodes);
+    }
+    Some(
+        nodes
+            .into_iter()
+            .filter_map(|node| semantic.hir.source_map.node_span(node))
+            .min_by_key(|span| span.start)
+            .map_or(GlobalStatement::Enclose, |span| {
+                GlobalStatement::Binding(source[span.start..span.end].to_owned())
+            }),
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum HostOwnerKind {
     Statement,

@@ -91,6 +91,7 @@ impl ParentCollector {
             break_capture_depth: 0,
             exit_regions: Vec::new(),
             arm_block_scopes: Vec::new(),
+            global_statements: HashMap::new(),
         }
     }
 
@@ -146,6 +147,7 @@ impl ParentCollector {
         }
         let mut owner_ids: HashMap<ProjectedHostOwner, HostOwnerId> = HashMap::new();
         let mut owners: Vec<HostOwnerSyntax> = Vec::new();
+        let mut globals = HashMap::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
         let overlay_spans: Vec<_> = pending
             .iter()
@@ -203,6 +205,9 @@ impl ParentCollector {
                 owner_id
             };
             owners[owner_id.0 as usize].roots.push(entry.id);
+            if let Some(global) = self.global_statements.get(&projected_anchor.span) {
+                globals.insert(owners[owner_id.0 as usize].owner.anchor(), global.clone());
+            }
             let enclosing_overlay = overlay_index
                 .covering(entry.projected.start.0, entry.projected.end.0)
                 .into_iter()
@@ -312,6 +317,7 @@ impl ParentCollector {
             overlay,
             owners,
             occupied_names: self.occupied_names,
+            globals,
         })
     }
 }

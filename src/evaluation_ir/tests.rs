@@ -248,7 +248,7 @@ fn generated_slot_names_do_not_collide_with_typescript_identifiers() {
         evaluation("const $tt_v0 = 1;\nconst out = match (value) { A => $tt_v0, _ => 0 };\n");
     let plan = plan(&file, &core);
     let ValueTarget::Slot(slot) = plan.owners().next().expect("host rewrite").values[0].target;
-    assert_eq!(plan.slot_name(slot), "$tt_v0_1");
+    assert_eq!(plan.slot_name(slot), "$tt_v0_1$out");
 }
 
 #[test]

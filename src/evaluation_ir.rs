@@ -22,8 +22,9 @@ use crate::hir::{ArmBodyKind, BindingMode, BodyId, ExprId, NodeId};
 use crate::ice::LoweringSubject;
 use crate::program_syntax::{
     ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,
-    EvaluationInputMode, EvaluationOwner, HostContinuation, HostEvaluationOperation,
-    HostEvaluationProtocol, HostExit, HostOwner, OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
+    EvaluationInputMode, EvaluationOwner, GlobalStatement, HostContinuation,
+    HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner, OwnerReach,
+    ProgramSyntax, SourceSpan, TtNodeId,
 };
 
 use builder::*;
@@ -120,6 +121,8 @@ pub(crate) struct EvaluationFile {
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
     tt_spans: Vec<SourceSpan>,
+    script: bool,
+    globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
 #[derive(Debug, Default)]
@@ -149,6 +152,8 @@ pub(crate) struct LoweringPlan {
     block_required_owners: HashSet<SourceSpan>,
     lexical_declaration_bodies: Vec<LexicalDeclarationBody>,
     ambient_items: HashSet<NodeId>,
+    script: bool,
+    global_temps: HashMap<crate::core_ir::TempId, String>,
     owner_model_unavailable: bool,
 }
 
@@ -609,6 +614,14 @@ impl LoweringPlan {
 
     pub(crate) fn lexical_declaration_bodies(&self) -> &[LexicalDeclarationBody] {
         &self.lexical_declaration_bodies
+    }
+
+    pub(crate) fn is_script(&self) -> bool {
+        self.script
+    }
+
+    pub(crate) fn global_temps(&self) -> &HashMap<crate::core_ir::TempId, String> {
+        &self.global_temps
     }
 }
 

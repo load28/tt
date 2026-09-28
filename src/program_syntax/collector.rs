@@ -157,12 +157,14 @@ pub(super) struct ParentCollector {
     /// body, whether the block is free of cleanup boundaries, and the
     /// function depth the block sits at.
     pub(super) arm_block_scopes: Vec<(BodyId, bool, usize)>,
+    pub(super) global_statements: HashMap<ProjectedSpan, GlobalStatement>,
 }
 
 pub(super) struct CollectedProgramSyntax {
     pub(super) overlay: Vec<OverlayEntry>,
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
+    pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
 pub(super) struct FoundOverlay {

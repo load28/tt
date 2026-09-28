@@ -63,9 +63,24 @@ impl EvaluationFile {
                 .core_contexts()
                 .map(|(_, _, _, _, source, _, _)| source)
                 .collect(),
+            script: syntax.is_script(),
+            globals: syntax.globals().clone(),
         };
         file.validate()?;
         Ok(file)
+    }
+
+    fn host_anchor(&self, region: &EvalRegion) -> Option<SourceSpan> {
+        let mut region = region;
+        loop {
+            match &region.placement {
+                RegionPlacement::Host { host_owner, .. } => return Some(host_owner.anchor()),
+                RegionPlacement::Nested { parent, .. } => {
+                    region = &self.regions[parent.0 as usize];
+                }
+                RegionPlacement::SourceEdit => return None,
+            }
+        }
     }
 
     pub(crate) fn lowering_plan(&self, core: &CoreFile) -> Result<LoweringPlan, EvaluationError> {
@@ -163,6 +178,7 @@ impl EvaluationFile {
         let mut next_slot = 0u32;
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
+        let mut slot_anchors: Vec<Option<SourceSpan>> = Vec::new();
         let mut value_slots = HashMap::new();
         let mut capture_dependencies = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
@@ -345,6 +361,7 @@ impl EvaluationFile {
                     );
                 }
             }
+            slot_anchors.resize(slot_names.len(), Some(owner.anchor()));
             rewrites.push(HostRewrite {
                 owner,
                 values,
@@ -369,6 +386,7 @@ impl EvaluationFile {
                 continue;
             }
             let slot = allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names)?;
+            slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             value_slots.insert(expr, slot);
         }
         let nested_sources: HashMap<_, _> = self
@@ -445,6 +463,7 @@ impl EvaluationFile {
                 &mut occupied_names,
                 false,
             )?;
+            slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             nested_schedules.insert(expr, schedule);
         }
         let direct_capabilities: HashMap<_, _> = rewrites
@@ -699,21 +718,42 @@ impl EvaluationFile {
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
         let match_show_name = allocate_generated_name("$tt_show", &mut occupied_names)?;
+        let global_bindings: HashMap<SourceSpan, &str> = self
+            .globals
+            .iter()
+            .filter_map(|(anchor, global)| match global {
+                GlobalStatement::Binding(binding) => Some((*anchor, binding.as_str())),
+                GlobalStatement::Enclose => None,
+            })
+            .collect();
+        slot_anchors.resize(slot_names.len(), None);
+        for (name, anchor) in slot_names.iter_mut().zip(&slot_anchors) {
+            if let Some(binding) = anchor.and_then(|anchor| global_bindings.get(&anchor)) {
+                *name = globalize_name(name, binding, &mut occupied_names)?;
+            }
+        }
         let mut match_subject_names = HashMap::new();
         let mut taken_subject_names = 0;
         for rewrite in &rewrites {
+            let binding = global_bindings.get(&rewrite.owner.anchor()).copied();
             for value in &rewrite.values {
                 if let Expr::Decision(decision) = &core.exprs[value.expr.index()] {
                     let names = decision
                         .subjects
                         .iter()
                         .map(|_| {
-                            crate::generated_names::allocate_after(
+                            let name = crate::generated_names::allocate_after(
                                 "$tt_subject",
                                 &mut occupied_names,
                                 &mut taken_subject_names,
                             )
-                            .ok_or(EvaluationError::GeneratedNameOverflow)
+                            .ok_or(EvaluationError::GeneratedNameOverflow)?;
+                            match binding {
+                                Some(binding) => {
+                                    globalize_name(&name, binding, &mut occupied_names)
+                                }
+                                None => Ok(name),
+                            }
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     match_subject_names.insert(value.expr, names);
@@ -787,7 +827,7 @@ impl EvaluationFile {
                 _ => None,
             })
             .collect();
-        let block_required_statements: HashSet<NodeId> =
+        let mut block_required_statements: HashSet<NodeId> =
             block_required.iter().map(|(node, _)| *node).collect();
         let lexical_declaration_bodies = core
             .bodies
@@ -817,7 +857,36 @@ impl EvaluationFile {
                     })
             })
             .collect();
+        let mut global_temps = HashMap::new();
+        for region in &self.regions {
+            let (Some(CoreRoot::Decision(extent)), RegionPlacement::Host { host_owner, .. }) =
+                (region.root, &region.placement)
+            else {
+                continue;
+            };
+            let Some(global) = self.globals.get(&host_owner.anchor()) else {
+                continue;
+            };
+            let Some(decision) = statement_decision(core, extent) else {
+                continue;
+            };
+            if !matches!(decision.kind, DecisionKind::LetElse { .. }) {
+                continue;
+            }
+            match global {
+                GlobalStatement::Enclose => {
+                    block_required_statements.insert(extent);
+                }
+                GlobalStatement::Binding(binding) => {
+                    for subject in &decision.subjects {
+                        global_temps.insert(subject.temporary, binding.clone());
+                    }
+                }
+            }
+        }
         Ok(LoweringPlan {
+            script: self.script,
+            global_temps,
             shadowed_globals,
             host_global_aliases,
             directive_prologue_end: self.directive_prologue_end,
@@ -898,7 +967,9 @@ impl EvaluationFile {
                             host_owner,
                             ..
                         },
-                    ) if context.requires_block
+                    ) if (context.requires_block
+                        || self.globals.get(&host_owner.anchor())
+                            == Some(&GlobalStatement::Enclose))
                         && match root {
                             CoreRoot::Expr(_) => true,
                             CoreRoot::Propagate(_) => {
@@ -927,4 +998,24 @@ impl EvaluationFile {
             owner_model_unavailable: false,
         })
     }
+}
+
+fn globalize_name(
+    name: &str,
+    binding: &str,
+    occupied: &mut HashSet<String>,
+) -> Result<String, EvaluationError> {
+    occupied.remove(name);
+    crate::generated_names::allocate_global(name, binding, occupied)
+        .ok_or(EvaluationError::GeneratedNameOverflow)
+}
+
+fn statement_decision(core: &CoreFile, extent: NodeId) -> Option<&Decision> {
+    core.bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .find_map(|statement| match statement {
+            Statement::Decision(decision) if decision.extent == extent => Some(decision),
+            _ => None,
+        })
 }

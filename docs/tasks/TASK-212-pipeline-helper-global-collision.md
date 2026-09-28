@@ -1,5 +1,7 @@
 # TASK-212: 파이프 헬퍼의 전역 스크립트 충돌 제거
 
+> **Partly reversed by [TASK-483](./TASK-483-script-global-generated-names.md).** The `@tt/runtime` import still serves modules, but a script (a file with no top-level import or export) no longer imports it: the import made the script a module and took its globals away from every other script. A script now declares `$tt_ap`/`$tt_fl` as typed `var`s after its file-level pragmas, the option this record set aside, because a script's declarations are global by definition.
+
 - **상태**: 완료
 - **시작일**: 2026-08-25
 - **완료일**: 2026-08-25

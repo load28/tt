@@ -12,6 +12,8 @@ pub(crate) struct ProgramSyntax {
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
     pub(super) directive_prologue_end: Option<usize>,
+    pub(super) script: bool,
+    pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
 #[derive(Debug)]
@@ -151,6 +153,10 @@ impl ProgramSyntax {
             &projection.projection_only_protocol_parents,
             &projection.arm_blocks,
         );
+        let script = is_script(&parsed.module);
+        if script {
+            collector.global_statements = global_statements(&parsed.module, parsed.start);
+        }
         let mut path = AstNodePath::default();
         parsed.module.visit_with_ast_path(&mut collector, &mut path);
         let mut collected = collector.finish(projection.pending)?;
@@ -159,6 +165,18 @@ impl ProgramSyntax {
             .extend(crate::generated_names::source_names(source, source_kind));
         let directive_prologue_end =
             directive_prologue_end(&parsed.module, parsed.start, &projection.source_segments)?;
+        let mut globals = collected.globals;
+        for entry in &collected.overlay {
+            let CoreRoot::Decision(extent) = entry.core_root else {
+                continue;
+            };
+            let Some(global) = globals.get_mut(&entry.host_owner.anchor()) else {
+                continue;
+            };
+            if let Some(binding) = let_else_global_binding(semantic, core, source, extent) {
+                *global = binding;
+            }
+        }
         let syntax = Self {
             directive_prologue_end,
             source_len: source.len(),
@@ -167,6 +185,8 @@ impl ProgramSyntax {
             overlay: collected.overlay,
             owners: collected.owners,
             occupied_names: collected.occupied_names,
+            script,
+            globals,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -205,6 +225,14 @@ impl ProgramSyntax {
 
     pub(crate) fn directive_prologue_end(&self) -> Option<usize> {
         self.directive_prologue_end
+    }
+
+    pub(crate) fn is_script(&self) -> bool {
+        self.script
+    }
+
+    pub(crate) fn globals(&self) -> &HashMap<SourceSpan, GlobalStatement> {
+        &self.globals
     }
 
     pub(crate) fn occupied_names(&self) -> impl Iterator<Item = &str> {

@@ -20,21 +20,22 @@ while (true) {
   work(1);
 }}
 
-let $tt_v1: number;
 {
-  const $tt_m = next();
-  switch ($tt_m) {
-    case 1: {
-      $tt_v1 = 1;
-      break;
-    }
-    default: {
-      $tt_v1 = 0;
-      break;
+  let $tt_v1: number;
+  {
+    const $tt_m = next();
+    switch ($tt_m) {
+      case 1: {
+        $tt_v1 = 1;
+        break;
+      }
+      default: {
+        $tt_v1 = 0;
+        break;
+      }
     }
   }
-}
-for (let value = $tt_v1;
+  for (let value = $tt_v1;
      ; value++) {
        let $tt_v2: boolean;
        {
@@ -52,4 +53,5 @@ for (let value = $tt_v1;
        }
        if (!($tt_v2)) break; {
   work(value);
+}
 }}

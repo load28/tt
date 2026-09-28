@@ -365,6 +365,8 @@ pub(super) struct TargetRewritePlan {
     pub(super) block_required_statements: HashSet<NodeId>,
     pub(super) block_required_owners: HashSet<SourceSpan>,
     pub(super) ambient_items: HashSet<NodeId>,
+    pub(super) script: bool,
+    pub(super) global_temps: HashMap<crate::core_ir::TempId, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1450,6 +1452,8 @@ impl TargetRewritePlan {
             block_required_statements: lowering.block_required_statements().clone(),
             block_required_owners: lowering.block_required_owners().clone(),
             ambient_items: lowering.ambient_items().clone(),
+            script: lowering.is_script(),
+            global_temps: lowering.global_temps().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),
             match_show_name: lowering.match_show_name().to_owned(),
             host_error: lowering.host_global("Error"),

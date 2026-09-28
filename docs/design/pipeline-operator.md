@@ -168,6 +168,11 @@ const label = $tt_ap($tt_ap(half(4), Option.mapP(x => x + 1)),
   Option.unwrapOrP(0)).toFixed(1);
 ```
 
+A script (a file with no top-level `import` or `export`) does not import the
+runtime, because the import would make it a module. It declares the helpers it
+uses as typed `var`s after its file-level pragmas instead (TASK-483, see
+`docs/design/program-lowering.md` §4.4).
+
 - 헬퍼는 순수 TypeScript 제네릭 함수이며 프로젝트에서 한 번만 인스턴스화된다.
   전역 바인딩은 만들지 않고 이름은 기존 `$tt_` 접두 규약을 따른다.
 - head와 각 step 식은 **원문 그대로**(재귀 파싱된 tt 구문만 변환) 괄호에

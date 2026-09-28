@@ -384,7 +384,7 @@ fn incomplete_match_arms_preserve_mapped_siblings_in_both_source_kinds() {
         .unwrap();
         let text = result["text"].as_str().unwrap();
         assert!(text.contains("const { name } = $tt_m;"), "{text}");
-        assert!(text.contains("$tt_v0 = name;"), "{text}");
+        assert!(text.contains("$tt_v0$greeting = name;"), "{text}");
         assert!(!result["mappings"].as_array().unwrap().is_empty());
         let diagnostics = result["diagnostics"].as_array().unwrap();
         assert!(

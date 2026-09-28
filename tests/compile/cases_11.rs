@@ -24,14 +24,14 @@ fn a_match_inside_an_arm_body_call_keeps_argument_order() {
     let effect = out.find("= (eff());").expect("eff is captured first");
     let inner = out.find("case \"B\"").expect("the inner match follows");
     assert!(effect < inner, "{out}");
-    assert!(out.contains("$tt_v0 = $tt_v2($tt_v3, $tt_v1);"), "{out}");
+    assert!(out.contains("$tt_v0$x = $tt_v2$x($tt_v3$x, $tt_v1$x);"), "{out}");
 }
 
 #[test]
 fn a_match_under_a_conditional_operation_in_an_arm_body_is_a_region() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\ndeclare function eff(): number;\nconst y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };\n");
-    assert!(out.contains("const $tt_v2 = (eff() > 0);\n      if ($tt_v2) {"), "{out}");
-    assert!(out.contains("$tt_v0 = $tt_v2 && $tt_v1;"), "{out}");
+    assert!(out.contains("const $tt_v2$y = (eff() > 0);\n      if ($tt_v2$y) {"), "{out}");
+    assert!(out.contains("$tt_v0$y = $tt_v2$y && $tt_v1$y;"), "{out}");
 }
 
 #[test]
@@ -171,7 +171,7 @@ fn numeric_literal_patterns_take_their_ecmascript_values() {
 
 #[test]
 fn generated_names_are_allocated_around_the_files_identifiers() {
-    let out = ok("const $tt_ap = 1;\nconst \\u0024tt_m = 2;\nconst xs = [1].map(x => x |> String);\nconst r = match (xs[0]) { \"1\" => $tt_m, _ => $tt_ap };\n");
+    let out = ok("const $tt_ap = 1;\nconst \\u0024tt_m = 2;\nconst xs = [1].map(x => x |> String);\nconst r = match (xs[0]) { \"1\" => $tt_m, _ => $tt_ap };\nexport {};\n");
     assert!(
         out.starts_with("import { $tt_ap as $tt_ap_1 } from \"@tt/runtime\";\n"),
         "{out}"
@@ -257,7 +257,7 @@ fn a_match_the_class_definition_evaluates_reports_its_placement() {
     let out = ok(&format!(
         "{prelude}class K extends match (s) {{ A => say(\"a\"), B => say(\"b\") }} {{}}\n"
     ));
-    assert!(out.contains("class K extends ($tt_v0 === 0 ? say(\"a\") : say(\"b\")) {}"), "{out}");
+    assert!(out.contains("class K extends ($tt_v0$K === 0 ? say(\"a\") : say(\"b\")) {}"), "{out}");
 }
 
 #[test]
@@ -1166,4 +1166,161 @@ fn missing_arms_fixed(source: &str) -> (String, String) {
         &source[edit.end..]
     );
     (missing.message.clone(), fixed)
+}
+
+#[test]
+fn a_script_declaration_names_its_global_storage_after_its_binding() {
+    let out = ok("declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                  const total = match (o) { A => 1, B => 2 };\n\
+                  let { kind } = match (o) { A => o, B => o };\n\
+                  class Base extends (match (o) { A => Object, B => Object }) {}\n\
+                  function f(x: typeof o) { return match (x) { A => 1, B => 2 }; }\n");
+    assert!(out.contains("let $tt_v0$total: number;"), "{out}");
+    assert!(out.contains("const total = $tt_v0$total;"), "{out}");
+    assert!(out.contains("let { kind } = $tt_v1$kind;"), "{out}");
+    assert!(
+        out.contains("class Base extends (($tt_v2$Base === 0 ? Object : Object)) {}"),
+        "{out}"
+    );
+    assert!(out.contains("let $tt_v3: number;"), "{out}");
+    assert!(out.contains("return $tt_v3;"), "{out}");
+    assert!(!out.contains("(() =>"), "{out}");
+}
+
+#[test]
+fn a_script_value_keeps_a_var_it_declares_in_the_global_scope() {
+    let out = ok("declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                  const total = match (o) { A => { var seen = 1; return seen; }, B => 2 };\n");
+    assert!(!out.contains("(() =>"), "{out}");
+    assert!(out.contains("var seen = 1;"), "{out}");
+}
+
+#[test]
+fn a_script_statement_that_declares_no_lexical_global_is_enclosed_with_its_storage() {
+    let out = ok("declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                  var v = match (o) { A => 1, B => 2 };\n\
+                  console.log(match (o) { A => 1, B => 2 });\n\
+                  for (const x of match (o) { A => [1], B => [2] }) {}\n\
+                  const {} = match (o) { A => o, B => o };\n");
+    assert!(out.contains("{\n  let $tt_v0: number;\n"), "{out}");
+    assert!(out.contains("  var v = $tt_v0;\n}\n"), "{out}");
+    assert!(out.contains("  $tt_v2(($tt_v1 === 0 ? 1 : 2));\n}\n"), "{out}");
+    assert!(
+        out.contains("  for (const x of ($tt_v4 === 0 ? [1] : [2])) {}\n}\n"),
+        "{out}"
+    );
+    assert!(out.contains("  const {} = $tt_v5;\n}"), "{out}");
+}
+
+#[test]
+fn a_script_let_else_keeps_its_bindings_global() {
+    let out = ok("declare const o: { kind: \"Some\"; value: number } | { kind: \"None\" };\n\
+                  const Some(value) = o else { throw new Error(); };\n\
+                  var Some(value: other) = o else { throw new Error(); };\n\
+                  let None() = o else { throw new Error(); };\n");
+    assert!(out.contains("const $tt_t0$value = o;"), "{out}");
+    assert!(out.contains("\nconst { value } = $tt_t0$value;\n"), "{out}");
+    assert!(out.contains("{\n  const $tt_t1 = o;\n"), "{out}");
+    assert!(out.contains("  var { value: other } = $tt_t1;\n}\n"), "{out}");
+    assert!(out.contains("{\n  const $tt_t2 = o;\n"), "{out}");
+}
+
+#[test]
+fn a_global_storage_name_avoids_the_files_own_identifiers() {
+    let out = ok("declare const $tt_v0$total: number;\n\
+                  declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                  const total = match (o) { A => $tt_v0$total, B => 2 };\n");
+    assert!(out.contains("let $tt_v0_1$total: number;"), "{out}");
+    assert!(out.contains("const total = $tt_v0_1$total;"), "{out}");
+}
+
+#[test]
+fn a_script_declares_its_helpers_as_typed_vars_after_its_file_pragmas() {
+    let source = "declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                  declare function step(n: number): number;\n\
+                  declare function read(): number;\n\
+                  const piped = read() |> step;\n\
+                  const composed = flow |> step |> step;\n\
+                  const total = match (o) { A => 1, B => 2 };\n";
+    let out = ok(source);
+    assert!(!out.contains("import "), "{out}");
+    assert!(
+        out.starts_with(
+            "var $tt_ap: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {\n  return f(v);\n};\n\
+             var $tt_fl: <A extends unknown[], B, C>(\n"
+        ),
+        "{out}"
+    );
+    assert!(
+        out.contains("};\nvar $tt_show: (value: unknown) => string = function (value) {\n"),
+        "{out}"
+    );
+    assert!(!out.contains("function $tt_show("), "{out}");
+    assert!(ok_tsx(source).starts_with("var $tt_ap: <A, B>"), "{out}");
+
+    for (header, attached) in [
+        (
+            "#!/usr/bin/env node\n/// <reference path=\"./globals.d.ts\" />\n// @ts-nocheck\n",
+            "",
+        ),
+        ("\"use strict\";\n// @ts-check\n", "/** The first statement. */\n"),
+        ("/// <reference types=\"node\" />\n", "// @ts-expect-error\n"),
+        ("// license\n/* @jsxImportSource preact */\n", "// @ts-ignore\n"),
+        ("", "/** The first statement. */\n"),
+    ] {
+        let out = ok(&format!("{header}{attached}{source}"));
+        assert!(
+            out.starts_with(&format!("{header}var $tt_ap: ")),
+            "{header}{attached}\n{out}"
+        );
+        assert!(
+            out.contains(&format!("}};\n{attached}declare const o")),
+            "{header}{attached}\n{out}"
+        );
+    }
+}
+
+#[test]
+fn a_module_keeps_its_import_and_trailing_helpers() {
+    let source = "declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                  declare function step(n: number): number;\n\
+                  const composed = flow |> step |> step;\n\
+                  const total = match (o) { A => 1, B => 2 };\n\
+                  export {};\n";
+    let out = ok(source);
+    assert!(
+        out.starts_with("import { $tt_fl } from \"@tt/runtime\";\n"),
+        "{out}"
+    );
+    assert!(out.contains("const total = $tt_v1;") && !out.contains("$total"), "{out}");
+    assert!(
+        out.contains("\nfunction $tt_show(value: unknown): string {\n"),
+        "{out}"
+    );
+    assert!(!out.contains("var $tt_"), "{out}");
+}
+
+#[test]
+fn only_a_file_typescript_reads_as_a_module_keeps_the_module_form() {
+    let body = "declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
+                const total = match (o) { A => 1, B => 2 };\n";
+    for module in [
+        "import \"./side-effect.js\";\n",
+        "export const one = 1;\n",
+        "import fs = require(\"fs\");\n",
+        "const url = import.meta.url;\n",
+        "declare const p: Promise<number>;\nconst n = await p;\n",
+        "declare const ps: AsyncIterable<number>;\nfor await (const n of ps) {}\n",
+    ] {
+        let out = ok(&format!("{module}{body}"));
+        assert!(out.contains("const total = $tt_v0;"), "{module}{out}");
+    }
+    for script in [
+        "namespace N { export const x = 1; }\nimport x = N.x;\n",
+        "async function f(p: Promise<number>) { return await p; }\n",
+        "declare module \"m\" { export const x: number; }\n",
+    ] {
+        let out = ok(&format!("{script}{body}"));
+        assert!(out.contains("const total = $tt_v0$total;"), "{script}{out}");
+    }
 }

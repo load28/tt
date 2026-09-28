@@ -28,6 +28,18 @@ impl GeneratedNames {
         self.allocated
     }
 
+    pub(crate) fn stable_global(&mut self, base: &str, binding: &str) -> String {
+        let key = format!("{base}${binding}");
+        if let Some(name) = self.assigned.get(&key) {
+            return name.clone();
+        }
+        let name = allocate_global(base, binding, &mut self.occupied)
+            .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for {key}"));
+        self.assigned.insert(key, name.clone());
+        self.allocated.insert(name.clone());
+        name
+    }
+
     pub(crate) fn stable(&mut self, base: &str) -> String {
         if let Some(name) = self.assigned.get(base) {
             return name.clone();
@@ -63,6 +75,26 @@ pub(crate) fn allocate_after(
         };
         if occupied.insert(candidate.clone()) {
             *taken = suffix.saturating_add(1);
+            return Some(candidate);
+        }
+        suffix = suffix.checked_add(1)?;
+    }
+}
+
+pub(crate) fn allocate_global(
+    base: &str,
+    binding: &str,
+    occupied: &mut HashSet<String>,
+) -> Option<String> {
+    let mut suffix = 0u32;
+    loop {
+        crate::work::tick("generated name probes");
+        let candidate = if suffix == 0 {
+            format!("{base}${binding}")
+        } else {
+            format!("{base}_{suffix}${binding}")
+        };
+        if occupied.insert(candidate.clone()) {
             return Some(candidate);
         }
         suffix = suffix.checked_add(1)?;

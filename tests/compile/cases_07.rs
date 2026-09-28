@@ -23,12 +23,12 @@ fn statement_bodied_result_returns_a_propagated_value() {
     let out = ok("const value = result { return try read(); };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0$value = $tt_t0; break $tt_v0$value; }"),
         "{out}"
     );
     assert!(
         compact(&out)
-            .contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0;"),
+            .contains("$tt_v0$value = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0$value;"),
         "{out}"
     );
 }
@@ -38,12 +38,12 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
     let out = ok("const value = result { const item = try read(); return item; };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0$value = $tt_t0; break $tt_v0$value; }"),
         "{out}"
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
     assert!(
-        compact(&out).contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break $tt_v0;"),
+        compact(&out).contains("$tt_v0$value = { kind: \"Ok\" as const, value: item }; break $tt_v0$value;"),
         "{out}"
     );
 }
@@ -57,7 +57,7 @@ const fromDo = result { do { return try read(); } while (ready()); return 0; };
 const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };
 "#;
     let out = ok(source);
-    for slot in ["$tt_v0", "$tt_v1", "$tt_v2", "$tt_v3"] {
+    for slot in ["$tt_v0$fromFor", "$tt_v1$fromWhile", "$tt_v2$fromDo", "$tt_v3$fromSwitch"] {
         assert!(out.contains(&format!("{slot}: {{")), "{slot}\n{out}");
         assert!(
             out.matches(&format!("break {slot};")).count() >= 2,
@@ -282,9 +282,9 @@ const label = match (dir) {
     assert!(out.contains("switch ($tt_m) {"));
     assert!(!out.contains("$tt_m.kind"));
     let compact = compact(&out);
-    assert!(compact.contains(r#"case "north": { $tt_v0 = "N"; break; }"#));
-    assert!(compact.contains(r#"case "south": { $tt_v0 = "S"; break; }"#));
-    assert!(compact.contains(r#"default: { $tt_v0 = "?"; break; }"#));
+    assert!(compact.contains(r#"case "north": { $tt_v0$label = "N"; break; }"#));
+    assert!(compact.contains(r#"case "south": { $tt_v0$label = "S"; break; }"#));
+    assert!(compact.contains(r#"default: { $tt_v0$label = "?"; break; }"#));
 }
 
 #[test]
@@ -299,9 +299,9 @@ const message = match (status) {
 "#);
     assert!(out.contains("switch ($tt_m) {"));
     let compact = compact(&out);
-    assert!(compact.contains(r#"case 200: { $tt_v0 = "ok"; break; }"#));
-    assert!(compact.contains(r#"case 404: { $tt_v0 = "not found"; break; }"#));
-    assert!(compact.contains(r#"case 500: { $tt_v0 = "error"; break; }"#));
+    assert!(compact.contains(r#"case 200: { $tt_v0$message = "ok"; break; }"#));
+    assert!(compact.contains(r#"case 404: { $tt_v0$message = "not found"; break; }"#));
+    assert!(compact.contains(r#"case 500: { $tt_v0$message = "error"; break; }"#));
 }
 
 #[test]
@@ -309,8 +309,8 @@ fn literal_boolean_match_emits_true_and_false_cases() {
     let out = ok("const v = match (flag) { true => 1, false => 0 };");
     assert!(out.contains("switch ($tt_m) {"));
     let compact = compact(&out);
-    assert!(compact.contains("case true: { $tt_v0 = 1; break; }"));
-    assert!(compact.contains("case false: { $tt_v0 = 0; break; }"));
+    assert!(compact.contains("case true: { $tt_v0$v = 1; break; }"));
+    assert!(compact.contains("case false: { $tt_v0$v = 0; break; }"));
 }
 
 #[test]
@@ -323,10 +323,10 @@ const kind = match (code) {
 };
 "#);
     let compact = compact(&out);
-    assert!(compact.contains(r#"case 200: case 201: case 204: { $tt_v0 = "success"; break; }"#));
-    assert!(compact.contains(r#"case 400: case 404: { $tt_v0 = "client error"; break; }"#));
+    assert!(compact.contains(r#"case 200: case 201: case 204: { $tt_v0$kind = "success"; break; }"#));
+    assert!(compact.contains(r#"case 400: case 404: { $tt_v0$kind = "client error"; break; }"#));
     // one body per arm, never duplicated per alternative
-    assert_eq!(out.matches(r#"$tt_v0 = "success""#).count(), 1);
+    assert_eq!(out.matches(r#"$tt_v0$kind = "success""#).count(), 1);
 }
 
 #[test]
@@ -361,7 +361,7 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
     // target, so the rewritten `return` leaves through it and the region
     // needs no label of its own (TASK-160 §6).
     assert!(
-        compact(&out).contains(r#"case "a": { $tt_v0 = 1; break; }"#),
+        compact(&out).contains(r#"case "a": { $tt_v0$v = 1; break; }"#),
         "{out}"
     );
     assert!(!out.contains("$tt_y_"), "{out}");
@@ -374,8 +374,8 @@ fn a_block_arm_exit_inside_a_loop_still_needs_the_region_label() {
     let out = ok(
         r#"const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };"#,
     );
-    assert!(out.contains("$tt_y_v0: {"), "{out}");
-    assert!(out.contains("break $tt_y_v0;"), "{out}");
+    assert!(out.contains("$tt_y_v0$v: {"), "{out}");
+    assert!(out.contains("break $tt_y_v0$v;"), "{out}");
 }
 
 #[test]
@@ -394,8 +394,8 @@ fn literal_match_with_a_guard_becomes_an_if_chain() {
     let out = ok("const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };");
     assert!(!out.contains("switch ("));
     let compact = compact(&out);
-    assert!(compact.contains("if ($tt_m === 200) { if (ok) { $tt_v0 = 1; break; } }"));
-    assert!(compact.contains("if ($tt_m === 200) { $tt_v0 = 2; break; }"));
+    assert!(compact.contains("if ($tt_m === 200) { if (ok) { $tt_v0$v = 1; break; } }"));
+    assert!(compact.contains("if ($tt_m === 200) { $tt_v0$v = 2; break; }"));
 }
 
 #[test]

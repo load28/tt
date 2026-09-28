@@ -26,6 +26,7 @@ use crate::ast::Span;
 use crate::scanner::*;
 
 mod names;
+pub(crate) mod pragmas;
 mod validation;
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use validation::host_syntax_error;

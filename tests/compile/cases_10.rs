@@ -120,7 +120,7 @@ fn a_declaration_try_without_a_semicolon_is_the_value_form_under_asi() {
 fn the_runtime_import_precedes_generated_text_at_the_top_of_the_file() {
     for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
         let options = Options { source_kind, ..Options::default() };
-        let source = "variant S { A, B }\nconst xs = [1].map(x => x |> String);\n";
+        let source = "variant S { A, B }\nconst xs = [1].map(x => x |> String);\nexport {};\n";
         let out = compile(source, &options).unwrap();
         assert!(out.starts_with("import { $tt_ap } from \"@tt/runtime\";\ntype S =\n"), "{out}");
         assert!(out.contains("B: { kind: \"B\" } as const,\n};\nconst xs"), "{out}");

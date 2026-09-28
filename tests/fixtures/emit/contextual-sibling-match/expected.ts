@@ -1,15 +1,5 @@
-declare const flag: boolean;
-type Item = {run: (x: number) => number};
-declare function pair(a: Item, b: Item): void;
-let $tt_subject;
-let $tt_subject_1;
-
-pair(
-  ($tt_subject = flag, ($tt_subject === true) ? ({run: x => x + 1}) : ($tt_subject === false) ? ({run: x => x}) : $tt_raise(new Error("tt match: unexpected literal " + $tt_show($tt_subject)))),
-  ($tt_subject_1 = flag, ($tt_subject_1 === true) ? ({run: x => x - 1}) : ($tt_subject_1 === false) ? ({run: x => x}) : $tt_raise(new Error("tt match: unexpected literal " + $tt_show($tt_subject_1)))),
-);
-function $tt_raise(error: unknown): never { throw error; }
-function $tt_show(value: unknown): string {
+var $tt_raise: (error: unknown) => never = function (error) { throw error; };
+var $tt_show: (value: unknown) => string = function (value) {
   if (typeof value === "string") {
     return JSON.stringify(value);
   }
@@ -26,4 +16,16 @@ function $tt_show(value: unknown): string {
     return typeof value;
   }
   return String(value);
+};
+declare const flag: boolean;
+type Item = {run: (x: number) => number};
+declare function pair(a: Item, b: Item): void;
+{
+  let $tt_subject;
+  let $tt_subject_1;
+  
+  pair(
+  ($tt_subject = flag, ($tt_subject === true) ? ({run: x => x + 1}) : ($tt_subject === false) ? ({run: x => x}) : $tt_raise(new Error("tt match: unexpected literal " + $tt_show($tt_subject)))),
+  ($tt_subject_1 = flag, ($tt_subject_1 === true) ? ({run: x => x - 1}) : ($tt_subject_1 === false) ? ({run: x => x}) : $tt_raise(new Error("tt match: unexpected literal " + $tt_show($tt_subject_1)))),
+);
 }

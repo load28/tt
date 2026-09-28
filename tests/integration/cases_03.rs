@@ -311,7 +311,8 @@ fn pipeline_files_import_one_shared_runtime() {
             "declare function input_{suffix}(): number;\n\
              declare const step_{suffix}: (value: number) => number;\n\
              const value_{suffix} = input_{suffix}() |> step_{suffix};\n\
-             const flow_{suffix} = flow |> step_{suffix} |> step_{suffix};\n"
+             const flow_{suffix} = flow |> step_{suffix} |> step_{suffix};\n\
+             export {{}};\n"
         );
         let code =
             compile(&source, &options_with_runtime("./runtime.js")).expect("tt compile failed");
@@ -335,6 +336,82 @@ fn pipeline_files_import_one_shared_runtime() {
         out.status.success(),
         "{}",
         String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+#[test]
+fn scripts_stay_scripts_and_their_generated_globals_never_collide() {
+    require_toolchain!();
+    let dir = tmpdir();
+    let mut files = Vec::new();
+    for suffix in ["a", "b"] {
+        let source = format!(
+            "/// <reference lib=\"es2022\" />\n\
+             // @ts-expect-error\n\
+             const unchecked_{suffix}: string = 1;\n\
+             type Shape_{suffix} = {{ kind: \"A\"; n: number }} | {{ kind: \"B\" }};\n\
+             function make_{suffix}(n: number): Shape_{suffix} {{ return n > 0 ? {{ kind: \"A\", n }} : {{ kind: \"B\" }}; }}\n\
+             function step_{suffix}(value: number): number {{ return value + 1; }}\n\
+             const size_{suffix} = match (make_{suffix}(2)) {{ A(n) => n, B => 0 }};\n\
+             var total_{suffix} = match (make_{suffix}(0)) {{ A(n) => n, B => 10 }};\n\
+             function measure_{suffix}(shape: Shape_{suffix}): number {{ return match (shape) {{ A(n) => n * 2, B => -1 }}; }}\n\
+             console.log(match (make_{suffix}(1)) {{ A(n) => `{suffix}:${{n}}`, B => \"{suffix}:none\" }});\n\
+             const A(n: first_{suffix}) = make_{suffix}(5) else {{ throw new Error(\"{suffix}\"); }};\n\
+             const piped_{suffix} = size_{suffix} |> step_{suffix};\n\
+             const flowed_{suffix} = flow |> step_{suffix} |> step_{suffix};\n\
+             const kept_{suffix} = match (make_{suffix}(4)) {{ A(n) => {{ var seen_{suffix} = n; return n; }}, B => 0 }};\n"
+        );
+        let code = compile(&source, &Options::default()).expect("tt compile failed");
+        assert!(!code.contains("import "), "{code}");
+        assert!(code.contains("var $tt_ap: "), "{code}");
+        assert!(code.contains("var $tt_fl: "), "{code}");
+        assert!(code.contains("var $tt_show: "), "{code}");
+        assert!(
+            code.contains("// @ts-expect-error\nconst unchecked_"),
+            "{code}"
+        );
+        assert!(
+            code.contains(&format!("const size_{suffix} = $tt_v0$size_{suffix};")),
+            "{code}"
+        );
+        let file = dir.join(format!("{suffix}.ts"));
+        fs::write(&file, code).unwrap();
+        files.push(file);
+    }
+    let consumer = dir.join("c.ts");
+    fs::write(
+        &consumer,
+        "console.log(size_a + size_b, total_a + total_b, measure_a(make_a(3)), first_a + first_b, piped_a, flowed_b(1));\n\
+         console.log(kept_a + kept_b, seen_a + seen_b);\n",
+    )
+    .unwrap();
+    files.push(consumer);
+
+    let out = Command::new("tsc")
+        .args(&files)
+        .arg("--outDir")
+        .arg(dir.join("out"))
+        .args(TSC_FLAGS)
+        .output()
+        .expect("failed to run tsc");
+    assert!(out.status.success(), "{}", tsc_report(&out));
+    let out = Command::new("node")
+        .arg("-e")
+        .arg(
+            "const vm = require('vm'), fs = require('fs');\n\
+             for (const file of process.argv.slice(1)) vm.runInThisContext(fs.readFileSync(file, 'utf8'), { filename: file });",
+        )
+        .args(["a.js", "b.js", "c.js"].map(|name| dir.join("out").join(name)))
+        .output()
+        .expect("failed to run node");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout),
+        "a:1\nb:1\n4 20 6 10 3 3\n8 8\n"
     );
 }
 

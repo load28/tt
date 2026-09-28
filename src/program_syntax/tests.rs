@@ -437,6 +437,33 @@ fn a_whole_variable_initializer_has_an_initialize_continuation() {
 }
 
 #[test]
+fn a_script_classifies_each_global_statement_by_the_bindings_it_declares() {
+    let script = syntax(
+        "variant E { A, B }\nconst out = match (e) { A => 1, B => 2 };\nvar legacy = match (e) { A => 1, B => 2 };\nuse(match (e) { A => 1, B => 2 });\n",
+    );
+    assert!(script.is_script());
+    let classes: Vec<_> = script
+        .overlay
+        .iter()
+        .filter(|entry| entry.category == SyntaxCategory::Expression)
+        .map(|entry| script.globals().get(&entry.host_owner.anchor()).cloned())
+        .collect();
+    assert_eq!(
+        classes,
+        [
+            Some(GlobalStatement::Binding("out".to_owned())),
+            Some(GlobalStatement::Enclose),
+            Some(GlobalStatement::Enclose),
+        ]
+    );
+
+    let module =
+        syntax("variant E { A, B }\nconst out = match (e) { A => 1, B => 2 };\nexport {};\n");
+    assert!(!module.is_script());
+    assert!(module.globals().is_empty());
+}
+
+#[test]
 fn a_short_circuit_rhs_is_a_conditional_protocol_branch() {
     let syntax = syntax("variant E { A, B }\nconst out = ready && match (e) { A => 1, B => 2 };\n");
     let entry = syntax
