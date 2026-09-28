@@ -153,6 +153,9 @@ impl Lower<'_> {
                 Span::new(case.tag_off, case.tag_off + case.tag.len()),
                 AstOrigin::VariantCase,
             );
+            self.hir
+                .source_map
+                .record_owner(case_node, Self::span(case.span));
             // The variant is allocated before its fields so the owner link
             // can be recorded on each field.
             let variant = self.hir.variants.alloc(VariantData {

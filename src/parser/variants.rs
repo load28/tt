@@ -207,6 +207,7 @@ fn parse_variant_cases(mut cur: Cursor) -> Option<Vec<VariantCase>> {
         }
 
         let mut fields = None;
+        let mut end = tag_span.end;
         if cur.at_punct(b'(') {
             let open = cur.idx;
             let close = cur.find_close()?;
@@ -215,9 +216,14 @@ fn parse_variant_cases(mut cur: Cursor) -> Option<Vec<VariantCase>> {
                 close,
                 cur.tokens[close].span.start,
             ))?);
+            end = cur.tokens[close].span.end;
             cur.idx = close + 1;
         }
         cases.push(VariantCase {
+            span: Span {
+                start: tag_span.start,
+                end,
+            },
             tag: tag.to_string(),
             tag_off: tag_span.start,
             fields,

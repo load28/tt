@@ -570,6 +570,7 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
                 "span": declaration_span.map(&span),
                 "cases": e.cases.iter().map(|c| json!({
                     "tag": c.tag,
+                    "nameSpan": c.name_span.map(&span),
                     "span": c.span.map(&span),
                     "unit": c.unit,
                     "fields": c.fields.iter().map(|f| json!({

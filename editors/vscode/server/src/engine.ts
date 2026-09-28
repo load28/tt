@@ -601,6 +601,7 @@ export interface EngineVariantDecl {
 /** One case of an [EngineVariantDecl]. */
 export interface EngineCaseDecl {
   tag: string;
+  nameSpan: EngineSpan | null;
   span: EngineSpan | null;
   unit: boolean;
   fields: { name: string; optional: boolean; ty: string }[];

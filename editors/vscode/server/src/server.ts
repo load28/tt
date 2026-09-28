@@ -1539,11 +1539,7 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
         end: doc.positionAt(e.nameSpan.end),
       },
       children: e.cases.flatMap((c) => {
-        if (!c.span) return [];
-        const tagRange = {
-          start: doc.positionAt(c.span.start),
-          end: doc.positionAt(c.span.end),
-        };
+        if (!c.span || !c.nameSpan) return [];
         return [
           {
             name: c.tag,
@@ -1552,8 +1548,14 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
                 ? `(${c.fields.map((f) => f.name).join(", ")})`
                 : undefined,
             kind: SymbolKind.EnumMember,
-            range: tagRange,
-            selectionRange: tagRange,
+            range: {
+              start: doc.positionAt(c.span.start),
+              end: doc.positionAt(c.span.end),
+            },
+            selectionRange: {
+              start: doc.positionAt(c.nameSpan.start),
+              end: doc.positionAt(c.nameSpan.end),
+            },
           },
         ];
       }),

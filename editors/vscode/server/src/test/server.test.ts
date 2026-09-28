@@ -1123,6 +1123,51 @@ test("or-pattern bindings navigate and rename as one binding across the LSP adap
   }
 });
 
+test("document symbol ranges enclose the whole variant and each case", { skip, timeout }, async () => {
+  const source = [
+    "/** doc */ export declare variant P { R(v: number), Q }",
+    "variant Shape<T> {",
+    "  Circle(radius: T),",
+    "  Point,",
+    "}",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    let symbols: any[] = [];
+    for (let attempt = 0; attempt < 40 && symbols.length === 0; attempt += 1) {
+      const answer = await client.request("textDocument/documentSymbol", { textDocument: { uri } });
+      symbols = Array.isArray(answer.result) ? answer.result : [];
+      if (symbols.length === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const shape = (symbol: any): any => ({
+      range: covered(source, symbol.range),
+      selection: covered(source, symbol.selectionRange),
+      children: (symbol.children ?? []).map(shape),
+    });
+    assert.deepEqual(symbols.map(shape), [
+      {
+        range: "export declare variant P { R(v: number), Q }",
+        selection: "P",
+        children: [
+          { range: "R(v: number)", selection: "R", children: [] },
+          { range: "Q", selection: "Q", children: [] },
+        ],
+      },
+      {
+        range: "variant Shape<T> {\n  Circle(radius: T),\n  Point,\n}",
+        selection: "Shape",
+        children: [
+          { range: "Circle(radius: T)", selection: "Circle", children: [] },
+          { range: "Point", selection: "Point", children: [] },
+        ],
+      },
+    ]);
+  } finally {
+    stop();
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* diagnostic ranges (TASK-116)                                        */
 /* ------------------------------------------------------------------ */

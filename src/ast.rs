@@ -435,6 +435,8 @@ pub(crate) struct VariantDecl {
 /// One case of a tt variant.
 #[derive(Debug)]
 pub(crate) struct VariantCase {
+    /// The complete case, from the tag through the payload's closing `)`.
+    pub span: Span,
     pub tag: String,
     /// Byte offset of the tag, for error reporting.
     pub tag_off: usize,
