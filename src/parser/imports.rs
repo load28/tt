@@ -310,8 +310,8 @@ pub(crate) fn local_export_specifiers(src: &str, tokens: &[Token]) -> Vec<(Strin
     let mut idx = 0usize;
     while let Some(token) = tokens.get(idx) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
             TokenKind::Ident
                 if depth == 0
                     && text(token) == "export"

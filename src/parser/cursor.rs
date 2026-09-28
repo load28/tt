@@ -85,10 +85,11 @@ impl<'t> Cursor<'t> {
         }
     }
 
-    /// The token index of the closer matching the opener at `self.idx`
-    /// (which must be a `( [ { <` punct). Like the byte scanner, only the
-    /// matching pair is counted — and `=>` can never miscount a `< >`
-    /// match because it is a fused [`TokenKind::Arrow`].
+    /// The token index of the closer matching the opener at `self.idx`,
+    /// which must open a bracket pair ([`Token::opens_bracket`]): `(`, `[`,
+    /// `{`, or a `<` the token facts record as opening type arguments or
+    /// parameters. Only the matching pair is counted, so a stray closer of
+    /// another kind never ends the group.
     pub(super) fn find_close(&self) -> Option<usize> {
         find_close_at(self.tokens, self.idx)
     }
@@ -116,21 +117,19 @@ impl<'t> Cursor<'t> {
 
 /// See [`Cursor::find_close`].
 pub(crate) fn find_close_at(tokens: &[Token], open_idx: usize) -> Option<usize> {
-    let open = match tokens.get(open_idx)?.kind {
-        TokenKind::Punct(b @ (b'(' | b'[' | b'{' | b'<')) => b,
+    let opener = tokens.get(open_idx)?;
+    let (open, close) = match opener.kind {
+        TokenKind::Punct(b'(') => (b'(', b')'),
+        TokenKind::Punct(b'[') => (b'[', b']'),
+        TokenKind::Punct(b'{') => (b'{', b'}'),
+        TokenKind::Punct(b'<') if opener.opens_bracket() => (b'<', b'>'),
         _ => return None,
-    };
-    let close = match open {
-        b'{' => b'}',
-        b'(' => b')',
-        b'[' => b']',
-        _ => b'>',
     };
     let mut depth = 0usize;
     for (k, t) in tokens.iter().enumerate().skip(open_idx) {
         match t.kind {
-            TokenKind::Punct(x) if x == open => depth += 1,
-            TokenKind::Punct(x) if x == close => {
+            TokenKind::Punct(x) if x == open && t.opens_bracket() => depth += 1,
+            TokenKind::Punct(x) if x == close && t.closes_bracket() => {
                 depth -= 1;
                 if depth == 0 {
                     return Some(k);

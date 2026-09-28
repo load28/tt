@@ -193,7 +193,7 @@ fn tuple_value_element(cur: &Cursor, body_open: usize) -> Option<TupleValueEleme
                 arm_start = true;
                 continue;
             }
-            TokenKind::Punct(delimiter @ (b'(' | b'[' | b'{')) => {
+            TokenKind::Punct(delimiter) if token.opens_bracket() => {
                 let end = super::cursor::find_close_at(body.tokens, idx)?;
                 if arm_start
                     && delimiter == b'('
@@ -218,8 +218,8 @@ fn value_element(elements: Cursor) -> Option<TupleValueElement> {
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate() {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
             TokenKind::Punct(b',') if depth == 0 => {
                 ranges.push((from, index));
                 from = index + 1;
@@ -291,14 +291,14 @@ fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
     let mut depth = 0usize;
     for token in &tokens[open + 1..] {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']') => depth = depth.saturating_sub(1),
+            _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b'}') => {
                 if depth == 0 {
                     return false; // the body ended with no arm in it
                 }
                 depth -= 1;
             }
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
             TokenKind::Punct(b';') if depth == 0 => return false,
             TokenKind::Arrow if depth == 0 => return true,
             _ => {}
@@ -408,20 +408,17 @@ fn parse_match_complete<'t>(
 
 /// Splits the scrutinee token range `(open..close)` at top-level commas
 /// into `(from, to)` token ranges. `None` means an empty part; one part is
-/// retained for tuple-arity recovery. A structurally closed generic argument
-/// list counts as a bracket; comparison operators remain ordinary expression
-/// tokens and therefore do not hide the tuple comma.
+/// retained for tuple-arity recovery. Type arguments are a bracket pair
+/// where the token facts say so (TASK-495); a comparison operator stays an
+/// ordinary expression token and does not hide the tuple comma.
 fn split_scrutinees(cur: &Cursor, open: usize, close: usize) -> Option<Vec<(usize, usize)>> {
     let mut parts = Vec::new();
     let mut depth = 0usize;
     let mut from = open + 1;
     for k in open + 1..close {
         match cur.tokens[k].kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b'<') if generic_angle_close(cur.tokens, k, close).is_some() => {
-                depth += 1
-            }
-            TokenKind::Punct(b')' | b']' | b'}' | b'>') => depth = depth.saturating_sub(1),
+            _ if cur.tokens[k].opens_bracket() => depth += 1,
+            _ if cur.tokens[k].closes_bracket() => depth = depth.saturating_sub(1),
             TokenKind::Punct(b',') if depth == 0 => {
                 if k == from {
                     return None; // empty part
@@ -437,52 +434,6 @@ fn split_scrutinees(cur: &Cursor, open: usize, close: usize) -> Option<Vec<(usiz
     }
     parts.push((from, close));
     Some(parts)
-}
-
-fn generic_angle_close(tokens: &[Token], open: usize, limit: usize) -> Option<usize> {
-    // Only a closing angle followed by a postfix continuation proves this is
-    // a type-argument list. A comma after `f<A>` remains the same ambiguous
-    // comparison boundary TypeScript assigns it; an invocation such as
-    // `f<A>(x)` is structurally closed and stays one tuple subject.
-    if open == 0
-        || !matches!(
-            tokens[open - 1].kind,
-            TokenKind::Ident | TokenKind::Punct(b')' | b']' | b'>')
-        )
-    {
-        return None;
-    }
-    let mut depth = 1usize;
-    let mut nested = 0usize;
-    for index in open + 1..limit {
-        match tokens[index].kind {
-            TokenKind::Punct(b'(' | b'[') => nested += 1,
-            TokenKind::Punct(b')' | b']') => {
-                if nested == 0 {
-                    return None;
-                }
-                nested -= 1;
-            }
-            _ if nested > 0 => {}
-            TokenKind::Punct(b'<') => depth += 1,
-            TokenKind::Punct(b'>') => {
-                depth -= 1;
-                if depth == 0 {
-                    return matches!(
-                        tokens.get(index + 1).map(|token| &token.kind),
-                        Some(
-                            TokenKind::Punct(b'(' | b'[' | b'.' | b'?' | b'!' | b'>')
-                                | TokenKind::OptChain
-                        )
-                    )
-                    .then_some(index);
-                }
-            }
-            TokenKind::Punct(b';' | b'{' | b'}') => return None,
-            _ => {}
-        }
-    }
-    None
 }
 
 /// Where an arm is in the arm grammar: its pattern, its `if` guard, or its
@@ -547,8 +498,8 @@ pub(super) fn outline_arms(src: &str, tokens: &[Token]) -> Vec<ArmOutline> {
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate() {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
             _ if depth > 0 => {}
             TokenKind::Punct(b',') => {
                 arm.end = index;
@@ -1125,8 +1076,8 @@ fn guard_end(cur: &Cursor) -> Option<(usize, usize)> {
         let t = &cur.tokens[k];
         match t.kind {
             TokenKind::Arrow if depth == 0 => return Some((k, t.span.start)),
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => {
                 if depth == 0 {
                     return None;
                 }
@@ -1149,8 +1100,8 @@ fn expr_body_end(cur: &Cursor) -> (usize, usize) {
     while k < cur.tokens.len() {
         let t = &cur.tokens[k];
         match t.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => {
                 if depth == 0 {
                     return (k, t.span.start);
                 }

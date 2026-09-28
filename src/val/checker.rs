@@ -213,7 +213,7 @@ impl<'a> Checker<'a> {
         let mut k = from;
         while k < to {
             match tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => {
+                _ if tokens[k].opens_bracket() => {
                     k = find_close_at(tokens, k).map_or(to, |close| close + 1);
                     continue;
                 }
@@ -379,7 +379,7 @@ impl<'a> Checker<'a> {
                             arms.insert(j);
                             break;
                         }
-                        TokenKind::Punct(b'(' | b'[' | b'{') => {
+                        _ if tokens[j].opens_bracket() => {
                             j = find_close_at(tokens, j).map_or(end, |c| c + 1);
                         }
                         _ => j += 1,

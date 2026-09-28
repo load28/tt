@@ -237,7 +237,12 @@ impl Machine<'_> {
         self.push_frame(Frame::Type(Type::new()));
     }
 
+    /// Opens a bracketed list of types whose opener is the current token,
+    /// recording on a `<` that it opens type arguments or parameters.
     pub(super) fn open_type_group(&mut self, closer: u8) {
+        if closer == b'>' {
+            self.mark(TokenFacts::TYPE_ARGUMENTS_OPEN);
+        }
         self.push_frame(Frame::TypeGroup(TypeGroup::new(closer)));
         self.open_type();
     }

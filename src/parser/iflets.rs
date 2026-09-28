@@ -241,8 +241,8 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
             }
         }
         match t.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => depth = depth.saturating_sub(1),
             _ => {}
         }
         expr_end = t.span.end;

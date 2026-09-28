@@ -53,6 +53,8 @@ impl TokenFacts {
     const FUNCTION_BODY: u16 = 1 << 6;
     const GENERATOR_BODY: u16 = 1 << 7;
     const CONSTRUCTOR_BODY: u16 = 1 << 8;
+    const TYPE_ARGUMENTS_OPEN: u16 = 1 << 9;
+    const TYPE_ARGUMENTS_CLOSE: u16 = 1 << 10;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -108,6 +110,19 @@ impl TokenFacts {
         self.0 & Self::CONSTRUCTOR_BODY != 0
     }
 
+    /// This `<` opens a list of type arguments or type parameters
+    /// (`f<A, B>(x)`, `new Map<K, V>()`, `function g<T>()`, `Array<T>`),
+    /// which its matching `>` closes: a bracket pair, not a comparison.
+    pub(crate) fn opens_type_arguments(self) -> bool {
+        self.0 & Self::TYPE_ARGUMENTS_OPEN != 0
+    }
+
+    /// This `>` closes the list a `<` with
+    /// [`TokenFacts::opens_type_arguments`] opened.
+    pub(crate) fn closes_type_arguments(self) -> bool {
+        self.0 & Self::TYPE_ARGUMENTS_CLOSE != 0
+    }
+
     /// The statement or expression before this token ends before it: an
     /// automatic semicolon or a statement start separates them.
     pub(crate) fn boundary_before(self) -> bool {
@@ -136,6 +151,8 @@ impl std::fmt::Debug for TokenFacts {
             (Self::FUNCTION_BODY, "function-body"),
             (Self::GENERATOR_BODY, "generator"),
             (Self::CONSTRUCTOR_BODY, "constructor"),
+            (Self::TYPE_ARGUMENTS_OPEN, "type-arguments-open"),
+            (Self::TYPE_ARGUMENTS_CLOSE, "type-arguments-close"),
         ];
         let set: Vec<&str> = names
             .iter()
@@ -552,8 +569,7 @@ impl<'s> Machine<'s> {
             }
             Tk::Punct(b'<') if name && !tok.line_break => {
                 self.push_frame(Frame::Decorator { called, name });
-                self.push_frame(Frame::TypeGroup(TypeGroup::new(b'>')));
-                self.push_frame(Frame::Type(Type::new()));
+                self.open_type_group(b'>');
                 Out::Consumed
             }
             _ => Out::Retry,

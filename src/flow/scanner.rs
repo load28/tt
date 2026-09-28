@@ -292,8 +292,8 @@ impl<'a> Scanner<'a> {
         let mut k = from;
         while k < to {
             match self.tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+                _ if self.tokens[k].opens_bracket() => depth += 1,
+                _ if self.tokens[k].closes_bracket() => depth = depth.saturating_sub(1),
                 TokenKind::Ident if depth == 0 => match self.word(k) {
                     Some("default") if self.is_punct(k + 1, b':') => heads.push((true, k, k + 2)),
                     Some("case") => {
@@ -331,8 +331,8 @@ impl<'a> Scanner<'a> {
         let mut conditionals = 0usize;
         for k in from..to {
             match self.tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+                _ if self.tokens[k].opens_bracket() => depth += 1,
+                _ if self.tokens[k].closes_bracket() => depth = depth.saturating_sub(1),
                 // `?.` and `??` lex as their own tokens, so a bare `?` at
                 // the top level is always a conditional.
                 TokenKind::Punct(b'?') if depth == 0 => conditionals += 1,
@@ -362,8 +362,8 @@ impl<'a> Scanner<'a> {
                 return k;
             }
             match self.tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+                _ if self.tokens[k].opens_bracket() => depth += 1,
+                _ if self.tokens[k].closes_bracket() => depth = depth.saturating_sub(1),
                 TokenKind::Punct(b';') if depth == 0 => return k + 1,
                 _ => {}
             }
@@ -391,8 +391,8 @@ impl<'a> Scanner<'a> {
         let mut first = None;
         for k in from..to {
             match self.tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+                _ if self.tokens[k].opens_bracket() => depth += 1,
+                _ if self.tokens[k].closes_bracket() => depth = depth.saturating_sub(1),
                 TokenKind::Punct(b';') if depth == 0 => match first {
                     None => first = Some(k),
                     Some(first) => return Some((first, k)),
@@ -425,8 +425,8 @@ impl<'a> Scanner<'a> {
         let mut depth = 0usize;
         for k in open..end {
             match self.tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => {
+                _ if self.tokens[k].opens_bracket() => depth += 1,
+                _ if self.tokens[k].closes_bracket() => {
                     depth = depth.checked_sub(1)?;
                     if depth == 0 {
                         return Some(k);

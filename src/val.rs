@@ -543,7 +543,7 @@ fn declarator_eq(tokens: &[Token], idx: usize) -> Option<usize> {
     let mut k = idx + 1;
     while k < tokens.len() {
         match &tokens[k].kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => k = find_close_at(tokens, k)? + 1,
+            _ if tokens[k].opens_bracket() => k = find_close_at(tokens, k)? + 1,
             TokenKind::Punct(b')' | b']' | b'}' | b';' | b',') => return None,
             TokenKind::Punct(b'=') if assignment_op_at(tokens, k) == Some(1) => return Some(k),
             _ => k += 1,
@@ -624,7 +624,7 @@ fn list_entries(tokens: &[Token], open: usize) -> Vec<(usize, usize)> {
     let mut k = start;
     while k < close {
         match &tokens[k].kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => {
+            _ if tokens[k].opens_bracket() => {
                 k = find_close_at(tokens, k).map_or(close, |c| c + 1);
                 continue;
             }
@@ -778,7 +778,7 @@ fn collect_decl_names<'a>(src: &'a str, tokens: &[Token], start: usize) -> Vec<&
         // skip this declarator's type annotation and initializer
         while k < tokens.len() {
             match &tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[' | b'{') => {
+                _ if tokens[k].opens_bracket() => {
                     k = match find_close_at(tokens, k) {
                         Some(c) => c + 1,
                         None => return names,
@@ -812,7 +812,7 @@ fn expression_end(tokens: &[Token], from: usize) -> usize {
     let mut k = from;
     while k < tokens.len() {
         match &tokens[k].kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => {
+            _ if tokens[k].opens_bracket() => {
                 k = match find_close_at(tokens, k) {
                     Some(c) => c + 1,
                     None => return tokens.len(),

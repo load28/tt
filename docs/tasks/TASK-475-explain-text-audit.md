@@ -1,5 +1,7 @@
 # TASK-475: `ttc explain` texts match what the compiler does
 
+> Partly superseded by [TASK-495](./TASK-495-type-argument-bracket-facts.md): `generic_angle_close` is deleted. Whether a `<` in a scrutinee opens type arguments is the token facts' decision (TypeScript's `canFollowTypeArgumentsInExpression`), and `split_scrutinees` balances brackets through `Token::opens_bracket`/`closes_bracket`.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

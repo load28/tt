@@ -501,6 +501,7 @@
 | TASK-491 | Model statement boundaries once, as token facts owned by the lexer | Complete | 2026-09-28 | 2026-09-28 | [TASK-491](./TASK-491-token-facts-statement-boundaries.md) |
 | TASK-492 | Completion reads the parser's arm structure | Complete | 2026-09-28 | 2026-09-28 | [TASK-492](./TASK-492-completion-reads-parser-arm-structure.md) |
 | TASK-494 | Expect an operand after a statement the grammar has completed | Complete | 2026-09-28 | 2026-09-28 | [TASK-494](./TASK-494-operand-goal-after-finished-statements.md) |
+| TASK-495 | Balance type-argument brackets through one token fact | Complete | 2026-09-28 | 2026-09-28 | [TASK-495](./TASK-495-type-argument-bracket-facts.md) |
 | TASK-498 | Count lines once, under the line breaks each consumer speaks | Complete | 2026-09-28 | 2026-09-28 | [TASK-498](./TASK-498-one-line-model.md) |
 
 ## Next task number

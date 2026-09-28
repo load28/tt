@@ -780,3 +780,10 @@ fn a_regex_or_element_after_a_finished_statement_passes_through() {
     assert_passthrough("L: for (;;) {\n  break L\n  / a /.test(\"\");\n}\n");
     assert_passthrough("const f = function () {}\n/ 2 / 1;\n");
 }
+
+#[test]
+fn type_arguments_with_commas_pass_through() {
+    assert_passthrough(
+        "declare function f<A, B>(v: unknown): unknown;\ntype A = 1;\ntype B = 2;\nconst m = new Map<A, B>();\nconst r = f<A, B>(m), s = f<B, A>;\nlet t = (f<A, Map<A, B>>(r), s);\n",
+    );
+}

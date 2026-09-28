@@ -7,7 +7,7 @@
 //! type only on the same line, as in TypeScript's parser; `|`, `&`, and a
 //! qualified name's `.` continue it across a line terminator.
 
-use super::{Frame, Machine, Out, Tk, Tok};
+use super::{Frame, Machine, Out, Tk, Tok, TokenFacts};
 use crate::scanner::{at, ident_end, scan_string, skip_trivia, starts_identifier};
 
 #[derive(Clone, Copy, Debug)]
@@ -179,7 +179,12 @@ impl Machine<'_> {
 
     pub(super) fn type_group(&mut self, group: TypeGroup, tok: &Tok<'_>) -> Out {
         match tok.kind {
-            Tk::Punct(byte) if byte == group.closer => Out::Consumed,
+            Tk::Punct(byte) if byte == group.closer => {
+                if byte == b'>' {
+                    self.mark(TokenFacts::TYPE_ARGUMENTS_CLOSE);
+                }
+                Out::Consumed
+            }
             Tk::Punct(b')' | b']' | b'}') => Out::Retry,
             Tk::Punct(b',' | b':' | b'=' | b';') => {
                 self.push_frame(Frame::TypeGroup(group));

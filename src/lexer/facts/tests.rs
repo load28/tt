@@ -433,6 +433,35 @@ fn a_brace_records_the_function_body_it_opens() {
     );
 }
 
+/// Each `<` and `>` of the source: `(` and `)` where the facts record a
+/// type-argument or type-parameter bracket, `<` and `>` where they do not.
+fn angles(src: &str) -> String {
+    lex_with_kind(src, 0, src.len(), SourceKind::TypeScript)
+        .iter()
+        .filter_map(|token| match token.kind {
+            TokenKind::Punct(b'<') if token.opens_bracket() => Some('('),
+            TokenKind::Punct(b'>') if token.closes_bracket() => Some(')'),
+            TokenKind::Punct(byte @ (b'<' | b'>')) => Some(byte as char),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn type_argument_brackets_are_recorded_on_their_angles() {
+    assert_eq!(angles("f<A, B>(x)\nnew Map<A, Array<B>>()\n"), "()(())");
+    assert_eq!(angles("a < b, c > d\nx << 2 > y\n"), "<><<>");
+    assert_eq!(
+        angles("function g<T>(v: Map<T, T>): Set<T> {}\nclass C<T> extends D<T> {}\n"),
+        "()()()()()"
+    );
+    assert_eq!(angles("let v: Array<number>\nconst e = f<A>\n"), "()()");
+    assert_eq!(
+        angles("match (x) { 1 if f<A, B>(x) => new Map<A, B>(), _ => g<A, B> }\n"),
+        "()()()"
+    );
+}
+
 #[test]
 fn a_regular_expression_is_lexed_where_an_operand_is_expected() {
     for (src, regex) in [

@@ -11,8 +11,8 @@ fn close_of(tokens: &[Token], open: usize) -> Option<usize> {
     let mut depth = 0usize;
     for (index, token) in tokens.iter().enumerate().skip(open) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => {
                 depth = depth.checked_sub(1)?;
                 if depth == 0 {
                     return Some(index);
@@ -30,16 +30,17 @@ fn close_of(tokens: &[Token], open: usize) -> Option<usize> {
 /// single call argument, and so the one reason such a position has to keep
 /// the parentheses codegen wrapped a value in.
 ///
-/// A `,` inside type arguments (`a as Map<K, V>`) counts as top level here,
-/// and so does anything past an unbalanced closer: the answer is only ever
-/// used to *keep* parentheses, so erring that way costs a pair of
-/// parentheses and never a meaning.
+/// A `,` inside type arguments (`a as Map<K, V>`, `f<A, B>(x)`) is inside
+/// a bracket pair, as the token facts record it. Anything past an
+/// unbalanced closer counts as top level: the answer is only ever used to
+/// *keep* parentheses, so erring that way costs a pair of parentheses and
+/// never a meaning.
 pub(crate) fn has_top_level_comma(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
     let mut depth = 0usize;
     for token in &lex_with_kind(src, from, end, kind) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => match depth.checked_sub(1) {
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => match depth.checked_sub(1) {
                 Some(outer) => depth = outer,
                 None => return true,
             },
@@ -88,7 +89,7 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
             }
             1
         }
-        TokenKind::Punct(b'(' | b'[' | b'{') => match close_of(&tokens, 0) {
+        _ if head.opens_bracket() => match close_of(&tokens, 0) {
             Some(close) => close + 1,
             None => return false,
         },
@@ -193,8 +194,8 @@ pub(crate) fn type_parameter_names(generics: &str) -> Vec<String> {
     let mut expecting = true;
     for token in &tokens {
         match token.kind {
-            TokenKind::Punct(b'<' | b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b'>' | b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
             TokenKind::Punct(b',') if depth == 1 => expecting = true,
             TokenKind::Ident if depth == 1 && expecting => {
                 let word = &generics[token.span.start..token.span.end];
@@ -257,7 +258,9 @@ mod tests {
             ("`${a, b}`", false),
             ("/,/.test(s)", false),
             ("x / 2, y", true),
-            ("a as Map<K, V>", true),
+            ("a as Map<K, V>", false),
+            ("f<A, B>(x)", false),
+            ("a < b, c > d", true),
         ] {
             assert_eq!(
                 has_top_level_comma(text, 0, text.len(), SourceKind::TypeScript),

@@ -68,3 +68,55 @@ fn a_match_after_a_regex_statement_after_an_if_compiles() {
     assert!(output.contains("  /`/.test(s) && s;\n"), "{output}");
     assert!(output.contains("switch ($tt_m.kind)"), "{output}");
 }
+
+const TASK_495_PRELUDE: &str = "declare function f<A, B>(v: any): any;\n\
+                                declare function g<A, B>(v: any): Option<number>;\n\
+                                type A = 1;\ntype B = 2;\ndeclare const x: number;\n";
+
+/// A `,` inside type arguments is inside a bracket pair for every tt
+/// construct that splits at a top-level `,` or ends at a top-level token
+/// (TASK-495).
+#[test]
+fn a_comma_inside_type_arguments_stays_inside_its_construct() {
+    for (source, expected) in [
+        (
+            "export const r = match (x) { 1 => f<A, B>(x), _ => 2 };\n",
+            "$tt_v0 = f<A, B>(x);",
+        ),
+        (
+            "export const r = match (x) { 1 => new Map<A, B>(), _ => 2 };\n",
+            "$tt_v0 = new Map<A, B>();",
+        ),
+        (
+            "export const r = match (x) { 1 if f<A, Map<A, B>>(x) => f<B, A>(x), _ => 2 };\n",
+            "if (f<A, Map<A, B>>(x)) {",
+        ),
+        (
+            "export function h() {\n  let Some(v) = g<A, B>(x) else { return 0 };\n  return v;\n}\n",
+            "const $tt_t0 = g<A, B>(x);",
+        ),
+        (
+            "export function h() {\n  if let Some(v) = g<A, B>(x) { return v; }\n  return 0;\n}\n",
+            "const $tt_t0 = g<A, B>(x);",
+        ),
+        (
+            "export const p = x |> f<A, B> |> f<B, A>;\n",
+            "$tt_ap($tt_ap(x, f<A, B>), f<B, A>)",
+        ),
+        (
+            "export const s = match (g<A, B>(x), x) { (Some(v), _) => v, _ => 2 };\n",
+            "const $tt_m0 = g<A, B>(x);",
+        ),
+    ] {
+        let output = ok(&format!("{TASK_495_PRELUDE}{source}"));
+        assert!(output.contains(expected), "{source}\n{output}");
+    }
+}
+
+#[test]
+fn a_comparison_comma_still_separates_scrutinees() {
+    let output = ok("declare const a: number, b: number, c: number;\n\
+         export const r = match (a < b, c > a) { (_, _) => 1 };\n");
+    assert!(output.contains("const $tt_m0 = a < b;"), "{output}");
+    assert!(output.contains("const $tt_m1 = c > a;"), "{output}");
+}

@@ -48,6 +48,30 @@ pub(crate) struct Token {
     pub facts: TokenFacts,
 }
 
+impl Token {
+    /// Whether this token opens a bracket pair: `(`, `[`, `{`, or a `<`
+    /// that opens type arguments or parameters
+    /// ([`TokenFacts::opens_type_arguments`]). Every walk that balances
+    /// brackets asks this, so a `,` inside `f<A, B>` is never top-level.
+    pub(crate) fn opens_bracket(&self) -> bool {
+        match self.kind {
+            TokenKind::Punct(b'(' | b'[' | b'{') => true,
+            TokenKind::Punct(b'<') => self.facts.opens_type_arguments(),
+            _ => false,
+        }
+    }
+
+    /// Whether this token closes a bracket pair: `)`, `]`, `}`, or the `>`
+    /// that closes type arguments or parameters.
+    pub(crate) fn closes_bracket(&self) -> bool {
+        match self.kind {
+            TokenKind::Punct(b')' | b']' | b'}') => true,
+            TokenKind::Punct(b'>') => self.facts.closes_type_arguments(),
+            _ => false,
+        }
+    }
+}
+
 /// What a [`Token`] is. Only the distinctions the parser consumes exist;
 /// everything else is a single-byte `Punct`.
 #[derive(Debug)]

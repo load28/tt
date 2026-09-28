@@ -46,8 +46,8 @@ pub(crate) fn pattern_site_at(src: &str, tokens: &[Token], before: usize) -> Opt
     let mut open = Vec::new();
     for (index, token) in tokens.iter().enumerate().take(before) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => open.push(index),
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if token.opens_bracket() => open.push(index),
+            _ if token.closes_bracket() => {
                 open.pop();
             }
             _ => {}
@@ -214,5 +214,25 @@ mod tests {
         assert!(arms[0].guard.is_some() && arms[0].arrow.is_some());
         assert!(arms[1].guard.is_none() && arms[1].arrow.is_some());
         assert_eq!(arms[2].start, tokens.len());
+    }
+
+    #[test]
+    fn a_comma_inside_type_arguments_is_not_an_arm_separator() {
+        let source = "match (s) { A(x) if f<P, Q>(x) => new Map<P, Q>(), B => g<P, Q>(1), ";
+        let tokens = lex(source);
+        let open = tokens
+            .iter()
+            .position(|token| matches!(token.kind, TokenKind::Punct(b'{')))
+            .expect("body");
+        let headers = arm_headers(source, &tokens, open);
+        assert_eq!(headers.len(), 2);
+        assert!(headers[0].guarded && headers[0].pattern.is_some());
+        assert!(!headers[1].guarded && headers[1].pattern.is_some());
+        assert!(matches!(
+            site(source, "g<P, Q>(1), "),
+            Some(PatternSite::Arm { .. })
+        ));
+        assert_eq!(site(source, "f<P,"), None);
+        assert!(site("match (s) { A(x) if f<P, Q>(x) => 1, B(", "B(").is_some());
     }
 }

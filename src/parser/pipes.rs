@@ -141,8 +141,8 @@ pub(super) fn parse_pipeline(
                 {
                     return None;
                 }
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => depth -= 1,
+                _ if t.opens_bracket() => depth += 1,
+                _ if t.closes_bracket() => depth -= 1,
                 _ => {}
             }
             k += 1;
@@ -282,8 +282,8 @@ fn malformed_pipeline_end(tokens: &[Token], mut k: usize) -> (usize, usize) {
             TokenKind::JsxRaw if depth == 0 => break,
             TokenKind::Punct(b';' | b',') if depth == 0 => break,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth -= 1,
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth -= 1,
             _ => {}
         }
         end = token.span.end;

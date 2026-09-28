@@ -331,9 +331,9 @@ fn recovery_expression_span(
         .map_or(range_end, |token| token.span.end);
     for token in tokens.iter().skip(operator_idx + 1) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
-            TokenKind::Punct(b')' | b']' | b'}') => depth -= 1,
+            _ if token.closes_bracket() => depth -= 1,
             TokenKind::Punct(b';' | b',') if depth == 0 => break,
             _ => recovery_end = token.span.end,
         }
@@ -885,12 +885,9 @@ impl Parser<'_> {
                 stack.push(ExprFrame::StatementHeader);
                 *expr = fresh;
             }
-            TokenKind::Punct(b'(' | b'[' | b'{') => {
+            _ if tok.opens_bracket() => {
                 stack.push(ExprFrame::Resume(*expr));
                 *expr = fresh;
-            }
-            TokenKind::Punct(b')' | b']') => {
-                *expr = restore(stack.pop());
             }
             TokenKind::Punct(b'}') => {
                 let outer = restore(stack.pop());
@@ -899,6 +896,9 @@ impl Parser<'_> {
                 } else {
                     (i + 1, false)
                 };
+            }
+            _ if tok.closes_bracket() => {
+                *expr = restore(stack.pop());
             }
             TokenKind::Punct(b';' | b',') => *expr = (i + 1, false),
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {

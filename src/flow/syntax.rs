@@ -195,8 +195,8 @@ pub(super) fn concise_arrow_end(tokens: &[Token], from: usize) -> usize {
             return index;
         }
         match tokens[index].kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if tokens[index].opens_bracket() => depth += 1,
+            _ if tokens[index].closes_bracket() => {
                 if depth == 0 {
                     return index;
                 }

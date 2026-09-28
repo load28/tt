@@ -80,8 +80,13 @@ arguments, heritage clauses, and type aliases — that the lexer drives one
 token at a time. It records `TokenFacts` on every token: a line terminator
 before it, whether it completes an operand, whether an automatic semicolon
 precedes it (§12.10.1, restricted productions included), whether it starts
-a statement, whether it is a label or a member name, and, on a `{`, whether
-it opens a function body (a generator's or a constructor's). The lexer's own
+a statement, whether it is a label or a member name, on a `{`, whether
+it opens a function body (a generator's or a constructor's), and, on a `<`
+and its `>`, whether they bracket type arguments or type parameters
+(TASK-495). `Token::opens_bracket` and `Token::closes_bracket` read that
+last fact, and every bracket walk in the parser, flow, `val`, completion,
+and the lexer's token queries balances brackets through them, so a `,`
+inside `f<A, B>(x)` is never taken for a top-level separator. The lexer's own
 regular-expression, JSX, and leading-`.` number decisions are the machine's
 "an operand is expected here" (the `InputElementRegExp` goal of ECMA-262
 §12), which the machine answers with its own transitions (TASK-494): it

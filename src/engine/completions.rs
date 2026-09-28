@@ -293,8 +293,8 @@ fn innermost_paren(tokens: &[Token], start: usize, before: usize) -> Option<Opti
     let mut open = Vec::new();
     for (index, token) in tokens.iter().enumerate().take(before).skip(start) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => open.push(index),
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if token.opens_bracket() => open.push(index),
+            _ if token.closes_bracket() => {
                 open.pop();
             }
             _ => {}
