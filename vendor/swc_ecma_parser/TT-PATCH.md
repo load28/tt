@@ -35,8 +35,21 @@ returned before the operator. acorn had the same defect
 (acornjs/acorn#475). `tests/swc_arrow_asi.rs` and `tests/passthrough.rs` in
 the parent repository cover it (TASK-497).
 
-`tests/jsx_entities.rs` and `tests/swc_arrow_asi.rs` in the parent repository
-test the dependency directly.
+Local change: `src/parser/typescript.rs`, `parse_ts_import_type` reads type
+arguments only when no line break precedes the `<` (or `<<`), as
+`parse_ts_type_ref` and `parse_ts_type_query` already did. TypeScript's
+`parseImportType` reads them through `parseTypeArgumentsOfTypeReference`,
+which requires `!scanner.hasPrecedingLineBreak()` and rescans `<<` as `<`.
+Upstream read `let x: typeof import("x")⏎<any>y` as `import("x")<any>`
+followed by `y` ("Expected a semicolon"), and in TSX read the `<b>` of a JSX
+element on the next line as a type argument list; TypeScript ends the
+declaration at the line break. No upstream SWC issue for this shape was
+found. `tests/swc_import_type_arguments.rs` and `tests/passthrough.rs` in
+the parent repository cover it (TASK-502).
+
+`tests/jsx_entities.rs`, `tests/swc_arrow_asi.rs`, and
+`tests/swc_import_type_arguments.rs` in the parent repository test the
+dependency directly.
 The direct path dependency also applies when ttc is built by the standalone
 fuzz workspace. Remove this vendored copy only after an upstream version
 passes these regressions without the patch. This copy retains upstream source,

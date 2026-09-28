@@ -883,3 +883,24 @@ fn contextual_type_and_statement_words_pass_through() {
         }
     }
 }
+
+#[test]
+fn a_line_after_an_import_type_is_not_its_type_arguments() {
+    for source in [
+        "declare const y: any;\nlet x: typeof import(\"x\")\n<any>y\n",
+        "declare const y: any;\nlet x: import(\"x\")\n<any>y\n",
+        "declare const y: any;\nlet x: import(\"x\").A\n<any>y\n",
+        "let x: import(\"x\").A<any>;\n",
+        "let x: typeof import(\"x\")<any>;\n",
+        "let x: import(\"x\")<<T>() => T>;\n",
+    ] {
+        assert_passthrough(source);
+    }
+    for source in [
+        "let x: typeof import(\"x\")\n<b>hi</b>\n",
+        "let x: import(\"x\").A\n<b>hi</b>\n",
+        "let x: import(\"x\").A<any>;\n",
+    ] {
+        assert_tsx_passthrough(source);
+    }
+}

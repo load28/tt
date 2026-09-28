@@ -4210,7 +4210,9 @@ impl<I: Tokens> Parser<I> {
             None
         };
 
-        let type_args = if self.input().is(Token::Lt) {
+        let type_args = if !self.input().had_line_break_before_cur()
+            && (self.input().is(Token::Lt) || self.input().is(Token::LShift))
+        {
             let ret = self.do_outside_of_context(
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,

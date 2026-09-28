@@ -509,6 +509,7 @@
 | TASK-499 | Read a parenthesized arrow return type the way TypeScript does | Complete | 2026-09-28 | 2026-09-28 | [TASK-499](./TASK-499-parenthesized-return-type-arrow.md) |
 | TASK-500 | Read an import-equals module reference as TypeScript's grammar does | Complete | 2026-09-28 | 2026-09-28 | [TASK-500](./TASK-500-import-equals-module-reference.md) |
 | TASK-501 | Compose hoisted values inside pipeline operands like any other expression owner | Complete | 2026-09-28 | 2026-09-28 | [TASK-501](./TASK-501-hoisted-values-in-pipeline-operands.md) |
+| TASK-502 | End an import type at a line break before a `<` | Complete | 2026-09-28 | 2026-09-28 | [TASK-502](./TASK-502-import-type-arguments-line-break.md) |
 | TASK-503 | Read contextual type and declaration words under TypeScript's lookahead rules | Complete | 2026-09-28 | 2026-09-28 | [TASK-503](./TASK-503-contextual-word-lookahead.md) |
 
 ## Next task number
