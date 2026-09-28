@@ -870,3 +870,63 @@ fn jumps_owned_inside_a_result_block_still_compile() {
     assert!(out.contains("break inner;"), "{out}");
     assert!(out.contains("continue inner;"), "{out}");
 }
+
+/* ------------------------------------------------------------------ */
+/* TASK-482 automatic semicolon boundaries after postfix and restricted */
+/* ------------------------------------------------------------------ */
+
+#[test]
+fn an_if_let_after_an_automatic_semicolon_boundary_starts_a_statement() {
+    let prelude = "variant O { Some(value: number), None }\n\
+                   declare const o: O;\n\
+                   declare function g(x: unknown): number;\n";
+    for body in [
+        "function f() {\n  let q = 1\n  q++\n  if let Some(value) = o { g(value); }\n}",
+        "function f() {\n  let q = 1\n  q--\n  if let Some(value) = o { g(value); }\n}",
+        "function f(p: number | undefined) {\n  p!\n  if let Some(value) = o { g(value); }\n}",
+        "function f(p: { a?: number }) {\n  p.a!!\n  if let Some(value) = o { g(value); }\n}",
+        "function f() {\n  const k = [1] as const\n  if let Some(value) = o { g(value); }\n}",
+        "function f() {\n  return\n  if let Some(value) = o { g(value); }\n}",
+        "function* f() {\n  yield\n  if let Some(value) = o { g(value); }\n}",
+        "function f() {\n  const k = { return: 1 }.return\n  if let Some(value) = o { g(value); }\n}",
+        "function f() {\n  for (;;) {\n    break\n    if let Some(value) = o { g(value); }\n  }\n}",
+    ] {
+        let source = format!("{prelude}{body}\n");
+        assert_eq!(codes(&source), vec![], "{body}");
+        let out = ok(&source);
+        assert!(out.contains(".kind === \"Some\""), "{out}");
+    }
+    let out = ok_tsx(&format!(
+        "{prelude}export const e = <button onClick={{() => {{\n  let q = 1\n  q++\n  if let Some(value) = o {{ g(value); }}\n}}}} />;\n"
+    ));
+    assert!(out.contains(".kind === \"Some\""), "{out}");
+}
+
+#[test]
+fn a_pipeline_head_starts_after_a_postfix_or_restricted_boundary() {
+    let prelude = "declare const o: number;\n";
+    for (body, head) in [
+        ("let q = 1\nq++\no |> String;", "q++\n$tt_ap(o, String)"),
+        ("let p: number | undefined\np!\no |> String;", "p!\n$tt_ap(o, String)"),
+        ("const k = [1] as const\no |> String;", "as const\n$tt_ap(o, String)"),
+        ("function f() {\n  return\n  o |> String;\n}", "return\n  $tt_ap(o, String)"),
+    ] {
+        let out = ok(&format!("{prelude}{body}\n"));
+        assert!(out.contains(head), "{body}\n{out}");
+    }
+}
+
+#[test]
+fn a_line_break_inside_an_expression_still_continues_it() {
+    let prelude = "variant O { Some(value: number), None }\n\
+                   declare let q: number;\n\
+                   declare const o: O;\n\
+                   declare const p: ((x: number) => number) | undefined;\n";
+    for body in [
+        "const x = q++\n  + if let Some(value) = o { value };",
+        "const x = p!\n  (if let Some(value) = o { value });",
+    ] {
+        let source = format!("{prelude}{body}\n");
+        assert_eq!(codes(&source), [DiagnosticCode::IfLetPlacement], "{body}");
+    }
+}

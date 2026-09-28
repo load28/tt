@@ -342,18 +342,79 @@ pub(crate) fn asi_boundary_at(src: &str, tokens: &[Token], at: usize) -> bool {
         return false;
     };
     line_break_after_expression(src, tokens, at)
-        && !continues_expression_after_line_break(src, tokens, at, token)
+        && (restricted_production_ends_at(src, tokens, at - 1)
+            || !continues_expression_after_line_break(src, tokens, at, token))
 }
 
 fn line_break_after_expression(src: &str, tokens: &[Token], at: usize) -> bool {
-    at.checked_sub(1)
-        .and_then(|previous| tokens.get(previous))
-        .is_some_and(|previous| {
-            token_ends_expression(src, previous)
-                && !(matches!(previous.kind, TokenKind::Ident)
-                    && TYPE_OPERATOR_WORDS.contains(&&src[previous.span.start..previous.span.end]))
-        })
-        && line_break_before_tokens(src, tokens, at)
+    line_break_before_tokens(src, tokens, at)
+        && (expression_ends_at(src, tokens, at - 1)
+            || restricted_production_ends_at(src, tokens, at - 1))
+}
+
+fn restricted_production_ends_at(src: &str, tokens: &[Token], index: usize) -> bool {
+    let token = &tokens[index];
+    matches!(token.kind, TokenKind::Ident)
+        && matches!(&src[token.span.start..token.span.end], "return" | "yield")
+        && !follows_member_access(tokens, index)
+}
+
+fn follows_member_access(tokens: &[Token], index: usize) -> bool {
+    let Some(before) = index.checked_sub(1) else {
+        return false;
+    };
+    match tokens[before].kind {
+        TokenKind::OptChain => true,
+        TokenKind::Punct(b'.') => !before.checked_sub(1).is_some_and(|dot| {
+            matches!(tokens[dot].kind, TokenKind::Punct(b'.'))
+                && tokens[dot].span.end == tokens[before].span.start
+        }),
+        _ => false,
+    }
+}
+
+fn expression_ends_at(src: &str, tokens: &[Token], mut index: usize) -> bool {
+    loop {
+        let token = &tokens[index];
+        let operator = match token.kind {
+            TokenKind::Punct(byte @ (b'+' | b'-')) => {
+                let Some(first) = index.checked_sub(1) else {
+                    return false;
+                };
+                if !matches!(tokens[first].kind, TokenKind::Punct(other) if other == byte)
+                    || tokens[first].span.end != token.span.start
+                {
+                    return false;
+                }
+                first
+            }
+            TokenKind::Punct(b'!') => index,
+            TokenKind::Ident => return word_ends_expression(src, tokens, index),
+            _ => return token_ends_expression(src, token),
+        };
+        let Some(operand) = operator.checked_sub(1) else {
+            return false;
+        };
+        if line_break_before_tokens(src, tokens, operator) {
+            return false;
+        }
+        index = operand;
+    }
+}
+
+fn word_ends_expression(src: &str, tokens: &[Token], index: usize) -> bool {
+    let token = &tokens[index];
+    let word = &src[token.span.start..token.span.end];
+    if follows_member_access(tokens, index) {
+        return true;
+    }
+    if word == "const" {
+        return index.checked_sub(1).is_some_and(|before| {
+            matches!(tokens[before].kind, TokenKind::Ident)
+                && &src[tokens[before].span.start..tokens[before].span.end] == "as"
+        });
+    }
+    !TYPE_OPERATOR_WORDS.contains(&word) && token_ends_expression(src, token)
 }
 
 pub(super) fn brace_starts_statement(src: &str, tokens: &[Token], at: usize, k: usize) -> bool {
@@ -456,7 +517,7 @@ pub(super) fn line_break_before_tokens(src: &str, tokens: &[Token], at: usize) -
     ) else {
         return false;
     };
-    src[previous.span.end..token.span.start].contains('\n')
+    src.as_bytes()[previous.span.end..token.span.start].contains(&b'\n')
 }
 
 pub(super) fn function_target_brace(
