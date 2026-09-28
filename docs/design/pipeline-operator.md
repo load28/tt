@@ -126,6 +126,22 @@ tt 파서는 의도적으로 **오류 없는 바이트 단위 구조 파서**다
 파일"** 계약은 깨지지 않는다 — `variant`/`match`/`try`와 달리 오인 가능한 유효 TS
 형태 자체가 존재하지 않는다.
 
+### 3.5 Type assertions after a step (TASK-454)
+
+A step is an expression that evaluates to a function, so it extends over
+binary operators and the emitted call groups a step that is not a primary
+expression: `x |> f ?? g` is `(f ?? g)(x)`. `as T` and `satisfies T` take a
+type, never an expression, so a top-level `as` or `satisfies` after a complete
+step operand ends the step and applies to the pipeline value built so far:
+`1 |> String as string` is `(1 |> String) as string`. A later `|>` continues
+from the asserted value, which makes `as`/`satisfies` and `|>` read left to
+right at one level: `x |> f as string |> .length` is
+`((x |> f) as string) |> .length`. The head already extends over an assertion
+(`x as number |> f`), so this is the same grouping on both sides. To assert
+the step's function, parenthesize it: `x |> (f as F)`. TypeScript does not
+continue an expression with an `as` or `satisfies` on the next line, so that
+spelling is a `source-not-typescript` error, as it is in TypeScript.
+
 ## 4. 컴파일 결과
 
 문맥 타입과 평가 순서를 함께 보존해야 하는 적용 스텝은 프로젝트 공용 런타임의

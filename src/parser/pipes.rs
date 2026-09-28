@@ -22,7 +22,7 @@
 //! parenthesized (a normative rule, like the match scrutinee parens) — and
 //! the unclaimed `|>` is recorded for the semantic phase to report.
 
-use super::cursor::dotted_at;
+use super::cursor::{dotted_at, ends_expression};
 use crate::ast::{PipeExpr, PipeHeadKind, PipeStep, PipeStepKind, Span};
 use crate::lexer::{Token, TokenKind};
 
@@ -52,6 +52,21 @@ fn head_kind(
         "super" => PipeHeadKind::BareSuper,
         _ => PipeHeadKind::Expression,
     }
+}
+
+pub(super) fn asserted(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+    tokens.get(k).is_some_and(|token| {
+        matches!(token.kind, TokenKind::Ident) && asserts_pipeline(src, tokens, from, k)
+    })
+}
+
+fn asserts_pipeline(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+    k > from
+        && matches!(
+            &src[tokens[k].span.start..tokens[k].span.end],
+            "as" | "satisfies"
+        )
+        && ends_expression(src, tokens, from, k - 1)
 }
 
 /// `tokens[pipe_idx]` is a `|>` token and `tokens[head_idx..pipe_idx]` is
@@ -100,6 +115,11 @@ pub(super) fn parse_pipeline(
                 TokenKind::Punct(b';' | b',') if depth == 0 => break,
                 TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
                 TokenKind::Punct(b':') if depth == 0 && case_test => break,
+                TokenKind::Ident
+                    if depth == 0 && asserts_pipeline(parser.src, tokens, step_from, k) =>
+                {
+                    break;
+                }
                 TokenKind::Punct(b'?' | b':') if depth == 0 => return None,
                 TokenKind::Arrow if depth == 0 => return None,
                 TokenKind::Punct(b'=') if depth == 0 && is_assignment_eq(parser.bytes, t.span) => {

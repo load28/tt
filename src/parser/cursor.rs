@@ -153,7 +153,7 @@ pub(super) fn brace_begins_expression(src: &str, tokens: &[Token], from: usize, 
 /// identifier, a literal, or a closer. An operator, a keyword that takes
 /// an operand, and a JSX run (whose `{` opens an expression container)
 /// cannot.
-fn ends_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+pub(super) fn ends_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
     let token = &tokens[k];
     match token.kind {
         TokenKind::Ident => {

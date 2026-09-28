@@ -457,3 +457,32 @@ fn a_generated_parse_failure_is_located_at_the_construct_that_generated_it() {
         );
     }
 }
+
+#[test]
+fn a_type_assertion_after_a_pipeline_step_applies_to_the_whole_pipeline() {
+    let out = compact(&ok("declare const f: (n: number) => string;\nconst d = 1 |> String as string;\nconst e = 1 |> String satisfies string;\nconst g = 1 |> ((x: number) => x) as number;\nconst h = 1 |> f as string | undefined;\nconst k = flow |> f as (n: number) => string;\nconst m = [1 |> f as string |> .length satisfies number |> String, 2];\n"));
+    assert!(out.contains("const d = String(1) as string;"), "{out}");
+    assert!(out.contains("const e = String(1) satisfies string;"), "{out}");
+    assert!(out.contains("const g = ((x: number) => x)(1) as number;"), "{out}");
+    assert!(out.contains("const h = f(1) as string | undefined;"), "{out}");
+    assert!(out.contains("const k = f as (n: number) => string;"), "{out}");
+    assert!(
+        out.contains("const m = [$tt_ap((f(1) as string).length satisfies number, String), 2];"),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_pipeline_step_that_is_not_a_primary_expression_is_called_as_a_group() {
+    let out = compact(&ok("declare const f: ((n: number) => string) | undefined;\ndeclare const g: (n: number) => string;\ndeclare const as: (n: number) => string;\nconst a = 1 |> f ?? g;\nconst b = 1 |> await Promise.resolve(g);\nconst c = 1 |> as;\nexport {};\n"));
+    assert!(out.contains("const a = (f ?? g)(1);"), "{out}");
+    assert!(out.contains("const b = (await Promise.resolve(g))(1);"), "{out}");
+    assert!(out.contains("const c = as(1);"), "{out}");
+}
+
+#[test]
+fn a_type_assertion_on_the_line_after_a_pipeline_is_rejected_as_typescript_rejects_it() {
+    let report = ttc::compile_report("const d = 1 |> String\n  as string;\n", &Options::default());
+    let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
+    assert_eq!(codes, [DiagnosticCode::SourceNotTypeScript], "{:#?}", report.diagnostics);
+}

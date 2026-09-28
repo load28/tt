@@ -551,7 +551,9 @@ impl Parser<'_> {
                         segments.push(Segment::Pipe(pipe));
                         seg_start = pipe_end;
                         i = next_i;
-                        expr = (i, false);
+                        if !pipes::asserted(self.src, tokens, expr.0, i) {
+                            expr = (i, false);
+                        }
                         continue;
                     }
                     stray_pipes.push(tok.span.start);

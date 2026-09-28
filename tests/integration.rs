@@ -1028,3 +1028,21 @@ try { k("c" as unknown as "a"); } catch (e) { console.log((e as globalThis.Error
         ]
     );
 }
+
+#[test]
+fn runtime_a_type_assertion_after_a_pipeline_asserts_the_piped_value() {
+    require_toolchain!();
+    let out = run(r#"
+const maybe = undefined as ((n: number) => string) | undefined;
+const twice = (n: number) => n * 2;
+const d = 1 |> String as string;
+const e = 2 |> twice satisfies number;
+const g = 3 |> ((x: number) => x + 1) as number;
+const h = 4 |> twice as number |> String satisfies string |> .length;
+const k = flow |> twice as (n: number) => number;
+const l = 5 |> (maybe ?? String);
+const m = 6 |> maybe ?? String;
+console.log(d, e, g, h, k(7), l, m);
+"#);
+    assert_eq!(out, ["1 4 4 1 14 5 6"]);
+}
