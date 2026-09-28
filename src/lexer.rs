@@ -8,10 +8,13 @@
 //! ordered and non-overlapping, so any construct the parser lifts maps
 //! back to an exact byte range of the source.
 //!
-//! Like the previous byte scan loop, the lexer decides regex-vs-division
-//! with the preceding-token heuristic, and template literals are lexed
-//! hierarchically: a [`TokenKind::Template`] token carries its raw chunks
-//! and the pre-lexed token stream of every `${ }` interpolation.
+//! The lexer drives the token facts machine ([`facts`]) as it goes: the
+//! machine's grammar position decides regex-vs-division and whether a `<`
+//! opens JSX, and every token carries the [`TokenFacts`] the machine
+//! recorded for it — line terminators before it, automatic semicolons,
+//! statement starts. Template literals are lexed hierarchically: a
+//! [`TokenKind::Template`] token carries its raw chunks and the pre-lexed
+//! token stream of every `${ }` interpolation.
 //!
 //! The only multi-byte operators fused into single tokens are the five the
 //! parser must treat as units: `=>` (never an `=` or a `< >` bracket),
@@ -25,9 +28,11 @@ use crate::SourceKind;
 use crate::ast::Span;
 use crate::scanner::*;
 
+mod facts;
 mod names;
 pub(crate) mod pragmas;
 mod validation;
+pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use validation::host_syntax_error;
 
@@ -36,6 +41,7 @@ pub(crate) use validation::host_syntax_error;
 pub(crate) struct Token {
     pub kind: TokenKind,
     pub span: Span,
+    pub facts: TokenFacts,
 }
 
 /// What a [`Token`] is. Only the distinctions the parser consumes exist;
@@ -53,7 +59,7 @@ pub(crate) enum TokenKind {
     /// overwhelmingly common one-byte `Punct` keeps [`Token`] small — the
     /// token stream of a large file is the compiler's biggest allocation.
     Template(Box<[TplPart]>),
-    /// A regex literal, decided by the preceding-token heuristic.
+    /// A regex literal: a `/` where the grammar expects an operand.
     Regex,
     /// A raw JSX run. Its bytes are opaque to the tt parser; JSX expression
     /// containers are lexed recursively and appear as ordinary tokens between
@@ -95,7 +101,34 @@ pub(crate) fn lex_with_kind(
     end: usize,
     source_kind: SourceKind,
 ) -> Vec<Token> {
-    lex_region(src_str, start, end, source_kind, false).0
+    lex_region(
+        src_str,
+        start,
+        end,
+        source_kind,
+        facts::Start::Statements,
+        false,
+        None,
+    )
+    .0
+}
+
+/// Every statement span the facts machine recognizes in `src`, nested
+/// regions included, in completion order: the validator that holds the
+/// machine to SWC's statement spans.
+#[cfg(test)]
+pub(crate) fn statement_spans(src: &str, source_kind: SourceKind) -> Vec<Span> {
+    let mut trace = Vec::new();
+    lex_region(
+        src,
+        0,
+        src.len(),
+        source_kind,
+        facts::Start::Statements,
+        false,
+        Some(&mut trace),
+    );
+    trace
 }
 
 /// Whether `offset` lies inside a comment of `src[start..end]`, a range
@@ -129,112 +162,193 @@ pub(crate) fn comment_at(src: &str, start: usize, end: usize, offset: usize) -> 
     false
 }
 
-/// Lex a JavaScript expression container in the same lexical mode as its file.
-/// Nested JSX, templates, strings and regexes own their delimiters.
+/// A statement trace for the facts validator: every statement span each
+/// machine recognizes, nested regions included.
+type Trace<'t> = Option<&'t mut Vec<Span>>;
+
+/// The byte just past the numeric literal starting at `i` (a digit, or a
+/// `.` before one): digits and separators, a fraction, an exponent, a radix
+/// prefix, and a BigInt suffix.
+fn number_end(src: &[u8], i: usize, end: usize) -> usize {
+    let digits = |mut j: usize, hex: bool| {
+        while let Some(b) = at(src, j, end) {
+            if b.is_ascii_digit() || b == b'_' || (hex && b.is_ascii_hexdigit()) {
+                j += 1;
+            } else {
+                break;
+            }
+        }
+        j
+    };
+    let mut j;
+    if src[i] == b'0'
+        && matches!(
+            at(src, i + 1, end),
+            Some(b'x' | b'X' | b'o' | b'O' | b'b' | b'B')
+        )
+    {
+        j = digits(i + 2, true);
+    } else {
+        j = digits(i, false);
+        if at(src, j, end) == Some(b'.') {
+            j = digits(j + 1, false);
+        }
+        if matches!(at(src, j, end), Some(b'e' | b'E')) {
+            let mut k = j + 1;
+            if matches!(at(src, k, end), Some(b'+' | b'-')) {
+                k += 1;
+            }
+            if at(src, k, end).is_some_and(|b| b.is_ascii_digit()) {
+                j = digits(k, false);
+            }
+        }
+    }
+    if at(src, j, end) == Some(b'n') {
+        j += 1;
+    }
+    j
+}
+
+/// Lexes `src[start..end]` from grammar position `mode`. A `braced` region
+/// is a JavaScript expression container or template interpolation and ends
+/// at its unmatched `}`, whose index is returned.
 fn lex_region(
     src_str: &str,
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    mode: facts::Start,
     braced: bool,
+    mut trace: Trace<'_>,
 ) -> (Vec<Token>, usize) {
     let src = src_str.as_bytes();
+    let mut machine = facts::Machine::new(src_str, end, mode, trace.is_some());
     let mut brace_depth = 0usize;
     // Significant tokens run about one per six source bytes across real
     // TypeScript, so sizing up front spares the repeated doubling that
     // dominated lexing on large files.
     let mut tokens: Vec<Token> = Vec::with_capacity((end - start) / 6 + 8);
     let mut i = start;
-    // Regex-heuristic state, same rules as the previous scan loop: the last
-    // identifier scanned, or the last significant byte otherwise.
-    let mut prev_word: &str = "";
-    let mut prev_sig: u8 = 0;
-
+    if start == 0 && !braced && src.starts_with(b"#!") {
+        i = line_end(src, 0, end);
+    }
+    let mut number_until = 0usize;
     let span = |start: usize, end: usize| Span { start, end };
+    let tok = |kind: facts::Tk, start: usize, end: usize, line_break: bool| facts::Tok {
+        kind,
+        text: &src_str[start..end],
+        span: Span { start, end },
+        line_break,
+    };
 
-    while i < end {
+    let close = loop {
+        let (next, line_break) = skip_trivia(src, i, end);
+        i = next;
+        if i >= end {
+            break end;
+        }
         let c = src[i];
         if braced && c == b'}' && brace_depth == 0 {
-            return (tokens, i);
+            break i;
         }
 
-        if is_ws(c) {
-            i += 1;
-            continue;
-        }
-
-        // comments — trivia
-        if c == b'/' && at(src, i + 1, end) == Some(b'/') {
-            i = line_end(src, i, end);
-            continue;
-        }
-        if c == b'/' && at(src, i + 1, end) == Some(b'*') {
-            i = match find_subslice(src, b"*/", i + 2, end) {
-                Some(e) => e + 2,
-                None => end,
+        if i < number_until {
+            let word = starts_identifier(src, i, end);
+            let (kind, e) = if word {
+                (TokenKind::Ident, ident_end(src, i, end))
+            } else {
+                (TokenKind::Punct(c), i + 1)
             };
+            tokens.push(Token {
+                kind,
+                span: span(i, e),
+                facts: machine.continuation(span(i, e)),
+            });
+            i = e;
             continue;
         }
 
         if c == b'"' || c == b'\'' {
             let e = scan_string(src, i, end);
+            let facts = machine.push(tok(facts::Tk::Str, i, e, line_break));
             tokens.push(Token {
                 kind: TokenKind::Str,
                 span: span(i, e),
+                facts,
             });
-            prev_sig = c;
-            prev_word = "";
             i = e;
             continue;
         }
 
         if c == b'`' {
-            let (e, parts) = lex_template(src_str, i, end, source_kind);
+            let (e, parts) = lex_template(src_str, i, end, source_kind, trace.as_deref_mut());
+            let facts = machine.push(tok(facts::Tk::Template, i, e, line_break));
             tokens.push(Token {
                 kind: TokenKind::Template(parts.into_boxed_slice()),
                 span: span(i, e),
+                facts,
             });
-            prev_sig = b'`';
-            prev_word = "";
             i = e;
             continue;
         }
 
         if source_kind.is_tsx()
             && c == b'<'
-            && jsx_allowed(prev_sig, prev_word)
-            && let Some(jsx) = scan_jsx(src_str, i, end, source_kind)
+            && machine.operand_expected()
+            && let Some(jsx) = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())
         {
+            let first = tokens.len();
             tokens.extend(jsx.tokens);
-            prev_sig = b'>';
-            prev_word = "";
+            let facts = machine.push(tok(facts::Tk::Jsx, i, jsx.end, line_break));
+            if let Some(opening) = tokens.get_mut(first) {
+                opening.facts = facts;
+            }
+            if let Some(closing) = tokens.last_mut() {
+                closing.facts = closing.facts.ending_expression();
+            }
             i = jsx.end;
             continue;
         }
 
         if c == b'/'
-            && regex_allowed(prev_sig, prev_word)
+            && machine.operand_expected()
             && let Some(e) = scan_regex(src, i, end)
         {
+            let facts = machine.push(tok(facts::Tk::Regex, i, e, line_break));
             tokens.push(Token {
                 kind: TokenKind::Regex,
                 span: span(i, e),
+                facts,
             });
-            prev_sig = b'/';
-            prev_word = "";
             i = e;
             continue;
         }
 
         if starts_identifier(src, i, end) {
             let j = ident_end(src, i, end);
+            let facts = machine.push(tok(facts::Tk::Word, i, j, line_break));
             tokens.push(Token {
                 kind: TokenKind::Ident,
                 span: span(i, j),
+                facts,
             });
-            prev_word = &src_str[i..j];
-            prev_sig = src[j - 1];
             i = j;
+            continue;
+        }
+
+        if c.is_ascii_digit()
+            || (c == b'.'
+                && at(src, i + 1, end).is_some_and(|b| b.is_ascii_digit())
+                && machine.operand_expected())
+        {
+            number_until = number_end(src, i, end);
+            let facts = machine.push(tok(facts::Tk::Number, i, number_until, line_break));
+            tokens.push(Token {
+                kind: TokenKind::Punct(c),
+                span: span(i, i + 1),
+                facts,
+            });
+            i += 1;
             continue;
         }
 
@@ -246,23 +360,29 @@ fn lex_region(
                 brace_depth -= 1;
             }
         }
-        let (kind, len) = match (c, at(src, i + 1, end)) {
-            (b'=', Some(b'>')) => (TokenKind::Arrow, 2),
-            (b'|', Some(b'|')) => (TokenKind::OrOr, 2),
-            (b'|', Some(b'>')) => (TokenKind::PipeOp, 2),
-            (b'?', Some(b'.')) => (TokenKind::OptChain, 2),
-            (b'?', Some(b'?')) => (TokenKind::Coalesce, 2),
-            _ => (TokenKind::Punct(c), 1),
+        let (kind, machine_kind, len) = match (c, at(src, i + 1, end)) {
+            (b'=', Some(b'>')) => (TokenKind::Arrow, facts::Tk::Arrow, 2),
+            (b'|', Some(b'|')) => (TokenKind::OrOr, facts::Tk::OrOr, 2),
+            (b'|', Some(b'>')) => (TokenKind::PipeOp, facts::Tk::Pipe, 2),
+            (b'?', Some(b'.')) if !at(src, i + 2, end).is_some_and(|b| b.is_ascii_digit()) => {
+                (TokenKind::OptChain, facts::Tk::OptChain, 2)
+            }
+            (b'?', Some(b'?')) => (TokenKind::Coalesce, facts::Tk::Coalesce, 2),
+            _ => (TokenKind::Punct(c), facts::Tk::Punct(c), 1),
         };
+        let facts = machine.push(tok(machine_kind, i, i + len, line_break));
         tokens.push(Token {
             kind,
             span: span(i, i + len),
+            facts,
         });
-        prev_sig = src[i + len - 1];
-        prev_word = "";
         i += len;
+    };
+    let statements = machine.finish();
+    if let Some(trace) = trace {
+        trace.extend(statements);
     }
-    (tokens, end)
+    (tokens, close)
 }
 
 struct JsxExpression {
@@ -271,8 +391,22 @@ struct JsxExpression {
     tokens: Vec<Token>,
 }
 
-fn jsx_expression(src: &str, open: usize, end: usize, kind: SourceKind) -> Option<JsxExpression> {
-    let (tokens, close) = lex_region(src, open + 1, end, kind, true);
+fn jsx_expression(
+    src: &str,
+    open: usize,
+    end: usize,
+    kind: SourceKind,
+    trace: Trace<'_>,
+) -> Option<JsxExpression> {
+    let (tokens, close) = lex_region(
+        src,
+        open + 1,
+        end,
+        kind,
+        facts::Start::Expression,
+        true,
+        trace,
+    );
     (close < end).then_some(JsxExpression {
         open,
         close,
@@ -335,6 +469,7 @@ pub(crate) fn invalid_jsx_namespace_member(src: &str) -> Option<Span> {
                 Some(Token {
                     kind: TokenKind::Punct(b'.'),
                     span,
+                    ..
                 }),
                 Some(Token {
                     kind: TokenKind::Ident,
@@ -359,6 +494,7 @@ fn lex_template(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    mut trace: Trace<'_>,
 ) -> (usize, Vec<TplPart>) {
     let src = src_str.as_bytes();
     let mut parts: Vec<TplPart> = Vec::new();
@@ -385,7 +521,15 @@ fn lex_template(
             // user is editing. Treating the remainder as an interpolation
             // would give the parser an overlapping span when recovery finds a
             // nested expression, violating source-preservation in codegen.
-            let (tokens, close) = lex_region(src_str, i + 2, end, source_kind, true);
+            let (tokens, close) = lex_region(
+                src_str,
+                i + 2,
+                end,
+                source_kind,
+                facts::Start::Expression,
+                true,
+                trace.as_deref_mut(),
+            );
             if close == end {
                 break;
             }
@@ -407,16 +551,6 @@ fn lex_template(
     (end, parts)
 }
 
-fn jsx_allowed(prev_sig: u8, prev_word: &str) -> bool {
-    if prev_sig == 0 {
-        return true;
-    }
-    if matches!(prev_word, "return" | "throw" | "yield" | "await" | "case") {
-        return true;
-    }
-    b"([{,:;=!?&|+-*%^~>".contains(&prev_sig)
-}
-
 struct ScannedJsx {
     end: usize,
     tokens: Vec<Token>,
@@ -431,9 +565,10 @@ fn scan_jsx(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    mut trace: Trace<'_>,
 ) -> Option<ScannedJsx> {
     let src = src_str.as_bytes();
-    let opening = scan_jsx_opening(src_str, start, end, source_kind)?;
+    let opening = scan_jsx_opening(src_str, start, end, source_kind, trace.as_deref_mut())?;
     let mut tokens = jsx_region_tokens(start, opening.end, opening.expressions);
     let mut i = opening.end;
     if opening.self_closing {
@@ -453,6 +588,7 @@ fn scan_jsx(
                     start: raw_start,
                     end: close_end,
                 },
+                facts: TokenFacts::default(),
             });
             return Some(ScannedJsx {
                 end: close_end,
@@ -460,7 +596,7 @@ fn scan_jsx(
             });
         }
         if src[i] == b'<' {
-            let child = scan_jsx(src_str, i, end, source_kind)?;
+            let child = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())?;
             if raw_start < i {
                 tokens.push(Token {
                     kind: TokenKind::JsxRaw,
@@ -468,6 +604,7 @@ fn scan_jsx(
                         start: raw_start,
                         end: i,
                     },
+                    facts: TokenFacts::default(),
                 });
             }
             tokens.extend(child.tokens);
@@ -476,7 +613,7 @@ fn scan_jsx(
             continue;
         }
         if src[i] == b'{' {
-            let expression = jsx_expression(src_str, i, end, source_kind)?;
+            let expression = jsx_expression(src_str, i, end, source_kind, trace.as_deref_mut())?;
             let close = expression.close;
             if raw_start < i + 1 {
                 tokens.push(Token {
@@ -485,6 +622,7 @@ fn scan_jsx(
                         start: raw_start,
                         end: i + 1,
                     },
+                    facts: TokenFacts::default(),
                 });
             }
             tokens.extend(expression.tokens);
@@ -494,6 +632,7 @@ fn scan_jsx(
                     start: close,
                     end: close + 1,
                 },
+                facts: TokenFacts::default(),
             });
             i = close + 1;
             raw_start = i;
@@ -518,6 +657,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 start: raw_start,
                 end: open + 1,
             },
+            facts: TokenFacts::default(),
         });
         tokens.extend(expression_tokens);
         tokens.push(Token {
@@ -526,6 +666,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 start: close,
                 end: close + 1,
             },
+            facts: TokenFacts::default(),
         });
         raw_start = close + 1;
     }
@@ -536,6 +677,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 start: raw_start,
                 end,
             },
+            facts: TokenFacts::default(),
         });
     }
     tokens
@@ -555,6 +697,7 @@ fn scan_jsx_opening(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    mut trace: Trace<'_>,
 ) -> Option<JsxOpening> {
     let src = src_str.as_bytes();
     let mut i = start + 1;
@@ -571,7 +714,7 @@ fn scan_jsx_opening(
     let name = String::from_utf8(src[name_start..i].to_vec()).ok()?;
     let mut expressions = Vec::new();
     if at(src, i, end) == Some(b'<') {
-        i = find_matching(src, i, end)? + 1;
+        i = facts::type_arguments_end(src, i, end)?;
     }
     loop {
         while i < end && is_ws(src[i]) {
@@ -595,7 +738,8 @@ fn scan_jsx_opening(
                 });
             }
             (Some(b'{'), _) => {
-                let expression = jsx_expression(src_str, i, end, source_kind)?;
+                let expression =
+                    jsx_expression(src_str, i, end, source_kind, trace.as_deref_mut())?;
                 let close = expression.close;
                 expressions.push(expression);
                 i = close + 1;
@@ -614,7 +758,8 @@ fn scan_jsx_opening(
                     match at(src, i, end)? {
                         b'"' | b'\'' => i = scan_string(src, i, end),
                         b'{' => {
-                            let expression = jsx_expression(src_str, i, end, source_kind)?;
+                            let expression =
+                                jsx_expression(src_str, i, end, source_kind, trace.as_deref_mut())?;
                             let close = expression.close;
                             expressions.push(expression);
                             i = close + 1;

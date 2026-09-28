@@ -66,25 +66,74 @@ pub(crate) fn ident_end(src: &[u8], i: usize, end: usize) -> usize {
 }
 
 /// Skips whitespace and comments; returns the index of the next significant byte.
-pub(crate) fn skip_ws_comments(src: &[u8], mut i: usize, end: usize) -> usize {
+pub(crate) fn skip_ws_comments(src: &[u8], i: usize, end: usize) -> usize {
+    skip_trivia(src, i, end).0
+}
+
+/// The byte length of the ECMA-262 `LineTerminator` (§12.3) at `i`: LF, CR,
+/// U+2028 LINE SEPARATOR, or U+2029 PARAGRAPH SEPARATOR. A CR LF pair is two
+/// terminators, which answers every question asked of them the same way.
+pub(crate) fn line_terminator_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
+    match at(src, i, end)? {
+        b'\n' | b'\r' => Some(1),
+        0xE2 if i + 3 <= end && src[i + 1] == 0x80 && matches!(src[i + 2], 0xA8 | 0xA9) => Some(3),
+        _ => None,
+    }
+}
+
+/// Whether `src[from..to]` contains a line terminator.
+pub(crate) fn contains_line_terminator(src: &[u8], from: usize, to: usize) -> bool {
+    (from..to).any(|i| line_terminator_len(src, i, to).is_some())
+}
+
+/// The byte length of the white space or line terminator at `i`: the ASCII
+/// ones, and the non-ASCII code points that cannot belong to an identifier
+/// ([`identifier_char_len`]), which are ECMA-262 `WhiteSpace` and
+/// `LineTerminator` and the byte-order mark.
+fn space_len(src: &[u8], i: usize, end: usize) -> Option<usize> {
+    let b = at(src, i, end)?;
+    if b.is_ascii() {
+        return is_ws(b).then_some(1);
+    }
+    let len = match b {
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF7 => 4,
+        _ => return None,
+    };
+    let c = std::str::from_utf8(src.get(i..(i + len).min(end))?)
+        .ok()?
+        .chars()
+        .next()?;
+    (c.is_whitespace() || c == '\u{FEFF}').then_some(len)
+}
+
+/// Skips trivia — white space, line terminators, and comments — from `i`.
+/// Returns the index of the next significant byte and whether a line
+/// terminator was crossed, inside a block comment included (ECMA-262
+/// §12.4: a multi-line comment containing a line terminator is one).
+pub(crate) fn skip_trivia(src: &[u8], mut i: usize, end: usize) -> (usize, bool) {
+    let mut line_break = false;
     loop {
-        while i < end && is_ws(src[i]) {
-            i += 1;
+        if let Some(len) = space_len(src, i, end) {
+            line_break |= line_terminator_len(src, i, end).is_some();
+            i += len;
+            continue;
         }
         if at(src, i, end) == Some(b'/') && at(src, i + 1, end) == Some(b'/') {
-            while i < end && src[i] != b'\n' {
-                i += 1;
-            }
+            i = line_end(src, i, end);
             continue;
         }
         if at(src, i, end) == Some(b'/') && at(src, i + 1, end) == Some(b'*') {
-            i = match find_subslice(src, b"*/", i + 2, end) {
+            let close = match find_subslice(src, b"*/", i + 2, end) {
                 Some(e) => e + 2,
                 None => end,
             };
+            line_break |= contains_line_terminator(src, i, close);
+            i = close;
             continue;
         }
-        return i;
+        return (i, line_break);
     }
 }
 
@@ -98,11 +147,12 @@ pub(crate) fn find_subslice(src: &[u8], needle: &[u8], from: usize, end: usize) 
         .map(|p| from + p)
 }
 
+/// The index of the line terminator ending the line that contains `from`,
+/// or `end`.
 pub(crate) fn line_end(src: &[u8], from: usize, end: usize) -> usize {
-    match src[from..end].iter().position(|&b| b == b'\n') {
-        Some(p) => from + p,
-        None => end,
-    }
+    (from..end)
+        .find(|&i| line_terminator_len(src, i, end).is_some())
+        .unwrap_or(end)
 }
 
 /// `src[i]` is `'` or `"` — returns the index just past the closing quote.
@@ -248,9 +298,11 @@ pub(crate) fn scan_regex(src: &[u8], mut i: usize, end: usize) -> Option<usize> 
     i += 1;
     let mut in_class = false;
     while i < end {
+        if line_terminator_len(src, i, end).is_some() {
+            return None;
+        }
         match src[i] {
             b'\\' => i += 2,
-            b'\n' => return None,
             b'[' => {
                 in_class = true;
                 i += 1;

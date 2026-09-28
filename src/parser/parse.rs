@@ -1,6 +1,5 @@
 //! Whole-file parsing, recovery collection, and parser implementation.
 
-use std::cell::OnceCell;
 use std::collections::HashMap;
 
 use super::*;
@@ -355,63 +354,12 @@ fn recovery_statement_span(tokens: &[Token], start_idx: usize, range_end: usize)
     }
 }
 
-fn starts_statement(
-    src: &str,
-    tokens: &[Token],
-    arrow_boundaries: &OnceCell<crate::flow::ConciseArrowBoundaries>,
-    idx: usize,
-    in_ternary: bool,
-) -> bool {
-    if arrow_boundaries
-        .get_or_init(|| crate::flow::ConciseArrowBoundaries::new(src, tokens))
-        .before(idx)
-    {
-        return true;
-    }
-    if in_ternary {
-        return false;
-    }
-    let Some(previous) = idx.checked_sub(1).and_then(|idx| tokens.get(idx)) else {
-        return true;
-    };
-    if matches!(previous.kind, TokenKind::Punct(b'{' | b'}' | b';' | b':')) {
-        return true;
-    }
-    if matches!(previous.kind, TokenKind::Ident)
-        && matches!(&src[previous.span.start..previous.span.end], "else" | "do")
-    {
-        return true;
-    }
-    if !matches!(previous.kind, TokenKind::Punct(b')')) {
-        return false;
-    }
-    let mut depth = 0usize;
-    for open in (0..idx).rev() {
-        match tokens[open].kind {
-            TokenKind::Punct(b')') => depth += 1,
-            TokenKind::Punct(b'(') => {
-                depth -= 1;
-                if depth == 0 {
-                    return open.checked_sub(1).is_some_and(|before| {
-                        matches!(tokens[before].kind, TokenKind::Ident)
-                            && matches!(
-                                &src[tokens[before].span.start..tokens[before].span.end],
-                                "if" | "for" | "while" | "with"
-                            )
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-    false
-}
-
-/// The update of a C-style `for` header follows its second top-level
-/// semicolon. Its `try` is an expression candidate, while the test position
-/// keeps statement-propagation ownership so Evaluation IR can report the
-/// repeated-evaluation reason.
-fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
+/// The clause of the enclosing C-style `for` head that token `idx` is in:
+/// its top-level `;` separators before `idx`, or `None` outside a `for`
+/// head. The test clause (1) keeps a `try` statement's grammar so Evaluation
+/// IR can report the repeated evaluation; the update clause (2) is an
+/// expression position.
+fn for_head_clause(src: &str, tokens: &[Token], idx: usize) -> Option<usize> {
     let mut depth = 0usize;
     let mut separators = 0usize;
     for cursor in (0..idx).rev() {
@@ -419,11 +367,13 @@ fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
             TokenKind::Punct(b')') => depth += 1,
             TokenKind::Punct(b'(') => {
                 if depth == 0 {
-                    return separators >= 2
-                        && cursor.checked_sub(1).is_some_and(|before| {
+                    return cursor
+                        .checked_sub(1)
+                        .is_some_and(|before| {
                             matches!(tokens[before].kind, TokenKind::Ident)
                                 && &src[tokens[before].span.start..tokens[before].span.end] == "for"
-                        });
+                        })
+                        .then_some(separators);
                 }
                 depth -= 1;
             }
@@ -431,43 +381,7 @@ fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
             _ => {}
         }
     }
-    false
-}
-
-/// A colon normally admits a following statement (labels, `case`, match
-/// arms), but a colon inside an object literal introduces a value expression.
-/// This recognizes the object-literal brace from the token that introduced it
-/// instead of guessing from the spelling of the property.
-fn follows_object_member_colon(src: &str, tokens: &[Token], idx: usize) -> bool {
-    if !idx
-        .checked_sub(1)
-        .and_then(|previous| tokens.get(previous))
-        .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b':')))
-    {
-        return false;
-    }
-
-    let mut depth = 0usize;
-    for open in (0..idx - 1).rev() {
-        match tokens[open].kind {
-            TokenKind::Punct(b'}') => depth += 1,
-            TokenKind::Punct(b'{') if depth > 0 => depth -= 1,
-            TokenKind::Punct(b'{') => {
-                let Some(before) = open.checked_sub(1).and_then(|at| tokens.get(at)) else {
-                    return false;
-                };
-                return match before.kind {
-                    TokenKind::Punct(b'(' | b'[' | b',' | b'=' | b':' | b'?') => true,
-                    TokenKind::Ident => {
-                        matches!(&src[before.span.start..before.span.end], "return" | "yield")
-                    }
-                    _ => false,
-                };
-            }
-            _ => {}
-        }
-    }
-    false
+    None
 }
 
 /// A spread operand begins with three adjacent dot tokens. The last dot is
@@ -492,17 +406,13 @@ fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
 /// Whether a parsed `match (...) { ... }` still overlaps a possible host
 /// declaration position. The expression tracker already models where a host
 /// operator or delimiter requires an operand; those positions need no second
-/// parser. A preceding prefix, statement boundary, or comma remains ambiguous
-/// and is delegated to the host AST without enumerating TypeScript modifiers.
-fn match_may_be_host_owned(
-    src: &str,
-    tokens: &[Token],
-    arrow_boundaries: &OnceCell<crate::flow::ConciseArrowBoundaries>,
-    idx: usize,
-    expr: (usize, bool),
-) -> bool {
+/// parser. A preceding prefix, a statement start or member name (the
+/// lexer's [`crate::lexer::TokenFacts`]), or a comma remains ambiguous and
+/// is delegated to the host AST without enumerating TypeScript modifiers.
+fn match_may_be_host_owned(tokens: &[Token], idx: usize, expr: (usize, bool)) -> bool {
     expr.0 < idx
-        || starts_statement(src, tokens, arrow_boundaries, idx, expr.1)
+        || tokens[idx].facts.statement_start()
+        || tokens[idx].facts.member()
         || idx
             .checked_sub(1)
             .is_some_and(|previous| matches!(tokens[previous].kind, TokenKind::Punct(b',')))
@@ -552,11 +462,10 @@ impl Parser<'_> {
         // state, so `f(a(b) |> g)` finds `a(b)`, not `b`.
         let mut expr: (usize, bool) = (0, false);
         let mut expr_stack: Vec<ExprFrame> = Vec::new();
-        let arrow_boundaries = OnceCell::new();
 
         while i < tokens.len() {
             let tok = &tokens[i];
-            if crate::flow::asi_boundary_at(self.src, tokens, i) {
+            if tok.facts.boundary_before() {
                 expr = (i, false);
             }
             let word = match tok.kind {
@@ -652,7 +561,7 @@ impl Parser<'_> {
                     "variant" => (Some(i), false, false),
                     "declare"
                         if word_at(i + 1) == Some("variant")
-                            && !cursor::line_break_before(self.src, tokens, i + 1) =>
+                            && !tokens[i + 1].facts.line_break_before() =>
                     {
                         (Some(i + 1), false, true)
                     }
@@ -660,7 +569,7 @@ impl Parser<'_> {
                     "export"
                         if word_at(i + 1) == Some("declare")
                             && word_at(i + 2) == Some("variant")
-                            && !cursor::line_break_before(self.src, tokens, i + 2) =>
+                            && !tokens[i + 2].facts.line_break_before() =>
                     {
                         (Some(i + 2), true, true)
                     }
@@ -739,8 +648,7 @@ impl Parser<'_> {
             // member access. Keep the same structural distinction used for
             // `try` so every spread-capable host can own a match operand.
             if match_keyword_at(self.src, tokens, i) && !self.host_owns_match_name(tok.span) {
-                let host_ambiguous =
-                    match_may_be_host_owned(self.src, tokens, &arrow_boundaries, i, expr);
+                let host_ambiguous = match_may_be_host_owned(tokens, i, expr);
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
                         if host_ambiguous {
@@ -772,12 +680,13 @@ impl Parser<'_> {
 
             // `try <expr>;` — never valid TypeScript in expression
             // position (`try { ... }` blocks and member names are
-            // structurally excluded by the sub-parser).
+            // structurally excluded by the sub-parser). A member name the
+            // lexer recognized is never an operand, so it is not the value
+            // form either.
             if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
-                let misplaced = (expression_root && i == 0)
-                    || !starts_statement(self.src, tokens, &arrow_boundaries, i, expr.1)
-                    || in_for_update(self.src, tokens, i)
-                    || follows_object_member_colon(self.src, tokens, i);
+                let misplaced = !tok.facts.member()
+                    && !(tok.facts.statement_start()
+                        || for_head_clause(self.src, tokens, i) == Some(1));
                 if misplaced
                     && let Some((next_i, parsed)) =
                         tries::parse_try_expr(Cursor::new(self, tokens, i + 1, end), tok.span)
@@ -858,11 +767,7 @@ impl Parser<'_> {
                     iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
                     stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
-                    stmt.expression_position = (expression_root && i == 0)
-                        || !(crate::flow::asi_boundary_at(self.src, tokens, i)
-                            || starts_statement(self.src, tokens, &arrow_boundaries, i, expr.1))
-                        || in_for_update(self.src, tokens, i)
-                        || follows_object_member_colon(self.src, tokens, i);
+                    stmt.expression_position = !tok.facts.statement_start();
                     if stmt.expression_position {
                         recoveries.push(RecoveryNode {
                             span: stmt.owner_span,
@@ -1037,22 +942,12 @@ impl Parser<'_> {
 
     /// True when the token after the `}` at `close_idx` continues the
     /// surrounding expression (`.m`, `)`, an operator, `|>`, ...) rather
-    /// than starting a new statement or expression.
+    /// than starting a new statement: no statement boundary
+    /// ([`crate::lexer::TokenFacts::boundary_before`]) separates them.
     pub(super) fn brace_ends_expression(&self, tokens: &[Token], close_idx: usize) -> bool {
-        match tokens.get(close_idx + 1) {
-            None => true,
-            Some(t) => match &t.kind {
-                TokenKind::Ident => {
-                    matches!(&self.src[t.span.start..t.span.end], "instanceof" | "in")
-                }
-                TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex => false,
-                TokenKind::JsxRaw => true,
-                TokenKind::Punct(c) => {
-                    !matches!(c, b'(' | b'[' | b'{' | b'!' | b'~') && !c.is_ascii_digit()
-                }
-                _ => true, // |>, =>, ||, ?., ?? all continue an expression
-            },
-        }
+        tokens
+            .get(close_idx + 1)
+            .is_none_or(|next| !next.facts.boundary_before())
     }
 
     /// Turns a lexed template token into the AST template, recursively

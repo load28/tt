@@ -170,7 +170,7 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
                         None
                     };
                 }
-                if super::tries::STMT_ONLY_WORDS.contains(&word) {
+                if crate::lexer::statement_only_keyword(word) {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`
@@ -188,9 +188,7 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
         }
         if depth == 0 {
             match t.kind {
-                TokenKind::Punct(b'{')
-                    if !brace_begins_expression(cur.parser.src, cur.tokens, cur.idx, k) =>
-                {
+                TokenKind::Punct(b'{') if !brace_begins_expression(cur.tokens, cur.idx, k) => {
                     return None;
                 }
                 TokenKind::Punct(b';' | b'}' | b')' | b']' | b',' | b'=') => return None,

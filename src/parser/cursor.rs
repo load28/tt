@@ -51,8 +51,10 @@ impl<'t> Cursor<'t> {
         Some(t)
     }
 
+    /// Whether a line terminator comes before the token under the cursor.
     pub(super) fn line_break_before(&self) -> bool {
-        line_break_before(self.parser.src, self.tokens, self.idx)
+        self.peek()
+            .is_some_and(|token| token.facts.line_break_before())
     }
 
     pub(super) fn text(&self, t: &Token) -> &'t str {
@@ -144,49 +146,9 @@ pub(crate) fn find_close_at(tokens: &[Token], open_idx: usize) -> Option<usize> 
 /// begins an expression: an object literal (ECMA-262 PrimaryExpression),
 /// an arrow body, or a type literal, each stepped over as one group. It
 /// is a block that follows the expression only when the token before it
-/// ends an expression.
-pub(super) fn brace_begins_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
-    k <= from || !ends_expression(src, tokens, from, k - 1)
-}
-
-/// Whether the token at `k` can be the last token of an expression: an
-/// identifier, a literal, or a closer. An operator, a keyword that takes
-/// an operand, and a JSX run (whose `{` opens an expression container)
-/// cannot.
-pub(super) fn ends_expression(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
-    let token = &tokens[k];
-    match token.kind {
-        TokenKind::Ident => {
-            let word = &src[token.span.start..token.span.end];
-            dotted_at(tokens, from, k)
-                || matches!(word, "this" | "super" | "null" | "true" | "false")
-                || !(super::is_reserved(word)
-                    || matches!(
-                        word,
-                        "as" | "satisfies" | "keyof" | "infer" | "is" | "asserts" | "unique"
-                    ))
-        }
-        TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex => true,
-        TokenKind::Punct(c) => matches!(c, b')' | b']' | b'}') || c.is_ascii_digit(),
-        TokenKind::JsxRaw
-        | TokenKind::Arrow
-        | TokenKind::OrOr
-        | TokenKind::OptChain
-        | TokenKind::Coalesce
-        | TokenKind::PipeOp => false,
-    }
-}
-
-/// Whether a line terminator separates token `k` from the token before it,
-/// the fact TypeScript's automatic semicolon insertion keys on.
-pub(super) fn line_break_before(src: &str, tokens: &[Token], k: usize) -> bool {
-    let (Some(previous), Some(token)) = (
-        k.checked_sub(1).and_then(|previous| tokens.get(previous)),
-        tokens.get(k),
-    ) else {
-        return false;
-    };
-    src[previous.span.end..token.span.start].contains(['\n', '\r', '\u{2028}', '\u{2029}'])
+/// ends an expression ([`crate::lexer::TokenFacts::ends_expression`]).
+pub(super) fn brace_begins_expression(tokens: &[Token], from: usize, k: usize) -> bool {
+    k <= from || !tokens[k - 1].facts.ends_expression()
 }
 
 /// True when the identifier at `k` (within a scan that started at `from`)

@@ -1,102 +1,6 @@
-//! Function-boundary and statement-brace syntax classification.
+//! Function-boundary syntax classification.
 
 use super::*;
-
-pub(super) const TYPE_OPERATOR_WORDS: &[&str] = &[
-    "as",
-    "satisfies",
-    "keyof",
-    "infer",
-    "is",
-    "asserts",
-    "unique",
-    "readonly",
-];
-
-/// Words that can never be the last token of an expression. Value
-/// keywords (`this`, `true`, `false`, `null`, `super`) are deliberately
-/// absent — they end one.
-pub(super) const NON_VALUE_WORDS: &[&str] = &[
-    "async",
-    "await",
-    "case",
-    "catch",
-    "class",
-    "const",
-    "default",
-    "delete",
-    "do",
-    "else",
-    "export",
-    "extends",
-    "finally",
-    "function",
-    "if",
-    "import",
-    "in",
-    "instanceof",
-    "let",
-    "new",
-    "of",
-    "return",
-    "switch",
-    "throw",
-    "try",
-    "typeof",
-    "var",
-    "void",
-    "while",
-    "yield",
-];
-
-/// Words that cannot be a statement label, so `<word> :` is never a
-/// labeled statement. The ECMAScript reserved words, plus the TypeScript
-/// declaration keywords that can head a statement.
-pub(super) const NON_LABEL_WORDS: &[&str] = &[
-    "await",
-    "break",
-    "case",
-    "catch",
-    "class",
-    "const",
-    "continue",
-    "debugger",
-    "declare",
-    "default",
-    "delete",
-    "do",
-    "else",
-    "enum",
-    "export",
-    "extends",
-    "false",
-    "finally",
-    "for",
-    "function",
-    "if",
-    "import",
-    "in",
-    "instanceof",
-    "interface",
-    "let",
-    "module",
-    "namespace",
-    "new",
-    "null",
-    "return",
-    "super",
-    "switch",
-    "this",
-    "throw",
-    "true",
-    "try",
-    "typeof",
-    "var",
-    "void",
-    "while",
-    "with",
-    "yield",
-];
 
 /// Whether a `return` emitted at token index `at` of this statement
 /// stream would leave a **user-written function inside the stream** — the
@@ -180,7 +84,7 @@ pub(crate) fn user_function_depth_at(
             !matches!(
                 tokens.get(arrow + 1).map(|token| &token.kind),
                 Some(TokenKind::Punct(b'{'))
-            ) && concise_arrow_end(src, tokens, arrow + 1) > at
+            ) && concise_arrow_end(tokens, arrow + 1) > at
         })
         .count();
     braced + concise
@@ -261,7 +165,7 @@ pub(crate) fn user_function_target_at(
         .filter(|(arrow, token)| {
             matches!(token.kind, TokenKind::Arrow) && !tt_owned.contains(arrow)
         })
-        .filter(|(arrow, _)| concise_arrow_end(src, tokens, arrow + 1) > at)
+        .filter(|(arrow, _)| concise_arrow_end(tokens, arrow + 1) > at)
         .map(|(arrow, _)| (arrow, FunctionTarget::Ordinary))
         .next_back();
     match (braced, concise_arrow) {
@@ -277,8 +181,9 @@ pub(crate) fn user_function_target_at(
 
 /// Token index just past a concise arrow body, or the body start for a
 /// braced arrow. Balanced groups are one expression atom; a top-level
-/// comma, semicolon, or enclosing closer ends the body.
-pub(super) fn concise_arrow_end(src: &str, tokens: &[Token], from: usize) -> usize {
+/// comma, semicolon, enclosing closer, or statement boundary
+/// ([`crate::lexer::TokenFacts::boundary_before`]) ends the body.
+pub(super) fn concise_arrow_end(tokens: &[Token], from: usize) -> usize {
     crate::work::tick("concise arrow scans");
     if matches!(
         tokens.get(from).map(|token| &token.kind),
@@ -289,7 +194,7 @@ pub(super) fn concise_arrow_end(src: &str, tokens: &[Token], from: usize) -> usi
     let mut index = from;
     let mut depth = 0usize;
     while index < tokens.len() {
-        if depth == 0 && index > from && asi_boundary_at(src, tokens, index) {
+        if depth == 0 && index > from && tokens[index].facts.boundary_before() {
             return index;
         }
         match tokens[index].kind {
@@ -306,218 +211,6 @@ pub(super) fn concise_arrow_end(src: &str, tokens: &[Token], from: usize) -> usi
         index += 1;
     }
     tokens.len()
-}
-
-/// Whether token `at` begins after a concise-arrow expression that token
-/// `at - 1` still belonged to. This is the lexical fact needed by both the
-/// tt parser and the TypeScript projection to preserve an authored automatic
-/// semicolon boundary when the following tt statement becomes a placeholder.
-#[derive(Debug)]
-pub(crate) struct ConciseArrowBoundaries {
-    before: Vec<bool>,
-}
-
-impl ConciseArrowBoundaries {
-    pub(crate) fn new(src: &str, tokens: &[Token]) -> Self {
-        let mut before = vec![false; tokens.len() + 1];
-        for (arrow, token) in tokens.iter().enumerate() {
-            if matches!(token.kind, TokenKind::Arrow) {
-                before[concise_arrow_end(src, tokens, arrow + 1)] = true;
-            }
-        }
-        Self { before }
-    }
-
-    pub(crate) fn before(&self, at: usize) -> bool {
-        at > 0 && self.before.get(at).copied().unwrap_or(false)
-    }
-}
-
-/// Whether automatic semicolon insertion ends an expression before token
-/// `at`. Flow graph statement splitting and concise-arrow target discovery
-/// share this predicate so semicolon-free source has one structural boundary
-/// in both models.
-pub(crate) fn asi_boundary_at(src: &str, tokens: &[Token], at: usize) -> bool {
-    let Some(token) = tokens.get(at) else {
-        return false;
-    };
-    line_break_after_expression(src, tokens, at)
-        && (restricted_production_ends_at(src, tokens, at - 1)
-            || !continues_expression_after_line_break(src, tokens, at, token))
-}
-
-fn line_break_after_expression(src: &str, tokens: &[Token], at: usize) -> bool {
-    line_break_before_tokens(src, tokens, at)
-        && (expression_ends_at(src, tokens, at - 1)
-            || restricted_production_ends_at(src, tokens, at - 1))
-}
-
-fn restricted_production_ends_at(src: &str, tokens: &[Token], index: usize) -> bool {
-    let token = &tokens[index];
-    matches!(token.kind, TokenKind::Ident)
-        && matches!(&src[token.span.start..token.span.end], "return" | "yield")
-        && !follows_member_access(tokens, index)
-}
-
-fn follows_member_access(tokens: &[Token], index: usize) -> bool {
-    let Some(before) = index.checked_sub(1) else {
-        return false;
-    };
-    match tokens[before].kind {
-        TokenKind::OptChain => true,
-        TokenKind::Punct(b'.') => !before.checked_sub(1).is_some_and(|dot| {
-            matches!(tokens[dot].kind, TokenKind::Punct(b'.'))
-                && tokens[dot].span.end == tokens[before].span.start
-        }),
-        _ => false,
-    }
-}
-
-fn expression_ends_at(src: &str, tokens: &[Token], mut index: usize) -> bool {
-    loop {
-        let token = &tokens[index];
-        let operator = match token.kind {
-            TokenKind::Punct(byte @ (b'+' | b'-')) => {
-                let Some(first) = index.checked_sub(1) else {
-                    return false;
-                };
-                if !matches!(tokens[first].kind, TokenKind::Punct(other) if other == byte)
-                    || tokens[first].span.end != token.span.start
-                {
-                    return false;
-                }
-                first
-            }
-            TokenKind::Punct(b'!') => index,
-            TokenKind::Ident => return word_ends_expression(src, tokens, index),
-            _ => return token_ends_expression(src, token),
-        };
-        let Some(operand) = operator.checked_sub(1) else {
-            return false;
-        };
-        if line_break_before_tokens(src, tokens, operator) {
-            return false;
-        }
-        index = operand;
-    }
-}
-
-fn word_ends_expression(src: &str, tokens: &[Token], index: usize) -> bool {
-    let token = &tokens[index];
-    let word = &src[token.span.start..token.span.end];
-    if follows_member_access(tokens, index) {
-        return true;
-    }
-    if word == "const" {
-        return index.checked_sub(1).is_some_and(|before| {
-            matches!(tokens[before].kind, TokenKind::Ident)
-                && &src[tokens[before].span.start..tokens[before].span.end] == "as"
-        });
-    }
-    !TYPE_OPERATOR_WORDS.contains(&word) && token_ends_expression(src, token)
-}
-
-pub(super) fn brace_starts_statement(src: &str, tokens: &[Token], at: usize, k: usize) -> bool {
-    k > at && line_break_after_expression(src, tokens, k) && !head_owes_body(src, tokens, at, k)
-}
-
-fn head_owes_body(src: &str, tokens: &[Token], at: usize, k: usize) -> bool {
-    let word = |i: usize| match tokens.get(i) {
-        Some(token) if matches!(token.kind, TokenKind::Ident) => {
-            Some(&src[token.span.start..token.span.end])
-        }
-        _ => None,
-    };
-    let names_on_same_line = |i: usize| {
-        tokens
-            .get(i + 1)
-            .is_some_and(|next| matches!(next.kind, TokenKind::Ident | TokenKind::Str))
-            && !line_break_before_tokens(src, tokens, i + 1)
-    };
-    let mut heads: Vec<usize> = Vec::new();
-    let mut depth = 0usize;
-    for j in at..k {
-        match tokens[j].kind {
-            TokenKind::Punct(b'{') => {
-                if depth == 0
-                    && let Some(&head) = heads.last()
-                    && (j == head + 1
-                        || token_ends_expression(src, &tokens[j - 1])
-                        || matches!(tokens[j - 1].kind, TokenKind::Punct(b'>')))
-                {
-                    heads.pop();
-                }
-                depth += 1;
-            }
-            TokenKind::Punct(b'(' | b'[') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
-            TokenKind::Ident if depth == 0 => {
-                let head = match word(j) {
-                    Some("function" | "class" | "enum") => true,
-                    Some("interface" | "namespace" | "module") => names_on_same_line(j),
-                    Some("global") => j > at && word(j - 1) == Some("declare"),
-                    _ => false,
-                };
-                if head {
-                    heads.push(j);
-                }
-            }
-            _ => {}
-        }
-    }
-    !heads.is_empty()
-}
-
-fn continues_expression_after_line_break(
-    src: &str,
-    tokens: &[Token],
-    at: usize,
-    token: &Token,
-) -> bool {
-    match token.kind {
-        TokenKind::Ident => {
-            matches!(&src[token.span.start..token.span.end], "in" | "instanceof")
-        }
-        TokenKind::Str | TokenKind::Regex | TokenKind::JsxRaw => false,
-        TokenKind::Template(_)
-        | TokenKind::Arrow
-        | TokenKind::OrOr
-        | TokenKind::OptChain
-        | TokenKind::Coalesce
-        | TokenKind::PipeOp => true,
-        TokenKind::Punct(byte @ (b'+' | b'-')) => !tokens.get(at + 1).is_some_and(|next| {
-            matches!(next.kind, TokenKind::Punct(other) if other == byte)
-                && next.span.start == token.span.end
-        }),
-        TokenKind::Punct(b'!' | b'~' | b'@' | b'#') => false,
-        TokenKind::Punct(byte) => !byte.is_ascii_digit(),
-    }
-}
-
-pub(super) fn token_ends_expression(src: &str, token: &Token) -> bool {
-    match token.kind {
-        TokenKind::Ident => !NON_VALUE_WORDS.contains(&&src[token.span.start..token.span.end]),
-        TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex | TokenKind::JsxRaw => true,
-        TokenKind::Punct(b')' | b']' | b'}') => true,
-        // Numeric literals lex as a punctuation run starting at their first
-        // digit.
-        TokenKind::Punct(byte) => byte.is_ascii_digit(),
-        TokenKind::Arrow
-        | TokenKind::OrOr
-        | TokenKind::OptChain
-        | TokenKind::Coalesce
-        | TokenKind::PipeOp => false,
-    }
-}
-
-pub(super) fn line_break_before_tokens(src: &str, tokens: &[Token], at: usize) -> bool {
-    let (Some(previous), Some(token)) = (
-        at.checked_sub(1).and_then(|index| tokens.get(index)),
-        tokens.get(at),
-    ) else {
-        return false;
-    };
-    src.as_bytes()[previous.span.end..token.span.start].contains(&b'\n')
 }
 
 pub(super) fn function_target_brace(
@@ -731,132 +424,4 @@ pub(super) fn find_open(tokens: &[Token], close: usize) -> Option<usize> {
         }
     }
     None
-}
-
-/// Words that head a statement whose braces are a *body* (their `}` ends
-/// the statement).
-pub(super) const BLOCK_STMT_WORDS: &[&str] = &[
-    "if",
-    "else",
-    "for",
-    "while",
-    "do",
-    "try",
-    "catch",
-    "finally",
-    "switch",
-    "function",
-    "class",
-    "async",
-    "declare",
-    "namespace",
-    "module",
-    "interface",
-    "enum",
-    "with",
-];
-
-/// Whether `{` is the declaration body of a TypeScript `enum` or a fully
-/// shaped tt `variant`. `variant` remains a valid TypeScript identifier
-/// everywhere else; only `variant Name {` (including generics and `export`)
-/// claims this statement boundary.
-pub(super) fn variant_or_enum_body(src: &str, tokens: &[Token], last: usize, k: usize) -> bool {
-    let word = |i: usize| match tokens.get(i) {
-        Some(token) if matches!(token.kind, TokenKind::Ident) => {
-            Some(&src[token.span.start..token.span.end])
-        }
-        _ => None,
-    };
-    let variant = match (word(last), word(last + 1)) {
-        (Some("variant"), _) => Some(last),
-        (Some("export"), Some("variant")) => Some(last + 1),
-        _ => None,
-    };
-    if let Some(mut i) = variant {
-        i += 1;
-        if word(i).is_none() || line_break_before_tokens(src, tokens, i) {
-            return false;
-        }
-        i += 1;
-        if i == k {
-            return true;
-        }
-        return matches!(
-            tokens.get(i).map(|token| &token.kind),
-            Some(TokenKind::Punct(b'<'))
-        ) && matches!(
-            k.checked_sub(1)
-                .and_then(|index| tokens.get(index))
-                .map(|token| &token.kind),
-            Some(TokenKind::Punct(b'>'))
-        );
-    }
-
-    let mut i = last;
-    if word(i) == Some("export") {
-        i += 1;
-        if word(i) == Some("default") {
-            i += 1;
-        }
-    }
-    if word(i) == Some("declare") {
-        i += 1;
-    }
-    let constant = word(i) == Some("const");
-    if constant {
-        i += 1;
-    }
-    if word(i) != Some("enum") {
-        return false;
-    }
-    i += 1;
-    if word(i).is_none() {
-        return false;
-    }
-    i += 1;
-    i == k
-}
-
-/// Words a `{` may directly follow while still being an *expression*:
-/// `return { … }`, `case { … }`, `await { … }`. Without this,
-/// `if (c) return { k: 1 };` would read its object literal as the `if`'s
-/// block.
-pub(super) const EXPR_BRACE_WORDS: &[&str] = &[
-    "return",
-    "throw",
-    "case",
-    "typeof",
-    "instanceof",
-    "in",
-    "of",
-    "new",
-    "delete",
-    "void",
-    "await",
-    "yield",
-];
-
-/// True when the top-level `{` at `k` opens a statement — a bare block or
-/// the body of the statement starting at `last` — rather than an
-/// expression's braces. Only the first kind ends a statement when it
-/// closes: an object literal or an arrow body leaves its statement running
-/// until the `;`.
-pub(crate) fn brace_opens_statement(src: &str, tokens: &[Token], last: usize, k: usize) -> bool {
-    if k == last {
-        return true; // the statement *is* a block
-    }
-    if variant_or_enum_body(src, tokens, last, k) {
-        return true;
-    }
-    let word = |i: usize| &src[tokens[i].span.start..tokens[i].span.end];
-    if !matches!(tokens[last].kind, TokenKind::Ident) || !BLOCK_STMT_WORDS.contains(&word(last)) {
-        return false;
-    }
-    // Inside such a statement the body brace follows its head: `) {` for
-    // the parenthesized ones, a name or the keyword itself for the rest.
-    match tokens[k - 1].kind {
-        TokenKind::Punct(b')') => true,
-        TokenKind::Ident => !EXPR_BRACE_WORDS.contains(&word(k - 1)),
-        _ => false,
-    }
 }

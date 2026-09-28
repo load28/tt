@@ -123,7 +123,7 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
     let head = cur.tokens.get(k)?;
     if matches!(head.kind, TokenKind::Ident)
         && !dotted_at(cur.tokens, cur.idx, k)
-        && STMT_ONLY_WORDS.contains(&cur.text(head))
+        && crate::lexer::statement_only_keyword(cur.text(head))
     {
         return None;
     }
@@ -151,7 +151,7 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             && k > cur.idx
             && matches!(token.kind, TokenKind::Ident)
             && !dotted_at(cur.tokens, cur.idx, k)
-            && STMT_ONLY_WORDS.contains(&cur.text(token))
+            && crate::lexer::statement_only_keyword(cur.text(token))
         {
             break;
         }
@@ -204,7 +204,7 @@ fn unclaimed_try_extent(cur: &Cursor, kw_span: Span) -> Span {
             if k > cur.idx
                 && matches!(token.kind, TokenKind::Ident)
                 && !dotted_at(cur.tokens, cur.idx, k)
-                && STMT_ONLY_WORDS.contains(&cur.text(token))
+                && crate::lexer::statement_only_keyword(cur.text(token))
             {
                 break;
             }
@@ -353,18 +353,6 @@ fn is_expr_start(t: &Token) -> bool {
     }
 }
 
-/// Statement-only keywords: meeting one at the top level of the expression
-/// scan means we ran past the statement (e.g. a missing `;`) or into a
-/// declaration — abort so the text passes through. Expression-capable
-/// keywords (`new`, `typeof`, `await`, `function`, `class`, `import(...)`,
-/// ...) are deliberately absent. Shared with the let-else expression
-/// scanner (which treats `else` as its terminator instead).
-pub(super) const STMT_ONLY_WORDS: &[&str] = &[
-    "break", "case", "catch", "const", "continue", "debugger", "default", "do", "else", "enum",
-    "export", "finally", "for", "if", "let", "return", "switch", "throw", "try", "var", "while",
-    "with",
-];
-
 /// Scans a statement expression from `cur.idx` until a top-level `;`,
 /// returning its token index and byte offset. Aborts (None) on anything
 /// that cannot appear at the top level of an expression: a bare `{`, a
@@ -380,7 +368,7 @@ fn stmt_expr_end(cur: &Cursor) -> Option<(usize, usize)> {
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
-                if STMT_ONLY_WORDS.contains(&word) {
+                if crate::lexer::statement_only_keyword(word) {
                     return None;
                 }
                 // A match expression and a `result` block carry their own

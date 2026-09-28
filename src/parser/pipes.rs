@@ -22,7 +22,7 @@
 //! parenthesized (a normative rule, like the match scrutinee parens) — and
 //! the unclaimed `|>` is recorded for the semantic phase to report.
 
-use super::cursor::{dotted_at, ends_expression};
+use super::cursor::dotted_at;
 use crate::ast::{PipeExpr, PipeHeadKind, PipeStep, PipeStepKind, Span};
 use crate::lexer::{Token, TokenKind};
 
@@ -66,7 +66,7 @@ fn asserts_pipeline(src: &str, tokens: &[Token], from: usize, k: usize) -> bool 
             &src[tokens[k].span.start..tokens[k].span.end],
             "as" | "satisfies"
         )
-        && ends_expression(src, tokens, from, k - 1)
+        && tokens[k - 1].facts.ends_expression()
 }
 
 /// `tokens[pipe_idx]` is a `|>` token and `tokens[head_idx..pipe_idx]` is
@@ -106,7 +106,7 @@ pub(super) fn parse_pipeline(
         let step_from = k;
         let mut depth = 0usize;
         while let Some(t) = tokens.get(k) {
-            if depth == 0 && k > step_from && crate::flow::asi_boundary_at(parser.src, tokens, k) {
+            if depth == 0 && k > step_from && t.facts.boundary_before() {
                 break;
             }
             if depth == 0
@@ -135,8 +135,9 @@ pub(super) fn parse_pipeline(
                 TokenKind::Ident
                     if depth == 0
                         && !dotted_at(tokens, step_from, k)
-                        && super::tries::STMT_ONLY_WORDS
-                            .contains(&&parser.src[t.span.start..t.span.end]) =>
+                        && crate::lexer::statement_only_keyword(
+                            &parser.src[t.span.start..t.span.end],
+                        ) =>
                 {
                     return None;
                 }

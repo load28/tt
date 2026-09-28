@@ -46,9 +46,9 @@ impl<'a> Scanner<'a> {
             Some(keyword @ ("break" | "continue")) => {
                 // The label is a restricted production: a line terminator
                 // after the keyword ends the statement.
-                let label = self.word(at + 1).filter(|name| {
-                    !NON_LABEL_WORDS.contains(name) && !self.line_break_before(at + 1)
-                });
+                let label = self
+                    .word(at + 1)
+                    .filter(|_| self.tokens[at + 1].facts.label());
                 let stmt = if keyword == "break" {
                     Stmt::Break {
                         label,
@@ -75,7 +75,7 @@ impl<'a> Scanner<'a> {
             Some("for") => self.for_statement(at, end),
             Some("switch") => self.switch_statement(at, end),
             Some("try") => self.try_statement(at, end),
-            Some(label) if !NON_LABEL_WORDS.contains(&label) && self.is_punct(at + 1, b':') => {
+            Some(label) if self.tokens[at].facts.label() && self.is_punct(at + 1, b':') => {
                 let (body, next) = self.statement(at + 2, end);
                 (
                     Stmt::Labeled {
@@ -349,28 +349,20 @@ impl<'a> Scanner<'a> {
     }
 
     /// The index just past the statement starting at `at` when its shape
-    /// is not modeled: its `;`, the `}` closing a brace that opens a
-    /// statement body, or an automatic-semicolon boundary. Bracket depth
-    /// is tracked, so nothing inside parentheses, brackets, an object
-    /// literal, or a function body ends the statement.
+    /// is not modeled: its `;`, or the next token the lexer's statement
+    /// model ([`crate::lexer::TokenFacts`]) puts after a statement boundary
+    /// — a statement start, or an automatic semicolon. Bracket depth is
+    /// tracked, so nothing inside parentheses, brackets, an object literal,
+    /// or a function body ends the statement.
     fn statement_end(&self, at: usize, end: usize) -> usize {
         let mut depth = 0usize;
         let mut k = at;
         while k < end {
-            if depth == 0 && k > at && self.asi_boundary(k) {
+            if depth == 0 && k > at && self.tokens[k].facts.boundary_before() {
                 return k;
             }
             match self.tokens[k].kind {
-                TokenKind::Punct(b'(' | b'[') => depth += 1,
-                TokenKind::Punct(b'{') => {
-                    if depth == 0 && brace_opens_statement(self.src, self.tokens, at, k) {
-                        return self.close(k, end).map_or(end, |close| close + 1);
-                    }
-                    if depth == 0 && brace_starts_statement(self.src, self.tokens, at, k) {
-                        return k;
-                    }
-                    depth += 1;
-                }
+                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
                 TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
                 TokenKind::Punct(b';') if depth == 0 => return k + 1,
                 _ => {}
@@ -378,25 +370,6 @@ impl<'a> Scanner<'a> {
             k += 1;
         }
         end
-    }
-
-    /// Whether a statement boundary sits just before token `k` because a
-    /// line terminator separates it from a token that can end an
-    /// expression, and `k` starts a statement no expression can continue.
-    ///
-    /// This is the part of automatic semicolon insertion the graph needs:
-    /// without it, semicolon-free source runs a whole block together into
-    /// one opaque statement and every divergence in it is lost. Only the
-    /// statement forms the graph models are split on, so a boundary the
-    /// rule misjudges can add an [`Stmt::Other`] break at worst.
-    fn asi_boundary(&self, k: usize) -> bool {
-        asi_boundary_at(self.src, self.tokens, k)
-    }
-
-    /// Whether a line terminator sits between token `k` and the one
-    /// before it.
-    fn line_break_before(&self, k: usize) -> bool {
-        line_break_before_tokens(self.src, self.tokens, k)
     }
 
     /// Whether the condition in `tokens[from..to]` is the literal `true`

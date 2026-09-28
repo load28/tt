@@ -15,9 +15,9 @@
 //! labeled statements, every iteration statement (`while`, `do`-`while`,
 //! C-style `for`, `for`-`in`/`of`, `for await`), `switch` (clause
 //! fall-through, `default`, and `break`), and `try`/`catch`/`finally`.
-//! Statement boundaries follow `;`, a statement body's closing brace, and
-//! a restricted automatic-semicolon rule, so semicolon-free source reads
-//! the same as semicolon-terminated source.
+//! Statement boundaries are the lexer's ([`crate::lexer::TokenFacts`]):
+//! `;`, a statement start, and automatic semicolon insertion, so
+//! semicolon-free source reads the same as semicolon-terminated source.
 //!
 //! Two things stay deliberately outside the graph, and both can only make
 //! the answer "does not diverge", never a false "diverges":
@@ -30,8 +30,8 @@
 //!   flow pass, which owns their lowered bodies.
 //!
 //! The block/expression brace distinction (an object literal's `}` ends no
-//! statement) lives here too, moved from the let-else parser — one
-//! implementation, shared by statement splitting wherever flow looks.
+//! statement) is the lexer's too: after an object literal's `}` the next
+//! token starts no statement, after a block's it does.
 
 mod scanner;
 mod syntax;
@@ -46,10 +46,9 @@ use crate::ast::{IfLetElse, IfLetStmt, Program, Segment};
 use crate::lexer::{Token, TokenKind};
 
 use scanner::*;
-use syntax::*;
+
 pub(crate) use syntax::{
-    ConciseArrowBoundaries, FunctionTarget, asi_boundary_at, brace_opens_statement,
-    function_depth_at, function_target_at, in_function_body, in_static_block,
+    FunctionTarget, function_depth_at, function_target_at, in_function_body, in_static_block,
     user_function_depth_at, user_function_target_at,
 };
 

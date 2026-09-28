@@ -57,9 +57,8 @@ fn is_operator_word(word: &str) -> bool {
 /// The shape of the undotted identifier `val` at token index `idx`, or
 /// `None` when it can only be an ordinary identifier.
 pub(super) fn shape(src: &str, tokens: &[Token], idx: usize) -> Option<ValShape> {
-    let val = tokens.get(idx)?;
     let next = tokens.get(idx + 1)?;
-    if src[val.span.end..next.span.start].contains('\n') {
+    if next.facts.line_break_before() {
         return None;
     }
     let word = |token: &Token| &src[token.span.start..token.span.end];

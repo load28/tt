@@ -498,6 +498,7 @@
 | TASK-488 | Write authored match arms with the file's line ending | Complete | 2026-09-28 | 2026-09-28 | [TASK-488](./TASK-488-quick-fix-line-endings.md) |
 | TASK-489 | Reach host globals when `globalThis` itself is shadowed | Complete | 2026-09-28 | 2026-09-28 | [TASK-489](./TASK-489-shadowed-global-this-host-access.md) |
 | TASK-490 | Decide the `val` modifier structurally, once, in the parser | Complete | 2026-09-28 | 2026-09-28 | [TASK-490](./TASK-490-val-modifier-decided-once-in-the-parser.md) |
+| TASK-491 | Model statement boundaries once, as token facts owned by the lexer | In progress | 2026-09-28 | — | [TASK-491](./TASK-491-token-facts-statement-boundaries.md) |
 | TASK-492 | Completion reads the parser's arm structure | Complete | 2026-09-28 | 2026-09-28 | [TASK-492](./TASK-492-completion-reads-parser-arm-structure.md) |
 
 ## Next task number

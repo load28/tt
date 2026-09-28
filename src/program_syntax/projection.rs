@@ -563,7 +563,6 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
     pub(super) tokens: Vec<Token>,
-    arrow_boundaries: std::cell::OnceCell<crate::flow::ConciseArrowBoundaries>,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -583,7 +582,6 @@ impl<'a> ProjectionBuilder<'a> {
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
             tokens: crate::lexer::lex_with_kind(source, 0, source.len(), source_kind),
-            arrow_boundaries: std::cell::OnceCell::new(),
         }
     }
 
@@ -808,11 +806,7 @@ impl<'a> ProjectionBuilder<'a> {
             .tokens
             .get(at)
             .is_some_and(|token| token.span.start == source_start)
-            && (self
-                .arrow_boundaries
-                .get_or_init(|| crate::flow::ConciseArrowBoundaries::new(self.source, &self.tokens))
-                .before(at)
-                || crate::flow::asi_boundary_at(self.source, &self.tokens, at))
+            && self.tokens[at].facts.asi_before()
         {
             let start = ProjectedByte(self.code.len());
             self.code.push(';');
