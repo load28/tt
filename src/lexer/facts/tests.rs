@@ -1,91 +1,171 @@
 //! The facts machine against its oracle: for TypeScript, the statement
-//! spans the machine recognizes are the statement spans SWC parses.
+//! spans the machine recognizes are the statement spans SWC parses, and
+//! the lexer reads a regular expression or a JSX element exactly where SWC
+//! parses one — every other `/` is division and every other `<` an
+//! operator or a type bracket.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use swc_common::Spanned;
-use swc_ecma_ast::{ModuleDecl, Stmt};
+use swc_ecma_ast::{Expr, ModuleDecl, Regex, Stmt};
 use swc_ecma_visit::{Visit, VisitWith};
 
 use crate::SourceKind;
 use crate::host_input::HostInput;
-use crate::lexer::{Token, TokenKind, lex_with_kind, statement_spans};
+use crate::lexer::{Token, TokenKind, lex_with_kind, trace};
 
-struct Statements<'a> {
-    input: &'a HostInput,
-    spans: BTreeSet<(usize, usize)>,
+/// One reading of a text: statement spans, and the starts of regular
+/// expression literals and of JSX elements in expression position.
+#[derive(Default, PartialEq, Eq)]
+struct Reading {
+    statements: BTreeSet<(usize, usize)>,
+    regexes: BTreeSet<usize>,
+    elements: BTreeSet<usize>,
 }
 
-impl Visit for Statements<'_> {
+struct Swc<'a> {
+    input: &'a HostInput,
+    reading: Reading,
+}
+
+impl Visit for Swc<'_> {
     fn visit_stmt(&mut self, stmt: &Stmt) {
         let span = stmt.span();
-        self.spans
+        self.reading
+            .statements
             .insert((self.input.byte(span.lo), self.input.byte(span.hi)));
         stmt.visit_children_with(self);
     }
 
     fn visit_module_decl(&mut self, decl: &ModuleDecl) {
         let span = decl.span();
-        self.spans
+        self.reading
+            .statements
             .insert((self.input.byte(span.lo), self.input.byte(span.hi)));
         decl.visit_children_with(self);
     }
+
+    fn visit_regex(&mut self, regex: &Regex) {
+        self.reading.regexes.insert(self.input.byte(regex.span.lo));
+    }
+
+    fn visit_expr(&mut self, expr: &Expr) {
+        if let Expr::JSXElement(_) | Expr::JSXFragment(_) = expr {
+            self.reading
+                .elements
+                .insert(self.input.byte(expr.span().lo));
+        }
+        expr.visit_children_with(self);
+    }
 }
 
-/// SWC's statement spans, or `None` when SWC does not parse the text.
-fn swc_statements(src: &str, kind: SourceKind) -> Option<BTreeSet<(usize, usize)>> {
+/// SWC's reading, or `None` when SWC does not parse the text.
+fn swc_reading(src: &str, kind: SourceKind) -> Option<Reading> {
     let input = HostInput::new(src);
     let mut parser = input.parser(kind);
     let module = parser.parse_module().ok()?;
     if !parser.take_errors().is_empty() {
         return None;
     }
-    let mut visitor = Statements {
+    let mut visitor = Swc {
         input: &input,
-        spans: BTreeSet::new(),
+        reading: Reading::default(),
     };
     module.visit_with(&mut visitor);
-    Some(visitor.spans)
+    Some(visitor.reading)
 }
 
-fn machine_statements(src: &str, kind: SourceKind) -> BTreeSet<(usize, usize)> {
-    statement_spans(src, kind)
-        .into_iter()
-        .map(|span| (span.start, span.end))
-        .collect()
+fn machine_reading(src: &str, kind: SourceKind) -> Reading {
+    let trace = trace(src, kind);
+    Reading {
+        statements: trace
+            .statements
+            .into_iter()
+            .map(|span| (span.start, span.end))
+            .collect(),
+        regexes: trace.regexes.into_iter().collect(),
+        elements: trace.elements.into_iter().collect(),
+    }
 }
 
 /// The differences between the two readings of `src`, rendered, or `None`
 /// when they agree or SWC rejects the text.
 fn disagreement(src: &str, kind: SourceKind) -> Option<String> {
-    let expected = swc_statements(src, kind)?;
-    let found = machine_statements(src, kind);
+    let expected = swc_reading(src, kind)?;
+    let found = machine_reading(src, kind);
     if expected == found {
         return None;
     }
-    let show = |(start, end): (usize, usize)| {
+    let show = |start: usize, end: usize| {
         let text = src.get(start..end).unwrap_or("<not a char boundary>");
         let text: String = text.chars().take(80).collect();
         format!("{start}..{end} {text:?}")
     };
     let mut out = String::new();
-    for missing in expected.difference(&found).take(6) {
-        out.push_str(&format!("  swc only:     {}\n", show(*missing)));
-    }
-    for extra in found.difference(&expected).take(6) {
-        out.push_str(&format!("  machine only: {}\n", show(*extra)));
-    }
+    let mut differ = |what: &str, swc: Vec<(usize, usize)>, machine: Vec<(usize, usize)>| {
+        for (start, end) in swc.into_iter().take(6) {
+            out.push_str(&format!("  {what} swc only:     {}\n", show(start, end)));
+        }
+        for (start, end) in machine.into_iter().take(6) {
+            out.push_str(&format!("  {what} machine only: {}\n", show(start, end)));
+        }
+    };
+    let line = |start: usize| {
+        (
+            start,
+            src[start..].find('\n').map_or(src.len(), |n| start + n),
+        )
+    };
+    differ(
+        "statement",
+        expected
+            .statements
+            .difference(&found.statements)
+            .copied()
+            .collect(),
+        found
+            .statements
+            .difference(&expected.statements)
+            .copied()
+            .collect(),
+    );
+    differ(
+        "regex",
+        expected
+            .regexes
+            .difference(&found.regexes)
+            .map(|&at| line(at))
+            .collect(),
+        found
+            .regexes
+            .difference(&expected.regexes)
+            .map(|&at| line(at))
+            .collect(),
+    );
+    differ(
+        "jsx",
+        expected
+            .elements
+            .difference(&found.elements)
+            .map(|&at| line(at))
+            .collect(),
+        found
+            .elements
+            .difference(&expected.elements)
+            .map(|&at| line(at))
+            .collect(),
+    );
     Some(out)
 }
 
 fn assert_agrees(src: &str, kind: SourceKind) {
     assert!(
-        swc_statements(src, kind).is_some(),
+        swc_reading(src, kind).is_some(),
         "SWC rejects the case, so it checks nothing:\n{src}"
     );
     if let Some(diff) = disagreement(src, kind) {
-        panic!("statement spans differ for:\n{src}\n{diff}");
+        panic!("the readings differ for:\n{src}\n{diff}");
     }
 }
 
@@ -175,6 +255,95 @@ fn the_machine_makes_progress_on_malformed_text() {
                 }
             }
         }
+    }
+}
+
+/// Statements the grammar has completed before the next token: a `/` or
+/// `<` after one begins the next statement's operand.
+const FINISHED: &[&str] = &[
+    "if (1) a;\n",
+    "if (1) ;\n",
+    "if (1) a; else b;\n",
+    "if (1) {}\n",
+    "if (1) {} else {}\n",
+    "while (0) a;\n",
+    "for (;;) a;\n",
+    "for (;;) {}\n",
+    "for (const k of a) a;\n",
+    "L: a;\n",
+    "L: {}\n",
+    "function f() {}\n",
+    "function* g() {}\n",
+    "async function h() {}\n",
+    "class C {}\n",
+    "abstract class K {}\n",
+    "interface I {}\n",
+    "enum E {}\n",
+    "namespace N {}\n",
+    "declare module \"m\" {}\n",
+    "declare global {}\n",
+    "try {} catch {}\n",
+    "try {} finally {}\n",
+    "switch (1) {}\n",
+    "export default class {}\n",
+    "export default function () {}\n",
+    "export function x() {}\n",
+    "export class X {}\n",
+    "export {}\n",
+    "export * from \"a\"\n",
+    "let c: number\n",
+    "type T = number\n",
+    "declare const d: number\n",
+    "declare function df(): void\n",
+    "import \"a\"\n",
+    "do {} while (0) ",
+    "{ a; } ",
+    "function* gy() {\n  yield\n  ",
+    "L1: for (;;) {\n  break L1\n  ",
+    "L2: for (;;) {\n  continue L2\n  ",
+    "for (;;) {\n  break\n  ",
+    "for (;;) {\n  continue\n  ",
+    "function db() {\n  debugger\n  ",
+    "function r(s: string) {\n  if (!s) return;\n  ",
+];
+
+/// The same text after each finished statement: its close, when the
+/// statement opened a body that is still open.
+fn after_finished(prefix: &str, operand: &str) -> String {
+    let close = if prefix.ends_with("  ") {
+        "\n}\n"
+    } else {
+        "\n"
+    };
+    format!("declare const a: any, b: any\n{prefix}{operand}{close}")
+}
+
+#[test]
+fn an_operand_begins_after_a_finished_statement() {
+    for prefix in FINISHED {
+        assert_agrees(
+            &after_finished(prefix, "/ a /.test(\"\") / 2"),
+            SourceKind::TypeScript,
+        );
+        assert_agrees(&after_finished(prefix, "<b>/ a /</b>"), SourceKind::Tsx);
+    }
+    for (src, kind) in [
+        (
+            "const f = function () {}\n/ 2 / 1\n",
+            SourceKind::TypeScript,
+        ),
+        ("const c = class {}\n/ 2 / 1\n", SourceKind::TypeScript),
+        (
+            "function* y() {\n  yield / a /\n}\n",
+            SourceKind::TypeScript,
+        ),
+        (
+            "function* y() {\n  const f = function () { return yield1 }\n  yield\n  (a)\n}\nconst yield1 = 1\n",
+            SourceKind::TypeScript,
+        ),
+        ("let t: Array<number>\n<b>x</b>\n", SourceKind::Tsx),
+    ] {
+        assert_agrees(src, kind);
     }
 }
 
@@ -370,7 +539,7 @@ fn the_machine_reads_the_corpus_as_swc_does() {
         } else {
             SourceKind::TypeScript
         };
-        if swc_statements(&src, kind).is_none() {
+        if swc_reading(&src, kind).is_none() {
             continue;
         }
         checked += 1;
@@ -380,7 +549,7 @@ fn the_machine_reads_the_corpus_as_swc_does() {
     }
     assert!(checked > 50, "only {checked} corpus files parsed");
     eprintln!(
-        "statement spans agree on {checked} of {} corpus files",
+        "statement spans and regex and JSX positions agree on {checked} of {} corpus files",
         files.len()
     );
     assert!(

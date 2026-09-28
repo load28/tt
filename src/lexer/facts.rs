@@ -208,6 +208,20 @@ use expressions::{Expr, ExprCfg, Group, GroupKind, Object, Params};
 use statements::{ClassMember, Decl, Stmt, SwitchBody, TtIf};
 use types::{Type, TypeBody, TypeGroup};
 
+/// Whether `yield` is an operator in a statement list: ECMA-262's `[Yield]`
+/// grammar parameter, which a function body sets (§15.5) and a block
+/// inherits.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Yield {
+    /// A block: the enclosing list decides.
+    Inherited,
+    /// A file, an ordinary function's body, a namespace body, or a class
+    /// static block: `yield` is an identifier.
+    Identifier,
+    /// A generator's body: `yield` begins a `YieldExpression`.
+    Operator,
+}
+
 /// One grammar position on the machine's stack.
 #[derive(Clone, Copy, Debug)]
 enum Frame {
@@ -216,6 +230,7 @@ enum Frame {
     List {
         closed: bool,
         block: Option<usize>,
+        yields: Yield,
     },
     /// Exactly one statement: the body of a control statement or a label.
     Slot,
@@ -259,14 +274,23 @@ pub(super) struct Machine<'s> {
     statements: Option<Vec<Span>>,
 }
 
+impl Frame {
+    /// The statement list of a file, or of a region whose expression has
+    /// ended.
+    fn top_level() -> Self {
+        Frame::List {
+            closed: false,
+            block: None,
+            yields: Yield::Identifier,
+        }
+    }
+}
+
 impl<'s> Machine<'s> {
     pub(super) fn new(src: &'s str, end: usize, start: Start, trace: bool) -> Self {
         let mut stack = Vec::with_capacity(32);
         match start {
-            Start::Statements => stack.push(Frame::List {
-                closed: false,
-                block: None,
-            }),
+            Start::Statements => stack.push(Frame::top_level()),
             Start::Expression => stack.push(Frame::Expr(Expr::new(ExprCfg::default()))),
         }
         Machine {
@@ -280,18 +304,59 @@ impl<'s> Machine<'s> {
         }
     }
 
-    /// Whether the next token stands where an operand may begin, so a `/`
-    /// there starts a regular expression and a `<` a JSX element.
-    pub(super) fn operand_expected(&self) -> bool {
-        match self.stack.last() {
-            None => true,
-            Some(Frame::List { .. } | Frame::Slot) => true,
-            Some(Frame::Expr(expr)) => expr.operand_expected(),
-            Some(Frame::Stmt(stmt)) => stmt.operand_expected(),
-            Some(Frame::Switch(body)) => body.operand_expected(),
-            Some(Frame::Match(body)) => body.operand_expected(),
-            Some(_) => false,
+    /// Whether an operand may begin at byte `at`, the `/`, `<`, or `.` the
+    /// lexer is deciding, which a line terminator precedes when
+    /// `line_break`: whether a `/` there starts a regular expression, a `<`
+    /// a JSX element, and a `.` a numeric literal — the lexical goal
+    /// `InputElementRegExp` of ECMA-262 §12.
+    ///
+    /// The goal is the grammar's, so the machine's own frames decide it:
+    /// the byte is offered, as a punctuator, to a copy of the stack. Frames
+    /// the grammar has completed hand it down — a statement or declaration
+    /// whose last part is done, one only a keyword (`else`, `catch`,
+    /// `finally`, `while`) could continue, one an automatic semicolon ends
+    /// before the byte (§12.10.1) — and an operand is expected when an
+    /// expression waiting for one receives it.
+    pub(super) fn operand_expected(&self, at: usize, line_break: bool) -> bool {
+        let mut probe = Machine {
+            src: self.src,
+            end: self.end,
+            stack: self.stack.clone(),
+            facts: TokenFacts::default(),
+            skip_next: false,
+            last_end: self.last_end,
+            statements: None,
+        };
+        let tok = Tok {
+            kind: Tk::Punct(self.src.as_bytes()[at]),
+            text: &self.src[at..at + 1],
+            span: Span {
+                start: at,
+                end: at + 1,
+            },
+            line_break,
+        };
+        for _ in 0..4096 {
+            let frame = probe.stack.pop().unwrap_or_else(Frame::top_level);
+            if let Frame::Expr(expr) = frame
+                && expr.operand_expected()
+            {
+                return true;
+            }
+            if let Out::Consumed = probe.step(frame, &tok) {
+                return false;
+            }
         }
+        false
+    }
+
+    /// Whether `yield` is an operator where the machine stands: the nearest
+    /// enclosing statement list that decides it is a generator's body.
+    pub(super) fn yield_operator(&self) -> bool {
+        self.stack.iter().rev().find_map(|frame| match frame {
+            Frame::List { yields, .. } if *yields != Yield::Inherited => Some(*yields),
+            _ => None,
+        }) == Some(Yield::Operator)
     }
 
     /// Offers one token; returns its facts.
@@ -308,10 +373,7 @@ impl<'s> Machine<'s> {
         let mut guard = 0usize;
         loop {
             let Some(frame) = self.stack.pop() else {
-                self.stack.push(Frame::List {
-                    closed: false,
-                    block: None,
-                });
+                self.stack.push(Frame::top_level());
                 continue;
             };
             match self.step(frame, &tok) {
@@ -373,7 +435,11 @@ impl<'s> Machine<'s> {
 
     fn step(&mut self, frame: Frame, tok: &Tok<'_>) -> Out {
         match frame {
-            Frame::List { closed, block } => self.list(closed, block, tok),
+            Frame::List {
+                closed,
+                block,
+                yields,
+            } => self.list(closed, block, yields, tok),
             Frame::Slot => self.slot(tok),
             Frame::Stmt(stmt) => self.stmt(stmt, tok),
             Frame::Decl(decl) => self.decl(decl, tok),
@@ -432,7 +498,12 @@ impl<'s> Machine<'s> {
         (self.byte(peek.at), self.word_at(peek), peek.line_break)
     }
 
-    fn list(&mut self, closed: bool, block: Option<usize>, tok: &Tok<'_>) -> Out {
+    fn list(&mut self, closed: bool, block: Option<usize>, yields: Yield, tok: &Tok<'_>) -> Out {
+        let list = Frame::List {
+            closed,
+            block,
+            yields,
+        };
         if tok.is(b'}') {
             if closed {
                 if let Some(start) = block {
@@ -440,10 +511,10 @@ impl<'s> Machine<'s> {
                 }
                 return Out::Consumed;
             }
-            self.push_frame(Frame::List { closed, block });
+            self.push_frame(list);
             return Out::Consumed;
         }
-        self.push_frame(Frame::List { closed, block });
+        self.push_frame(list);
         self.statement(tok, None)
     }
 

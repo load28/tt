@@ -1,5 +1,7 @@
 # TASK-491: Model statement boundaries once, as token facts owned by the lexer
 
+> Partly superseded by [TASK-494](./TASK-494-operand-goal-after-finished-statements.md): the machine no longer answers "an operand is expected" from its top frame (Issue 1's resolution, which listed a `match` arm body and `export default`); it offers the byte to a copy of its stack, so a `/` or `<` after any statement the grammar has completed begins an operand. The oracle (Decision 5) also compares regular-expression and JSX positions.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

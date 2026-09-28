@@ -741,3 +741,42 @@ fn val_decorators_stay_decorators() {
 fn untyped_try_method_signatures_remain_host_members() {
     assert_passthrough("interface X { try(x); }\ntype Y = { try(x); };\n");
 }
+
+/// A `/` or `<` after a statement the grammar has completed begins the next
+/// statement's operand (TASK-494).
+const FINISHED_STATEMENTS: &[&str] = &[
+    "if (1) a;\n",
+    "if (1) a; else b;\n",
+    "if (1) {}\n",
+    "while (0) a;\n",
+    "for (;;) {}\n",
+    "L: {}\n",
+    "function f() {}\n",
+    "class C {}\n",
+    "interface I {}\n",
+    "enum E {}\n",
+    "namespace N {}\n",
+    "try {} catch {}\n",
+    "switch (1) {}\n",
+    "export default function () {}\n",
+    "let c: number\n",
+    "type T = number\n",
+    "import \"a\"\n",
+    "do {} while (0) ",
+    "{ a; } ",
+];
+
+#[test]
+fn a_regex_or_element_after_a_finished_statement_passes_through() {
+    for prefix in FINISHED_STATEMENTS {
+        assert_passthrough(&format!(
+            "declare const a: any, b: any;\n{prefix}/ a /.test(\"\") / 2;\n"
+        ));
+        assert_tsx_passthrough(&format!(
+            "declare const a: any, b: any;\n{prefix}<b>/ a /</b>;\n"
+        ));
+    }
+    assert_passthrough("function* g() {\n  yield\n  / a /.test(\"\");\n}\n");
+    assert_passthrough("L: for (;;) {\n  break L\n  / a /.test(\"\");\n}\n");
+    assert_passthrough("const f = function () {}\n/ 2 / 1;\n");
+}

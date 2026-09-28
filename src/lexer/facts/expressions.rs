@@ -2,7 +2,7 @@
 
 use super::statements::{FunctionKind, MatchBody, TtIf};
 use super::types::{Type, TypeGroup};
-use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, statement_only_keyword};
+use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, Yield, statement_only_keyword};
 
 /// What ended the operand an expression is past, which decides the tokens
 /// that may continue it (ECMA-262 §13).
@@ -207,10 +207,29 @@ impl Machine<'_> {
         }));
     }
 
-    pub(super) fn open_function_body(&mut self) {
+    /// Opens the statement list of a body whose `{` is the current token;
+    /// `yields` is whether `yield` is an operator in it.
+    pub(super) fn open_body(&mut self, yields: Yield) {
         self.push_frame(Frame::List {
             closed: true,
             block: None,
+            yields,
+        });
+    }
+
+    /// Opens a block that belongs to the statement list around it.
+    pub(super) fn open_block(&mut self) {
+        self.open_body(Yield::Inherited);
+    }
+
+    /// Opens a function's body, recording on its `{` which kind of
+    /// function it belongs to.
+    pub(super) fn open_function_body(&mut self, function: FunctionKind) {
+        self.mark_function_body(function);
+        self.open_body(if function == FunctionKind::Generator {
+            Yield::Operator
+        } else {
+            Yield::Identifier
         });
     }
 
@@ -316,8 +335,7 @@ impl Machine<'_> {
                 if arrow_body {
                     e.after(After::Closed);
                     self.push_frame(Frame::Expr(e));
-                    self.mark_function_body(FunctionKind::Ordinary);
-                    self.open_function_body();
+                    self.open_function_body(FunctionKind::Ordinary);
                 } else {
                     e.after(After::Primary);
                     self.push_frame(Frame::Expr(e));
@@ -385,14 +403,22 @@ impl Machine<'_> {
                 self.push_frame(Frame::Expr(e));
                 Out::Consumed
             }
-            "await" | "yield"
-                if !(next.is_none()
+            "await" | "yield" if tok.text == "await" || self.yield_operator() => {
+                let operand = !(next.is_none()
                     || matches!(next, Some(b')' | b']' | b'}' | b',' | b';' | b':'))
                     || (tok.text == "yield" && next_break)
-                    || matches!(next_word, Some("in" | "instanceof" | "of"))) =>
-            {
-                self.push_frame(Frame::Expr(e));
-                Out::Consumed
+                    || matches!(next_word, Some("in" | "instanceof" | "of")));
+                if operand {
+                    self.push_frame(Frame::Expr(e));
+                    Out::Consumed
+                } else if tok.text == "yield" {
+                    e.after(After::Closed);
+                    e.head = Head::None;
+                    self.push_frame(Frame::Expr(e));
+                    Out::Consumed
+                } else {
+                    self.atom(e)
+                }
             }
             "if" => {
                 e.after(After::Primary);
@@ -544,10 +570,7 @@ impl Machine<'_> {
                 if head == Head::MatchCall {
                     self.push_frame(Frame::Match(MatchBody::new()));
                 } else {
-                    self.push_frame(Frame::List {
-                        closed: true,
-                        block: None,
-                    });
+                    self.open_block();
                 }
                 Out::Consumed
             }
@@ -794,15 +817,15 @@ impl Machine<'_> {
                     Out::Consumed
                 }
                 Tk::Punct(b'{') => {
-                    self.mark_function_body(if object.generator {
+                    let function = if object.generator {
                         FunctionKind::Generator
                     } else {
                         FunctionKind::Ordinary
-                    });
+                    };
                     object.state = ObjectState::AfterValue;
                     object.generator = false;
                     self.push_frame(Frame::Object(object));
-                    self.open_function_body();
+                    self.open_function_body(function);
                     Out::Consumed
                 }
                 _ => {

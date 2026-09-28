@@ -920,3 +920,4 @@ include!("compile/cases_09.rs");
 include!("compile/cases_10.rs");
 include!("compile/cases_11.rs");
 include!("compile/cases_12.rs");
+include!("compile/cases_13.rs");

@@ -82,8 +82,16 @@ before it, whether it completes an operand, whether an automatic semicolon
 precedes it (§12.10.1, restricted productions included), whether it starts
 a statement, whether it is a label or a member name, and, on a `{`, whether
 it opens a function body (a generator's or a constructor's). The lexer's own
-regular-expression and JSX decisions are the machine's "an operand is
-expected here". It also knows tt's statement-shaped constructs (`if let`,
+regular-expression, JSX, and leading-`.` number decisions are the machine's
+"an operand is expected here" (the `InputElementRegExp` goal of ECMA-262
+§12), which the machine answers with its own transitions (TASK-494): it
+offers the byte, as a punctuator, to a copy of its stack, so frames the
+grammar has completed — a declaration's body, a control statement's body,
+a statement only `else`/`catch`/`finally` could continue, one an automatic
+semicolon ends — hand it down, and an operand is expected exactly when an
+expression waiting for one receives it. Statement lists carry the `[Yield]`
+parameter a function body sets, so `yield` is an operator only in a
+generator. It also knows tt's statement-shaped constructs (`if let`,
 let-else, `match` arms, `variant` bodies, construct bodies), whose shapes
 TypeScript never has. Every consumer reads the facts instead of deriving a
 boundary from the tokens around it: flow statement splitting and
@@ -91,7 +99,8 @@ function-scope queries, the parser's statement starts, `try`/`if let`
 expression positions, pipeline heads and steps, and `match` host ambiguity,
 the program-syntax projection's boundary semicolon, and `val`'s same-line
 rule. The machine's oracle is SWC: for TypeScript input its statement spans
-equal SWC's (`lexer/facts/tests.rs`, over the repository's TypeScript and
+equal SWC's, and the lexer reads a regular expression or a JSX element
+exactly where SWC parses one (`lexer/facts/tests.rs`, over the repository's TypeScript and
 tt fixtures and the installed TypeScript package; `TTC_FACTS_CORPUS` adds
 trees).
 

@@ -117,12 +117,11 @@ pub(crate) fn lex_with_kind(
     .0
 }
 
-/// Every statement span the facts machine recognizes in `src`, nested
-/// regions included, in completion order: the validator that holds the
-/// machine to SWC's statement spans.
+/// What the facts machine decided lexing `src`, nested regions included:
+/// the validator that holds the machine to SWC's reading.
 #[cfg(test)]
-pub(crate) fn statement_spans(src: &str, source_kind: SourceKind) -> Vec<Span> {
-    let mut trace = Vec::new();
+pub(crate) fn trace(src: &str, source_kind: SourceKind) -> Trace {
+    let mut trace = Trace::default();
     lex_region(
         src,
         0,
@@ -166,9 +165,18 @@ pub(crate) fn comment_at(src: &str, start: usize, end: usize, offset: usize) -> 
     false
 }
 
-/// A statement trace for the facts validator: every statement span each
-/// machine recognizes, nested regions included.
-type Trace<'t> = Option<&'t mut Vec<Span>>;
+/// What the facts validator reads back from lexing, nested regions
+/// included: every statement span a machine recognizes, in completion
+/// order, and every position where a machine expected an operand and the
+/// lexer read a regular expression or a JSX element there.
+#[derive(Debug, Default)]
+pub(crate) struct Trace {
+    pub(crate) statements: Vec<Span>,
+    pub(crate) regexes: Vec<usize>,
+    pub(crate) elements: Vec<usize>,
+}
+
+type TraceSink<'t> = Option<&'t mut Trace>;
 
 /// The byte just past the numeric literal starting at `i` (a digit, or a
 /// `.` before one): digits and separators, a fraction, an exponent, a radix
@@ -223,7 +231,7 @@ fn lex_region(
     source_kind: SourceKind,
     mode: facts::Start,
     braced: bool,
-    mut trace: Trace<'_>,
+    mut trace: TraceSink<'_>,
 ) -> (Vec<Token>, usize) {
     let src = src_str.as_bytes();
     let mut machine = facts::Machine::new(src_str, end, mode, trace.is_some());
@@ -298,9 +306,12 @@ fn lex_region(
 
         if source_kind.is_tsx()
             && c == b'<'
-            && machine.operand_expected()
+            && machine.operand_expected(i, line_break)
             && let Some(jsx) = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())
         {
+            if let Some(trace) = trace.as_deref_mut() {
+                trace.elements.push(i);
+            }
             let first = tokens.len();
             tokens.extend(jsx.tokens);
             let facts = machine.push(tok(facts::Tk::Jsx, i, jsx.end, line_break));
@@ -315,9 +326,12 @@ fn lex_region(
         }
 
         if c == b'/'
-            && machine.operand_expected()
+            && machine.operand_expected(i, line_break)
             && let Some(e) = scan_regex(src, i, end)
         {
+            if let Some(trace) = trace.as_deref_mut() {
+                trace.regexes.push(i);
+            }
             let facts = machine.push(tok(facts::Tk::Regex, i, e, line_break));
             tokens.push(Token {
                 kind: TokenKind::Regex,
@@ -343,7 +357,7 @@ fn lex_region(
         if c.is_ascii_digit()
             || (c == b'.'
                 && at(src, i + 1, end).is_some_and(|b| b.is_ascii_digit())
-                && machine.operand_expected())
+                && machine.operand_expected(i, line_break))
         {
             number_until = number_end(src, i, end);
             let facts = machine.push(tok(facts::Tk::Number, i, number_until, line_break));
@@ -384,7 +398,7 @@ fn lex_region(
     };
     let statements = machine.finish();
     if let Some(trace) = trace {
-        trace.extend(statements);
+        trace.statements.extend(statements);
     }
     (tokens, close)
 }
@@ -400,7 +414,7 @@ fn jsx_expression(
     open: usize,
     end: usize,
     kind: SourceKind,
-    trace: Trace<'_>,
+    trace: TraceSink<'_>,
 ) -> Option<JsxExpression> {
     let (tokens, close) = lex_region(
         src,
@@ -498,7 +512,7 @@ fn lex_template(
     start: usize,
     end: usize,
     source_kind: SourceKind,
-    mut trace: Trace<'_>,
+    mut trace: TraceSink<'_>,
 ) -> (usize, Vec<TplPart>) {
     let src = src_str.as_bytes();
     let mut parts: Vec<TplPart> = Vec::new();
@@ -569,7 +583,7 @@ fn scan_jsx(
     start: usize,
     end: usize,
     source_kind: SourceKind,
-    mut trace: Trace<'_>,
+    mut trace: TraceSink<'_>,
 ) -> Option<ScannedJsx> {
     let src = src_str.as_bytes();
     let opening = scan_jsx_opening(src_str, start, end, source_kind, trace.as_deref_mut())?;
@@ -701,7 +715,7 @@ fn scan_jsx_opening(
     start: usize,
     end: usize,
     source_kind: SourceKind,
-    mut trace: Trace<'_>,
+    mut trace: TraceSink<'_>,
 ) -> Option<JsxOpening> {
     let src = src_str.as_bytes();
     let mut i = start + 1;

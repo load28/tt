@@ -3,7 +3,7 @@
 
 use super::expressions::{ExprCfg, GroupKind, ObjectKind};
 use super::types::TypeBody;
-use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, reserved};
+use super::{Frame, Machine, Out, Tk, Tok, TokenFacts, Yield, reserved};
 
 /// A statement in progress. `start` is the byte where it began, for the
 /// statement trace.
@@ -156,15 +156,6 @@ impl Stmt {
             Stmt::ForHead(_) => usize::MAX,
         }
     }
-
-    pub(super) fn operand_expected(&self) -> bool {
-        matches!(
-            self,
-            Stmt::Return { operand: false, .. }
-                | Stmt::ForHead(ForHead::Init)
-                | Stmt::Export { default: true, .. }
-        )
-    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -273,12 +264,6 @@ pub(super) enum SwitchBody {
     Colon,
 }
 
-impl SwitchBody {
-    pub(super) fn operand_expected(&self) -> bool {
-        *self == SwitchBody::Clauses
-    }
-}
-
 /// What kind of function a body `{` opens, for the facts on that brace.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) enum FunctionKind {
@@ -336,10 +321,6 @@ impl MatchBody {
             state: MatchState::Pattern,
             depth: 0,
         }
-    }
-
-    pub(super) fn operand_expected(&self) -> bool {
-        self.state == MatchState::Body
     }
 }
 
@@ -404,6 +385,7 @@ impl Machine<'_> {
                 self.push_frame(Frame::List {
                     closed: true,
                     block: Some(begin),
+                    yields: Yield::Inherited,
                 });
                 Out::Consumed
             }
@@ -801,7 +783,7 @@ impl Machine<'_> {
                     Some(after) => keep(self, after),
                     None => self.stmt_frame(Stmt::Done { start }),
                 }
-                self.open_function_body();
+                self.open_block();
                 Out::Consumed
             }
             TryState::AfterBlock | TryState::AfterCatch if tok.is_word("finally") => {
@@ -1006,7 +988,7 @@ impl Machine<'_> {
             VarState::ElseBlock if tok.is(b'{') => {
                 var.state = VarState::AfterElse;
                 keep(self, var);
-                self.open_function_body();
+                self.open_block();
                 Out::Consumed
             }
             VarState::ElseBlock | VarState::AfterElse => self.end_statement(var.start, tok),
@@ -1094,14 +1076,13 @@ impl Machine<'_> {
                 Out::Consumed
             }
             (DeclKind::Function, DeclState::Params | DeclState::Return, Tk::Punct(b'{')) => {
-                self.mark_function_body(if decl.generator {
+                decl.state = DeclState::Done;
+                keep(self, decl);
+                self.open_function_body(if decl.generator {
                     FunctionKind::Generator
                 } else {
                     FunctionKind::Ordinary
                 });
-                decl.state = DeclState::Done;
-                keep(self, decl);
-                self.open_function_body();
                 Out::Consumed
             }
             (DeclKind::Class, DeclState::Keyword | DeclState::Head, Tk::Word)
@@ -1164,7 +1145,7 @@ impl Machine<'_> {
             (DeclKind::Namespace, DeclState::Head, Tk::Punct(b'{')) => {
                 decl.state = DeclState::Done;
                 keep(self, decl);
-                self.open_function_body();
+                self.open_body(Yield::Identifier);
                 Out::Consumed
             }
             _ => match decl.start {
@@ -1203,7 +1184,7 @@ impl Machine<'_> {
             TtIfState::Scrutinee if tok.is(b'{') => {
                 tt.state = TtIfState::AfterBody;
                 self.push_frame(Frame::TtIf(tt));
-                self.open_function_body();
+                self.open_block();
                 Out::Consumed
             }
             TtIfState::Scrutinee => end(self, tt, tok),
@@ -1291,7 +1272,7 @@ impl Machine<'_> {
                 }
                 Tk::Punct(b'{') => {
                     keep(self, ClassBody::Start);
-                    self.open_function_body();
+                    self.open_body(Yield::Identifier);
                     Out::Consumed
                 }
                 Tk::Punct(b'[') => {
@@ -1368,9 +1349,8 @@ impl Machine<'_> {
                     Out::Consumed
                 }
                 Tk::Punct(b'{') => {
-                    self.mark_function_body(member.function);
                     keep(self, ClassBody::Start);
-                    self.open_function_body();
+                    self.open_function_body(member.function);
                     Out::Consumed
                 }
                 _ => {
@@ -1453,7 +1433,7 @@ impl Machine<'_> {
                 keep(self, body);
                 if tok.is(b'{') {
                     self.mark_function_body(FunctionKind::Ordinary);
-                    self.open_function_body();
+                    self.open_block();
                     return Out::Consumed;
                 }
                 self.push_expr(ExprCfg {
