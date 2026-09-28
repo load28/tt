@@ -222,6 +222,27 @@ test('init keeps a reference that leaves the project through a symlink as writte
   assert.deepEqual(result.files, ['tsconfig.tt.json'])
 })
 
+test('init refuses a root tsconfig that resolves outside the project and writes nothing', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'create-tt-outside-root-'))
+  await writeFile(join(outside, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-linked-root-'))
+  await writeFile(join(root, 'package.json'), '{}\n')
+  await symlink(join(outside, 'tsconfig.json'), join(root, 'tsconfig.json'))
+  await assert.rejects(initializeExisting({ directory: root, bundler: 'none' }), /resolves outside the project/)
+  assert.deepEqual((await readdir(outside)).sort(), ['tsconfig.json'])
+  assert.deepEqual(await readFile(join(root, 'package.json'), 'utf8'), '{}\n')
+})
+
+test('init refuses to write a generated file through a symlink that leaves the project', async () => {
+  const outside = await mkdtemp(join(tmpdir(), 'create-tt-outside-file-'))
+  const root = await mkdtemp(join(tmpdir(), 'create-tt-linked-file-'))
+  await writeFile(join(root, 'package.json'), '{}\n')
+  await writeFile(join(root, 'tsconfig.json'), '{"compilerOptions":{"strict":true}}\n')
+  await symlink(join(outside, 'target.json'), join(root, 'tsconfig.tt.json'))
+  await assert.rejects(initializeExisting({ directory: root, bundler: 'none' }), /resolves outside the project/)
+  assert.deepEqual(await readdir(outside), [])
+})
+
 test('init treats a directory whose name begins with two dots as inside the project', async () => {
   const root = await mkdtemp(join(tmpdir(), 'create-tt-dotted-'))
   await writeFile(join(root, 'package.json'), '{}\n')

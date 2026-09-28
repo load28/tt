@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, readdir, realpath, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -157,8 +157,9 @@ export async function initializeExisting(options) {
   manifest.scripts ??= {}
   const typeConfig = 'tsconfig.tt.json'
   const generated = []
+  const realRoot = await realpath(root)
   const references = existsSync(join(root, 'tsconfig.json'))
-    ? await typeConfigGraph(await realpath(root), await realpath(join(root, 'tsconfig.json')), generated)
+    ? await typeConfigGraph(realRoot, await projectConfig(realRoot, join(root, 'tsconfig.json')), generated)
     : (generated.push([typeConfig, `${JSON.stringify(tsconfig(), null, '  ')}\n`]), false)
   const typeCheck = `tsc ${references ? '-b' : '-p'} ${typeConfig} --runExternalCode`
   manifest.scripts['tt:check'] ??= typeCheck
@@ -187,6 +188,7 @@ export async function initializeExisting(options) {
   // require an explicit user decision outside the initializer.
   for (const [file, content] of generated) {
     const path = join(root, file)
+    await assertInsideProject(realRoot, path)
     if (existsSync(path) && await readFile(path, 'utf8') !== content) {
       throw new Error(`refusing to overwrite existing config: ${path}`)
     }
@@ -227,6 +229,25 @@ async function typeConfigGraph(root, configPath, generated, visited = new Set())
   }
   generated[slot] = [relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`]
   return hasReferences
+}
+
+async function projectConfig(root, path) {
+  const config = await realpath(path)
+  if (!insideRoot(root, config)) throw new Error(`refusing to follow ${path}: it resolves outside the project to ${config}`)
+  return config
+}
+
+async function assertInsideProject(root, path) {
+  const target = await writtenPath(path, new Set())
+  if (!insideRoot(root, target)) throw new Error(`refusing to write ${path}: it resolves outside the project to ${target}`)
+}
+
+async function writtenPath(path, seen) {
+  if (seen.has(path)) throw new Error(`refusing to write ${path}: its symbolic links form a cycle`)
+  seen.add(path)
+  const entry = await lstat(path).catch(() => null)
+  if (entry?.isSymbolicLink()) return writtenPath(resolve(dirname(path), await readlink(path)), seen)
+  return entry ? realpath(path) : join(await realpath(dirname(path)), basename(path))
 }
 
 function referencedConfig(directory, path) {
