@@ -500,6 +500,7 @@
 | TASK-490 | Decide the `val` modifier structurally, once, in the parser | Complete | 2026-09-28 | 2026-09-28 | [TASK-490](./TASK-490-val-modifier-decided-once-in-the-parser.md) |
 | TASK-491 | Model statement boundaries once, as token facts owned by the lexer | Complete | 2026-09-28 | 2026-09-28 | [TASK-491](./TASK-491-token-facts-statement-boundaries.md) |
 | TASK-492 | Completion reads the parser's arm structure | Complete | 2026-09-28 | 2026-09-28 | [TASK-492](./TASK-492-completion-reads-parser-arm-structure.md) |
+| TASK-493 | Document the missing-case enumeration bound as a named analysis limit | Complete | 2026-09-28 | 2026-09-28 | [TASK-493](./TASK-493-witness-enumeration-limit.md) |
 | TASK-494 | Expect an operand after a statement the grammar has completed | Complete | 2026-09-28 | 2026-09-28 | [TASK-494](./TASK-494-operand-goal-after-finished-statements.md) |
 | TASK-495 | Balance type-argument brackets through one token fact | Complete | 2026-09-28 | 2026-09-28 | [TASK-495](./TASK-495-type-argument-bracket-facts.md) |
 | TASK-496 | Keep the source's automatic semicolons when generated code starts a statement | Complete | 2026-09-28 | 2026-09-28 | [TASK-496](./TASK-496-statement-boundaries-survive-lowering.md) |

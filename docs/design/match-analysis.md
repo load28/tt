@@ -218,6 +218,17 @@ extern 입력의 모양이 둘인 것(컴파일러의 `ExternVariant` — 태그
   후보 선택과 다르다). 이것은 이관 전 sema의 동작을 그대로 옮긴 것이고,
   위치마다 "만족시키는 후보"를 따지는 규칙으로 바꿀지는 열려 있다.
 
+- Missing-case enumeration is bounded (TASK-487, TASK-493). The witness
+  search in `src/analysis/usefulness.rs` stops splitting written
+  constructors after `STEP_BUDGET` (4,096) recursive steps once one hole is
+  known, and lists at most `WITNESS_BUDGET` (40) holes. The exhaustive-or-not
+  verdict is always exact, because Maranget's usefulness check needs no
+  enumeration; only the list degrades. The message then states a lower bound
+  (`… (at least N combinations in total)`) and only the final `_` arm is
+  offered as a fix. This is a named analysis limit, like rustc's pattern
+  complexity limit, not a heuristic: it never changes which programs are
+  accepted.
+
 ## 7. 이름 해석 — 모델이 답하는 두 번째 질문 (TASK-102)
 
 TASK-096의 모델은 "이 바인딩의 타입은 무엇인가"만 답했다. 그 반대 방향 —
