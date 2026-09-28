@@ -194,10 +194,85 @@ impl Witness {
     }
 }
 
-/// How many witnesses to build before giving up on completeness. A
-/// message showing more than a handful is unreadable anyway, and the
-/// product of several columns can grow fast.
 const WITNESS_BUDGET: usize = 40;
+
+const STEP_BUDGET: usize = 4_096;
+
+pub(super) struct Missing {
+    pub witnesses: Vec<Vec<Witness>>,
+    pub total: usize,
+    pub certain: usize,
+    pub exact: bool,
+}
+
+impl Missing {
+    fn none() -> Missing {
+        Missing {
+            witnesses: Vec::new(),
+            total: 0,
+            certain: 0,
+            exact: true,
+        }
+    }
+
+    fn one(witness: Vec<Witness>) -> Missing {
+        let certain = usize::from(witness.iter().all(Witness::certain));
+        Missing {
+            witnesses: vec![witness],
+            total: 1,
+            certain,
+            exact: true,
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.total == 0
+    }
+
+    fn extend(&mut self, other: Missing) {
+        self.total = self.total.saturating_add(other.total);
+        self.certain = self.certain.saturating_add(other.certain);
+        self.exact &= other.exact;
+        let room = WITNESS_BUDGET.saturating_sub(self.witnesses.len());
+        self.witnesses
+            .extend(other.witnesses.into_iter().take(room));
+    }
+
+    fn behind(head: &Witness, rest: &Missing) -> Missing {
+        let witnesses = rest
+            .witnesses
+            .iter()
+            .map(|tail| {
+                let mut witness = vec![head.clone()];
+                witness.extend(tail.iter().cloned());
+                witness
+            })
+            .collect();
+        Missing {
+            witnesses,
+            total: rest.total,
+            certain: if head.certain() { rest.certain } else { 0 },
+            exact: rest.exact,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Mode {
+    All,
+    Any,
+}
+
+struct Search {
+    mode: Mode,
+    steps: usize,
+}
+
+impl Search {
+    fn spent(&self) -> bool {
+        self.steps >= STEP_BUDGET
+    }
+}
 
 /// The values `rows` leaves unhandled, over columns of the given types.
 /// Empty means exhaustive.
@@ -205,9 +280,13 @@ pub(super) fn missing<'a>(
     rows: &[Vec<Cell<'a>>],
     types: &[ColTy<'a>],
     cx: &'a Alphabets<'a>,
-) -> Vec<Vec<Witness>> {
+) -> Missing {
     let query: Vec<Cell> = vec![Cell::Wild; types.len()];
-    usefulness(rows, &query, types, cx)
+    let mut search = Search {
+        mode: Mode::All,
+        steps: 0,
+    };
+    usefulness(rows, &query, types, cx, &mut search)
 }
 
 /// Whether `row` matches anything `rows` does not — reachability, asked of
@@ -218,7 +297,11 @@ pub(super) fn is_useful<'a>(
     types: &[ColTy<'a>],
     cx: &'a Alphabets<'a>,
 ) -> bool {
-    !usefulness(rows, row, types, cx).is_empty()
+    let mut search = Search {
+        mode: Mode::Any,
+        steps: 0,
+    };
+    !usefulness(rows, row, types, cx, &mut search).is_empty()
 }
 
 /// `U(P, q)` with witnesses: the values matching `q` that no row of `rows`
@@ -228,16 +311,17 @@ fn usefulness<'a>(
     query: &[Cell<'a>],
     types: &[ColTy<'a>],
     cx: &'a Alphabets<'a>,
-) -> Vec<Vec<Witness>> {
+    search: &mut Search,
+) -> Missing {
+    search.steps += 1;
+    if rows
+        .iter()
+        .any(|row| row.iter().all(|cell| matches!(cell, Cell::Wild)))
+    {
+        return Missing::none();
+    }
     let Some(column) = types.first() else {
-        // No columns left: the query is useful exactly when nothing
-        // reached this far — the base case that makes the recursion an
-        // emptiness test.
-        return if rows.is_empty() {
-            vec![Vec::new()]
-        } else {
-            Vec::new()
-        };
+        return Missing::one(Vec::new());
     };
 
     match query[0] {
@@ -246,92 +330,93 @@ fn usefulness<'a>(
             let ColTy::Variant(entry) = column else {
                 // The column's alphabet is unknown, so nothing can be
                 // proven redundant here.
-                return vec![vec![Witness::Unknown; types.len()]];
+                return Missing::one(vec![Witness::Unknown; types.len()]);
             };
             let Some(constructor) = entry.constructors.iter().find(|c| c.tag == pattern.tag) else {
-                return vec![vec![Witness::Unknown; types.len()]];
+                return Missing::one(vec![Witness::Unknown; types.len()]);
             };
-            let specialized = specialize(rows, constructor);
             let mut sub_query = expand(pattern, constructor);
             sub_query.extend_from_slice(&query[1..]);
-            let sub_types = descend(&specialized, constructor, types, cx);
-            let found = usefulness(&specialized, &sub_query, &sub_types, cx);
-            rebuild(found, constructor)
+            split(rows, &sub_query, constructor, types, cx, search)
         }
         Cell::Wild => {
             let used = used_tags(rows);
-            let complete = match column {
-                ColTy::Variant(entry) => entry.constructors.iter().all(|c| used.contains(&c.tag)),
-                ColTy::Unconstrained | ColTy::Unknown => false,
+            let wild_query = |constructor: &MatchConstructor| {
+                let mut sub_query = vec![Cell::Wild; arity(constructor)];
+                sub_query.extend_from_slice(&query[1..]);
+                sub_query
             };
-            if complete {
-                let ColTy::Variant(entry) = column else {
-                    unreachable!("only a variant column can be complete")
+            let ColTy::Variant(entry) = column else {
+                let rest = usefulness(&default(rows), &query[1..], &types[1..], cx, search);
+                let head = match column {
+                    ColTy::Unknown => Witness::Unknown,
+                    _ => Witness::Wild,
                 };
-                // Every constructor is written somewhere, so the query
-                // splits into one branch per constructor.
-                let mut out: Vec<Vec<Witness>> = Vec::new();
-                for constructor in &entry.constructors {
-                    let specialized = specialize(rows, constructor);
-                    let mut sub_query = vec![Cell::Wild; arity(constructor)];
-                    sub_query.extend_from_slice(&query[1..]);
-                    let sub_types = descend(&specialized, constructor, types, cx);
-                    let found = usefulness(&specialized, &sub_query, &sub_types, cx);
-                    out.extend(rebuild(found, constructor));
-                    if out.len() >= WITNESS_BUDGET {
-                        break;
-                    }
-                }
-                out
+                return Missing::behind(&head, &rest);
+            };
+            let complete = entry.constructors.iter().all(|c| used.contains(&c.tag));
+            let rest = if complete {
+                None
             } else {
-                // Some constructor is missing (or the alphabet is
-                // unknown): what the rest of the row needs is decided by
-                // the rows that say nothing about this column.
-                let defaulted = default(rows);
-                let rest = usefulness(&defaulted, &query[1..], &types[1..], cx);
+                let rest = usefulness(&default(rows), &query[1..], &types[1..], cx, search);
                 if rest.is_empty() {
-                    return Vec::new();
+                    return rest;
                 }
-                let heads = missing_heads(column, &used);
-                let mut out = Vec::new();
-                for head in heads {
-                    for tail in &rest {
-                        let mut witness = vec![head.clone()];
-                        witness.extend(tail.iter().cloned());
-                        out.push(witness);
-                        if out.len() >= WITNESS_BUDGET {
-                            return out;
-                        }
+                Some(rest)
+            };
+            let mut out = Missing::none();
+            for constructor in &entry.constructors {
+                let found = match &rest {
+                    Some(rest) if !used.contains(&constructor.tag) => {
+                        Missing::behind(&missing_head(constructor), rest)
                     }
+                    Some(_) if search.mode == Mode::Any => continue,
+                    _ if search.spent() && (rest.is_some() || !out.is_empty()) => {
+                        out.exact = false;
+                        continue;
+                    }
+                    _ => split(
+                        rows,
+                        &wild_query(constructor),
+                        constructor,
+                        types,
+                        cx,
+                        search,
+                    ),
+                };
+                out.extend(found);
+                if search.mode == Mode::Any && !out.is_empty() {
+                    break;
                 }
-                out
             }
+            out
         }
     }
 }
 
-/// The witness heads for a column no row completes: each missing
-/// constructor by name, or a bare wildcard when there is nothing to name
-/// (an opaque column — its alphabet is unknown, so `_` is the honest
-/// answer). A variant column no arm mentioned at all is missing *every*
-/// constructor, and naming them beats printing `_` at the one place the
-/// user can act on.
-fn missing_heads(column: &ColTy<'_>, used: &[String]) -> Vec<Witness> {
-    match column {
-        ColTy::Variant(entry) => entry
-            .constructors
+fn split<'a>(
+    rows: &[Vec<Cell<'a>>],
+    sub_query: &[Cell<'a>],
+    constructor: &MatchConstructor,
+    types: &[ColTy<'a>],
+    cx: &'a Alphabets<'a>,
+    search: &mut Search,
+) -> Missing {
+    let specialized = specialize(rows, constructor);
+    let sub_types = descend(&specialized, constructor, types, cx);
+    rebuild(
+        usefulness(&specialized, sub_query, &sub_types, cx, search),
+        constructor,
+    )
+}
+
+fn missing_head(constructor: &MatchConstructor) -> Witness {
+    Witness::Ctor {
+        tag: constructor.tag.clone(),
+        args: fields_of(constructor)
             .iter()
-            .filter(|c| !used.contains(&c.tag))
-            .map(|c| Witness::Ctor {
-                tag: c.tag.clone(),
-                args: fields_of(c)
-                    .iter()
-                    .map(|f| (f.clone(), Witness::Wild))
-                    .collect(),
-            })
+            .map(|f| (f.clone(), Witness::Wild))
             .collect(),
-        ColTy::Unconstrained => vec![Witness::Wild],
-        ColTy::Unknown => vec![Witness::Unknown],
     }
 }
 
@@ -434,10 +519,11 @@ fn descend<'a>(
 }
 
 /// Folds a constructor's payload columns back into one witness cell.
-fn rebuild(found: Vec<Vec<Witness>>, constructor: &MatchConstructor) -> Vec<Vec<Witness>> {
+fn rebuild(found: Missing, constructor: &MatchConstructor) -> Missing {
     let width = arity(constructor);
     let names = fields_of(constructor);
-    found
+    let witnesses = found
+        .witnesses
         .into_iter()
         .map(|witness| {
             let mut rest = witness;
@@ -449,7 +535,13 @@ fn rebuild(found: Vec<Vec<Witness>>, constructor: &MatchConstructor) -> Vec<Vec<
             out.extend(rest);
             out
         })
-        .collect()
+        .collect();
+    Missing {
+        witnesses,
+        total: found.total,
+        certain: found.certain,
+        exact: found.exact,
+    }
 }
 
 /// The tags any row writes in the first column.

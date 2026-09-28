@@ -6,15 +6,19 @@ use super::*;
 pub(crate) fn non_exhaustive_message(
     subject: Option<&str>,
     missing: &[String],
+    total: usize,
+    exact: bool,
     tuple: bool,
 ) -> String {
-    let shown = if missing.len() > 4 {
+    let shown = if missing.len() > 4 || total > missing.len() || !exact {
         let unit = if tuple {
             "combinations in total"
         } else {
             "in total"
         };
-        format!("{}, … ({} {unit})", missing[..3].join(", "), missing.len())
+        let head = &missing[..missing.len().min(3)];
+        let bound = if exact { "" } else { "at least " };
+        format!("{}, … ({bound}{total} {unit})", head.join(", "))
     } else {
         missing.join(", ")
     };

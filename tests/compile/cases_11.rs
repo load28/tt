@@ -1028,3 +1028,142 @@ fn a_host_global_alias_is_captured_only_when_global_this_is_shadowed() {
     ));
     assert!(!out.contains("$tt_Error"), "{out}");
 }
+
+#[test]
+fn a_tuple_hole_under_a_written_constructor_is_reported_and_fixed_in_one_step() {
+    let source = "variant A { X, Y }\nvariant B { P, Q }\n\
+         declare const c: A; declare const m: B;\n\
+         export const r = match (c, m) { (Y, Q) => 1, };\n";
+    let (message, fixed) = missing_arms_fixed(source);
+    assert!(
+        message.ends_with("missing (X, P), (X, Q), (Y, P)"),
+        "{message}"
+    );
+    let after = ttc::analyze(&fixed, &Options::default());
+    assert!(after.is_empty(), "{fixed}{after:#?}");
+}
+
+#[test]
+fn a_tuple_hole_count_is_every_missing_combination() {
+    let source = "variant A { A1, A2, A3 }\nvariant B { B1, B2, B3 }\n\
+         declare const c: A; declare const m: B;\n\
+         export const r = match (c, m) { (A1, B1) => 1, };\n";
+    let (message, fixed) = missing_arms_fixed(source);
+    assert!(message.ends_with("(8 combinations in total)"), "{message}");
+    assert_eq!(fixed.matches("=> undefined").count(), 8, "{fixed}");
+    let after = ttc::analyze(&fixed, &Options::default());
+    assert!(after.is_empty(), "{fixed}{after:#?}");
+}
+
+#[test]
+fn a_nested_hole_under_a_written_constructor_is_reported_with_the_missing_case() {
+    let source = "declare const r: { kind: \"Ok\"; value: { kind: \"Some\"; value: number } | { kind: \"None\" } } | { kind: \"Err\"; error: string };\n\
+         export const v = match (r) { Ok(value: Some(value: v)) => v };\n";
+    let (message, fixed) = missing_arms_fixed(source);
+    assert!(
+        message.ends_with("missing \"Ok(value: None())\", \"Err\""),
+        "{message}"
+    );
+    let after = ttc::analyze(&fixed, &Options::default());
+    assert!(after.is_empty(), "{fixed}{after:#?}");
+}
+
+#[test]
+fn a_wide_tuple_counts_its_holes_exactly_without_listing_them_all() {
+    let width = 12;
+    let names: Vec<String> = (0..width).map(|i| format!("v{i}")).collect();
+    let row = |tag: &str| vec![tag; width].join(", ");
+    let source = format!(
+        "variant T {{ K1, K2, K3 }}\ndeclare const {}: T;\n\
+         export const r = match ({}) {{ ({}) => 1, ({}) => 2 }};\n",
+        names.join(": T, "),
+        names.join(", "),
+        row("K1"),
+        row("K2"),
+    );
+    let started = std::time::Instant::now();
+    let diagnostics = ttc::analyze(&source, &Options::default());
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+    let missing = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagnosticCode::MatchNotExhaustive)
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
+    let total = 3usize.pow(width as u32) - 2;
+    assert!(
+        missing
+            .message
+            .ends_with(&format!("({total} combinations in total)")),
+        "{}",
+        missing.message
+    );
+    assert_eq!(missing.suggestions.len(), 1, "{:#?}", missing.suggestions);
+    let edit = missing.suggestions[0].edit.as_ref().unwrap();
+    assert!(
+        edit.replacement.contains("_ => undefined,"),
+        "{}",
+        edit.replacement
+    );
+}
+
+#[test]
+fn a_tuple_too_wide_to_enumerate_states_a_lower_bound_and_offers_only_the_wildcard() {
+    let width = 16;
+    let tags = ["_", "K1", "K2", "K3", "K4", "_"];
+    let mut seed: u64 = 11;
+    let mut next = || {
+        seed = seed
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        tags[(seed >> 33) as usize % tags.len()]
+    };
+    let arms: Vec<String> = (0..80)
+        .map(|_| {
+            let cells: Vec<&str> = (0..width).map(|_| next()).collect();
+            format!("({}) => 1", cells.join(", "))
+        })
+        .collect();
+    let names: Vec<String> = (0..width).map(|i| format!("v{i}")).collect();
+    let source = format!(
+        "variant T {{ K1, K2, K3, K4 }}\ndeclare const {}: T;\n\
+         export const r = match ({}) {{ {} }};\n",
+        names.join(": T, "),
+        names.join(", "),
+        arms.join(", "),
+    );
+    let started = std::time::Instant::now();
+    let diagnostics = ttc::analyze(&source, &Options::default());
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "{:?}",
+        started.elapsed()
+    );
+    let missing = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagnosticCode::MatchNotExhaustive)
+        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
+    assert!(missing.message.contains("… (at least "), "{}", missing.message);
+    assert_eq!(missing.suggestions.len(), 1, "{:#?}", missing.suggestions);
+}
+
+fn missing_arms_fixed(source: &str) -> (String, String) {
+    let diagnostics = ttc::analyze(source, &Options::default());
+    let missing = diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == DiagnosticCode::MatchNotExhaustive)
+        .unwrap_or_else(|| panic!("{source}{diagnostics:#?}"));
+    let edit = missing.suggestions[0]
+        .edit
+        .as_ref()
+        .expect("the missing-arm suggestion has an edit");
+    let fixed = format!(
+        "{}{}{}",
+        &source[..edit.start],
+        edit.replacement,
+        &source[edit.end..]
+    );
+    (missing.message.clone(), fixed)
+}

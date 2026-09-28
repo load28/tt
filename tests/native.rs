@@ -829,3 +829,60 @@ fn typed_missing_arm_edits_compile_after_an_unseparated_last_arm() {
         );
     }
 }
+
+#[test]
+fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
+    require_tsgo!();
+    for (source, said) in [
+        (
+            "variant A { X, Y }\nvariant B { P, Q }\n\
+             export function f(c: A, m: B) {\n\
+             \treturn match (c, m) { (Y, Q) => 1, };\n\
+             }\n",
+            "missing (X, P), (X, Q), (Y, P)",
+        ),
+        (
+            "variant O { Some(value: number), None }\n\
+             variant R { Ok(value: O), Err(error: string) }\n\
+             export function f(r: R) {\n\
+             \treturn match (r) { Ok(value: Some(value: v)) => v };\n\
+             }\n",
+            "missing \"Ok(value: None())\", \"Err\"",
+        ),
+    ] {
+        let dir = project(&[("src/main.tt", source)]);
+        let answer = typed_server(&dir, "src/main.tt", source);
+        let holes: Vec<&serde_json::Value> = answer["result"]["diagnostics"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{answer}"))
+            .iter()
+            .filter(|d| d["code"] == "match-not-exhaustive")
+            .collect();
+        assert_eq!(holes.len(), 1, "{answer}");
+        let hole = holes[0];
+        assert!(
+            hole["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("match is not exhaustive: missing")
+                && hole["message"].as_str().unwrap().ends_with(said),
+            "{hole}"
+        );
+        let edit = &hole["suggestions"][0]["edit"];
+        let replaced = source_slice(source, edit);
+        let start = replaced.as_ptr() as usize - source.as_ptr() as usize;
+        let fixed = format!(
+            "{}{}{}",
+            &source[..start],
+            edit["replacement"].as_str().unwrap(),
+            &source[start + replaced.len()..]
+        );
+        let after = typed_server(&dir, "src/main.tt", &fixed);
+        assert!(
+            after["result"]["diagnostics"]
+                .as_array()
+                .is_some_and(Vec::is_empty),
+            "{fixed}\n{after}"
+        );
+    }
+}

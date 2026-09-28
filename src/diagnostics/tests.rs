@@ -4,11 +4,11 @@ use super::*;
 fn the_typed_and_untyped_wordings_are_one_renderer() {
     let missing = vec!["\"Square\"".to_string(), "\"Tri\"".to_string()];
     assert_eq!(
-        non_exhaustive_message(Some("variant Shape"), &missing, false),
+        non_exhaustive_message(Some("variant Shape"), &missing, 2, true, false),
         "match on variant Shape is not exhaustive: missing \"Square\", \"Tri\"",
     );
     assert_eq!(
-        non_exhaustive_message(None, &missing, false),
+        non_exhaustive_message(None, &missing, 2, true, false),
         "match is not exhaustive: missing \"Square\", \"Tri\"",
     );
 }
@@ -16,14 +16,24 @@ fn the_typed_and_untyped_wordings_are_one_renderer() {
 #[test]
 fn long_lists_truncate_the_same_way_on_both_paths() {
     let missing: Vec<String> = (0..6).map(|i| format!("\"C{i}\"")).collect();
-    let said = non_exhaustive_message(None, &missing, false);
+    let said = non_exhaustive_message(None, &missing, 6, true, false);
     assert!(
         said.contains("\"C0\", \"C1\", \"C2\", … (6 in total)"),
         "{said}"
     );
     let combos: Vec<String> = (0..6).map(|i| format!("(A, B{i})")).collect();
-    let said = non_exhaustive_message(None, &combos, true);
+    let said = non_exhaustive_message(None, &combos, 6, true, true);
     assert!(said.contains("… (6 combinations in total)"), "{said}");
+    let said = non_exhaustive_message(None, &combos[..2], 9, true, true);
+    assert!(
+        said.ends_with("missing (A, B0), (A, B1), … (9 combinations in total)"),
+        "{said}"
+    );
+    let said = non_exhaustive_message(None, &combos[..2], 2, false, true);
+    assert!(
+        said.ends_with("missing (A, B0), (A, B1), … (at least 2 combinations in total)"),
+        "{said}"
+    );
 }
 
 #[test]

@@ -440,6 +440,8 @@ pub(crate) fn report(
             message: crate::diagnostics::non_exhaustive_message(
                 Some("literal union"),
                 &uncovered,
+                uncovered.len(),
+                true,
                 false,
             ),
             code: Some(
@@ -565,10 +567,11 @@ pub(crate) fn report(
             }
             // The arms that close the hole, from the same witnesses in
             // their binding form — one authoring, both pipelines.
+            let whole = coverage.exact && uncovered.len() == coverage.certain_total;
             let arms: Vec<String> = coverage
                 .missing
                 .iter()
-                .filter(|m| m.certain)
+                .filter(|m| whole && m.certain)
                 .map(|m| {
                     if m.arm.len() > 1 {
                         format!("({})", m.arm.join(", "))
@@ -587,7 +590,13 @@ pub(crate) fn report(
                 end: match_ends
                     .get(&(file.source_path.clone(), offset))
                     .map(|at| crate::line_col(&file.source, *at)),
-                message: crate::diagnostics::non_exhaustive_message(None, &uncovered, tuple),
+                message: crate::diagnostics::non_exhaustive_message(
+                    None,
+                    &uncovered,
+                    coverage.certain_total,
+                    coverage.exact,
+                    tuple,
+                ),
                 code: Some(
                     crate::DiagnosticCode::MatchNotExhaustive
                         .as_str()

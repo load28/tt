@@ -32,7 +32,13 @@ pub(crate) fn report_coverage(
                 .iter()
                 .map(|m| format!("\"{m}\""))
                 .collect();
-            non_exhaustive_message(Some(&describe(subject)), &missing, false)
+            non_exhaustive_message(
+                Some(&describe(subject)),
+                &missing,
+                coverage.total,
+                coverage.exact,
+                false,
+            )
         } else {
             let names = coverage
                 .positions
@@ -45,15 +51,23 @@ pub(crate) fn report_coverage(
                 .iter()
                 .map(|row| format!("({})", row.pattern.join(", ")))
                 .collect();
-            non_exhaustive_message(Some(&format!("({names})")), &combinations, true)
+            non_exhaustive_message(
+                Some(&format!("({names})")),
+                &combinations,
+                coverage.total,
+                coverage.exact,
+                true,
+            )
         };
         // The arms that close the hole, written out: one per witness, each
         // position's binding form joined the way a tuple pattern is
         // written. Everything in the text comes from the analysis, so the
         // edit and the message answer from one model.
+        let whole = coverage.exact && coverage.missing.len() == coverage.total;
         let arms: Vec<String> = coverage
             .missing
             .iter()
+            .filter(|_| whole)
             .map(|row| {
                 if row.arm.len() > 1 {
                     format!("({})", row.arm.join(", "))

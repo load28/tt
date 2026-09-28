@@ -20,15 +20,15 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>,
     // subject if there is one; otherwise the one they leave least of —
     // the rule sema has always reported, now measured in witnesses.
     let cx = Alphabets::of(table);
-    let mut best: Option<(&Entry, Vec<Uncovered>)> = None;
+    let mut best: Option<(&Entry, usefulness::Missing)> = None;
     for entry in table.candidates(&rows.tags) {
         let types = [ColTy::Variant(entry)];
-        let missing = render_witnesses(&usefulness::missing(&rows.rows, &types, &cx));
-        if missing.is_empty() {
+        let missing = usefulness::missing(&rows.rows, &types, &cx);
+        if missing.total == 0 {
             best = Some((entry, missing));
             break;
         }
-        if best.as_ref().is_none_or(|(_, m)| missing.len() < m.len()) {
+        if best.as_ref().is_none_or(|(_, m)| missing.total < m.total) {
             best = Some((entry, missing));
         }
     }
@@ -36,11 +36,8 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>,
         return (None, Vec::new());
     };
     let unreachable = unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx);
-    let coverage = (!rows.wildcard).then(|| Coverage {
-        positions: vec![Some(entry.covered_variant())],
-        covered: rows.covered,
-        missing,
-    });
+    let coverage = (!rows.wildcard)
+        .then(|| Coverage::of(vec![Some(entry.covered_variant())], rows.covered, missing));
     (coverage, unreachable)
 }
 
@@ -88,14 +85,13 @@ pub(crate) fn checked_coverage(
                 .collect(),
         };
         let types = [ColTy::Variant(&entry)];
-        let missing = render_witnesses(&usefulness::missing(&rows.rows, &types, &cx));
         found.push((
             expr.keyword_off,
-            Coverage {
-                positions: vec![None],
-                covered: rows.covered,
-                missing,
-            },
+            Coverage::of(
+                vec![None],
+                rows.covered,
+                usefulness::missing(&rows.rows, &types, &cx),
+            ),
         ));
     }
 
@@ -155,11 +151,11 @@ pub(crate) fn checked_coverage(
         };
         found.push((
             expr.keyword_off,
-            Coverage {
-                positions: vec![None; arity],
-                covered: Vec::new(),
-                missing: render_witnesses(&usefulness::missing(&rows, &types, &cx)),
-            },
+            Coverage::of(
+                vec![None; arity],
+                Vec::new(),
+                usefulness::missing(&rows, &types, &cx),
+            ),
         ));
     }
     found
@@ -415,10 +411,12 @@ pub(super) fn tuple_coverage_of(
 
     let cx = Alphabets::of(table);
     let unreachable = unreachable_arms(&arm_rows, &types, &cx);
-    let coverage = (!wildcard).then(|| Coverage {
-        positions,
-        covered: Vec::new(),
-        missing: render_witnesses(&usefulness::missing(&rows, &types, &cx)),
+    let coverage = (!wildcard).then(|| {
+        Coverage::of(
+            positions,
+            Vec::new(),
+            usefulness::missing(&rows, &types, &cx),
+        )
     });
     (coverage, unreachable)
 }
@@ -470,7 +468,24 @@ pub(super) fn unreachable_arms<'a>(
     out
 }
 
-pub(super) fn render_witnesses(found: &[Vec<usefulness::Witness>]) -> Vec<Uncovered> {
+impl Coverage {
+    fn of(
+        positions: Vec<Option<CoveredVariant>>,
+        covered: Vec<String>,
+        found: usefulness::Missing,
+    ) -> Coverage {
+        Coverage {
+            positions,
+            covered,
+            missing: render_witnesses(&found.witnesses),
+            total: found.total,
+            certain_total: found.certain,
+            exact: found.exact,
+        }
+    }
+}
+
+fn render_witnesses(found: &[Vec<usefulness::Witness>]) -> Vec<Uncovered> {
     found
         .iter()
         .map(|row| Uncovered {

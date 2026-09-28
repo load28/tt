@@ -383,8 +383,17 @@ pub struct Coverage {
     pub covered: Vec<String>,
     /// **Witnesses**: the values the arms leave unhandled. Empty when the
     /// match is exhaustive; bounded, so a wide product does not build a
-    /// list nobody can read.
+    /// list nobody can read. Together they cover every unhandled value
+    /// when the list holds all [`Coverage::total`] of them.
     pub missing: Vec<Uncovered>,
+    /// How many witnesses there are in all, however many
+    /// [`Coverage::missing`] lists.
+    pub total: usize,
+    /// How many of those witnesses are [`Uncovered::certain`].
+    pub certain_total: usize,
+    /// Whether the two totals are exact. A match too wide to enumerate
+    /// within the analysis budget has at least that many.
+    pub exact: bool,
 }
 
 /// One value a match leaves unhandled, as the tt pattern that would cover
