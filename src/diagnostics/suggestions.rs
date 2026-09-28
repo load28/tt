@@ -158,7 +158,11 @@ fn insert_arms(source: &str, site: MatchSite, arms: &[String]) -> Option<Edit> {
                 format!("{outer}{step}")
             }
         };
-        let text: String = arms.iter().map(|arm| format!("{indent}{arm}\n")).collect();
+        let newline = crate::line_ending(source);
+        let text: String = arms
+            .iter()
+            .map(|arm| format!("{indent}{arm}{newline}"))
+            .collect();
         (close_line, text)
     } else {
         let padded = bytes[site.body_close - 1].is_ascii_whitespace();

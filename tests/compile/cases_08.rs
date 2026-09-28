@@ -562,6 +562,40 @@ fn authored_arms_take_the_indentation_of_the_written_arms() {
 }
 
 #[test]
+fn authored_arm_lines_end_with_the_line_ending_of_a_crlf_file() {
+    for (src, arms) in [
+        (
+            "variant Shape { Circle(r: number), Point }\r\ndeclare const s: Shape;\r\nconst a = match (s) {\r\n    Circle(r) => r,\r\n};\r\n",
+            "    Point => undefined,\r\n",
+        ),
+        (
+            "variant Dir { North, South }\r\ndeclare const d: Dir;\r\nconst b = match (d, d) {\r\n  (North, _) => 1,\r\n  (South, North) => 2,\r\n};\r\n",
+            "  (South, South) => undefined,\r\n",
+        ),
+        (
+            "variant Shape { Circle(r: number), Point }\r\ndeclare const s: Shape;\r\nconst c = match (s) {\r\n    Circle(r) => r\r\n};\r\n",
+            "    Point => undefined,\r\n",
+        ),
+    ] {
+        let d = hole(src);
+        let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+        assert!(edit.replacement.ends_with(arms), "{:?}", edit.replacement);
+        for which in 0..d.suggestions.len() {
+            let fixed = with_suggestion_applied(src, &d, which);
+            assert_eq!(
+                fixed.matches('\n').count(),
+                fixed.matches("\r\n").count(),
+                "{fixed:?}"
+            );
+            assert!(
+                ttc::analyze(&fixed, &Options::default()).is_empty(),
+                "{fixed:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn misspelled_field_names_the_field_meant() {
     let e = err(r#"variant Shape { Circle(radius: number), Empty }
 const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };

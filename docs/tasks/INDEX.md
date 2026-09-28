@@ -493,6 +493,7 @@
 | TASK-485 | The `@tt/std` CommonJS entry points are declaration files | Complete | 2026-09-28 | 2026-09-28 | [TASK-485](./TASK-485-std-commonjs-declarations.md) |
 | TASK-486 | Place the runtime import after the parsed directive prologue | Complete | 2026-09-28 | 2026-09-28 | [TASK-486](./TASK-486-directive-prologue-import-placement.md) |
 | TASK-487 | Report every missing case and an exact total | Complete | 2026-09-28 | 2026-09-28 | [TASK-487](./TASK-487-complete-missing-case-witnesses.md) |
+| TASK-488 | Write authored match arms with the file's line ending | Complete | 2026-09-28 | 2026-09-28 | [TASK-488](./TASK-488-quick-fix-line-endings.md) |
 | TASK-489 | Reach host globals when `globalThis` itself is shadowed | Complete | 2026-09-28 | 2026-09-28 | [TASK-489](./TASK-489-shadowed-global-this-host-access.md) |
 | TASK-490 | Decide the `val` modifier structurally, once, in the parser | Complete | 2026-09-28 | 2026-09-28 | [TASK-490](./TASK-490-val-modifier-decided-once-in-the-parser.md) |
 | TASK-492 | Completion reads the parser's arm structure | Complete | 2026-09-28 | 2026-09-28 | [TASK-492](./TASK-492-completion-reads-parser-arm-structure.md) |
