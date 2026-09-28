@@ -351,11 +351,9 @@ The text committed to tt's `match` syntax but did not parse as one.
 
 The scrutinee parentheses are mandatory and may not be empty. Each arm is
 `pattern => expression,` or `pattern => { ... }`. An object literal body
-needs its own parentheses (`Tag => ({ a: 1 })`), and scrutinees containing
-a top-level `<` or `>` comparison need parenthesizing so they cannot be
-read as type arguments. Tuple pattern elements are tag patterns or `_`; a
-literal or `is` pattern cannot be an element, so test such a value in an
-arm guard or a nested `match`."
+needs its own parentheses (`Tag => ({ a: 1 })`). Tuple pattern elements
+are tag patterns or `_`; a literal or `is` pattern cannot be an element, so
+test such a value in an arm guard or a nested `match`."
             }
 
             DiagnosticCode::FlowFirstStepMethod => {
@@ -382,6 +380,14 @@ original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
 loop headers, parameter defaults, class field initializers, decorators,
 computed member names, and the heritage of a decorated class.
+
+Some functions cannot be a Result scope at all. In a constructor, returning
+an `Err` object would replace the constructed instance. In a generator or
+async generator, `return` only completes the iterator, and a `for...of`
+loop discards that value, so the error would vanish. A class static block
+has no function to return from. A `try` targeting any of them is rejected;
+a whole `result` block written there is its own Result scope and is
+allowed.
 
 Move the propagation into the nearest Result scope when the surrounding
 expression cannot carry it.
@@ -659,9 +665,18 @@ Each arm is an isolated completion region. Allowing a jump to an enclosing host 
                 "\
 A nested pattern appears inside an or-pattern.
 
-`A(x: Some(v)) | B(y)` would have to bind different shapes on different
-alternatives. Use element-level alternation instead — `Ok(value: Some(v) |
-None())` is not this rule — or write the arms separately."
+The alternatives of an or-pattern share one arm body and are compared by
+tag alone, so none of them may descend into a payload:
+`Ok(value: Some(v)) | Err(error)` is rejected. An alternation inside a
+field, such as `Ok(value: Some(v) | None())`, is not pattern syntax and
+does not parse. Write each nested shape as its own arm:
+
+    Ok(value: Some(v)) => v,
+    Ok(value: None()) => 0,
+    Err(error) => -1,
+
+A tuple match may alternate tags within one position, as in `(A, B | C)`,
+under the same rule: no alternative there is nested either."
             }
 
             DiagnosticCode::MatchOrBindingMismatch => {
@@ -682,7 +697,12 @@ scrutinees.
 `match (a, b)` matches pairs, so every arm is a two-element tuple pattern
 (or a final bare `_`). A one-element side is still claimed as a tuple when
 the other arms prove tuple intent, so the reported arity is the real
-mismatch rather than a guess."
+mismatch rather than a guess.
+
+Scrutinees are split at top-level commas. Comparisons are fine there
+(`match (a < b, v)`), but `a < b, c > (d)` reads as the generic call
+`a<b, c>(d)`, as it does in TypeScript, so the match has one scrutinee.
+Parenthesize a comparison: `match ((a < b), c > (d))`."
             }
 
             DiagnosticCode::UnknownCase => {
@@ -718,7 +738,7 @@ missing arms, or a final `_` arm to opt out.
 Two rules decide what counts as covered: a *guarded* arm never covers its
 tag, because the guard can fail; a *nested* pattern does cover, because
 the check descends into payloads. A hole is reported as a pattern you can
-paste back — `missing \"Ok(value: None)\"`.
+paste back — `missing \"Ok(value: None())\"`.
 
 For a tuple match the answer is the product of the positions, so a hole is
 a combination: `missing (North, Slow)`."
@@ -730,6 +750,11 @@ A value reached through a `val` binding is mutated.
 
 `val` makes the binding *and every path from it* read-only, at any depth:
 `x.a = v` and its compound forms, `x[i] = v`, `x.a++`, `delete x.a`.
+
+Method calls are not judged by name, because a user-defined `set` may not
+mutate anything. With `--check-types` (or `--types`), a call the
+TypeScript checker resolves to a built-in mutator, such as Array `push`,
+Map `set`, or Set `add`, is reported too.
 
 Rebinding is a different axis and is not this rule — `val let state` may
 still be assigned. Reads, comparisons and spreads (`{ ...x }`) are fine;

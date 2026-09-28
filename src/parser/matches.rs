@@ -454,8 +454,17 @@ fn generic_angle_close(tokens: &[Token], open: usize, limit: usize) -> Option<us
         return None;
     }
     let mut depth = 1usize;
+    let mut nested = 0usize;
     for index in open + 1..limit {
         match tokens[index].kind {
+            TokenKind::Punct(b'(' | b'[') => nested += 1,
+            TokenKind::Punct(b')' | b']') => {
+                if nested == 0 {
+                    return None;
+                }
+                nested -= 1;
+            }
+            _ if nested > 0 => {}
             TokenKind::Punct(b'<') => depth += 1,
             TokenKind::Punct(b'>') => {
                 depth -= 1;

@@ -175,9 +175,12 @@ fn tuple_match_accepts_comparison_expression_subjects() {
          declare const a: number; declare const b: number; declare const v: V;\n\
          declare const id: <T>(value: T) => T;\n\
          const n = match (a < b, v) { (_, A) => 1, _ => 0 };\n\
-         const m = match (id<number>(0), v) { (_, A) => 1, _ => 0 };\n");
+         const m = match (id<number>(0), v) { (_, A) => 1, _ => 0 };\n\
+         const k = match ((a < b), (b > (a)), v) { (_, _, A) => 1, _ => 0 };\n\
+         const j = match (a < b, (b > (a)), v) { (_, _, A) => 1, _ => 0 };\n");
     assert!(output.contains("a < b"), "{output}");
     assert!(output.contains("id<number>(0)"), "{output}");
+    assert!(output.contains("= (b > (a));"), "{output}");
 }
 
 #[test]

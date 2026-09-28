@@ -601,3 +601,79 @@ fn a_conditional_try_keeps_its_operand_when_a_later_sibling_captures_it() {
         assert!(!out.contains("= ;"), "{out}");
     }
 }
+
+fn codes(src: &str) -> Vec<DiagnosticCode> {
+    ttc::analyze(src, &Options::default())
+        .iter()
+        .map(|diagnostic| diagnostic.code)
+        .collect()
+}
+
+#[test]
+fn explained_examples_behave_as_their_explanations_say() {
+    let nested = DiagnosticCode::MatchNestedInOrPattern.explanation();
+    let arms = "Ok(value: Some(v)) => v,\n    Ok(value: None()) => 0,\n    Err(error) => -1,";
+    assert!(nested.contains(arms), "{nested}");
+    assert!(nested.contains("`Ok(value: Some(v) | None())`"), "{nested}");
+    let prelude = "declare const r: { kind: \"Ok\"; value: { kind: \"Some\"; value: number } | { kind: \"None\" } } | { kind: \"Err\"; error: string };\n";
+    assert_eq!(
+        codes(&format!("{prelude}const a = match (r) {{ {arms} }};\n")),
+        vec![]
+    );
+    assert_eq!(
+        codes(&format!(
+            "{prelude}const a = match (r) {{ Ok(value: Some(v) | None()) => 1, Err(error) => -1 }};\n"
+        )),
+        vec![DiagnosticCode::MalformedMatch]
+    );
+    assert_eq!(
+        codes(&format!(
+            "{prelude}const a = match (r) {{ Ok(value: Some(v)) | Err(error) => 1, _ => 0 }};\n"
+        ))[0],
+        DiagnosticCode::MatchNestedInOrPattern
+    );
+    assert_eq!(
+        codes(
+            "variant V { A, B, C }\ndeclare const v: V;\nconst a = match (v, v) { (A, B | C) => 1, _ => 0 };\n"
+        ),
+        vec![]
+    );
+
+    let placement = DiagnosticCode::TryPlacement.explanation();
+    for host in ["constructor", "generator", "static block"] {
+        assert!(placement.contains(host), "{host}: {placement}");
+    }
+    for source in [
+        "declare function f(): any;\nclass C { constructor() { const x = try f(); } }\n",
+        "declare function f(): any;\nfunction* g() { const x = try f(); yield x; }\n",
+        "declare function f(): any;\nasync function* g() { const x = try f(); yield x; }\n",
+        "declare function f(): any;\nclass C { static { const x = try f(); } }\n",
+    ] {
+        assert_eq!(codes(source), vec![DiagnosticCode::TryPlacement], "{source}");
+    }
+
+    let hole = "missing \"Ok(value: None())\"";
+    let exhaustive = DiagnosticCode::MatchNotExhaustive.explanation();
+    assert!(exhaustive.contains(hole), "{exhaustive}");
+    let missing = ttc::analyze(
+        &format!("{prelude}const a = match (r) {{ Ok(value: Some(v)) => v, Err(error) => -1 }};\n"),
+        &Options::default(),
+    );
+    assert!(missing[0].message.contains(hole), "{missing:?}");
+
+    let arity = DiagnosticCode::MatchTupleArity.explanation();
+    assert!(arity.contains("`match ((a < b), c > (d))`"), "{arity}");
+    let tuple = "variant V { A, B }\ndeclare const a: any, b: number, c: number, d: number;\n";
+    assert_eq!(
+        codes(&format!(
+            "{tuple}const x = match ((a < b), c > (d)) {{ (A, _) => 1, _ => 2 }};\n"
+        )),
+        vec![]
+    );
+    assert_eq!(
+        codes(&format!(
+            "{tuple}const x = match (a < b, c > (d)) {{ (A, _) => 1, _ => 2 }};\n"
+        )),
+        vec![DiagnosticCode::MatchTupleArity]
+    );
+}
