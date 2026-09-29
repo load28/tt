@@ -1300,3 +1300,40 @@ console.log(JSON.stringify([template(1), template(2)]));
         ]
     );
 }
+
+#[test]
+fn runtime_a_propagated_call_around_a_match_does_not_share_the_match_s_slot() {
+    require_toolchain!();
+    // TASK-550: the Result `r(...)` returns is read into the propagation's
+    // own temporary; the match's slot keeps holding the number it wrote.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function r(n: number): R { return n > 1 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; }
+function sum(v: number): R {
+  const y = 1 + try r(match (v) { 1 => 1, _ => 2 });
+  return r(y - 1 + 10);
+}
+function listed(v: number): R {
+  const a = [try r(match (v) { 1 => 1, _ => 2 })];
+  console.log(try r(match (v) { 1 => 3, _ => 4 }));
+  return { kind: "Ok", value: a[0] };
+}
+function inResult(v: number) {
+  return result {
+    const y = 1 + try r(match (v) { 1 => 1, _ => 2 });
+    const a = [try r(match (v) { 1 => 1, _ => 2 })];
+    console.log(try r(match (v) { 1 => 3, _ => 4 }));
+    return y + a[0];
+  };
+}
+console.log(JSON.stringify([sum(1), sum(2), listed(1), listed(2), inResult(1), inResult(2)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            "4",
+            "4",
+            r#"[{"kind":"Err","error":"small1"},{"kind":"Ok","value":12},{"kind":"Err","error":"small1"},{"kind":"Ok","value":2},{"kind":"Err","error":"small1"},{"kind":"Ok","value":5}]"#,
+        ]
+    );
+}

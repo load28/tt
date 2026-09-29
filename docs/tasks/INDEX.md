@@ -555,7 +555,8 @@
 | TASK-547 | Bind a function or class expression's name only inside itself | Complete | 2026-09-29 | 2026-09-29 | [TASK-547](./TASK-547-function-expression-name-scope.md) |
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
 | TASK-549 | Lower the values of a `try` statement's operand inside a `result` block | Complete | 2026-09-29 | 2026-09-29 | [TASK-549](./TASK-549-try-statement-operand-values-in-result.md) |
+| TASK-550 | Give a propagated operand its own storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-550](./TASK-550-propagated-operand-storage.md) |
 
 ## Next task number
 
-**TASK-550**
+**TASK-551**

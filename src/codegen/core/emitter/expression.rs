@@ -591,7 +591,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn emit_nested_operand(&self, expr: ExprId) -> Option<(Rope<'a>, Rope<'a>)> {
+    pub(super) fn emit_nested_operand(&self, expr: ExprId) -> Option<(Rope<'a>, Rope<'a>)> {
         match &self.core.exprs[expr.index()] {
             Expr::Sequence(body) => {
                 self.emit_sequence_operand(*body, &ValueContinuation::expression())

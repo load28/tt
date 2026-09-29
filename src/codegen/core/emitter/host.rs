@@ -1355,15 +1355,51 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| crate::ice::bug!("scheduled value slot has no generated name"))
     }
 
+    /// The slot that holds `expr`'s value. A sequence has the slot of the
+    /// value it consists of; a sequence that computes something else from
+    /// its values (`f(match ...)`) has none, since that slot holds the
+    /// inner value.
     pub(super) fn structured_value_slot(&self, expr: ExprId) -> Option<&String> {
         self.value_slots.get(&expr).or_else(|| {
             let Expr::Sequence(body) = &self.core.exprs[expr.index()] else {
                 return None;
             };
-            self.core
-                .body_tail_expr(*body)
+            self.grouped_sequence_value(*body)
                 .and_then(|value| self.structured_value_slot(value))
         })
+    }
+
+    /// The one value a sequence consists of, apart from trivia and the
+    /// parentheses that group it.
+    fn grouped_sequence_value(&self, body: hir::BodyId) -> Option<ExprId> {
+        let statements = &self.core.bodies[body.index()].statements;
+        let index = statements
+            .iter()
+            .position(|statement| matches!(statement, Statement::Expr(_)))?;
+        let Statement::Expr(value) = statements[index] else {
+            return None;
+        };
+        let only = |statements: &[Statement], paren: u8| {
+            statements.iter().all(|statement| {
+                let Statement::Opaque(node) = statement else {
+                    return false;
+                };
+                let span = self.span(*node);
+                let bytes = self.source.as_bytes();
+                let mut at = span.start;
+                loop {
+                    at = crate::scanner::skip_ws_comments(bytes, at, span.end);
+                    if at == span.end {
+                        return true;
+                    }
+                    if bytes[at] != paren {
+                        return false;
+                    }
+                    at += 1;
+                }
+            })
+        };
+        (only(&statements[..index], b'(') && only(&statements[index + 1..], b')')).then_some(value)
     }
 
     /// The slot of a structured value owned by the active structural parent.
