@@ -1412,3 +1412,31 @@ console.log(pick(1), pick(2));
 "#);
     assert_eq!(output, ["3 0"]);
 }
+
+#[test]
+fn an_annotation_names_the_declarations_its_type_refers_to() {
+    require_toolchain!();
+    // TASK-575: the storage sits inside the scope of a type parameter or an
+    // interface that shadows the one the arm values have; the same name
+    // there denotes the other declaration.
+    let output = run(r#"
+variant K { A, B }
+interface Item { a: number }
+function outer<T>(a: T) {
+  function inner<T>(b: T, k: K) {
+    const z = match (k) { A => a, B => a };
+    return [z, b] as const;
+  }
+  return inner("s", K.A);
+}
+function local(i: Item, k: K) {
+  interface Item { b: string }
+  const x: Item = { b: "s" };
+  const z = match (k) { A => i, B => i };
+  const y = match (k) { A => x, B => x };
+  return [z.a, y.b];
+}
+console.log(JSON.stringify([outer(1), local({ a: 2 }, K.B)]));
+"#);
+    assert_eq!(output, [r#"[[1,"s"],[2,"s"]]"#]);
+}

@@ -1059,6 +1059,24 @@ fn types_type_a_value_with_no_contextual_type_as_at_its_source_position() {
 }
 
 #[test]
+fn types_reports_nothing_for_storage_inside_a_shadowing_scope() {
+    require_types_toolchain!();
+    // TASK-575: `T` at the storage is `inner`'s own type parameter, not the
+    // `outer` one the arm values have.
+    let err = types_stderr(
+        "variant K { A, B }\n\
+         export function outer<T>(a: T) {\n\
+         \x20 function inner<T>(b: T, k: K) {\n\
+         \x20   const z = match (k) { A => a, B => a };\n\
+         \x20   return [z, b] as const;\n\
+         \x20 }\n\
+         \x20 return inner(\"s\", K.A);\n\
+         }\n",
+    );
+    assert!(!err.contains("error"), "{err}");
+}
+
+#[test]
 fn types_does_not_count_a_guarded_arm_as_covering() {
     require_types_toolchain!();
     let err = types_stderr(

@@ -1,5 +1,10 @@
 # TASK-546: Annotate generated storage only with names visible at its declaration
 
+> TASK-575 replaces Decision 1: a name is compared with the symbol the
+> type refers to, not with its resolution where the type was observed,
+> which is inside the same shadowing scope as the storage when the
+> storage is (`function inner<T>` inside `function outer<T>`).
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29
