@@ -213,8 +213,11 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   words. The CLI and the batch typed path keep reporting them: they have no
   other reporter, and `tsc` itself reports only syntactic diagnostics while
   there are any.
-- **The typed pass.** A buffer that cannot be lowered is a blocked file of
-  its snapshot, and `typedCheck` says so (`blocked`). A blocked pass
+- **The typed pass.** A document held open whose TypeScript does not parse
+  is checked through the same faithful projection (TASK-561), so its type
+  errors keep the checker's rendering while the syntax error lasts. A
+  buffer that cannot be lowered at all is a blocked file of its snapshot,
+  and `typedCheck` says so (`blocked`). A blocked pass
   checked none of the buffer's TypeScript, so its answer never replaces the
   service layer. A pass that ran and found problems only in other files
   answers this file with no diagnostics, which does replace it.

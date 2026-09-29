@@ -30,7 +30,7 @@ pub(crate) fn match_declarations(
                 .files()
                 .iter()
                 .find(|f| projection::declaration_path_of(f) == declaration.path)
-                .filter(|f| requested.contains(&f.source_path))?;
+                .filter(|f| requested.contains(&f.source_path) && !f.unparsed)?;
             Some(ModuleDeclaration {
                 file: file.clone(),
                 text: declaration.text.clone(),

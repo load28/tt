@@ -757,24 +757,22 @@ async function validate(
     typeResults = { diagnostics: [], restates: [] };
   }
 
+  // A syntax error in the TypeScript the user wrote is TypeScript's to
+  // report, in its own words, as it is in a `.ts` file. The compiler's
+  // layers state the same fact as the reason the file has no output; once
+  // TypeScript has stated it, they would only state it twice. They go
+  // before the typed merge, whose TypeScript statement of the error is at
+  // the same position.
+  const restated = new Set(typeResults.restates);
+  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? ""));
+  diagnostics.splice(0, diagnostics.length, ...diagnostics.filter(stated));
   diagnostics.push(...typeResults.diagnostics, ...hints);
   if (typedResult !== null) {
     mergeTyped(
       diagnostics,
-      typedResult.diagnostics,
+      typedResult.diagnostics.filter(stated),
       typedResult.replacesTypes,
     );
-  }
-  // A syntax error in the TypeScript the user wrote is TypeScript's to
-  // report, in its own words, as it is in a `.ts` file. The compiler's
-  // layers state the same fact as the reason the file has no output; once
-  // the service has stated it, they would only state it twice.
-  const restated = new Set(typeResults.restates);
-  for (let i = diagnostics.length - 1; i >= 0; i--) {
-    const d = diagnostics[i];
-    if (d.source !== "ts" && restated.has(String(d.code ?? ""))) {
-      diagnostics.splice(i, 1);
-    }
   }
   // The layers finish independently and typed diagnostics are merged last,
   // but the user reads and fixes one file from top to bottom. Restore the

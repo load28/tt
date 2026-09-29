@@ -3,6 +3,10 @@
 > TASK-556 narrows Decision 5: a zero-width edit maps to the source point
 > only before or after one of the prelude's declarations; an edit inside
 > one changes glue and is refused.
+>
+> TASK-561 narrows Decision 4: a document held open whose TypeScript does
+> not parse is checked through its faithful projection and is not blocked;
+> only a file read from disk, or one with tt text left as written, is.
 
 - **Status**: Complete
 - **Started**: 2026-09-29

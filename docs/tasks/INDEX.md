@@ -559,6 +559,7 @@
 | TASK-558 | Read the member-completion context from the token stream | Complete | 2026-09-29 | 2026-09-29 | [TASK-558](./TASK-558-member-context-from-tokens.md) |
 | TASK-559 | Report a syntax error after an arm body where TypeScript puts it | Complete | 2026-09-29 | 2026-09-29 | [TASK-559](./TASK-559-syntax-error-after-copied-text.md) |
 | TASK-560 | Read a pipeline step with an open list as TypeScript reads the list | Complete | 2026-09-29 | 2026-09-29 | [TASK-560](./TASK-560-unfinished-pipeline-call-step.md) |
+| TASK-561 | Check an open document through its faithful projection while it does not parse | Complete | 2026-09-29 | 2026-09-29 | [TASK-561](./TASK-561-typed-check-of-an-open-unparsed-document.md) |
 
 ## Next task number
 

@@ -111,3 +111,59 @@ fn an_unfinished_pipeline_call_step_answers_signature_help() {
         assert_eq!(help.active_parameter, 1, "{source}");
     }
 }
+
+#[test]
+fn a_type_error_keeps_its_rendering_while_an_open_document_does_not_parse() {
+    require_tsgo!();
+    // The typed layer is the one an editor shows once it answers; while
+    // line 2 does not parse, it still checks the buffer and says the same
+    // thing about line 1.
+    let clean = "export const bad: number = \"x\";\nexport const y = 1 + 2;\n";
+    let edited = "export const bad: number = \"x\";\nexport const y = 1 + ;\n";
+    let dir = project(&[("src/main.tt", clean)]);
+    let mismatch = |answer: &serde_json::Value| {
+        answer["result"]["diagnostics"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{answer}"))
+            .iter()
+            .filter(|d| d["code"] == "ts2322")
+            .map(|d| (d["line"].clone(), d["col"].clone(), d["message"].clone()))
+            .collect::<Vec<_>>()
+    };
+    let before = typed_server(&dir, "src/main.tt", clean);
+    let during = typed_server(&dir, "src/main.tt", edited);
+    assert_eq!(during["result"]["blocked"], false, "{during}");
+    assert_eq!(mismatch(&during), mismatch(&before), "{during}");
+    assert_eq!(
+        mismatch(&before),
+        vec![(
+            serde_json::json!(1),
+            serde_json::json!(28),
+            serde_json::json!("type mismatch: expected `number`, found `\"x\"`"),
+        )]
+    );
+    assert!(
+        during["result"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|d| d["code"] == "ts1109" && d["line"] == 2),
+        "{during}"
+    );
+
+    // A file read from disk is checked as `tsc` checks it: blocked while
+    // it does not parse.
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    fs::write(&file, edited).unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let snapshot = project.update(std::slice::from_ref(&file)).unwrap();
+    assert!(snapshot.is_blocked(&file));
+    project.open_document(file.clone(), edited.to_string());
+    let snapshot = project.update(std::slice::from_ref(&file)).unwrap();
+    assert!(!snapshot.is_blocked(&file));
+}

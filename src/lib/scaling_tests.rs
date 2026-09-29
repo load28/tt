@@ -96,6 +96,7 @@ fn projecting_a_file_for_a_snapshot_parses_it_once() {
             crate::engine::ProjectedDocument::project_for_snapshot(
                 Path::new("/scaling/module.tt"),
                 source.clone(),
+                false,
             )
             .expect("the module projects")
         });

@@ -301,9 +301,12 @@ impl Project {
                     })
                 })?,
             };
+            let open = self.opened.contains(file);
             let doc = match self.cache.get(file) {
-                Some(cached) if cached.source == text => Some(cached.clone()),
-                _ => match ProjectedDocument::project_for_snapshot(file, text) {
+                Some(cached) if cached.source == text && (open || !cached.unparsed) => {
+                    Some(cached.clone())
+                }
+                _ => match ProjectedDocument::project_for_snapshot(file, text, open) {
                     Ok(doc) => Some(Arc::new(doc)),
                     Err(blocked) => {
                         discover_imports(

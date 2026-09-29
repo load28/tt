@@ -60,6 +60,11 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
+    /// Whether `emit` is the faithful projection of a document whose
+    /// TypeScript does not parse ([`crate::ProjectionReport::withheld`]).
+    /// Only a document held open is checked through one, as an editor
+    /// checks a `.ts` buffer mid-edit; no declarations are written from it.
+    pub(crate) unparsed: bool,
     /// The variants the file exports, under their exported names, parsed
     /// once per content version — what an importer's extern collection
     /// reads, so a file that did not change is never re-parsed for its
@@ -99,7 +104,7 @@ impl ProjectedDocument {
         source_path: &Path,
         source: String,
     ) -> Result<ProjectedDocument, CompileError> {
-        Self::project_for_snapshot(source_path, source).map_err(|blocked| {
+        Self::project_for_snapshot(source_path, source, false).map_err(|blocked| {
             blocked
                 .diagnostics
                 .first()
@@ -111,9 +116,15 @@ impl ProjectedDocument {
         })
     }
 
+    /// The projection a snapshot holds for `source`. A file whose
+    /// TypeScript does not parse is blocked, as `tsc` reports only its
+    /// syntax errors while there are any, unless it is `open`: a document
+    /// being edited is checked through its faithful projection, so its type
+    /// errors keep the checker's facts while a syntax error is transient.
     pub(crate) fn project_for_snapshot(
         source_path: &Path,
         source: String,
+        open: bool,
     ) -> Result<ProjectedDocument, BlockedFile> {
         let options = Options {
             filename: Some(source_path.to_str().unwrap_or("<input>")),
@@ -132,12 +143,16 @@ impl ProjectedDocument {
         let source_kind = options.source_kind;
         let (program, tokens) = crate::parser::lex_and_parse_with_kind(&source, source_kind);
         let report = crate::compile_projection_report_parsed(&source, &options, &program, &tokens);
-        let Some(emit) = report.emit else {
-            return Err(BlockedFile::new(
-                source_path.to_path_buf(),
-                source,
-                report.diagnostics,
-            ));
+        let (emit, unparsed) = match (report.emit, report.withheld) {
+            (Some(emit), _) => (emit, false),
+            (None, Some(withheld)) if open => (withheld, true),
+            (None, _) => {
+                return Err(BlockedFile::new(
+                    source_path.to_path_buf(),
+                    source,
+                    report.diagnostics,
+                ));
+            }
         };
         let scan = crate::scan_module_of(&source, &program);
         Ok(ProjectedDocument {
@@ -153,6 +168,7 @@ impl ProjectedDocument {
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
+            unparsed,
             exported_variant_symbols: std::sync::OnceLock::new(),
             imports: scan.imports,
         })
