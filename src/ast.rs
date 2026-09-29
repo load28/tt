@@ -481,6 +481,9 @@ pub(crate) struct VariantDecl {
     pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
+    /// Byte offset of [`VariantDecl::generics`] (just past the name when
+    /// there is none).
+    pub generics_off: usize,
     pub cases: Vec<VariantCase>,
 }
 
@@ -857,8 +860,12 @@ pub(crate) struct Binding {
 /// A template literal split into raw text and recursively parsed
 /// interpolations. Raw chunks include the surrounding backticks and the
 /// literal text; codegen re-emits `${` and `}` around each interpolation.
+/// An unterminated template may end with an interpolation that never
+/// closed.
 #[derive(Debug)]
 pub(crate) struct Template {
+    /// The whole literal, from its opening backtick.
+    pub span: Span,
     pub chunks: Vec<TemplateChunk>,
 }
 

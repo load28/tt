@@ -218,6 +218,15 @@ TT 고유의 차이: **Projection 계층**. tsgo는 `TS source → Program`이�
 > text they were built from, and each project rebuilds what changed at its
 > next question.
 
+> **Update (TASK-576).** The parse-only tt surfaces (`ttSymbol`,
+> `ttCompletions`, `ttHints`, `declarations`) need no project, but they do
+> read the `.tt` files a buffer imports. A server answers them through its
+> `Workspace`, which reads those files through the engine's store
+> (`documents::Texts::Open`), so an unsaved variant reaches pattern
+> completion, hover and definition when it reaches the diagnostics. The
+> free functions (`engine::tt_symbol_at` and the others) are the
+> stand-alone question with no session, and read the disk.
+
 ---
 
 ## E. 최종 아키텍처

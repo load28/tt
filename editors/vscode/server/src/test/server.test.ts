@@ -2167,6 +2167,7 @@ test("a member name after any receiver completes members only", { skip: skipType
     ["const t = xs[0].t", "trim"],
     ['const t = "abc".len', "length"],
     ["const t = k |> .t", "trim"],
+    ["const t = `said ${k.t", "trim"],
   ] as const) {
     const source = prefix + line;
     const { completion, stop } = await open(source);
@@ -2181,6 +2182,46 @@ test("a member name after any receiver completes members only", { skip: skipType
     } finally {
       stop();
     }
+  }
+});
+
+test("tt items are offered only where they are valid, ranked as TypeScript ranks keywords", { skip: skipTyped, timeout }, async () => {
+  const tt = ["Option", "Result", "Order", "variant", "match", "try", "flow", "result", "let-else"];
+  const orders = "export variant Order { Open(id: number), Closed }\nexport const count = 1;\n";
+  for (const [language, source, marker, allowed] of [
+    ["ttx", "function Row(p: { a: number }) { return null; }\nconst e = <Row  />;\n", "<Row ", ["a"]],
+    ["tt", "interface Cfg { a: number; b: string }\nconst cfg: Cfg = {  };\n", "= { ", ["a", "b"]],
+    ["tt", 'import {  } from "./orders.tt";\n', "import { ", ["Order", "count", "type"]],
+  ] as [ "tt" | "ttx", string, string, string[] ][]) {
+    const { completion, stop } = await open(source, language, { "orders.tt": orders });
+    try {
+      const { labels } = await completion(marker);
+      for (const label of labels) {
+        assert.ok(allowed.includes(label) || !tt.includes(label), `${marker}: ${label} in ${JSON.stringify(labels)}`);
+      }
+      for (const label of allowed) {
+        if (label !== "type") assert.ok(labels.includes(label), `${marker}: ${JSON.stringify(labels)}`);
+      }
+    } finally {
+      stop();
+    }
+  }
+
+  // A value position in a file that imports no built-in: the snippets rank
+  // with TypeScript's keywords, after the names in scope, and `Option` is
+  // whatever TypeScript has in scope (the DOM's), not the built-in variant.
+  const source = "const local = 1;\nconst v = ;\n";
+  const { completion, stop } = await open(source);
+  try {
+    const { items } = await completion("const v = ");
+    const sort = (label: string) => items.find((item) => item.label === label)?.sortText;
+    assert.equal(sort("match"), sort("typeof"), JSON.stringify(items.slice(0, 5)));
+    assert.ok(sort("local")! < sort("match")!, `${sort("local")} ${sort("match")}`);
+    assert.equal(sort("variant"), undefined, "a declaration is not an expression");
+    const option = items.find((item) => item.label === "Option");
+    assert.ok(!option || option.data?.name === "Option", JSON.stringify(option));
+  } finally {
+    stop();
   }
 });
 

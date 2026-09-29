@@ -115,9 +115,19 @@ fn unbalanced_delimiter(tokens: &[Token]) -> Option<Span> {
                 }
                 TokenKind::Template(parts) => {
                     for part in parts.iter() {
-                        if let TplPart::Interp { tokens, .. } = part
-                            && let Some(span) = walk(tokens, stack)
-                        {
+                        let TplPart::Interp { span, tokens } = part else {
+                            continue;
+                        };
+                        // An interpolation that runs to the template's end
+                        // never met its `}`: its `${` is still open.
+                        if span.end == token.span.end {
+                            let open = Span {
+                                start: span.start - 2,
+                                end: span.start,
+                            };
+                            stack.push((b'{', open));
+                        }
+                        if let Some(span) = walk(tokens, stack) {
                             return Some(span);
                         }
                     }

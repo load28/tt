@@ -819,3 +819,29 @@ fn a_tt_diagnostic_lands_on_the_line_every_terminator_starts() {
         );
     }
 }
+
+#[test]
+fn a_type_error_in_a_variant_field_reports_at_the_field_type() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    // The field's type is written in the union and in the constructor; both
+    // copies map to the one place the user wrote it.
+    fs::write(
+        project.path().join("src/price.tt"),
+        "export interface Money { cents: number }\nexport variant Price { Fixed(amount: Mony), Free }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { Price } from \"./price.tt\";\nexport const p: Price = Price.Free;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, &project);
+    assert!(!ok);
+    assert!(
+        text.contains("price.tt(2,38): error TS2552"),
+        "expected the checker's error at the field type, got:\n{text}"
+    );
+    assert!(!text.contains("price.tt(2,16)"), "{text}");
+}

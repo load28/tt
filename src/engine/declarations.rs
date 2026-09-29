@@ -11,6 +11,7 @@
 
 use std::path::Path;
 
+use super::documents::Texts;
 use crate::hir;
 use crate::resolve::{self, DeclOrigin, DefKind};
 
@@ -99,15 +100,21 @@ pub struct TtMatchSite {
 }
 
 /// The declarations visible in `source`, at `path` (which is what resolves
-/// its relative `.tt` imports — from disk; an editor passes the buffer's
-/// text for the file itself).
+/// its relative `.tt` imports; an editor passes the buffer's text for the
+/// file itself). This is the stand-alone question: an imported file is read
+/// as saved. A session asks [`super::Workspace::tt_declarations`], which
+/// reads its open documents.
 pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
+    declarations(path, source, Texts::Disk)
+}
+
+pub(super) fn declarations(path: &Path, source: &str, texts: Texts<'_>) -> TtDeclarations {
     let program = crate::parser::parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let externs: Vec<resolve::ExternDecl> =
-        super::language::externs_of(path, source, &|target| std::fs::read_to_string(target).ok())
+        super::language::externs_of(path, source, &|target| texts.read(target))
             .iter()
             .map(Into::into)
             .collect();

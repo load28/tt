@@ -40,6 +40,7 @@ use crate::ast::{
 use crate::lexer::{Token, TokenKind};
 use crate::parser::PatternSite;
 
+use super::documents::Texts;
 use super::language::Position;
 
 /// What a completion item is.
@@ -73,13 +74,26 @@ pub struct TtCompletion {
 ///
 /// The answer never includes ordinary TypeScript completions: those are the
 /// service's, and a consumer merges the two lists.
+///
+/// This is the stand-alone question: the files `source` imports are read
+/// as saved. A session asks [`super::Workspace::tt_completions_at`], which
+/// reads its open documents.
 pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<TtCompletion> {
+    completions_at(path, source, position, Texts::Disk)
+}
+
+pub(super) fn completions_at(
+    path: &Path,
+    source: &str,
+    position: Position,
+    texts: Texts<'_>,
+) -> Vec<TtCompletion> {
     let offset = super::language::source_byte(source, position);
     let (program, tokens) = crate::parser::lex_and_parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
-    let declarations = super::language::analyses_for(path, source).declarations;
+    let declarations = super::language::analyses_for(path, source, texts).declarations;
     let items = match context(source, &program, &tokens, offset) {
         Some(Context::Case { of: Some(arms) }) => {
             let mut items = resolve_all(&declarations, &arms.tags)
@@ -186,14 +200,123 @@ pub fn member_access_at(path: &Path, source: &str, position: Position) -> Option
     })
 }
 
+/// A tt keyword whose construct can be written at a position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TtKeyword {
+    /// `variant Name { … }`, a declaration.
+    Variant,
+    /// `match (…) { … }`, an expression.
+    Match,
+    /// `try expression;`, the statement form.
+    Try,
+    /// `flow |> …`, an expression.
+    Flow,
+    /// `result { … }`, an expression.
+    Result,
+    /// `const Tag(…) = expression else { … };`, a declaration.
+    LetElse,
+}
+
+impl TtKeyword {
+    /// The label a completion item shows.
+    pub fn label(self) -> &'static str {
+        match self {
+            TtKeyword::Variant => "variant",
+            TtKeyword::Match => "match",
+            TtKeyword::Try => "try",
+            TtKeyword::Flow => "flow",
+            TtKeyword::Result => "result",
+            TtKeyword::LetElse => "let-else",
+        }
+    }
+
+    /// Where TypeScript ranks a keyword in a completion list
+    /// (`SortText.GlobalsOrKeywords`): after the names in scope, among its
+    /// own keywords.
+    pub fn sort_text(self) -> &'static str {
+        "15"
+    }
+
+    /// Whether the construct can begin where a word with `facts` stands: a
+    /// declaration where a statement begins or after `export`, another
+    /// statement where a statement begins, an expression where a statement
+    /// or an operand begins.
+    fn fits(self, facts: crate::lexer::TokenFacts) -> bool {
+        match self {
+            TtKeyword::Variant => facts.statement_start() || facts.modified(),
+            TtKeyword::Try | TtKeyword::LetElse => facts.statement_start(),
+            TtKeyword::Match | TtKeyword::Flow | TtKeyword::Result => {
+                facts.statement_start() || (facts.operand_start() && !facts.modified())
+            }
+        }
+    }
+
+    const ALL: [TtKeyword; 6] = [
+        TtKeyword::Variant,
+        TtKeyword::Match,
+        TtKeyword::Try,
+        TtKeyword::Flow,
+        TtKeyword::Result,
+        TtKeyword::LetElse,
+    ];
+}
+
+/// The tt keywords whose construct can be written at `position`: a
+/// statement's where a statement begins, an expression's where an operand
+/// may begin — the grammar position the lexer's facts record for the word
+/// being typed there. Nothing in a comment or a literal, at a member
+/// access, in a pattern, or where TypeScript expects a name of its own (a
+/// property, a JSX attribute, an import specifier, a type).
+pub fn tt_keywords_at(path: &Path, source: &str, position: Position) -> Vec<TtKeyword> {
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    let offset = super::language::source_byte(source, position);
+    let (program, tokens) = crate::parser::lex_and_parse_with_kind(source, kind);
+    if member_access_at(path, source, position).is_some()
+        || context(source, &program, &tokens, offset).is_some()
+    {
+        return Vec::new();
+    }
+    let Some(facts) = word_facts(source, kind, offset) else {
+        return Vec::new();
+    };
+    TtKeyword::ALL
+        .into_iter()
+        .filter(|keyword| keyword.fits(facts))
+        .collect()
+}
+
+/// The facts of the word the cursor at `offset` is typing, or of a word
+/// written there when none is: the grammar position a name at the cursor
+/// stands in. `None` in a comment or a literal.
+fn word_facts(
+    source: &str,
+    kind: crate::SourceKind,
+    offset: usize,
+) -> Option<crate::lexer::TokenFacts> {
+    let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), kind);
+    let tokens = innermost_tokens(&tokens, offset);
+    if inside_text(source, tokens, offset) {
+        return None;
+    }
+    let next = token_at(tokens, offset);
+    if next > 0 && is_prefix(tokens, next - 1, offset) {
+        return Some(tokens[next - 1].facts);
+    }
+    let probe = super::language::PROBE_NAME;
+    let spliced = format!("{}{probe}{}", &source[..offset], &source[offset..]);
+    let tokens = crate::lexer::lex_with_kind(&spliced, 0, spliced.len(), kind);
+    let tokens = innermost_tokens(&tokens, offset);
+    tokens
+        .get(token_at(tokens, offset))
+        .filter(|token| token.span.start == offset && matches!(token.kind, TokenKind::Ident))
+        .map(|token| token.facts)
+}
+
 /// The tokens of the innermost template interpolation around `offset`, or
 /// `tokens` when it is in none.
 fn innermost_tokens(tokens: &[Token], offset: usize) -> &[Token] {
     for token in tokens {
-        if let TokenKind::Template(parts) = &token.kind
-            && token.span.start < offset
-            && offset < token.span.end
-        {
+        if let TokenKind::Template(parts) = &token.kind {
             for part in parts.iter() {
                 if let crate::lexer::TplPart::Interp { span, tokens } = part
                     && span.start <= offset
@@ -739,6 +862,54 @@ mod tests {
     }
 
     #[test]
+    fn a_tt_keyword_is_offered_where_its_construct_can_begin() {
+        let keywords = |path: &str, source: &str| {
+            let offset = source.find('‸').expect("cursor");
+            let text = source.replace('‸', "");
+            let (line, character) = crate::lines::LineMap::lsp(&text).utf16_position(offset);
+            let position = Position {
+                line: line as u32,
+                character: character as u32,
+            };
+            tt_keywords_at(Path::new(path), &text, position)
+                .into_iter()
+                .map(TtKeyword::label)
+                .collect::<Vec<_>>()
+        };
+        let statement = ["variant", "match", "try", "flow", "result", "let-else"];
+        let expression = ["match", "flow", "result"];
+        for (path, source, expected) in [
+            ("/p/a.tt", "const x = 1;\n‸\n", &statement[..]),
+            ("/p/a.tt", "const x = 1;\nma‸\n", &statement[..]),
+            ("/p/a.tt", "function f() {\n  ‸\n}\n", &statement[..]),
+            ("/p/a.tt", "const x = ‸;\n", &expression[..]),
+            ("/p/a.tt", "const x = f(1, ma‸);\n", &expression[..]),
+            ("/p/a.tt", "const o = { a: ‸ };\n", &expression[..]),
+            ("/p/a.tt", "const f = (a: number) => ‸;\n", &expression[..]),
+            ("/p/a.tt", "const s = `a ${‸}`;\n", &expression[..]),
+            ("/p/a.ttx", "const e = <div>{‸}</div>;\n", &expression[..]),
+            ("/p/a.tt", "export default ‸\n", &expression[..]),
+            ("/p/a.tt", "export ‸\n", &["variant"][..]),
+            ("/p/a.tt", "const cfg: Cfg = { ‸ };\n", &[][..]),
+            ("/p/a.tt", "const cfg: Cfg = { a: 1, b‸ };\n", &[][..]),
+            ("/p/a.tt", "import { ‸ } from \"./orders.tt\";\n", &[][..]),
+            ("/p/a.ttx", "const e = <Row ‸ />;\n", &[][..]),
+            ("/p/a.tt", "let y: ‸;\n", &[][..]),
+            ("/p/a.tt", "class C {\n  ‸\n}\n", &[][..]),
+            ("/p/a.tt", "const n = user.‸\n", &[][..]),
+            ("/p/a.tt", "// ‸\n", &[][..]),
+            ("/p/a.tt", "const s = \"‸\";\n", &[][..]),
+            (
+                "/p/a.tt",
+                "variant V { A, B }\nconst v = match (x) { A => 1, ‸ };\n",
+                &[][..],
+            ),
+        ] {
+            assert_eq!(keywords(path, source), expected, "{source}");
+        }
+    }
+
+    #[test]
     fn a_member_access_is_read_from_the_tokens_before_the_name() {
         for source in [
             "declare const nm: string;\nconst m = nm.trim().ma",
@@ -768,6 +939,9 @@ mod tests {
         // expression containers are.
         for (path, source, cursor, receiver) in [
             ("/p/a.tt", "const r = `${obj.na}`;", "obj.na", "obj"),
+            ("/p/a.tt", "const s = `returned ${at.", "at.", "at"),
+            ("/p/a.tt", "const s = `returned ${at.ge", "at.ge", "at"),
+            ("/p/a.tt", "const s = `a ${x} b ${y.", "y.", "y"),
             (
                 "/p/a.ttx",
                 "const r = <div>{obj.na}</div>;",

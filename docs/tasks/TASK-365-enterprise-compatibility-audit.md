@@ -1,5 +1,11 @@
 # TASK-365: Audit enterprise mixed-source compatibility
 
+> **Superseded in part (TASK-579).** Decision 2 no longer holds: an
+> unterminated template interpolation is lexed as TypeScript's scanner
+> reads it, as expression tokens to the end of the file. No raw chunk
+> follows it, so the source spans still do not overlap, and its `${` is
+> reported as an unbalanced delimiter.
+
 - **Status**: Complete
 - **Started**: 2026-09-11
 - **Completed**: 2026-09-12

@@ -56,6 +56,8 @@ impl TokenFacts {
     const TYPE_ARGUMENTS_OPEN: u16 = 1 << 9;
     const TYPE_ARGUMENTS_CLOSE: u16 = 1 << 10;
     const DECLARATION: u16 = 1 << 11;
+    const OPERAND_START: u16 = 1 << 12;
+    const MODIFIED: u16 = 1 << 13;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -94,6 +96,19 @@ impl TokenFacts {
     /// binds only inside the function or class itself.
     pub(crate) fn declaration(self) -> bool {
         self.0 & Self::DECLARATION != 0
+    }
+
+    /// This token begins an operand where an expression expects one: a
+    /// value may be written here, as opposed to a statement keyword, a
+    /// member name, a binding, or a type.
+    pub(crate) fn operand_start(self) -> bool {
+        self.0 & Self::OPERAND_START != 0
+    }
+
+    /// This token continues a statement that modifiers or decorators began
+    /// (`export`, `declare`, `@dec`): what follows them is a declaration.
+    pub(crate) fn modified(self) -> bool {
+        self.0 & Self::MODIFIED != 0
     }
 
     /// This token names a member of a class, interface, type literal, or
@@ -163,6 +178,8 @@ impl std::fmt::Debug for TokenFacts {
             (Self::TYPE_ARGUMENTS_OPEN, "type-arguments-open"),
             (Self::TYPE_ARGUMENTS_CLOSE, "type-arguments-close"),
             (Self::DECLARATION, "declaration"),
+            (Self::OPERAND_START, "operand-start"),
+            (Self::MODIFIED, "modified"),
         ];
         let set: Vec<&str> = names
             .iter()

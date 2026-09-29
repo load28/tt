@@ -38,10 +38,12 @@
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
 //! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }],
-//!                          "member": { "receiver" } | null } }
+//!                          "member": { "receiver" } | null,
+//!                          "keywords": [{ "label", "sortText" }] } }
 //! `member`: the cursor completes a member name; `receiver` is the path of
 //! names before the `.` (`Result`, `ns.Shape`), or null for any other
-//! expression.
+//! expression. `keywords`: the tt keywords whose construct can be written
+//! at the position, with TypeScript's rank for a keyword.
 //!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
@@ -50,6 +52,9 @@
 //! ← { "id": 8, "result": { "variants": [{ "name", "generics", "origin",
 //!        "specifier", "nameSpan", "span", "cases" }],
 //!        "matches": [{ "keyword", "bodyOpen", "bodyClose" }] } }
+//! `ttSymbol`, `ttCompletions`, `ttHints` and `declarations` answer from
+//! `text` without a project; the `.tt` files it imports are read as the
+//! session holds them open, else from disk.
 //!
 //! → { "id": 9, "method": "reloadProjects", "params": {} }
 //! ← { "id": 9, "result": {} }
@@ -328,10 +333,10 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             })
         }),
         "semanticTokens" => semantic_tokens(params),
-        "declarations" => declarations(params),
-        "ttSymbol" => tt_symbol(params),
-        "ttCompletions" => tt_completions(params),
-        "ttHints" => tt_hints(params),
+        "declarations" => declarations(workspace, params),
+        "ttSymbol" => tt_symbol(workspace, params),
+        "ttCompletions" => tt_completions(workspace, params),
+        "ttHints" => tt_hints(workspace, params),
         "tsDiagnostics" => semantic(workspace, params, |project, path, _position| {
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
@@ -564,14 +569,18 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 /// (local, imported, built-in, under the compiler's shadowing) plus the
 /// buffer's `match` sites. This is the surface that replaces the editor's
 /// regex re-implementation of tt semantics (`engine::tt_declarations`).
-/// Text-only; `path` resolves the buffer's relative `.tt` imports.
-fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// Text-only; `path` resolves the buffer's relative `.tt` imports, read as
+/// the session holds them open.
+fn declarations(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
     let text = text_param(params)?;
-    let decls = ttc::engine::tt_declarations(Path::new(path), text);
+    let decls = workspace.tt_declarations(Path::new(path), text);
     // The engine measures these in bytes; a consumer addresses the buffer
     // in UTF-16 code units, which is what the protocol counts. One
     // conversion here keeps the two from disagreeing about where a name is
@@ -643,8 +652,12 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
 /// Text-only like `semanticTokens`: the answer needs no project and no
 /// toolchain, because these names exist nowhere in the emitted TypeScript
 /// and are tt's to answer (`engine::names`). `path` is still required, to
-/// resolve the file's relative `.tt` imports.
-fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// resolve the file's relative `.tt` imports, which are read as the session
+/// holds them open.
+fn tt_symbol(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
@@ -653,7 +666,7 @@ fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let Some(symbol) = ttc::engine::tt_symbol_at(Path::new(path), text_param(params)?, position)
+    let Some(symbol) = workspace.tt_symbol_at(Path::new(path), text_param(params)?, position)
     else {
         return Ok(serde_json::Value::Null);
     };
@@ -678,7 +691,10 @@ fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 
 /// What can be written at a pattern position — case tags, payload field
 /// names. Text-only, for the same reason [`tt_symbol`] is.
-fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn tt_completions(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
@@ -689,35 +705,44 @@ fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, Strin
     };
     let member = ttc::engine::member_access_at(Path::new(path), text_param(params)?, position)
         .map(|access| json!({ "receiver": access.receiver }));
-    let items: Vec<_> =
-        ttc::engine::tt_completions_at(Path::new(path), text_param(params)?, position)
-            .into_iter()
-            .map(|item| {
-                json!({
-                    "label": item.label,
-                    "kind": match item.kind {
-                        ttc::engine::TtCompletionKind::Case => "case",
-                        ttc::engine::TtCompletionKind::Field => "field",
-                        ttc::engine::TtCompletionKind::Wildcard => "wildcard",
-                    },
-                    "detail": item.detail,
-                    "covered": item.covered,
-                })
+    let items: Vec<_> = workspace
+        .tt_completions_at(Path::new(path), text_param(params)?, position)
+        .into_iter()
+        .map(|item| {
+            json!({
+                "label": item.label,
+                "kind": match item.kind {
+                    ttc::engine::TtCompletionKind::Case => "case",
+                    ttc::engine::TtCompletionKind::Field => "field",
+                    ttc::engine::TtCompletionKind::Wildcard => "wildcard",
+                },
+                "detail": item.detail,
+                "covered": item.covered,
             })
+        })
+        .collect();
+    let keywords: Vec<_> =
+        ttc::engine::tt_keywords_at(Path::new(path), text_param(params)?, position)
+            .into_iter()
+            .map(|keyword| json!({ "label": keyword.label(), "sortText": keyword.sort_text() }))
             .collect();
-    Ok(json!({ "items": items, "member": member }))
+    Ok(json!({ "items": items, "member": member, "keywords": keywords }))
 }
 
 /// What tt has to say about a buffer that is not an error — today, the
 /// arms an earlier arm already covers. Text-only like [`tt_symbol`], and
 /// separate from `check` on purpose: a hint never fails a build, so it
 /// never travels in the diagnostics of a compile answer.
-fn tt_hints(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn tt_hints(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let hints: Vec<_> = ttc::engine::tt_hints(Path::new(path), text_param(params)?)
+    let hints: Vec<_> = workspace
+        .tt_hints(Path::new(path), text_param(params)?)
         .into_iter()
         .map(|hint| {
             json!({

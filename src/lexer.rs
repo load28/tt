@@ -562,6 +562,11 @@ pub(crate) fn invalid_jsx_namespace_member(tokens: &[Token]) -> Option<Span> {
 /// `src[start]` is a backtick — lexes the template into raw chunks and
 /// recursively lexed `${ }` interpolations. Returns the index just past
 /// the closing backtick (or `end` if unterminated).
+///
+/// An interpolation whose `}` is missing runs to `end` and ends the
+/// template, as TypeScript's scanner reads it: after `${` come expression
+/// tokens, whatever follows. The parts still cover the source once, in
+/// order — no raw chunk follows an interpolation that never closed.
 fn lex_template(
     src_str: &str,
     start: usize,
@@ -590,10 +595,6 @@ fn lex_template(
             return (i, parts);
         }
         if c == b'$' && at(src, i + 1, end) == Some(b'{') {
-            // An unterminated interpolation is still template text while the
-            // user is editing. Treating the remainder as an interpolation
-            // would give the parser an overlapping span when recovery finds a
-            // nested expression, violating source-preservation in codegen.
             let (tokens, close) = lex_region(
                 src_str,
                 i + 2,
@@ -603,9 +604,6 @@ fn lex_template(
                 true,
                 trace.as_deref_mut(),
             );
-            if close == end {
-                break;
-            }
             push_raw(&mut parts, raw_start, i);
             parts.push(TplPart::Interp {
                 span: Span {
@@ -614,6 +612,9 @@ fn lex_template(
                 },
                 tokens,
             });
+            if close == end {
+                return (end, parts);
+            }
             i = (close + 1).min(end);
             raw_start = i;
             continue;

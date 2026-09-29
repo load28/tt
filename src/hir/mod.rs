@@ -240,6 +240,8 @@ pub struct VariantItem {
     pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
+    /// Where [`VariantItem::generics`] is written in the source.
+    pub generics_span: Span,
     /// The declaration's variants, in order.
     pub variants: Vec<VariantId>,
 }
@@ -273,6 +275,8 @@ pub struct FieldData {
     /// The verbatim type annotation text — a *text*, not a type; the typed
     /// pass asks the checker (Phase 4).
     pub ty_text: String,
+    /// Where [`FieldData::ty_text`] is written in the source.
+    pub ty_span: Span,
     pub(crate) comments: crate::ast::Comments,
 }
 

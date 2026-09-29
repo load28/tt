@@ -296,7 +296,12 @@ impl Project {
             let Some(text) = self.text_of(&file) else {
                 continue;
             };
-            for range in crate::engine::names::tt_pattern_references(&file, &text, &declaration) {
+            for range in crate::engine::names::tt_pattern_references(
+                &file,
+                &text,
+                &declaration,
+                Texts::Open(&self.overlays),
+            ) {
                 found.push(Reference {
                     is_definition: false,
                     location: Location {
@@ -331,7 +336,8 @@ impl Project {
         let is_tt = |path: &Path| crate::SourceKind::from_tt_path(path).is_some();
         if is_tt(path)
             && let Some(text) = self.text_of(path)
-            && let Some(symbol) = crate::engine::names::tt_symbol_at(path, &text, position)
+            && let Some(symbol) =
+                crate::engine::names::symbol_at(path, &text, position, Texts::Open(&self.overlays))
         {
             return Ok(symbol.definition);
         }
@@ -342,9 +348,14 @@ impl Project {
             let Some(text) = self.text_of(&definition.path) else {
                 continue;
             };
-            if crate::engine::names::tt_symbol_at(&definition.path, &text, definition.range.start)
-                .and_then(|symbol| symbol.definition)
-                .is_some_and(|found| crate::engine::names::same_location(&found, definition))
+            if crate::engine::names::symbol_at(
+                &definition.path,
+                &text,
+                definition.range.start,
+                Texts::Open(&self.overlays),
+            )
+            .and_then(|symbol| symbol.definition)
+            .is_some_and(|found| crate::engine::names::same_location(&found, definition))
             {
                 return Ok(Some(definition.clone()));
             }
@@ -369,10 +380,7 @@ impl Project {
 
     /// A file's text as the project sees it: the open buffer, else the disk.
     fn text_of(&self, path: &Path) -> Option<String> {
-        match self.overlays.read().get(path) {
-            Some(text) => Some(text.clone()),
-            None => std::fs::read_to_string(path).ok(),
-        }
+        self.overlays.text(path)
     }
 
     fn locations(
@@ -656,7 +664,13 @@ impl Project {
                     // silently rebinding a different field.
                     return Ok(None);
                 }
-                out.push(RenameEdit { location, new_text });
+                // Text a lowering writes more than once (a variant field's
+                // type, in its union and its constructor) is one place in
+                // the source, renamed once.
+                let edit = RenameEdit { location, new_text };
+                if !out.contains(&edit) {
+                    out.push(edit);
+                }
             }
         }
         Ok(if out.is_empty() { None } else { Some(out) })
@@ -922,14 +936,20 @@ impl Project {
             if !exact {
                 message.push_str(" (in code ttc generated for this construct)");
             }
-            out.push(ServiceDiagnostic {
+            let entry = ServiceDiagnostic {
                 range: source_range(&doc.source, s, e),
                 message,
                 code,
                 severity,
                 tags,
                 related,
-            });
+            };
+            // Text a lowering writes more than once (a variant field's
+            // type) draws the checker's error at each copy; the user wrote
+            // it once.
+            if !out.contains(&entry) {
+                out.push(entry);
+            }
         }
         Ok(out)
     }

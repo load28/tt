@@ -267,7 +267,7 @@ pub(crate) struct Adt {
     pub name: String,
     pub exported: bool,
     pub declared: bool,
-    pub generics: String,
+    pub generics: hir::Span,
     pub variants: Vec<AdtVariant>,
 }
 
@@ -285,7 +285,7 @@ pub(crate) struct AdtField {
     pub node: NodeId,
     pub name: String,
     pub optional: bool,
-    pub ty_text: String,
+    pub ty_span: hir::Span,
     pub comments: crate::ast::Comments,
 }
 

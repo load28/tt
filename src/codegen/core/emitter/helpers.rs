@@ -238,8 +238,14 @@ const PROTOTYPE_SETTER_NAME: &str = "__proto__";
 
 /// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
+///
+/// A field's type is the user's TypeScript: each place it is written, in
+/// the union and in the constructor's parameters, copies it from `source`,
+/// so every question about it reaches the checker and every answer maps
+/// back to it.
 pub(super) fn emit_adt<'a>(
     adt: &Adt,
+    source: &'a str,
     span: impl Fn(NodeId) -> hir::Span,
     ambient: bool,
     source_kind: crate::SourceKind,
@@ -255,58 +261,63 @@ pub(super) fn emit_adt<'a>(
         (false, false) => "",
     };
     let ambient = ambient || adt.declared;
+    let annotation = |field: &AdtField, out: &mut Rope<'a>| {
+        out.push_lit(if field.optional { "?: " } else { ": " });
+        out.push_src(
+            &source[field.ty_span.start..field.ty_span.end],
+            field.ty_span.start,
+        );
+    };
     let field_list = |fields: &[AdtField], separator: &str, out: &mut Rope<'a>| {
         for (index, field) in fields.iter().enumerate() {
             if index > 0 {
                 out.push_lit(separator.to_owned());
             }
             declared(out, &field.name, field.node);
-            out.push_lit(format!(
-                "{}: {}",
-                if field.optional { "?" } else { "" },
-                field.ty_text
-            ));
+            annotation(field, out);
         }
     };
-    let parameter_list = |fields: &[AdtField]| {
-        fields
-            .iter()
-            .map(|field| {
-                format!(
-                    "{}{}: {}",
-                    field.name,
-                    if field.optional { "?" } else { "" },
-                    field.ty_text
-                )
-            })
-            .collect::<Vec<_>>()
-            .join(", ")
+    let parameter_list = |fields: &[AdtField], out: &mut Rope<'a>| {
+        for (index, field) in fields.iter().enumerate() {
+            if index > 0 {
+                out.push_lit(", ");
+            }
+            out.push_lit(field.name.clone());
+            annotation(field, out);
+        }
     };
-    let type_args = if adt.generics.is_empty() {
+    let generics = &source[adt.generics.start..adt.generics.end];
+    let type_args = if generics.is_empty() {
         String::new()
     } else {
-        format!("<{}>", generic_param_names(&adt.generics).join(", "))
+        format!("<{}>", generic_param_names(generics).join(", "))
     };
-    let arrow_generics = if source_kind == crate::SourceKind::Tsx && !adt.generics.is_empty() {
-        let inner = &adt.generics[..adt.generics.len() - 1];
+    let push_generics = |out: &mut Rope<'a>| out.push_src(generics, adt.generics.start);
+    // In a `.tsx` file `<T>(` would open a JSX element; a trailing comma in
+    // the list makes it a type parameter list.
+    let push_arrow_generics = |out: &mut Rope<'a>| {
+        if source_kind != crate::SourceKind::Tsx || generics.is_empty() {
+            push_generics(out);
+            return;
+        }
+        let inner = &generics[..generics.len() - 1];
         let tokens = crate::lexer::lex(inner, 0, inner.len());
         if tokens
             .last()
             .is_some_and(|token| &inner[token.span.start..token.span.end] == ",")
         {
-            adt.generics.clone()
+            push_generics(out);
         } else {
-            format!("{inner},>")
+            out.push_src(inner, adt.generics.start);
+            out.push_lit(",>");
         }
-    } else {
-        adt.generics.clone()
     };
     let parameters = |fields: &[AdtField], out: &mut Rope<'a>| {
         let documented = fields
             .iter()
             .any(|field| field.comments.leading.iter().any(Comment::is_doc));
         if !documented {
-            out.push_lit(parameter_list(fields));
+            parameter_list(fields, out);
             return;
         }
         for field in fields {
@@ -320,19 +331,17 @@ pub(super) fn emit_adt<'a>(
                 push_comment(out, comment, 2);
             }
             out.push_break(2);
-            out.push_lit(format!(
-                "{}{}: {},",
-                field.name,
-                if field.optional { "?" } else { "" },
-                field.ty_text
-            ));
+            out.push_lit(field.name.clone());
+            annotation(field, out);
+            out.push_lit(",");
         }
         out.push_break(1);
     };
     let mut out = Rope::new();
     out.push_lit(format!("{export}type "));
     declared(&mut out, &adt.name, adt.node);
-    out.push_lit(format!("{} =", adt.generics));
+    push_generics(&mut out);
+    out.push_lit(" =");
     let last = adt.variants.len().saturating_sub(1);
     for (index, variant) in adt.variants.iter().enumerate() {
         for comment in &variant.comments.leading {
@@ -356,11 +365,8 @@ pub(super) fn emit_adt<'a>(
                     }
                     out.push_break(3);
                     declared(&mut out, &field.name, field.node);
-                    out.push_lit(format!(
-                        "{}: {};",
-                        if field.optional { "?" } else { "" },
-                        field.ty_text
-                    ));
+                    annotation(field, &mut out);
+                    out.push_lit(";");
                     push_trailing_comments(&mut out, &field.comments.trailing, 3);
                 }
                 out.push_break(2);
@@ -403,7 +409,9 @@ pub(super) fn emit_adt<'a>(
             match &variant.fields {
                 None => out.push_lit(format!(": {{ readonly kind: \"{}\" }};", variant.name)),
                 Some(fields) => {
-                    out.push_lit(format!(": {}(", adt.generics));
+                    out.push_lit(": ");
+                    push_generics(&mut out);
+                    out.push_lit("(");
                     parameters(fields, &mut out);
                     out.push_lit(format!(") => {}{type_args};", adt.name));
                 }
@@ -431,7 +439,9 @@ pub(super) fn emit_adt<'a>(
                     }))
                     .collect::<Vec<_>>()
                     .join(", ");
-                out.push_lit(format!(": {arrow_generics}("));
+                out.push_lit(": ");
+                push_arrow_generics(&mut out);
+                out.push_lit("(");
                 parameters(fields, &mut out);
                 out.push_lit(format!("): {}{type_args} => ({{ {object} }}),", adt.name));
             }

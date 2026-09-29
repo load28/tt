@@ -465,6 +465,7 @@ impl<'a> Emitter<'a> {
                         span.end,
                         emit_adt(
                             adt,
+                            self.source,
                             |node| self.span(node),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,

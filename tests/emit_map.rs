@@ -8,7 +8,10 @@
 use ttc::{EmitMapping, ImportRewrite, Options, compile, emit_mapped};
 
 /// Every mapping's chunk must read the same in source and output, chunks
-/// must be in-bounds, and must not overlap in either coordinate space.
+/// must be in-bounds, and must not overlap in the output. Two chunks copy
+/// the same source bytes only as copies of one text, which a tt construct's
+/// lowering may write more than once (a variant field's type, in the union
+/// and the constructor).
 fn assert_mapping_invariants(src: &str, m: &ttc::MappedEmit) {
     let mut by_src = m.mappings.clone();
     by_src.sort_by_key(|e| e.src);
@@ -24,13 +27,16 @@ fn assert_mapping_invariants(src: &str, m: &ttc::MappedEmit) {
             "mapped chunk differs between source and output: {e:?}"
         );
     }
-    for w in by_src.windows(2) {
-        assert!(
-            w[0].src + w[0].len <= w[1].src,
-            "overlapping source mappings: {:?} / {:?}",
-            w[0],
-            w[1]
-        );
+    for (index, a) in by_src.iter().enumerate() {
+        for b in by_src[index + 1..]
+            .iter()
+            .take_while(|b| b.src < a.src + a.len)
+        {
+            assert_eq!(
+                a.src, b.src,
+                "overlapping source mappings that are not copies of one text: {a:?} / {b:?}"
+            );
+        }
     }
     for w in by_out.windows(2) {
         assert!(
@@ -614,5 +620,31 @@ fn a_value_try_without_an_owner_keeps_its_operand_mapped() {
                 .all(|e| e.src + e.len <= keyword || start <= e.src),
             "the keyword is not copied: {src:?}"
         );
+    }
+}
+
+/// A variant's field types and type parameters are the user's TypeScript:
+/// each place the lowering writes them (the union, the constructor) copies
+/// them from the source, in `.tt` and `.ttx` alike.
+#[test]
+fn variant_field_types_and_type_parameters_are_mapped_where_they_are_written() {
+    for kind in [ttc::SourceKind::TypeScript, ttc::SourceKind::Tsx] {
+        let src = "export variant Box<T extends Money> { Full(item: T, at?: Date), Empty }\n";
+        let m = ttc::emit_mapped_with_kind(src, kind);
+        assert_mapping_invariants(src, &m);
+        for (text, copies) in [("<T extends Money", 2), ("T, at", 2), ("Date", 2)] {
+            let start = src.find(text).unwrap();
+            let len = text.find(',').unwrap_or(text.len());
+            let outs: Vec<_> = m
+                .mappings
+                .iter()
+                .filter(|e| e.src <= start && start + len <= e.src + e.len)
+                .map(|e| e.out + (start - e.src))
+                .collect();
+            assert_eq!(outs.len(), copies, "{kind:?} {text}: {:#?}", m.mappings);
+            for out in outs {
+                assert_eq!(&m.code[out..out + len], &src[start..start + len]);
+            }
+        }
     }
 }

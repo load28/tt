@@ -29,6 +29,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::documents::Texts;
 use super::project::Project;
 use super::projection::{self, module_path_of};
 use crate::EmitMapping;
@@ -360,7 +361,7 @@ struct ProbeDoc {
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so
 /// it cannot collide with the name the user is in the middle of typing.
-const PROBE_NAME: &str = "$tt_probe";
+pub(super) const PROBE_NAME: &str = "$tt_probe";
 
 use service::*;
 pub(super) use service::{

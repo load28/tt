@@ -167,3 +167,223 @@ fn a_type_error_keeps_its_rendering_while_an_open_document_does_not_parse() {
     let snapshot = project.update(std::slice::from_ref(&file)).unwrap();
     assert!(!snapshot.is_blocked(&file));
 }
+
+/// The parse-only surfaces read an imported `.tt` file as the session holds
+/// it open: a case added to the open `st.tt` buffer is completed, hovered
+/// and defined in `use.tt` before it is saved, as TypeScript's surfaces
+/// already see it.
+#[test]
+fn tt_names_read_an_imported_declaration_from_its_open_buffer() {
+    let dir = tmpdir();
+    let st = dir.join("src/st.tt");
+    let use_tt = dir.join("src/use.tt");
+    write(&dir, "src/st.tt", "export variant St { A, B }\n");
+    let edited = "export variant St { A, B, C }\n";
+    let typing = "import { St } from \"./st.tt\";\nexport function g(s: St): number {\n  return match (s) {\n    A => 1,\n    \n  };\n}\n";
+    let written = typing.replace("    \n  };", "    C => 3,\n    A => 4,\n  };");
+    write(&dir, "src/use.tt", typing);
+    let at = |text: &str, needle: &str, delta: usize| {
+        let position = source_position(text, needle, delta);
+        serde_json::json!({ "line": position.line, "character": position.character })
+    };
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": st, "text": edited } }),
+            serde_json::json!({ "id": 2, "method": "ttCompletions",
+                "params": { "path": use_tt, "text": typing,
+                    "position": at(typing, "    \n  };", 4) } }),
+            serde_json::json!({ "id": 3, "method": "ttSymbol",
+                "params": { "path": use_tt, "text": written,
+                    "position": at(&written, "C => 3", 0) } }),
+            serde_json::json!({ "id": 4, "method": "declarations",
+                "params": { "path": use_tt, "text": typing } }),
+            serde_json::json!({ "id": 5, "method": "ttHints",
+                "params": { "path": use_tt, "text": written } }),
+            serde_json::json!({ "id": 6, "method": "closeDocument",
+                "params": { "path": st } }),
+            serde_json::json!({ "id": 7, "method": "ttSymbol",
+                "params": { "path": use_tt, "text": written,
+                    "position": at(&written, "C => 3", 0) } }),
+        ],
+    );
+    let labels: Vec<_> = answers[1]["result"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["label"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(labels, ["A", "B", "C", "_"], "{answers:?}");
+    let symbol = &answers[2]["result"];
+    assert_eq!(symbol["kind"], "case", "{answers:?}");
+    assert_eq!(
+        symbol["definition"]["path"],
+        st.canonicalize().unwrap().to_string_lossy().as_ref(),
+        "{answers:?}"
+    );
+    assert_eq!(
+        symbol["definition"]["range"]["start"],
+        serde_json::json!({ "line": 0, "character": 26 }),
+        "{answers:?}"
+    );
+    let cases: Vec<_> = answers[3]["result"]["variants"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|variant| variant["name"] == "St")
+        .unwrap()["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|case| case["tag"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(cases, ["A", "B", "C"], "{answers:?}");
+    assert_eq!(
+        answers[4]["result"]["hints"].as_array().unwrap().len(),
+        1,
+        "the second `A` arm is unreachable: {answers:?}"
+    );
+    assert_eq!(
+        answers[6]["result"],
+        serde_json::Value::Null,
+        "closed, `st.tt` is its saved text again: {answers:?}"
+    );
+}
+
+/// A variant field's type is the user's TypeScript, and every service
+/// feature answers there as it does in a hand-written union: hover,
+/// definition, references, rename, completion and the checker's errors.
+#[test]
+fn a_variant_field_type_is_typescript_to_every_service_feature() {
+    require_tsgo!();
+    let source = "export interface Money { cents: number }\nexport variant Price { Fixed(amount: Money), Free }\nexport const toMoney = (n: number): Money => ({ cents: n });\n";
+    let typo = source.replace("amount: Money", "amount: Mony");
+    let typing = source.replace("amount: Money", "amount: Mo");
+    let dir = project(&[("src/price.tt", source)]);
+    let path = dir.join("src/price.tt");
+    let at = |text: &str, needle: &str, delta: usize| {
+        let position = source_position(text, needle, delta);
+        serde_json::json!({ "line": position.line, "character": position.character })
+    };
+    let field = at(source, "amount: Money", 8);
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": path, "text": source } }),
+            serde_json::json!({ "id": 2, "method": "hover",
+                "params": { "path": path, "position": field } }),
+            serde_json::json!({ "id": 3, "method": "definition",
+                "params": { "path": path, "position": field } }),
+            serde_json::json!({ "id": 4, "method": "references",
+                "params": { "path": path, "position": at(source, "Money {", 0) } }),
+            serde_json::json!({ "id": 5, "method": "rename",
+                "params": { "path": path, "position": field } }),
+            serde_json::json!({ "id": 6, "method": "updateDocument",
+                "params": { "path": path, "text": typing } }),
+            serde_json::json!({ "id": 7, "method": "completion",
+                "params": { "path": path, "position": at(&typing, "amount: Mo", 10) } }),
+            serde_json::json!({ "id": 8, "method": "updateDocument",
+                "params": { "path": path, "text": typo } }),
+            serde_json::json!({ "id": 9, "method": "tsDiagnostics",
+                "params": { "path": path } }),
+        ],
+    );
+    let start = |value: &serde_json::Value| {
+        (
+            value["range"]["start"]["line"].as_u64().unwrap(),
+            value["range"]["start"]["character"].as_u64().unwrap(),
+        )
+    };
+    assert!(
+        answers[1]["result"]["signature"]
+            .as_str()
+            .is_some_and(|signature| signature.contains("interface Money")),
+        "{answers:?}"
+    );
+    let definitions = answers[2]["result"]["locations"].as_array().unwrap();
+    assert_eq!(
+        definitions.iter().map(start).collect::<Vec<_>>(),
+        [(0, 17)],
+        "{answers:?}"
+    );
+    let mut references: Vec<_> = answers[3]["result"]["locations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(start)
+        .collect();
+    references.sort();
+    assert_eq!(references, [(0, 17), (1, 37), (2, 36)], "{answers:?}");
+    let mut renamed: Vec<_> = answers[4]["result"]["edits"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{answers:?}"))
+        .iter()
+        .map(start)
+        .collect();
+    renamed.sort();
+    assert_eq!(renamed, [(0, 17), (1, 37), (2, 36)], "{answers:?}");
+    let labels: Vec<_> = answers[6]["result"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["label"].as_str().unwrap())
+        .collect();
+    for expected in ["Money", "Date", "string"] {
+        assert!(labels.contains(&expected), "{expected}: {labels:?}");
+    }
+    let diagnostics = answers[8]["result"]["diagnostics"].as_array().unwrap();
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|d| (start(d), d["code"].clone()))
+            .collect::<Vec<_>>(),
+        [((1, 37), serde_json::json!(2552))],
+        "{answers:?}"
+    );
+}
+
+/// A member name typed in an interpolation whose `}` is not written yet is
+/// a member access, and TypeScript's members answer it, as in a `.ts` file.
+#[test]
+fn a_member_in_an_unterminated_interpolation_completes_members() {
+    require_tsgo!();
+    let dir = project(&[]);
+    let path = dir.join("src/at.tt");
+    let mut answers = Vec::new();
+    for source in [
+        "const at = new Date();\nconst s = `returned ${at.",
+        "const at = new Date();\nconst s = `returned ${at.ge",
+    ] {
+        write(&dir, "src/at.tt", source);
+        let end = source_position(source, source, source.len());
+        let end = serde_json::json!({ "line": end.line, "character": end.character });
+        answers.extend(server_answers(
+            &dir,
+            &[
+                serde_json::json!({ "id": 1, "method": "openDocument",
+                    "params": { "path": path, "text": source } }),
+                serde_json::json!({ "id": 2, "method": "ttCompletions",
+                    "params": { "path": path, "text": source, "position": end } }),
+                serde_json::json!({ "id": 3, "method": "completion",
+                    "params": { "path": path, "position": end, "member": true } }),
+            ],
+        ));
+    }
+    for answer in answers.chunks(3) {
+        assert_eq!(
+            answer[1]["result"]["member"],
+            serde_json::json!({ "receiver": "at" }),
+            "{answers:?}"
+        );
+        let labels: Vec<_> = answer[2]["result"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["label"].as_str().unwrap())
+            .collect();
+        assert!(labels.contains(&"getTime"), "{labels:?}");
+        assert!(!labels.contains(&"match"), "{labels:?}");
+    }
+}

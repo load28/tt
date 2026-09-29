@@ -140,6 +140,15 @@ export interface EngineTtCompletions {
    * of names before the `.` (`Result`, `ns.Shape`), or null for any other
    * expression (`f().`, `x |> .`). */
   member: { receiver: string | null } | null;
+  /** The tt keywords whose construct can be written there, with
+   * TypeScript's rank for a keyword. */
+  keywords: EngineTtKeyword[];
+}
+
+/** A tt keyword the engine found valid at a position. */
+export interface EngineTtKeyword {
+  label: string;
+  sortText: string;
 }
 
 export interface EngineSemanticToken {
@@ -601,7 +610,11 @@ export async function ttCompletions(
     { path, text, position },
     onError,
   );
-  return { items: result?.items ?? [], member: result?.member ?? null };
+  return {
+    items: result?.items ?? [],
+    member: result?.member ?? null,
+    keywords: result?.keywords ?? [],
+  };
 }
 
 /** What tt has to say about a buffer that is not an error — today, the

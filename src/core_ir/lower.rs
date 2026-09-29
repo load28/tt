@@ -173,7 +173,7 @@ impl Lowering<'_> {
                         name: item.name.clone(),
                         exported: item.exported,
                         declared: item.declared,
-                        generics: item.generics.clone(),
+                        generics: item.generics_span,
                         variants: item
                             .variants
                             .iter()
@@ -191,7 +191,7 @@ impl Lowering<'_> {
                                                     node: field.node,
                                                     name: field.name.clone(),
                                                     optional: field.optional,
-                                                    ty_text: field.ty_text.clone(),
+                                                    ty_span: field.ty_span,
                                                     comments: field.comments.clone(),
                                                 }
                                             })

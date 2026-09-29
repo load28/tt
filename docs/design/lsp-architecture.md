@@ -158,6 +158,20 @@ a variant's constructors are offered through). `ttCompletions` answers it
 as `member`, and the adapter relays it into the completion request. What
 remains in `analysis.ts` is the word at the cursor.
 
+**Update (TASK-578)**: at a general position the adapter no longer adds
+every visible variant and every keyword snippet in front of TypeScript's
+list. `ttCompletions` answers `keywords`: the tt keywords whose construct
+can begin at the position (`engine::tt_keywords_at`), read from the
+lexer's facts for the word being typed there — a statement's where a
+statement begins, a declaration's also after `export`, an expression's
+where an operand may begin; none for a property name, a JSX attribute, an
+import specifier, a type or a class member. Each carries TypeScript's
+keyword rank (`15`, `SortText.GlobalsOrKeywords`), so the snippets sort
+among TypeScript's keywords, after the names in scope. A variant's name at
+a general position is TypeScript's entry: the emission declares it, so the
+service lists it wherever it is in scope and valid, and a built-in that is
+not imported is not in scope.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

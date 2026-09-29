@@ -488,7 +488,7 @@ impl Parser<'_> {
             let word = match tok.kind {
                 TokenKind::Template(ref parts) => {
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
-                    segments.push(Segment::Template(self.build_template(parts)));
+                    segments.push(Segment::Template(self.build_template(tok.span, parts)));
                     seg_start = tok.span.end;
                     i += 1;
                     continue;
@@ -967,7 +967,7 @@ impl Parser<'_> {
 
     /// Turns a lexed template token into the AST template, recursively
     /// parsing each interpolation's token stream.
-    fn build_template(&self, parts: &[TplPart]) -> Template {
+    fn build_template(&self, span: Span, parts: &[TplPart]) -> Template {
         let chunks = parts
             .iter()
             .map(|part| match part {
@@ -977,6 +977,6 @@ impl Parser<'_> {
                 ),
             })
             .collect();
-        Template { chunks }
+        Template { span, chunks }
     }
 }

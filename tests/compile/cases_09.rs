@@ -91,7 +91,7 @@ fn malformed_namespaced_jsx_member_is_reported_without_panicking() {
 #[test]
 fn unterminated_template_interpolation_never_overlaps_source_spans() {
     // This is an incomplete editor buffer: the `${` has no closing brace.
-    // Template recovery must keep it as opaque text so codegen can preserve
+    // The interpolation runs to the end, and codegen must still preserve
     // every byte exactly once.
     let source = String::from_utf8(vec![60, 96, 0, 0, 0, 123, 36, 123, 10, 0]).unwrap();
     for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
@@ -105,6 +105,53 @@ fn unterminated_template_interpolation_never_overlaps_source_spans() {
             )
         });
         assert!(result.is_ok(), "{source_kind:?} panicked");
+    }
+}
+
+/// An interpolation whose `}` is missing is read as TypeScript's scanner
+/// reads it: expression tokens to the end of the file. Its `${` is the
+/// unbalanced delimiter the check reports, whatever the interpolation holds,
+/// and the editor's projection keeps every byte where it was.
+#[test]
+fn an_unterminated_interpolation_is_an_open_expression() {
+    for (source, column) in [
+        ("const at = new Date();\nconst s = `returned ${at.", 21),
+        ("const s = `a ${x} b ${y", 21),
+        ("const s = `a ${x |> f", 14),
+        ("const s = `a ${", 14),
+    ] {
+        for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+            let error = compile(
+                source,
+                &Options {
+                    source_kind,
+                    ..Options::default()
+                },
+            )
+            .expect_err("an unterminated template does not compile");
+            assert!(
+                error.message.contains("unbalanced TypeScript delimiter"),
+                "{source}: {}",
+                error.message
+            );
+            assert_eq!(
+                (error.line, error.col),
+                (source.matches('\n').count() + 1, column),
+                "{source}"
+            );
+        }
+        if !source.contains("|>") {
+            let emit = ttc::emit_mapped(source);
+            assert_eq!(emit.code, source);
+            assert_eq!(
+                emit.mappings,
+                [ttc::EmitMapping {
+                    src: 0,
+                    out: 0,
+                    len: source.len()
+                }]
+            );
+        }
     }
 }
 

@@ -4,8 +4,12 @@ use super::*;
 
 /// One chunk of emitted output copied verbatim from the source: `len` bytes
 /// starting at byte `src` of the source appear at byte `out` of the output.
-/// Produced by [`emit_mapped`]; chunks are non-overlapping in both
-/// coordinate spaces. Compiler-written glue has no mapping.
+/// Produced by [`emit_mapped`]; chunks never overlap in the output. Text
+/// the compiler passes through is copied once, so its chunks never overlap
+/// in the source either; a tt construct's own text that its lowering writes
+/// more than once (a variant field's type, in the union and in the
+/// constructor) is copied, and mapped, at each place. Compiler-written glue
+/// has no mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmitMapping {
     /// Byte offset of the chunk in the source.
