@@ -1309,3 +1309,20 @@ console.log(JSON.stringify([pick(1), pick(2)]));
 "#);
     assert_eq!(output, [r#"[["t",1,1],["t",2,2]]"#]);
 }
+
+#[test]
+fn an_annotation_never_names_the_storage_the_lowering_declared() {
+    require_toolchain!();
+    // TASK-552: TypeScript names a class expression assigned to the storage
+    // after the storage (`typeof $tt_v0`); written as its own annotation
+    // that is TS2502, so the storage is typed from its assignments.
+    let output = run(r#"
+function pick(n: number) {
+  const C = match (n) { 1 => class { q = 1 }, _ => class { q = 2 } };
+  const K = match (n) { 1 => { const Local = class { r = 3 }; return Local; }, _ => class { r = 4 } };
+  return [new C().q, new K().r];
+}
+console.log(JSON.stringify([pick(1), pick(2)]));
+"#);
+    assert_eq!(output, [r#"[[1,3],[2,4]]"#]);
+}

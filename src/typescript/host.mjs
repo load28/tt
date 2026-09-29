@@ -605,8 +605,31 @@ async function main() {
 
     const contextual = ({ project, members }) => {
       const checker = project.checker;
+      // The storage the lowering declared in each module, annotated or not.
+      // TypeScript can name a type after it (a class expression assigned
+      // to it is `typeof $tt_v0`), and an annotation that did would read
+      // the compiler's glue, or itself (TS2502).
+      const storage = new Map();
+      const storageOf = (module, source) => {
+        let symbols = storage.get(module);
+        if (symbols) return symbols;
+        const ends = new Set((job.contextualSlots ?? [])
+          .filter((slot) => slot.module === module)
+          .map((slot) => slot.declarationEnd));
+        symbols = new Set();
+        const collect = (node) => {
+          if (isVariableDeclaration(node) && isIdentifier(node.name) && ends.has(node.name.end)) {
+            const declared = checker.getSymbolAtLocation(node.name);
+            if (declared) symbols.add(declared.id);
+          }
+          node.forEachChild(collect);
+        };
+        collect(source);
+        storage.set(module, symbols);
+        return symbols;
+      };
       for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
-        if (!members.has(slot.module)) continue;
+        if (slot.annotated || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
         let declaration;
@@ -629,7 +652,9 @@ async function main() {
         // match arm's block is out of scope there, or an outer declaration
         // of the same name shadows it. An annotation is written only when
         // every name it references denotes, at the declaration, the symbol
-        // it denotes where the type was observed.
+        // it denotes where the type was observed, and that symbol is not
+        // storage the lowering declared.
+        const generated = storageOf(slot.module, source);
         const annotation = (type, observed) => {
           const node = typeNode(checker, type, declaration);
           if (!node) return undefined;
@@ -647,7 +672,7 @@ async function main() {
               }
               const here = checker.resolveName(name.text, meaning, declaration);
               const there = checker.resolveName(name.text, meaning, observed);
-              accessible = !!here && !!there && here.id === there.id;
+              accessible = !!here && !!there && here.id === there.id && !generated.has(here.id);
             }
             child.forEachChild(visit);
           };
