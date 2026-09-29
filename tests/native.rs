@@ -453,6 +453,44 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
 }
 
 #[test]
+fn a_sidecar_of_a_source_with_a_shebang_is_a_declaration_file_typescript_reads() {
+    require_emit!();
+    let dir = project(&[(
+        "src/cli.tt",
+        "#!/usr/bin/env node\nexport const q = match (1) { 1 => 2, _ => 3 };\n",
+    )]);
+    let out = run(&dir, &["--types", "src"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let sidecar = dir.join(".tt-types/cli.tt.d.ts");
+    let written = fs::read_to_string(&sidecar).unwrap();
+    assert!(
+        written.starts_with(
+            "#!/usr/bin/env node\n// @generated from cli.tt by ttc --sidecar — do not edit.\n"
+        ),
+        "{written}"
+    );
+    // TypeScript itself reads it: a shebang below the banner is TS18026.
+    let typescript = common::typescript().expect("toolchain");
+    let checked = Command::new("node")
+        .arg(typescript.join("bin/tsc"))
+        .args(["--noEmit", "--pretty", "false", "--ignoreConfig"])
+        .arg(&sidecar)
+        .current_dir(&dir)
+        .output()
+        .expect("tsc runs");
+    assert!(
+        checked.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&checked.stdout),
+        written
+    );
+}
+
+#[test]
 fn files_outside_tsconfig_do_not_receive_typed_queries() {
     require_tsgo!();
     let source = "import { importedMutation } from \"../shared/reachable.tt\";\n\

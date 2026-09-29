@@ -49,6 +49,7 @@ mod help_tests;
 #[cfg(test)]
 mod test_workspace;
 
+use ttc::banner::{BannerPlacement, write_banner};
 use ttc::engine::collect_sources;
 use ttc::source_map::SourceMapRequest;
 use ttc::{

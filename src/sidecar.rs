@@ -98,15 +98,23 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
     }
 
     let map_name = format!("{tt_file_name}.d.ts.map");
-    // The banner costs one generated line, so the mappings are shifted by
-    // one (the leading `;` below).
-    let declarations = format!(
-        "// @generated from {tt_file_name} by ttc --sidecar — do not edit.\n{}\n//# sourceMappingURL={}\n",
+    // The banner goes where a compiled module's does: first, or below a
+    // shebang, which TypeScript keeps first in the declarations it emits.
+    // Its lines map to nothing.
+    let mut declarations = format!(
+        "{}\n//# sourceMappingURL={}\n",
         body.trim_end(),
         crate::source_map::url_path([map_name.as_str()])
     );
-    // A leading `;` skips the banner line the declarations open with.
-    let mappings = format!(";{}", encode_mappings(&hits));
+    let banner = crate::banner::write_banner(
+        &mut declarations,
+        &format!("// @generated from {tt_file_name} by ttc --sidecar — do not edit.\n"),
+    );
+    hits.splice(
+        banner.at_line..banner.at_line,
+        std::iter::repeat_with(Vec::new).take(banner.lines),
+    );
+    let mappings = encode_mappings(&hits);
     let map = format!(
         "{{\"version\":3,\"file\":{},\"sourceRoot\":\"\",\"sources\":[{}],\"names\":[],\"mappings\":\"{}\"}}\n",
         json_string(&format!("{tt_file_name}.d.ts")),

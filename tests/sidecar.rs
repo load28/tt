@@ -313,3 +313,46 @@ fn every_name_a_declaration_line_declares_gets_its_own_segment() {
         sidecar.map
     );
 }
+
+#[test]
+fn a_shebang_stays_first_and_the_banner_goes_below_it() {
+    // TypeScript keeps a source's shebang as the first line of the
+    // declarations it emits, and a `#!` anywhere else does not parse
+    // (TS18026). The banner takes the line below it, as in a compiled module.
+    let source = "#!/usr/bin/env node\nexport const q = match (1) { 1 => 2, _ => 3 };\n";
+    let declarations = "#!/usr/bin/env node\nexport declare const q: number;\n";
+    let sidecar = build_sidecar(source, declarations, "cli.tt");
+    let lines: Vec<&str> = sidecar.declarations.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "#!/usr/bin/env node",
+            "// @generated from cli.tt by ttc --sidecar — do not edit.",
+            "export declare const q: number;",
+            "//# sourceMappingURL=cli.tt.d.ts.map",
+        ]
+    );
+    let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
+    let named: Vec<_> = segments
+        .iter()
+        .filter(|segment| segment.generated_column != 0)
+        .map(|segment| {
+            (
+                segment.generated_line,
+                segment.generated_column,
+                segment.source_line,
+                segment.source_column,
+            )
+        })
+        .collect();
+    assert_eq!(named, [(2, 21, 1, 13)], "{segments:?}");
+}
+
+#[test]
+fn a_file_that_is_only_a_shebang_keeps_it_first() {
+    let sidecar = build_sidecar("#!/usr/bin/env node", "#!/usr/bin/env node", "cli.tt");
+    assert_eq!(
+        sidecar.declarations,
+        "#!/usr/bin/env node\n// @generated from cli.tt by ttc --sidecar — do not edit.\n//# sourceMappingURL=cli.tt.d.ts.map\n"
+    );
+}

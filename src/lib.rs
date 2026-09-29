@@ -56,6 +56,7 @@ mod analysis;
 #[path = "lib/api.rs"]
 mod api;
 mod ast;
+pub mod banner;
 mod codegen;
 #[path = "lib/compile.rs"]
 mod compile;
