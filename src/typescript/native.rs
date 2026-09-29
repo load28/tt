@@ -400,12 +400,16 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
     let project_modules = value["projectModules"]
         .as_array()
         .ok_or_else(|| Failure::internal("the TypeScript backend answer omitted projectModules"))?;
-    answers.dependencies = value["dependencies"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|path| path.as_str().map(PathBuf::from))
-        .collect();
+    let paths = |key: &str| -> Vec<PathBuf> {
+        value[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|path| path.as_str().map(PathBuf::from))
+            .collect()
+    };
+    answers.dependencies = paths("dependencies");
+    answers.directories = paths("directories");
     answers.project_modules = Some(
         project_modules
             .iter()

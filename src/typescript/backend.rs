@@ -311,8 +311,11 @@ pub(crate) struct Answers {
     /// `None` means the backend did not run; an empty program is different
     /// from an unavailable answer.
     pub project_modules: Option<Vec<PathBuf>>,
-    /// Files and directories read while resolving the configured program.
+    /// Files read while resolving the configured program.
     pub dependencies: Vec<PathBuf>,
+    /// Directories listed while resolving it: a file added to or removed
+    /// from one can change the program.
+    pub directories: Vec<PathBuf>,
     pub diagnostics: Vec<Diagnostic>,
     pub project_diagnostics: Vec<ProjectDiagnostic>,
     pub literal_missing: Vec<LiteralMissing>,

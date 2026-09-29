@@ -123,7 +123,7 @@ Tooling options (bundler plugins, editors):
   --symbols             print tt variant declarations (with positions) and the
                         direct .tt imports of each input as JSON; compiles
                         nothing (for language tooling)
-  --dependencies        print compiler dependency paths as JSON (including types)
+  --dependencies        print the files and directories a compile depends on as JSON
   --emit-map            print each input's emitted TypeScript plus source<->
                         output byte mappings as JSON; parse + emit only (no
                         tt-level checks, .tt specifiers untouched) — the

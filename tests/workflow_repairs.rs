@@ -143,12 +143,59 @@ fn project_discovers_relative_tt_modules_outside_the_config_root() {
     success(run(&root.join("app"), &["--check-types", "src"]));
     let output = run(&root.join("app"), &["--dependencies", "src/main.tt"]);
     assert!(output.status.success());
-    let dependencies: Vec<String> = serde_json::from_slice(&output.stdout).unwrap();
+    let dependencies = dependency_files(&output);
     assert!(
         dependencies
             .iter()
             .any(|path| path.ends_with("domain/model.tt"))
     );
+}
+
+/// The `files` of what `--dependencies` printed.
+fn dependency_files(output: &std::process::Output) -> Vec<std::path::PathBuf> {
+    let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    serde_json::from_value(printed["files"].clone()).unwrap()
+}
+
+#[test]
+fn dependencies_list_directories_apart_from_files() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo("dependency-directories");
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.tt"), "export const value = 1;").unwrap();
+    fs::write(root.join("src/extra.ts"), "export const extra = 2;").unwrap();
+    fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    let output = run(&root, &["--dependencies", "src/main.tt"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let paths = |key: &str| -> Vec<std::path::PathBuf> {
+        serde_json::from_value(printed[key].clone()).unwrap_or_else(|_| panic!("{printed}"))
+    };
+    let files = paths("files");
+    let directories = paths("directories");
+    // A build integration registers a file and a directory differently, so
+    // neither list may hold the other kind.
+    assert!(
+        files.iter().all(|path| !path.is_dir()),
+        "a directory among the files: {files:?}"
+    );
+    assert!(
+        directories.iter().all(|path| path.is_dir()),
+        "{directories:?}"
+    );
+    let src = fs::canonicalize(root.join("src")).unwrap();
+    assert!(directories.contains(&src), "{directories:?}");
+    assert!(files.contains(&src.join("extra.ts")), "{files:?}");
 }
 
 #[test]
@@ -170,7 +217,7 @@ fn dependencies_of_a_configured_project_are_only_its_inputs() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let dependencies: Vec<std::path::PathBuf> = serde_json::from_slice(&output.stdout).unwrap();
+    let dependencies = dependency_files(&output);
     assert!(
         dependencies
             .iter()

@@ -190,6 +190,6 @@ fn server_dependencies_answer_what_dependencies_prints() {
             String::from_utf8_lossy(&output.stderr)
         );
         let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(answer["result"]["paths"], printed, "{file}");
+        assert_eq!(answer["result"], printed, "{file}");
     }
 }

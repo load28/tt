@@ -116,7 +116,7 @@ import { createInterface } from "node:readline";
 createInterface({ input: process.stdin }).on("line", (line) => {
   const { id, method, params } = JSON.parse(line);
   const result = method === "dependencies"
-    ? { paths: [params.path] }
+    ? { files: [params.path], directories: [] }
     : { code: "export const a = 1;\\n//# sourceMappingURL=data:application/json;charset=utf-8;base64," + ${JSON.stringify(Buffer.from(JSON.stringify(map)).toString('base64'))} + "\\n", messages: [] };
   process.stdout.write(JSON.stringify({ id, result }) + "\\n");
 });
@@ -244,9 +244,87 @@ test('type-only dependencies invalidate cached modules even with HMR disabled', 
   const module = { id }
   const invalidated = []
   const graph = { getModuleById: key => key === id ? module : undefined, invalidateModule: module => invalidated.push(module) }
-  plugin.vite.configureServer({ config: { server: { hmr: false } }, environments: { client: { moduleGraph: graph } } })
+  plugin.vite.configureServer({ config: { root, server: { hmr: false } }, watcher: { add() {} }, environments: { client: { moduleGraph: graph } } })
   await writeFile(model, 'export variant State { Ready(value: number), Empty, Loading }')
   plugin.watchChange(dependency)
   assert.deepEqual(invalidated, [module])
   await assert.rejects(() => plugin.load.call(context(), id), /missing.*Loading/)
+})
+
+/**
+ * A compiler whose `dependencies` answer names `files` beside the module's
+ * own file and `directories`, and which compiles every module to one line.
+ */
+async function dependencyCompiler(root, files, directories) {
+  const fake = join(root, 'ttc.mjs')
+  await writeFile(fake, `#!/usr/bin/env node
+import { createInterface } from "node:readline";
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method, params } = JSON.parse(line);
+  const result = method === "dependencies"
+    ? { files: [params.path, ...${JSON.stringify(files)}], directories: ${JSON.stringify(directories)} }
+    : { code: "export const a = 1;\\n", messages: [] };
+  process.stdout.write(JSON.stringify({ id, result }) + "\\n");
+});
+`)
+  await chmod(fake, 0o755)
+  return fake
+}
+
+test('dependency files and directories are registered as each host defines them', async () => {
+  const root = testDir('unplugin-tt-dependency-kinds-')
+  const file = join(root, 'src', 'main.tt')
+  const model = join(root, 'src', 'model.ts')
+  const outside = join(dirname(root), 'shared', 'types.ts')
+  const listed = join(root, 'src')
+  const fake = await dependencyCompiler(root, [model, outside], [root, listed])
+  const id = `${file}?lang.ts`
+
+  // Rollup, Rolldown, Vite's build and Farm: `addWatchFile` takes both.
+  const rollup = context()
+  await unpluginFactory({ compiler: fake }, { framework: 'rollup' }).load.call(rollup, id)
+  assert.deepEqual(rollup.watched, [file, model, outside, root, listed])
+
+  // webpack and Rspack: a directory is a context dependency.
+  for (const framework of ['webpack', 'rspack']) {
+    const contextDependencies = []
+    const webpack = {
+      ...context(),
+      getNativeBuildContext: () => ({ framework, loaderContext: { addContextDependency: (directory) => contextDependencies.push(directory) } }),
+    }
+    await unpluginFactory({ compiler: fake }, { framework }).load.call(webpack, id)
+    assert.deepEqual(webpack.watched, [file, model, outside], framework)
+    assert.deepEqual(contextDependencies, [root, listed], framework)
+  }
+
+  // Vite's dev server resolves what `addWatchFile` names as an import of
+  // the module, so a dependency goes to its watcher, and only when the
+  // watcher does not already cover it.
+  const added = []
+  const plugin = unpluginFactory({ compiler: fake }, { framework: 'vite' })
+  plugin.vite.configureServer({ config: { root }, watcher: { add: (paths) => added.push(...paths) } })
+  const dev = context()
+  await plugin.load.call(dev, id)
+  assert.deepEqual(dev.watched, [file])
+  assert.deepEqual(added, [outside])
+})
+
+test('an entry added to or removed from a listed directory invalidates the module', async () => {
+  const root = testDir('unplugin-tt-dependency-directories-')
+  const file = join(root, 'src', 'main.tt')
+  const listed = join(root, 'src')
+  const fake = await dependencyCompiler(root, [], [listed])
+  const plugin = unpluginFactory({ compiler: fake }, { framework: 'vite' })
+  const invalidated = []
+  const module = { id: `${file}?lang.ts` }
+  const graph = { getModuleById: (key) => (key === module.id ? module : undefined), invalidateModule: (found) => invalidated.push(found) }
+  plugin.vite.configureServer({ config: { root }, watcher: { add() {} }, environments: { client: { moduleGraph: graph } } })
+  await plugin.load.call(context(), module.id)
+
+  plugin.watchChange(join(listed, 'other.ts'), { event: 'update' })
+  plugin.watchChange(join(listed, 'nested', 'added.ts'), { event: 'create' })
+  assert.deepEqual(invalidated, [])
+  plugin.watchChange(join(listed, 'added.ts'), { event: 'create' })
+  plugin.watchChange(join(listed, 'removed.ts'), { event: 'delete' })
+  assert.deepEqual(invalidated, [module, module])
 })

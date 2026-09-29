@@ -338,7 +338,7 @@ pub(super) fn dependencies_mode(
     config: Option<&Path>,
     node: Option<&Path>,
 ) -> ExitCode {
-    let result = (|| -> Result<Vec<PathBuf>, String> {
+    let result = (|| -> Result<ttc::engine::Dependencies, String> {
         let engine = ttc::engine::Engine::new(node.map(Path::to_path_buf));
         let mut project = engine.open_project(
             inputs,
@@ -356,11 +356,11 @@ pub(super) fn dependencies_mode(
         {
             return Err(error.message);
         }
-        project.watch_paths().map_err(|error| error.to_string())
+        project.dependencies().map_err(|error| error.to_string())
     })();
     match result {
-        Ok(paths) => {
-            crate::out::line(&serde_json::json!(paths).to_string());
+        Ok(dependencies) => {
+            crate::out::line(&dependencies.to_json().to_string());
             ExitCode::SUCCESS
         }
         Err(error) => {

@@ -69,7 +69,7 @@ pub use language::{
     ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter, TextEdit,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
-pub use project::{Blocked, CheckRequest, Project, collect_sources};
+pub use project::{Blocked, CheckRequest, Dependencies, Project, collect_sources};
 pub use projection::ProjectedDocument;
 pub use semantics::{
     BackendError, BackendErrorKind, Checked, Declarations, Diagnostic, DiagnosticLabel,

@@ -36,7 +36,7 @@ if (args[0] === "--emit-std") {
   createInterface({ input: process.stdin }).on("line", (line) => {
     const { id, method, params } = JSON.parse(line);
     const result = method === "dependencies"
-      ? { paths: [params.path, "C:\\\\proj\\\\src\\\\model.tt"] }
+      ? { files: [params.path, "C:\\\\proj\\\\src\\\\model.tt"], directories: ["C:\\\\proj\\\\src"] }
       : { code: "export const compiled = true;\\n", messages: [] };
     process.stdout.write(JSON.stringify({ id, result }) + "\\n");
   });
@@ -59,7 +59,9 @@ await plugin.load.call(context, entry);
 const invalidated = [];
 const graph = { getModuleById: (id) => (id === entry ? { id } : undefined), invalidateModule: (module) => invalidated.push(module.id) };
 plugin.vite.configureServer({ environments: { client: { moduleGraph: graph } } });
-plugin.watchChange("C:/proj/src/model.tt");
+plugin.watchChange("C:/proj/src/model.tt", { event: "update" });
+plugin.watchChange("C:/proj/src/added.ts", { event: "create" });
+plugin.watchChange("C:/proj/src/nested/added.ts", { event: "create" });
 console.log(JSON.stringify({ types, option, std: std?.code ?? null, resolvedAgain: plugin.resolveId(types), invalidated }));
 `
 
@@ -73,6 +75,7 @@ test('standard module ids and dependency paths survive Vite path normalization o
   assert.equal(result.option, 'virtual:unplugin-tt/std/option.ts')
   assert.equal(result.resolvedAgain, result.types)
   assert.equal(result.std, 'export const module = "option";\n')
-  assert.deepEqual(result.invalidated, [result.invalidated[0]])
+  assert.equal(result.invalidated.length, 2)
+  assert.equal(result.invalidated[1], result.invalidated[0])
   assert.match(result.invalidated[0], /^C:\/proj\/src\/main\.tt/)
 })

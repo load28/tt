@@ -510,7 +510,8 @@ async function main() {
       if (unreadable?.code === CANNOT_READ_FILE) {
         if (opened) reconnect();
         out.projectDiagnostics.push({ file: open.tsconfig, code: unreadable.code, message: unreadable.text });
-        out.dependencies = [...dependencies.keys(), ...listings.keys()];
+        out.dependencies = [...dependencies.keys()];
+        out.directories = [...listings.keys()];
         return engineAnswer(out);
       }
       const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
@@ -748,7 +749,7 @@ async function main() {
       }
     };
     for (const group of groups) contextual(group);
-    if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return engineAnswer(out); }
+    if (job.contextualOnly) { out.dependencies = [...dependencies.keys()]; out.directories = [...listings.keys()]; return engineAnswer(out); }
     const reported = new Set();
     const unique = (diagnostics) => diagnostics.filter((d) => {
       const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, d.text]);
@@ -979,7 +980,8 @@ async function main() {
         out.declarations.push({ path, text: file.text });
       }
     }
-    out.dependencies = [...dependencies.keys(), ...listings.keys()];
+    out.dependencies = [...dependencies.keys()];
+    out.directories = [...listings.keys()];
     return engineAnswer(out);
   }
 }

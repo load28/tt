@@ -96,7 +96,7 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     process.exit(134);
   }
   const { id, method, params } = JSON.parse(line);
-  const result = method === "dependencies" ? { paths: [params.path] } : { code: "export const a = 1;\\n", messages: [] };
+  const result = method === "dependencies" ? { files: [params.path], directories: [] } : { code: "export const a = 1;\\n", messages: [] };
   process.stdout.write(JSON.stringify({ id, result }) + "\\n");
 });
 `)

@@ -98,6 +98,20 @@ const stdModuleOfId = (id) => {
 
 const nativePath = (file) => path.resolve(file);
 
+const isWithin = (directory, file) => {
+  const relative = path.relative(directory, file);
+  return relative === "" || (relative.split(/[\\/]/)[0] !== ".." && !path.isAbsolute(relative));
+};
+
+/**
+ * Whether a module whose compile read `dependencies` is stale after the
+ * watcher reported `event` for `changed`: a file it read changed, or an
+ * entry appeared in or left a directory it listed.
+ */
+const dependsOn = (dependencies, changed, event) =>
+  dependencies.files.has(changed) ||
+  ((event === "create" || event === "delete") && dependencies.directories.has(path.dirname(changed)));
+
 const INLINE_MAP =
   /(\r?\n)\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)(?:\r?\n)?$/;
 
@@ -136,7 +150,7 @@ function detachInlineSourceMap(code, file) {
  */
 
 /** @type {import("unplugin").UnpluginFactory<Options | undefined>} */
-export const unpluginFactory = (options = {}) => {
+export const unpluginFactory = (options = {}, meta = {}) => {
   const compiler = options.compiler ?? defaultCompiler();
   const verify = options.verify ?? true;
   const sourcemap = options.sourcemap ?? true;
@@ -161,6 +175,47 @@ export const unpluginFactory = (options = {}) => {
     if (code === null) throw new Error(messages.map((message) => `${message}\n`).join(""));
     return code;
   };
+
+  /**
+   * What `ttc --dependencies` prints for the module's file, asked of the
+   * server and kept for invalidation: the files its compile reads and the
+   * directories it lists.
+   */
+  const dependenciesOf = async (id, file) => {
+    const dependencies = await server.request("dependencies", { path: file });
+    dependenciesByModule.set(id, {
+      files: new Set(dependencies.files.map(nativePath)),
+      directories: new Set(dependencies.directories.map(nativePath)),
+    });
+    return dependencies;
+  };
+
+  /**
+   * Registers a module's dependencies with the host's watcher, each kind
+   * through the API the host defines for it.
+   *
+   * - Vite's dev server treats a file given to `addWatchFile` as an import
+   *   of the module and resolves it, so the paths go to the server's own
+   *   watcher instead (it already watches everything under the root), and
+   *   `watchChange` invalidates the modules that read them.
+   * - webpack and Rspack take a directory as a context dependency.
+   * - Rollup's `addWatchFile` accepts a file or a directory; Rolldown,
+   *   Vite's build and Farm take the same call.
+   */
+  function watchDependencies(file, { files, directories }) {
+    if (devServer) {
+      const outside = [...files, ...directories].filter((dependency) => !isWithin(devServer.config.root, dependency));
+      if (outside.length > 0) devServer.watcher.add(outside);
+      return;
+    }
+    for (const dependency of files) if (dependency !== file) this.addWatchFile(dependency);
+    if (meta.framework === "esbuild") return;
+    const native = meta.framework === "webpack" || meta.framework === "rspack" ? this.getNativeBuildContext?.() : undefined;
+    for (const directory of directories) {
+      if (native?.loaderContext) native.loaderContext.addContextDependency(directory);
+      else this.addWatchFile(directory);
+    }
+  }
 
   const scanSource = async (id) => {
     const file = cleanUrl(id);
@@ -242,9 +297,7 @@ export const unpluginFactory = (options = {}) => {
       // Compiler metadata includes erased type imports and configuration reads.
       // Register dependencies before loading so a failed build can recover too.
       try {
-        const { paths: dependencies } = await server.request("dependencies", { path: file });
-        dependenciesByModule.set(id, new Set(dependencies.map(nativePath)));
-        for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
+        watchDependencies.call(this, file, await dependenciesOf(id, file));
         return detachInlineSourceMap(await print(file, sourcemap), file);
       } catch (error) {
         // ttc reports `file:line:col: message`; surface that as the build
@@ -263,12 +316,12 @@ export const unpluginFactory = (options = {}) => {
       server.close();
     },
 
-    watchChange(file) {
+    watchChange(file, change) {
       if (!devServer) return;
       const changed = nativePath(file);
       for (const environment of Object.values(devServer.environments ?? { client: devServer })) {
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(changed)) continue;
+          if (!dependsOn(dependencies, changed, change?.event)) continue;
           const module = environment.moduleGraph.getModuleById(id);
           if (module) environment.moduleGraph.invalidateModule(module);
         }
@@ -286,7 +339,7 @@ export const unpluginFactory = (options = {}) => {
         const modules = new Set(context.modules);
         const changed = nativePath(context.file);
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(changed)) continue;
+          if (!dependsOn(dependencies, changed, "update")) continue;
           const module = context.server.moduleGraph.getModuleById(id);
           if (module) {
             context.server.moduleGraph.invalidateModule(module);

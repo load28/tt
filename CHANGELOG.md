@@ -34,6 +34,13 @@
 
 ### Changed
 
+- **`ttc --dependencies` separates directories from files** (TASK-580). It
+  prints `{"files": [...], "directories": [...]}` instead of one array, and
+  the server's `dependencies` answers the same object. `@openload28/unplugin-tt`
+  registers each kind through the bundler's own watch API, so the Vite dev
+  server no longer answers 500 for `.tt` modules or keeps its process alive
+  after `close()`.
+
 - **TypeScript는 프로젝트가 설치한 npm 패키지 하나에서만 온다**
   (TASK-255, TASK-256). ttc가 구동하는 TypeScript 7은 이제 그 프로젝트의
   `node_modules`에서만 해석되고, 다른 것을 지목할 방법이 없다.

@@ -143,9 +143,24 @@ package exports and external decisions. Vite/Rollup-compatible hooks use
 `this.resolve`; esbuild uses `build.resolve`.
 
 The plugin asks the compiler session for each module's dependencies (the answer
-`ttc --dependencies` prints) and registers those paths with the bundler. Vite
-invalidates consuming modules when a type-only import or compiler configuration
-changes, including when HMR is disabled.
+`ttc --dependencies` prints): the files the compile reads and the directories
+TypeScript listed, where a file added or removed can change the program. Each
+kind is registered through the bundler's own API:
+
+| Host | Files | Directories |
+|------|-------|-------------|
+| Rollup, Rolldown, `vite build`, Farm | `this.addWatchFile` | `this.addWatchFile`, which Rollup documents for directories too |
+| webpack, Rspack | `this.addWatchFile` (file dependencies) | the loader's `addContextDependency` |
+| esbuild | `watchFiles`, through unplugin | not registered: unplugin passes only `watchFiles` on to esbuild |
+| Vite dev server | the dev server's watcher | the dev server's watcher |
+
+The Vite dev server resolves every path given to `addWatchFile` as an import of
+the module, so a dependency (a directory, a declaration file, `tsconfig.json`)
+is added to the server's watcher instead, unless it is under the root, which the
+watcher already covers. When the watcher reports a change to a file a module
+read, or a file created in or deleted from a directory it listed, the plugin
+invalidates that module, including when HMR is disabled; a changed file also
+joins the HMR update.
 
 ## One compiler session per build
 

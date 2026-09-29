@@ -66,9 +66,9 @@
 //! `banner: false` for `--no-banner`, `verify: false` for `--no-verify`.
 //!
 //! → { "id": 11, "method": "dependencies", "params": { "path" } }
-//! ← { "id": 11, "result": { "paths": [string] } }
-//! `ttc --dependencies` for the file: the paths whose change invalidates
-//! its compile.
+//! ← { "id": 11, "result": { "files": [string], "directories": [string] } }
+//! `ttc --dependencies` for the file: the files whose change invalidates
+//! its compile, and the directories where a file added or removed does.
 //!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
 //! ```
@@ -845,7 +845,10 @@ fn dependencies(
         && checked.files == files
         && checked.stamps == current
     {
-        return Ok(serde_json::json!({ "paths": watched }));
+        return project
+            .dependencies()
+            .map(|dependencies| dependencies.to_json())
+            .map_err(|error| error.to_string());
     }
     checks.0.remove(project.root());
     let snapshot = project
@@ -857,6 +860,7 @@ fn dependencies(
     {
         return Err(error.message);
     }
+    let dependencies = project.dependencies().map_err(|error| error.to_string())?;
     let paths = project.watch_paths().map_err(|error| error.to_string())?;
     // Stamps taken before the check stand for the paths that were already
     // watched, so an edit made while it ran still invalidates it; the paths
@@ -872,7 +876,7 @@ fn dependencies(
             stamps: recorded,
         },
     );
-    Ok(serde_json::json!({ "paths": paths }))
+    Ok(dependencies.to_json())
 }
 
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.

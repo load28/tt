@@ -54,6 +54,24 @@ pub struct CheckRequest {
     pub tt_only: bool,
 }
 
+/// The paths a compile depends on, split as a build integration watches
+/// them: a file by its content, a directory by the entries it lists.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Dependencies {
+    /// Files whose content the compile reads, sorted.
+    pub files: Vec<PathBuf>,
+    /// Directories whose entries the compile lists, sorted.
+    pub directories: Vec<PathBuf>,
+}
+
+impl Dependencies {
+    /// The JSON `--dependencies` prints and the server's `dependencies`
+    /// answers: `{ "files": [...], "directories": [...] }`.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({ "files": self.files, "directories": self.directories })
+    }
+}
+
 /// One workspace's compiler state: documents, projections, and the session.
 #[derive(Debug)]
 pub struct Project {
@@ -68,6 +86,8 @@ pub struct Project {
     pub(super) input_roots: Vec<PathBuf>,
     pub(super) named: Vec<PathBuf>,
     dependencies: RefCell<HashSet<PathBuf>>,
+    /// Directories the compiler listed while resolving the program.
+    directories: RefCell<HashSet<PathBuf>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
     /// configured TypeScript program filters these to actual members.
@@ -123,6 +143,7 @@ impl Project {
             input_roots: Vec::new(),
             named: Vec::new(),
             dependencies: RefCell::new(HashSet::new()),
+            directories: RefCell::new(HashSet::new()),
             initial,
             sources,
             overlays: Documents::default(),
@@ -192,23 +213,40 @@ impl Project {
         Ok(candidates)
     }
 
-    /// Source, configuration, and compiler-resolved dependency paths whose
-    /// changes invalidate a project check. Directory membership is rescanned.
+    /// Every path whose change invalidates a project check: the files and
+    /// directories of [`Project::dependencies`] together.
     pub fn watch_paths(&self) -> std::io::Result<Vec<PathBuf>> {
-        let mut paths = project_sources(
+        let Dependencies {
+            mut files,
+            directories,
+        } = self.dependencies()?;
+        files.extend(directories);
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
+    /// What a project check depends on: the source, configuration, and
+    /// compiler-resolved files it reads, and the directories whose listing
+    /// it reads — a file added to or removed from one can change the
+    /// program, while the directory is not itself an input.
+    pub fn dependencies(&self) -> std::io::Result<Dependencies> {
+        let mut files = project_sources(
             &self.root,
             self.out_dir.as_deref(),
             &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
         )?;
-        paths.extend(self.dependencies.borrow().iter().cloned());
-        paths.extend(self.requested.iter().cloned());
-        paths.extend(self.cache.keys().cloned());
+        files.extend(self.dependencies.borrow().iter().cloned());
+        files.extend(self.requested.iter().cloned());
+        files.extend(self.cache.keys().cloned());
         if let Some(config) = &self.tsconfig {
-            paths.push(config.clone());
+            files.push(config.clone());
         }
-        paths.sort();
-        paths.dedup();
-        Ok(paths)
+        files.sort();
+        files.dedup();
+        let mut directories: Vec<_> = self.directories.borrow().iter().cloned().collect();
+        directories.sort();
+        Ok(Dependencies { files, directories })
     }
 
     /// The candidate set the first pass layers, decided when the project was
@@ -558,6 +596,9 @@ impl Project {
         self.dependencies
             .borrow_mut()
             .extend(answers.dependencies.iter().cloned());
+        self.directories
+            .borrow_mut()
+            .extend(answers.directories.iter().cloned());
         let declarations = if request.emit_declarations && backend_error.is_none() {
             semantics::match_declarations(snapshot, &answers, &self.requested)
         } else {
