@@ -528,7 +528,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     // construct as written. Zero means "position only": the consumer
     // decides the width. `code` is the rule's stable identity.
     let report = ttc::ice::working_on(Path::new(filename.unwrap_or("<buffer>")), || {
-        ttc::compile_report(text, &options)
+        ttc::check_report(text, &options)
     });
     let positions = ProtocolPositions::new(text);
     let diagnostics: Vec<_> = report

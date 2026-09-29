@@ -2067,6 +2067,67 @@ fn check_does_not_start_the_typescript_backend() {
     assert!(started.exists(), "-p did not ask the TypeScript backend");
 }
 
+/// The server's `check` is `--check` for a buffer, and starts no backend
+/// either: the editor asks it on every keystroke.
+#[cfg(unix)]
+#[test]
+fn the_servers_check_does_not_start_the_typescript_backend() {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let dir = Workspace::in_repo_with_subdir("server-check-without-backend", "src");
+    let file = dir.join("src/a.tt");
+    let text = "variant T { A(x: number), B }\n\
+                export const f = (t: T) => match (t) { A(x) => x };\n";
+    fs::write(&file, text).unwrap();
+    let runtime = dir.join("runtime");
+    let started = dir.join("started");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::write(
+        runtime.join("node"),
+        format!("#!/bin/sh\n: > '{}'\nexit 1\n", started.display()),
+    )
+    .unwrap();
+    fs::set_permissions(runtime.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    let request = serde_json::json!({
+        "id": 1,
+        "method": "check",
+        "params": { "text": text, "filename": file },
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .current_dir(&dir)
+        .env("PATH", &runtime)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to run ttc --server");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(format!("{request}\n").as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let answer: serde_json::Value = serde_json::from_str(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        answer["result"]["diagnostics"][0]["code"], "match-not-exhaustive",
+        "{answer}"
+    );
+    assert!(
+        !started.exists(),
+        "the server's check started the TypeScript backend"
+    );
+}
+
 /// The contextual refinement of a build is one TypeScript session per
 /// project however many workers compile it: `-j 4` starts exactly the
 /// processes `-j 1` does, and writes the same output.
