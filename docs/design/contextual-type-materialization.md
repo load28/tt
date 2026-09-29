@@ -13,6 +13,15 @@ types at references to that symbol. Shadowed identifiers are separate symbols.
 An annotation is serialized in the declaration's scope. Conflicting contexts or
 indefinite types do not produce a guessed annotation.
 
+The declaration can enclose the scope the type was observed in: a class
+declared in a match arm's block is out of scope at the storage, and an outer
+declaration of the same name shadows it there (TASK-546). Every name an
+annotation references (the head of each type reference and type query) must
+therefore resolve, at the declaration, to the symbol it resolves to where the
+type was observed: the reference that supplied the contextual type, or the
+right-hand side of the join's assignment. Otherwise the storage has no
+annotation and TypeScript infers its type from its assignments.
+
 Each round annotates previously unresolved declarations. An updated snapshot
 then exposes those contexts to nested values. Rounds stop when no additional
 facts are available; successful rounds strictly reduce the unresolved set.

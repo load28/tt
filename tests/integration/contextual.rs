@@ -1258,3 +1258,34 @@ fn scoped_contextual_family_matrix_covers_hosts_and_nesting() {
         assert!(checked.status.success(), "{}", tsc_report(&checked));
     }
 }
+
+#[test]
+fn generated_storage_names_no_type_declared_inside_an_arm() {
+    require_toolchain!();
+    // TASK-546: the storage is declared outside the arm block, where the
+    // arm's class is out of scope or an outer class of the same name
+    // shadows it; no annotation may name it there.
+    let output = run(r#"
+variant S { A, B }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function read(): R { return { kind: "Ok", value: 1 }; }
+class Loc { other = 1; }
+function inner(s: S) {
+  const v = match (s) { A => { class Loc { tag = "a"; } return new Loc(); }, B => ({ tag: "b" }) };
+  return v.tag;
+}
+function inResult(s: S) {
+  return result {
+    const n = try read();
+    const v = match (s) { A => { class Loc { tag = "a" + n; } return new Loc(); }, B => ({ tag: "b" }) };
+    return v.tag;
+  };
+}
+function unnamed(s: S) {
+  const v = match (s) { A => { class Hidden { tag = "h"; } return new Hidden(); }, B => ({ tag: "b" }) };
+  return v.tag;
+}
+console.log(inner(S.A), inner(S.B), JSON.stringify(inResult(S.A)), unnamed(S.A), new Loc().other);
+"#);
+    assert_eq!(output, [r#"a b {"kind":"Ok","value":"a1"} h 1"#]);
+}

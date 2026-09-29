@@ -547,7 +547,8 @@
 | TASK-543 | Leave the backend's own mapper package out of project dependencies | Complete | 2026-09-29 | 2026-09-29 | [TASK-543](./TASK-543-host-owned-dependencies.md) |
 | TASK-544 | Lower a tt value inside a let-else or `if let` subject once | Complete | 2026-09-29 | 2026-09-29 | [TASK-544](./TASK-544-values-in-binding-statement-subjects.md) |
 | TASK-545 | Test an optional call at the link its chain short-circuits at | Complete | 2026-09-29 | 2026-09-29 | [TASK-545](./TASK-545-optional-call-short-circuit-link.md) |
+| TASK-546 | Annotate generated storage only with names visible at its declaration | Complete | 2026-09-29 | 2026-09-29 | [TASK-546](./TASK-546-accessible-storage-annotations.md) |
 
 ## Next task number
 
-**TASK-546**
+**TASK-547**
