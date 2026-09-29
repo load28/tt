@@ -263,6 +263,56 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
 }
 
 #[test]
+fn a_discarded_result_does_not_hide_the_file_s_type_errors() {
+    require_tsgo!();
+    // TASK-548: a discarded `result` block is a recoverable tt error; the
+    // typed projection recovers every one of them, the second found only
+    // once the first is recovered.
+    let dir = project(&[(
+        "src/discarded.tt",
+        "import * as Result from \"@tt/std/result\";\n\
+         export function run() {\n\
+         \x20 result { const q = try Result.Ok(1); return q; };\n\
+         \x20 result { const r = try Result.Ok(2); return r; };\n\
+         }\n\
+         export const z: string = 1;\n",
+    )]);
+    let out = check(&dir);
+    assert!(
+        block(&out, "result-value-discarded").contains("discarded.tt:3:3"),
+        "{out}"
+    );
+    assert!(
+        block(&out, "ts2322").contains("discarded.tt:6:26"),
+        "the file's type error is reported beside the tt error: {out}"
+    );
+}
+
+#[test]
+fn a_result_without_a_success_value_owns_its_slot_s_consequence() {
+    require_tsgo!();
+    // TASK-548: the slot read in place of the block is anchored to it, so
+    // TypeScript's use-before-assignment error there is the tt error's
+    // consequence, not a second diagnostic.
+    let dir = project(&[(
+        "src/fallthrough.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         declare function fetchJob(): TResult<string, \"offline\">;\n\
+         declare function persist(job: string): void;\n\
+         export const queued = result {\n\
+         \x20 const job = try fetchJob();\n\
+         \x20 persist(job);\n\
+         };\n",
+    )]);
+    let out = check(&dir);
+    assert!(
+        block(&out, "result-no-success-value").contains("fallthrough.tt:4:23"),
+        "{out}"
+    );
+    assert!(!out.contains("ts2454"), "{out}");
+}
+
+#[test]
 fn a_ts_file_and_an_tt_file_share_one_project_graph() {
     require_tsgo!();
     let dir = project(&[

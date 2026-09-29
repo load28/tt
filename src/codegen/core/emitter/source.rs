@@ -981,7 +981,15 @@ impl<'a> Emitter<'a> {
         {
             let mut out = Rope::new();
             if span.start == capture.source.start {
-                out.push_lit(capture.written().to_owned());
+                let mut written = Rope::new();
+                written.push_lit(capture.written().to_owned());
+                match capture.anchor {
+                    Some(value) => {
+                        let (kind, start, end, extent) = self.value_anchor(value);
+                        out.anchored(kind, start, end, extent, written);
+                    }
+                    None => out.append(written),
+                }
             }
             return out;
         }

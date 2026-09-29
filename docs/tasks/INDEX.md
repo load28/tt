@@ -549,7 +549,8 @@
 | TASK-545 | Test an optional call at the link its chain short-circuits at | Complete | 2026-09-29 | 2026-09-29 | [TASK-545](./TASK-545-optional-call-short-circuit-link.md) |
 | TASK-546 | Annotate generated storage only with names visible at its declaration | Complete | 2026-09-29 | 2026-09-29 | [TASK-546](./TASK-546-accessible-storage-annotations.md) |
 | TASK-547 | Bind a function or class expression's name only inside itself | Complete | 2026-09-29 | 2026-09-29 | [TASK-547](./TASK-547-function-expression-name-scope.md) |
+| TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
 
 ## Next task number
 
-**TASK-548**
+**TASK-549**
