@@ -5,15 +5,15 @@ let $tt_v0: string;
   const $tt_m = code;
   switch ($tt_m) {
     case 200: case 201: {
-      $tt_v0 = "success";
+      const $tt_a0 = { value: "success" }; $tt_v0 = $tt_a0.value;
       break;
     }
     case 404: {
-      $tt_v0 = "not found";
+      const $tt_a1 = { value: "not found" }; $tt_v0 = $tt_a1.value;
       break;
     }
     default: {
-      $tt_v0 = "other";
+      const $tt_a2 = { value: "other" }; $tt_v0 = $tt_a2.value;
       break;
     }
   }

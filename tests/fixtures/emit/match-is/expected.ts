@@ -7,20 +7,20 @@ let $tt_v0: string;
     if ($tt_m instanceof SyntaxError) {
       const { message } = $tt_m;
       if (message.length > 0) {
-        $tt_v0 = `syntax: ${message}`;
+        const $tt_a0 = { value: `syntax: ${message}` }; $tt_v0 = $tt_a0.value;
         break;
       }
     }
     if ($tt_m instanceof RangeError || $tt_m instanceof TypeError) {
-      $tt_v0 = "bad value";
+      const $tt_a1 = { value: "bad value" }; $tt_v0 = $tt_a1.value;
       break;
     }
     if ($tt_m instanceof Error) {
       const { message: detail } = $tt_m;
-      $tt_v0 = detail;
+      const $tt_a2 = { value: detail }; $tt_v0 = $tt_a2.value;
       break;
     }
-    $tt_v0 = String(error);
+    const $tt_a3 = { value: String(error) }; $tt_v0 = $tt_a3.value;
     break;
   } while (false);
 }

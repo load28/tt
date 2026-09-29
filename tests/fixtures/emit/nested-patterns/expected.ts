@@ -38,15 +38,15 @@ let $tt_v0: number;
   do {
     if ($tt_m.kind === "Wrap" && $tt_m.inner.kind === "Yes") {
       const { n } = $tt_m.inner;
-      $tt_v0 = n;
+      const $tt_a0 = { value: n }; $tt_v0 = $tt_a0.value;
       break;
     }
     if ($tt_m.kind === "Wrap" && $tt_m.inner.kind === "No") {
-      $tt_v0 = 0;
+      const $tt_a1 = { value: 0 }; $tt_v0 = $tt_a1.value;
       break;
     }
     if ($tt_m.kind === "Bare") {
-      $tt_v0 = -1;
+      const $tt_a2 = { value: -1 }; $tt_v0 = $tt_a2.value;
       break;
     }
     throw new Error("tt match: unexpected case " + $tt_show($tt_m));

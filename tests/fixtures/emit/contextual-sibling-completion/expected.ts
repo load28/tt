@@ -38,11 +38,11 @@ const $tt_v2: Item = (make());
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v0 = $tt_v1($tt_v2, ({ kind: "item", run: x => x + value }));
+      const $tt_a0 = { value: $tt_v1($tt_v2, ({ kind: "item", run: x => x + value })) }; $tt_v0 = $tt_a0.value;
       break;
     }
     case "Empty": {
-      $tt_v0 = $tt_v1($tt_v2, ({ kind: "item", run: x => x }));
+      const $tt_a1 = { value: $tt_v1($tt_v2, ({ kind: "item", run: x => x })) }; $tt_v0 = $tt_a1.value;
       break;
     }
     default: {

@@ -16,8 +16,9 @@ pub(crate) struct SlotRefinement {
     /// The type written on the slot's declaration.
     pub annotation: Option<String>,
     /// The slot's source position has no contextual type. Every value
-    /// written to the slot then initializes a `const` of its own first,
-    /// where TypeScript types it without one, as at that position.
+    /// written to the slot is then first the property of an object literal
+    /// a `const` of its own holds, where TypeScript types it without one,
+    /// as at that position.
     pub detached: bool,
 }
 
@@ -75,16 +76,16 @@ pub(crate) fn refine(
         for (index, write) in writes.into_iter().enumerate() {
             let local = crate::generated_names::allocate(&format!("$tt_a{index}"), &mut occupied)
                 .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for a value"));
-            locals.push((write.target.0, format!("const {local}").len()));
+            locals.push((write.target, format!("const {local}").len()));
             edits.push(Edit {
-                start: write.target.0,
-                end: write.target.1,
-                text: format!("const {local}"),
+                start: write.target,
+                end: write.value.0,
+                text: format!("const {local} = {{ value: "),
             });
             edits.push(Edit {
-                start: write.value_end,
-                end: write.value_end,
-                text: format!("; {} = {local}", write.storage),
+                start: write.value.1,
+                end: write.value.1,
+                text: format!(" }}; {} = {local}.value", write.storage),
             });
             emit.generated_names.insert(local);
         }
@@ -190,10 +191,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
 /// One statement that assigns a value to generated storage.
 struct StorageWrite {
     storage: String,
-    /// The assignment's target identifier.
-    target: (usize, usize),
-    /// The end of the assigned value.
-    value_end: usize,
+    /// The start of the assignment's target identifier.
+    target: usize,
+    /// The assigned value.
+    value: (usize, usize),
 }
 
 /// Every assignment to the storage declared by the identifiers ending at
@@ -213,7 +214,7 @@ fn storage_writes(
         declarations: &'a [usize],
         names: HashMap<String, usize>,
         statements: Vec<(usize, usize)>,
-        assignments: Vec<(String, (usize, usize), usize, (usize, usize))>,
+        assignments: Vec<(String, usize, (usize, usize), (usize, usize))>,
     }
     impl Collect<'_> {
         fn statements(&mut self, statements: &[Stmt]) {
@@ -242,6 +243,10 @@ fn storage_writes(
             self.statements(&node.stmts);
             node.visit_children_with(self);
         }
+        fn visit_function_body(&mut self, node: &swc_ecma_ast::FunctionBody) {
+            self.statements(&node.stmts);
+            node.visit_children_with(self);
+        }
         fn visit_switch_case(&mut self, node: &swc_ecma_ast::SwitchCase) {
             self.statements(&node.cons);
             node.visit_children_with(self);
@@ -251,13 +256,11 @@ fn storage_writes(
                 && let AssignTarget::Simple(SimpleAssignTarget::Ident(target)) = &node.left
             {
                 let span = node.span();
+                let value = node.right.span();
                 self.assignments.push((
                     target.id.sym.to_string(),
-                    (
-                        self.input.byte(target.id.span.lo),
-                        self.input.byte(target.id.span.hi),
-                    ),
-                    self.input.byte(node.right.span().hi),
+                    self.input.byte(target.id.span.lo),
+                    (self.input.byte(value.lo), self.input.byte(value.hi)),
                     (self.input.byte(span.lo), self.input.byte(span.hi)),
                 ));
             }
@@ -283,7 +286,7 @@ fn storage_writes(
         crate::ice::bug!("detached value storage has no declaration")
     }
     let mut writes = Vec::new();
-    for (storage, target, value_end, span) in collect.assignments {
+    for (storage, target, value, span) in collect.assignments {
         if !collect.names.contains_key(&storage) {
             continue;
         }
@@ -293,9 +296,9 @@ fn storage_writes(
         writes.push(StorageWrite {
             storage,
             target,
-            value_end,
+            value,
         });
     }
-    writes.sort_by_key(|write| write.target.0);
+    writes.sort_by_key(|write| write.target);
     Some(writes)
 }

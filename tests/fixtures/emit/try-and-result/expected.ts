@@ -15,19 +15,19 @@ export function load(id: string): TResult<{ name: string; title: string }, strin
   $tt_v0: {
     const $tt_t0 = getUser(id);
     if (!("value" in $tt_t0)) {
-      $tt_v0 = $tt_t0;
+      const $tt_a0 = { value: $tt_t0 }; $tt_v0 = $tt_a0.value;
       break $tt_v0;
     }
     const user = $tt_t0.value;
     const name = user.name;
     const $tt_t1 = getCompany(user.companyId);
     if (!("value" in $tt_t1)) {
-      $tt_v0 = $tt_t1;
+      const $tt_a1 = { value: $tt_t1 }; $tt_v0 = $tt_a1.value;
       break $tt_v0;
     }
     const company = $tt_t1.value;
     {
-      $tt_v0 = { kind: "Ok" as const, value: { name, title: company.title } };
+      const $tt_a2 = { value: { kind: "Ok" as const, value: { name, title: company.title } } }; $tt_v0 = $tt_a2.value;
       break $tt_v0;
     }
   }

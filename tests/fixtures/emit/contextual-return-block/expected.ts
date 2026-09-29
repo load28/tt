@@ -24,8 +24,8 @@ declare function consume(item: { kind: "item"; run: (x: number) => number }): vo
   {
     const $tt_m = flag;
     switch ($tt_m) {
-      case true: $tt_v0 = 0; break;
-      case false: $tt_v0 = 1; break;
+      case true: const $tt_a0 = { value: 0 }; $tt_v0 = $tt_a0.value; break;
+      case false: const $tt_a1 = { value: 1 }; $tt_v0 = $tt_a1.value; break;
       default: throw new Error("tt match: unexpected literal " + $tt_show($tt_m));
     }
   }
