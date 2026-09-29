@@ -236,6 +236,34 @@ fn an_output_directory_inside_the_input_is_not_recompiled() {
     assert!(!out_dir.join("alias/stale.ts").exists());
 }
 
+/// Only an output root strictly inside a directory input is excluded from
+/// it. The input itself, or a directory enclosing it, is where every source
+/// lives, and excluding it would leave nothing to compile.
+#[test]
+fn an_output_directory_that_is_or_encloses_the_input_keeps_its_sources() {
+    for (out, input, emitted) in [
+        (".", "src", "a.ts"),
+        ("src", "src", "src/a.ts"),
+        ("gen", "gen/src", "gen/a.ts"),
+    ] {
+        let dir = tmpdir();
+        fs::create_dir_all(dir.join(input)).unwrap();
+        fs::write(dir.join(input).join("a.tt"), "export const a = 1;\n").unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["-o", out, input])
+            .current_dir(dir.path())
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "-o {out} {input}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(dir.join(emitted).is_file(), "-o {out} {input}");
+    }
+}
+
 #[test]
 fn mixed_source_project_preserves_all_directed_runtime_values() {
     if !have("tsc") || !have("bun") || !have("node") {

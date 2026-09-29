@@ -146,7 +146,10 @@ pub(super) fn build_jobs(
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
         collect_sources(input_path, include_ts, &mut files).map_err(|e| format!("ttc: {e}"))?;
-        if is_dir && let Some(dir) = out_dir {
+        if is_dir
+            && let Some(dir) = out_dir
+            && output_tree_inside(input_path, dir)
+        {
             files.retain(|file| !path_is_within(file, dir));
         }
         for file in files {
@@ -200,6 +203,20 @@ fn path_is_within(path: &Path, dir: &Path) -> bool {
             (path.canonicalize(), dir.canonicalize()),
             (Ok(path), Ok(dir)) if path.starts_with(&dir)
         )
+}
+
+/// Whether the output root is a subtree of a directory input, so the
+/// input's walk would read back what a previous build wrote there. Only a
+/// root strictly inside the input is: the input directory itself, or one
+/// enclosing it, holds every source, and its earlier outputs are already
+/// skipped by their ownership records.
+fn output_tree_inside(input: &Path, out_dir: &Path) -> bool {
+    let lexically_same = normalized_absolute(input) == normalized_absolute(out_dir);
+    let canonically_same = matches!(
+        (input.canonicalize(), out_dir.canonicalize()),
+        (Ok(input), Ok(out_dir)) if input == out_dir
+    );
+    !lexically_same && !canonically_same && path_is_within(out_dir, input)
 }
 
 /// Whether two paths name the same file. The output side may not exist
