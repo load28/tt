@@ -32,13 +32,11 @@ let $tt_v0;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      const $tt_a0 = { value: <strong>{value}</strong> };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = <strong>{value}</strong>;
       break;
     }
     case "Empty": {
-      const $tt_a1 = { value: <span>empty</span> };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = <span>empty</span>;
       break;
     }
     default: {

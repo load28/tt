@@ -28,13 +28,11 @@ export async function selected(flag: boolean) {
     const $tt_m = flag;
     switch ($tt_m) {
       case true: {
-        const $tt_a0 = { value: await import('./model.js') };
-        $tt_v0 = $tt_a0.value;
+        $tt_v0 = await import('./model.js');
         break;
       }
       case false: {
-        const $tt_a1 = { value: await import('./fallback.js') };
-        $tt_v0 = $tt_a1.value;
+        $tt_v0 = await import('./fallback.js');
         break;
       }
       default: {

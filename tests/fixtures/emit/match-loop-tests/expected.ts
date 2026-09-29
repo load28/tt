@@ -7,13 +7,11 @@ while (true) {
     const $tt_m = next();
     switch ($tt_m) {
       case 1: {
-        const $tt_a0 = { value: true };
-        $tt_v0 = $tt_a0.value;
+        $tt_v0 = true;
         break;
       }
       default: {
-        const $tt_a1 = { value: false };
-        $tt_v0 = $tt_a1.value;
+        $tt_v0 = false;
         break;
       }
     }
@@ -28,13 +26,11 @@ while (true) {
     const $tt_m = next();
     switch ($tt_m) {
       case 1: {
-        const $tt_a2 = { value: 1 };
-        $tt_v1 = $tt_a2.value;
+        $tt_v1 = 1;
         break;
       }
       default: {
-        const $tt_a3 = { value: 0 };
-        $tt_v1 = $tt_a3.value;
+        $tt_v1 = 0;
         break;
       }
     }
@@ -46,13 +42,11 @@ while (true) {
          const $tt_m = next();
          switch ($tt_m) {
            case 2: {
-             const $tt_a4 = { value: true };
-             $tt_v2 = $tt_a4.value;
+             $tt_v2 = true;
              break;
            }
            default: {
-             const $tt_a5 = { value: false };
-             $tt_v2 = $tt_a5.value;
+             $tt_v2 = false;
              break;
            }
          }

@@ -89,7 +89,7 @@ fn a_whole_primary_initializer_is_still_the_statement_form() {
 fn a_result_return_without_a_semicolon_completes_the_block() {
     let out = ok("declare function read(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\nexport function f() {\n  const r = result {\n    const a = try read();\n    return a\n  };\n  return r;\n}\n");
     assert!(
-        out.contains("const $tt_a1 = { value: { kind: \"Ok\" as const, value: a } };"),
+        out.contains("const $tt_a0 = { value: { kind: \"Ok\" as const, value: a } };"),
         "{out}"
     );
 }

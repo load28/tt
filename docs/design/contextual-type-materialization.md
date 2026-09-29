@@ -56,14 +56,18 @@ position the storage stands for can have no contextual type at all
 (TASK-570).
 
 When contextual propagation reaches its first fixed point, every slot still
-without a contextual type is detached. Each value written to it is first the
-`value` of an object literal an arm-local `const` holds, and the storage reads
-it from there:
+without a contextual type is detached. A value written to it whose type
+TypeScript computes from its contextual type is first the `value` of an
+object literal an arm-local `const` holds, and the storage reads it from
+there:
 
 ```ts
 const $tt_a0 = { value: ({ k: 1, m() { return this; } }) };
 $tt_v0 = $tt_a0.value;
 ```
+
+Every other value is written directly, as before: `$tt_v0 = 1;`,
+`$tt_v0 = g();`.
 
 An unannotated `const` initializer has no contextual type, and a property of
 an object literal that has none has none either. The value is a property
@@ -73,15 +77,28 @@ evolving array (TS7034 and TS7005 where it is read), and a `Symbol()`
 initializer of a `const` declares a `unique symbol`. A property only widens a
 fresh literal type, which storage with no contextual type widens anyway.
 
-The rule covers every value written to the slot. Which values TypeScript types
-by their context is the checker's question (object and array literals,
-functions, generic calls, type-parameter references and the expressions that
-pass a context on), not a syntactic one, so no value form is exempt. Storage
-for the index of the arm a dispatch selected is not detached: it holds no
-value of the source (`MarkKind::SelectorSlot`). The writes are the assignment
-statements the emission's syntax tree has for the slot's generated name,
-which is unique in its file; the lowering writes storage only in its own
-blocks and `switch` cases, where a `const` can be declared.
+Which values TypeScript types from their context follows its checker, read
+off the value's syntax tree (`typed_by_context` in `src/codegen/contextual.rs`).
+The checker consults the contextual type in typing an object literal (its
+properties, and `this` in its methods), an array literal (its elements), and
+a function expression or arrow function (its parameters and return
+expressions). `getContextualType` passes a position's contextual type on to
+the operand of parentheses, `as const`, a non-null assertion and `await`, to
+both branches of a conditional, to both operands of `||` and `??`, and to the
+right operand of `&&` and of the comma operator. Any other operand has a
+contextual type of its own (a call argument its parameter's, `as T` and
+`satisfies T` their `T`) or none. A class expression's members are not
+contextually typed. The remaining expressions type themselves under `any` as
+they do with no contextual type: a literal is kept literal only by a literal
+contextual type, and a generic call infers nothing from an `any` return
+context. A Result block's success value (`{ kind: "Ok" as const, value: … }`)
+is an object literal, so it is carried too.
+
+Storage for the index of the arm a dispatch selected is never detached: it
+holds no value of the source (`MarkKind::SelectorSlot`). The writes are the
+assignment statements the emission's syntax tree has for the slot's
+generated name, which is unique in its file; the lowering writes storage only
+in its own blocks and `switch` cases, where a `const` can be declared.
 
 The backend says whether an annotation is a contextual type or an inferred
 join (`ContextualSlotType::inferred`). A detached slot that a later round

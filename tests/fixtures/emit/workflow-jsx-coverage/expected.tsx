@@ -23,18 +23,15 @@ let $tt_v0$view;
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "A": {
-      const $tt_a0 = { value: <p>A</p> };
-      $tt_v0$view = $tt_a0.value;
+      $tt_v0$view = <p>A</p>;
       break;
     }
     case "B": {
-      const $tt_a1 = { value: <p>B</p> };
-      $tt_v0$view = $tt_a1.value;
+      $tt_v0$view = <p>B</p>;
       break;
     }
     case "C": {
-      const $tt_a2 = { value: <p>C</p> };
-      $tt_v0$view = $tt_a2.value;
+      $tt_v0$view = <p>C</p>;
       break;
     }
     default: {

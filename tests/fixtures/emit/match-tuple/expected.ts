@@ -41,19 +41,16 @@ let $tt_v0: number;
     if ($tt_m0.kind === "North" && $tt_m1.kind === "Fast") {
       const { dx } = $tt_m0;
       const { v } = $tt_m1;
-      const $tt_a0 = { value: dx + v };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = dx + v;
       break;
     }
     if ($tt_m0.kind === "North" && $tt_m1.kind === "Slow") {
       const { dx } = $tt_m0;
-      const $tt_a1 = { value: dx };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = dx;
       break;
     }
     if ($tt_m0.kind === "South") {
-      const $tt_a2 = { value: 0 };
-      $tt_v0 = $tt_a2.value;
+      $tt_v0 = 0;
       break;
     }
     throw new Error("tt match: unexpected case " + "[" + $tt_show($tt_m0) + "," + $tt_show($tt_m1) + "]");

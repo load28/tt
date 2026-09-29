@@ -37,13 +37,11 @@ const $tt_v1 = (consume);
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      const $tt_a0 = { value: $tt_v1(({ kind: "item", run: x => x + value })) };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = $tt_v1(({ kind: "item", run: x => x + value }));
       break;
     }
     case "Empty": {
-      const $tt_a1 = { value: $tt_v1(({ kind: "item", run: x => x })) };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = $tt_v1(({ kind: "item", run: x => x }));
       break;
     }
     default: {
@@ -81,13 +79,11 @@ if ($tt_v6 != null) {
     switch ($tt_m.kind) {
       case "Ready": {
         const { value } = $tt_m;
-        const $tt_a2 = { value: $tt_v6(({ kind: "item", run: x => x + value })) };
-        $tt_v7 = $tt_a2.value;
+        $tt_v7 = $tt_v6(({ kind: "item", run: x => x + value }));
         break;
       }
       case "Empty": {
-        const $tt_a3 = { value: $tt_v6(({ kind: "item", run: x => x })) };
-        $tt_v7 = $tt_a3.value;
+        $tt_v7 = $tt_v6(({ kind: "item", run: x => x }));
         break;
       }
       default: {
@@ -96,8 +92,7 @@ if ($tt_v6 != null) {
     }
   }
 } else {
-  const $tt_a4 = { value: undefined };
-  $tt_v7 = $tt_a4.value;
+  $tt_v7 = undefined;
 }
 
 const optional = $tt_v7;
@@ -110,13 +105,11 @@ const $tt_v10 = $tt_v9<Item>;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      const $tt_a5 = { value: $tt_v10(({ kind: "item", run: x => x + value })) };
-      $tt_v8 = $tt_a5.value;
+      $tt_v8 = $tt_v10(({ kind: "item", run: x => x + value }));
       break;
     }
     case "Empty": {
-      const $tt_a6 = { value: $tt_v10(({ kind: "item", run: x => x })) };
-      $tt_v8 = $tt_a6.value;
+      $tt_v8 = $tt_v10(({ kind: "item", run: x => x }));
       break;
     }
     default: {

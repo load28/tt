@@ -71,19 +71,36 @@ help: the annotation repeats `m(): any`.
   `tsc --strict` check confirmed `never[]` for `[]`, `symbol` for
   `Symbol()`, and the type parameter itself for a generic reference.
 
-### Decision 3: Every value written to a detached slot, except an arm index
+### Decision 3: Carry only a value TypeScript types from its context
 
-- **Context**: Which writes the rule covers.
-- **Alternatives considered**: Only values whose type depends on a
-  contextual type. TypeScript consults the contextual type for object and
-  array literals, functions and their return expressions, generic calls,
-  references to a type parameter with a union constraint, and the operators
-  that pass it on; `isContextSensitive` does not even cover
-  `m() { return this; }`. Choosing a subset would re-implement the checker
-  syntactically.
-- **Decision and rationale**: Every write, so the fixture churn is every
-  write to such a slot. The one exception is structural: the slot a deferred
-  arm selection writes (`$tt_v1 = 0; … ($tt_v1 === 0 ? a : b)`) holds the
+- **Context**: A first version carried every value written to a detached
+  slot, which rewrote every ordinary arm (`$tt_v0 = 1;`) and allocated an
+  object for it. On review the user chose to carry only the values whose
+  type TypeScript computes from their contextual type, decided from the
+  parsed value and derived from TypeScript's contextual-typing rules.
+- **Alternatives considered**: (a) Every write (the first version): the
+  contextual `any` changes nothing for the other values, so the rewrite had
+  no effect on their types. (b) TypeScript's `isContextSensitive`: it is the
+  test for deferring inference, and does not cover `m() { return this; }`,
+  the reported case. (c) Class expressions, which the review listed: the
+  checker does not contextually type a class expression's members, so its
+  type is the same under `any` and under no contextual type.
+- **Decision and rationale**: `typed_by_context` in
+  `src/codegen/contextual.rs`, on the SWC expression of the write's value.
+  True for an object literal, an array literal, a function expression and an
+  arrow function, the kinds whose checking reads the contextual type; and
+  through the operands `getContextualType` hands the position's contextual
+  type to: parentheses, `as const`, a non-null assertion, `await`, both
+  branches of a conditional, both operands of `||` and `??`, the right
+  operand of `&&` and of a comma. Every other operand has its own contextual
+  type (a call argument, `as T`, `satisfies T`) or none, and the other
+  expressions type themselves under `any` as with no contextual type (a
+  literal stays literal only under a literal contextual type; a generic call
+  infers nothing from an `any` return context, checked with `tsc --strict`:
+  `x = mk()` is `unknown[]`). A reference to a type parameter with a union
+  constraint is read through its constraint under any contextual type, and
+  is left as it was. A Result block's success wrapper is an object literal
+  and is carried. The slot a deferred arm selection writes holds the
   compiler's arm index, not a value of the source; codegen declares it
   through `push_selector_declaration` (`MarkKind::SelectorSlot`,
   `MappedEmit::selector_slots`) and it is never detached.
@@ -135,8 +152,7 @@ help: the annotation repeats `m(): any`.
   (`UPDATE_EXPECT=1 cargo test --test snapshot`) and read the diff; updated
   the output assertions of 46 `tests/compile` tests and
   `emit_map::anchors_do_not_change_the_emitted_bytes`, which compares the
-  unrefined emission and now compiles with `defer_to_checker`, and of
-  `content_mapper::tests::incomplete_match_arms_preserve_mapped_siblings_in_both_source_kinds`.
+  unrefined emission and now compiles with `defer_to_checker`.
 - 2026-09-29: Added `a_value_with_no_contextual_type_is_typed_as_at_its_source_position`,
   `a_contextual_this_type_still_reaches_the_arm_values`
   (`tests/integration/contextual.rs`) and
@@ -145,6 +161,13 @@ help: the annotation repeats `m(): any`.
   fail (no TS2339); the second holds on both.
 - 2026-09-29: Rebased onto the branch's new head (TASK-561) and re-ran the
   suites.
+- 2026-09-29: Narrowed the carrier to values typed from their context
+  (Decision 3) after review; restored the 46 `tests/compile` assertions,
+  the fixtures and the content-mapper assertion to their base form, updated
+  the four Result-block assertions whose success wrapper is carried, and
+  added `only_a_value_typed_by_its_context_is_carried_past_its_storage`
+  (`tests/compile/cases_13.rs`). Rebased onto the branch's head again,
+  keeping every INDEX row.
 
 ## Issues and resolutions
 
@@ -187,10 +210,11 @@ Changed `src/codegen/contextual.rs`, `src/codegen/rope.rs`,
 `src/typescript/backend.rs`, `src/typescript/native.rs`,
 `src/typescript/host.mjs`, `docs/design/contextual-type-materialization.md`,
 `docs/ai/tt.md`, `docs/tasks/TASK-553-untruncated-annotations.md`,
-`src/content_mapper/tests.rs`, `tests/cli.rs`, `tests/emit_map.rs`, `tests/integration/contextual.rs`,
-`tests/compile/cases_01.rs`, `cases_02.rs`, `cases_05.rs`, `cases_06.rs`,
-`cases_07.rs`, `cases_09.rs`, `cases_10.rs`, `cases_11.rs`, `cases_13.rs`,
-21 fixtures under `tests/fixtures/emit/`, `docs/tasks/INDEX.md`, and this
-record. Every write to storage whose source position has no contextual type
-now goes through an arm-local `const`; the join annotation's elided cycles
+`tests/cli.rs`, `tests/emit_map.rs`, `tests/integration/contextual.rs`,
+`tests/compile/cases_05.rs`, `cases_07.rs`, `cases_10.rs`, `cases_13.rs`,
+`docs/tasks/INDEX.md`, and this record. Fixtures: two files change,
+four writes, all object or array literals —
+`owned-inline-control-flow` (a Result success wrapper, `[value]` and `[]`)
+and `try-and-result` (a Result success wrapper). Every other write, and all
+storage annotations, are unchanged. The join annotation's elided cycles
 remain (Issue 2).

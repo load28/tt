@@ -16,9 +16,9 @@ pub(crate) struct SlotRefinement {
     /// The type written on the slot's declaration.
     pub annotation: Option<String>,
     /// The slot's source position has no contextual type. Every value
-    /// written to the slot is then first the property of an object literal
-    /// a `const` of its own holds, where TypeScript types it without one,
-    /// as at that position.
+    /// written to the slot whose type TypeScript computes from its context
+    /// is then first the property of an object literal a `const` of its own
+    /// holds, where TypeScript types it without one, as at that position.
     pub detached: bool,
 }
 
@@ -74,7 +74,8 @@ pub(crate) fn refine(
     if let Some(writes) = writes {
         let mut occupied = crate::generated_names::source_names(&emit.code, source_kind);
         let newline = crate::line_ending(&emit.code);
-        for (index, write) in writes.into_iter().enumerate() {
+        let carried = writes.into_iter().filter(|write| write.typed_by_context);
+        for (index, write) in carried.enumerate() {
             let local = crate::generated_names::allocate(&format!("$tt_a{index}"), &mut occupied)
                 .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for a value"));
             locals.push((write.target, format!("const {local}").len()));
@@ -209,6 +210,47 @@ struct StorageWrite {
     target: usize,
     /// The assigned value.
     value: (usize, usize),
+    /// TypeScript computes the value's type from its contextual type
+    /// ([`typed_by_context`]).
+    typed_by_context: bool,
+}
+
+/// Whether TypeScript computes the type of `value` from the contextual type
+/// it is given, so the `any` of undeclared storage would change it.
+///
+/// The checker consults the contextual type in typing an object literal
+/// (its properties, and `this` in its methods), an array literal (its
+/// elements) and a function or arrow function (its parameters, and its
+/// return expressions); `getContextualType` passes a position's contextual
+/// type on to the operand of parentheses, `as const`, a non-null assertion
+/// and `await`, to both branches of a conditional, to both operands of `||`
+/// and `??`, and to the right operand of `&&` and of the comma operator.
+/// Every other operand gets a contextual type of its own (a call argument
+/// its parameter's, `as T` and `satisfies T` their `T`) or none, and the
+/// remaining expressions type themselves: a literal is not kept literal by
+/// `any`, and a call infers nothing from a contextual `any` return type.
+fn typed_by_context(value: &Expr) -> bool {
+    use swc_ecma_ast::BinaryOp;
+    match value {
+        Expr::Object(_) | Expr::Array(_) | Expr::Fn(_) | Expr::Arrow(_) => true,
+        Expr::Paren(inner) => typed_by_context(&inner.expr),
+        Expr::TsConstAssertion(inner) => typed_by_context(&inner.expr),
+        Expr::TsNonNull(inner) => typed_by_context(&inner.expr),
+        Expr::Await(inner) => typed_by_context(&inner.arg),
+        Expr::Cond(inner) => typed_by_context(&inner.cons) || typed_by_context(&inner.alt),
+        Expr::Bin(inner) => match inner.op {
+            BinaryOp::LogicalOr | BinaryOp::NullishCoalescing => {
+                typed_by_context(&inner.left) || typed_by_context(&inner.right)
+            }
+            BinaryOp::LogicalAnd => typed_by_context(&inner.right),
+            _ => false,
+        },
+        Expr::Seq(inner) => inner
+            .exprs
+            .last()
+            .is_some_and(|last| typed_by_context(last)),
+        _ => false,
+    }
 }
 
 /// Every assignment to the storage declared by the identifiers ending at
@@ -277,6 +319,7 @@ fn storage_writes(
                         storage: target.id.sym.to_string(),
                         target: self.input.byte(target.id.span.lo),
                         value: (self.input.byte(value.lo), self.input.byte(value.hi)),
+                        typed_by_context: typed_by_context(&node.right),
                     },
                     (self.input.byte(span.lo), self.input.byte(span.hi)),
                 ));

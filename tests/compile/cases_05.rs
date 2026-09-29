@@ -259,9 +259,7 @@ fn a_lowering_is_laid_out_from_the_line_it_replaces() {
     assert!(out.contains("\n      const $tt_m = e;"), "{out}");
     assert!(out.contains("\n      switch ($tt_m.kind) {\n"), "{out}");
     assert!(
-        compact(&out).contains(
-            "case \"A\": { const { v } = $tt_m; const $tt_a0 = { value: v }; $tt_v0 = $tt_a0.value; break; }"
-        ),
+        compact(&out).contains("case \"A\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
         "{out}"
     );
     assert!(out.contains("\n    }\n    const r = $tt_v0;"), "{out}");
@@ -399,18 +397,9 @@ fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
         "variant E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
     );
     let compact = compact(&out);
-    assert!(
-        compact.contains("const $tt_a0 = { value: v + 1 }; $tt_v0$plain = $tt_a0.value; break;"),
-        "{out}"
-    );
-    assert!(
-        compact.contains("const $tt_a1 = { value: 0 }; $tt_v0$plain = $tt_a1.value; break;"),
-        "{out}"
-    );
-    assert!(
-        compact.contains("const $tt_a2 = { value: (v, v + 1) }; $tt_v1$seq = $tt_a2.value; break;"),
-        "{out}"
-    );
+    assert!(compact.contains("$tt_v0$plain = v + 1; break;"), "{out}");
+    assert!(compact.contains("$tt_v0$plain = 0; break;"), "{out}");
+    assert!(compact.contains("$tt_v1$seq = (v, v + 1); break;"), "{out}");
 }
 
 #[test]
@@ -426,7 +415,7 @@ fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
     }
     assert!(
         out.contains(
-            "case \"A\": {\n        const { v } = $tt_m;\n        const $tt_a0 = { value: v };\n        $tt_v0 = $tt_a0.value;\n        break;\n      }"
+            "case \"A\": {\n        const { v } = $tt_m;\n        $tt_v0 = v;\n        break;\n      }"
         ),
         "{out}"
     );
@@ -448,7 +437,7 @@ fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
     );
     assert!(
         out.contains(
-            "if (!(\"value\" in $tt_t2)) {\n    const $tt_a2 = { value: $tt_t2 };\n    $tt_v2$computed = $tt_a2.value;\n    break $tt_v2$computed;\n  }\n  const $tt_a3 = { value: { kind: \"Ok\" as const, value: $tt_t2.value } };\n  $tt_v2$computed = $tt_a3.value;\n  break $tt_v2$computed;"
+            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2$computed = $tt_t2;\n    break $tt_v2$computed;\n  }\n  const $tt_a0 = { value: { kind: \"Ok\" as const, value: $tt_t2.value } };\n  $tt_v2$computed = $tt_a0.value;\n  break $tt_v2$computed;"
         ),
         "{out}"
     );
@@ -484,7 +473,7 @@ fn an_inert_pipeline_input_uses_a_direct_call() {
 fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
     let out = ok("variant E { A(value: number), B }\n\
          const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
-    assert!(out.contains("const $tt_a2 = { value: String($tt_v2) };"), "{out}");
+    assert!(out.contains("$tt_v0$value = String($tt_v2);"), "{out}");
     assert!(!out.contains("$tt_ap"), "{out}");
 }
 
@@ -521,7 +510,7 @@ fn pipeline_head_reclaims_a_lifted_match() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("const $tt_a2 = { value: double($tt_v2) };"), "{out}");
+    assert!(out.contains("$tt_v0$a = double($tt_v2);"), "{out}");
     assert!(out.contains("const a = $tt_v0$a;"), "{out}");
 }
 
@@ -540,8 +529,7 @@ fn pipeline_inside_match_scrutinee_arm_and_template() {
     );
     assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
     assert!(
-        compact(&out)
-            .contains("const $tt_a0 = { value: $tt_ap(v, double) }; $tt_v0$r = $tt_a0.value; break;"),
+        compact(&out).contains("$tt_v0$r = $tt_ap(v, double); break;"),
         "{out}"
     );
     assert!(out.contains("`n=${$tt_ap(x, f)}`"), "{out}");

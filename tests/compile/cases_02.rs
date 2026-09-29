@@ -89,7 +89,7 @@ fn direct_return_match_keeps_await_in_the_host_function() {
         "async function f(x: T) { return match (x) { A(url) => await fetch(url), _ => null }; }",
     );
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("const $tt_a0 = { value: await fetch(url) };"), "{out}");
+    assert!(out.contains("$tt_v0 = await fetch(url);"), "{out}");
     assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
@@ -154,9 +154,7 @@ const action = match (key) {
 };
 "#);
     assert!(
-        compact(&out).contains(
-            "case \"Escape\": case \"Tab\": { const $tt_a1 = { value: \"cancel\" }; $tt_v0$action = $tt_a1.value; break; }"
-        ),
+        compact(&out).contains("case \"Escape\": case \"Tab\": { $tt_v0$action = \"cancel\"; break; }"),
         "{out}"
     );
 }
@@ -166,7 +164,7 @@ fn or_pattern_with_identical_bindings_shares_destructuring() {
     let out = ok("const r = match (x) { A(v) | B(v) => v, _ => 0 };");
     assert!(
         compact(&out)
-            .contains("case \"A\": case \"B\": { const { v } = $tt_m; const $tt_a0 = { value: v }; $tt_v0$r = $tt_a0.value; break; }"),
+            .contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0$r = v; break; }"),
         "{out}"
     );
 }
@@ -306,13 +304,13 @@ const grade = match (s) {
     assert!(!out.contains("switch ("), "{out}");
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if (points >= 90) { const $tt_a0 = { value: \"A\" }; $tt_v0$grade = $tt_a0.value; break; } }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if (points >= 90) { $tt_v0$grade = \"A\"; break; } }"
         ),
         "{out}"
     );
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; const $tt_a1 = { value: \"F\" }; $tt_v0$grade = $tt_a1.value; break; }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0$grade = \"F\"; break; }"
         ),
         "{out}"
     );
@@ -371,7 +369,7 @@ fn guard_with_or_pattern_emits_combined_condition() {
     let out = ok("const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };");
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if (v > 0) { const $tt_a0 = { value: v }; $tt_v0$r = $tt_a0.value; break; } }"
+            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if (v > 0) { $tt_v0$r = v; break; } }"
         ),
         "{out}"
     );
@@ -391,9 +389,7 @@ fn await_in_guard_makes_match_async() {
     );
     assert!(!out.contains("async () =>"), "{out}");
     assert!(
-        compact(&out).contains(
-            "if (await allowed(u)) { const $tt_a0 = { value: 1 }; $tt_v0 = $tt_a0.value; break; }"
-        ),
+        compact(&out).contains("if (await allowed(u)) { $tt_v0 = 1; break; }"),
         "{out}"
     );
     assert!(out.contains("return $tt_v0;"), "{out}");
@@ -407,7 +403,7 @@ fn nested_await_match_keeps_its_expression_boundary() {
     assert!(!out.contains("async () =>"), "{out}");
     // The consumed call completes inside each arm, so the awaited value
     // keeps the consumer's contextual position (TASK-327).
-    assert!(out.contains("const $tt_a0 = { value: $tt_v1(await fetch(url)) };"), "{out}");
+    assert!(out.contains("$tt_v0 = $tt_v1(await fetch(url));"), "{out}");
     assert!(out.contains("return $tt_v0;"), "{out}");
 }
 
@@ -473,10 +469,7 @@ fn a_match_inside_a_literal_argument_completes_the_call_from_its_arms() {
 
     // A consumed call still delivers its result to the authored position.
     let consumed = ok("const kept = consume({item: match (x) { A(v) => v, _ => 0 }});");
-    assert!(
-        consumed.contains("const $tt_a0 = { value: $tt_v1$kept({item: v}) };"),
-        "{consumed}"
-    );
+    assert!(consumed.contains("$tt_v0$kept = $tt_v1$kept({item: v});"), "{consumed}");
     assert!(consumed.contains("const kept = $tt_v0$kept;"), "{consumed}");
 }
 
@@ -508,7 +501,7 @@ fn final_argument_completions_call_through_captured_earlier_arguments() {
     // A match that is not the final argument keeps its join slot: moving the
     // call into it would run the later argument's subject too early.
     let leading = ok("pair(match (x) { A(v) => v, _ => 0 }, last());");
-    assert!(leading.contains("const $tt_a0 = { value: v };"), "{leading}");
+    assert!(leading.contains("$tt_v0 = v;"), "{leading}");
     assert!(leading.contains("$tt_v1($tt_v0, last());"), "{leading}");
 }
 
@@ -767,7 +760,7 @@ fn try_expression_may_contain_a_match() {
     assert!(nested.contains("const $tt_v1 = (wrap);"), "{nested}");
     // Each arm performs the consuming call itself (TASK-327); the try
     // propagation then reads the completed result.
-    assert!(nested.contains("const $tt_a0 = { value: $tt_v1(value) };"), "{nested}");
+    assert!(nested.contains("$tt_v0 = $tt_v1(value);"), "{nested}");
     assert!(nested.contains("const $tt_t0 = $tt_v0;"), "{nested}");
     assert!(!nested.contains("$tt_expr"), "{nested}");
 

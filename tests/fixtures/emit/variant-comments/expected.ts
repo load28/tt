@@ -76,19 +76,16 @@ let $tt_v0: number;
   switch ($tt_m.kind) {
     case "Circle": {
       const { radius } = $tt_m;
-      const $tt_a0 = { value: Math.PI * radius ** 2 };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = Math.PI * radius ** 2;
       break;
     }
     case "Rect": {
       const { width, height } = $tt_m;
-      const $tt_a1 = { value: width * height };
-      $tt_v0 = $tt_a1.value;
+      $tt_v0 = width * height;
       break;
     }
     case "Point": {
-      const $tt_a2 = { value: 0 };
-      $tt_v0 = $tt_a2.value;
+      $tt_v0 = 0;
       break;
     }
     default: {

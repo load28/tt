@@ -6,13 +6,11 @@ const $tt_v2 = ($tt_ap(observe(1), ((x: number) => x + 1)));
   const $tt_m = 2;
   switch ($tt_m) {
     case 2: {
-      const $tt_a0 = { value: 2 };
-      $tt_v1 = $tt_a0.value;
+      $tt_v1 = 2;
       break;
     }
     default: {
-      const $tt_a1 = { value: 0 };
-      $tt_v1 = $tt_a1.value;
+      $tt_v1 = 0;
       break;
     }
   }
@@ -28,13 +26,11 @@ const $tt_v10 = ((((x: number) => x + 1))(1));
   const $tt_m = 2;
   switch ($tt_m) {
     case 2: {
-      const $tt_a2 = { value: 2 };
-      $tt_v9 = $tt_a2.value;
+      $tt_v9 = 2;
       break;
     }
     default: {
-      const $tt_a3 = { value: 0 };
-      $tt_v9 = $tt_a3.value;
+      $tt_v9 = 0;
       break;
     }
   }

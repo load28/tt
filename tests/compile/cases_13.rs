@@ -81,11 +81,11 @@ fn a_comma_inside_type_arguments_stays_inside_its_construct() {
     for (source, expected) in [
         (
             "export const r = match (x) { 1 => f<A, B>(x), _ => 2 };\n",
-            "{ value: f<A, B>(x) };",
+            "$tt_v0 = f<A, B>(x);",
         ),
         (
             "export const r = match (x) { 1 => new Map<A, B>(), _ => 2 };\n",
-            "{ value: new Map<A, B>() };",
+            "$tt_v0 = new Map<A, B>();",
         ),
         (
             "export const r = match (x) { 1 if f<A, Map<A, B>>(x) => f<B, A>(x), _ => 2 };\n",
@@ -208,4 +208,25 @@ fn a_separator_is_written_at_every_nesting_depth() {
     let out = ok(&source);
     assert_eq!(out.matches("\n    ;((").count(), 1, "{out}");
     assert_eq!(out.matches("\n  ;((").count(), 2, "{out}");
+}
+
+#[test]
+fn only_a_value_typed_by_its_context_is_carried_past_its_storage() {
+    // TASK-570: storage whose source position has no contextual type would
+    // type an object literal by its own `any`; a number or a call types
+    // itself, and is written directly.
+    let out = ok("declare const n: number;\n\
+         declare function g(): number;\n\
+         export const a = match (n) { 1 => 1, _ => g() };\n\
+         export const b = match (n) { 1 => ({ m() { return this; } }), _ => null };\n");
+    assert!(out.contains("\n      $tt_v0 = 1;\n"), "{out}");
+    assert!(out.contains("\n      $tt_v0 = g();\n"), "{out}");
+    assert!(
+        out.contains(
+            "\n      const $tt_a0 = { value: ({ m() { return this; } }) };\n      $tt_v1 = $tt_a0.value;\n"
+        ),
+        "{out}"
+    );
+    assert!(out.contains("\n      $tt_v1 = null;\n"), "{out}");
+    assert_eq!(out.matches("{ value: ").count(), 1, "{out}");
 }
