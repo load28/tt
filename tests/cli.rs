@@ -2064,6 +2064,89 @@ fn check_does_not_start_the_typescript_backend() {
     assert!(started.exists(), "-p did not ask the TypeScript backend");
 }
 
+/// The contextual refinement of a build is one TypeScript session per
+/// project however many workers compile it: `-j 4` starts exactly the
+/// processes `-j 1` does, and writes the same output.
+#[cfg(unix)]
+#[test]
+fn parallel_workers_share_one_typescript_session_per_project() {
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let Some(node) = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("node"))
+            .find(|node| node.is_file())
+    }) else {
+        assert!(!common::toolchain_required(), "no node on PATH");
+        return;
+    };
+    let dir = Workspace::in_repo_with_subdir("shared-session", "src");
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"module":"nodenext"}}"#,
+    )
+    .unwrap();
+    for index in 0..8 {
+        fs::write(
+            dir.join(format!("src/m{index}.tt")),
+            format!(
+                "variant T{index} {{ A(x: number), B }}\n\
+                 export const f{index} = (t: T{index}) => match (t) {{ A(x) => x, B => 0 }};\n"
+            ),
+        )
+        .unwrap();
+    }
+    let runtime = dir.join("runtime");
+    let log = dir.join("started");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::write(
+        runtime.join("node"),
+        format!(
+            "#!/bin/sh\necho started >> '{}'\nexec '{}' \"$@\"\n",
+            log.display(),
+            node.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(runtime.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    let path = std::env::join_paths(
+        std::iter::once(runtime.clone()).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )),
+    )
+    .unwrap();
+
+    let mut runs = Vec::new();
+    for jobs in ["1", "4"] {
+        let _ = fs::remove_file(&log);
+        let out = format!("out-{jobs}");
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["-j", jobs, "-o", &out, "src"])
+            .current_dir(&dir)
+            .env("PATH", &path)
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "-j {jobs}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let started = fs::read_to_string(&log).unwrap_or_default().lines().count();
+        runs.push((jobs, started));
+    }
+    assert!(runs[0].1 > 0, "the build never asked TypeScript");
+    assert_eq!(runs[0].1, runs[1].1, "processes started per -j: {runs:?}");
+    for index in 0..8 {
+        let name = format!("m{index}.ts");
+        assert_eq!(
+            fs::read_to_string(dir.join("out-1").join(&name)).unwrap(),
+            fs::read_to_string(dir.join("out-4").join(&name)).unwrap()
+        );
+    }
+}
+
 /// Input read failures must not be mistaken for absent type information.
 #[test]
 fn an_unreadable_sibling_is_reported_as_a_project_input_failure() {

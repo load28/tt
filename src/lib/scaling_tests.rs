@@ -176,20 +176,21 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
         return;
     }
     let files = 6;
-    let (_workspace, root) = contextual_project(files);
-    let fresh: Vec<String> = (0..files)
-        .map(|file| {
-            let root = root.clone();
-            std::thread::spawn(move || contextual_compile(&root, file))
-                .join()
-                .unwrap()
-        })
-        .collect();
+    // A reference answer comes from a project no other call has seen.
+    let fresh = |file: usize, dep: Option<&str>| {
+        let (_workspace, root) = contextual_project(files);
+        if let Some(dep) = dep {
+            std::fs::write(root.join("src/dep.ts"), dep).unwrap();
+        }
+        contextual_compile(&root, file)
+    };
+    let expected: Vec<String> = (0..files).map(|file| fresh(file, None)).collect();
     assert!(
-        fresh[1].contains("let $tt_v0: (string) | (number[]);"),
+        expected[1].contains("let $tt_v0: (string) | (number[]);"),
         "{}",
-        fresh[1]
+        expected[1]
     );
+    let (_workspace, root) = contextual_project(files);
     let mut shared = Vec::new();
     let first = measure(|| shared.push(contextual_compile(&root, 0)));
     let rest = measure(|| {
@@ -197,21 +198,33 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
             shared.push(contextual_compile(&root, file));
         }
     });
-    assert_eq!(shared, fresh);
-    assert_eq!(first["contextual projections"], files - 1);
-    assert_eq!(rest["contextual projections"], files - 1);
+    assert_eq!(shared, expected);
+    assert_eq!(first["contextual projections"], files);
     assert!(first["contextual checker asks"] > 0);
+    assert_eq!(rest.get("contextual projections"), None);
     assert_eq!(rest.get("contextual checker asks"), None);
-    std::fs::write(root.join("src/dep.ts"), "export const d: boolean = true;\n").unwrap();
+    // Workers compiling the project in parallel share what it already knows.
+    let workers: Vec<_> = (0..files)
+        .map(|file| {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                let mut output = String::new();
+                let counts = measure(|| output = contextual_compile(&root, file));
+                (output, counts)
+            })
+        })
+        .collect();
+    for (file, worker) in workers.into_iter().enumerate() {
+        let (output, counts) = worker.join().unwrap();
+        assert_eq!(output, expected[file]);
+        assert_eq!(counts.get("contextual projections"), None);
+        assert_eq!(counts.get("contextual checker asks"), None);
+    }
+    let dep = "export const d: boolean = true;\n";
+    std::fs::write(root.join("src/dep.ts"), dep).unwrap();
     let mut changed = String::new();
     let after = measure(|| changed = contextual_compile(&root, 0));
-    let expected = {
-        let root = root.clone();
-        std::thread::spawn(move || contextual_compile(&root, 0))
-            .join()
-            .unwrap()
-    };
-    assert_eq!(changed, expected);
+    assert_eq!(changed, fresh(0, Some(dep)));
     assert!(changed.contains("boolean"), "{changed}");
     assert!(after["contextual checker asks"] > 0);
 }
