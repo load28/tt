@@ -209,6 +209,30 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   service layer. A pass that ran and found problems only in other files
   answers this file with no diagnostics, which does replace it.
 
+### Unfinished tt values (TASK-528)
+
+- **The operand stays the user's.** Without an owner model a value `try`
+  has nowhere to put its early exit, but its operand is still the user's
+  expression. It is emitted where it stands, mapped, as the argument of
+  glue that reads its success payload under the Result ABI a statement
+  `try` tests: `(($tt_result) => { if (!("value" in $tt_result)) throw
+  $tt_result; return $tt_result.value; })(operand)`. The operand is evaluated
+  outside the arrow, so `this`, `await`, and `arguments` in it are the
+  enclosing function's, and its value keeps its type.
+- **An unterminated operand ends where TypeScript ends it.** The parser
+  reads an operand whose call or index is still open to where the
+  enclosing syntax resumes — a closer of another bracket, a statement
+  keyword directly in a parenthesis or index, or the end of the region —
+  as TypeScript reads an unterminated argument list, so the operand holds
+  the text being typed and the function's own `}` stays outside it.
+- **A cursor with no place in the served text is asked through a probe.**
+  Completion and signature help splice `$tt_probe` at the cursor and ask
+  at its mapped position when the served projection did not copy the
+  cursor's text (the whitespace after a match arm body, for instance). The
+  probe is built from the projection the service would serve for the
+  spliced text, the faithful projection of TypeScript that does not parse
+  included, and its auto-import edits map back through it (TASK-526).
+
 ### 지운 것 (§51)
 
 `tsgo.ts`(TsgoProject) · `lsp.ts`(수제 LSP 클라이언트) · `probe.ts` ·

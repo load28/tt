@@ -184,3 +184,104 @@ fn tt_text_left_as_written_keeps_its_projection_unread() {
     assert_eq!(listed(&project.service_diagnostics(&file).unwrap()), vec![]);
     assert_eq!(project.service_restates(&file).unwrap(), vec![]);
 }
+
+/// The source with `@@` removed, and where it stood.
+fn at_cursor(marked: &str) -> (String, ttc::engine::Position) {
+    let source = marked.replacen("@@", "", 1);
+    let position = utf16_position(marked, "@@");
+    (source, position)
+}
+
+#[test]
+fn an_unfinished_tt_value_answers_signature_help_and_completion() {
+    require_tsgo!();
+    let parse = "declare function parse(t: string, radix?: number): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n";
+    let cases = [
+        ("value", format!("{parse}export function g() {{\n  const n = try parse(\"1\", @@\n}}\n"), 1),
+        ("operand", format!("{parse}export function g() {{\n  const k = 1 + try parse(\"1\", @@\n}}\n"), 1),
+        ("name", format!("{parse}export function g() {{\n  const q = try parse(nu@@\n}}\n"), 0),
+        ("result", format!("{parse}export const r = result {{ const q = try parse(\"1\", @@\n}};\n"), 1),
+        (
+            "arm",
+            format!(
+                "{parse}variant V {{ A(n: number), B }}\ndeclare const v: V;\nexport const m = match (v) {{ B => 0, A(n) => parse(\"x\", @@\n}};\n"
+            ),
+            1,
+        ),
+    ];
+    let files: Vec<(String, String, ttc::engine::Position, u32)> = cases
+        .iter()
+        .map(|(name, marked, parameter)| {
+            let (source, position) = at_cursor(marked);
+            (format!("src/{name}.tt"), source, position, *parameter)
+        })
+        .collect();
+    let dir = project(
+        &files
+            .iter()
+            .map(|(name, source, ..)| (name.as_str(), source.as_str()))
+            .collect::<Vec<_>>(),
+    );
+    for (name, _, position, parameter) in &files {
+        let file = dir.join(name).canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let help = project
+            .signature_help(&file, *position)
+            .unwrap()
+            .unwrap_or_else(|| panic!("{name}: no signature help"));
+        assert!(
+            help.signatures[help.active_signature as usize]
+                .label
+                .starts_with("parse(t: string, radix?: number)"),
+            "{name}: {help:?}"
+        );
+        assert_eq!(help.active_parameter, *parameter, "{name}");
+        let items = project.completion(&file, *position, false).unwrap().items;
+        assert!(
+            items.iter().any(|item| item.label == "Math"),
+            "{name}: {} items",
+            items.len()
+        );
+    }
+}
+
+#[test]
+fn an_auto_import_resolves_through_a_probe() {
+    require_tsgo!();
+    // The last arm's body is copied without the space the cursor stands
+    // after, so the answer comes from a probe — and its import edit is
+    // mapped back through that probe.
+    let (source, position) = at_cursor(
+        "variant V { A(n: number), B }\n\
+declare const v: V;\n\
+declare function parse(t: string, n: number): number;\n\
+export const m = match (v) { B => 0, A(n) => parse(\"x\", @@\n};\n",
+    );
+    let dir = project(&[
+        ("src/util.ts", "export function helperFn(n: number): number { return n; }\n"),
+        ("src/main.tt", &source),
+    ]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let answer = project.completion(&file, position, false).unwrap();
+    assert!(answer.probe.is_some(), "the answer came from a probe");
+    assert!(
+        answer.items.iter().any(|item| item.label == "helperFn"),
+        "helperFn not offered"
+    );
+    let detail = project
+        .completion_resolve(&file, position, "helperFn", answer.probe)
+        .unwrap()
+        .expect("resolved");
+    let start = ttc::engine::Position {
+        line: 0,
+        character: 0,
+    };
+    assert_eq!(
+        detail.additional_edits,
+        vec![ttc::engine::TextEdit {
+            range: ttc::engine::Range { start, end: start },
+            new_text: "import { helperFn } from \"./util\";\n\n".to_string(),
+        }]
+    );
+}

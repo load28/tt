@@ -367,8 +367,10 @@ pub(super) fn declared_binding_hover(
 }
 
 /// Builds a completion probe: the source with the placeholder spliced in at
-/// `at` (a byte offset), emitted, and the placeholder's mapped position.
-/// `None` when the buffer is broken somewhere a placeholder does not reach.
+/// `at` (a byte offset), emitted, and the placeholder's mapped position. The
+/// emission is the one the service would serve for that text, the faithful
+/// projection of TypeScript that does not parse included. `None` when the
+/// buffer is broken somewhere a placeholder does not reach.
 pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) -> Option<ProbeDoc> {
     if !source.is_char_boundary(at) {
         return None;
@@ -384,7 +386,7 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
             ..crate::Options::default()
         },
     );
-    let emit = report.emit?;
+    let emit = report.emit.or(report.withheld)?;
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
     Some(ProbeDoc {
         path: path.to_path_buf(),

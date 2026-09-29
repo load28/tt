@@ -528,11 +528,6 @@ fn a_buffer_whose_typescript_does_not_parse_still_emits() {
 #[test]
 fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
     let cases = [
-        ("function f() {\n  const value = try g", "try g"),
-        (
-            "function f() {\n  const v = 1 + (try g());\n  x.\n}\n",
-            "try g()",
-        ),
         (
             "function read(value = match (1) { 1 => \"one\", _ => \"other\" }) {}\n",
             "match (1) { 1 => \"one\", _ => \"other\" }",
@@ -563,6 +558,61 @@ fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
                 .all(|e| e.src + e.len <= start || end <= e.src),
             "{src:?}: {:?}",
             m.mappings
+        );
+    }
+}
+
+#[test]
+fn a_value_try_without_an_owner_keeps_its_operand_mapped() {
+    // The TypeScript around each `try` does not parse, so there is no owner
+    // to hold its early exit; the operand is still the user's text.
+    let cases = [
+        ("function f() {\n  const value = try g", "g"),
+        (
+            "function f() {\n  const v = 1 + (try g());\n  x.\n}\n",
+            "g()",
+        ),
+        (
+            "function f() {\n  const v = try parse(\"1\", \n}\n",
+            "parse(\"1\", \n",
+        ),
+        (
+            "const r = result { const q = try parse(\"1\", \n};\n",
+            "parse(\"1\", \n",
+        ),
+        (
+            "function f() {\n  const v = try parse(\"1\", \n  const z = 1;\n}\n",
+            "parse(\"1\", \n  ",
+        ),
+    ];
+    for (src, operand) in cases {
+        let m = emit_mapped(src);
+        assert_mapping_invariants(src, &m);
+        let start = src.find(operand).unwrap();
+        let keyword = src[..start].rfind("try").unwrap();
+        let anchor = m
+            .anchors
+            .iter()
+            .find(|anchor| anchor.src == keyword)
+            .unwrap_or_else(|| panic!("{src:?}: {:?}", m.anchors));
+        assert_eq!(anchor.src_end, start + operand.len(), "{src:?}");
+        let glue = &m.code[anchor.out..anchor.end];
+        assert!(
+            glue.ends_with(&format!("}})({operand})")),
+            "{src:?}: {glue:?}"
+        );
+        assert!(
+            m.mappings
+                .iter()
+                .any(|e| e.src <= start && start + operand.len() <= e.src + e.len),
+            "{src:?}: {:?}",
+            m.mappings
+        );
+        assert!(
+            m.mappings
+                .iter()
+                .all(|e| e.src + e.len <= keyword || start <= e.src),
+            "the keyword is not copied: {src:?}"
         );
     }
 }

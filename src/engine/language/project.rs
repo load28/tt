@@ -327,7 +327,9 @@ impl Project {
     /// sits at a member access (the adapter knows, from the tt syntax layer)
     /// — at a member access only a member answer means anything, and when
     /// the plain answer is not one, a probe mends the unfinished construct
-    /// and asks again.
+    /// and asks again. A cursor the served text has no place for (text of
+    /// an unfinished construct the emission did not copy) is asked through
+    /// a probe too.
     pub fn completion(
         &mut self,
         path: &Path,
@@ -337,15 +339,15 @@ impl Project {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         let plain = match to_service(&doc, position) {
-            Some(at) => ts_completions(session, &path, at, &doc.code, &doc.generated_names)?,
+            Some(at) => {
+                let plain = ts_completions(session, &path, at, &doc.code, &doc.generated_names)?;
+                if !member || (plain.member && !plain.items.is_empty()) {
+                    return Ok(plain);
+                }
+                plain
+            }
             None => CompletionAnswer::default(),
         };
-        if !member {
-            return Ok(plain);
-        }
-        if plain.member && !plain.items.is_empty() {
-            return Ok(plain);
-        }
 
         // The construct is unfinished (`x |> .`): splice the placeholder in,
         // emit, and ask at its mapped position. The probe stands in for the
@@ -374,7 +376,7 @@ impl Project {
         )?;
         probed.probe = Some(probe.version);
         session.last_probe = Some(probe);
-        Ok(if probed.member {
+        Ok(if !member || probed.member {
             probed
         } else {
             CompletionAnswer::default()
@@ -560,14 +562,27 @@ impl Project {
     ) -> Result<Option<SignatureHelp>, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
-        let Some(at) = to_service(&doc, position) else {
-            return Ok(None);
+        // A cursor the served text has no place for is asked through a
+        // probe, as completion asks there.
+        let (code, at) = match to_service(&doc, position) {
+            Some(at) => (doc.code.clone(), at),
+            None => {
+                let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+                let Some(probe) =
+                    build_probe(&path, &doc.source, source_at, session.probe_count + 1)
+                else {
+                    return Ok(None);
+                };
+                session.probe_count += 1;
+                open_served(session, &path, &probe.code);
+                (probe.code, probe.offset)
+            }
         };
         let help = session.client.request(
             "textDocument/signatureHelp",
             serde_json::json!({
                 "textDocument": { "uri": served_uri(session, &path) },
-                "position": lsp_position(u16_position(&doc.code, at)),
+                "position": lsp_position(u16_position(&code, at)),
             }),
         )?;
         let Some(signatures) = help["signatures"].as_array().filter(|s| !s.is_empty()) else {

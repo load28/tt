@@ -18,7 +18,7 @@ declaration — were dropped, so the result was TS2304.
   probe's record (`ProbeDoc`), the `completionResolve` server answer, and the
   extension's `onCompletionResolve`.
 - Excluded: Offering completions where none are offered today (the unfinished
-  `try` operand, TASK-527).
+  `try` operand, TASK-528).
 
 ## Decisions
 
