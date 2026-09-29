@@ -197,6 +197,17 @@ TT 고유의 차이: **Projection 계층**. tsgo는 `TS source → Program`이�
 | 부모 프로세스 워치독 | **채택** | `ttc --server`는 stdin EOF에서 종료 — LSP 서버가 죽으면 자연 종료. (tsgo의 pid 폴링 워치독까지는 불필요: 전송이 stdio뿐이다.) |
 | FENNEL checker 파티셔닝, 워크스페이스 다중 프로젝트 서비스, ATA, auto-import 레지스트리 | **기각** | TT의 현재 표면에 대응물이 없다. multi-tsconfig는 `Engine`이 프로젝트를 여럿 소유할 수 있는 형태(키: tsconfig 경로)로 자리만 만든다. |
 
+> **Update (TASK-535).** The multi-project half of the row above is no longer
+> rejected. `engine::Workspace` owns every project a consumer holds open,
+> keyed by `(tsconfig, root)`. References and rename search every open
+> project the way TypeScript's `getPerProjectReferences` does: the requesting
+> file's project answers at the requested position, each other project that
+> contains the definition that answer names (`Project::sees`, tt's
+> `containsFile`) answers there, and the results are merged without
+> duplicates. A rename is refused whole when any project refuses it
+> or two projects disagree about one place. Loading projects that no open
+> document belongs to (`loadAncestorProjectTree`) is still not done.
+
 ---
 
 ## E. 최종 아키텍처

@@ -206,6 +206,27 @@ impl Project {
         self.initial.clone()
     }
 
+    /// Whether `path` is part of what this project compiles, as far as the
+    /// engine can tell: a document opened through it, a tt module its
+    /// graph reaches from its candidates (taken fresh), or a file its
+    /// compiler read in a typed check. A project serves its TypeScript no
+    /// tt module outside that graph, so for tt sources this is exactly what
+    /// its program can contain — TypeScript's `containsFile`.
+    pub fn sees(&mut self, path: &Path) -> Result<bool, String> {
+        let path = super::normalize_document_path(path)?;
+        if self.overlays.contains_key(&path) || self.dependencies.borrow().contains(&path) {
+            return Ok(true);
+        }
+        let snapshot = self
+            .update(&self.initial_files())
+            .map_err(|blocked| blocked.error.to_string())?;
+        Ok(snapshot.files().iter().any(|file| file.source_path == path)
+            || snapshot
+                .blocked()
+                .iter()
+                .any(|file| file.source_path == path))
+    }
+
     /// Takes a snapshot of `files` and their reachable tt imports: overlay text where a
     /// document is open, disk text otherwise. A file whose text is unchanged
     /// since the last snapshot keeps its projection; the rest are

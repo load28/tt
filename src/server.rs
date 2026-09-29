@@ -63,38 +63,21 @@
 //!
 //! Exit: end of stdin, code 0. A failed request never ends the session.
 
-use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use ttc::lines::ProtocolPositions;
 
 use ttc::engine::{
-    CheckRequest, CompletionAnswer, Engine, Location, Position, Project, ProjectOptions, Range,
-    ServiceSeverity, ServiceTag,
+    CheckRequest, CompletionAnswer, Engine, Location, Position, Project, Range, ServiceSeverity,
+    ServiceTag, Workspace,
 };
-
-/// A project's identity: the `(tsconfig, root)` pair it was opened as.
-type Identity = (Option<PathBuf>, PathBuf);
-
-/// Everything the server keeps between requests.
-struct Sessions {
-    engine: Engine,
-    /// One live project per identity — the map a server exists to keep.
-    projects: HashMap<Identity, Project>,
-    /// The documents a consumer holds open, and which project each landed
-    /// in — so `closeDocument` releases the right overlay, and a
-    /// `typedCheck` for an open document leaves its overlay in place.
-    docs: HashMap<PathBuf, Identity>,
-}
 
 /// Runs the server until stdin closes.
 pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
-    let mut sessions = Sessions {
-        engine: Engine::new(node),
-        projects: HashMap::new(),
-        docs: HashMap::new(),
-    };
+    // One live project per identity, and the documents a consumer holds
+    // open in them — what a server exists to keep between requests.
+    let mut workspace = Workspace::new(Engine::new(node));
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -132,11 +115,11 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         // already on stderr; stdout carries the answer, so the consumer
         // sees an error for this id and can ask the next question.
         //
-        // Unwind safety: the sessions map is kept. A panic aborts the work
+        // Unwind safety: the workspace is kept. A panic aborts the work
         // of one request, and what that work builds — a snapshot — is
         // immutable and installed whole or not at all, so the projects the
-        // map holds are the ones the last successful request left.
-        let response = match ttc::ice::catching(|| respond(&mut sessions, line)) {
+        // workspace holds are the ones the last successful request left.
+        let response = match ttc::ice::catching(|| respond(&mut workspace, line)) {
             Ok(response) => response,
             Err(message) => serde_json::json!({
                 "id": request_id(line),
@@ -166,7 +149,7 @@ fn request_id(line: &str) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
-fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
+fn respond(workspace: &mut Workspace, line: &str) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
@@ -178,18 +161,17 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
     let result = match request["method"].as_str().unwrap_or_default() {
         "check" => check(params),
         "emitMap" => emit_map(params),
-        "typedCheck" => typed_check(sessions, params),
-        "openDocument" | "updateDocument" => open_document(sessions, params),
-        "closeDocument" => close_document(sessions, params),
+        "typedCheck" => typed_check(workspace, params),
+        "openDocument" | "updateDocument" => open_document(workspace, params),
+        "closeDocument" => close_document(workspace, params),
         "reloadProjects" => {
             // Filesystem/configuration topology changed. Clients replay open
             // buffers after this ordered barrier; old snapshots cannot leak
             // into a graph resolved against the new configuration.
-            sessions.projects.clear();
-            sessions.docs.clear();
+            workspace.reload();
             Ok(json!({}))
         }
-        "hover" => semantic(sessions, params, |project, path, position| {
+        "hover" => semantic(workspace, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,
                 Some(info) => json!({
@@ -199,7 +181,7 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 }),
             })
         }),
-        "definition" => semantic(sessions, params, |project, path, position| {
+        "definition" => semantic(workspace, params, |project, path, position| {
             let locations: Vec<_> = project
                 .definition(path, position)?
                 .into_iter()
@@ -207,8 +189,8 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "references" => semantic(sessions, params, |project, path, position| {
-            let locations: Vec<_> = project
+        "references" => spanning(workspace, params, |workspace, path, position| {
+            let locations: Vec<_> = workspace
                 .references(path, position)?
                 .into_iter()
                 .map(|reference| {
@@ -219,7 +201,7 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "completion" => semantic(sessions, params, |project, path, position| {
+        "completion" => semantic(workspace, params, |project, path, position| {
             let member = params["member"].as_bool().unwrap_or(false);
             let CompletionAnswer {
                 items,
@@ -239,7 +221,7 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 "probe": probe,
             }))
         }),
-        "completionResolve" => semantic(sessions, params, |project, path, position| {
+        "completionResolve" => semantic(workspace, params, |project, path, position| {
             let label = params["label"].as_str().unwrap_or_default();
             let probe = params["probe"].as_u64();
             Ok(
@@ -267,8 +249,8 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 },
             )
         }),
-        "rename" => semantic(sessions, params, |project, path, position| {
-            Ok(match project.rename(path, position)? {
+        "rename" => spanning(workspace, params, |workspace, path, position| {
+            Ok(match workspace.rename(path, position)? {
                 None => json!({ "edits": serde_json::Value::Null }),
                 Some(edits) => json!({
                     "edits": edits.into_iter().map(|edit| {
@@ -282,12 +264,12 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 }),
             })
         }),
-        "documentSymbols" => semantic(sessions, params, |project, path, _position| {
+        "documentSymbols" => semantic(workspace, params, |project, path, _position| {
             Ok(
                 json!({ "symbols": project.document_symbols(path)?.iter().map(symbol_json).collect::<Vec<_>>() }),
             )
         }),
-        "signatureHelp" => semantic(sessions, params, |project, path, position| {
+        "signatureHelp" => semantic(workspace, params, |project, path, position| {
             Ok(match project.signature_help(path, position)? {
                 None => serde_json::Value::Null,
                 Some(help) => json!({
@@ -309,7 +291,7 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
         "ttSymbol" => tt_symbol(params),
         "ttCompletions" => tt_completions(params),
         "ttHints" => tt_hints(params),
-        "tsDiagnostics" => semantic(sessions, params, |project, path, _position| {
+        "tsDiagnostics" => semantic(workspace, params, |project, path, _position| {
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
                 .into_iter()
@@ -370,83 +352,53 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
 /// Routes a semantic request to the live project the file belongs to. The
 /// position defaults to 0:0 for the requests that do not carry one.
 fn semantic(
-    sessions: &mut Sessions,
+    workspace: &mut Workspace,
     params: &serde_json::Value,
     handle: impl FnOnce(&mut Project, &Path, Position) -> Result<serde_json::Value, String>,
 ) -> Result<serde_json::Value, String> {
+    spanning(workspace, params, |workspace, path, position| {
+        handle(workspace.project_for(path)?, path, position)
+    })
+}
+
+/// Hands a request whose answer can span projects to the workspace.
+fn spanning(
+    workspace: &mut Workspace,
+    params: &serde_json::Value,
+    handle: impl FnOnce(&mut Workspace, &Path, Position) -> Result<serde_json::Value, String>,
+) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
-        .ok_or_else(|| "the request needs a \"path\"".to_string())?
-        .to_string();
+        .ok_or_else(|| "the request needs a \"path\"".to_string())?;
     let position = Position {
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let project = project_for(sessions, &path)?;
-    handle(project, Path::new(&path), position)
-}
-
-/// The live project `path` belongs to, opened on first use.
-fn project_for<'a>(sessions: &'a mut Sessions, path: &str) -> Result<&'a mut Project, String> {
-    let document = ttc::engine::normalize_document_path(Path::new(path))?;
-    if let Some(identity) = sessions.docs.get(&document).cloned() {
-        return sessions
-            .projects
-            .get_mut(&identity)
-            .ok_or_else(|| format!("the project for {} is not open", document.display()));
-    }
-    let options = ProjectOptions::default();
-    let identity = Engine::document_project_identity(&document, &options)?;
-    match sessions.projects.entry(identity) {
-        std::collections::hash_map::Entry::Occupied(entry) => Ok(entry.into_mut()),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            Ok(entry.insert(sessions.engine.open_document_project(&document, &options)?))
-        }
-    }
+    handle(workspace, Path::new(path), position)
 }
 
 /// `openDocument` / `updateDocument`: the consumer's buffer stands in for
 /// the file, in whichever project it belongs to, until `closeDocument`.
 fn open_document(
-    sessions: &mut Sessions,
-    params: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let path = params["path"]
-        .as_str()
-        .ok_or_else(|| "the request needs a \"path\"".to_string())?
-        .to_string();
-    let text = text_param(params)?.to_string();
-    let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
-    let options = ProjectOptions::default();
-    let identity = Engine::document_project_identity(&canonical, &options)?;
-    let project = match sessions.projects.entry(identity.clone()) {
-        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
-            sessions
-                .engine
-                .open_document_project(&canonical, &options)?,
-        ),
-    };
-    project.open_document(canonical.clone(), text);
-    sessions.docs.insert(canonical, identity);
-    Ok(serde_json::json!({}))
-}
-
-/// `closeDocument`: the file's text is the disk's again.
-fn close_document(
-    sessions: &mut Sessions,
+    workspace: &mut Workspace,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let canonical = ttc::engine::normalize_document_path(Path::new(path))
-        .unwrap_or_else(|_| PathBuf::from(path));
-    if let Some(identity) = sessions.docs.remove(&canonical)
-        && let Some(project) = sessions.projects.get_mut(&identity)
-    {
-        project.close_document(&canonical);
-    }
+    workspace.open_document(Path::new(path), text_param(params)?.to_string())?;
+    Ok(serde_json::json!({}))
+}
+
+/// `closeDocument`: the file's text is the disk's again.
+fn close_document(
+    workspace: &mut Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let path = params["path"]
+        .as_str()
+        .ok_or_else(|| "the request needs a \"path\"".to_string())?;
+    workspace.close_document(Path::new(path));
     Ok(serde_json::json!({}))
 }
 
@@ -768,7 +720,7 @@ fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 /// it belongs to. `includeTypes` controls whether TypeScript diagnostics are
 /// included; typed tt facts are always computed by the same pass.
 fn typed_check(
-    sessions: &mut Sessions,
+    workspace: &mut Workspace,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     use serde_json::json;
@@ -783,8 +735,8 @@ fn typed_check(
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
     // stays stateless while the projection cache keeps the incremental win.
-    let registered = sessions.docs.contains_key(&canonical);
-    let project = project_for(sessions, &path)?;
+    let registered = workspace.is_open(&canonical);
+    let project = workspace.project_for(&canonical)?;
 
     project.open_document(canonical.clone(), text);
     let files = {
