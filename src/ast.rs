@@ -481,6 +481,9 @@ pub(crate) struct VariantDecl {
     pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
+    /// Byte offset of [`VariantDecl::generics`] (just past the name when
+    /// there is none).
+    pub generics_off: usize,
     pub cases: Vec<VariantCase>,
 }
 

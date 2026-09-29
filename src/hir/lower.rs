@@ -179,6 +179,7 @@ impl Lower<'_> {
                             name: field.name.clone(),
                             optional: field.optional,
                             ty_text: field.ty.clone(),
+                            ty_span: Span::new(field.ty_off, field.ty_off + field.ty.len()),
                             comments: field.comments.clone(),
                         })
                     })
@@ -193,6 +194,7 @@ impl Lower<'_> {
             exported: decl.exported,
             declared: decl.declared,
             generics: decl.generics.clone(),
+            generics_span: Span::new(decl.generics_off, decl.generics_off + decl.generics.len()),
             variants,
         }));
         owner

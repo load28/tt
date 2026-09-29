@@ -160,9 +160,11 @@ fn parse_variant_complete<'t>(
     }
 
     let mut generics = "";
+    let mut generics_off = name_span.end;
     if cur.at_punct(b'<') {
         let close = cur.find_close()?;
-        generics = &cur.parser.src[cur.tokens[cur.idx].span.start..cur.tokens[close].span.end];
+        generics_off = cur.tokens[cur.idx].span.start;
+        generics = &cur.parser.src[generics_off..cur.tokens[close].span.end];
         cur.idx = close + 1;
     }
 
@@ -193,6 +195,7 @@ fn parse_variant_complete<'t>(
             exported,
             declared,
             generics: generics.to_string(),
+            generics_off,
             cases,
         },
     ))

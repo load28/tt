@@ -664,7 +664,13 @@ impl Project {
                     // silently rebinding a different field.
                     return Ok(None);
                 }
-                out.push(RenameEdit { location, new_text });
+                // Text a lowering writes more than once (a variant field's
+                // type, in its union and its constructor) is one place in
+                // the source, renamed once.
+                let edit = RenameEdit { location, new_text };
+                if !out.contains(&edit) {
+                    out.push(edit);
+                }
             }
         }
         Ok(if out.is_empty() { None } else { Some(out) })
@@ -930,14 +936,20 @@ impl Project {
             if !exact {
                 message.push_str(" (in code ttc generated for this construct)");
             }
-            out.push(ServiceDiagnostic {
+            let entry = ServiceDiagnostic {
                 range: source_range(&doc.source, s, e),
                 message,
                 code,
                 severity,
                 tags,
                 related,
-            });
+            };
+            // Text a lowering writes more than once (a variant field's
+            // type) draws the checker's error at each copy; the user wrote
+            // it once.
+            if !out.contains(&entry) {
+                out.push(entry);
+            }
         }
         Ok(out)
     }

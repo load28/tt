@@ -250,3 +250,96 @@ fn tt_names_read_an_imported_declaration_from_its_open_buffer() {
         "closed, `st.tt` is its saved text again: {answers:?}"
     );
 }
+
+/// A variant field's type is the user's TypeScript, and every service
+/// feature answers there as it does in a hand-written union: hover,
+/// definition, references, rename, completion and the checker's errors.
+#[test]
+fn a_variant_field_type_is_typescript_to_every_service_feature() {
+    require_tsgo!();
+    let source = "export interface Money { cents: number }\nexport variant Price { Fixed(amount: Money), Free }\nexport const toMoney = (n: number): Money => ({ cents: n });\n";
+    let typo = source.replace("amount: Money", "amount: Mony");
+    let typing = source.replace("amount: Money", "amount: Mo");
+    let dir = project(&[("src/price.tt", source)]);
+    let path = dir.join("src/price.tt");
+    let at = |text: &str, needle: &str, delta: usize| {
+        let position = source_position(text, needle, delta);
+        serde_json::json!({ "line": position.line, "character": position.character })
+    };
+    let field = at(source, "amount: Money", 8);
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": path, "text": source } }),
+            serde_json::json!({ "id": 2, "method": "hover",
+                "params": { "path": path, "position": field } }),
+            serde_json::json!({ "id": 3, "method": "definition",
+                "params": { "path": path, "position": field } }),
+            serde_json::json!({ "id": 4, "method": "references",
+                "params": { "path": path, "position": at(source, "Money {", 0) } }),
+            serde_json::json!({ "id": 5, "method": "rename",
+                "params": { "path": path, "position": field } }),
+            serde_json::json!({ "id": 6, "method": "updateDocument",
+                "params": { "path": path, "text": typing } }),
+            serde_json::json!({ "id": 7, "method": "completion",
+                "params": { "path": path, "position": at(&typing, "amount: Mo", 10) } }),
+            serde_json::json!({ "id": 8, "method": "updateDocument",
+                "params": { "path": path, "text": typo } }),
+            serde_json::json!({ "id": 9, "method": "tsDiagnostics",
+                "params": { "path": path } }),
+        ],
+    );
+    let start = |value: &serde_json::Value| {
+        (
+            value["range"]["start"]["line"].as_u64().unwrap(),
+            value["range"]["start"]["character"].as_u64().unwrap(),
+        )
+    };
+    assert!(
+        answers[1]["result"]["signature"]
+            .as_str()
+            .is_some_and(|signature| signature.contains("interface Money")),
+        "{answers:?}"
+    );
+    let definitions = answers[2]["result"]["locations"].as_array().unwrap();
+    assert_eq!(
+        definitions.iter().map(start).collect::<Vec<_>>(),
+        [(0, 17)],
+        "{answers:?}"
+    );
+    let mut references: Vec<_> = answers[3]["result"]["locations"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(start)
+        .collect();
+    references.sort();
+    assert_eq!(references, [(0, 17), (1, 37), (2, 36)], "{answers:?}");
+    let mut renamed: Vec<_> = answers[4]["result"]["edits"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{answers:?}"))
+        .iter()
+        .map(start)
+        .collect();
+    renamed.sort();
+    assert_eq!(renamed, [(0, 17), (1, 37), (2, 36)], "{answers:?}");
+    let labels: Vec<_> = answers[6]["result"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["label"].as_str().unwrap())
+        .collect();
+    for expected in ["Money", "Date", "string"] {
+        assert!(labels.contains(&expected), "{expected}: {labels:?}");
+    }
+    let diagnostics = answers[8]["result"]["diagnostics"].as_array().unwrap();
+    assert_eq!(
+        diagnostics
+            .iter()
+            .map(|d| (start(d), d["code"].clone()))
+            .collect::<Vec<_>>(),
+        [((1, 37), serde_json::json!(2552))],
+        "{answers:?}"
+    );
+}

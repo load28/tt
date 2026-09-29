@@ -576,7 +576,8 @@
 | TASK-568 | Leave only ttc's own outputs out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-568](./TASK-568-exclude-only-ttc-outputs.md) |
 | TASK-569 | Answer the server's buffer check without the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-569](./TASK-569-server-check-without-backend.md) |
 | TASK-576 | Read imported variants from the open buffer in tt's name surfaces | Complete | 2026-09-29 | 2026-09-29 | [TASK-576](./TASK-576-tt-names-read-open-imports.md) |
+| TASK-577 | Map a variant's field types and type parameters to the source | Complete | 2026-09-29 | 2026-09-29 | [TASK-577](./TASK-577-variant-field-types-are-mapped.md) |
 
 ## Next task number
 
-**TASK-577**
+**TASK-578**
