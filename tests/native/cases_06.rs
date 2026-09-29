@@ -48,3 +48,51 @@ export function head(): S {\n  const value = `${wrap(try read())}!` |> String;\n
 export function step(): S {\n  const value = \"v\" |> ((tail: string) => (v: string) => v + tail)(`${wrap(try read())}`);\n  return { kind: \"Ok\", value };\n}\n",
     );
 }
+
+#[test]
+fn service_suggestions_keep_their_severity_and_tags_on_written_text() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Point }\n\
+/** @deprecated */\n\
+declare function old(): void;\n\
+export function area(shape: Shape): number {\n\
+\x20 const unused = 1;\n\
+\x20 old();\n\
+\x20 return match (shape) {\n\
+\x20   Circle(radius) => 1,\n\
+\x20   Point => 0,\n\
+\x20 };\n\
+}\n\
+export const wrong: number = \"x\";\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let diagnostics = project.service_diagnostics(&file).unwrap();
+    let seen: Vec<_> = diagnostics
+        .iter()
+        .map(|d| {
+            (
+                utf16_slice(source, d.range),
+                d.code,
+                d.severity,
+                d.tags.clone(),
+            )
+        })
+        .collect();
+    use ttc::engine::{ServiceSeverity::*, ServiceTag::*};
+    assert_eq!(
+        seen,
+        vec![
+            ("wrong", 2322, Error, vec![]),
+            ("unused", 6133, Hint, vec![Unnecessary]),
+            ("old", 6387, Hint, vec![Deprecated]),
+            ("radius", 6133, Hint, vec![Unnecessary]),
+        ],
+        "{diagnostics:?}"
+    );
+}

@@ -613,10 +613,13 @@ impl Project {
         let mut declarations: Option<Vec<crate::analysis::DeclaredVariant>> = None;
         let mut translated_seen: HashSet<(usize, crate::AnchorKind, &'static str)> = HashSet::new();
         for item in items {
-            let severity = item["severity"].as_u64().unwrap_or(1);
-            if severity > 2 {
-                continue;
-            }
+            let severity = ServiceSeverity::from_lsp(item["severity"].as_u64());
+            let tags: Vec<ServiceTag> = item["tags"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|tag| tag.as_u64().and_then(ServiceTag::from_lsp))
+                .collect();
             let start = u16_offset(&doc.code, position_of(&item["range"]["start"]));
             let end = u16_offset(&doc.code, position_of(&item["range"]["end"]));
             let Some((s, e, origin)) = diagnostic_source_span(&doc, start, end) else {
@@ -633,6 +636,17 @@ impl Project {
                 mapper::DiagnosticOrigin::Anchor(anchor) => (false, Some(anchor)),
                 mapper::DiagnosticOrigin::Nearest { .. } => (false, None),
             };
+            // A suggestion (an unused name, a deprecated call) is about the
+            // text it covers. Only text the user wrote can be faded or
+            // struck through; one landing in glue is about ttc's emission.
+            if !exact
+                && matches!(
+                    severity,
+                    ServiceSeverity::Information | ServiceSeverity::Hint
+                )
+            {
+                continue;
+            }
             // An empty span (an error at a position, not over one) would
             // render as an invisible squiggle; give it the character it
             // points at.
@@ -658,9 +672,9 @@ impl Project {
                     message: "the piped value is produced here".to_string(),
                 });
             }
-            // The tsgo preview omits `relatedInformation` from pull
-            // diagnostics today; when it starts sending it, these entries
-            // become labels with no further work here.
+            // The checker's `relatedInformation`, which the service sends
+            // because the session declares the capability
+            // (`typescript::service`).
             for entry in item["relatedInformation"].as_array().into_iter().flatten() {
                 if entry["location"]["uri"].as_str() != Some(served.as_str()) {
                     continue;
@@ -716,14 +730,16 @@ impl Project {
                         range,
                         message: said,
                         code,
-                        warning: severity == 2,
+                        severity,
+                        tags: tags.clone(),
                         related: related.clone(),
                     },
                     None => ServiceDiagnostic {
                         range,
                         message: format!("{raw} (in code ttc generated for this construct)"),
                         code,
-                        warning: severity == 2,
+                        severity,
+                        tags: tags.clone(),
                         related: related.clone(),
                     },
                 };
@@ -751,7 +767,8 @@ impl Project {
                 range: source_range(&doc.source, s, e),
                 message,
                 code,
-                warning: severity == 2,
+                severity,
+                tags,
                 related,
             });
         }

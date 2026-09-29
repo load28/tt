@@ -90,7 +90,10 @@ export interface EngineDiagnostic {
   range: EngineRange;
   message: string;
   code: number;
-  warning: boolean;
+  severity: "error" | "warning" | "information" | "hint";
+  /** TypeScript's unused and deprecated suggestions carry these; absent
+   * when there are none. */
+  tags?: ("unnecessary" | "deprecated")[];
   /** Secondary labeled spans ("the piped value is produced here"), absent
    * when the diagnostic has only its primary range. `path` names another
    * file; without it the span is in the diagnostic's own file. */

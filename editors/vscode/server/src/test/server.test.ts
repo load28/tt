@@ -24,6 +24,11 @@ import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const SERVER = path.join(__dirname, "..", "server.js");
+/** The errors and warnings of a publish — what "the file is clean" means.
+ * Suggestions (an unused name, a deprecated call) are published beside
+ * them and are not problems. */
+const problems = (diagnostics: any[]) =>
+  diagnostics.filter((d) => d.severity === undefined || d.severity <= 2);
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** Answers that need the TypeScript language service. A skip must mean a
  * tool is missing, never that a feature quietly answered nothing — so the
@@ -46,7 +51,7 @@ for (const consumerKind of ["tt", "ttx"]) {
       const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\nexport function identity(input) { return input; }\n`;
       const uri = pathToFileURL(consumer).toString();
       const client = connect();
-      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : p.diagnostics.length === 0));
+      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : problems(p.diagnostics).length === 0));
       const changed = (file: string, type: number) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(file).toString(), type }] });
       try {
         await client.request("initialize", { processId: process.pid, rootUri: pathToFileURL(dir).toString(), workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {} });
@@ -110,7 +115,7 @@ for (const consumerKind of ["tt", "ttx"]) {
           uri: providerUri, languageId: providerKind === "ts" ? "typescript" : providerKind === "tsx" ? "typescriptreact" : providerKind,
           version: 1, text: original,
         } });
-        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && problems(p.diagnostics).length === 0);
         client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
         await clean;
         const failed = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "ts2322"));
@@ -118,7 +123,7 @@ for (const consumerKind of ["tt", "ttx"]) {
           textDocument: { uri: providerUri, version: 2 }, contentChanges: [{ text: "export const value: number = 42;\n" }],
         });
         assert.equal((await failed).version, 1, "consumer was never edited");
-        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && problems(p.diagnostics).length === 0);
         client.notify("textDocument/didClose", { textDocument: { uri: providerUri } });
         assert.equal((await cleared).version, 1, "closing reveals the disk dependency");
       } finally { client.stop(); }
@@ -632,6 +637,46 @@ test(
         textDocument: { uri },
       });
       assert.ok(semantic.result?.data?.length > 0, JSON.stringify(semantic.result));
+    } finally {
+      stop();
+    }
+  },
+);
+
+const SUGGESTION_SOURCE = [
+  "/** @deprecated */",
+  "declare function old(): void;",
+  "export function run(): number {",
+  "  const unused = 1;",
+  "  old();",
+  "  return 0;",
+  "}",
+  'export const wrong: number = "x";',
+  "",
+].join("\n");
+
+test(
+  "unused and deprecated suggestions are published beside the type errors",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(SUGGESTION_SOURCE);
+    try {
+      const published = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (params) =>
+          params.uri === uri &&
+          params.diagnostics.some((diagnostic: any) => String(diagnostic.code).endsWith("2322")),
+      );
+      const seen = published.diagnostics.map((d: any) => [
+        covered(SUGGESTION_SOURCE, d.range),
+        d.severity,
+        d.tags ?? [],
+      ]);
+      assert.deepEqual(seen, [
+        ["unused", 4, [1]],
+        ["old", 4, [2]],
+        ['"x"', 1, []],
+      ]);
     } finally {
       stop();
     }

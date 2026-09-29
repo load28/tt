@@ -15,7 +15,7 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt, sliceOf } from "./positions";
-import { COMPILER, answered, compilerAvailable, findTsgo } from "./toolchain";
+import { COMPILER, answered, compilerAvailable, findTsgo, problems } from "./toolchain";
 import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = !compilerAvailable()
@@ -466,10 +466,10 @@ test(
       "",
     ].join("\n");
     const dir = fixture("tt-owned-diagnostic-test-", { "mixed.tt": source });
-    const diagnostics = answered(await engine.tsDiagnostics(
+    const diagnostics = problems(answered(await engine.tsDiagnostics(
       COMPILER,
       path.join(dir, "mixed.tt"),
-    ), "tsDiagnostics");
+    ), "tsDiagnostics"));
     assert.deepEqual(
       diagnostics,
       [],

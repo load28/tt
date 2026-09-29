@@ -71,6 +71,7 @@ use ttc::lines::ProtocolPositions;
 
 use ttc::engine::{
     CheckRequest, CompletionAnswer, Engine, Location, Position, Project, ProjectOptions, Range,
+    ServiceSeverity, ServiceTag,
 };
 
 /// A project's identity: the `(tsconfig, root)` pair it was opened as.
@@ -297,8 +298,23 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                         "range": range_json(d.range),
                         "message": d.message,
                         "code": d.code,
-                        "warning": d.warning,
+                        "severity": match d.severity {
+                            ServiceSeverity::Error => "error",
+                            ServiceSeverity::Warning => "warning",
+                            ServiceSeverity::Information => "information",
+                            ServiceSeverity::Hint => "hint",
+                        },
                     });
+                    if !d.tags.is_empty() {
+                        entry["tags"] = d
+                            .tags
+                            .iter()
+                            .map(|tag| match tag {
+                                ServiceTag::Unnecessary => "unnecessary",
+                                ServiceTag::Deprecated => "deprecated",
+                            })
+                            .collect();
+                    }
                     // Secondary labeled spans ride only when there are any,
                     // so consumers of the existing shape see no new field
                     // until a diagnostic actually carries one.

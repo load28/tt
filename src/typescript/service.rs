@@ -204,7 +204,13 @@ impl Service {
                     "completion": { "completionItem": { "labelDetailsSupport": true } },
                     "signatureHelp": {},
                     "rename": { "prepareSupport": true },
-                    "diagnostic": {},
+                    // LSP 3.18 `DiagnosticsCapabilities`: without them the
+                    // server leaves out related places and the unused /
+                    // deprecated tags a suggestion is drawn with.
+                    "diagnostic": {
+                        "relatedInformation": true,
+                        "tagSupport": { "valueSet": [1, 2] },
+                    },
                 },
                 "workspace": { "configuration": true, "workspaceFolders": true },
             },

@@ -5,6 +5,7 @@
 import { execFileSync } from "node:child_process";
 import * as path from "node:path";
 
+import type { EngineDiagnostic } from "../engine";
 import { findCompiler, findTsgo as resolveTsgo } from "../ttc";
 
 /** The TT repository root — four levels above `server/out/test`. */
@@ -47,4 +48,11 @@ export function answered<T>(value: T | null, what: string): T {
     throw new Error(`the engine did not answer ${what}`);
   }
   return value;
+}
+
+/** The errors and warnings among an engine answer's diagnostics — what
+ * "no type errors" means. Suggestions (an unused name, a deprecated call)
+ * ride beside them and are not problems. */
+export function problems(diagnostics: EngineDiagnostic[]): EngineDiagnostic[] {
+  return diagnostics.filter((d) => d.severity === "error" || d.severity === "warning");
 }

@@ -491,18 +491,22 @@ function mergeTyped(
   if (replacesTypes) {
     // Language-service diagnostics are the fast provisional layer. Once the
     // compiler answers with its structured checker diagnostics, replace that
-    // layer as a whole so consequences suppressed by the compiler cannot
-    // remain visible in the editor.
+    // layer's errors and warnings as a whole so consequences suppressed by
+    // the compiler cannot remain visible in the editor. Suggestions (unused,
+    // deprecated) are the service's alone: the compiler reports none.
     for (let i = into.length - 1; i >= 0; i--) {
-      if (into[i].source === "ts") into.splice(i, 1);
+      if (into[i].source === "ts" && isProblem(into[i])) into.splice(i, 1);
     }
   }
   const positionKey = (d: Diagnostic) =>
     `${d.range.start.line}:${d.range.start.character}`;
   const codeKey = (d: Diagnostic) => String(d.code ?? "").replace(/^ts/, "");
+  // A suggestion shares its range with whatever error is there without
+  // standing for it: only problems compete for a position.
   for (const d of typed) {
     const sameDiagnostic = into.findIndex(
       (base) =>
+        isProblem(base) &&
         positionKey(base) === positionKey(d) &&
         codeKey(base) !== "" &&
         codeKey(base) === codeKey(d),
@@ -513,9 +517,21 @@ function mergeTyped(
       into[sameDiagnostic] = d;
       continue;
     }
-    if (into.some((base) => positionKey(base) === positionKey(d))) continue;
+    if (into.some((base) => isProblem(base) && positionKey(base) === positionKey(d))) {
+      continue;
+    }
     into.push(d);
   }
+}
+
+/** An error or a warning — what the Problems panel counts — as opposed to
+ * a suggestion the editor only fades or strikes through. */
+function isProblem(d: Diagnostic): boolean {
+  return (
+    d.severity === undefined ||
+    d.severity === DiagnosticSeverity.Error ||
+    d.severity === DiagnosticSeverity.Warning
+  );
 }
 
 async function typedDiagnosticsFor(
@@ -748,6 +764,18 @@ async function validate(
  * responsibility, never something to report at the user (CLAUDE.md, error
  * layers). This side only converts and version-gates.
  */
+const SERVICE_SEVERITY: Record<engine.EngineDiagnostic["severity"], DiagnosticSeverity> = {
+  error: DiagnosticSeverity.Error,
+  warning: DiagnosticSeverity.Warning,
+  information: DiagnosticSeverity.Information,
+  hint: DiagnosticSeverity.Hint,
+};
+
+const SERVICE_TAG: Record<NonNullable<engine.EngineDiagnostic["tags"]>[number], DiagnosticTag> = {
+  unnecessary: DiagnosticTag.Unnecessary,
+  deprecated: DiagnosticTag.Deprecated,
+};
+
 async function typeDiagnostics(
   doc: TextDocument,
   compiler: string,
@@ -757,9 +785,8 @@ async function typeDiagnostics(
   const items = await engine.tsDiagnostics(compiler, fsPath, logEngine);
   if (items === null) return null;
   return items.map((d) => ({
-    severity: d.warning
-      ? DiagnosticSeverity.Warning
-      : DiagnosticSeverity.Error,
+    severity: SERVICE_SEVERITY[d.severity],
+    tags: d.tags?.length ? d.tags.map((tag) => SERVICE_TAG[tag]) : undefined,
     range: d.range,
     message: d.message,
     code: d.code,

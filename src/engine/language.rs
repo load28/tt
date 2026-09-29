@@ -184,12 +184,62 @@ pub struct ServiceDiagnostic {
     pub message: String,
     /// TypeScript's error number, 0 when it had none.
     pub code: u32,
-    /// True for a warning; everything else reported here is an error.
-    pub warning: bool,
+    /// How TypeScript ranked it.
+    pub severity: ServiceSeverity,
+    /// What the editor should show about the range besides a squiggle:
+    /// TypeScript's unused and deprecated suggestions carry these.
+    pub tags: Vec<ServiceTag>,
     /// Secondary places this diagnostic points at, each with its own words
     /// — served to the editor as LSP related information. Empty when the
     /// diagnostic has only its primary range.
     pub related: Vec<ServiceRelated>,
+}
+
+/// The LSP severity of a [`ServiceDiagnostic`] (3.17, `DiagnosticSeverity`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceSeverity {
+    /// A type error.
+    Error,
+    /// A warning.
+    Warning,
+    /// An informational message.
+    Information,
+    /// A suggestion — never a build failure; the editor fades or strikes
+    /// the range through by its [`ServiceTag`]s.
+    Hint,
+}
+
+impl ServiceSeverity {
+    /// The severity an LSP `DiagnosticSeverity` number names; an absent or
+    /// unknown one is an error, as LSP defines the default.
+    pub fn from_lsp(value: Option<u64>) -> ServiceSeverity {
+        match value {
+            Some(2) => ServiceSeverity::Warning,
+            Some(3) => ServiceSeverity::Information,
+            Some(4) => ServiceSeverity::Hint,
+            _ => ServiceSeverity::Error,
+        }
+    }
+}
+
+/// An LSP `DiagnosticTag` (3.15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceTag {
+    /// Unused or unnecessary code; the editor fades it.
+    Unnecessary,
+    /// Deprecated code; the editor strikes it through.
+    Deprecated,
+}
+
+impl ServiceTag {
+    /// The tag an LSP `DiagnosticTag` number names.
+    pub fn from_lsp(value: u64) -> Option<ServiceTag> {
+        match value {
+            1 => Some(ServiceTag::Unnecessary),
+            2 => Some(ServiceTag::Deprecated),
+            _ => None,
+        }
+    }
 }
 
 /// One secondary span of a [`ServiceDiagnostic`].

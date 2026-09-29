@@ -14,7 +14,7 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt, sliceOf, spanOf } from "./positions";
-import { COMPILER, answered, compilerAvailable, findTsgo } from "./toolchain";
+import { COMPILER, answered, compilerAvailable, findTsgo, problems } from "./toolchain";
 import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = !compilerAvailable()
@@ -238,7 +238,7 @@ for (const extension of ["tt", "ttx"]) {
       for (const statement of cases) {
         const source = `${header}\n${statement}\nexport {};\n`;
         engine.openDocument(COMPILER, file, source);
-        assert.deepEqual(answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics"), [], statement);
+        assert.deepEqual(problems(answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics")), [], statement);
         const offset = source.indexOf("x.toFixed");
         const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
         assert.ok(hover, statement);

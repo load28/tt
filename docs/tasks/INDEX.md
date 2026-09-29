@@ -522,7 +522,8 @@
 | TASK-512 | Bring single-file compile cost back within the CI budget | Complete | 2026-09-29 | 2026-09-29 | [TASK-512](./TASK-512-single-file-compile-cost.md) |
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 | TASK-514 | Run every test against the TypeScript that package.json pins | Complete | 2026-09-29 | 2026-09-29 | [TASK-514](./TASK-514-tests-pinned-typescript.md) |
+| TASK-515 | Serve TypeScript's unused and deprecated suggestions in the editor | Complete | 2026-09-29 | 2026-09-29 | [TASK-515](./TASK-515-editor-suggestion-diagnostics.md) |
 
 ## Next task number
 
-**TASK-515**
+**TASK-516**
