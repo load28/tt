@@ -430,3 +430,49 @@ fn a_case_named_like_the_prototype_setter_is_an_own_constructor_property() {
     let ambient = ok("declare variant V { __proto__(x: number), B }\n");
     assert!(ambient.contains("readonly __proto__: (x: number) => V;"), "{ambient}");
 }
+
+/// Subjects of a let-else or `if let` that contain a tt value below their
+/// top level (TASK-544). Each is lowered like a `match` subject: the value
+/// runs behind the captures the subject's own evaluation takes, and the
+/// subject is delivered once into the decision's temporary.
+const TASK_544_PRELUDE: &str = "declare function opt(n: number): { kind: \"Some\"; value: number } | { kind: \"None\" };\n\
+     declare function r(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+     declare function ro(): { kind: \"Ok\"; value: { kind: \"Some\"; value: number } | { kind: \"None\" } } | { kind: \"Err\"; error: string };\n";
+
+#[test]
+fn a_value_inside_a_let_else_or_if_let_subject_is_lowered_once() {
+    let subjects = [
+        ("opt(match (k) { 1 => 1, _ => 2 })", true),
+        ("opt(try r())", true),
+        ("(try ro())", false),
+        ("[match (k) { 1 => opt(1), _ => opt(2) }][0]", false),
+        ("match (k) { 1 => opt(1), _ => opt(2) }", false),
+    ];
+    for (subject, captures_callee) in subjects {
+        for body in [
+            format!("const Some(value: v) = {subject} else {{ return 0; }};\n  return v;"),
+            format!("if let Some(value: v) = {subject} {{ return v; }}\n  return 0;"),
+            format!(
+                "if let Some(value: z) = opt(0) {{ return z; }}\n  else if let Some(value: v) = {subject} {{ return v; }}\n  return 1;"
+            ),
+        ] {
+            for source in [
+                format!("{TASK_544_PRELUDE}export function g(k: 1 | 2) {{\n  {body}\n}}\n"),
+                format!(
+                    "{TASK_544_PRELUDE}export function g(k: 1 | 2) {{\n  return result {{\n  const n = try r();\n  {body}\n  }};\n}}\n"
+                ),
+            ] {
+                let out = ok(&source);
+                assert!(
+                    !out.contains("if let") && !out.contains("Some(value"),
+                    "{source}\n{out}"
+                );
+                assert_eq!(
+                    out.contains(" = (opt);"),
+                    captures_callee,
+                    "{source}\n{out}"
+                );
+            }
+        }
+    }
+}

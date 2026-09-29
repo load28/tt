@@ -1100,6 +1100,49 @@ export class Holder {
 }
 
 #[test]
+fn runtime_a_value_inside_a_let_else_or_if_let_subject_keeps_evaluation_order() {
+    require_toolchain!();
+    // TASK-544: the callee of the subject's call is read before the value
+    // in its argument runs, as in `opt(match ...)` anywhere else.
+    let out = run(r#"
+type Opt = { kind: "Some"; value: number } | { kind: "None" };
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const trace: string[] = [];
+let pick = (n: number): Opt => { trace.push("pick" + n); return n > 1 ? { kind: "Some", value: n } : { kind: "None" }; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = pick;
+  pick = (m) => { trace.push("late" + m); return first(m); };
+  return n;
+}
+function viaMatch(k: number): number {
+  if let Some(value: w) = pick(match (k) { 1 => swap(1), _ => swap(3) }) { return w; }
+  else if let Some(value: z) = pick(match (k) { 1 => swap(5), _ => 0 }) { return z * 10; }
+  return -1;
+}
+function readOpt(n: number): R<Opt> {
+  return n < 0 ? { kind: "Err", error: "neg" } : { kind: "Ok", value: n > 1 ? { kind: "Some", value: n } : { kind: "None" } };
+}
+function inResult(n: number) {
+  return result {
+    const Some(value: v) = (try readOpt(n)) else { return -2; };
+    if let Some(value: q) = [try readOpt(n + 1)][0] { return v + q; }
+    return v;
+  };
+}
+console.log(viaMatch(1), JSON.stringify(trace));
+console.log(JSON.stringify([inResult(2), inResult(1), inResult(-1)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"50 ["swap","pick1","swap","late5","pick5"]"#,
+            r#"[{"kind":"Ok","value":5},{"kind":"Ok","value":-2},{"kind":"Err","error":"neg"}]"#,
+        ]
+    );
+}
+
+#[test]
 fn runtime_a_prototype_setter_name_is_an_own_property() {
     require_toolchain!();
     let out = run(r#"

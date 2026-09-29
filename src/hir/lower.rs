@@ -497,7 +497,7 @@ impl Lower<'_> {
             .pattern_span(pattern)
             .unwrap_or(Self::span(stmt.head_span));
         let arm_node = self.node(pattern_span, AstOrigin::Arm);
-        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.head_span));
+        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.expr.span));
         let site_node = self.node(Self::span(stmt.head_span), AstOrigin::LetElse);
         let site = self.hir.sites.alloc(PatternSite {
             node: site_node,
@@ -540,7 +540,7 @@ impl Lower<'_> {
             .pattern_span(pattern)
             .unwrap_or(Self::span(stmt.head_span));
         let arm_node = self.node(pattern_span, AstOrigin::Arm);
-        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.head_span));
+        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.expr.span));
         let body = self.lower_body(&stmt.body);
         let site_node = self.node(Self::span(stmt.head_span), AstOrigin::IfLet);
         let site = self.hir.sites.alloc(PatternSite {
