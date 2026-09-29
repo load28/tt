@@ -1,3 +1,21 @@
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}
 type Item = { kind: string; run: (x: number) => number };
 declare function consume(item: Item): number;
 declare function consumeAll(runs: ((x: number) => number)[]): void;
@@ -137,21 +155,3 @@ const $tt_v16 = (consume);
 $tt_v16({ kind: "item", run: $tt_v14 as (x: number) => number });
 
 export { kept };
-function $tt_show(value: unknown): string {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "bigint") {
-    return String(value) + "n";
-  }
-  if (typeof value === "object" || typeof value === "function") {
-    try {
-      const text = JSON.stringify(value);
-      if (typeof text === "string") {
-        return text;
-      }
-    } catch {}
-    return typeof value;
-  }
-  return String(value);
-}

@@ -482,9 +482,28 @@ struct PlannedSourceSlot {
 }
 
 impl LoweringPlan {
-    pub(crate) fn without_owner_model() -> Self {
+    /// The plan of a file whose TypeScript gives no owner model. The helpers
+    /// a lowering without owners still calls are named against the names
+    /// the source already uses, as a built plan names them.
+    pub(crate) fn without_owner_model(source: &str, source_kind: crate::SourceKind) -> Self {
+        let written = crate::generated_names::source_names(source, source_kind);
+        let mut occupied = written.clone();
+        let mut name = |base: &str| {
+            crate::generated_names::allocate(base, &mut occupied)
+                .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for {base}"))
+        };
+        let expression_boundary_name = name("$tt_expr");
+        let match_raise_name = name("$tt_raise");
+        let match_show_name = name("$tt_show");
+        let allocated = occupied.difference(&written).cloned().collect();
         Self {
             owner_model_unavailable: true,
+            expression_boundary_name,
+            match_raise_name,
+            match_show_name,
+            generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
+                occupied, allocated,
+            )),
             ..Self::default()
         }
     }

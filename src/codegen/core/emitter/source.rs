@@ -2,6 +2,11 @@
 
 use super::*;
 
+/// What a tt value that has no lowering stands as: TypeScript's error type,
+/// so nothing the checker says past it is a consequence of the stand-in.
+/// The typed projection's recovery writes the same expression.
+const RECOVERED_VALUE: &str = "(undefined as any)";
+
 impl<'a> Emitter<'a> {
     pub(super) fn exits_for_expr(&self, expr: ExprId) -> Vec<HostExit> {
         self.value_exits.get(&expr).cloned().unwrap_or_default()
@@ -1109,7 +1114,7 @@ impl<'a> Emitter<'a> {
                 let head = self.span(decision.head);
                 let extent = self.span(decision.extent);
                 let mut generated = Rope::new();
-                generated.push_lit("undefined");
+                generated.push_lit(RECOVERED_VALUE);
                 let mut out = Rope::new();
                 out.anchored(
                     AnchorKind::Match,
@@ -1138,13 +1143,26 @@ impl<'a> Emitter<'a> {
                     );
                 }
                 let span = self.span(propagate.node);
-                if !self.owner_model {
+                let mut generated = Rope::new();
+                if self.owner_model {
+                    generated.push_lit(RECOVERED_VALUE);
+                } else {
+                    // No owner to hold the early exit: the operand is still
+                    // the user's expression, evaluated where it stands as
+                    // the argument, and the glue only reads its success
+                    // payload under the Result ABI a statement `try` tests.
                     self.recovered_sources
                         .borrow_mut()
                         .push(SourceSpan::from(span));
+                    let result = self.generated_name("$tt_result");
+                    generated.push_lit(format!(
+                        "(({result}) => {{ if ({}) throw {result}; return {result}.{}; }})(",
+                        result_failure_test(&result, propagate.layout),
+                        propagate.layout.payload_field,
+                    ));
+                    generated.append(self.emit_expr(propagate.value));
+                    generated.push_lit(")");
                 }
-                let mut generated = Rope::new();
-                generated.push_lit("undefined");
                 let mut out = Rope::new();
                 out.anchored(AnchorKind::Try, span.start, span.end, span.end, generated);
                 out

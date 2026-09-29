@@ -605,7 +605,9 @@ async function typedDiagnosticsFor(
   }
 
   return {
-    replacesTypes: includeTypes,
+    // A pass that checked none of the buffer's TypeScript has no checker
+    // answer to put in the service layer's place.
+    replacesTypes: includeTypes && !result.blocked,
     diagnostics: result.diagnostics
       .filter((d) => includeTypedTt || String(d.code ?? "").startsWith("ts"))
       .map((d) => toDiagnostic(doc, d)),
@@ -716,9 +718,9 @@ async function validate(
           settings.typedChecks,
         )
       : Promise.resolve(null);
-  const serviceTypes: Promise<Diagnostic[] | null> = settings.typeDiagnostics
+  const serviceTypes: Promise<TypeDiagnostics | null> = settings.typeDiagnostics
     ? typeDiagnostics(doc, compiler)
-    : Promise.resolve([]);
+    : Promise.resolve({ diagnostics: [], restates: [] });
   // Hints are not diagnostics of the compile: ttc never fails on one, and
   // they only reach the user here (`engine::hints`). Run every slower layer
   // together, then publish one complete generation.
@@ -754,16 +756,27 @@ async function validate(
           "output channel above for why the engine stopped answering.",
       );
     }
-    typeResults = [];
+    typeResults = { diagnostics: [], restates: [] };
   }
 
-  diagnostics.push(...typeResults, ...hints);
+  diagnostics.push(...typeResults.diagnostics, ...hints);
   if (typedResult !== null) {
     mergeTyped(
       diagnostics,
       typedResult.diagnostics,
       typedResult.replacesTypes,
     );
+  }
+  // A syntax error in the TypeScript the user wrote is TypeScript's to
+  // report, in its own words, as it is in a `.ts` file. The compiler's
+  // layers state the same fact as the reason the file has no output; once
+  // the service has stated it, they would only state it twice.
+  const restated = new Set(typeResults.restates);
+  for (let i = diagnostics.length - 1; i >= 0; i--) {
+    const d = diagnostics[i];
+    if (d.source !== "ts" && restated.has(String(d.code ?? ""))) {
+      diagnostics.splice(i, 1);
+    }
   }
   // The layers finish independently and typed diagnostics are merged last,
   // but the user reads and fixes one file from top to bottom. Restore the
@@ -807,34 +820,44 @@ const SERVICE_TAG: Record<NonNullable<engine.EngineDiagnostic["tags"]>[number], 
   deprecated: DiagnosticTag.Deprecated,
 };
 
+interface TypeDiagnostics {
+  diagnostics: Diagnostic[];
+  /** The codes of the compiler diagnostics these state in TypeScript's
+   * words (`engine.tsDiagnosticsAnswer`). */
+  restates: string[];
+}
+
 async function typeDiagnostics(
   doc: TextDocument,
   compiler: string,
-): Promise<Diagnostic[] | null> {
+): Promise<TypeDiagnostics | null> {
   const fsPath = enginePath(doc);
-  if (fsPath === null) return [];
-  const items = await engine.tsDiagnostics(compiler, fsPath, logEngine);
-  if (items === null) return null;
-  return items.map((d) => ({
-    severity: SERVICE_SEVERITY[d.severity],
-    tags: d.tags?.length ? d.tags.map((tag) => SERVICE_TAG[tag]) : undefined,
-    range: d.range,
-    message: d.message,
-    code: d.code,
-    source: "ts",
-    // The compiler's secondary labeled spans, as the LSP's own related
-    // information — the editor renders each as a clickable "here" link
-    // under the diagnostic.
-    relatedInformation: d.related?.length
-      ? d.related.map((r) => ({
-          location: {
-            uri: r.path ? editorUri(r.path) : doc.uri,
-            range: r.range,
-          },
-          message: r.message,
-        }))
-      : undefined,
-  }));
+  if (fsPath === null) return { diagnostics: [], restates: [] };
+  const answer = await engine.tsDiagnosticsAnswer(compiler, fsPath, logEngine);
+  if (answer === null) return null;
+  return {
+    restates: answer.restates,
+    diagnostics: answer.diagnostics.map((d) => ({
+      severity: SERVICE_SEVERITY[d.severity],
+      tags: d.tags?.length ? d.tags.map((tag) => SERVICE_TAG[tag]) : undefined,
+      range: d.range,
+      message: d.message,
+      code: d.code,
+      source: "ts",
+      // The compiler's secondary labeled spans, as the LSP's own related
+      // information — the editor renders each as a clickable "here" link
+      // under the diagnostic.
+      relatedInformation: d.related?.length
+        ? d.related.map((r) => ({
+            location: {
+              uri: r.path ? editorUri(r.path) : doc.uri,
+              range: r.range,
+            },
+            message: r.message,
+          }))
+        : undefined,
+    })),
+  };
 }
 
 /**

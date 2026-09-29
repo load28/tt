@@ -166,6 +166,73 @@ Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔
    카운트였을 때는 설정이 도착하기 전 잘못된 경로로 두 번 실패하면 이후
    올바른 경로에도 엔진이 깨어나지 않았다.
 
+### Diagnostics while the TypeScript does not parse (TASK-527)
+
+A buffer mid-edit is routinely not TypeScript. A `.ts` file then shows
+TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
+
+- **What the service reads.** When the verified projection is withheld
+  only because the file's TypeScript does not parse (or its lowering plan
+  cannot be built over it), `compile_projection_report` still returns the
+  file lowered without an owner model, over the recovered source
+  (`ProjectionReport::withheld`). It is *faithful*: every byte is TypeScript
+  the user wrote, glue of a claimed construct, or a recovery placeholder,
+  so TypeScript's answer about it is its answer about the user's code. Two
+  properties make that hold by construction. Glue is delimiter-balanced and
+  stands in its construct's own syntactic slot, so a user's syntax error
+  can move within the construct but can neither be hidden nor created by
+  it. Helpers no source text owns (`$tt_show`, `$tt_raise`, `$tt_expr`) are
+  written with the prelude, before any source text, so a bracket left open
+  at the end of the file cannot take them in. Recovery placeholders are
+  TypeScript's error type (`undefined as any`), so no consequence of a
+  stand-in is reported.
+- **When it is not read.** Where tt text would stay as the user wrote it —
+  a diagnostic that leaves its construct unlowered
+  (`DiagnosticCode::leaves_tt_text`), or a tt candidate the parser rolled
+  back into passthrough — there is no withheld emission, the service falls
+  back to the raw emit map, and its diagnostics are reported only if that
+  text parses, as before.
+- **Who reports a syntax error.** A syntax error in the TypeScript the user
+  wrote is TypeScript's, as the error-layer contract assigns every error in
+  the user's TypeScript to TypeScript. `source-not-typescript` and
+  `verify-failed` restate that verdict as the reason the file has no
+  output (`DiagnosticCode::restates_typescript_syntax`). They own no
+  checker consequence, and when the faithful projection is served the
+  engine names them in `tsDiagnostics`' `restates`; the editor then drops
+  the compiler layers' copies, so the fact is shown once, in TypeScript's
+  words. The CLI and the batch typed path keep reporting them: they have no
+  other reporter, and `tsc` itself reports only syntactic diagnostics while
+  there are any.
+- **The typed pass.** A buffer that cannot be lowered is a blocked file of
+  its snapshot, and `typedCheck` says so (`blocked`). A blocked pass
+  checked none of the buffer's TypeScript, so its answer never replaces the
+  service layer. A pass that ran and found problems only in other files
+  answers this file with no diagnostics, which does replace it.
+
+### Unfinished tt values (TASK-528)
+
+- **The operand stays the user's.** Without an owner model a value `try`
+  has nowhere to put its early exit, but its operand is still the user's
+  expression. It is emitted where it stands, mapped, as the argument of
+  glue that reads its success payload under the Result ABI a statement
+  `try` tests: `(($tt_result) => { if (!("value" in $tt_result)) throw
+  $tt_result; return $tt_result.value; })(operand)`. The operand is evaluated
+  outside the arrow, so `this`, `await`, and `arguments` in it are the
+  enclosing function's, and its value keeps its type.
+- **An unterminated operand ends where TypeScript ends it.** The parser
+  reads an operand whose call or index is still open to where the
+  enclosing syntax resumes — a closer of another bracket, a statement
+  keyword directly in a parenthesis or index, or the end of the region —
+  as TypeScript reads an unterminated argument list, so the operand holds
+  the text being typed and the function's own `}` stays outside it.
+- **A cursor with no place in the served text is asked through a probe.**
+  Completion and signature help splice `$tt_probe` at the cursor and ask
+  at its mapped position when the served projection did not copy the
+  cursor's text (the whitespace after a match arm body, for instance). The
+  probe is built from the projection the service would serve for the
+  spliced text, the faithful projection of TypeScript that does not parse
+  included, and its auto-import edits map back through it (TASK-526).
+
 ### 지운 것 (§51)
 
 `tsgo.ts`(TsgoProject) · `lsp.ts`(수제 LSP 클라이언트) · `probe.ts` ·

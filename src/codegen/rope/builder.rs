@@ -274,8 +274,21 @@ impl<'a> Rope<'a> {
             break;
         }
         self.len += text.len();
+        let inserted = [
+            Piece::Mark {
+                src: at,
+                kind: MarkKind::InsertedStart,
+            },
+            Piece::Lit(text),
+            Piece::Mark {
+                src: at,
+                kind: MarkKind::InsertedEnd,
+            },
+        ];
         match split {
-            None => self.pieces.insert(index, Piece::Lit(text)),
+            None => {
+                self.pieces.splice(index..index, inserted);
+            }
             Some(cut) => {
                 let Piece::Src { text: whole, src } = self.pieces[index] else {
                     unreachable!("the piece was matched as a source piece")
@@ -291,7 +304,7 @@ impl<'a> Rope<'a> {
                         src: src + cut,
                     },
                 );
-                self.pieces.insert(index + 1, Piece::Lit(text));
+                self.pieces.splice(index + 1..index + 1, inserted);
             }
         }
     }
@@ -505,5 +518,6 @@ pub(crate) struct Flat {
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,
+    pub inserted: Vec<crate::InsertedGlue>,
     pub support_imports: Vec<crate::StdModule>,
 }

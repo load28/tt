@@ -1283,7 +1283,7 @@ fn a_script_declares_its_helpers_as_typed_vars_after_its_file_pragmas() {
 }
 
 #[test]
-fn a_module_keeps_its_import_and_trailing_helpers() {
+fn a_module_declares_its_helpers_with_its_import_after_its_file_pragmas() {
     let source = "declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
                   declare function step(n: number): number;\n\
                   const composed = flow |> step |> step;\n\
@@ -1291,15 +1291,36 @@ fn a_module_keeps_its_import_and_trailing_helpers() {
                   export {};\n";
     let out = ok(source);
     assert!(
-        out.starts_with("import { $tt_fl } from \"@tt/runtime\";\n"),
+        out.starts_with(
+            "import { $tt_fl } from \"@tt/runtime\";\n\
+             function $tt_show(value: unknown): string {\n"
+        ),
         "{out}"
     );
     assert!(out.contains("const total = $tt_v1;") && !out.contains("$total"), "{out}");
-    assert!(
-        out.contains("\nfunction $tt_show(value: unknown): string {\n"),
-        "{out}"
-    );
+    assert!(out.ends_with("export {};\n"), "{out}");
     assert!(!out.contains("var $tt_"), "{out}");
+
+    for (header, attached) in [
+        (
+            "#!/usr/bin/env node\n/// <reference path=\"./globals.d.ts\" />\n// @ts-nocheck\n",
+            "",
+        ),
+        ("\"use strict\";\n// @ts-check\n", "/** The first statement. */\n"),
+        ("/// <reference types=\"node\" />\n", "// @ts-expect-error\n"),
+        ("// license\n/* @jsxImportSource preact */\n", "// @ts-ignore\n"),
+        ("", "/** The first statement. */\n"),
+    ] {
+        let out = ok(&format!("{header}{attached}{source}"));
+        assert!(
+            out.starts_with(&format!("{header}import {{ $tt_fl }}")),
+            "{header}{attached}\n{out}"
+        );
+        assert!(
+            out.contains(&format!("}}\n{attached}declare const o")),
+            "{header}{attached}\n{out}"
+        );
+    }
 }
 
 #[test]

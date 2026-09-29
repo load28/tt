@@ -32,6 +32,10 @@ pub(crate) fn insert_annotations(emit: &mut MappedEmit, edits: &[(usize, String)
         binding.out = shifted(binding.out, true);
         binding.out_end = shifted(binding.out_end, false);
     }
+    for glue in &mut emit.inserted {
+        glue.out = shifted(glue.out, true);
+        glue.out_end = shifted(glue.out_end, false);
+    }
     for anchor in &mut emit.anchors {
         anchor.out = shifted(anchor.out, true);
         anchor.end = shifted(anchor.end, false);

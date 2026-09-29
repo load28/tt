@@ -235,6 +235,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        inserted: flat.inserted,
         support_imports: flat.support_imports,
     };
     if options.defer_to_checker {
@@ -611,6 +612,35 @@ pub struct ProjectionReport {
     pub diagnostics: Vec<Diagnostic>,
     /// Source byte ranges occupied by parser recovery nodes.
     pub recovered: Vec<(usize, usize)>,
+    /// The emission `emit` withholds from the typed program when the only
+    /// thing wrong with the (recovered) file is its TypeScript: it does not
+    /// parse, or its lowering plan could not be built over it. It is
+    /// lowered without that plan, and every byte of it is TypeScript the
+    /// user wrote, glue a claimed construct lowered to, or a recovery
+    /// placeholder in `recovered` — no tt text is left as written — so
+    /// what a TypeScript reader says about it is what it says about the
+    /// user's code. `None` when `emit` is present, or when a construct
+    /// would stay the tt text the user wrote.
+    pub withheld: Option<MappedEmit>,
+}
+
+/// The emission of a file that has no verified one, when no tt text in it
+/// is left as written: no diagnostic leaves its construct unlowered
+/// ([`DiagnosticCode::leaves_tt_text`]) and the parser rolled back no tt
+/// candidate into passthrough text.
+fn withheld_emit(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+    diagnostics: &[Diagnostic],
+) -> Option<MappedEmit> {
+    if diagnostics.iter().any(|d| d.code.leaves_tt_text())
+        || !parser::unclaimed_candidates(program).is_empty()
+    {
+        return None;
+    }
+    Some(emit_mapped_parsed(source, options, program, tokens))
 }
 
 fn overwrite_recovery(source: &mut [u8], start: usize, end: usize, replacement: &str) {
@@ -643,6 +673,7 @@ pub(crate) fn compile_projection_report_parsed(
             emit: ordinary.emit,
             diagnostics: ordinary.diagnostics,
             recovered: Vec::new(),
+            withheld: None,
         };
     }
 
@@ -683,6 +714,7 @@ pub(crate) fn compile_projection_report_parsed(
     if selected.is_empty() {
         return ProjectionReport {
             emit: None,
+            withheld: withheld_emit(source, options, program, tokens, &ordinary.diagnostics),
             diagnostics: ordinary.diagnostics,
             recovered: Vec::new(),
         };
@@ -692,12 +724,13 @@ pub(crate) fn compile_projection_report_parsed(
     for node in &selected {
         let replacement = match &node.kind {
             ast::RecoveryKind::Expression => {
-                let replacement =
-                    if node.span.end.saturating_sub(node.span.start) >= "undefined as any".len() {
-                        "undefined as any"
-                    } else {
-                        "0"
-                    };
+                // TypeScript's error type, so no consequence of the stand-in
+                // is reported, in the widest spelling the node has room for.
+                let width = node.span.end.saturating_sub(node.span.start);
+                let replacement = ["undefined as any", "0 as any"]
+                    .into_iter()
+                    .find(|replacement| replacement.len() <= width)
+                    .unwrap_or("0");
                 overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
                 continue;
             }
@@ -730,9 +763,27 @@ pub(crate) fn compile_projection_report_parsed(
     // still the UTF-8 it started as.
     let recovered_source =
         String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII");
-    let recovered_report = compile_report(&recovered_source, options);
+    let (recovered_program, recovered_tokens) =
+        parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
+    let recovered_report = compile_report_parsed(
+        &recovered_source,
+        options,
+        &recovered_program,
+        &recovered_tokens,
+    );
+    let withheld = match recovered_report.emit {
+        Some(_) => None,
+        None => withheld_emit(
+            &recovered_source,
+            options,
+            &recovered_program,
+            &recovered_tokens,
+            &recovered_report.diagnostics,
+        ),
+    };
     ProjectionReport {
         emit: recovered_report.emit,
+        withheld,
         diagnostics: ordinary.diagnostics,
         recovered: selected
             .into_iter()
@@ -867,6 +918,7 @@ pub(crate) fn compile_report_parsed(
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        inserted: flat.inserted,
         support_imports: flat.support_imports,
     };
     let mut emit = verified_emit(

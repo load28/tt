@@ -172,7 +172,13 @@ statement list (`GlobalStatement`), and the lowering plan follows it:
   `@ts-check`/`@ts-nocheck`, and the `@jsx` pragmas.
 
 A function body, block, or namespace body is already a private scope, and a
-module's top level is private to the module, so none of them changes.
+module's top level is private to the module, so none of them changes. A
+module declares its helpers as function declarations with the rest of its
+prelude — after the directive prologue and the file-level pragmas, beside
+the runtime import — so no source text precedes them: a bracket the user
+left open at the end of the file cannot take them into its own syntax
+(TASK-527). A function declaration is hoisted, so its place in the module
+does not change what it means.
 
 ## 5. Evaluation IR
 

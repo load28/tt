@@ -114,7 +114,6 @@ pub(super) fn parse_try_expr(cur: Cursor<'_>, kw_span: Span) -> Option<(usize, T
 
 fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
     let first = cur.peek()?;
-    let mut depth = 0usize;
     let mut k = cur.idx;
     if matches!(first.kind, TokenKind::Ident) && cur.text(first) == "await" {
         k += 1;
@@ -136,9 +135,11 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         operand_token_end = past;
         k = past;
     }
+    // The closer each open bracket waits for, innermost last.
+    let mut open: Vec<u8> = Vec::new();
     let mut piped = false;
     while let Some(token) = cur.tokens.get(k) {
-        if depth == 0
+        if open.is_empty()
             && matches!(
                 token.kind,
                 TokenKind::Punct(b')' | b']' | b'}' | b',' | b';')
@@ -146,15 +147,25 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         {
             break;
         }
-        if depth == 0
+        // A closer of another bracket, or a statement keyword directly in
+        // a parenthesis or an index, belongs to the enclosing syntax: it is
+        // where TypeScript ends a list the operand left open. `try` is the
+        // one such keyword tt reads as a value there.
+        if token.closes_bracket()
+            && !matches!((open.last(), &token.kind), (Some(&want), TokenKind::Punct(got)) if want == *got)
+        {
+            break;
+        }
+        if matches!(open.last(), None | Some(b')' | b']'))
             && k > cur.idx
             && matches!(token.kind, TokenKind::Ident)
             && !dotted_at(cur.tokens, cur.idx, k)
             && crate::lexer::statement_only_keyword(cur.text(token))
+            && (open.is_empty() || cur.text(token) != "try")
         {
             break;
         }
-        if depth == 0 && matches!(token.kind, TokenKind::PipeOp) {
+        if open.is_empty() && matches!(token.kind, TokenKind::PipeOp) {
             if operand_token_end != k {
                 break;
             }
@@ -162,13 +173,20 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         }
 
         match token.kind {
-            _ if token.opens_bracket() => depth += 1,
-            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
+            TokenKind::Punct(byte) if token.opens_bracket() => open.push(match byte {
+                b'(' => b')',
+                b'[' => b']',
+                b'{' => b'}',
+                _ => b'>',
+            }),
+            _ if token.closes_bracket() => {
+                open.pop();
+            }
             _ => {}
         }
         k += 1;
         if piped {
-            if depth == 0 && !matches!(token.kind, TokenKind::PipeOp) {
+            if open.is_empty() && !matches!(token.kind, TokenKind::PipeOp) {
                 operand_end = Some(token.span.end);
                 operand_token_end = k;
             }
@@ -181,6 +199,12 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             operand_end = Some(token.span.end);
             operand_token_end = k;
         }
+    }
+    // A bracket still open is a list being written: TypeScript reads it as
+    // the operand's, up to where the enclosing syntax resumes.
+    if !open.is_empty() {
+        operand_end = Some(cur.stop_byte_at(k));
+        operand_token_end = k;
     }
     operand_end.map(|end| (operand_token_end, end))
 }

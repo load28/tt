@@ -367,23 +367,30 @@ fn a_banner_shifts_the_map_so_positions_still_line_up() {
         "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
-    let with_banner = ttc(&[
-        "-o",
-        out_dir.to_str().unwrap(),
-        "--source-map",
-        "file",
-        source.to_str().unwrap(),
-    ]);
-    assert!(with_banner.status.success(), "{with_banner:?}");
-    let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
-    let mappings = map
-        .split("\"mappings\":\"")
-        .nth(1)
-        .and_then(|rest| rest.split('"').next())
-        .expect("mappings");
+    let mappings = |banner: bool| {
+        let mut args = vec![
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--source-map",
+            "file",
+            source.to_str().unwrap(),
+        ];
+        if !banner {
+            args.push("--no-banner");
+        }
+        let out = ttc(&args);
+        assert!(out.status.success(), "{out:?}");
+        let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
+        map.split("\"mappings\":\"")
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+            .expect("mappings")
+            .to_string()
+    };
+    let without = mappings(false);
+    assert!(without.contains(|c: char| c != ';'), "{without}");
     // The banner is one generated line with nothing behind it.
-    assert!(mappings.starts_with(';'), "{mappings}");
-    assert!(!mappings.starts_with(";;"), "{mappings}");
+    assert_eq!(mappings(true), format!(";{without}"));
 }
 
 /* ------------------------------------------------------------------ */

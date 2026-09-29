@@ -25,6 +25,9 @@
 //! ← { "id": 3, "result": { "blocked", "diagnostics":
 //!        [{ "path", "line", "col", "endLine", "endCol", "message", "code",
 //!           "suggestions" }] } }
+//! `blocked`: the pass checked none of the buffer's TypeScript — the
+//! project could not be read, or the buffer could not be lowered and its
+//! diagnostics are its tt-level ones alone.
 //!
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
 //! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
@@ -357,7 +360,14 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                     entry
                 })
                 .collect();
-            Ok(json!({ "diagnostics": diagnostics }))
+            // The tt diagnostics these state in TypeScript's own words: a
+            // consumer showing both layers shows the fact once.
+            let restates: Vec<_> = project
+                .service_restates(path)?
+                .into_iter()
+                .map(|code| code.as_str())
+                .collect();
+            Ok(json!({ "diagnostics": diagnostics, "restates": restates }))
         }),
         method => Err(format!("unknown method \"{method}\"")),
     };
@@ -883,7 +893,7 @@ fn typed_check(
                         })
                     });
                     json!({
-                        "blocked": false,
+                        "blocked": snapshot.is_blocked(&canonical),
                         "diagnostics": diagnostics,
                         "backendError": backend_error,
                     })
