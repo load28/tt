@@ -20,6 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::documents::Documents;
 use super::projection::{self, ProjectedDocument};
 use super::semantics::{self, Checked, FileSemantics};
 use super::snapshot::Snapshot;
@@ -75,8 +76,12 @@ pub struct Project {
     /// `tsconfig.json` to decide the program's files — see
     /// [`crate::typescript::backend::Query::sources`].
     sources: Vec<PathBuf>,
-    /// Unsaved text standing in for files on disk, keyed by canonical path.
-    pub(crate) overlays: HashMap<PathBuf, String>,
+    /// Unsaved text standing in for files on disk, keyed by canonical path
+    /// — the engine's store, shared with every project it opened.
+    pub(crate) overlays: Documents,
+    /// The documents opened through this project: the files that are roots
+    /// by request here, whatever the configuration includes.
+    pub(super) opened: HashSet<PathBuf>,
     /// Projections by path, kept across snapshots. An entry is reused when
     /// the file's current text equals the projected text.
     cache: HashMap<PathBuf, Arc<ProjectedDocument>>,
@@ -120,7 +125,8 @@ impl Project {
             dependencies: RefCell::new(HashSet::new()),
             initial,
             sources,
-            overlays: HashMap::new(),
+            overlays: Documents::default(),
+            opened: HashSet::new(),
             cache: HashMap::new(),
             backend,
             pattern_analysis_cache: RefCell::new(HashMap::new()),
@@ -153,18 +159,25 @@ impl Project {
     /// checked as part of the project it belongs to: the module keeps its
     /// real path — so its imports, and the imports that name it, resolve
     /// exactly as they do on disk — and only its text is the unsaved one.
+    ///
+    /// The text is the file's for every project the same [`super::Engine`]
+    /// opened, so a project that imports the file compiles the buffer too;
+    /// the document is a root by request only here.
     pub fn open_document(&mut self, path: PathBuf, text: String) {
-        self.overlays.insert(path, text);
+        self.opened.insert(path.clone());
+        self.overlays.set(path, text);
     }
 
     /// Replaces an open document's text. The next [`Project::update`] sees
     /// the new text; snapshots already taken keep the old one.
     pub fn update_document(&mut self, path: PathBuf, text: String) {
-        self.overlays.insert(path, text);
+        self.open_document(path, text);
     }
 
-    /// Closes an open document: the file's text is the disk's again.
+    /// Closes an open document: the file's text is the disk's again, for
+    /// every project.
     pub fn close_document(&mut self, path: &Path) {
+        self.opened.remove(path);
         self.overlays.remove(path);
     }
 
@@ -214,7 +227,7 @@ impl Project {
     /// its program can contain — TypeScript's `containsFile`.
     pub fn sees(&mut self, path: &Path) -> Result<bool, String> {
         let path = super::normalize_document_path(path)?;
-        if self.overlays.contains_key(&path) || self.dependencies.borrow().contains(&path) {
+        if self.opened.contains(&path) || self.dependencies.borrow().contains(&path) {
             return Ok(true);
         }
         let snapshot = self
@@ -263,6 +276,8 @@ impl Project {
         // Projection already owns each content version's import metadata.
         // Follow those edges here instead of reading and parsing every input
         // once for discovery and again for projection.
+        let documents = self.overlays.clone();
+        let overlays = documents.read();
         let mut pending = files.to_vec();
         let mut seen: HashSet<_> = files.iter().cloned().collect();
         let mut cursor = 0;
@@ -270,7 +285,7 @@ impl Project {
             let file = pending[cursor].clone();
             cursor += 1;
             let file = &file;
-            let text = match self.overlays.get(file) {
+            let text = match overlays.get(file) {
                 Some(text) => text.clone(),
                 None => std::fs::read_to_string(file).map_err(|e| {
                     Box::new(Blocked {
@@ -294,7 +309,7 @@ impl Project {
                         discover_imports(
                             file,
                             blocked.tt_imports(),
-                            &self.overlays,
+                            &overlays,
                             &mut pending,
                             &mut seen,
                         );
@@ -304,13 +319,7 @@ impl Project {
                 },
             };
             if let Some(doc) = doc {
-                discover_imports(
-                    file,
-                    doc.tt_imports(),
-                    &self.overlays,
-                    &mut pending,
-                    &mut seen,
-                );
+                discover_imports(file, doc.tt_imports(), &overlays, &mut pending, &mut seen);
                 cache.insert(file.clone(), doc.clone());
                 projected.push(doc);
             }
@@ -330,7 +339,7 @@ impl Project {
                 .modules
                 .retain(|module| !projected.iter().any(|doc| doc.module_path == module.path));
             query.modules.extend(
-                self.overlays
+                overlays
                     .iter()
                     .filter(|(path, _)| is_host_source(path))
                     .map(|(path, text)| crate::typescript::backend::Module {
@@ -375,8 +384,7 @@ impl Project {
             id: self.next_snapshot,
             files: projected,
             blocked: blocked_files,
-            host_overlays: self
-                .overlays
+            host_overlays: overlays
                 .iter()
                 .filter(|(path, _)| is_host_source(path))
                 .map(|(path, text)| (path.clone(), text.clone()))
@@ -459,7 +467,7 @@ impl Project {
                 crate::SourceKind::from_path(path).unwrap_or_default(),
             ),
             &|target| {
-                let text = match self.overlays.get(target) {
+                let text = match self.overlays.read().get(target) {
                     Some(text) => text.clone(),
                     None => std::fs::read_to_string(target).ok()?,
                 };
@@ -481,8 +489,7 @@ impl Project {
         files
             .iter()
             .filter(|file| {
-                self.named.contains(&file.source_path)
-                    || self.overlays.contains_key(&file.source_path)
+                self.named.contains(&file.source_path) || self.opened.contains(&file.source_path)
             })
             .map(|file| file.module_path.clone())
             .collect()

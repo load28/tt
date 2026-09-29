@@ -208,6 +208,16 @@ TT 고유의 차이: **Projection 계층**. tsgo는 `TS source → Program`이�
 > or two projects disagree about one place. Loading projects that no open
 > document belongs to (`loadAncestorProjectTree`) is still not done.
 
+> **Update (TASK-536).** Open documents are one store per `Engine`
+> (`engine::documents::Documents`), the counterpart of tsgo's session-level
+> overlay filesystem (§B.2), and every project the engine opens reads its
+> text through that store. A project still keeps its own set of the
+> documents opened through it. Those are its roots by request, so a buffer
+> of another project never becomes a root here. Nothing is invalidated
+> eagerly: projections, semantic caches and served modules are keyed by the
+> text they were built from, and each project rebuilds what changed at its
+> next question.
+
 ---
 
 ## E. 최종 아키텍처

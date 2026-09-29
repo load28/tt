@@ -79,6 +79,7 @@ impl Workspace {
     pub fn reload(&mut self) {
         self.projects.clear();
         self.open.clear();
+        self.engine.documents.clear();
     }
 
     /// The project `path` belongs to — the one it was opened in, or the one

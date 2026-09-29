@@ -43,6 +43,7 @@
 
 mod completions;
 mod declarations;
+mod documents;
 mod hints;
 mod language;
 mod names;
@@ -86,6 +87,8 @@ pub struct Engine {
     /// The `node` binary that runs the TypeScript host, or `None` for the
     /// `node` on PATH.
     node: Option<PathBuf>,
+    /// The open documents every project this engine opens reads through.
+    documents: documents::Documents,
 }
 
 /// How a project is opened, beside its inputs.
@@ -105,7 +108,10 @@ impl Engine {
     /// `node` when `None`). Nothing is started until a project's first
     /// question.
     pub fn new(node: Option<PathBuf>) -> Engine {
-        Engine { node }
+        Engine {
+            node,
+            documents: documents::Documents::default(),
+        }
     }
 
     /// Opens the project `inputs` belong to.
@@ -214,7 +220,7 @@ impl Engine {
                     .unwrap_or_default()
             }
         };
-        Ok(Project::new(
+        let mut project = Project::new(
             root,
             tsconfig,
             options.out_dir.clone(),
@@ -222,7 +228,9 @@ impl Engine {
             initial,
             sources,
             backend,
-        ))
+        );
+        project.overlays = self.documents.clone();
+        Ok(project)
     }
 
     /// The identity `inputs` resolve to — the `(tsconfig, root)` pair a

@@ -176,7 +176,7 @@ impl Project {
     /// and only tt's own analysis answers.
     fn declared_hover_unserved(&mut self, path: &Path, position: Position) -> Option<HoverInfo> {
         let canonical = crate::engine::normalize_document_path(path).ok()?;
-        let source = match self.overlays.get(&canonical) {
+        let source = match self.overlays.read().get(&canonical) {
             Some(text) => text.clone(),
             None => std::fs::read_to_string(&canonical).ok()?,
         };
@@ -343,12 +343,13 @@ impl Project {
         Ok(None)
     }
 
-    /// The project's `.tt`/`.ttx` files, open buffers included.
+    /// The project's `.tt`/`.ttx` files, the documents opened through it
+    /// included.
     fn tt_files(&self) -> Result<Vec<PathBuf>, String> {
         let mut files = self.scan().map_err(|error| error.to_string())?;
         files.extend(
-            self.overlays
-                .keys()
+            self.opened
+                .iter()
                 .filter(|path| crate::SourceKind::from_tt_path(path).is_some())
                 .cloned(),
         );
@@ -359,7 +360,7 @@ impl Project {
 
     /// A file's text as the project sees it: the open buffer, else the disk.
     fn text_of(&self, path: &Path) -> Option<String> {
-        match self.overlays.get(path) {
+        match self.overlays.read().get(path) {
             Some(text) => Some(text.clone()),
             None => std::fs::read_to_string(path).ok(),
         }
@@ -373,10 +374,9 @@ impl Project {
         extra: serde_json::Value,
     ) -> Result<Vec<Location>, String> {
         let (doc, path) = self.serve(path)?;
-        let Project {
-            service, overlays, ..
-        } = self;
-        let session = service.as_mut().expect("serve started it");
+        let documents = self.overlays.clone();
+        let overlays = &*documents.read();
+        let session = self.session();
         let mut raw: Vec<serde_json::Value> = Vec::new();
         for at in to_service_names(&doc, position) {
             let mut params = serde_json::json!({
@@ -563,10 +563,9 @@ impl Project {
         position: Position,
     ) -> Result<Option<Vec<RenameEdit>>, String> {
         let (doc, path) = self.serve(path)?;
-        let Project {
-            service, overlays, ..
-        } = self;
-        let session = service.as_mut().expect("serve started it");
+        let documents = self.overlays.clone();
+        let overlays = &*documents.read();
+        let session = self.session();
         let Some(at) = to_service_name(&doc, position) else {
             return Ok(None);
         };
@@ -935,66 +934,70 @@ impl Project {
                 probe_count: 0,
             });
         }
-        let Project {
-            service, overlays, ..
-        } = self;
-        let session = service.as_mut().expect("just ensured");
+        let documents = self.overlays.clone();
+        // The store is read in this scope only: taking the snapshot below
+        // reads it again.
+        let (doc, files) = {
+            let overlays = &*documents.read();
+            let session = self.session();
 
-        let closed: Vec<_> = session
-            .host_served
-            .keys()
-            .filter(|path| !overlays.contains_key(*path))
-            .cloned()
-            .collect();
-        for path in closed {
-            session.client.close(&file_uri(&path));
-            session.host_served.remove(&path);
-        }
-        for (path, text) in overlays
-            .iter()
-            .filter(|(path, _)| super::super::project::is_host_source(path))
-        {
-            if session.host_served.get(path) != Some(text) {
-                session.client.open(&file_uri(path), text);
-                session.host_served.insert(path.clone(), text.clone());
+            let closed: Vec<_> = session
+                .host_served
+                .keys()
+                .filter(|path| !overlays.contains_key(*path))
+                .cloned()
+                .collect();
+            for path in closed {
+                session.client.close(&file_uri(&path));
+                session.host_served.remove(&path);
             }
-        }
-
-        let doc = serve_one(session, overlays, &canonical)
-            .ok_or_else(|| format!("cannot read {}", canonical.display()))?;
-
-        // The `.tt` modules it imports are served too, transitively. That is
-        // not an optimization: the server resolves `"./x.tt"` to `x.tt.ts`,
-        // and that name only exists as a document *this session serves*.
-        let mut seen: HashSet<PathBuf> = HashSet::from([canonical.clone()]);
-        let mut stack = vec![(canonical.clone(), doc.clone())];
-        while let Some((file, doc)) = stack.pop() {
-            for import in crate::tt_imports(&doc.source) {
-                let target = match crate::engine::paths::canonical(
-                    &file
-                        .parent()
-                        .unwrap_or(Path::new("."))
-                        .join(&import.specifier),
-                ) {
-                    Ok(target) => target,
-                    Err(_) => continue, // unresolvable — tsc's TS2307, not ours
-                };
-                if !seen.insert(target.clone()) {
-                    continue;
-                }
-                if let Some(imported) = serve_one(session, overlays, &target) {
-                    stack.push((target, imported));
+            for (path, text) in overlays
+                .iter()
+                .filter(|(path, _)| super::super::project::is_host_source(path))
+            {
+                if session.host_served.get(path) != Some(text) {
+                    session.client.open(&file_uri(path), text);
+                    session.host_served.insert(path.clone(), text.clone());
                 }
             }
-        }
-        // Serve the same contextualized graph used by typed compilation. A
-        // host overlay can change an imported expected type without changing
-        // this document's source, so source equality alone cannot cache it.
-        let mut files = self.initial_files();
-        files.extend(seen);
-        files.sort();
-        files.dedup();
-        files.retain(|path| path.is_file() || self.overlays.contains_key(path));
+
+            let doc = serve_one(session, overlays, &canonical)
+                .ok_or_else(|| format!("cannot read {}", canonical.display()))?;
+
+            // The `.tt` modules it imports are served too, transitively. That is
+            // not an optimization: the server resolves `"./x.tt"` to `x.tt.ts`,
+            // and that name only exists as a document *this session serves*.
+            let mut seen: HashSet<PathBuf> = HashSet::from([canonical.clone()]);
+            let mut stack = vec![(canonical.clone(), doc.clone())];
+            while let Some((file, doc)) = stack.pop() {
+                for import in crate::tt_imports(&doc.source) {
+                    let target = match crate::engine::paths::canonical(
+                        &file
+                            .parent()
+                            .unwrap_or(Path::new("."))
+                            .join(&import.specifier),
+                    ) {
+                        Ok(target) => target,
+                        Err(_) => continue, // unresolvable — tsc's TS2307, not ours
+                    };
+                    if !seen.insert(target.clone()) {
+                        continue;
+                    }
+                    if let Some(imported) = serve_one(session, overlays, &target) {
+                        stack.push((target, imported));
+                    }
+                }
+            }
+            // Serve the same contextualized graph used by typed compilation. A
+            // host overlay can change an imported expected type without changing
+            // this document's source, so source equality alone cannot cache it.
+            let mut files = self.initial_files();
+            files.extend(seen);
+            files.sort();
+            files.dedup();
+            files.retain(|path| path.is_file() || overlays.contains_key(path));
+            (doc, files)
+        };
         let snapshot = self
             .update(&files)
             .map_err(|blocked| blocked.error.to_string())?;

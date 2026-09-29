@@ -177,3 +177,145 @@ fn the_server_answers_references_from_every_open_project() {
     assert_eq!(files(&answers[2], "locations"), [a.as_str(), b.as_str(), b.as_str()], "{answers:?}");
     assert_eq!(files(&answers[3], "edits"), [a.as_str(), b.as_str(), b.as_str()], "{answers:?}");
 }
+
+#[test]
+fn an_unsaved_edit_reaches_the_importers_in_another_project() {
+    require_tsgo!();
+    let (dir, a, b) = solution(PROVIDER, CONSUMER);
+    let edited = PROVIDER.replace(
+        "mk(n: number): V { return V.A(n); }",
+        "mk(n: string): V { return V.B; }",
+    );
+    let use_site = source_position(CONSUMER, "mk(1)", 0);
+    let at = serde_json::json!({ "line": use_site.line, "character": use_site.character });
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": a, "text": PROVIDER } }),
+            serde_json::json!({ "id": 2, "method": "openDocument",
+                "params": { "path": b, "text": CONSUMER } }),
+            serde_json::json!({ "id": 3, "method": "hover",
+                "params": { "path": b, "position": at } }),
+            serde_json::json!({ "id": 4, "method": "updateDocument",
+                "params": { "path": a, "text": edited } }),
+            serde_json::json!({ "id": 5, "method": "hover",
+                "params": { "path": b, "position": at } }),
+            serde_json::json!({ "id": 6, "method": "tsDiagnostics",
+                "params": { "path": b } }),
+            serde_json::json!({ "id": 7, "method": "typedCheck",
+                "params": { "path": b, "text": CONSUMER, "includeTypes": true } }),
+            serde_json::json!({ "id": 8, "method": "closeDocument",
+                "params": { "path": a } }),
+            serde_json::json!({ "id": 9, "method": "hover",
+                "params": { "path": b, "position": at } }),
+            serde_json::json!({ "id": 10, "method": "tsDiagnostics",
+                "params": { "path": b } }),
+        ],
+    );
+    let signature = |id: usize| {
+        answers[id - 1]["result"]["signature"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string()
+    };
+    assert!(signature(3).contains("mk(n: number)"), "{answers:?}");
+    assert!(
+        signature(5).contains("mk(n: string)"),
+        "pb sees pa's buffer, not its disk: {answers:?}"
+    );
+    assert!(signature(9).contains("mk(n: number)"), "{answers:?}");
+    let diagnostics = |id: usize| -> Vec<serde_json::Value> {
+        answers[id - 1]["result"]["diagnostics"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{answers:?}"))
+            .clone()
+    };
+    let codes = |id: usize| -> Vec<serde_json::Value> {
+        diagnostics(id).iter().map(|d| d["code"].clone()).collect()
+    };
+    assert_eq!(codes(6), [serde_json::json!(2345)], "{answers:?}");
+    assert!(
+        diagnostics(7).iter().any(|d| d["path"] == b.display().to_string()
+            && (d["code"] == "ts2345" || d["code"] == 2345)),
+        "{answers:?}"
+    );
+    assert!(codes(10).is_empty(), "{answers:?}");
+}
+
+#[test]
+fn an_unsaved_typescript_module_reaches_the_importers_in_another_project() {
+    require_tsgo!();
+    let consumer = "import { limit } from \"../pa/limit.ts\";\n\
+                    export const within: number = limit;\n";
+    let (dir, _a, b) = solution(PROVIDER, consumer);
+    write(&dir, "pa/limit.ts", "export const limit = 1;\n");
+    let limit = dir.join("pa/limit.ts").canonicalize().unwrap();
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": b, "text": consumer } }),
+            serde_json::json!({ "id": 2, "method": "openDocument",
+                "params": { "path": limit, "text": "export const limit = \"none\";\n" } }),
+            serde_json::json!({ "id": 3, "method": "tsDiagnostics",
+                "params": { "path": b } }),
+            serde_json::json!({ "id": 4, "method": "typedCheck",
+                "params": { "path": b, "text": consumer, "includeTypes": true } }),
+        ],
+    );
+    let reports = |id: usize| {
+        answers[id - 1]["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| {
+                diagnostics
+                    .iter()
+                    .any(|d| d["code"] == "ts2322" || d["code"] == 2322)
+            })
+    };
+    assert!(reports(3), "{answers:?}");
+    assert!(reports(4), "{answers:?}");
+}
+
+#[test]
+fn a_document_open_in_another_project_is_not_a_root_of_this_one() {
+    require_tsgo!();
+    let clean = "export const a: number = 1;\n";
+    let broken = "import { a } from \"../src/a.tt\";\nexport const b: string = a;\n";
+    let dir = project(&[("src/a.tt", clean)]);
+    fs::create_dir_all(dir.join("test")).unwrap();
+    write(
+        &dir,
+        "test/tsconfig.json",
+        r#"{ "compilerOptions": { "strict": true, "noEmit": true, "module": "preserve", "moduleResolution": "bundler", "allowImportingTsExtensions": true }, "include": ["*.tt"] }"#,
+    );
+    write(&dir, "test/b.tt", broken);
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let b = dir.join("test/b.tt").canonicalize().unwrap();
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": a, "text": clean } }),
+            serde_json::json!({ "id": 2, "method": "openDocument",
+                "params": { "path": b, "text": broken } }),
+            serde_json::json!({ "id": 3, "method": "typedCheck",
+                "params": { "path": a, "text": clean, "includeTypes": true } }),
+            serde_json::json!({ "id": 4, "method": "typedCheck",
+                "params": { "path": b, "text": broken, "includeTypes": true } }),
+        ],
+    );
+    assert_eq!(
+        answers[2]["result"]["diagnostics"],
+        serde_json::json!([]),
+        "src's check stays about src's program: {answers:?}"
+    );
+    assert!(
+        answers[3]["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics
+                .iter()
+                .any(|d| d["path"] == b.display().to_string())),
+        "{answers:?}"
+    );
+}
