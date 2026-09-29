@@ -359,7 +359,7 @@ fn job_json(query: &Query) -> serde_json::Value {
             .map(|v| json!({
                 "module": v.module,
                 "declarationEnd": v.declaration_end,
-                "annotated": v.annotated,
+                "settled": v.settled,
             }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
@@ -425,9 +425,13 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             .as_str()
             .filter(|text| !text.is_empty())
             .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?;
+        let inferred = slot["inferred"]
+            .as_bool()
+            .ok_or_else(|| Failure::internal("contextual slot answer omitted its kind"))?;
         answers.contextual_slots.push(ContextualSlotType {
             index,
             annotation: annotation.into(),
+            inferred,
         });
     }
     for d in array(&value, "diagnostics") {
@@ -645,7 +649,7 @@ const result = consume(slot);
             contextual_slots: vec![ContextualSlotQuery {
                 module,
                 declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
-                annotated: false,
+                settled: false,
             }],
             ..Query::default()
         };
@@ -654,7 +658,8 @@ const result = consume(slot);
             answer.contextual_slots,
             vec![ContextualSlotType {
                 index: 0,
-                annotation: "Item".into()
+                annotation: "Item".into(),
+                inferred: false,
             }]
         );
         let mut typed = query;

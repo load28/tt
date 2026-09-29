@@ -136,9 +136,10 @@ pub(crate) struct ContextualSlotQuery {
     pub module: PathBuf,
     /// UTF-16 end of the declaration identifier, where an annotation belongs.
     pub declaration_end: usize,
-    /// Storage an earlier round already annotated: not asked again, and,
-    /// like every slot, never named by another slot's annotation.
-    pub annotated: bool,
+    /// Storage that is not asked about: annotated by an earlier round, or a
+    /// `const` holding a value on its way to detached storage. Like every
+    /// slot, never named by another slot's annotation.
+    pub settled: bool,
 }
 
 /// A type expressed in the lexical scope of the generated declaration.
@@ -146,6 +147,9 @@ pub(crate) struct ContextualSlotQuery {
 pub(crate) struct ContextualSlotType {
     pub index: usize,
     pub annotation: String,
+    /// Joined from the values assigned to the storage, rather than the
+    /// contextual type at its uses.
+    pub inferred: bool,
 }
 
 /// Everything asked of one project graph, in one round trip.

@@ -7,10 +7,17 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use super::backend::{ContextualSlotQuery, Failure, FailureKind, Module, Query, TypeScriptBackend};
 use super::mapper;
 use crate::MappedEmit;
-use crate::codegen::contextual::insert_annotations;
+use crate::codegen::contextual::{SlotRefinement, refine};
 
-/// Each successful round annotates at least one previously unannotated slot.
-/// Re-querying the updated graph lets outer contexts reach nested slots.
+/// Settles every value slot of `modules` and leaves each module refined.
+///
+/// Each successful round annotates at least one previously unannotated
+/// slot. Re-querying the updated graph lets outer contexts reach nested
+/// slots. Once no slot has a further contextual type, every slot still
+/// without one is detached: its source position has no contextual type, so
+/// its values are written through `const`s of their own, and only then are
+/// joins inferred. A detached slot a later round finds a contextual type
+/// for is written directly again, under that type.
 pub(crate) fn materialize(
     backend: &impl TypeScriptBackend,
     config: Option<&Path>,
@@ -19,17 +26,12 @@ pub(crate) fn materialize(
     support: &[Module],
     sources: &[PathBuf],
     roots: &[PathBuf],
-) -> Result<Vec<Vec<Option<String>>>, Failure> {
-    let mut types: Vec<Vec<Option<String>>> = modules
+) -> Result<Vec<Vec<SlotRefinement>>, Failure> {
+    let bases: Vec<MappedEmit> = modules.iter().map(|(_, emit)| emit.clone()).collect();
+    let mut slots: Vec<Vec<SlotRefinement>> = bases
         .iter()
-        .map(|(_, emit)| vec![None; emit.contextual_slots.len()])
+        .map(|emit| vec![SlotRefinement::default(); emit.contextual_slots.len()])
         .collect();
-    let mut origins: Vec<Vec<usize>> = modules
-        .iter()
-        .map(|(_, emit)| (0..emit.contextual_slots.len()).collect())
-        .collect();
-    // The declaration ends of the storage earlier rounds annotated.
-    let mut annotated: Vec<Vec<usize>> = vec![Vec::new(); modules.len()];
     let mut infer_joins = false;
     loop {
         let mut query = Query {
@@ -42,40 +44,48 @@ pub(crate) fn materialize(
         };
         let mut sites = Vec::new();
         let mut settled = Vec::new();
-        for (module_index, (path, emit)) in modules.iter().enumerate() {
+        for (module_index, ((path, emit), base)) in modules.iter_mut().zip(&bases).enumerate() {
+            *emit = base.clone();
+            let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+            let refined = refine(emit, kind, &slots[module_index]);
             query.modules.push(Module {
                 path: path.clone(),
                 text: emit.code.clone(),
             });
-            for (index, &position) in emit.contextual_slots.iter().enumerate() {
-                sites.push((module_index, position, origins[module_index][index]));
-                query.contextual_slots.push(ContextualSlotQuery {
-                    module: path.clone(),
-                    declaration_end: mapper::to_utf16(&emit.code, position),
-                    annotated: false,
-                });
+            let at = |position: usize, settled: bool| ContextualSlotQuery {
+                module: path.clone(),
+                declaration_end: mapper::to_utf16(&emit.code, position),
+                settled,
+            };
+            for (index, (&position, slot)) in refined
+                .declarations
+                .iter()
+                .zip(&slots[module_index])
+                .enumerate()
+            {
+                if slot.annotation.is_some() {
+                    settled.push(at(position, true));
+                } else {
+                    sites.push((module_index, index));
+                    query.contextual_slots.push(at(position, false));
+                }
             }
-            settled.extend(
-                annotated[module_index]
-                    .iter()
-                    .map(|&position| ContextualSlotQuery {
-                        module: path.clone(),
-                        declaration_end: mapper::to_utf16(&emit.code, position),
-                        annotated: true,
-                    }),
-            );
+            settled.extend(refined.locals.iter().map(|&position| at(position, true)));
         }
         // After every slot an answer can name, so an answer's index is its
         // site's.
         query.contextual_slots.extend(settled);
         if sites.is_empty() {
-            return Ok(types);
+            return Ok(slots);
         }
         crate::work::tick("contextual checker asks");
         let answers = backend.ask(config, root, &query)?;
         if answers.contextual_slots.is_empty() {
             if infer_joins {
-                return Ok(types);
+                return Ok(slots);
+            }
+            for &(module, index) in &sites {
+                slots[module][index].detached = true;
             }
             infer_joins = true;
             continue;
@@ -83,40 +93,18 @@ pub(crate) fn materialize(
         // New inferred storage can expose further contexts; propagate those
         // before inferring any more joins.
         infer_joins = false;
-        let mut edits = vec![Vec::new(); modules.len()];
         for answer in answers.contextual_slots {
-            let &(module, position, origin) = sites.get(answer.index).ok_or_else(|| {
+            let &(module, index) = sites.get(answer.index).ok_or_else(|| {
                 Failure::internal("contextual answer names an unknown value slot")
             })?;
-            if edits[module]
-                .iter()
-                .any(|(previous, _)| *previous == position)
-            {
+            let slot = &mut slots[module][index];
+            if slot.annotation.is_some() {
                 return Err(Failure::internal("contextual answer repeats a value slot"));
             }
-            types[module][origin] = Some(answer.annotation.clone());
-            edits[module].push((position, answer.annotation));
-        }
-        for (module, ((_, emit), mut edits)) in modules.iter_mut().zip(edits).enumerate() {
-            origins[module].retain(|origin| types[module][*origin].is_none());
-            edits.sort_by_key(|edit| edit.0);
-            // An annotation is inserted after its declaration's name, so a
-            // declaration end moves only by the annotations before it.
-            let settled = annotated[module]
-                .iter()
-                .copied()
-                .chain(edits.iter().map(|(position, _)| *position))
-                .map(|position| {
-                    position
-                        + edits
-                            .iter()
-                            .filter(|(at, _)| *at < position)
-                            .map(|(_, text)| text.len() + 2)
-                            .sum::<usize>()
-                })
-                .collect();
-            annotated[module] = settled;
-            insert_annotations(emit, &edits);
+            slot.annotation = Some(answer.annotation);
+            if !answer.inferred {
+                slot.detached = false;
+            }
         }
     }
 }
@@ -367,28 +355,33 @@ pub(crate) fn standalone(
             }
         }
     };
-    let mut edits = Vec::new();
-    for (position, annotation) in emit.contextual_slots.iter().copied().zip(&types) {
-        let Some(annotation) = annotation else {
-            continue;
+    let mut refinements = Vec::with_capacity(types.len());
+    for slot in types {
+        let annotation = match slot.annotation {
+            // Reuse the compiler's import-specifier model for synthesized
+            // import types, exactly as for authored import types.
+            Some(annotation) => {
+                let wrapper = format!("type __tt_context = {annotation};");
+                let rewritten = crate::compile(
+                    &wrapper,
+                    &crate::Options {
+                        rewrite_imports: options.rewrite_imports,
+                        std_imports: options.std_imports,
+                        defer_to_checker: true,
+                        ..crate::Options::default()
+                    },
+                )
+                .map_err(|error| Failure::internal(error.to_string()))?;
+                Some(rewritten["type __tt_context = ".len()..rewritten.len() - 1].to_owned())
+            }
+            None => None,
         };
-        // Reuse the compiler's import-specifier model for synthesized
-        // import types, exactly as for authored import types.
-        let wrapper = format!("type __tt_context = {annotation};");
-        let rewritten = crate::compile(
-            &wrapper,
-            &crate::Options {
-                rewrite_imports: options.rewrite_imports,
-                std_imports: options.std_imports,
-                defer_to_checker: true,
-                ..crate::Options::default()
-            },
-        )
-        .map_err(|error| Failure::internal(error.to_string()))?;
-        let annotation = &rewritten["type __tt_context = ".len()..rewritten.len() - 1];
-        edits.push((position, annotation.to_owned()));
+        refinements.push(SlotRefinement {
+            annotation,
+            detached: slot.detached,
+        });
     }
-    insert_annotations(&mut emit, &edits);
+    refine(&mut emit, options.source_kind, &refinements);
     Ok(emit)
 }
 
@@ -433,7 +426,7 @@ impl ProjectSession {
     }
 }
 
-type SlotTypes = Vec<Vec<Option<String>>>;
+type SlotTypes = Vec<Vec<SlotRefinement>>;
 
 #[derive(Default)]
 struct Reuse {

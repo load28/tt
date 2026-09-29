@@ -653,7 +653,7 @@ async function main() {
         return symbols;
       };
       for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
-        if (slot.annotated || !members.has(slot.module)) continue;
+        if (slot.settled || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
         let declaration;
@@ -738,14 +738,14 @@ async function main() {
             (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
           const annotations = joined.map(index => annotation(types[index], incoming[index].right));
           if (annotations.length && annotations.every(Boolean)) {
-            out.contextualSlots.push({ index, annotation: annotations.length === 1
+            out.contextualSlots.push({ index, inferred: true, annotation: annotations.length === 1
               ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
           }
           continue;
         }
         if (!expected || ambiguous) continue;
         const text = annotation(expected, observedAt);
-        if (text) out.contextualSlots.push({ index, annotation: text });
+        if (text) out.contextualSlots.push({ index, inferred: false, annotation: text });
       }
     };
     for (const group of groups) contextual(group);

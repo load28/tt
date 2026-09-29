@@ -1,51 +1,301 @@
-//! Apply checker-provided type annotations at explicit declaration sites.
+//! Refine generated value storage with the facts the TypeScript backend
+//! supplied about it (`docs/design/contextual-type-materialization.md`).
 
-use crate::MappedEmit;
+use std::collections::HashMap;
 
-pub(crate) fn insert_annotations(emit: &mut MappedEmit, edits: &[(usize, String)]) {
-    let shifted = |position: usize, inclusive: bool| {
-        position
-            + edits
-                .iter()
-                .filter(|(at, _)| *at < position || inclusive && *at == position)
-                .map(|(_, text)| text.len() + 2)
-                .sum::<usize>()
+use swc_common::Spanned;
+use swc_ecma_ast::{AssignOp, AssignTarget, Expr, SimpleAssignTarget, Stmt};
+use swc_ecma_visit::{Visit, VisitWith};
+
+use crate::host_input::HostInput;
+use crate::{MappedEmit, SourceKind};
+
+/// What the backend's rounds settled about one generated value slot.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SlotRefinement {
+    /// The type written on the slot's declaration.
+    pub annotation: Option<String>,
+    /// The slot's source position has no contextual type. Every value
+    /// written to the slot then initializes a `const` of its own first,
+    /// where TypeScript types it without one, as at that position.
+    pub detached: bool,
+}
+
+/// Where the refined emission declares its storage.
+pub(crate) struct Refined {
+    /// The end of each slot's declaration identifier, in the order of the
+    /// refinements.
+    pub declarations: Vec<usize>,
+    /// The end of each `const` identifier that holds a value on its way to
+    /// detached storage.
+    pub locals: Vec<usize>,
+}
+
+struct Edit {
+    start: usize,
+    end: usize,
+    text: String,
+}
+
+/// Applies `slots`, one per [`MappedEmit::contextual_slots`] entry, to an
+/// emission no refinement has been applied to.
+pub(crate) fn refine(
+    emit: &mut MappedEmit,
+    source_kind: SourceKind,
+    slots: &[SlotRefinement],
+) -> Refined {
+    if slots.len() != emit.contextual_slots.len() {
+        crate::ice::bug!("refinements do not match the emission's value slots")
+    }
+    let mut edits: Vec<Edit> = Vec::new();
+    for (&end, slot) in emit.contextual_slots.iter().zip(slots) {
+        if let Some(annotation) = &slot.annotation {
+            edits.push(Edit {
+                start: end,
+                end,
+                text: format!(": {annotation}"),
+            });
+        }
+    }
+    let mut locals = Vec::new();
+    let detached: Vec<usize> = emit
+        .contextual_slots
+        .iter()
+        .zip(slots)
+        .filter(|(_, slot)| slot.detached)
+        .map(|(&end, _)| end)
+        .collect();
+    let writes = if detached.is_empty() {
+        None
+    } else {
+        storage_writes(&emit.code, source_kind, &detached)
     };
+    if let Some(writes) = writes {
+        let mut occupied = crate::generated_names::source_names(&emit.code, source_kind);
+        for (index, write) in writes.into_iter().enumerate() {
+            let local = crate::generated_names::allocate(&format!("$tt_a{index}"), &mut occupied)
+                .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for a value"));
+            locals.push((write.target.0, format!("const {local}").len()));
+            edits.push(Edit {
+                start: write.target.0,
+                end: write.target.1,
+                text: format!("const {local}"),
+            });
+            edits.push(Edit {
+                start: write.value_end,
+                end: write.value_end,
+                text: format!("; {} = {local}", write.storage),
+            });
+            emit.generated_names.insert(local);
+        }
+    }
+    edits.sort_by_key(|edit| (edit.start, edit.end));
+    if edits
+        .windows(2)
+        .any(|pair| pair[0].end > pair[1].start || pair[0].start == pair[1].start)
+    {
+        crate::ice::bug!("value storage refinements overlap")
+    }
+    let declarations = emit
+        .contextual_slots
+        .iter()
+        .map(|&end| shifted(&edits, end, false))
+        .collect();
+    let locals = locals
+        .into_iter()
+        .map(|(start, len)| shifted(&edits, start, false) + len)
+        .collect();
+    let unannotated: Vec<usize> = emit
+        .contextual_slots
+        .iter()
+        .zip(slots)
+        .filter(|(_, slot)| slot.annotation.is_none())
+        .map(|(&end, _)| end)
+        .collect();
+    emit.contextual_slots = unannotated;
+    apply(emit, &edits);
+    Refined {
+        declarations,
+        locals,
+    }
+}
+
+/// Where `p` lands once `edits` are applied. A position at an insertion
+/// moves past it when `inclusive` (a start of what follows), and a position
+/// at the start of a replacement stays in front of the new text.
+fn shifted(edits: &[Edit], p: usize, inclusive: bool) -> usize {
+    let mut at = p;
+    for edit in edits {
+        if edit.start == edit.end {
+            if edit.start < p || inclusive && edit.start == p {
+                at += edit.text.len();
+            }
+        } else if edit.end <= p {
+            at = at + edit.text.len() - (edit.end - edit.start);
+        } else if edit.start < p {
+            crate::ice::bug!("an emitted position lies inside refined glue")
+        }
+    }
+    at
+}
+
+fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
     for mapping in &mut emit.mappings {
-        mapping.out = shifted(mapping.out, true);
+        let end = mapping.out + mapping.len;
+        if edits.iter().any(|edit| {
+            if edit.start == edit.end {
+                mapping.out < edit.start && edit.start < end
+            } else {
+                edit.start < end && mapping.out < edit.end
+            }
+        }) {
+            crate::ice::bug!("value storage refinement splits copied source")
+        }
+        mapping.out = shifted(edits, mapping.out, true);
     }
     for mark in &mut emit.scrutinee_temps {
-        mark.out = shifted(mark.out, true);
+        mark.out = shifted(edits, mark.out, true);
     }
     for mark in &mut emit.payload_temps {
-        mark.out = shifted(mark.out, true);
+        mark.out = shifted(edits, mark.out, true);
     }
     for mark in &mut emit.result_return_temps {
-        mark.out = shifted(mark.out, true);
-        mark.out_end = shifted(mark.out_end, false);
+        mark.out = shifted(edits, mark.out, true);
+        mark.out_end = shifted(edits, mark.out_end, false);
     }
     for name in &mut emit.declared_names {
-        name.out = shifted(name.out, true);
-        name.out_end = shifted(name.out_end, false);
+        name.out = shifted(edits, name.out, true);
+        name.out_end = shifted(edits, name.out_end, false);
     }
     for binding in &mut emit.shared_bindings {
-        binding.out = shifted(binding.out, true);
-        binding.out_end = shifted(binding.out_end, false);
+        binding.out = shifted(edits, binding.out, true);
+        binding.out_end = shifted(edits, binding.out_end, false);
     }
     for glue in &mut emit.inserted {
-        glue.out = shifted(glue.out, true);
-        glue.out_end = shifted(glue.out_end, false);
+        glue.out = shifted(edits, glue.out, true);
+        glue.out_end = shifted(edits, glue.out_end, false);
     }
     for anchor in &mut emit.anchors {
-        anchor.out = shifted(anchor.out, true);
-        anchor.end = shifted(anchor.end, false);
+        anchor.out = shifted(edits, anchor.out, true);
+        anchor.end = shifted(edits, anchor.end, false);
     }
-    emit.contextual_slots
-        .retain(|position| !edits.iter().any(|(at, _)| at == position));
     for position in &mut emit.contextual_slots {
-        *position = shifted(*position, true);
+        *position = shifted(edits, *position, true);
     }
-    for (position, annotation) in edits.iter().rev() {
-        emit.code.insert_str(*position, &format!(": {annotation}"));
+    for edit in edits.iter().rev() {
+        emit.code.replace_range(edit.start..edit.end, &edit.text);
     }
+}
+
+/// One statement that assigns a value to generated storage.
+struct StorageWrite {
+    storage: String,
+    /// The assignment's target identifier.
+    target: (usize, usize),
+    /// The end of the assigned value.
+    value_end: usize,
+}
+
+/// Every assignment to the storage declared by the identifiers ending at
+/// `declarations`, in output order. An emission that does not parse (an
+/// editor buffer mid-edit) has no statements to rewrite: `None`.
+///
+/// The lowering writes storage only in statements of its own blocks and
+/// `switch` cases, where a `const` can be declared. Generated names are
+/// unique in their file, so the name identifies the storage.
+fn storage_writes(
+    code: &str,
+    source_kind: SourceKind,
+    declarations: &[usize],
+) -> Option<Vec<StorageWrite>> {
+    struct Collect<'a> {
+        input: &'a HostInput,
+        declarations: &'a [usize],
+        names: HashMap<String, usize>,
+        statements: Vec<(usize, usize)>,
+        assignments: Vec<(String, (usize, usize), usize, (usize, usize))>,
+    }
+    impl Collect<'_> {
+        fn statements(&mut self, statements: &[Stmt]) {
+            for statement in statements {
+                if let Stmt::Expr(expression) = statement
+                    && let Expr::Assign(assign) = &*expression.expr
+                {
+                    let span = assign.span();
+                    self.statements
+                        .push((self.input.byte(span.lo), self.input.byte(span.hi)));
+                }
+            }
+        }
+    }
+    impl Visit for Collect<'_> {
+        fn visit_var_declarator(&mut self, node: &swc_ecma_ast::VarDeclarator) {
+            if let Some(name) = node.name.as_ident() {
+                let end = self.input.byte(name.id.span.hi);
+                if self.declarations.contains(&end) {
+                    self.names.insert(name.id.sym.to_string(), end);
+                }
+            }
+            node.visit_children_with(self);
+        }
+        fn visit_block_stmt(&mut self, node: &swc_ecma_ast::BlockStmt) {
+            self.statements(&node.stmts);
+            node.visit_children_with(self);
+        }
+        fn visit_switch_case(&mut self, node: &swc_ecma_ast::SwitchCase) {
+            self.statements(&node.cons);
+            node.visit_children_with(self);
+        }
+        fn visit_assign_expr(&mut self, node: &swc_ecma_ast::AssignExpr) {
+            if node.op == AssignOp::Assign
+                && let AssignTarget::Simple(SimpleAssignTarget::Ident(target)) = &node.left
+            {
+                let span = node.span();
+                self.assignments.push((
+                    target.id.sym.to_string(),
+                    (
+                        self.input.byte(target.id.span.lo),
+                        self.input.byte(target.id.span.hi),
+                    ),
+                    self.input.byte(node.right.span().hi),
+                    (self.input.byte(span.lo), self.input.byte(span.hi)),
+                ));
+            }
+            node.visit_children_with(self);
+        }
+    }
+
+    let input = HostInput::new(code);
+    let mut parser = input.parser(source_kind);
+    let module = parser.parse_module().ok()?;
+    if !parser.take_errors().is_empty() {
+        return None;
+    }
+    let mut collect = Collect {
+        input: &input,
+        declarations,
+        names: HashMap::new(),
+        statements: Vec::new(),
+        assignments: Vec::new(),
+    };
+    module.visit_with(&mut collect);
+    if collect.names.len() != declarations.len() {
+        crate::ice::bug!("detached value storage has no declaration")
+    }
+    let mut writes = Vec::new();
+    for (storage, target, value_end, span) in collect.assignments {
+        if !collect.names.contains_key(&storage) {
+            continue;
+        }
+        if !collect.statements.contains(&span) {
+            crate::ice::bug!("a write to value storage is not a statement of a block")
+        }
+        writes.push(StorageWrite {
+            storage,
+            target,
+            value_end,
+        });
+    }
+    writes.sort_by_key(|write| write.target.0);
+    Some(writes)
 }
