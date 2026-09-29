@@ -242,10 +242,12 @@ impl<'a> Rope<'a> {
         }
     }
 
-    /// Inserts `text` after the leading top-level source pieces that print
-    /// only bytes before `at`, splitting the piece that straddles `at`, so
-    /// `text` precedes every piece written for source at or after `at`,
-    /// generated glue included.
+    /// Inserts `declarations` after the leading top-level source pieces that
+    /// print only bytes before `at`, splitting the piece that straddles
+    /// `at`, so they precede every piece written for source at or after
+    /// `at`, generated glue included. Each declaration is its own
+    /// [`crate::InsertedGlue`]: text inserted between two of them stands
+    /// at `at`, text inserted inside one changes it.
     ///
     /// The one thing codegen cannot know while emitting is what the
     /// emission will *need* — a pipeline helper's import is decided by the
@@ -256,9 +258,17 @@ impl<'a> Rope<'a> {
     /// Splitting a pass-through piece in two keeps both halves pointing at
     /// the bytes they always did, so the emission still covers the source
     /// exactly once and still in order.
-    pub(crate) fn insert_lit_at_source(&mut self, at: usize, text: impl Into<Cow<'a, str>>) {
-        let text = text.into();
-        if text.is_empty() {
+    pub(crate) fn insert_declarations_at_source<T: Into<Cow<'a, str>>>(
+        &mut self,
+        at: usize,
+        declarations: impl IntoIterator<Item = T>,
+    ) {
+        let declarations: Vec<Cow<'a, str>> = declarations
+            .into_iter()
+            .map(Into::into)
+            .filter(|text| !text.is_empty())
+            .collect();
+        if declarations.is_empty() {
             return;
         }
         let mut index = 0;
@@ -273,18 +283,23 @@ impl<'a> Rope<'a> {
             }
             break;
         }
-        self.len += text.len();
-        let inserted = [
-            Piece::Mark {
-                src: at,
-                kind: MarkKind::InsertedStart,
-            },
-            Piece::Lit(text),
-            Piece::Mark {
-                src: at,
-                kind: MarkKind::InsertedEnd,
-            },
-        ];
+        self.len += declarations.iter().map(|text| text.len()).sum::<usize>();
+        let inserted: Vec<Piece<'a>> = declarations
+            .into_iter()
+            .flat_map(|text| {
+                [
+                    Piece::Mark {
+                        src: at,
+                        kind: MarkKind::InsertedStart,
+                    },
+                    Piece::Lit(text),
+                    Piece::Mark {
+                        src: at,
+                        kind: MarkKind::InsertedEnd,
+                    },
+                ]
+            })
+            .collect();
         match split {
             None => {
                 self.pieces.splice(index..index, inserted);

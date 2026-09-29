@@ -1,5 +1,9 @@
 # TASK-527: Keep a file's type errors in the editor while its TypeScript does not parse
 
+> TASK-556 narrows Decision 5: a zero-width edit maps to the source point
+> only before or after one of the prelude's declarations; an edit inside
+> one changes glue and is refused.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29
