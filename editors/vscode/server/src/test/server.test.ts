@@ -1072,8 +1072,9 @@ test("pattern positions complete cases and fields", { skip, timeout }, async () 
       assert.ok(arm.labels.includes(label), `missing ${label} in: ${arm.labels}`);
     }
     // A payload position: that case's fields, and nothing else.
+    // `w` is the name under the cursor; `h` is already bound.
     const payload = await completion("  Rect(");
-    assert.deepEqual(payload.labels, ["w", "h"]);
+    assert.deepEqual(payload.labels, ["w"]);
     // An `if let` — a position this server could not complete at all before.
     const conditional = await completion("if let ");
     assert.ok(
@@ -2001,7 +2002,7 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
         ['const r = match (user) { Ad# };', undefined, ['Admin', 'Guest']],
         ['const r = match (user) { Admin(name) => name,# };', ',', ['Admin', 'Guest']],
         ['const r = match (user) { Admin(name) => name, Gu#, _ => 0 };', undefined, ['Admin', 'Guest']],
-        ['const r = match (user) { Admin(name,#) => name };', ',', ['name', 'level']],
+        ['const r = match (user) { Admin(name,#) => name };', ',', ['level']],
         ['const r = match (user) { Admin(na#) => name };', undefined, ['name', 'level']],
         ['const r = match (a, b) { (Admin(name), G#) => name };', undefined, ['Admin', 'Guest']],
         ['const object = {# };', '{', []],

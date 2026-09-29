@@ -102,9 +102,12 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
             .iter()
             .flat_map(|declared| cases(declared, &[]))
             .collect(),
-        Some(Context::Field { tag }) => resolve_all(&declarations, std::slice::from_ref(&tag))
-            .flat_map(|declared| fields(declared, &tag))
-            .collect(),
+        Some(Context::Field { tag, written }) => {
+            resolve_all(&declarations, std::slice::from_ref(&tag))
+                .flat_map(|declared| fields(declared, &tag))
+                .filter(|field| !written.contains(&field.label))
+                .collect()
+        }
         Some(Context::Nested { tag, field }) => {
             resolve_all(&declarations, std::slice::from_ref(&tag))
                 .filter_map(|declared| {
@@ -151,8 +154,9 @@ enum Context {
     /// match, which is what says *which* variant — `None` when the position
     /// has no such evidence (an `if let`).
     Case { of: Option<ArmTags> },
-    /// A payload field name of `tag` is expected.
-    Field { tag: String },
+    /// A payload field name of `tag` is expected; `written` are the fields
+    /// the same payload already binds, which a pattern may not repeat.
+    Field { tag: String, written: Vec<String> },
     /// A nested pattern's tag is expected, in `tag`'s field `field`.
     Nested { tag: String, field: String },
 }
@@ -231,7 +235,10 @@ fn site_context(
         }
         // Otherwise a field name: at the start of the list or after a comma.
         if matches!(tokens[before - 1].kind, TokenKind::Punct(b'(' | b',')) {
-            return Some(Context::Field { tag });
+            return Some(Context::Field {
+                tag,
+                written: written_fields(source, tokens, open, prefix),
+            });
         }
         return None;
     }
@@ -251,6 +258,40 @@ fn site_context(
         });
     }
     None
+}
+
+/// The field names the payload list opened at `open` already writes: each
+/// name at the list's own level that starts an entry, except the one being
+/// typed. The list ends at its `)`, or — mid-edit, unclosed — at the arm's
+/// `=>`.
+fn written_fields(
+    source: &str,
+    tokens: &[Token],
+    open: usize,
+    prefix: Option<usize>,
+) -> Vec<String> {
+    let mut written = Vec::new();
+    let mut depth = 0usize;
+    for index in open + 1..tokens.len() {
+        let token = &tokens[index];
+        if token.opens_bracket() {
+            depth += 1;
+        } else if token.closes_bracket() {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        } else if depth == 0 && matches!(token.kind, TokenKind::Arrow) {
+            break;
+        } else if depth == 0
+            && matches!(token.kind, TokenKind::Ident)
+            && Some(index) != prefix
+            && (index == open + 1 || matches!(tokens[index - 1].kind, TokenKind::Punct(b',')))
+        {
+            written.push(text(source, token).to_string());
+        }
+    }
+    written
 }
 
 /// Whether `offset` is inside a comment or inside a literal token — a
@@ -682,9 +723,22 @@ mod tests {
     fn a_payload_position_offers_the_cases_fields() {
         let src = format!("{DECL}const a = match (s) {{ Rect(w) => w, Point => 0 }};\n");
         assert_eq!(labels(&src, "{ Rect("), ["w", "h"]);
-        // ...and after a comma inside the list.
+        // ...and after a comma inside the list, less the fields it binds.
         let src = format!("{DECL}const a = match (s) {{ Rect(w, ) => w }};\n");
-        assert_eq!(labels(&src, "Rect(w, "), ["w", "h"]);
+        assert_eq!(labels(&src, "Rect(w, "), ["h"]);
+    }
+
+    #[test]
+    fn a_payload_position_leaves_out_the_fields_already_bound() {
+        for (source, needle, expected) in [
+            ("Rect(w: width, ) => 0", "Rect(w: width, ", vec!["h"]),
+            ("Rect(w: Some(v), ) => 0", "Rect(w: Some(v), ", vec!["h"]),
+            // The name being typed is not yet bound.
+            ("Rect(w, h) => 0", "Rect(w, h", vec!["h"]),
+        ] {
+            let source = format!("{DECL}const a = match (s) {{ {source} }};\n");
+            assert_eq!(labels(&source, needle), expected, "{source}");
+        }
     }
 
     #[test]
@@ -780,11 +834,17 @@ mod tests {
             assert!(found.contains(&"Circle".into()), "{pattern}: {found:?}");
             assert!(found.contains(&"Point".into()), "{pattern}: {found:?}");
         }
-        for pattern in ["Rect(", "Rect(w", "Rect(w, ", "Rect(w, h"] {
+        for (pattern, expected) in [
+            ("Rect(", vec!["w", "h"]),
+            ("Rect(w", vec!["w", "h"]),
+            ("Rect(w, ", vec!["h"]),
+            ("Rect(w, h", vec!["h"]),
+        ] {
             let source = format!("{DECL}const r = match (s) {{ {pattern}");
             assert_eq!(
                 labels(&source, &format!("match (s) {{ {pattern}")),
-                ["w", "h"]
+                expected,
+                "{pattern}"
             );
         }
     }
@@ -877,7 +937,13 @@ mod tests {
             (format!("{DECL}if let Circle(radius) | Rect("), "| Rect("),
             (format!("{DECL}let Rect(w, "), "let Rect(w, "),
         ] {
-            assert_eq!(labels(&source, needle), ["w", "h"], "{needle}");
+            // A field the payload already binds is not offered again.
+            let expected: &[&str] = if needle.ends_with("(w, ") {
+                &["h"]
+            } else {
+                &["w", "h"]
+            };
+            assert_eq!(labels(&source, needle), expected, "{needle}");
         }
     }
 
@@ -943,7 +1009,7 @@ mod tests {
             );
         }
         let source = format!("{DECL}const a = match s {{ Rect(w, ");
-        assert_eq!(labels(&source, "Rect(w, "), ["w", "h"]);
+        assert_eq!(labels(&source, "Rect(w, "), ["h"]);
         for (source, needle) in [
             (
                 format!("{DECL}const a = match s {{ Circle(r) => Rect(r, "),
@@ -975,7 +1041,7 @@ mod tests {
         let items = tt_completions_at(Path::new("/p/a.tt"), &src, at(&src, "=> 1, "));
         assert!(items.iter().all(|i| !i.covered), "{items:?}");
         let src = format!("{DECL}const a = match (s) {{ Circle(r) => {{ return r; }}, Rect(w, ");
-        assert_eq!(labels(&src, "Rect(w, "), ["w", "h"]);
+        assert_eq!(labels(&src, "Rect(w, "), ["h"]);
         let src = "variant Inner { Yes(n: number), No }\n\
                    variant Outer { Wrap(inner: Inner), Bare }\n\
                    const a = match (o) { Wrap(inner) => match (inner) { Yes(n) => n, ";
