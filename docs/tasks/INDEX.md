@@ -556,6 +556,7 @@
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
 | TASK-562 | Treat a backend that cannot start as unavailable | Complete | 2026-09-29 | 2026-09-29 | [TASK-562](./TASK-562-unstartable-backend-is-unavailable.md) |
 | TASK-563 | Leave the output directory out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-563](./TASK-563-exclude-output-directory-from-program.md) |
+| TASK-564 | Keep `--check` from starting the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-564](./TASK-564-check-without-typescript.md) |
 
 ## Next task number
 

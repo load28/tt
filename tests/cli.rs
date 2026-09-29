@@ -2017,6 +2017,53 @@ fn a_backend_that_cannot_start_does_not_stop_a_check_print_or_build() {
     }
 }
 
+/// `--check` writes nothing, and the TypeScript backend's only effect on a
+/// compile is the contextual annotation of the output — so `--check` never
+/// starts it, while a compile that prints its output does.
+#[cfg(unix)]
+#[test]
+fn check_does_not_start_the_typescript_backend() {
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let dir = Workspace::in_repo_with_subdir("check-without-backend", "src");
+    fs::write(
+        dir.join("src/a.tt"),
+        "variant T { A(x: number), B }\n\
+         export const f = (t: T) => match (t) { A(x) => x, B => 0 };\n",
+    )
+    .unwrap();
+    let runtime = dir.join("runtime");
+    let started = dir.join("started");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::write(
+        runtime.join("node"),
+        format!("#!/bin/sh\n: > '{}'\nexit 1\n", started.display()),
+    )
+    .unwrap();
+    fs::set_permissions(runtime.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .env("PATH", &runtime)
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    run(&["--check", "src"]);
+    run(&["--check", "src/a.tt"]);
+    assert!(!started.exists(), "--check started the TypeScript backend");
+    run(&["-p", "src/a.tt"]);
+    assert!(started.exists(), "-p did not ask the TypeScript backend");
+}
+
 /// Input read failures must not be mistaken for absent type information.
 #[test]
 fn an_unreadable_sibling_is_reported_as_a_project_input_failure() {
