@@ -2077,9 +2077,12 @@ test("the server's own sidecar writes do not re-arm the project, a hand-written 
   const uri = pathToFileURL(file).toString();
   const client = connect();
   const changed = (target: string) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(target).toString(), type: 2 }] });
-  const republished = () => Promise.race([
-    client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri).then(() => true),
-    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 2000)),
+  const publish = () => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+  // Silence can only be observed for a while; an expected publish is
+  // awaited for as long as it takes, so a slow machine cannot fail it.
+  const silent = () => Promise.race([
+    publish().then(() => false),
+    new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2000)),
   ]);
   try {
     await client.request("initialize", {
@@ -2094,11 +2097,12 @@ test("the server's own sidecar writes do not re-arm the project, a hand-written 
     client.notify("textDocument/didSave", { textDocument: { uri } });
     changed(`${file}.d.ts`);
     changed(`${file}.d.ts.map`);
-    assert.equal(await republished(), false, "the server's own sidecar write is not an external change");
+    assert.equal(await silent(), true, "the server's own sidecar write is not an external change");
 
     const byHand = path.join(dir, "extra.d.ts");
     fs.writeFileSync(byHand, "export declare const byHand: number;\n");
+    const republished = publish();
     changed(byHand);
-    assert.equal(await republished(), true, "a declaration written by somebody else still is");
+    await republished;
   } finally { client.stop(); }
 });
