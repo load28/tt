@@ -135,7 +135,8 @@ help: the annotation repeats `m(): any`.
   (`UPDATE_EXPECT=1 cargo test --test snapshot`) and read the diff; updated
   the output assertions of 46 `tests/compile` tests and
   `emit_map::anchors_do_not_change_the_emitted_bytes`, which compares the
-  unrefined emission and now compiles with `defer_to_checker`.
+  unrefined emission and now compiles with `defer_to_checker`, and of
+  `content_mapper::tests::incomplete_match_arms_preserve_mapped_siblings_in_both_source_kinds`.
 - 2026-09-29: Added `a_value_with_no_contextual_type_is_typed_as_at_its_source_position`,
   `a_contextual_this_type_still_reaches_the_arm_values`
   (`tests/integration/contextual.rs`) and
@@ -186,7 +187,7 @@ Changed `src/codegen/contextual.rs`, `src/codegen/rope.rs`,
 `src/typescript/backend.rs`, `src/typescript/native.rs`,
 `src/typescript/host.mjs`, `docs/design/contextual-type-materialization.md`,
 `docs/ai/tt.md`, `docs/tasks/TASK-553-untruncated-annotations.md`,
-`tests/cli.rs`, `tests/emit_map.rs`, `tests/integration/contextual.rs`,
+`src/content_mapper/tests.rs`, `tests/cli.rs`, `tests/emit_map.rs`, `tests/integration/contextual.rs`,
 `tests/compile/cases_01.rs`, `cases_02.rs`, `cases_05.rs`, `cases_06.rs`,
 `cases_07.rs`, `cases_09.rs`, `cases_10.rs`, `cases_11.rs`, `cases_13.rs`,
 21 fixtures under `tests/fixtures/emit/`, `docs/tasks/INDEX.md`, and this
