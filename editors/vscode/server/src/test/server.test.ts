@@ -1334,6 +1334,30 @@ test(
 );
 
 test(
+  "a syntax error keeps the file's type errors and is stated once, by TypeScript",
+  { skip: skipTyped, timeout },
+  async () => {
+    // The typed pass cannot lower a buffer whose TypeScript does not parse,
+    // so it checks none of it: its answer must not replace the service's,
+    // which reads the buffer as a `.ts` file is read.
+    for (const source of [
+      'const a: number = "x";\nconst o = { k: 1 };\no.\nexport {};\n',
+      'variant V { A, B }\ndeclare const v: V;\nconst n = match (v) { A => 1, B => 2 };\nconst a: string = n;\nMath.max(1,\n',
+    ]) {
+      const listed = (await published(source)).map(
+        (d: any) => `${d.range.start.line}:${d.range.start.character} ${d.source} ${d.code}`,
+      );
+      assert.ok(listed.some((d) => / ts 2322$/.test(d)), `${source}\n${listed}`);
+      assert.ok(listed.some((d) => / ts 1005$/.test(d)), `${source}\n${listed}`);
+      assert.ok(
+        !listed.some((d) => / (verify-failed|source-not-typescript)$/.test(d)),
+        `${source}\n${listed}`,
+      );
+    }
+  },
+);
+
+test(
   "a new diagnostic generation never drops an untouched typed error",
   { skip: skipTyped, timeout },
   async () => {

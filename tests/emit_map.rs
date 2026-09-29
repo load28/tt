@@ -552,7 +552,11 @@ fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
             .iter()
             .find(|anchor| anchor.src == start)
             .unwrap_or_else(|| panic!("{src:?}: {:?}", m.anchors));
-        assert_eq!(&m.code[anchor.out..anchor.end], "undefined", "{src:?}");
+        assert_eq!(
+            &m.code[anchor.out..anchor.end],
+            "(undefined as any)",
+            "{src:?}"
+        );
         assert!(
             m.mappings
                 .iter()

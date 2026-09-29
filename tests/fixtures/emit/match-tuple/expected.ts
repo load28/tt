@@ -1,3 +1,21 @@
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}
 type Dir =
   | { kind: "North"; dx: number }
   | { kind: "South" };
@@ -39,21 +57,3 @@ let $tt_v0: number;
   } while (false);
 }
 export const rating = $tt_v0;
-function $tt_show(value: unknown): string {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "bigint") {
-    return String(value) + "n";
-  }
-  if (typeof value === "object" || typeof value === "function") {
-    try {
-      const text = JSON.stringify(value);
-      if (typeof text === "string") {
-        return text;
-      }
-    } catch {}
-    return typeof value;
-  }
-  return String(value);
-}

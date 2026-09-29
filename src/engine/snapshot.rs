@@ -91,6 +91,13 @@ impl Snapshot {
         &self.blocked
     }
 
+    /// Whether `path` could not be lowered into this snapshot: the typed
+    /// layer checks none of its TypeScript, and its diagnostics are its
+    /// tt-level ones alone.
+    pub fn is_blocked(&self, path: &std::path::Path) -> bool {
+        self.blocked.iter().any(|file| file.source_path == path)
+    }
+
     /// The text a diagnostic in `path` was reported against.
     ///
     /// This is the buffer the check actually ran on — an `--overlay`'s

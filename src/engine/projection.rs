@@ -719,25 +719,30 @@ fn source_extent(origin: mapper::DiagnosticOrigin) -> (usize, usize) {
 
 /// Whether a checker diagnostic origin is already explained by a direct TT
 /// cause. Display spans may be narrow; syntax-owner identity is what links
-/// a cause to consequences emitted elsewhere in the same lowering.
+/// a cause to consequences emitted elsewhere in the same lowering. A tt
+/// restatement of TypeScript's syntax verdict is no such cause: the
+/// checker's diagnostic there is the verdict itself.
 pub(crate) fn origin_intersects_tt_error(
     origin: mapper::DiagnosticOrigin,
     tt_diagnostics: &[crate::Diagnostic],
 ) -> bool {
     let (start, end) = source_extent(origin);
-    tt_diagnostics.iter().any(|tt| {
-        if let (mapper::DiagnosticOrigin::Anchor(anchor), Some(owner)) = (origin, tt.owner)
-            && owner.start == anchor.src
-            && owner.end == anchor.owner_end
-        {
-            return true;
-        }
-        let Some(tt_start) = tt.start else {
-            return false;
-        };
-        let tt_end = tt.end.unwrap_or_else(|| tt_start.saturating_add(1));
-        start < tt_end && tt_start < end
-    })
+    tt_diagnostics
+        .iter()
+        .filter(|tt| !tt.code.restates_typescript_syntax())
+        .any(|tt| {
+            if let (mapper::DiagnosticOrigin::Anchor(anchor), Some(owner)) = (origin, tt.owner)
+                && owner.start == anchor.src
+                && owner.end == anchor.owner_end
+            {
+                return true;
+            }
+            let Some(tt_start) = tt.start else {
+                return false;
+            };
+            let tt_end = tt.end.unwrap_or_else(|| tt_start.saturating_add(1));
+            start < tt_end && tt_start < end
+        })
 }
 
 pub(crate) fn diagnostic_intersects_recovery(

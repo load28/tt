@@ -401,14 +401,39 @@ pub(crate) fn emit_with_map<'a>(
         for alias in &aliases {
             prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
         }
+        // The helpers are declarations no source text owns, so they go
+        // where no source text comes before them: a bracket the user left
+        // open cannot take them into its own syntax. A function
+        // declaration is hoisted, so where it stands in the module does
+        // not change what it means.
+        if emitter.used_match_raise.get() {
+            prelude.push_str(&format!(
+                "function {}(error: unknown): never {{ throw error; }}\n",
+                emitter.match_raise_name
+            ));
+        }
+        if let Some(body) = &show {
+            prelude.push_str(&format!(
+                "function {}(value: unknown): string {body}\n",
+                emitter.match_show_name
+            ));
+        }
+        if emitter.used_expression_boundary.get() {
+            prelude.push_str(&format!(
+                "function {}<T>(run: () => T): T {{ return run(); }}\n",
+                emitter.expression_boundary_name
+            ));
+        }
     }
     if !prelude.is_empty() {
         // Which helpers the file needs is only known once the whole file
         // is emitted, but where an import belongs is the top — after
         // anything that has to come before one (TASK-219).
+        // TypeScript reads a file's pragmas only before its first token, in
+        // a module as in a script.
         let (mut at, after_code) =
             module_import_position(source, lowering_plan.directive_prologue_end());
-        if script && !after_code {
+        if !after_code {
             at = crate::lexer::pragmas::after_file_pragmas(source, at);
         }
         // A prologue that runs to the end of the file leaves nothing to
@@ -420,35 +445,6 @@ pub(crate) fn emit_with_map<'a>(
             ""
         };
         output.insert_lit_at_source(at, format!("{separator}{prelude}"));
-    }
-    if !script {
-        if emitter.used_match_raise.get() {
-            if !output.ends_with_newline() {
-                output.push_lit("\n");
-            }
-            output.push_lit(format!(
-                "function {}(error: unknown): never {{ throw error; }}\n",
-                emitter.match_raise_name
-            ));
-        }
-        if let Some(body) = &show {
-            if !output.ends_with_newline() {
-                output.push_lit("\n");
-            }
-            output.push_lit(format!(
-                "function {}(value: unknown): string {body}\n",
-                emitter.match_show_name
-            ));
-        }
-        if emitter.used_expression_boundary.get() {
-            if !output.ends_with_newline() {
-                output.push_lit("\n");
-            }
-            output.push_lit(format!(
-                "function {}<T>(run: () => T): T {{ return run(); }}\n",
-                emitter.expression_boundary_name
-            ));
-        }
     }
     // A block arm's `return` frame (the keyword, and anything after the
     // argument) is claimed by the exit rewrite, as is the operator frame of

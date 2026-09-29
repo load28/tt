@@ -44,6 +44,35 @@ test("a new file is type-checked before its first save", { skip: skipTyped, time
 });
 
 test(
+  "a clean file beside a failing one gets an answer, and a buffer that cannot lower says it was not checked",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = tmpProject();
+    fs.writeFileSync(path.join(dir, "broken.tt"), "export const wrong: number = \"x\";\n");
+    const clean = path.join(dir, "clean.tt");
+    const source = "export const right: number = 1;\n";
+    fs.writeFileSync(clean, source);
+
+    const checked = await runTypedCheck(COMPILER, source, clean, true);
+    assert.deepEqual(checked, { kind: "ok", blocked: false, diagnostics: [] });
+
+    const unparsed = await runTypedCheck(
+      COMPILER,
+      "export const right: number = \"x\";\nMath.max(1,\n",
+      clean,
+      true,
+    );
+    assert.equal(unparsed.kind, "ok", JSON.stringify(unparsed));
+    if (unparsed.kind !== "ok") return;
+    assert.equal(unparsed.blocked, true);
+    assert.deepEqual(
+      unparsed.diagnostics.map((d) => d.code),
+      ["verify-failed"],
+    );
+  },
+);
+
+test(
   "an internal backend failure is distinct from toolchain availability",
   { skip: skipTyped, timeout },
   async () => {

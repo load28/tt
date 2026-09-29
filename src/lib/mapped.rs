@@ -65,6 +65,16 @@ pub(crate) struct DeclaredName {
     pub out_end: usize,
 }
 
+/// Glue the emitter wrote at one point of the source rather than for a
+/// construct: the prelude of helpers and imports. Relative to the source
+/// text around it, everything in `out..out_end` stands at `src`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct InsertedGlue {
+    pub src: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SharedBinding {
     pub out: usize,
@@ -187,6 +197,8 @@ pub struct MappedEmit {
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
+    /// Glue written at a source point, ordered by output offset.
+    pub(crate) inserted: Vec<InsertedGlue>,
     /// The compiler support modules the emitted code imports, in
     /// [`StdModule::ALL`](crate::StdModule::ALL) order: the standard-library
     /// modules the source imports, and the pipeline runtime when the
@@ -260,17 +272,40 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 /// [`emit_mapped`] under an explicit TypeScript surface kind.
 pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
-    let typescript_tokens = crate::lexer::TypeScriptTokens::of(source, source_kind, &tokens);
-    let semantics = analysis::coverage_semantics(source, &program, &[]);
+    emit_mapped_parsed(
+        source,
+        &Options {
+            source_kind,
+            rewrite_imports: ImportRewrite::Off,
+            ..Options::default()
+        },
+        &program,
+        &tokens,
+    )
+}
+
+/// [`emit_mapped`] over a parse the caller already has, under `options`'
+/// surface kind, imported variants, and import handling.
+pub(crate) fn emit_mapped_parsed(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[crate::lexer::Token],
+) -> MappedEmit {
+    let source_kind = options.source_kind;
+    let typescript_tokens = crate::lexer::TypeScriptTokens::of(source, source_kind, tokens);
+    let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
     // host rewrites to plan, so every tt value the plan cannot own emits as
     // a recovery placeholder anchored to its construct — the same values
     // the plan refuses by placement. Reporting stays [`compile`]'s job.
-    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind, &tokens)
-        .unwrap_or_else(|_| crate::evaluation_ir::LoweringPlan::without_owner_model());
-    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
+    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind, tokens)
+        .unwrap_or_else(|_| {
+            crate::evaluation_ir::LoweringPlan::without_owner_model(source, source_kind)
+        });
+    let automatic_semicolons = crate::lexer::automatic_semicolons(tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -280,8 +315,8 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
             automatic_semicolons: &automatic_semicolons,
         },
         &plan,
-        ImportRewrite::Off,
-        StdImports::default(),
+        options.rewrite_imports,
+        options.std_imports,
     );
     MappedEmit {
         code: flat.code,
@@ -294,6 +329,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        inserted: flat.inserted,
         support_imports: flat.support_imports,
     }
 }

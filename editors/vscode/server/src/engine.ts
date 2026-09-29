@@ -663,6 +663,20 @@ export async function tsDiagnostics(
   path: string,
   onError?: (message: string) => void,
 ): Promise<EngineDiagnostic[] | null> {
+  const answer = await tsDiagnosticsAnswer(compiler, path, onError);
+  return answer && answer.diagnostics;
+}
+
+/** [`tsDiagnostics`] with the codes of the compiler's own diagnostics
+ * that the answer states in TypeScript's words — TypeScript's verdict on
+ * the buffer's syntax, when the engine served the buffer as the user wrote
+ * it. A consumer showing both layers shows that fact once, as TypeScript's
+ * diagnostics of a `.ts` file show it. */
+export async function tsDiagnosticsAnswer(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<{ diagnostics: EngineDiagnostic[]; restates: string[] } | null> {
   const answer = await engineRequest(
     compiler,
     "tsDiagnostics",
@@ -672,8 +686,14 @@ export async function tsDiagnostics(
   if (!answer) return null;
   if ("error" in answer) {
     onError?.(`tt: tsDiagnostics: ${answer.error}`);
-    return [];
+    return { diagnostics: [], restates: [] };
   }
-  const result = answer.result as { diagnostics?: EngineDiagnostic[] } | null;
-  return result?.diagnostics ?? [];
+  const result = answer.result as {
+    diagnostics?: EngineDiagnostic[];
+    restates?: string[];
+  } | null;
+  return {
+    diagnostics: result?.diagnostics ?? [],
+    restates: result?.restates ?? [],
+  };
 }

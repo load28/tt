@@ -1,3 +1,21 @@
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}
 type Opt =
   | { kind: "Some"; value: number }
   | { kind: "None" };
@@ -95,21 +113,3 @@ let $tt_v5: number[];
   }
 }
 export const values = $tt_v5;
-function $tt_show(value: unknown): string {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "bigint") {
-    return String(value) + "n";
-  }
-  if (typeof value === "object" || typeof value === "function") {
-    try {
-      const text = JSON.stringify(value);
-      if (typeof text === "string") {
-        return text;
-      }
-    } catch {}
-    return typeof value;
-  }
-  return String(value);
-}

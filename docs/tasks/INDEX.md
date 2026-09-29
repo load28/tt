@@ -529,7 +529,9 @@
 | TASK-519 | Keep a lone shebang on the first line of its source map | Complete | 2026-09-29 | 2026-09-29 | [TASK-519](./TASK-519-lone-shebang-source-map.md) |
 | TASK-520 | Report each file of a `--types` declaration collision once | Complete | 2026-09-29 | 2026-09-29 | [TASK-520](./TASK-520-types-collision-report-once.md) |
 | TASK-526 | Carry auto-import edits from completion resolve onto the tt source | Complete | 2026-09-29 | 2026-09-29 | [TASK-526](./TASK-526-auto-import-completion-edits.md) |
+| TASK-527 | Keep a file's type errors in the editor while its TypeScript does not parse | Complete | 2026-09-29 | 2026-09-29 | [TASK-527](./TASK-527-type-errors-survive-syntax-errors.md) |
+| TASK-528 | Answer completion and signature help inside an unfinished tt value | In progress | 2026-09-29 | — | [TASK-528](./TASK-528-unfinished-try-operand-service.md) |
 
 ## Next task number
 
-**TASK-527**
+**TASK-529**

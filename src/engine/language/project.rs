@@ -434,15 +434,19 @@ impl Project {
         if resolved.is_null() {
             return Ok(None);
         }
-        let (mappings, splice) = match &installed {
-            Some(installed) => (&installed.mappings, Some(installed.splice)),
-            None => (&doc.mappings, None),
+        let (mappings, inserted, splice) = match &installed {
+            Some(installed) => (
+                &installed.mappings,
+                &installed.inserted,
+                Some(installed.splice),
+            ),
+            None => (&doc.mappings, &doc.inserted, None),
         };
         let additional_edits = resolved["additionalTextEdits"]
             .as_array()
             .into_iter()
             .flatten()
-            .map(|edit| source_edit(&code, mappings, &doc.source, splice, edit))
+            .map(|edit| source_edit(&code, mappings, inserted, &doc.source, splice, edit))
             .collect::<Option<Vec<_>>>()
             .unwrap_or_default();
         Ok(Some(CompletionDetail {
@@ -603,14 +607,16 @@ impl Project {
     /// span, matching the batch typed-check path.
     pub fn service_diagnostics(&mut self, path: &Path) -> Result<Vec<ServiceDiagnostic>, String> {
         let (doc, path) = self.serve(path)?;
-        // An unhandled projection failure still gets the old raw emit-map
-        // fallback. Do not trust TypeScript's recovery from that malformed
-        // document; parser-owned recoveries have already made ordinary edit
-        // states valid before this point.
-        if !projection_accepts_diagnostics(
-            &doc.code,
-            crate::SourceKind::from_path(&path).unwrap_or_default(),
-        ) {
+        // A faithful projection is read as a `.ts` file is: syntax errors
+        // and all, they are the user's. The raw emit-map fallback leaves tt
+        // text as written, and TypeScript's recovery from that says nothing
+        // about the user's code unless the text parses.
+        if !doc.faithful
+            && !projection_accepts_diagnostics(
+                &doc.code,
+                crate::SourceKind::from_path(&path).unwrap_or_default(),
+            )
+        {
             return Ok(Vec::new());
         }
         let session = self.session();
@@ -790,6 +796,34 @@ impl Project {
         Ok(out)
     }
 
+    /// The tt-level diagnostics of `path` that [`Project::service_diagnostics`]
+    /// states in TypeScript's own words: TypeScript's syntax verdict
+    /// ([`crate::DiagnosticCode::restates_typescript_syntax`]) about text the
+    /// faithful projection carries as the user wrote it. A verdict inside a
+    /// recovered span is about text TypeScript never reads, and a projection
+    /// that is not faithful restates nothing.
+    pub fn service_restates(&mut self, path: &Path) -> Result<Vec<crate::DiagnosticCode>, String> {
+        let (doc, _) = self.serve(path)?;
+        if !doc.faithful {
+            return Ok(Vec::new());
+        }
+        let mut codes: Vec<crate::DiagnosticCode> = Vec::new();
+        for diagnostic in &doc.tt_diagnostics {
+            let read = diagnostic.start.is_none_or(|start| {
+                !doc.recovered
+                    .iter()
+                    .any(|&(from, to)| from <= start && start < to)
+            });
+            if diagnostic.code.restates_typescript_syntax()
+                && read
+                && !codes.contains(&diagnostic.code)
+            {
+                codes.push(diagnostic.code);
+            }
+        }
+        Ok(codes)
+    }
+
     /// Starts (or reuses) the service session and serves `path` and its
     /// transitive `.tt` imports as the TypeScript they lower to. Returns the
     /// file's projection and its canonical path; the session is then live.
@@ -901,6 +935,8 @@ impl Project {
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
                     generated_names: projected.emit.generated_names.clone(),
+                    inserted: projected.emit.inserted.clone(),
+                    faithful: true,
                 }),
             );
         }

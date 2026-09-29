@@ -968,6 +968,25 @@ look up."
                 | DiagnosticCode::SourceNotTypeScript
         )
     }
+
+    /// Whether the diagnostic restates TypeScript's own verdict on the
+    /// file's syntax: the file's TypeScript (`source-not-typescript`) or the
+    /// module lowered from it (`verify-failed`) does not parse. A TypeScript
+    /// reader of the same text states the same fact in its own words.
+    pub fn restates_typescript_syntax(self) -> bool {
+        matches!(
+            self,
+            DiagnosticCode::VerifyFailed | DiagnosticCode::SourceNotTypeScript
+        )
+    }
+
+    /// Whether a diagnostic with this code leaves its construct in the
+    /// emission as the tt text the user wrote, which no TypeScript reader
+    /// reads as written: every projection blocker but TypeScript's own
+    /// syntax verdict.
+    pub(crate) fn leaves_tt_text(self) -> bool {
+        self.blocks_projection() && !self.restates_typescript_syntax()
+    }
 }
 
 /// One reported problem, with a byte span in the source it was found in.

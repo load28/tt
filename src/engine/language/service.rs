@@ -23,6 +23,8 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             recovered: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
+            inserted: Vec::new(),
+            faithful: true,
         };
     }
     let options = crate::Options {
@@ -33,17 +35,19 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         ..crate::Options::default()
     };
     let report = crate::compile_projection_report(&text, &options);
-    let (emit, recovered) = match report.emit {
-        Some(emit) => (emit, report.recovered),
-        None => (
+    let (emit, recovered, faithful) = match (report.emit, report.withheld) {
+        (Some(emit), _) | (None, Some(emit)) => (emit, report.recovered, true),
+        (None, None) => (
             crate::emit_mapped_with_kind(
                 &text,
                 crate::SourceKind::from_path(path).unwrap_or_default(),
             ),
             Vec::new(),
+            false,
         ),
     };
     ServiceDoc {
+        faithful,
         source: text,
         code: emit.code,
         mappings: emit.mappings,
@@ -53,6 +57,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         recovered,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
+        inserted: emit.inserted,
     }
 }
 
@@ -390,24 +395,32 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         code: emit.code,
         version,
         generated_names: emit.generated_names,
+        inserted: emit.inserted,
     })
 }
 
 /// An edit the service computed over served text, as an edit of `source`:
 /// `mappings` maps `source` onto `code`, with a completion probe's
-/// placeholder spliced in at `splice` when there is one. `None` when either
-/// end of the range was not copied from the source, or falls inside the
-/// placeholder.
+/// placeholder spliced in at `splice` when there is one. An insertion in
+/// glue written at a source point (`inserted`) is an insertion at that
+/// point. `None` when either end of the range was not copied from the
+/// source, or falls inside the placeholder.
 pub(super) fn source_edit(
     code: &str,
     mappings: &[EmitMapping],
+    inserted: &[crate::InsertedGlue],
     source: &str,
     splice: Option<usize>,
     edit: &serde_json::Value,
 ) -> Option<TextEdit> {
     let start = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["start"])));
     let end = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["end"])));
-    let (start, end) = mapper::to_source_span(mappings, start, end)?;
+    let (start, end) = mapper::to_source_span(mappings, start, end).or_else(|| {
+        let glue = inserted
+            .iter()
+            .find(|glue| start == end && glue.out <= start && start <= glue.out_end)?;
+        Some((glue.src, glue.src))
+    })?;
     let unsplice = |byte: usize| match splice {
         Some(at) if byte > at => byte.checked_sub(PROBE_NAME.len()).filter(|&b| b >= at),
         _ => Some(byte),

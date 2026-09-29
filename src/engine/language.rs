@@ -312,6 +312,13 @@ pub(crate) struct ServiceDoc {
     /// a provisional consequence.
     tt_diagnostics: Vec<crate::Diagnostic>,
     generated_names: HashSet<String>,
+    /// Glue written at a source point, for edits that land in it.
+    inserted: Vec<crate::InsertedGlue>,
+    /// Whether what TypeScript says about `code` is what it says about the
+    /// user's code: every byte of it is TypeScript the user wrote, glue of
+    /// a claimed construct, or a placeholder in `recovered`, so no tt text
+    /// stands in it as written. Its syntax errors are then the user's own.
+    faithful: bool,
 }
 
 /// A compiled completion probe: the buffer with `$tt_probe` spliced in at
@@ -331,6 +338,7 @@ struct ProbeDoc {
     offset: usize,
     version: u64,
     generated_names: HashSet<String>,
+    inserted: Vec<crate::InsertedGlue>,
 }
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so

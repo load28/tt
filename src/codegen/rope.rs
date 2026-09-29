@@ -50,6 +50,10 @@ pub(crate) enum MarkKind {
         shorthand: bool,
     },
     SharedBindingEnd,
+    /// Start of glue written at source point `src` ([`crate::InsertedGlue`]).
+    InsertedStart,
+    /// End of the same glue.
+    InsertedEnd,
 }
 
 enum Piece<'a> {
@@ -604,9 +608,28 @@ impl<'a> TargetFile<'a> {
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
+        let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
             match piece {
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::InsertedStart,
+                } => inserted.push(crate::InsertedGlue {
+                    src: *src,
+                    out: out.len(),
+                    out_end: out.len(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::InsertedEnd,
+                } => {
+                    inserted
+                        .last_mut()
+                        .filter(|glue| glue.src == *src && glue.out_end == glue.out)
+                        .unwrap_or_else(|| crate::ice::bug!("inserted glue end has no start"))
+                        .out_end = out.len();
+                }
                 TargetPiece::Open {
                     src,
                     src_end,
@@ -791,6 +814,7 @@ impl<'a> TargetFile<'a> {
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,
+            inserted,
             support_imports: Vec::new(),
         }
     }
