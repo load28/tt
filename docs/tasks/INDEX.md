@@ -537,7 +537,8 @@
 | TASK-537 | Hover a pattern binding by its type and a tt name with its JSDoc | Complete | 2026-09-29 | 2026-09-29 | [TASK-537](./TASK-537-tt-name-hover.md) |
 | TASK-540 | Report an unreadable root configuration as TS5083 and recover | Complete | 2026-09-29 | 2026-09-29 | [TASK-540](./TASK-540-unreadable-root-configuration.md) |
 | TASK-541 | Write the `@tt/std` declarations under a TypeScript configuration | Complete | 2026-09-29 | 2026-09-29 | [TASK-541](./TASK-541-configured-std-declarations.md) |
+| TASK-542 | Place sidecar map segments from declaration syntax | Complete | 2026-09-29 | 2026-09-29 | [TASK-542](./TASK-542-sidecar-syntax-positions.md) |
 
 ## Next task number
 
-**TASK-542**
+**TASK-543**

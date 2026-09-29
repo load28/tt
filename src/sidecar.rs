@@ -11,8 +11,12 @@
 //! that as a declaration map whose `sources` points at the `.tt` file, which
 //! is what sends "go to definition" to the original instead of the `.d.ts`.
 
+use std::collections::HashMap;
+
+use swc_ecma_ast::{Decl, Ident, ModuleDecl, ModuleItem, ObjectPatProp, Pat, Stmt, TsModuleName};
+
+use crate::host_input::HostInput;
 use crate::lines::LineMap;
-use crate::variant_symbols;
 
 /// The two files that make up a module's editor sidecar.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,27 +40,45 @@ pub struct Sidecar {
 /// becomes the stem of the written files (`notice.tt.d.ts`) and, as a URL,
 /// of the `sourceMappingURL` comment.
 ///
-/// Every exported declaration that can be located in the source gets two
-/// mapping segments: one at column 0 and one at the column where its name
-/// starts. The second is the one that matters — "go to definition" asks
-/// about the name's position, and without a segment there the editor stops
-/// at the `.d.ts`.
+/// Every exported declaration that can be located in the source gets a
+/// mapping segment at the column where its name starts, and a line that has
+/// one also gets a segment at column 0. The name's segment is the one that
+/// matters — "go to definition" asks about the name's position, and without
+/// a segment there the editor stops at the `.d.ts`. Both sides are read as
+/// syntax: the names are the declaration file's exported declarations, and
+/// each is located at the module-level declaration of that name in the
+/// source.
 pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar {
     let tt_file_name = tt_path
         .rsplit(['/', '\\'])
         .next()
         .filter(|name| !name.is_empty())
         .unwrap_or(tt_path);
+    let source_kind =
+        crate::SourceKind::from_path(std::path::Path::new(tt_file_name)).unwrap_or_default();
     let source_lines = LineMap::ecma(source);
-    let variants = variant_symbols(source);
+    let located = module_declarations(source, source_kind);
 
     // The declarations are rewritten line by line, and every line the map
     // counts is one ECMA-262 line of what is written: a line ending becomes
     // LF, and a U+2028 or U+2029 — a line terminator that is also text, as
     // inside a string literal — stays itself.
     let declaration_lines = LineMap::ecma(declarations);
+    let mut by_line: HashMap<usize, Vec<Hit>> = HashMap::new();
+    for (name, byte) in exported_declarations(declarations) {
+        let Some(&at) = located.get(&name) else {
+            continue;
+        };
+        let (line, generated_column) = declaration_lines.utf16_position(byte);
+        let (source_line, source_column) = source_lines.utf16_position(at);
+        by_line.entry(line).or_default().push(Hit {
+            generated_column,
+            line: source_line,
+            column: source_column,
+        });
+    }
     let mut body = String::new();
-    let mut hits: Vec<Option<Hit>> = Vec::new();
+    let mut hits: Vec<Vec<Hit>> = Vec::new();
     for index in 0..declaration_lines.len() {
         let line = declaration_lines.line_text(index).unwrap_or_default();
         if line.trim_start().starts_with("//# sourceMappingURL=") {
@@ -69,14 +91,9 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
             });
         }
         body.push_str(line);
-        hits.push(declared_name(line).and_then(|name| {
-            let (line_number, column) = locate(&source_lines, &variants, name)?;
-            Some(Hit {
-                generated_column: line[..line.find(name)?].encode_utf16().count(),
-                line: line_number,
-                column,
-            })
-        }));
+        let mut line_hits = by_line.remove(&index).unwrap_or_default();
+        line_hits.sort_by_key(|hit| hit.generated_column);
+        hits.push(line_hits);
     }
 
     let map_name = format!("{tt_file_name}.d.ts.map");
@@ -105,118 +122,153 @@ struct Hit {
     column: usize,
 }
 
-/// The name declared by a `.d.ts` line, if it declares one.
-fn declared_name(line: &str) -> Option<&str> {
-    let rest = line.trim_start().strip_prefix("export ")?.trim_start();
-    let rest = rest.strip_prefix("declare ").unwrap_or(rest).trim_start();
-    let rest = rest.strip_prefix("abstract ").unwrap_or(rest).trim_start();
-    for keyword in [
-        "function ",
-        "const ",
-        "let ",
-        "var ",
-        "class ",
-        "interface ",
-        "type ",
-        "enum ",
-    ] {
-        if let Some(after) = rest.strip_prefix(keyword) {
-            let name = identifier_prefix(after.trim_start());
-            return (!name.is_empty()).then_some(name);
-        }
-    }
-    None
+/// The names a declaration file exports by declaring them, each with the
+/// byte offset of its identifier. A text that does not parse declares
+/// nothing.
+fn exported_declarations(declarations: &str) -> Vec<(String, usize)> {
+    let input = HostInput::new(declarations);
+    let Ok(module) = input.declaration_parser().parse_module() else {
+        return Vec::new();
+    };
+    module
+        .body
+        .iter()
+        .filter_map(|item| match item {
+            ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export)) => Some(&export.decl),
+            _ => None,
+        })
+        .flat_map(declared_identifiers)
+        .map(|ident| (ident.sym.to_string(), input.byte(ident.span.lo)))
+        .collect()
 }
 
-/// The leading ASCII identifier of `text`.
-fn identifier_prefix(text: &str) -> &str {
-    let end = text
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
-        .unwrap_or(text.len());
-    &text[..end]
-}
-
-/// Where `name` is declared in the source, as a zero-based line and UTF-16
-/// column — ECMA-262's lines, which are the ones the map counts.
+/// Where the source's module-level declarations declare their names, as
+/// byte offsets of the source — the first in source order where a name is
+/// declared more than once (overloads, a variant's type and constructor).
 ///
-/// tt variants come from the parsed declarations, so their positions are exact.
-/// Everything else lives in a passthrough region and is found by scanning
-/// for its declaration keyword; the first match wins.
-fn locate(
-    source_lines: &LineMap<'_>,
-    variants: &[crate::VariantSymbol],
-    name: &str,
-) -> Option<(usize, usize)> {
-    if let Some(symbol) = variants.iter().find(|e| e.name == name) {
-        // `offset` points at the declaration keyword; move to the name.
-        let line = source_lines.line_of(symbol.offset);
-        let at = source_lines
-            .line_text(line)
-            .and_then(|text| text.find(name))
-            .and_then(|byte| Some(source_lines.line_start(line)? + byte))
-            .unwrap_or(symbol.offset);
-        return Some(source_lines.utf16_position(at));
+/// The source is tt, so it is read through the TypeScript ttc emits for it:
+/// the emitted module's declarations are parsed, and each name is placed
+/// where the emission took it from — the source bytes the chunk holding it
+/// was copied from, or the tt name ttc declared it for.
+fn module_declarations(source: &str, source_kind: crate::SourceKind) -> HashMap<String, usize> {
+    let emit = crate::emit_mapped_with_kind(source, source_kind);
+    let input = HostInput::new(&emit.code);
+    let mut located: HashMap<String, usize> = HashMap::new();
+    let Ok(module) = input.parser(source_kind).parse_module() else {
+        return located;
+    };
+    let declarations = module.body.iter().filter_map(|item| match item {
+        ModuleItem::Stmt(Stmt::Decl(declaration)) => Some(declaration),
+        ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export)) => Some(&export.decl),
+        _ => None,
+    });
+    for ident in declarations.flat_map(declared_identifiers) {
+        let Some(at) = source_byte(&emit, input.byte(ident.span.lo)) else {
+            continue;
+        };
+        located
+            .entry(ident.sym.to_string())
+            .and_modify(|first| *first = (*first).min(at))
+            .or_insert(at);
     }
-
-    (0..source_lines.len()).find_map(|index| {
-        let text = source_lines.line_text(index)?;
-        if !declares(text, name) {
-            return None;
-        }
-        let byte = source_lines.line_start(index)? + text.find(name)?;
-        Some(source_lines.utf16_position(byte))
-    })
+    located
 }
 
-/// Whether a source line declares `name` at the top of a statement.
-fn declares(line: &str, name: &str) -> bool {
-    let rest = line.trim_start();
-    let rest = rest.strip_prefix("export ").unwrap_or(rest).trim_start();
-    let rest = rest.strip_prefix("declare ").unwrap_or(rest).trim_start();
-    let rest = rest.strip_prefix("abstract ").unwrap_or(rest).trim_start();
-    for keyword in [
-        "function ",
-        "const ",
-        "let ",
-        "var ",
-        "class ",
-        "interface ",
-        "type ",
-        "enum ",
-    ] {
-        if let Some(after) = rest.strip_prefix(keyword) {
-            return identifier_prefix(after.trim_start()) == name;
-        }
-    }
-    false
+/// The source byte an emitted byte was written for.
+fn source_byte(emit: &crate::MappedEmit, out: usize) -> Option<usize> {
+    emit.mappings
+        .iter()
+        .find(|chunk| chunk.out <= out && out < chunk.out + chunk.len)
+        .map(|chunk| chunk.src + (out - chunk.out))
+        .or_else(|| {
+            emit.declared_names
+                .iter()
+                .find(|name| name.out <= out && out < name.out_end)
+                .map(|name| name.src + (out - name.out).min(name.src_end - name.src))
+        })
 }
 
-/// Encodes one segment per located declaration into a source map v3
-/// `mappings` string.
-fn encode_mappings(hits: &[Option<Hit>]) -> String {
+/// The identifiers a declaration binds.
+fn declared_identifiers(declaration: &Decl) -> Vec<&Ident> {
+    let mut out = Vec::new();
+    match declaration {
+        Decl::Class(class) => out.push(&class.ident),
+        Decl::Fn(function) => out.push(&function.ident),
+        Decl::Var(var) => {
+            for declarator in &var.decls {
+                pattern_identifiers(&declarator.name, &mut out);
+            }
+        }
+        Decl::Using(using) => {
+            for declarator in &using.decls {
+                pattern_identifiers(&declarator.name, &mut out);
+            }
+        }
+        Decl::TsInterface(interface) => out.push(&interface.id),
+        Decl::TsTypeAlias(alias) => out.push(&alias.id),
+        Decl::TsEnum(declaration) => out.push(&declaration.id),
+        Decl::TsModule(declaration) => {
+            if let TsModuleName::Ident(ident) = &declaration.id {
+                out.push(ident);
+            }
+        }
+    }
+    out
+}
+
+fn pattern_identifiers<'a>(pattern: &'a Pat, out: &mut Vec<&'a Ident>) {
+    match pattern {
+        Pat::Ident(binding) => out.push(&binding.id),
+        Pat::Array(array) => {
+            for element in array.elems.iter().flatten() {
+                pattern_identifiers(element, out);
+            }
+        }
+        Pat::Rest(rest) => pattern_identifiers(&rest.arg, out),
+        Pat::Object(object) => {
+            for property in &object.props {
+                match property {
+                    ObjectPatProp::KeyValue(pair) => pattern_identifiers(&pair.value, out),
+                    ObjectPatProp::Assign(assign) => out.push(&assign.key.id),
+                    ObjectPatProp::Rest(rest) => pattern_identifiers(&rest.arg, out),
+                }
+            }
+        }
+        Pat::Assign(assign) => pattern_identifiers(&assign.left, out),
+        Pat::Expr(_) | Pat::Invalid(_) => {}
+    }
+}
+
+/// Encodes the located declarations of each generated line into a source
+/// map v3 `mappings` string: a segment at column 0 for the line's first
+/// declaration, then one at each declaration's name.
+fn encode_mappings(hits: &[Vec<Hit>]) -> String {
     let mut previous_line: i64 = 0;
     let mut previous_column: i64 = 0;
     let mut lines: Vec<String> = Vec::with_capacity(hits.len());
 
-    for hit in hits {
-        let Some(hit) = hit else {
+    for line_hits in hits {
+        let Some(first) = line_hits.first() else {
             lines.push(String::new());
             continue;
         };
-        let mut generated: Vec<usize> = vec![0];
-        if hit.generated_column > 0 {
-            generated.push(hit.generated_column);
-        }
-
+        let start = (first.generated_column > 0).then_some(Hit {
+            generated_column: 0,
+            line: first.line,
+            column: first.column,
+        });
         let mut previous_generated: i64 = 0;
-        let mut segments: Vec<String> = Vec::with_capacity(generated.len());
-        for column in generated {
+        let mut segments: Vec<String> = Vec::new();
+        for hit in start.iter().chain(line_hits) {
             let mut segment = String::new();
-            vlq(column as i64 - previous_generated, &mut segment);
+            vlq(
+                hit.generated_column as i64 - previous_generated,
+                &mut segment,
+            );
             vlq(0, &mut segment);
             vlq(hit.line as i64 - previous_line, &mut segment);
             vlq(hit.column as i64 - previous_column, &mut segment);
-            previous_generated = column as i64;
+            previous_generated = hit.generated_column as i64;
             previous_line = hit.line as i64;
             previous_column = hit.column as i64;
             segments.push(segment);
