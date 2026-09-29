@@ -169,6 +169,14 @@ impl<'a> Emitter<'a> {
             out.push_break(depth);
         }
         for action in &rewrite.actions {
+            if let ComposeAction::Value(value) = action
+                && value.defer_arm_values
+                && !self.has_conditional_match_dispatch(value.expr)
+            {
+                out.push_selector_declaration(&value.slot);
+                out.push_break(depth);
+                continue;
+            }
             let slot = match action {
                 // A discarded completed call produces nothing; a consumed
                 // one still fills the value's join slot with the result.

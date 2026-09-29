@@ -63,7 +63,7 @@ pub(crate) fn refine(
         .contextual_slots
         .iter()
         .zip(slots)
-        .filter(|(_, slot)| slot.detached)
+        .filter(|(end, slot)| slot.detached && !emit.selector_slots.contains(end))
         .map(|(&end, _)| end)
         .collect();
     let writes = if detached.is_empty() {
@@ -180,7 +180,11 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         anchor.out = shifted(edits, anchor.out, true);
         anchor.end = shifted(edits, anchor.end, false);
     }
-    for position in &mut emit.contextual_slots {
+    for position in emit
+        .contextual_slots
+        .iter_mut()
+        .chain(&mut emit.selector_slots)
+    {
         *position = shifted(edits, *position, true);
     }
     for edit in edits.iter().rev() {
