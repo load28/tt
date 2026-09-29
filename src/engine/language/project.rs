@@ -49,36 +49,45 @@ impl Project {
         let doc = doc.clone();
         let path = path.to_path_buf();
         let session = self.session();
-        let Some(at) = to_service(&doc, position) else {
-            return Ok(None);
-        };
         let uri = served_uri(session, &path);
-        let hover = session.client.request(
-            "textDocument/hover",
-            serde_json::json!({
-                "textDocument": { "uri": uri },
-                "position": lsp_position(u16_position(&doc.code, at)),
-            }),
-        )?;
-        let (signature, documentation) = split_hover(&hover["contents"]);
-        if signature.is_empty() {
-            return Ok(None);
+        // A name ttc declares in glue (a variant, a case, a field) is asked
+        // at each place the emission declares it, and the answer covers the
+        // name as written.
+        let declared = to_service(&doc, position).is_none();
+        for at in to_service_names(&doc, position) {
+            let hover = session.client.request(
+                "textDocument/hover",
+                serde_json::json!({
+                    "textDocument": { "uri": uri },
+                    "position": lsp_position(u16_position(&doc.code, at)),
+                }),
+            )?;
+            let (signature, documentation) = split_hover(&hover["contents"]);
+            if signature.is_empty() {
+                continue;
+            }
+            let span = if declared {
+                declared_name_at(&doc, position)
+            } else {
+                let (start, end) = match hover.get("range").filter(|r| !r.is_null()) {
+                    Some(range) => (
+                        u16_offset(&doc.code, position_of(&range["start"])),
+                        u16_offset(&doc.code, position_of(&range["end"])),
+                    ),
+                    None => (at, at),
+                };
+                from_service_span(&doc, start, end)
+            };
+            let Some((s, e)) = span else {
+                continue;
+            };
+            return Ok(Some(HoverInfo {
+                signature,
+                documentation,
+                range: source_range(&doc.source, s, e),
+            }));
         }
-        let (start, end) = match hover.get("range").filter(|r| !r.is_null()) {
-            Some(range) => (
-                u16_offset(&doc.code, position_of(&range["start"])),
-                u16_offset(&doc.code, position_of(&range["end"])),
-            ),
-            None => (at, at),
-        };
-        let Some((s, e)) = from_service_span(&doc, start, end) else {
-            return Ok(None);
-        };
-        Ok(Some(HoverInfo {
-            signature,
-            documentation,
-            range: source_range(&doc.source, s, e),
-        }))
+        Ok(None)
     }
 
     /// Hover answered from the match analysis, for positions the service

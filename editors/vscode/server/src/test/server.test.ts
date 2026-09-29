@@ -1013,6 +1013,35 @@ test("a case tag's references reach its declaration and every pattern", { skip: 
   }
 });
 
+test("a pattern binding hovers with its instantiated type, a documented case with its JSDoc", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'import type { TOption } from "@tt/std";',
+    "/** A shape. */",
+    "variant Shape {",
+    "  /** A round one. */",
+    "  Circle(radius: number),",
+    "  Point,",
+    "}",
+    "declare const o: TOption<number>;",
+    "declare const s: Shape;",
+    "export const n = match (o) { Some(value) => value, None => 0 };",
+    "export const r = match (s) { Circle(radius: r) => r, Point => 0 };",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const hover = async (marker: string) =>
+      (await client.request("textDocument/hover", { textDocument: { uri }, position: positionOf(source, marker) }))
+        .result?.contents?.value ?? "";
+    assert.match(await hover("Some(val"), /const value: number/);
+    const tag = await hover("{ Circ");
+    assert.match(tag, /Shape\.Circle\(radius: number\)/);
+    assert.match(tag, /A round one\./);
+  } finally {
+    stop();
+  }
+});
+
 test("a case tag hovers as its declaration — in a match and in an if let", { skip, timeout }, async () => {
   const { client, uri, stop } = await open(SHAPE_SOURCE);
   try {

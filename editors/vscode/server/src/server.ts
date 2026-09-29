@@ -1434,10 +1434,33 @@ connection.onHover(async (params) => {
     logEngine,
   );
   if (!sym) return tsHover(doc, params.position);
+  // A shorthand pattern name is also the binding it declares, and a
+  // binding hovers with its own type — `Some(value)` over a
+  // `TOption<number>` is `const value: number`, as `const { value } = o` is
+  // in TypeScript — not the field's declared `value: T`.
+  if (sym.binds) {
+    const binding = await tsHover(doc, params.position);
+    if (binding) return binding;
+  }
+  // The declaration's own JSDoc, which the emission carries onto the names
+  // TypeScript knows it by.
+  // An untitled buffer's declarations are in its text, not in a file the
+  // engine can serve.
+  const served =
+    sym.definition && !(enginePath(doc) === null && sym.definition.path === bufferPath(doc));
+  const declared = served && sym.definition
+    ? await engine.hover(
+        await compilerOf(doc),
+        sym.definition.path,
+        sym.definition.range.start,
+        logEngine,
+      )
+    : null;
+  const documentation = declared?.documentation ? `${declared.documentation}\n\n` : "";
   return {
     contents: {
       kind: MarkupKind.Markdown,
-      value: `\`\`\`tt\n${sym.signature}\n\`\`\`\n${sym.detail}`,
+      value: `\`\`\`tt\n${sym.signature}\n\`\`\`\n${documentation}${sym.detail}`,
     },
     range: sym.range,
   };

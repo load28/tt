@@ -528,6 +528,20 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
         .collect()
 }
 
+/// The source span (UTF-16) of the glue-declared name covering `position`.
+pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(usize, usize)> {
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    doc.declared_names
+        .iter()
+        .find(|name| name.src <= byte && byte <= name.src_end)
+        .map(|name| {
+            (
+                mapper::to_utf16(&doc.source, name.src),
+                mapper::to_utf16(&doc.source, name.src_end),
+            )
+        })
+}
+
 pub(super) struct SharedTarget {
     pub location: Location,
     pub name: String,
