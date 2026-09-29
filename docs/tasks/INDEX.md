@@ -525,7 +525,8 @@
 | TASK-517 | Walk a symlinked directory under its link-free spelling | Complete | 2026-09-29 | 2026-09-29 | [TASK-517](./TASK-517-directory-alias-spelling.md) |
 | TASK-518 | Write support modules from the imports codegen emitted | Complete | 2026-09-29 | 2026-09-29 | [TASK-518](./TASK-518-runtime-from-emitted-imports.md) |
 | TASK-519 | Keep a lone shebang on the first line of its source map | Complete | 2026-09-29 | 2026-09-29 | [TASK-519](./TASK-519-lone-shebang-source-map.md) |
+| TASK-520 | Report each file of a `--types` declaration collision once | Complete | 2026-09-29 | 2026-09-29 | [TASK-520](./TASK-520-types-collision-report-once.md) |
 
 ## Next task number
 
-**TASK-520**
+**TASK-521**

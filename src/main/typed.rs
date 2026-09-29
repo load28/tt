@@ -351,12 +351,18 @@ pub(super) fn write_declarations(
                 })
         });
     if let Some(error) = collision {
-        for (path, _) in &std_files {
-            outcome.fail(path, error.clone());
-        }
-        for target in &targets {
-            outcome.fail(target, error.clone());
-            outcome.fail(&target.with_extension("ts.map"), error.clone());
+        // Every planned file fails once. The plan is of files, and colliding
+        // declarations are two claims on one of them.
+        let mut planned = HashSet::new();
+        let files = std_files.iter().map(|(path, _)| path.clone()).chain(
+            targets
+                .iter()
+                .flat_map(|target| [target.clone(), target.with_extension("ts.map")]),
+        );
+        for path in files {
+            if planned.insert(normalized_absolute(&path)) {
+                outcome.fail(&path, error.clone());
+            }
         }
         return outcome;
     }
