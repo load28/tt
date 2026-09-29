@@ -331,8 +331,12 @@ capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 
 
 A tt value can sit inside an operand that another tt value lowers
 structurally: a pipeline head or step (`f(match ...) |> g`), a match subject,
-or an expression arm body. Such a value is planned exactly like a value of a
-TypeScript owner, bounded by the enclosing value instead of the owner:
+or an expression arm body. The subject of a let-else or `if let` statement
+is such an operand too (TASK-544): the projection writes it after the
+statement's placeholder, a chained `else if let` included, and the
+statement's head bounds the values in it as an enclosing value's extent
+does. Such a value is planned exactly like a value of a TypeScript owner,
+bounded by the enclosing value instead of the owner:
 
 - Its schedule is the prefix of its protocol whose parents lie inside the
   enclosing value, and its target capability is decided from that schedule

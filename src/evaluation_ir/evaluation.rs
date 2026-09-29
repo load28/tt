@@ -175,6 +175,37 @@ impl EvaluationFile {
             })
             .collect();
         owners.sort_unstable_by_key(|(owner, _)| owner.span.start);
+        // The heads of the let-else and `if let` statements each owner
+        // hosts: the bounds of the values their subjects contain.
+        let mut statement_decisions: HashMap<HostOwner, Vec<SourceSpan>> = HashMap::new();
+        for region in &self.regions {
+            let Some(CoreRoot::Decision(_)) = region.root else {
+                continue;
+            };
+            let source = match &region.placement {
+                RegionPlacement::Host { source, .. } => *source,
+                RegionPlacement::Nested {
+                    source: Some(source),
+                    ..
+                } => *source,
+                RegionPlacement::Nested { source: None, .. } | RegionPlacement::SourceEdit => {
+                    continue;
+                }
+            };
+            let mut host = region;
+            let owner = loop {
+                match &host.placement {
+                    RegionPlacement::Host { host_owner, .. } => break Some(*host_owner),
+                    RegionPlacement::Nested { parent, .. } => {
+                        host = &self.regions[parent.0 as usize];
+                    }
+                    RegionPlacement::SourceEdit => break None,
+                }
+            };
+            if let Some(owner) = owner {
+                statement_decisions.entry(owner).or_default().push(source);
+            }
+        }
         let mut next_slot = 0u32;
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
@@ -262,17 +293,28 @@ impl EvaluationFile {
             // those children at their exact position and writes their
             // already allocated slots; planning the children again as
             // sibling owner actions would either run them twice or consume
-            // authored syntax that still contains the outer construct.
+            // authored syntax that still contains the outer construct. A
+            // let-else or `if let` owns the values in its subject the same
+            // way: it evaluates the subject into its own temporary.
+            let outers: Vec<SourceSpan> = values
+                .iter()
+                .filter(|outer| outer.capability == TargetCapability::StatementRegion)
+                .map(|outer| outer.source)
+                .chain(
+                    statement_decisions
+                        .get(&owner)
+                        .into_iter()
+                        .flatten()
+                        .copied(),
+                )
+                .collect();
             let owned_children: HashSet<_> = values
                 .iter()
                 .filter(|child| {
-                    values.iter().any(|outer| {
-                        outer.expr != child.expr
-                            && outer.capability == TargetCapability::StatementRegion
-                            && outer.source.start <= child.source.start
-                            && child.source.end <= outer.source.end
-                            && (outer.source.start < child.source.start
-                                || child.source.end < outer.source.end)
+                    outers.iter().any(|outer| {
+                        outer.start <= child.source.start
+                            && child.source.end <= outer.end
+                            && (outer.start < child.source.start || child.source.end < outer.end)
                     })
                 })
                 .map(|child| child.expr)
@@ -284,20 +326,20 @@ impl EvaluationFile {
                     .filter(|value| owned_children.contains(&value.expr) && !value.exits.is_empty())
                     .map(|value| (value.expr, value.exits.clone())),
             );
-            let mut owned_groups: Vec<(ExprId, Vec<PlannedValue>)> = Vec::new();
+            let mut owned_groups: Vec<(SourceSpan, Vec<PlannedValue>)> = Vec::new();
             for child in values
                 .iter()
                 .filter(|value| owned_children.contains(&value.expr))
             {
-                let Some(outer) = values
+                let Some(outer) = outers
                     .iter()
+                    .copied()
                     .filter(|outer| {
-                        outer.expr != child.expr
-                            && outer.capability == TargetCapability::StatementRegion
-                            && outer.source.start <= child.source.start
-                            && child.source.end <= outer.source.end
+                        *outer != child.source
+                            && outer.start <= child.source.start
+                            && child.source.end <= outer.end
                     })
-                    .min_by_key(|outer| outer.source.end - outer.source.start)
+                    .min_by_key(|outer| outer.end - outer.start)
                 else {
                     continue;
                 };
@@ -306,9 +348,9 @@ impl EvaluationFile {
                     .steps()
                     .iter()
                     .take_while(|step| {
-                        outer.source.start <= step.parent.start
-                            && step.parent.end <= outer.source.end
-                            && step.parent != outer.source
+                        outer.start <= step.parent.start
+                            && step.parent.end <= outer.end
+                            && step.parent != outer
                     })
                     .cloned()
                     .collect();
@@ -329,12 +371,9 @@ impl EvaluationFile {
                     capability,
                     ..child.clone()
                 };
-                match owned_groups
-                    .iter_mut()
-                    .find(|(group, _)| *group == outer.expr)
-                {
+                match owned_groups.iter_mut().find(|(group, _)| *group == outer) {
                     Some((_, group)) => group.push(owned),
-                    None => owned_groups.push((outer.expr, vec![owned])),
+                    None => owned_groups.push((outer, vec![owned])),
                 }
             }
             for (_, mut group) in owned_groups {
@@ -415,16 +454,6 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            if matches!(
-                &core.exprs[expr.index()],
-                Expr::Propagate(Propagate {
-                    exit: ExitTarget::ResultRegion(_),
-                    ..
-                })
-            ) && matches!(&region.placement, RegionPlacement::Nested { protocol, .. } if protocol.steps().is_empty())
-            {
-                continue;
-            }
             if region.result.is_none() || value_slots.contains_key(&expr) {
                 continue;
             }

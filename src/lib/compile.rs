@@ -678,29 +678,100 @@ pub(crate) fn compile_projection_report_parsed(
     }
 
     let mut nodes = parser::projection_recoveries(program);
-    for diagnostic in &ordinary.diagnostics {
-        let (Some(start), Some(end)) = (diagnostic.start, diagnostic.end) else {
-            continue;
-        };
-        match diagnostic.code {
-            DiagnosticCode::TryPlacement
-            | DiagnosticCode::TryCrossesValueRegion
-            | DiagnosticCode::MatchPlacement => nodes.push(ast::RecoveryNode {
-                span: ast::Span { start, end },
-                kind: ast::RecoveryKind::Expression,
-            }),
-            DiagnosticCode::VariantInvalidFieldType => nodes.push(ast::RecoveryNode {
-                span: ast::Span { start, end },
-                kind: ast::RecoveryKind::Type,
-            }),
-            _ => {}
+    nodes.extend(recoverable_constructs(&ordinary.diagnostics));
+    // A construct the plan rejects is reported when planning reaches it, so
+    // a file with several can show the next one only once the first is
+    // recovered. Each round recovers at least one construct more, until the
+    // projection emits or no recoverable construct is left.
+    loop {
+        nodes.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end)));
+        let selected = outermost_recoveries(nodes);
+        if selected.is_empty() {
+            return ProjectionReport {
+                emit: None,
+                withheld: withheld_emit(source, options, program, tokens, &ordinary.diagnostics),
+                diagnostics: ordinary.diagnostics,
+                recovered: Vec::new(),
+            };
         }
+        let recovered_source = recover_source(source, &selected);
+        let (recovered_program, recovered_tokens) =
+            parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
+        let recovered_report = compile_report_parsed(
+            &recovered_source,
+            options,
+            &recovered_program,
+            &recovered_tokens,
+        );
+        let further: Vec<_> = if recovered_report.emit.is_some() {
+            Vec::new()
+        } else {
+            recoverable_constructs(&recovered_report.diagnostics)
+                .into_iter()
+                .filter(|node| {
+                    !selected.iter().any(|outer| {
+                        outer.span.start <= node.span.start && node.span.end <= outer.span.end
+                    })
+                })
+                .collect()
+        };
+        if further.is_empty() {
+            let withheld = match recovered_report.emit {
+                Some(_) => None,
+                None => withheld_emit(
+                    &recovered_source,
+                    options,
+                    &recovered_program,
+                    &recovered_tokens,
+                    &recovered_report.diagnostics,
+                ),
+            };
+            return ProjectionReport {
+                emit: recovered_report.emit,
+                withheld,
+                diagnostics: ordinary.diagnostics,
+                recovered: selected
+                    .into_iter()
+                    .map(|node| (node.span.start, node.span.end))
+                    .collect(),
+            };
+        }
+        nodes = selected;
+        nodes.extend(further);
     }
-    nodes.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end)));
+}
 
-    // Keep the outer error node when parser recovery found nested symptoms
-    // inside it. This is the same synchronization rule as an error AST node:
-    // one placeholder owns one malformed construct.
+/// The constructs a reported diagnostic lets the typed projection
+/// substitute: a tt value whose placement the plan rejects, a discarded
+/// `result` block, and an invalid variant field type. Each is an
+/// expression (or a type) whose replacement keeps the file's other code
+/// checkable.
+fn recoverable_constructs(diagnostics: &[Diagnostic]) -> Vec<ast::RecoveryNode> {
+    diagnostics
+        .iter()
+        .filter_map(|diagnostic| {
+            let span = ast::Span {
+                start: diagnostic.start?,
+                end: diagnostic.end?,
+            };
+            let kind = match diagnostic.code {
+                DiagnosticCode::TryPlacement
+                | DiagnosticCode::TryCrossesValueRegion
+                | DiagnosticCode::MatchPlacement
+                | DiagnosticCode::ResultValueDiscarded => ast::RecoveryKind::Expression,
+                DiagnosticCode::VariantInvalidFieldType => ast::RecoveryKind::Type,
+                _ => return None,
+            };
+            Some(ast::RecoveryNode { span, kind })
+        })
+        .collect()
+}
+
+/// Keeps the outer error node when parser recovery found nested symptoms
+/// inside it. This is the same synchronization rule as an error AST node:
+/// one placeholder owns one malformed construct. `nodes` is sorted by start,
+/// outermost first.
+fn outermost_recoveries(nodes: Vec<ast::RecoveryNode>) -> Vec<ast::RecoveryNode> {
     let mut selected: Vec<ast::RecoveryNode> = Vec::new();
     for node in nodes {
         if selected
@@ -711,26 +782,24 @@ pub(crate) fn compile_projection_report_parsed(
         }
         selected.push(node);
     }
-    if selected.is_empty() {
-        return ProjectionReport {
-            emit: None,
-            withheld: withheld_emit(source, options, program, tokens, &ordinary.diagnostics),
-            diagnostics: ordinary.diagnostics,
-            recovered: Vec::new(),
-        };
-    }
+    selected
+}
 
+fn recover_source(source: &str, selected: &[ast::RecoveryNode]) -> String {
     let mut recovered = source.as_bytes().to_vec();
-    for node in &selected {
+    for node in selected {
         let replacement = match &node.kind {
             ast::RecoveryKind::Expression => {
-                // TypeScript's error type, so no consequence of the stand-in
-                // is reported, in the widest spelling the node has room for.
+                // The placeholder is `any` wherever it fits, so the code that
+                // uses the recovered value has no checker consequence of it.
                 let width = node.span.end.saturating_sub(node.span.start);
-                let replacement = ["undefined as any", "0 as any"]
-                    .into_iter()
-                    .find(|replacement| replacement.len() <= width)
-                    .unwrap_or("0");
+                let replacement = if width >= "undefined as any".len() {
+                    "undefined as any"
+                } else if width >= "0 as any".len() {
+                    "0 as any"
+                } else {
+                    "0"
+                };
                 overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
                 continue;
             }
@@ -761,35 +830,7 @@ pub(crate) fn compile_projection_report_parsed(
     // Every overwrite replaces a whole node's byte range with ASCII, and
     // a node's range is a char boundary on both ends, so what is left is
     // still the UTF-8 it started as.
-    let recovered_source =
-        String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII");
-    let (recovered_program, recovered_tokens) =
-        parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
-    let recovered_report = compile_report_parsed(
-        &recovered_source,
-        options,
-        &recovered_program,
-        &recovered_tokens,
-    );
-    let withheld = match recovered_report.emit {
-        Some(_) => None,
-        None => withheld_emit(
-            &recovered_source,
-            options,
-            &recovered_program,
-            &recovered_tokens,
-            &recovered_report.diagnostics,
-        ),
-    };
-    ProjectionReport {
-        emit: recovered_report.emit,
-        withheld,
-        diagnostics: ordinary.diagnostics,
-        recovered: selected
-            .into_iter()
-            .map(|node| (node.span.start, node.span.end))
-            .collect(),
-    }
+    String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII")
 }
 
 fn verified_emit(

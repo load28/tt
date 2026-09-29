@@ -37,7 +37,7 @@ pub(super) fn evaluation_protocol(
                 callee: Some(_),
                 arguments,
                 type_args,
-                optional: false,
+                optional: None,
                 ..
             } if matches!(arguments.last(), Some((argument, false, _)) if projected_contains(*argument, value))
                 && arguments.iter().all(|(_, spread, _)| !*spread) =>
@@ -119,6 +119,7 @@ pub(super) struct ProjectedConditionalFacts {
     skipped: Option<ProjectedSpan>,
     operands: Vec<(ProjectedSpan, bool)>,
     type_args: Option<ProjectedSpan>,
+    optional_test: Option<OptionalCallTest>,
 }
 
 pub(super) fn protocol_step(
@@ -222,6 +223,7 @@ pub(super) fn protocol_step(
                     skipped: None,
                     operands: Vec::new(),
                     type_args: None,
+                    optional_test: None,
                 });
             }
             let (left, effects) = *left;
@@ -242,6 +244,7 @@ pub(super) fn protocol_step(
                 skipped: Some(*alternate),
                 operands: Vec::new(),
                 type_args: None,
+                optional_test: None,
             });
             let (test, effects) = *test;
             (
@@ -261,6 +264,7 @@ pub(super) fn protocol_step(
                 skipped: Some(*consequent),
                 operands: Vec::new(),
                 type_args: None,
+                optional_test: None,
             });
             let (test, effects) = *test;
             (
@@ -276,7 +280,7 @@ pub(super) fn protocol_step(
             ..
         } if projected_contains(*callee, value) => (
             *parent,
-            HostEvaluationOperation::Reference(if *optional {
+            HostEvaluationOperation::Reference(if optional.is_some() {
                 ReferencePosition::OptionalCallCallee
             } else {
                 ReferencePosition::CallCallee
@@ -301,7 +305,7 @@ pub(super) fn protocol_step(
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let operation = if *optional {
+            let operation = if let Some(test) = optional {
                 conditional = Some(ProjectedConditionalFacts {
                     branch: arguments[position].0,
                     skipped: None,
@@ -310,6 +314,7 @@ pub(super) fn protocol_step(
                         .map(|(span, spread, _)| (*span, *spread))
                         .collect(),
                     type_args: *type_args,
+                    optional_test: Some(*test),
                 });
                 HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(index))
             } else {
@@ -542,6 +547,7 @@ pub(super) fn protocol_step(
                     .type_args
                     .map(|span| map_evaluation_span(segments, span))
                     .transpose()?,
+                optional_test: facts.optional_test,
             })
         })
         .transpose()?;
@@ -613,6 +619,27 @@ pub(super) fn map_structural_span(
 
 pub(super) fn projected_contains(container: ProjectedSpan, value: ProjectedSpan) -> bool {
     container.start <= value.start && value.end <= container.end
+}
+
+/// Which link of its optional chain a call inside the chain is skipped at
+/// ([`OptionalCallTest`]): `own_link` is whether the call itself is written
+/// `?.(`.
+pub(super) fn optional_call_test(own_link: bool, callee: &swc_ecma_ast::Expr) -> OptionalCallTest {
+    use swc_ecma_ast::{Expr as SwcExpr, OptChainBase};
+
+    let member_link = match callee {
+        SwcExpr::OptChain(chain) => match &*chain.base {
+            OptChainBase::Member(_) => Some(chain.optional),
+            OptChainBase::Call(_) => None,
+        },
+        _ => None,
+    };
+    match (own_link, member_link) {
+        (_, Some(false)) => OptionalCallTest::Inner,
+        (true, _) => OptionalCallTest::Callee,
+        (false, Some(true)) => OptionalCallTest::Receiver,
+        (false, None) => OptionalCallTest::Inner,
+    }
 }
 
 pub(super) fn call_callee_mode(

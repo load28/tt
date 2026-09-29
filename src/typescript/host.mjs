@@ -248,17 +248,28 @@ async function main() {
   }
 
   let API;
+  let SymbolFlags;
   let TypeFlags;
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
   let isBinaryExpression;
+  let isTypeReferenceNode;
+  let isTypeQueryNode;
+  let isQualifiedName;
   let SyntaxKind;
   try {
-    ({ API, TypeFlags } = await import(open.apiModule));
-    ({ isExpression, isIdentifier, isVariableDeclaration, isBinaryExpression, SyntaxKind } = await import(
-      path.resolve(path.dirname(open.apiModule), "../../ast/index.js")
-    ));
+    ({ API, SymbolFlags, TypeFlags } = await import(open.apiModule));
+    ({
+      isExpression,
+      isIdentifier,
+      isVariableDeclaration,
+      isBinaryExpression,
+      isTypeReferenceNode,
+      isTypeQueryNode,
+      isQualifiedName,
+      SyntaxKind,
+    } = await import(path.resolve(path.dirname(open.apiModule), "../../ast/index.js")));
   } catch (e) {
     fail(2, "ttc host: cannot load the TypeScript API from " + open.apiModule + ": " + e.message);
   }
@@ -613,7 +624,38 @@ async function main() {
         const symbol = checker.getSymbolAtLocation(declaration.name);
         if (!symbol) continue;
         const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
+        // The annotation is written at the storage declaration, which may
+        // enclose the scope the type was observed in: a class declared in a
+        // match arm's block is out of scope there, or an outer declaration
+        // of the same name shadows it. An annotation is written only when
+        // every name it references denotes, at the declaration, the symbol
+        // it denotes where the type was observed.
+        const annotation = (type, observed) => {
+          const node = checker.typeToTypeNode(type, declaration);
+          if (!node) return undefined;
+          let accessible = true;
+          const visit = (child) => {
+            if (!accessible) return;
+            const reference = isTypeReferenceNode(child)
+              ? [child.typeName, SymbolFlags.Type]
+              : isTypeQueryNode(child) ? [child.exprName, SymbolFlags.Value] : undefined;
+            if (reference) {
+              let [name, meaning] = reference;
+              while (isQualifiedName(name)) {
+                name = name.left;
+                meaning = SymbolFlags.Namespace | SymbolFlags.Value;
+              }
+              const here = checker.resolveName(name.text, meaning, declaration);
+              const there = checker.resolveName(name.text, meaning, observed);
+              accessible = !!here && !!there && here.id === there.id;
+            }
+            child.forEachChild(visit);
+          };
+          visit(node);
+          return accessible ? project.emitter.printNode(node) : undefined;
+        };
         let expected;
+        let observedAt;
         let ambiguous = false;
         for (const identifier of identifiers) {
           if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
@@ -625,6 +667,7 @@ async function main() {
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
           expected = context;
+          observedAt ??= identifier;
         }
         if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
@@ -639,13 +682,10 @@ async function main() {
           if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
           // Remove constituents subsumed by another incoming type. This is the
           // checker's assignability relation, including never[] <: number[].
-          const joined = types.filter((type, index) => !types.some((other, otherIndex) =>
+          const joined = types.flatMap((type, index) => types.some((other, otherIndex) =>
             index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
-            (!checker.isTypeAssignableTo(other, type) || otherIndex < index)));
-          const annotations = joined.map(type => {
-            const node = checker.typeToTypeNode(type, declaration);
-            return node && project.emitter.printNode(node);
-          });
+            (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
+          const annotations = joined.map(index => annotation(types[index], incoming[index].right));
           if (annotations.length && annotations.every(Boolean)) {
             out.contextualSlots.push({ index, annotation: annotations.length === 1
               ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
@@ -653,8 +693,8 @@ async function main() {
           continue;
         }
         if (!expected || ambiguous) continue;
-        const node = checker.typeToTypeNode(expected, declaration);
-        if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
+        const text = annotation(expected, observedAt);
+        if (text) out.contextualSlots.push({ index, annotation: text });
       }
     };
     for (const group of groups) contextual(group);

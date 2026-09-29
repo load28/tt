@@ -907,6 +907,12 @@ impl<'a> ProjectionBuilder<'a> {
             CoreRoot::Decision(decision.extent),
         )?;
         self.code.push(';');
+        for subject in &decision.subjects {
+            self.code.push('(');
+            let segments_since = self.source_segments.len();
+            self.emit_expr(subject.value)?;
+            self.push_source_boundary(");", segments_since);
+        }
         // Statement decisions do not introduce a function boundary. Keep their
         // bodies in this lexical control-flow region so returns belong to the
         // surrounding match/result, and nested values retain their real owner.
@@ -1257,7 +1263,7 @@ impl<'a> ProjectionBuilder<'a> {
                     }
                     crate::core_ir::MissAction::Decision(inner) => {
                         self.code.push_str(" else ");
-                        self.emit_inline_decision_bodies(inner)?;
+                        self.emit_statement_decision(inner)?;
                     }
                     crate::core_ir::MissAction::Nothing => {}
                     crate::core_ir::MissAction::ThrowUnexpected(_) => {

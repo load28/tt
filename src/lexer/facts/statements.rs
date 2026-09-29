@@ -458,10 +458,12 @@ impl Machine<'_> {
                 modifier(self)
             }
             "function" => {
+                self.mark(TokenFacts::DECLARATION);
                 self.push_frame(Frame::Decl(Decl::function(Some(begin))));
                 Out::Consumed
             }
             "class" => {
+                self.mark(TokenFacts::DECLARATION);
                 self.push_frame(Frame::Decl(Decl::class(Some(begin))));
                 Out::Consumed
             }

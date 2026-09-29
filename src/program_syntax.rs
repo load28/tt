@@ -236,6 +236,31 @@ pub(crate) struct ConditionalFacts {
     pub(crate) operands: Vec<ConditionalOperand>,
     /// An optional call's explicit type arguments, verbatim.
     pub(crate) type_args: Option<SourceSpan>,
+    /// What an optional call's arguments are conditional on. `None` for
+    /// other operations.
+    pub(crate) optional_test: Option<OptionalCallTest>,
+}
+
+/// The link of its optional chain an optional call is skipped at. A chain
+/// short-circuits at the first `?.` whose base is `undefined` or `null`
+/// (ECMA-262 §13.3.9.1), and everything after that link, the call and its
+/// arguments included, is skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OptionalCallTest {
+    /// `callee?.(...)`: the call's own link. The call is skipped when the
+    /// callee is nullish, which is also the case when a `?.` inside the
+    /// callee short-circuits it (`o?.m?.(...)`).
+    Callee,
+    /// `receiver?.name(...)` or `receiver?.[key](...)`: the link of the
+    /// callee's member access. The call is skipped when the receiver is
+    /// nullish; otherwise the callee is called, and a callee that is not
+    /// callable throws.
+    Receiver,
+    /// A `?.` further inside the callee's receiver (`a?.b.m(...)`,
+    /// `a?.b.m?.(...)`), or a call the callee chains from (`f?.()(...)`).
+    /// Whether the chain short-circuits is known only by evaluating that
+    /// link's base, which no captured input of the call holds.
+    Inner,
 }
 
 /// One argument of an optional call: the argument expression, and whether
