@@ -1,5 +1,9 @@
 # TASK-483: Keep generated declarations of script files from colliding in the shared global scope
 
+> TASK-518 resolves the runtime residual named under Scope: `ttc` now writes
+> `tt/runtime.ts` only when an emitted output imports it, so a project of
+> scripts no longer gets an unused runtime file.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

@@ -329,6 +329,7 @@ pub(crate) fn emit_with_map<'a>(
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
         used_flow: Cell::new(false),
+        imported_std: RefCell::new(Vec::new()),
         generated_names: RefCell::new(lowering_plan.generated_names().cloned().unwrap_or_else(
             || crate::generated_names::GeneratedNames::for_source(source, source_kind),
         )),
@@ -513,5 +514,15 @@ pub(crate) fn emit_with_map<'a>(
             .map_or(result_return.src, |argument| argument.end);
     }
     flat.generated_names = emitter.generated_names.into_inner().into_allocated();
+    // A script inlines its runtime helpers; only a module imports them.
+    let imports_runtime = !script && !runtime_helpers.is_empty();
+    let imported_std = emitter.imported_std.into_inner();
+    flat.support_imports = crate::StdModule::ALL
+        .into_iter()
+        .filter(|module| {
+            imported_std.contains(module)
+                || (*module == crate::StdModule::Runtime && imports_runtime)
+        })
+        .collect();
     flat
 }

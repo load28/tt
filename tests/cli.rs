@@ -103,6 +103,46 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
     }
 }
 
+/// The runtime is written for an output that imports it, which is what
+/// codegen emitted rather than whether the source has a pipeline: a
+/// literal-headed pipeline lowers to a direct call, and a script inlines
+/// its helpers.
+#[test]
+fn a_pipeline_that_imports_no_runtime_writes_none() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("direct.tt"), "export const a = 1 |> String;\n").unwrap();
+    fs::write(
+        source.join("script.tt"),
+        "declare function input(): number;\n\
+         declare const step: (value: number) => number;\n\
+         const value = input() |> step;\n",
+    )
+    .unwrap();
+
+    for out in [None, Some(&out_dir)] {
+        let mut args = vec!["--no-banner"];
+        if let Some(out) = out {
+            args.extend(["-o", out.to_str().unwrap()]);
+        }
+        args.push(source.to_str().unwrap());
+        let output = ttc(&args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let root = out.unwrap_or(&source);
+        for name in ["direct", "script"] {
+            let code = fs::read_to_string(root.join(format!("{name}.ts"))).unwrap();
+            assert!(!code.contains("runtime"), "{code}");
+        }
+        assert!(!root.join("tt").exists(), "{}", root.display());
+    }
+}
+
 #[test]
 fn a_mixed_source_stem_collision_is_rejected_before_writing() {
     let dir = tmpdir();
@@ -185,8 +225,9 @@ fn a_source_cannot_claim_a_compiler_support_module_output() {
     fs::create_dir_all(source.join("tt")).unwrap();
     fs::write(
         source.join("main.tt"),
-        "const twice = (value: number): number => value * 2;\n\
-         export const result = 1 |> twice;\n",
+        "declare function input(): number;\n\
+         const twice = (value: number): number => value * 2;\n\
+         export const result = input() |> twice;\n",
     )
     .unwrap();
     fs::write(
@@ -234,6 +275,73 @@ fn an_output_directory_inside_the_input_is_not_recompiled() {
     assert!(out_dir.join("stale.ts").is_file());
     assert!(!out_dir.join("generated/stale.ts").exists());
     assert!(!out_dir.join("alias/stale.ts").exists());
+}
+
+/// Only an output root strictly inside a directory input is excluded from
+/// it. The input itself, or a directory enclosing it, is where every source
+/// lives, and excluding it would leave nothing to compile.
+#[test]
+fn an_output_directory_that_is_or_encloses_the_input_keeps_its_sources() {
+    for (out, input, emitted) in [
+        (".", "src", "a.ts"),
+        ("src", "src", "src/a.ts"),
+        ("gen", "gen/src", "gen/a.ts"),
+    ] {
+        let dir = tmpdir();
+        fs::create_dir_all(dir.join(input)).unwrap();
+        fs::write(dir.join(input).join("a.tt"), "export const a = 1;\n").unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["-o", out, input])
+            .current_dir(dir.path())
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "-o {out} {input}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(dir.join(emitted).is_file(), "-o {out} {input}");
+    }
+}
+
+/// A directory the input reaches both by its own name and through a symlink
+/// is mirrored under its own name, wherever the alias sorts. A directory
+/// reached only through a symlink is still collected through it.
+#[cfg(unix)]
+#[test]
+fn a_directory_alias_does_not_move_the_real_directory_outputs() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let outside = dir.join("shared");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(source.join("lib")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(source.join("lib/x.tt"), "export const x = 1;\n").unwrap();
+    fs::write(outside.join("s.tt"), "export const s = 1;\n").unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "import { x } from \"./lib/x.tt\";\nexport const y = x;\n",
+    )
+    .unwrap();
+    for alias in ["@lib", "zlib"] {
+        std::os::unix::fs::symlink("lib", source.join(alias)).unwrap();
+    }
+    std::os::unix::fs::symlink(&outside, source.join("linked")).unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("lib/x.ts").is_file());
+    assert!(out_dir.join("linked/s.ts").is_file());
+    for alias in ["@lib", "zlib"] {
+        assert!(!out_dir.join(alias).exists(), "{alias}");
+    }
+    let main = fs::read_to_string(out_dir.join("main.ts")).unwrap();
+    assert!(main.contains("\"./lib/x.js\""), "{main}");
 }
 
 #[test]
@@ -1330,6 +1438,41 @@ fn a_source_map_follows_the_banner_past_a_shebang() {
         !mappings.starts_with(';'),
         "the shebang line lost its mapping: {mappings}"
     );
+}
+
+/// A file that is only a shebang, with no line break after it, keeps the
+/// shebang on generated line 1: the banner goes on a line of its own after
+/// it, and the map's only segment stays on the first line.
+#[test]
+fn a_source_map_keeps_a_lone_shebang_on_the_first_line() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let source = dir.join("only.tt");
+    fs::write(&source, "#!/usr/bin/env node").unwrap();
+    let output = ttc(&[
+        "--source-map",
+        "file",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let code = fs::read_to_string(out_dir.join("only.ts")).unwrap();
+    assert!(
+        code.starts_with("#!/usr/bin/env node\n// @generated"),
+        "{code}"
+    );
+    let map = fs::read_to_string(out_dir.join("only.ts.map")).unwrap();
+    let mappings = map
+        .split("\"mappings\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("a mappings field");
+    assert_eq!(mappings, "AAAA", "{map}");
 }
 
 /// A reader that stops reading is the reader's decision, not a compiler

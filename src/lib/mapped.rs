@@ -187,6 +187,12 @@ pub struct MappedEmit {
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
+    /// The compiler support modules the emitted code imports, in
+    /// [`StdModule::ALL`](crate::StdModule::ALL) order: the standard-library
+    /// modules the source imports, and the pipeline runtime when the
+    /// emission calls one of its helpers through an import. A build writes
+    /// exactly these modules for the outputs it writes.
+    pub support_imports: Vec<crate::StdModule>,
 }
 
 impl MappedEmit {
@@ -288,6 +294,7 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        support_imports: flat.support_imports,
     }
 }
 

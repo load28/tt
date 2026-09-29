@@ -235,6 +235,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        support_imports: flat.support_imports,
     };
     if options.defer_to_checker {
         return Ok(emit);
@@ -865,6 +866,7 @@ pub(crate) fn compile_report_parsed(
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        support_imports: flat.support_imports,
     };
     let mut emit = verified_emit(
         lowered,
