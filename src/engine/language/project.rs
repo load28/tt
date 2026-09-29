@@ -255,13 +255,114 @@ impl Project {
             "textDocument/definition",
             serde_json::json!({}),
         )?;
-        Ok(locations
+        let mut references: Vec<Reference> = locations
             .into_iter()
             .map(|location| Reference {
                 is_definition: definitions.contains(&location),
                 location,
             })
-            .collect())
+            .collect();
+        let Some(declaration) = self.tt_declaration(path, position, &definitions)? else {
+            return Ok(references);
+        };
+        // A tt name's uses are of two kinds: the TypeScript ones the
+        // emission declares it for (`Shape.Circle(1)`, `s: Shape`), asked at
+        // the declaration, and the pattern ones only tt resolves.
+        let mut found = vec![Reference {
+            location: declaration.clone(),
+            is_definition: true,
+        }];
+        for location in self.locations(
+            &declaration.path,
+            declaration.range.start,
+            "textDocument/references",
+            serde_json::json!({ "context": { "includeDeclaration": true } }),
+        )? {
+            found.push(Reference {
+                is_definition: false,
+                location,
+            });
+        }
+        for file in self.tt_files()? {
+            let Some(text) = self.text_of(&file) else {
+                continue;
+            };
+            for range in crate::engine::names::tt_pattern_references(&file, &text, &declaration) {
+                found.push(Reference {
+                    is_definition: false,
+                    location: Location {
+                        path: file.clone(),
+                        range,
+                    },
+                });
+            }
+        }
+        for reference in found {
+            match references
+                .iter_mut()
+                .find(|r| crate::engine::names::same_location(&r.location, &reference.location))
+            {
+                Some(known) => known.is_definition |= reference.is_definition,
+                None => references.push(reference),
+            }
+        }
+        Ok(references)
+    }
+
+    /// The tt declaration a name at `position` refers to: the name itself
+    /// when tt resolves it (a declaration, a pattern tag or field), or the
+    /// place TypeScript's `definitions` of it land when that place is a tt
+    /// declaration (`Shape.Circle` in a `.ts` file lands on the case).
+    fn tt_declaration(
+        &mut self,
+        path: &Path,
+        position: Position,
+        definitions: &[Location],
+    ) -> Result<Option<Location>, String> {
+        let is_tt = |path: &Path| crate::SourceKind::from_tt_path(path).is_some();
+        if is_tt(path)
+            && let Some(text) = self.text_of(path)
+            && let Some(symbol) = crate::engine::names::tt_symbol_at(path, &text, position)
+        {
+            return Ok(symbol.definition);
+        }
+        for definition in definitions {
+            if !is_tt(&definition.path) {
+                continue;
+            }
+            let Some(text) = self.text_of(&definition.path) else {
+                continue;
+            };
+            if crate::engine::names::tt_symbol_at(&definition.path, &text, definition.range.start)
+                .and_then(|symbol| symbol.definition)
+                .is_some_and(|found| crate::engine::names::same_location(&found, definition))
+            {
+                return Ok(Some(definition.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    /// The project's `.tt`/`.ttx` files, open buffers included.
+    fn tt_files(&self) -> Result<Vec<PathBuf>, String> {
+        let mut files = self.scan().map_err(|error| error.to_string())?;
+        files.extend(
+            self.overlays
+                .keys()
+                .filter(|path| crate::SourceKind::from_tt_path(path).is_some())
+                .cloned(),
+        );
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
+    /// A file's text as the project sees it: the open buffer, else the disk.
+    fn text_of(&self, path: &Path) -> Option<String> {
+        match self.overlays.get(path) {
+            Some(text) => Some(text.clone()),
+            None => std::fs::read_to_string(path).ok(),
+        }
     }
 
     fn locations(
@@ -276,24 +377,23 @@ impl Project {
             service, overlays, ..
         } = self;
         let session = service.as_mut().expect("serve started it");
-        let Some(at) = to_service_name(&doc, position) else {
-            return Ok(Vec::new());
-        };
-        let mut params = serde_json::json!({
-            "textDocument": { "uri": served_uri(session, &path) },
-            "position": lsp_position(u16_position(&doc.code, at)),
-        });
-        if let (Some(into), Some(from)) = (params.as_object_mut(), extra.as_object()) {
-            for (key, value) in from {
-                into.insert(key.clone(), value.clone());
+        let mut raw: Vec<serde_json::Value> = Vec::new();
+        for at in to_service_names(&doc, position) {
+            let mut params = serde_json::json!({
+                "textDocument": { "uri": served_uri(session, &path) },
+                "position": lsp_position(u16_position(&doc.code, at)),
+            });
+            if let (Some(into), Some(from)) = (params.as_object_mut(), extra.as_object()) {
+                for (key, value) in from {
+                    into.insert(key.clone(), value.clone());
+                }
+            }
+            match session.client.request(method, params)? {
+                serde_json::Value::Array(items) => raw.extend(items),
+                serde_json::Value::Null => {}
+                one => raw.push(one),
             }
         }
-        let answer = session.client.request(method, params)?;
-        let raw: Vec<serde_json::Value> = match answer {
-            serde_json::Value::Array(items) => items,
-            serde_json::Value::Null => Vec::new(),
-            one => vec![one],
-        };
         let mut out = Vec::new();
         for location in raw {
             let Some(uri) = location["uri"].as_str() else {

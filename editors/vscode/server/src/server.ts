@@ -1520,7 +1520,7 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   // Delegated wholesale to the engine: TypeScript resolves the passthrough
-  // region exactly, and tt-specific spans degrade to an empty result.
+  // region, and a tt name's declaration and patterns are the engine's own.
   const references = (
     await engine.references(await compilerOf(doc), fsPath, params.position, logEngine)
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);

@@ -141,3 +141,78 @@ fn an_auto_import_completion_carries_its_import_edit_onto_the_source() {
         );
     }
 }
+
+#[test]
+fn references_to_a_tt_name_reach_its_declaration_its_patterns_and_its_typescript_uses() {
+    require_tsgo!();
+    let lib = "export variant Color { Red, Green(level: number) }\n\
+export function f(c: Color): number {\n\
+\x20 return match (c) { Red => 0, Green(level) => level };\n\
+}\n";
+    let use_tt = "import { Color } from \"./lib.tt\";\n\
+export const g = (c: Color) => match (c) { Green(level: l) => l, _ => 1 };\n\
+export const made = Color.Green(3);\n";
+    let use_ts = "import { Color } from \"./lib.tt\";\nexport const x: Color = Color.Green(2);\n";
+    let dir = project(&[
+        ("src/lib.tt", lib),
+        ("src/use.tt", use_tt),
+        ("src/use.ts", use_ts),
+    ]);
+    let file = |name: &str| dir.join(name).canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[
+                file("src/lib.tt").to_string_lossy().into_owned(),
+                file("src/use.tt").to_string_lossy().into_owned(),
+            ],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let text = |name: &str| match name {
+        "src/lib.tt" => lib,
+        "src/use.tt" => use_tt,
+        _ => use_ts,
+    };
+    let mut references = |name: &str, needle: &str| {
+        let mut at = utf16_position(text(name), needle);
+        at.character += 1;
+        let mut found: Vec<String> = project
+            .references(&file(name), at)
+            .unwrap()
+            .into_iter()
+            .map(|reference| {
+                let owner = ["src/lib.tt", "src/use.tt", "src/use.ts"]
+                    .into_iter()
+                    .find(|owner| file(owner) == reference.location.path)
+                    .expect("a project file");
+                format!(
+                    "{owner}:{}{}",
+                    utf16_slice(text(owner), reference.location.range),
+                    if reference.is_definition { "*" } else { "" }
+                )
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    let green = vec![
+        "src/lib.tt:Green",
+        "src/lib.tt:Green*",
+        "src/use.ts:Green",
+        "src/use.tt:Green",
+        "src/use.tt:Green",
+    ];
+    for (name, needle) in [
+        ("src/lib.tt", "Green(level: number)"),
+        ("src/lib.tt", "Green(level) =>"),
+        ("src/use.tt", "Green(level: l)"),
+        ("src/use.ts", "Green(2)"),
+    ] {
+        assert_eq!(references(name, needle), green, "{name} {needle}");
+    }
+    assert_eq!(
+        references("src/use.tt", "level: l"),
+        vec!["src/lib.tt:level", "src/lib.tt:level*", "src/use.tt:level"]
+    );
+    assert_eq!(references("src/lib.tt", "Color {").len(), 8);
+}

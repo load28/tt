@@ -507,6 +507,27 @@ pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<us
     })
 }
 
+/// Where to ask the service about the name at `position`: the served text
+/// the name was copied to, or — for a name ttc declares in glue, a variant's
+/// type and constructor, a case's constructor, a payload field's properties
+/// — every place the emission declares it. Empty when neither holds.
+pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usize> {
+    if let Some(at) = to_service_name(doc, position) {
+        return vec![at];
+    }
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    doc.declared_names
+        .iter()
+        .filter(|name| name.src <= byte && byte <= name.src_end)
+        .map(|name| {
+            mapper::to_utf16(
+                &doc.code,
+                name.out + (byte - name.src).min(name.out_end - name.out),
+            )
+        })
+        .collect()
+}
+
 pub(super) struct SharedTarget {
     pub location: Location,
     pub name: String,

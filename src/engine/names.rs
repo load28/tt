@@ -145,7 +145,68 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
     })
 }
 
-/// The symbol at `offset` when it sits inside one of this file's own variant
+/// Every name in `source`'s patterns that resolves to the tt declaration at
+/// `target` — the case tags and payload fields TypeScript never sees, since
+/// they lower to string literals and destructuring keys. A name resolves
+/// here by the same rule it does for [`tt_symbol_at`], so a pattern is a
+/// reference exactly when go-to-definition from it lands on `target`.
+pub fn tt_pattern_references(path: &Path, source: &str, target: &Location) -> Vec<Range> {
+    let locals = crate::variant_symbols_with_kind(
+        source,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
+    let analyses = super::language::analyses_for(path, source);
+    let mut definitions = std::collections::HashMap::new();
+    let mut out = Vec::new();
+    for resolved in &analyses.resolved {
+        let key = (
+            resolved.kind == NameKind::Case,
+            resolved.variant_name.clone(),
+            resolved.tag.clone(),
+            resolved.name.clone(),
+        );
+        let definition = definitions
+            .entry(key)
+            .or_insert_with(|| {
+                let declared = analyses
+                    .declarations
+                    .iter()
+                    .find(|d| d.name == resolved.variant_name)?;
+                match resolved.kind {
+                    NameKind::Case => {
+                        case_definition(path, source, &locals, declared, &resolved.name)
+                    }
+                    NameKind::Field => field_definition(
+                        path,
+                        source,
+                        &locals,
+                        declared,
+                        resolved.tag.as_deref()?,
+                        &resolved.name,
+                    ),
+                }
+            })
+            .clone();
+        if definition.is_some_and(|definition| same_location(&definition, target)) {
+            out.push(super::language::span_range(
+                source,
+                resolved.start,
+                resolved.end,
+            ));
+        }
+    }
+    out
+}
+
+/// Whether two locations name the same range of the same file, however
+/// each path was spelled.
+pub(crate) fn same_location(a: &Location, b: &Location) -> bool {
+    let file =
+        |path: &Path| super::normalize_document_path(path).unwrap_or_else(|_| path.to_path_buf());
+    a.range == b.range && file(&a.path) == file(&b.path)
+}
+
+/// The symbol at `offset` when it sits inside one of this file's own variant/// The symbol at `offset` when it sits inside one of this file's own variant
 /// declarations — the one region that lowers to text with no mapping at
 /// all, so nothing else can answer for it.
 fn declaration_at(

@@ -986,6 +986,33 @@ function positionOf(source: string, marker: string) {
   };
 }
 
+test("a case tag's references reach its declaration and every pattern", { skip: skipTyped, timeout }, async () => {
+  const { client, uri, stop } = await open(SHAPE_SOURCE);
+  try {
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "if let Circ"),
+      context: { includeDeclaration: true },
+    });
+    const lines = references.result
+      .filter((location: any) => location.uri === uri && covered(SHAPE_SOURCE, location.range) === "Circle")
+      .map((location: any) => location.range.start.line)
+      .sort();
+    assert.deepEqual(lines, [0, 3, 7], JSON.stringify(references.result));
+    const withoutDeclaration = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "if let Circ"),
+      context: { includeDeclaration: false },
+    });
+    assert.ok(
+      withoutDeclaration.result.every((location: any) => location.range.start.line !== 0),
+      JSON.stringify(withoutDeclaration.result),
+    );
+  } finally {
+    stop();
+  }
+});
+
 test("a case tag hovers as its declaration — in a match and in an if let", { skip, timeout }, async () => {
   const { client, uri, stop } = await open(SHAPE_SOURCE);
   try {

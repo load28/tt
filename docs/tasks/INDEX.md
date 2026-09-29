@@ -530,7 +530,8 @@
 | TASK-520 | Report each file of a `--types` declaration collision once | Complete | 2026-09-29 | 2026-09-29 | [TASK-520](./TASK-520-types-collision-report-once.md) |
 | TASK-526 | Carry auto-import edits from completion resolve onto the tt source | Complete | 2026-09-29 | 2026-09-29 | [TASK-526](./TASK-526-auto-import-completion-edits.md) |
 | TASK-529 | Answer a document opened through a symlink under its own URI | Complete | 2026-09-29 | 2026-09-29 | [TASK-529](./TASK-529-symlinked-document-locations.md) |
+| TASK-530 | Find every reference to a tt variant, case, or payload field | Complete | 2026-09-29 | 2026-09-29 | [TASK-530](./TASK-530-tt-name-references.md) |
 
 ## Next task number
 
-**TASK-530**
+**TASK-531**
