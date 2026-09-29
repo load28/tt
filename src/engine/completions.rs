@@ -127,6 +127,106 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
     merge_candidates(items)
 }
 
+/// A member access whose name the cursor completes: the cursor ends the
+/// name being typed (or stands where it will be) right after a `.` or `?.`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemberAccess {
+    /// The receiver when it is a name or a path of names (`Result`,
+    /// `ns.Shape`), the form a namespace's members are asked through.
+    /// `None` for any other expression (`f().`, `xs[0].`, `"abc".`,
+    /// `x |> .`).
+    pub receiver: Option<String>,
+}
+
+/// The member access the cursor at `position` completes, read from the
+/// token stream: `None` outside one, in a comment, and in a literal.
+pub fn member_access_at(path: &Path, source: &str, position: Position) -> Option<MemberAccess> {
+    let offset = super::language::source_byte(source, position);
+    let tokens = crate::lexer::lex_with_kind(
+        source,
+        0,
+        source.len(),
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
+    let tokens = innermost_tokens(&tokens, offset);
+    if inside_text(source, tokens, offset) {
+        return None;
+    }
+    let mut next = token_at(tokens, offset);
+    if next > 0 && is_prefix(tokens, next - 1, offset) {
+        next -= 1;
+    }
+    let dot = next
+        .checked_sub(1)
+        .filter(|&dot| is_member_dot(tokens, dot))?;
+    // The receiver is a path of names when names and `.`s alone run back
+    // from the dot to where the expression starts.
+    let mut names = Vec::new();
+    let mut after = dot;
+    let path = loop {
+        let Some(name) = after
+            .checked_sub(1)
+            .filter(|&name| matches!(tokens[name].kind, TokenKind::Ident))
+        else {
+            break false;
+        };
+        names.push(text(source, &tokens[name]));
+        match name
+            .checked_sub(1)
+            .map(|previous| (previous, &tokens[previous].kind))
+        {
+            Some((_, TokenKind::OptChain)) => break false,
+            Some((previous, _)) if is_member_dot(tokens, previous) => after = previous,
+            _ => break true,
+        }
+    };
+    names.reverse();
+    Some(MemberAccess {
+        receiver: path.then(|| names.join(".")),
+    })
+}
+
+/// The tokens of the innermost template interpolation around `offset`, or
+/// `tokens` when it is in none.
+fn innermost_tokens(tokens: &[Token], offset: usize) -> &[Token] {
+    for token in tokens {
+        if let TokenKind::Template(parts) = &token.kind
+            && token.span.start < offset
+            && offset < token.span.end
+        {
+            for part in parts.iter() {
+                if let crate::lexer::TplPart::Interp { span, tokens } = part
+                    && span.start <= offset
+                    && offset <= span.end
+                {
+                    return innermost_tokens(tokens, offset);
+                }
+            }
+        }
+    }
+    tokens
+}
+
+/// Whether the token at `index` is a member-access `.` or `?.`, not one of
+/// the dots of a spread's `...`.
+fn is_member_dot(tokens: &[Token], index: usize) -> bool {
+    match tokens[index].kind {
+        TokenKind::OptChain => true,
+        TokenKind::Punct(b'.') => {
+            let touching_dot = |token: &Token| {
+                matches!(token.kind, TokenKind::Punct(b'.'))
+                    && (token.span.end == tokens[index].span.start
+                        || token.span.start == tokens[index].span.end)
+            };
+            !(index
+                .checked_sub(1)
+                .is_some_and(|previous| touching_dot(&tokens[previous]))
+                || tokens.get(index + 1).is_some_and(touching_dot))
+        }
+        _ => false,
+    }
+}
+
 /// Ambiguous declarations can share a tag or field. Present one insertion
 /// candidate while preserving each possible declaration in its detail.
 fn merge_candidates(items: Vec<TtCompletion>) -> Vec<TtCompletion> {
@@ -631,6 +731,113 @@ mod tests {
             .into_iter()
             .map(|item| item.label)
             .collect()
+    }
+
+    /// The member access at the end of `source`.
+    fn member_at_end(path: &str, source: &str) -> Option<Option<String>> {
+        member_access_at(Path::new(path), source, at(source, source)).map(|access| access.receiver)
+    }
+
+    #[test]
+    fn a_member_access_is_read_from_the_tokens_before_the_name() {
+        for source in [
+            "declare const nm: string;\nconst m = nm.trim().ma",
+            "const t = foo().t",
+            "const t = xs[0].t",
+            "const t = \"abc\".len",
+            "const t = k |> .t",
+            "const t = k |> .",
+            "const t = a?.b.",
+            "const t = (a + b).",
+        ] {
+            assert_eq!(member_at_end("/p/a.tt", source), Some(None), "{source}");
+        }
+        for (source, receiver) in [
+            ("const r = Result.", "Result"),
+            ("const r = Result.O", "Result"),
+            ("const r = Result?.O", "Result"),
+            ("const r = ns.Shape.Ci", "ns.Shape"),
+        ] {
+            assert_eq!(
+                member_at_end("/p/a.tt", source),
+                Some(Some(receiver.to_string())),
+                "{source}"
+            );
+        }
+        // JSX text, attributes and generic arrows are not code; the
+        // expression containers are.
+        for (path, source, cursor, receiver) in [
+            ("/p/a.tt", "const r = `${obj.na}`;", "obj.na", "obj"),
+            (
+                "/p/a.ttx",
+                "const r = <div>{obj.na}</div>;",
+                "obj.na",
+                "obj",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <><p>{t.a}</p><p>{t.</p></>;",
+                "{t.",
+                "t",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <p>Don't {user.}</p>;",
+                "user.",
+                "user",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <a title=\"it's\" href='say \"hi\"' onClick={() => go(x.)}>{y.}</a>;",
+                "x.",
+                "x",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <a title=\"it's\" onClick={() => go(x.)}>{y.}</a>;",
+                "y.",
+                "y",
+            ),
+            (
+                "/p/a.ttx",
+                "const list = (\n  <ul>\n    {items.map(item => <li key={item.id}>{item.name} isn't {other.}</li>)}\n  </ul>\n);\n",
+                "other.",
+                "other",
+            ),
+            (
+                "/p/a.ttx",
+                "const id = <T,>(x: T) => x;\nconst pick = <T extends object>(x: T) => x;\nconst v = q.",
+                "q.",
+                "q",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <><img src='a.png' />{'literal'}{v.}</>;",
+                "v.",
+                "v",
+            ),
+        ] {
+            let access = member_access_at(Path::new(path), source, at(source, cursor));
+            assert_eq!(
+                access.map(|access| access.receiver),
+                Some(Some(receiver.to_string())),
+                "{source}"
+            );
+        }
+        let jsx_text = "const el = <p>see a.b</p>;";
+        assert_eq!(
+            member_access_at(Path::new("/p/a.ttx"), jsx_text, at(jsx_text, "a.b")),
+            None
+        );
+        for source in [
+            "const t = ma",
+            "const t = [...xs",
+            "const t = 1; // a.b",
+            "const t = \"a.b",
+            "const t = `a.b",
+        ] {
+            assert_eq!(member_at_end("/p/a.tt", source), None, "{source}");
+        }
     }
 
     #[test]

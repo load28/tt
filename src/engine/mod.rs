@@ -55,7 +55,9 @@ mod snapshot;
 mod tokens;
 mod workspace;
 
-pub use completions::{TtCompletion, TtCompletionKind, tt_completions_at};
+pub use completions::{
+    MemberAccess, TtCompletion, TtCompletionKind, member_access_at, tt_completions_at,
+};
 pub use declarations::{
     TtCaseDecl, TtDeclarations, TtFieldDecl, TtMatchSite, TtVariantDecl, TtVariantOrigin,
     tt_declarations,

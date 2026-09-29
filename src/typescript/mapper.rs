@@ -13,9 +13,12 @@ use crate::{EmitAnchor, EmitMapping};
 
 /// Where a checker diagnostic span belongs in the original source.
 ///
-/// A span is exact only when one verbatim mapping covers it completely.
-/// Crossing even one byte of compiler-written glue transfers ownership to
-/// the innermost lowering anchor. `Nearest` is the last-resort position for
+/// A span is exact only when one verbatim mapping covers it completely, or
+/// when it lies in glue that starts where copied text ends and opens no
+/// construct: TypeScript reports there what it expected after that text,
+/// and the span is that position. Crossing even one byte of other
+/// compiler-written glue transfers ownership to the innermost lowering
+/// anchor. `Nearest` is the last-resort position for
 /// output that has neither a complete mapping nor a recorded origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DiagnosticOrigin {
@@ -43,7 +46,23 @@ pub(crate) fn diagnostic_origin(
         });
     }
 
+    // TypeScript reports a missing token at the token it found in its
+    // place: `Identifier expected.` on the `;` a match arm's glue writes
+    // after `radius.`. A range that starts where copied text ends, copies
+    // nothing, and opens no construct's glue is that position after the
+    // user's text, as the cursor before the glue is (`Affinity::Preceding`).
     let occupied_end = end.max(start.saturating_add(1));
+    if !mappings
+        .iter()
+        .any(|m| m.out < occupied_end && start < m.out + m.len)
+        && !anchors.iter().any(|anchor| anchor.out == start)
+        && let Some(chunk) = mappings
+            .iter()
+            .find(|m| m.len > 0 && m.out + m.len == start)
+    {
+        let at = chunk.src + chunk.len;
+        return Some(DiagnosticOrigin::Exact { start: at, end: at });
+    }
     if let Some(anchor) = anchors
         .iter()
         .find(|anchor| anchor.out <= start && start < anchor.end)
@@ -249,6 +268,40 @@ mod tests {
         assert_eq!(
             diagnostic_origin(&mappings, &[anchor], 101, 104),
             Some(DiagnosticOrigin::Exact { start: 21, end: 24 })
+        );
+    }
+
+    #[test]
+    fn a_token_right_after_copied_text_is_the_position_after_it() {
+        let mappings = [EmitMapping {
+            src: 20,
+            out: 100,
+            len: 5,
+        }];
+        let anchor = EmitAnchor {
+            out: 90,
+            end: 140,
+            src: 12,
+            src_end: 25,
+            owner_end: 40,
+            context: None,
+            kind: AnchorKind::Match,
+        };
+        // The glue `;` after the copied `radius.`.
+        assert_eq!(
+            diagnostic_origin(&mappings, &[anchor], 105, 106),
+            Some(DiagnosticOrigin::Exact { start: 25, end: 25 })
+        );
+        // Glue a construct opens there is that construct's.
+        let opened = EmitAnchor { out: 105, ..anchor };
+        assert_eq!(
+            diagnostic_origin(&mappings, &[opened, anchor], 105, 106),
+            Some(DiagnosticOrigin::Anchor(opened))
+        );
+        // A range reaching back into the copied text keeps its anchor.
+        assert_eq!(
+            diagnostic_origin(&mappings, &[anchor], 104, 106),
+            Some(DiagnosticOrigin::Anchor(anchor))
         );
     }
 

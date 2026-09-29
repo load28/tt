@@ -5,7 +5,7 @@ use super::*;
 /// What a tt value that has no lowering stands as: TypeScript's error type,
 /// so nothing the checker says past it is a consequence of the stand-in.
 /// The typed projection's recovery writes the same expression.
-const RECOVERED_VALUE: &str = "(undefined as any)";
+pub(super) const RECOVERED_VALUE: &str = "(undefined as any)";
 
 impl<'a> Emitter<'a> {
     pub(super) fn exits_for_expr(&self, expr: ExprId) -> Vec<HostExit> {

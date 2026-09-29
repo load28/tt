@@ -354,28 +354,28 @@ pub(crate) fn emit_with_map<'a>(
         .map(|(export, _)| (export, emitter.generated_name(export)))
         .collect();
     let show = used_show.then(|| match_show_body(&emitter.host_json, &emitter.host_string));
-    let mut prelude = String::new();
+    let mut prelude: Vec<String> = Vec::new();
     if script {
         for alias in &aliases {
-            prelude.push_str(&format!("var {} = {};\n", alias.name, alias.capture));
+            prelude.push(format!("var {} = {};\n", alias.name, alias.capture));
         }
         for (export, local) in &runtime_helpers {
-            prelude.push_str(&script_runtime_helper(export, local));
+            prelude.push(script_runtime_helper(export, local));
         }
         if emitter.used_match_raise.get() {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "var {}: (error: unknown) => never = function (error) {{ throw error; }};\n",
                 emitter.match_raise_name
             ));
         }
         if let Some(body) = &show {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "var {}: (value: unknown) => string = function (value) {body};\n",
                 emitter.match_show_name
             ));
         }
         if emitter.used_expression_boundary.get() {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "var {}: <T>(run: () => T) => T = function (run) {{ return run(); }};\n",
                 emitter.expression_boundary_name
             ));
@@ -396,10 +396,10 @@ pub(crate) fn emit_with_map<'a>(
             let runtime = std_imports
                 .get(crate::StdModule::Runtime)
                 .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
-            prelude.push_str(&format!("import {{ {names} }} from \"{runtime}\";\n"));
+            prelude.push(format!("import {{ {names} }} from \"{runtime}\";\n"));
         }
         for alias in &aliases {
-            prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
+            prelude.push(format!("const {} = {};\n", alias.name, alias.capture));
         }
         // The helpers are declarations no source text owns, so they go
         // where no source text comes before them: a bracket the user left
@@ -407,19 +407,19 @@ pub(crate) fn emit_with_map<'a>(
         // declaration is hoisted, so where it stands in the module does
         // not change what it means.
         if emitter.used_match_raise.get() {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "function {}(error: unknown): never {{ throw error; }}\n",
                 emitter.match_raise_name
             ));
         }
         if let Some(body) = &show {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "function {}(value: unknown): string {body}\n",
                 emitter.match_show_name
             ));
         }
         if emitter.used_expression_boundary.get() {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "function {}<T>(run: () => T): T {{ return run(); }}\n",
                 emitter.expression_boundary_name
             ));
@@ -444,7 +444,10 @@ pub(crate) fn emit_with_map<'a>(
         } else {
             ""
         };
-        output.insert_lit_at_source(at, format!("{separator}{prelude}"));
+        if let Some(first) = prelude.first_mut() {
+            first.insert_str(0, separator);
+        }
+        output.insert_declarations_at_source(at, prelude);
     }
     // A block arm's `return` frame (the keyword, and anything after the
     // argument) is claimed by the exit rewrite, as is the operator frame of

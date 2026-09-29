@@ -561,6 +561,12 @@
 | TASK-553 | Annotate storage with the whole type, never a truncated one | Complete | 2026-09-29 | 2026-09-29 | [TASK-553](./TASK-553-untruncated-annotations.md) |
 | TASK-554 | Keep a member step's simple key where the member is read | Complete | 2026-09-29 | 2026-09-29 | [TASK-554](./TASK-554-member-step-simple-keys.md) |
 | TASK-555 | Bind a captured method at its call, after the arguments | Complete | 2026-09-29 | 2026-09-29 | [TASK-555](./TASK-555-late-method-binding.md) |
+| TASK-556 | Keep the pipeline runtime's helpers out of completion | Complete | 2026-09-29 | 2026-09-29 | [TASK-556](./TASK-556-runtime-helpers-in-completion.md) |
+| TASK-557 | Keep a pipeline whose last step is not written yet | Complete | 2026-09-29 | 2026-09-29 | [TASK-557](./TASK-557-unfinished-pipeline-step.md) |
+| TASK-558 | Read the member-completion context from the token stream | Complete | 2026-09-29 | 2026-09-29 | [TASK-558](./TASK-558-member-context-from-tokens.md) |
+| TASK-559 | Report a syntax error after an arm body where TypeScript puts it | Complete | 2026-09-29 | 2026-09-29 | [TASK-559](./TASK-559-syntax-error-after-copied-text.md) |
+| TASK-560 | Read a pipeline step with an open list as TypeScript reads the list | Complete | 2026-09-29 | 2026-09-29 | [TASK-560](./TASK-560-unfinished-pipeline-call-step.md) |
+| TASK-561 | Check an open document through its faithful projection while it does not parse | Complete | 2026-09-29 | 2026-09-29 | [TASK-561](./TASK-561-typed-check-of-an-open-unparsed-document.md) |
 | TASK-562 | Treat a backend that cannot start as unavailable | Complete | 2026-09-29 | 2026-09-29 | [TASK-562](./TASK-562-unstartable-backend-is-unavailable.md) |
 | TASK-563 | Leave the output directory out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-563](./TASK-563-exclude-output-directory-from-program.md) |
 | TASK-564 | Keep `--check` from starting the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-564](./TASK-564-check-without-typescript.md) |

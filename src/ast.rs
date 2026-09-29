@@ -251,6 +251,9 @@ pub(crate) enum PipeStepKind {
     /// whether the tail begins with `?.` rather than `.`; the parser has
     /// already validated the complete tail before constructing this node.
     Postfix { optional: bool },
+    /// No step was written after the `|>`: a syntax error node, spanning
+    /// nothing at the end of the `|>`.
+    Missing,
 }
 
 /// A statement-bodied tt `result { ... }` computation block. Direct `try`

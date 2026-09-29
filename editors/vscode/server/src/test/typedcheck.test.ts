@@ -44,7 +44,7 @@ test("a new file is type-checked before its first save", { skip: skipTyped, time
 });
 
 test(
-  "a clean file beside a failing one gets an answer, and a buffer that cannot lower says it was not checked",
+  "a clean file beside a failing one gets an answer, a buffer mid-edit is checked, and one that cannot lower says it was not",
   { skip: skipTyped, timeout },
   async () => {
     const dir = tmpProject();
@@ -56,6 +56,8 @@ test(
     const checked = await runTypedCheck(COMPILER, source, clean, true);
     assert.deepEqual(checked, { kind: "ok", blocked: false, diagnostics: [] });
 
+    // TypeScript that does not parse yet is checked through the buffer's
+    // faithful projection: its type errors keep their rendering.
     const unparsed = await runTypedCheck(
       COMPILER,
       "export const right: number = \"x\";\nMath.max(1,\n",
@@ -64,9 +66,26 @@ test(
     );
     assert.equal(unparsed.kind, "ok", JSON.stringify(unparsed));
     if (unparsed.kind !== "ok") return;
-    assert.equal(unparsed.blocked, true);
+    assert.equal(unparsed.blocked, false);
+    assert.ok(
+      unparsed.diagnostics.some(
+        (d) => d.code === "ts2322" && d.message.startsWith("type mismatch"),
+      ),
+      JSON.stringify(unparsed.diagnostics),
+    );
+
+    // tt text left as written cannot be lowered at all.
+    const unlowered = await runTypedCheck(
+      COMPILER,
+      "export const right: number = \"x\";\nfunction f() { try g() }\n",
+      clean,
+      true,
+    );
+    assert.equal(unlowered.kind, "ok", JSON.stringify(unlowered));
+    if (unlowered.kind !== "ok") return;
+    assert.equal(unlowered.blocked, true);
     assert.deepEqual(
-      unparsed.diagnostics.map((d) => d.code),
+      unlowered.diagnostics.map((d) => d.code),
       ["verify-failed"],
     );
   },

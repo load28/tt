@@ -307,6 +307,7 @@ impl Lowering<'_> {
                             hir::PipeStepKind::Postfix { optional } => {
                                 ApplyMode::Postfix { optional }
                             }
+                            hir::PipeStepKind::Missing => ApplyMode::Missing,
                         },
                     })
                     .collect(),
@@ -799,7 +800,7 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
                     validate_node(step.node, semantic);
                     validate_expr(step.value, file);
                     match step.mode {
-                        ApplyMode::Call | ApplyMode::Postfix { .. } => {}
+                        ApplyMode::Call | ApplyMode::Postfix { .. } | ApplyMode::Missing => {}
                     }
                 }
             }

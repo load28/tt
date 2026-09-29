@@ -132,6 +132,16 @@ export interface EngineTtCompletion {
   covered: boolean;
 }
 
+/** What completion at a position is, read from the buffer's tokens. */
+export interface EngineTtCompletions {
+  /** The pattern completions tt owns there; empty elsewhere. */
+  items: EngineTtCompletion[];
+  /** Set when the cursor completes a member name: `receiver` is the path
+   * of names before the `.` (`Result`, `ns.Shape`), or null for any other
+   * expression (`f().`, `x |> .`). */
+  member: { receiver: string | null } | null;
+}
+
 export interface EngineSemanticToken {
   range: EngineRange;
   /** An LSP standard token-type string ("keyword", "enumMember", ...). */
@@ -584,14 +594,14 @@ export async function ttCompletions(
   text: string,
   position: EnginePosition,
   onError?: (message: string) => void,
-): Promise<EngineTtCompletion[]> {
-  const result = await semantic<{ items: EngineTtCompletion[] }>(
+): Promise<EngineTtCompletions> {
+  const result = await semantic<EngineTtCompletions>(
     compiler,
     "ttCompletions",
     { path, text, position },
     onError,
   );
-  return result?.items ?? [];
+  return { items: result?.items ?? [], member: result?.member ?? null };
 }
 
 /** What tt has to say about a buffer that is not an error — today, the

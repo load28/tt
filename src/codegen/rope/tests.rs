@@ -107,7 +107,7 @@ fn source_in_a_top_level_construct_is_an_insertion_boundary() {
     let mut rope = Rope::new();
     rope.anchored(AnchorKind::Pipe, 0, source.len(), source.len(), inner);
 
-    rope.insert_lit_at_source(0, "import { helper } from \"runtime\";\n");
+    rope.insert_declarations_at_source(0, ["import { helper } from \"runtime\";\n"]);
 
     assert_eq!(
         rope.resolved_text().as_deref(),

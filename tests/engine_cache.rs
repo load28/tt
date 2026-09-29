@@ -140,7 +140,7 @@ fn an_error_node_keeps_its_file_and_other_files_checkable() {
     let dir = Workspace::new("cache-partial-snapshot");
     let blocked = dir.join("a-blocked.tt");
     let valid = dir.join("b-valid.tt");
-    fs::write(&blocked, "const broken = 1 |> ;\n").unwrap();
+    fs::write(&blocked, "const broken = ready ? 1 : 2 |> f;\n").unwrap();
     // A rule the tt layer answers on its own. Exhaustiveness would not do:
     // the engine defers that to the checker, so on a machine with no
     // TypeScript toolchain this file would have no diagnostic and the case

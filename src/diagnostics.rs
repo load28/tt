@@ -53,6 +53,8 @@ pub enum DiagnosticCode {
     /// An optional postfix pipeline step committed at `?.` but its complete
     /// tail is not in the supported grammar.
     MalformedPipelinePostfix,
+    /// A `|>` with no step after it.
+    MissingPipelineStep,
     /// A pipeline head cannot be the base receiver of an optional chain.
     InvalidOptionalReceiver,
     /// An `if let` the parser could not claim.
@@ -162,7 +164,7 @@ enum Numbered {
 ///
 /// Append-only: a new code takes the next number, and a retired code keeps
 /// its slot so every later number stays what `tsc` has already printed.
-const NUMBERED_CODES: [Numbered; 50] = [
+const NUMBERED_CODES: [Numbered; 51] = [
     Numbered::Active(DiagnosticCode::StrayPipe),
     Numbered::Active(DiagnosticCode::MalformedPipelinePostfix),
     Numbered::Active(DiagnosticCode::InvalidOptionalReceiver),
@@ -213,6 +215,7 @@ const NUMBERED_CODES: [Numbered; 50] = [
     Numbered::Active(DiagnosticCode::VariantFieldShadowsTag),
     Numbered::Active(DiagnosticCode::VariantRequiredAfterOptional),
     Numbered::Active(DiagnosticCode::VariantDefaultExport),
+    Numbered::Active(DiagnosticCode::MissingPipelineStep),
 ];
 
 /// The numbered slot a code reference names: a name, `tt<number>`, or a
@@ -235,6 +238,7 @@ impl DiagnosticCode {
         match self {
             DiagnosticCode::StrayPipe => "stray-pipe",
             DiagnosticCode::MalformedPipelinePostfix => "malformed-pipeline-postfix",
+            DiagnosticCode::MissingPipelineStep => "missing-pipeline-step",
             DiagnosticCode::InvalidOptionalReceiver => "invalid-optional-receiver",
             DiagnosticCode::StrayIfLet => "stray-if-let",
             DiagnosticCode::StrayResult => "stray-result",
@@ -291,6 +295,7 @@ impl DiagnosticCode {
     pub const ALL: &[DiagnosticCode] = &[
         DiagnosticCode::StrayPipe,
         DiagnosticCode::MalformedPipelinePostfix,
+        DiagnosticCode::MissingPipelineStep,
         DiagnosticCode::InvalidOptionalReceiver,
         DiagnosticCode::StrayIfLet,
         DiagnosticCode::StrayResult,
@@ -398,8 +403,23 @@ an arrow function at the top level of either side has to be wrapped:
     (ready ? a : b) |> f
     x |> (n => n + 1)
 
-A step may not be empty. An ambiguous head — no-semicolon style, or one
-containing `in` / `instanceof` — is resolved by parenthesizing the head."
+An ambiguous head — no-semicolon style, or one containing `in` /
+`instanceof` — is resolved by parenthesizing the head."
+            }
+
+            DiagnosticCode::MissingPipelineStep => {
+                "\
+A `|>` has no step after it: the pipeline ends at `;`, `,`, a closing
+bracket, another `|>`, or a statement keyword before its next step was
+written.
+
+    const n = xs |> .length |>
+    return n;
+
+The head and the steps before it are still the pipeline written, as
+TypeScript keeps the left operand of `a +` with its right operand missing,
+so the rest of the file is checked while the step is being typed. Write the
+step, or remove the `|>`."
             }
 
             DiagnosticCode::MalformedPipelinePostfix => {

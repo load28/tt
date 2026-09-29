@@ -646,10 +646,72 @@ fn unparenthesized_arrow_step_is_an_error() {
 
 #[test]
 fn empty_or_dangling_step_is_an_error() {
-    let e = err("const a = x |>;\n");
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
-    let e = err("const a = x |> |> f;\n");
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
+    for (src, col) in [
+        ("const a = x |>;\n", 13),
+        ("const a = x |> |> f;\n", 13),
+        ("const a = x |> .length |>\nconst b = a;\n", 24),
+    ] {
+        let codes: Vec<_> = ttc::analyze(src, &Options::default())
+            .iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(codes, [ttc::DiagnosticCode::MissingPipelineStep], "{src}");
+        let e = err(src);
+        assert!(e.message.contains("`|>` has no step"), "{}", e.message);
+        assert_eq!((e.line, e.col), (1, col), "{src}");
+    }
+}
+
+#[test]
+fn a_missing_step_keeps_the_pipeline_written_before_it() {
+    // The steps written stay the pipeline, and the missing one applies
+    // TypeScript's error type, so the projection still reads the head and
+    // the statement after it.
+    let src = "export function run(xs: number[]): number {\n  const n = xs |> .length |> \n  return n;\n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.emit.expect("the projection emits");
+    assert!(
+        emit.code
+            .contains("const n = (undefined as any)(xs.length) \n  return n;"),
+        "{}",
+        emit.code
+    );
+    assert!(report.recovered.is_empty(), "{:?}", report.recovered);
+}
+
+#[test]
+fn a_step_with_an_open_list_ends_where_typescript_ends_the_list() {
+    // The list runs to the next statement, as TypeScript reads `add(2, `
+    // with `const` after it; the statement stays outside the step.
+    let src = "const v = 1 |> add(2, \nconst w = 1;\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.withheld.expect("the faithful projection");
+    assert!(emit.code.ends_with("(1)const w = 1;\n"), "{}", emit.code);
+    let src = "function f() {\n  const v = 1 |> add(2, \n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.withheld.expect("the faithful projection");
+    assert!(emit.code.ends_with("(1)}\n"), "{}", emit.code);
+}
+
+#[test]
+fn a_stray_pipe_recovers_only_to_the_end_of_its_statement() {
+    let src = "export function run(a: boolean, f: (n: number) => number): number {\n  const n = a ? 1 : 2 |> f\n  const m = n + 1\n  return m;\n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let next = src.find("const m").unwrap();
+    assert!(
+        report
+            .recovered
+            .iter()
+            .all(|&(start, end)| end <= next || start >= next),
+        "{:?}",
+        report.recovered
+    );
+    let emit = report.emit.expect("the projection emits");
+    assert!(
+        emit.code.contains("const m = n + 1\n  return m;"),
+        "{}",
+        emit.code
+    );
 }
 
 #[test]

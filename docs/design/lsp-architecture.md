@@ -148,6 +148,16 @@ parse-only라 미완성 버퍼에서도, TS 툴체인 없이도 답한다 — �
 Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔진 표면이
 같은 내성을 갖추면서 해소됐다.
 
+**Update (TASK-558)**: member-access detection left `analysis.ts` too, and
+with it the masking it needed. It read only an identifier receiver and the
+character before the cursor, so `s.trim().ma` got tt's keyword snippets in
+place of String's `match`. The engine now reads the cursor's member context
+from the lexer's tokens (`engine::member_access_at`): the name being typed
+after a `.` or `?.`, and the receiver when it is a path of names (the form
+a variant's constructors are offered through). `ttCompletions` answers it
+as `member`, and the adapter relays it into the completion request. What
+remains in `analysis.ts` is the word at the cursor.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:
@@ -203,8 +213,11 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   words. The CLI and the batch typed path keep reporting them: they have no
   other reporter, and `tsc` itself reports only syntactic diagnostics while
   there are any.
-- **The typed pass.** A buffer that cannot be lowered is a blocked file of
-  its snapshot, and `typedCheck` says so (`blocked`). A blocked pass
+- **The typed pass.** A document held open whose TypeScript does not parse
+  is checked through the same faithful projection (TASK-561), so its type
+  errors keep the checker's rendering while the syntax error lasts. A
+  buffer that cannot be lowered at all is a blocked file of its snapshot,
+  and `typedCheck` says so (`blocked`). A blocked pass
   checked none of the buffer's TypeScript, so its answer never replaces the
   service layer. A pass that ran and found problems only in other files
   answers this file with no diagnostics, which does replace it.

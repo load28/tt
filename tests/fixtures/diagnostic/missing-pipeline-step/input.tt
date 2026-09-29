@@ -1,0 +1,4 @@
+export function run(xs: number[]): number {
+  const n = xs |> .length |>
+  return n;
+}

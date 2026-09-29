@@ -251,8 +251,13 @@ ttc는 아무 타입 판단도 하지 않는다 — 에러 계층 분리 계약 
 (통과시키면 생성물이 유효하지 않은 TS가 되어 출력 자가 검사에서 위치 정보 없이
 실패하게 된다 — 에러 계층 계약 위반). 추가 sema 검사:
 
-- 빈 step (`x |> |> f`, `x |>;`), 식별자가 따라오지 않는 `.` 스텝 — 구조
-  파싱 실패 → 위 에러로 수렴.
+- An empty step (`x |> |> f`, `x |>;`, a `|>` before a statement keyword)
+  is a missing step, not a parse failure (TASK-557): the parser keeps the
+  head and the written steps and records `PipeStepKind::Missing`, sema
+  reports `missing-pipeline-step` at that `|>`, and codegen applies
+  TypeScript's error type in its place (`(undefined as any)(acc)`), as
+  TypeScript keeps `a` in `a +` with the right operand missing.
+- 식별자가 따라오지 않는 `.` 스텝 — 구조 파싱 실패 → 위 에러로 수렴.
 - step/head 내부의 `try` 문 — match와 동일한 사유로 금지 (§5.4의 `return`
   의미 변화).
 

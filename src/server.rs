@@ -37,7 +37,11 @@
 //!                          "signature", "detail", "definition", "binds" } | null }
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
-//! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }] } }
+//! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }],
+//!                          "member": { "receiver" } | null } }
+//! `member`: the cursor completes a member name; `receiver` is the path of
+//! names before the `.` (`Result`, `ns.Shape`), or null for any other
+//! expression.
 //!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
@@ -683,6 +687,8 @@ fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, Strin
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
+    let member = ttc::engine::member_access_at(Path::new(path), text_param(params)?, position)
+        .map(|access| json!({ "receiver": access.receiver }));
     let items: Vec<_> =
         ttc::engine::tt_completions_at(Path::new(path), text_param(params)?, position)
             .into_iter()
@@ -699,7 +705,7 @@ fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, Strin
                 })
             })
             .collect();
-    Ok(json!({ "items": items }))
+    Ok(json!({ "items": items, "member": member }))
 }
 
 /// What tt has to say about a buffer that is not an error — today, the

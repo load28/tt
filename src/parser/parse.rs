@@ -319,8 +319,11 @@ fn rewind_segments(segments: &mut Vec<Segment>, boundary: usize, seg_start: usiz
 
 /// Bounds the expression containing an unclaimed operator and stops before
 /// the enclosing statement or delimiter. This parser-owned synchronization
-/// point prevents recovery from consuming the next independent construct.
+/// point prevents recovery from consuming the next independent construct:
+/// as in TypeScript, an expression ends at a statement boundary and before
+/// a statement keyword, which cannot continue it.
 fn recovery_expression_span(
+    src: &str,
     tokens: &[Token],
     start_idx: usize,
     operator_idx: usize,
@@ -330,7 +333,16 @@ fn recovery_expression_span(
     let mut recovery_end = tokens
         .get(operator_idx)
         .map_or(range_end, |token| token.span.end);
-    for token in tokens.iter().skip(operator_idx + 1) {
+    for (idx, token) in tokens.iter().enumerate().skip(operator_idx + 1) {
+        if depth == 0
+            && (token.facts.boundary_before()
+                || matches!(token.kind, TokenKind::Ident)
+                    && !cursor::dotted_at(tokens, operator_idx + 1, idx)
+                    && crate::lexer::statement_only_keyword(&src[token.span.start..token.span.end])
+                    && &src[token.span.start..token.span.end] != "try")
+        {
+            break;
+        }
         match token.kind {
             _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
@@ -484,7 +496,7 @@ impl Parser<'_> {
                 TokenKind::PipeOp => {
                     if !expr.1
                         && expr.0 < i
-                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i)
+                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i, end)
                     {
                         let (next_i, pipe) = match attempt {
                             pipes::Attempt::Parsed(next_i, pipe) => (next_i, pipe),
@@ -538,7 +550,7 @@ impl Parser<'_> {
                     }
                     stray_pipes.push(tok.span.start);
                     recoveries.push(RecoveryNode {
-                        span: recovery_expression_span(tokens, expr.0.min(i), i, end),
+                        span: recovery_expression_span(self.src, tokens, expr.0.min(i), i, end),
                         kind: RecoveryKind::Expression,
                     });
                     i += 1;

@@ -172,7 +172,7 @@ pub(super) fn ts_completions(
     let mut entries = Vec::with_capacity(items.len());
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
-        if generated_names.contains(&label) {
+        if generated_names.contains(&label) || imports_from_runtime(&item) {
             continue;
         }
         session
@@ -194,6 +194,14 @@ pub(super) fn ts_completions(
         member: is_member_context(code, at),
         probe: None,
     })
+}
+
+/// Whether a completion entry imports an export of the pipeline runtime.
+/// The runtime is compiler-owned: every export of it is a helper the
+/// emitter calls under a generated name, never a name the user writes.
+fn imports_from_runtime(item: &serde_json::Value) -> bool {
+    item["data"]["autoImport"]["moduleSpecifier"].as_str()
+        == Some(crate::StdPackage::Runtime.name())
 }
 
 /// The source byte a position names — the analysis speaks bytes, the
@@ -403,10 +411,11 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
 
 /// An edit the service computed over served text, as an edit of `source`:
 /// `mappings` maps `source` onto `code`, with a completion probe's
-/// placeholder spliced in at `splice` when there is one. An insertion in
-/// glue written at a source point (`inserted`) is an insertion at that
-/// point. `None` when either end of the range was not copied from the
-/// source, or falls inside the placeholder.
+/// placeholder spliced in at `splice` when there is one. An insertion
+/// before or after a declaration of glue written at a source point
+/// (`inserted`) is an insertion at that point. `None` when either end of
+/// the range was not copied from the source, when the edit changes glue,
+/// or when it falls inside the placeholder.
 pub(super) fn source_edit(
     code: &str,
     mappings: &[EmitMapping],
@@ -420,7 +429,7 @@ pub(super) fn source_edit(
     let (start, end) = mapper::to_source_span(mappings, start, end).or_else(|| {
         let glue = inserted
             .iter()
-            .find(|glue| start == end && glue.out <= start && start <= glue.out_end)?;
+            .find(|glue| start == end && (start == glue.out || start == glue.out_end))?;
         Some((glue.src, glue.src))
     })?;
     let unsplice = |byte: usize| match splice {

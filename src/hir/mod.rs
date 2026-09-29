@@ -503,6 +503,8 @@ pub enum PipeStepKind {
         /// Whether the first operation is optional (`?.`) rather than `.`.
         optional: bool,
     },
+    /// No step was written: its value is TypeScript's error type.
+    Missing,
 }
 
 /// One template component. Keeping raw chunks in HIR lets backend lowering

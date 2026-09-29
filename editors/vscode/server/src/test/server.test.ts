@@ -1472,9 +1472,10 @@ test(
   "a syntax error keeps the file's type errors and is stated once, by TypeScript",
   { skip: skipTyped, timeout },
   async () => {
-    // The typed pass cannot lower a buffer whose TypeScript does not parse,
-    // so it checks none of it: its answer must not replace the service's,
-    // which reads the buffer as a `.ts` file is read.
+    // The typed pass checks a buffer whose TypeScript does not parse
+    // through its faithful projection, as the service reads it: the type
+    // error keeps the compiler's rendering, and the syntax error is
+    // TypeScript's own, stated once.
     for (const source of [
       'const a: number = "x";\nconst o = { k: 1 };\no.\nexport {};\n',
       'variant V { A, B }\ndeclare const v: V;\nconst n = match (v) { A => 1, B => 2 };\nconst a: string = n;\nMath.max(1,\n',
@@ -1482,12 +1483,50 @@ test(
       const listed = (await published(source)).map(
         (d: any) => `${d.range.start.line}:${d.range.start.character} ${d.source} ${d.code}`,
       );
-      assert.ok(listed.some((d) => / ts 2322$/.test(d)), `${source}\n${listed}`);
-      assert.ok(listed.some((d) => / ts 1005$/.test(d)), `${source}\n${listed}`);
+      assert.ok(listed.some((d) => / ttc ts2322$/.test(d)), `${source}\n${listed}`);
+      assert.equal(listed.filter((d) => / (ttc ts|ts )1005$/.test(d)).length, 1, `${source}\n${listed}`);
       assert.ok(
         !listed.some((d) => / (verify-failed|source-not-typescript)$/.test(d)),
         `${source}\n${listed}`,
       );
+    }
+  },
+);
+
+test(
+  "an untouched type error reads the same while another line does not parse",
+  { skip: skipTyped, timeout },
+  async () => {
+    const clean = 'export const bad: number = "x";\nexport const y = 1 + 2;\n';
+    const edited = 'export const bad: number = "x";\nexport const y = 1 + ;\n';
+    const { client, uri, stop } = await open(clean);
+    try {
+      const lineOne = (p: any) =>
+        p.diagnostics
+          .filter((d: any) => d.range.start.line === 0)
+          .map((d: any) => JSON.stringify([d.range, d.code, d.message]));
+      const first = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (p) => p.uri === uri && lineOne(p).length > 0,
+      );
+      let version = 1;
+      for (const text of [edited, clean, edited]) {
+        version += 1;
+        const expected = version;
+        const next = client.waitFor(
+          "textDocument/publishDiagnostics",
+          (p) => p.uri === uri && p.version === expected,
+        );
+        client.notify("textDocument/didChange", {
+          textDocument: { uri, version },
+          contentChanges: [{ text }],
+        });
+        const published = await next;
+        assert.deepEqual(lineOne(published), lineOne(first), text);
+      }
+      assert.match(lineOne(first)[0], /type mismatch/);
+    } finally {
+      stop();
     }
   },
 );
@@ -2111,6 +2150,37 @@ test("a trigger character completes only the context it is registered for", { sk
         assert.ok(!labels.includes('match'), `${language} ${line}: no keyword snippets after a trigger character`);
       }
     } finally { stop(); }
+  }
+});
+
+test("a member name after any receiver completes members only", { skip: skipTyped, timeout }, async () => {
+  const prefix = [
+    "declare const nm: string;",
+    "declare function foo(): string;",
+    "declare const xs: string[];",
+    "declare const k: string;",
+    "",
+  ].join("\n");
+  for (const [line, member] of [
+    ["const m = nm.trim().ma", "match"],
+    ["const t = foo().t", "trim"],
+    ["const t = xs[0].t", "trim"],
+    ['const t = "abc".len', "length"],
+    ["const t = k |> .t", "trim"],
+  ] as const) {
+    const source = prefix + line;
+    const { completion, stop } = await open(source);
+    try {
+      const { items, labels } = await completion(line);
+      assert.ok(labels.includes(member), `${line}: ${JSON.stringify(labels)}`);
+      for (const tt of ["Option", "Result", "flow", "let-else"]) {
+        assert.ok(!labels.includes(tt), `${line}: ${tt} offered`);
+      }
+      const matches = items.filter((item) => item.label === "match");
+      assert.ok(matches.every((item) => item.kind === 2), `${line}: ${JSON.stringify(matches)}`);
+    } finally {
+      stop();
+    }
   }
 });
 

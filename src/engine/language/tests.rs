@@ -35,7 +35,7 @@ fn diagnostic_projection_depends_on_parseability_not_diagnostic_numbers() {
 #[test]
 fn service_projection_recovers_parser_error_nodes() {
     let source = "function f(value: number) { const n = try value; return n; }\n\
-            const broken = 1 |> ;\n";
+            const broken = ready ? 1 : 2 |> f;\n";
     let doc = service_doc(Path::new("/p/src/a.tt"), source.to_string());
     assert!(
         projection_accepts_diagnostics(&doc.code, crate::SourceKind::TypeScript),
@@ -44,7 +44,11 @@ fn service_projection_recovers_parser_error_nodes() {
     );
     assert_eq!(doc.recovered.len(), 1);
     assert!(doc.code.contains("\"value\" in $tt_t0"), "{}", doc.code);
-    assert!(doc.code.contains("const broken = 0"), "{}", doc.code);
+    assert!(
+        doc.code.contains("const broken = ready ? 1 : 0     ;"),
+        "{}",
+        doc.code
+    );
 }
 
 #[test]
@@ -117,6 +121,33 @@ fn a_chunk_end_offset_belongs_to_the_chunk() {
     assert_eq!(mapper::to_source_inclusive(&mappings, 15), Some(5));
     // ... and one past it is glue.
     assert_eq!(mapper::to_output_inclusive(&mappings, 6), None);
+}
+
+#[test]
+fn an_edit_of_the_prelude_maps_only_between_its_declarations() {
+    let source = "variant V { A, B }\ndeclare const v: V;\n\
+export const n = match (v) { A => 1, B => 2 };\nexport const f = flow |> String |> .trim();\n";
+    let doc = service_doc(Path::new("/p/src/a.tt"), source.to_string());
+    let import = "import { $tt_fl } from \"@tt/runtime\";\n";
+    assert!(doc.code.starts_with(import), "{}", doc.code);
+    let edit_at = |byte: usize| {
+        let position = byte_position(&crate::lines::LineMap::lsp(&doc.code), byte);
+        let position =
+            serde_json::json!({ "line": position.line, "character": position.character });
+        let edit = serde_json::json!({
+            "range": { "start": position, "end": position },
+            "newText": "x",
+        });
+        source_edit(&doc.code, &doc.mappings, &doc.inserted, source, None, &edit)
+            .map(|edit| edit.range.start)
+    };
+    let start = Some(Position {
+        line: 0,
+        character: 0,
+    });
+    assert_eq!(edit_at(0), start);
+    assert_eq!(edit_at(import.len()), start);
+    assert_eq!(edit_at("import { ".len()), None);
 }
 
 #[test]
