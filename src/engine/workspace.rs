@@ -20,9 +20,13 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use super::documents::Texts;
 use super::language::{Location, Position, RENAME_PLACEHOLDER, Reference, RenameEdit};
 use super::names::same_location;
-use super::{Engine, Project, ProjectOptions, normalize_document_path};
+use super::{
+    Engine, Project, ProjectOptions, TtCompletion, TtDeclarations, TtHint, TtSymbol,
+    normalize_document_path,
+};
 
 /// A project's identity: the `(tsconfig, root)` pair it was opened as.
 pub type ProjectIdentity = (Option<PathBuf>, PathBuf);
@@ -80,6 +84,39 @@ impl Workspace {
         self.projects.clear();
         self.open.clear();
         self.engine.documents.clear();
+    }
+
+    /// [`super::tt_symbol_at`], with the files `source` imports read as
+    /// this workspace holds them open.
+    pub fn tt_symbol_at(&self, path: &Path, source: &str, position: Position) -> Option<TtSymbol> {
+        super::names::symbol_at(path, source, position, self.texts())
+    }
+
+    /// [`super::tt_completions_at`], with the files `source` imports read
+    /// as this workspace holds them open.
+    pub fn tt_completions_at(
+        &self,
+        path: &Path,
+        source: &str,
+        position: Position,
+    ) -> Vec<TtCompletion> {
+        super::completions::completions_at(path, source, position, self.texts())
+    }
+
+    /// [`super::tt_hints`], with the files `source` imports read as this
+    /// workspace holds them open.
+    pub fn tt_hints(&self, path: &Path, source: &str) -> Vec<TtHint> {
+        super::hints::hints(path, source, self.texts())
+    }
+
+    /// [`super::tt_declarations`], with the files `source` imports read as
+    /// this workspace holds them open.
+    pub fn tt_declarations(&self, path: &Path, source: &str) -> TtDeclarations {
+        super::declarations::declarations(path, source, self.texts())
+    }
+
+    fn texts(&self) -> Texts<'_> {
+        Texts::Open(&self.engine.documents)
     }
 
     /// The project `path` belongs to — the one it was opened in, or the one

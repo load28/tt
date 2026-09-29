@@ -29,6 +29,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::documents::Texts;
 use super::project::Project;
 use super::projection::{self, module_path_of};
 use crate::EmitMapping;

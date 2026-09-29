@@ -40,6 +40,7 @@ use crate::ast::{
 use crate::lexer::{Token, TokenKind};
 use crate::parser::PatternSite;
 
+use super::documents::Texts;
 use super::language::Position;
 
 /// What a completion item is.
@@ -73,13 +74,26 @@ pub struct TtCompletion {
 ///
 /// The answer never includes ordinary TypeScript completions: those are the
 /// service's, and a consumer merges the two lists.
+///
+/// This is the stand-alone question: the files `source` imports are read
+/// as saved. A session asks [`super::Workspace::tt_completions_at`], which
+/// reads its open documents.
 pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<TtCompletion> {
+    completions_at(path, source, position, Texts::Disk)
+}
+
+pub(super) fn completions_at(
+    path: &Path,
+    source: &str,
+    position: Position,
+    texts: Texts<'_>,
+) -> Vec<TtCompletion> {
     let offset = super::language::source_byte(source, position);
     let (program, tokens) = crate::parser::lex_and_parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
-    let declarations = super::language::analyses_for(path, source).declarations;
+    let declarations = super::language::analyses_for(path, source, texts).declarations;
     let items = match context(source, &program, &tokens, offset) {
         Some(Context::Case { of: Some(arms) }) => {
             let mut items = resolve_all(&declarations, &arms.tags)

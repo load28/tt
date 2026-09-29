@@ -210,14 +210,19 @@ pub(in super::super) fn source_byte(source: &str, position: Position) -> usize {
     byte_at(&LineMap::lsp(source), position)
 }
 
-/// The match analysis of one file as a stand-alone question: imported
-/// declarations are the CLI's 1-hop collection, read from disk, since no
-/// project session is involved. This is what the parse-only surfaces
-/// ([`super::names`], [`super::hints`], [`super::completions`]) ask; a
-/// surface with a [`Project`] asks [`Project::semantic_analyses`] instead
-/// and shares the typed pass's cross-snapshot cache.
-pub(in super::super) fn analyses_for(path: &Path, source: &str) -> crate::PatternAnalyses {
-    let externs = externs_of(path, source, &|target| std::fs::read_to_string(target).ok());
+/// The match analysis of one file as a parse-only question: imported
+/// declarations are the CLI's 1-hop collection, read through `texts` — the
+/// session's open documents, or the disk when there is no session. This is
+/// what the parse-only surfaces ([`super::names`], [`super::hints`],
+/// [`super::completions`]) ask; a surface with a [`Project`] asks
+/// [`Project::semantic_analyses`] instead and shares the typed pass's
+/// cross-snapshot cache.
+pub(in super::super) fn analyses_for(
+    path: &Path,
+    source: &str,
+    texts: Texts<'_>,
+) -> crate::PatternAnalyses {
+    let externs = externs_of(path, source, &|target| texts.read(target));
     crate::analysis::pattern_analyses_with_kind(
         source,
         &externs,

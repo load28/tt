@@ -19,6 +19,7 @@
 
 use std::path::Path;
 
+use super::documents::Texts;
 use super::language::{Range, span_range};
 
 /// What a hint is about. One kind today; the enum is the seam that keeps a
@@ -42,11 +43,16 @@ pub struct TtHint {
 
 /// Every hint tt has about `source`.
 ///
-/// `path` resolves relative `.tt` imports (from disk, so an unsaved
-/// imported file is seen as last saved), exactly as the other parse-only
-/// surfaces resolve them.
+/// `path` resolves relative `.tt` imports, exactly as the other parse-only
+/// surfaces resolve them. This is the stand-alone question: an imported
+/// file is read as saved. A session asks [`super::Workspace::tt_hints`],
+/// which reads its open documents.
 pub fn tt_hints(path: &Path, source: &str) -> Vec<TtHint> {
-    let analyses = super::language::analyses_for(path, source);
+    hints(path, source, Texts::Disk)
+}
+
+pub(super) fn hints(path: &Path, source: &str, texts: Texts<'_>) -> Vec<TtHint> {
+    let analyses = super::language::analyses_for(path, source, texts);
     let mut out = Vec::new();
     for analysis in &analyses.matches {
         for &index in &analysis.unreachable {

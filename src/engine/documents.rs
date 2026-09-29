@@ -50,4 +50,35 @@ impl Documents {
             .unwrap_or_else(PoisonError::into_inner)
             .clear();
     }
+
+    /// The text of `path` as every project sees it: the open buffer, else
+    /// the disk.
+    pub(crate) fn text(&self, path: &Path) -> Option<String> {
+        if let Some(text) = self.read().get(path) {
+            return Some(text.clone());
+        }
+        std::fs::read_to_string(path).ok()
+    }
+}
+
+/// Where a surface reads a file it was not handed the text of — the `.tt`
+/// files a buffer imports. With a session that is the session's open
+/// documents, so an unsaved declaration reaches every surface at once; a
+/// stand-alone question has no documents and reads the disk.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum Texts<'a> {
+    /// No session: the files as last saved.
+    Disk,
+    /// A session's documents, over the disk.
+    Open(&'a Documents),
+}
+
+impl Texts<'_> {
+    /// The text of `path`, or `None` when it cannot be read.
+    pub(crate) fn read(self, path: &Path) -> Option<String> {
+        match self {
+            Texts::Disk => std::fs::read_to_string(path).ok(),
+            Texts::Open(documents) => documents.text(path),
+        }
+    }
 }

@@ -439,7 +439,7 @@ fn completion_probe_preserves_source_kind_and_cursor() {
 #[test]
 fn ttx_pattern_analysis_does_not_parse_jsx_text() {
     let source = "variant Real { A }\nconst view = <div>variant Fake { A }</div>;\n";
-    let analyses = analyses_for(Path::new("/p/a.ttx"), source);
+    let analyses = analyses_for(Path::new("/p/a.ttx"), source, Texts::Disk);
     assert!(analyses.declarations.iter().any(|d| d.name == "Real"));
     assert!(!analyses.declarations.iter().any(|d| d.name == "Fake"));
 
@@ -475,7 +475,7 @@ fn ttx_pattern_analysis_does_not_parse_jsx_text() {
 fn isolated_pattern_hover_preserves_jsx_text() {
     let source = "variant E { A(x: string), B(x: number) }\nconst view = <div>let x = try value;</div>;\nconst v = match (e) { A(x) | B(x) => x };\n";
     let path = Path::new("/p/a.ttx");
-    let analyses = analyses_for(path, source);
+    let analyses = analyses_for(path, source, Texts::Disk);
     let byte = source.find("B(x)").unwrap() + 2;
     let binding = analyses.binding_at(byte).unwrap();
     let (code, offset) = isolate_alternative(path, source, binding, byte).unwrap();
