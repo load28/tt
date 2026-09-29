@@ -558,6 +558,7 @@
 | TASK-557 | Keep a pipeline whose last step is not written yet | Complete | 2026-09-29 | 2026-09-29 | [TASK-557](./TASK-557-unfinished-pipeline-step.md) |
 | TASK-558 | Read the member-completion context from the token stream | Complete | 2026-09-29 | 2026-09-29 | [TASK-558](./TASK-558-member-context-from-tokens.md) |
 | TASK-559 | Report a syntax error after an arm body where TypeScript puts it | Complete | 2026-09-29 | 2026-09-29 | [TASK-559](./TASK-559-syntax-error-after-copied-text.md) |
+| TASK-560 | Read a pipeline step with an open list as TypeScript reads the list | Complete | 2026-09-29 | 2026-09-29 | [TASK-560](./TASK-560-unfinished-pipeline-call-step.md) |
 
 ## Next task number
 

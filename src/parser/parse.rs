@@ -496,7 +496,7 @@ impl Parser<'_> {
                 TokenKind::PipeOp => {
                     if !expr.1
                         && expr.0 < i
-                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i)
+                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i, end)
                     {
                         let (next_i, pipe) = match attempt {
                             pipes::Attempt::Parsed(next_i, pipe) => (next_i, pipe),

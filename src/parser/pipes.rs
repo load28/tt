@@ -17,7 +17,11 @@
 //! parenthesized (`(flow) |> f`). A step
 //! runs to the next top-level `|>` or to a terminator the pipeline cannot
 //! contain at its top level (`;`, `,`, an unmatched closer, or the region
-//! end). A step with no text (`x |>;`, `x |> |> f`, a `|>` before a
+//! end). A step that leaves a bracket open is a list being written, read
+//! as TypeScript reads an unterminated list (TASK-528's operand rule): a
+//! closer of another bracket or a statement keyword directly in a
+//! parenthesis or index ends it, and it runs to where the enclosing syntax
+//! resumes, whitespace included. A step with no text (`x |>;`, `x |> |> f`, a `|>` before a
 //! statement keyword) is a missing step: the pipeline keeps its head and
 //! written steps, as TypeScript keeps the operands of an operator whose
 //! right operand is missing. A top-level `?`, `:`, `=` (assignment), `=>`,
@@ -93,6 +97,7 @@ pub(super) fn parse_pipeline(
     tokens: &[Token],
     head_idx: usize,
     pipe_idx: usize,
+    range_end: usize,
 ) -> Option<Attempt> {
     let head_span = Span {
         start: tokens[head_idx].span.start,
@@ -108,9 +113,29 @@ pub(super) fn parse_pipeline(
     while matches!(tokens.get(k).map(|t| &t.kind), Some(TokenKind::PipeOp)) {
         k += 1;
         let step_from = k;
-        let mut depth = 0usize;
+        // The closer each open bracket waits for, innermost last.
+        let mut open: Vec<u8> = Vec::new();
         while let Some(t) = tokens.get(k) {
+            let depth = open.len();
             if depth == 0 && k > step_from && t.facts.boundary_before() {
+                break;
+            }
+            // A closer of another bracket, or a statement keyword directly
+            // in a parenthesis or an index, belongs to the enclosing
+            // syntax: it is where TypeScript ends a list the step left
+            // open. `try` is the one such keyword tt reads as a value there.
+            if t.closes_bracket()
+                && !matches!((open.last(), &t.kind), (Some(&want), TokenKind::Punct(got)) if want == *got)
+                && depth > 0
+            {
+                break;
+            }
+            if matches!(open.last(), Some(b')' | b']'))
+                && matches!(t.kind, TokenKind::Ident)
+                && !dotted_at(tokens, step_from, k)
+                && crate::lexer::statement_only_keyword(&parser.src[t.span.start..t.span.end])
+                && &parser.src[t.span.start..t.span.end] != "try"
+            {
                 break;
             }
             if depth == 0
@@ -157,8 +182,15 @@ pub(super) fn parse_pipeline(
                 {
                     return None;
                 }
-                _ if t.opens_bracket() => depth += 1,
-                _ if t.closes_bracket() => depth -= 1,
+                TokenKind::Punct(byte) if t.opens_bracket() => open.push(match byte {
+                    b'(' => b')',
+                    b'[' => b']',
+                    b'{' => b'}',
+                    _ => b'>',
+                }),
+                _ if t.closes_bracket() => {
+                    open.pop();
+                }
                 _ => {}
             }
             k += 1;
@@ -206,9 +238,15 @@ pub(super) fn parse_pipeline(
             _ => PipeStepKind::Call,
         };
 
+        // A bracket still open is a list being written: TypeScript reads it
+        // as the step's, up to where the enclosing syntax resumes.
         let span = Span {
             start: tokens[step_from].span.start,
-            end: tokens[k - 1].span.end,
+            end: if open.is_empty() {
+                tokens[k - 1].span.end
+            } else {
+                tokens.get(k).map_or(range_end, |next| next.span.start)
+            },
         };
         steps.push(PipeStep {
             span,

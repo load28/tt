@@ -79,3 +79,35 @@ declare const s: Shape;\n";
         );
     }
 }
+
+#[test]
+fn an_unfinished_pipeline_call_step_answers_signature_help() {
+    require_tsgo!();
+    let cat = "function cat(a: string, b: string): string { return a + b; }\n";
+    let add = "function add(a: number, b: number): number { return a + b; }\n";
+    for (marked, label) in [
+        (format!("{cat}const v = 1 |> String |> cat(\"x\", @@"), "cat(a: string, b: string)"),
+        (format!("{add}const v = 1 |> add(2, @@"), "add(a: number, b: number)"),
+        (format!("{add}const v = 1 |> add(2, @@\nconst w = 1;\n"), "add(a: number, b: number)"),
+        (
+            format!("{add}export function f() {{\n  const v = 1 |> add(2, @@\n}}\n"),
+            "add(a: number, b: number)",
+        ),
+    ] {
+        let (source, position) = at_cursor(&marked);
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let help = project
+            .signature_help(&file, position)
+            .unwrap()
+            .unwrap_or_else(|| panic!("no signature help: {source}"));
+        assert!(
+            help.signatures[help.active_signature as usize]
+                .label
+                .starts_with(label),
+            "{source}: {help:?}"
+        );
+        assert_eq!(help.active_parameter, 1, "{source}");
+    }
+}

@@ -679,6 +679,20 @@ fn a_missing_step_keeps_the_pipeline_written_before_it() {
 }
 
 #[test]
+fn a_step_with_an_open_list_ends_where_typescript_ends_the_list() {
+    // The list runs to the next statement, as TypeScript reads `add(2, `
+    // with `const` after it; the statement stays outside the step.
+    let src = "const v = 1 |> add(2, \nconst w = 1;\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.withheld.expect("the faithful projection");
+    assert!(emit.code.ends_with("(1)const w = 1;\n"), "{}", emit.code);
+    let src = "function f() {\n  const v = 1 |> add(2, \n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.withheld.expect("the faithful projection");
+    assert!(emit.code.ends_with("(1)}\n"), "{}", emit.code);
+}
+
+#[test]
 fn a_stray_pipe_recovers_only_to_the_end_of_its_statement() {
     let src = "export function run(a: boolean, f: (n: number) => number): number {\n  const n = a ? 1 : 2 |> f\n  const m = n + 1\n  return m;\n}\n";
     let report = ttc::compile_projection_report(src, &Options::default());
