@@ -1206,7 +1206,10 @@ fn a_script_statement_that_declares_no_lexical_global_is_enclosed_with_its_stora
                   const {} = match (o) { A => o, B => o };\n");
     assert!(out.contains("{\n  let $tt_v0: number;\n"), "{out}");
     assert!(out.contains("  var v = $tt_v0;\n}\n"), "{out}");
-    assert!(out.contains("  $tt_v2(($tt_v1 === 0 ? 1 : 2));\n}\n"), "{out}");
+    assert!(
+        out.contains("  $tt_v2.bind($tt_v3)(($tt_v1 === 0 ? 1 : 2));\n}\n"),
+        "{out}"
+    );
     assert!(
         out.contains("  for (const x of ($tt_v4 === 0 ? [1] : [2])) {}\n}\n"),
         "{out}"

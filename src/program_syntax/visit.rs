@@ -600,6 +600,14 @@ impl VisitAstPath for ParentCollector {
             parent: span,
             callee: Some(projected_span(
                 match &node.callee {
+                    // A method is captured with the TypeScript wrappers
+                    // around it (`o.m!`, `(o.m as F)`), so the call binds
+                    // the method as its author typed it.
+                    swc_ecma_ast::Callee::Expr(expression)
+                        if callee_mode == EvaluationInputMode::MemberReference =>
+                    {
+                        expression.span()
+                    }
                     swc_ecma_ast::Callee::Expr(expression) => reference_value_span(expression),
                     swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
                         node.callee.span()

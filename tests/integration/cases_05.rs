@@ -1362,3 +1362,25 @@ console.log(c, d, e, f, g, JSON.stringify(trace));
         [r#"6 8 12 20 20 ["head","head","head","head","receiver"]"#]
     );
 }
+
+#[test]
+fn runtime_a_missing_method_throws_after_the_call_s_arguments() {
+    require_toolchain!();
+    // TASK-555: the method is read before the arguments and bound at the
+    // call, so `IsCallable` fails after the arguments ran (ECMA-262
+    // `EvaluateCall`); a generic method keeps its signature.
+    let out = run(r#"
+const trace: string[] = [];
+function m(): number { trace.push("m"); return 1; }
+type O = { k: number; add(x: number): number; id<T>(v: T): T; missing?: (x: number) => number };
+const o: O = { k: 5, add(x: number) { return x + this.k; }, id<T>(v: T): T { return v; } };
+function attempt(f: () => unknown): string {
+  try { return String(f()); } catch (e) { return (e as Error).constructor.name; }
+}
+const missing = attempt(() => o.missing!(match (m()) { 1 => 10, _ => 20 }));
+const n: number = o.id(match (m()) { 1 => 10, _ => 20 });
+const piped = o |> .add(match (m()) { 1 => 1, _ => 2 });
+console.log(missing, n, o.add(match (m()) { 1 => 10, _ => 20 }), piped, JSON.stringify(trace));
+"#);
+    assert_eq!(out, [r#"TypeError 10 15 6 ["m","m","m","m"]"#]);
+}

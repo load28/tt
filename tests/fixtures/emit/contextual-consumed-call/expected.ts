@@ -52,16 +52,16 @@ const $tt_v1 = (consume);
 const consumed = $tt_v0;
 
 const $tt_v4 = (api);
-const $tt_v3 = ($tt_v4.consume).bind($tt_v4);
+const $tt_v3 = ($tt_v4.consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v3({ kind: "item", run: x => x + value }); break;
+      $tt_v3.bind($tt_v4)({ kind: "item", run: x => x + value }); break;
     }
     case "Empty": {
-      $tt_v3(({ kind: "item", run: x => x }));
+      $tt_v3.bind($tt_v4)(({ kind: "item", run: x => x }));
       break;
     }
     default: {

@@ -715,6 +715,7 @@ impl<'a> Emitter<'a> {
         // again; expression-only tt nodes are lowered at this evaluation site.
         enum Part<'b, 'r> {
             Captured(&'b str),
+            Read(String),
             Value(ExprId),
             Statement(&'b Statement),
             Piped(Rope<'r>),
@@ -756,11 +757,11 @@ impl<'a> Emitter<'a> {
                 parts.push((replacement.source, Part::Captured(replacement.written())));
             }
         }
-        for input in self
+        for (step, input) in self
             .nested_schedules
             .values()
             .flat_map(EvaluationSchedule::steps)
-            .flat_map(|step| &step.inputs)
+            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
         {
             if let PlannedEvaluationInput::Source {
                 source: dependency,
@@ -772,7 +773,7 @@ impl<'a> Emitter<'a> {
                 && *dependency != source
                 && captured.contains(target)
             {
-                parts.push((*dependency, Part::Captured(self.value_slot_name(*target))));
+                parts.push((*dependency, Part::Read(self.captured_reading(step, input))));
             }
         }
         for expr in self.value_slots.keys() {
@@ -823,6 +824,7 @@ impl<'a> Emitter<'a> {
             }
             match part {
                 Part::Captured(name) => out.push_lit(name.to_owned()),
+                Part::Read(text) => out.push_lit(text),
                 Part::Piped(piped) => out.append(piped),
                 Part::Statement(statement) => {
                     out.append(self.emit_statements(std::slice::from_ref(statement)))
@@ -849,6 +851,34 @@ impl<'a> Emitter<'a> {
         }
         self.active_capture_sources.borrow_mut().pop();
         out
+    }
+
+    /// The text that reads a captured input where its source stood: its
+    /// slot, or, for a method, the method bound to its receiver
+    /// (`bound_callee`).
+    fn captured_reading(
+        &self,
+        step: &PlannedEvaluationStep,
+        input: &PlannedEvaluationInput,
+    ) -> String {
+        match input {
+            PlannedEvaluationInput::Source {
+                target,
+                mode: EvaluationInputMode::MemberReference,
+                receiver: Some(receiver),
+                ..
+            } if !optional_call_step(step) => {
+                let slot = self.value_slot_name(*target);
+                format!("{slot}.bind({})", self.planned_receiver_text(receiver))
+            }
+            PlannedEvaluationInput::Source { target, .. } => {
+                self.value_slot_name(*target).to_owned()
+            }
+            PlannedEvaluationInput::Slot { slot, .. } => self.value_slot_name(*slot).to_owned(),
+            PlannedEvaluationInput::Stable { source, .. } => {
+                self.source[source.start..source.end].to_owned()
+            }
+        }
     }
 
     pub(super) fn source_range_with_value_slots(
@@ -936,9 +966,9 @@ impl<'a> Emitter<'a> {
                         rendered,
                     ))
                 }
-                PlannedEvaluationInput::Source { source, target, .. } => {
+                PlannedEvaluationInput::Source { source, .. } => {
                     let mut rendered = Rope::new();
-                    rendered.push_lit(self.value_slot_name(*target).to_owned());
+                    rendered.push_lit(self.captured_reading(step, input));
                     Some((*source, rendered))
                 }
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
@@ -1248,8 +1278,7 @@ impl<'a> Emitter<'a> {
                     callee.push_lit("}");
                     callee.push_break(0);
                 } else {
-                    callee.push_lit(").bind(");
-                    self.push_planned_receiver(&receiver, false, &mut callee);
+                    // The call binds the method (`bound_callee`).
                     callee.push_lit(");");
                     callee.push_break(0);
                 }

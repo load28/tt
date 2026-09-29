@@ -498,7 +498,8 @@ fn an_inert_member_receiver_needs_no_receiver_slot() {
            match (E.A(\"a\")) { A(value) => value, B => \"b\" },\
            \"x\",\
          );\n");
-    assert!(out.contains("(\"abc\".replace).bind(\"abc\")"), "{out}");
+    assert!(out.contains("= (\"abc\".replace);"), "{out}");
+    assert!(out.contains(".bind(\"abc\")($tt_v0$value,"), "{out}");
     assert_eq!(out.matches("const $tt_v").count(), 1, "{out}");
 }
 

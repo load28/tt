@@ -564,13 +564,13 @@ fn all_arms_are_expressions(core: &CoreFile, expr: ExprId) -> bool {
 
 fn scoped_call_completion(
     core: &CoreFile,
-    expr: ExprId,
-    exits: &[HostExit],
-    schedule: &EvaluationSchedule,
+    value: &crate::evaluation_ir::PlannedValue,
     value_slot: &str,
-    value_source: SourceSpan,
     lowering: &LoweringPlan,
+    source: &str,
 ) -> Option<CallCompletionPlan> {
+    let (expr, exits, schedule, value_source) =
+        (value.expr, &value.exits[..], &value.schedule, value.source);
     let completion = schedule.call_completion?;
     if !completable_decision_arms(core, expr, exits) {
         return None;
@@ -623,10 +623,19 @@ fn scoped_call_completion(
     if step.inputs.len() != usize::try_from(index).ok()?.checked_add(1)? {
         return None;
     }
-    let PlannedEvaluationInput::Source { target, .. } = step.inputs.first()? else {
+    let PlannedEvaluationInput::Source {
+        target,
+        mode,
+        receiver,
+        ..
+    } = step.inputs.first()?
+    else {
         return None;
     };
     let callee = lowering.slot_name(*target).to_owned();
+    let method_receiver = (*mode == EvaluationInputMode::MemberReference)
+        .then_some(*receiver)
+        .flatten();
     let instantiation = match (completion.facts.type_args, completion.instantiated) {
         (Some(type_args), Some(slot)) => Some((
             lowering.slot_name(slot).to_owned(),
@@ -636,12 +645,13 @@ fn scoped_call_completion(
         (None, None) => None,
         _ => return None,
     };
-    let mut invoke = format!(
-        "{}(",
-        instantiation
-            .as_ref()
-            .map_or(callee.as_str(), |(name, ..)| name.as_str())
-    );
+    let function = instantiation
+        .as_ref()
+        .map_or(callee.as_str(), |(name, ..)| name.as_str());
+    let mut invoke = match method_receiver {
+        Some(receiver) => format!("{}(", bound_callee(source, lowering, function, receiver)),
+        None => format!("{function}("),
+    };
     let mut captures = Vec::new();
     for input in &step.inputs[1..] {
         match input {
@@ -762,6 +772,35 @@ impl SourceReplacement {
     pub(super) fn written(&self) -> &str {
         self.rewrite.as_deref().unwrap_or(&self.slot)
     }
+}
+
+/// Whether a step is the argument of an optional call, whose callee the
+/// optional-call lowering binds or calls through its receiver itself.
+pub(super) fn optional_call_step(step: &PlannedEvaluationStep) -> bool {
+    matches!(
+        step.operation,
+        HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_))
+    )
+}
+
+/// How a call reads the method a member reference captured. The capture
+/// reads the member where the reference is evaluated (`GetValue`, which
+/// runs a getter); the method is bound to its receiver at the call, after
+/// the arguments ran, so a member that is not callable throws there, as
+/// ECMA-262 `EvaluateCall` checks `IsCallable` after
+/// `ArgumentListEvaluation`. `bind` keeps a generic method's signature,
+/// which `call` does not.
+pub(super) fn bound_callee(
+    source: &str,
+    lowering: &LoweringPlan,
+    slot: &str,
+    receiver: PlannedReceiver,
+) -> String {
+    let receiver = match receiver {
+        PlannedReceiver::Captured { slot, .. } => lowering.slot_name(slot),
+        PlannedReceiver::Stable { source: at } => &source[at.start..at.end],
+    };
+    format!("{slot}.bind({receiver})")
 }
 
 /// The operator token of the compound assignment whose target is `target`.
@@ -1046,13 +1085,7 @@ impl TargetRewritePlan {
                                             &value.exits,
                                         )) {
                                     scoped_call_completion(
-                                        core,
-                                        value.expr,
-                                        &value.exits,
-                                        &value.schedule,
-                                        &slot_name,
-                                        value.source,
-                                        lowering,
+                                        core, value, &slot_name, lowering, source,
                                     )
                                 } else {
                                     None
@@ -1391,8 +1424,8 @@ impl TargetRewritePlan {
                     .flat_map(|active| &active.steps)
                     .chain(&operation.outer)
             }))
-            .flat_map(|step| &step.inputs)
-            .filter_map(|input| match input {
+            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
+            .filter_map(|(step, input)| match input {
                 PlannedEvaluationInput::Source {
                     source: target_span,
                     target,
@@ -1407,6 +1440,22 @@ impl TargetRewritePlan {
                         anchor: None,
                         claim: false,
                         rewrite: Some(format!("= {slot} {operator}")),
+                    })
+                }
+                PlannedEvaluationInput::Source {
+                    source: callee,
+                    target,
+                    mode: EvaluationInputMode::MemberReference,
+                    receiver: Some(receiver),
+                } if !optional_call_step(step) => {
+                    let slot = lowering.slot_name(*target);
+                    Some(SourceReplacement {
+                        source: *callee,
+                        slot: slot.to_owned(),
+                        jsx_child: false,
+                        anchor: None,
+                        claim: false,
+                        rewrite: Some(bound_callee(source, lowering, slot, *receiver)),
                     })
                 }
                 PlannedEvaluationInput::Source {

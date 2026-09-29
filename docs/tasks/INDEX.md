@@ -560,7 +560,8 @@
 | TASK-552 | Never annotate storage with a type that names generated storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-552](./TASK-552-annotations-name-no-generated-storage.md) |
 | TASK-553 | Annotate storage with the whole type, never a truncated one | Complete | 2026-09-29 | 2026-09-29 | [TASK-553](./TASK-553-untruncated-annotations.md) |
 | TASK-554 | Keep a member step's simple key where the member is read | Complete | 2026-09-29 | 2026-09-29 | [TASK-554](./TASK-554-member-step-simple-keys.md) |
+| TASK-555 | Bind a captured method at its call, after the arguments | Complete | 2026-09-29 | 2026-09-29 | [TASK-555](./TASK-555-late-method-binding.md) |
 
 ## Next task number
 
-**TASK-555**
+**TASK-556**
