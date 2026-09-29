@@ -188,7 +188,7 @@ fn skip_match_shape(tokens: &[Token], k: usize) -> Option<usize> {
         return None;
     }
     let close_paren = find_close_at(tokens, k + 1)?;
-    if !matches!(tokens.get(close_paren + 1)?.kind, TokenKind::Punct(b'{')) {
+    if !super::matches::opens_match_body(tokens.get(close_paren + 1)?) {
         return None;
     }
     let close_brace = find_close_at(tokens, close_paren + 1)?;

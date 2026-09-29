@@ -528,6 +528,11 @@
 | TASK-518 | Write support modules from the imports codegen emitted | Complete | 2026-09-29 | 2026-09-29 | [TASK-518](./TASK-518-runtime-from-emitted-imports.md) |
 | TASK-519 | Keep a lone shebang on the first line of its source map | Complete | 2026-09-29 | 2026-09-29 | [TASK-519](./TASK-519-lone-shebang-source-map.md) |
 | TASK-520 | Report each file of a `--types` declaration collision once | Complete | 2026-09-29 | 2026-09-29 | [TASK-520](./TASK-520-types-collision-report-once.md) |
+| TASK-521 | Close the hoisting block of a statement value that ends the file | Complete | 2026-09-29 | 2026-09-29 | [TASK-521](./TASK-521-statement-match-at-end-of-file.md) |
+| TASK-522 | Evaluate an assignment's target before a hoisted right operand | Complete | 2026-09-29 | 2026-09-29 | [TASK-522](./TASK-522-assignment-target-evaluation-order.md) |
+| TASK-523 | Read a line-broken brace after `match (…)` as a block statement | Complete | 2026-09-29 | 2026-09-29 | [TASK-523](./TASK-523-match-body-brace-after-a-line-break.md) |
+| TASK-524 | Read a `val` write target through TypeScript's wrappers | Complete | 2026-09-29 | 2026-09-29 | [TASK-524](./TASK-524-val-targets-through-wrappers.md) |
+| TASK-525 | Define a variant case named `__proto__` as an own constructor property | Complete | 2026-09-29 | 2026-09-29 | [TASK-525](./TASK-525-variant-case-named-proto.md) |
 | TASK-526 | Carry auto-import edits from completion resolve onto the tt source | Complete | 2026-09-29 | 2026-09-29 | [TASK-526](./TASK-526-auto-import-completion-edits.md) |
 | TASK-529 | Answer a document opened through a symlink under its own URI | Complete | 2026-09-29 | 2026-09-29 | [TASK-529](./TASK-529-symlinked-document-locations.md) |
 | TASK-530 | Find every reference to a tt variant, case, or payload field | Complete | 2026-09-29 | 2026-09-29 | [TASK-530](./TASK-530-tt-name-references.md) |

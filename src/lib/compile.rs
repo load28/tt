@@ -277,6 +277,7 @@ fn tt_errors(
     if !options.defer_to_checker {
         errors.extend(val::check_all(
             source,
+            options.source_kind,
             tokens,
             &parser::val_modifiers(program),
         ));

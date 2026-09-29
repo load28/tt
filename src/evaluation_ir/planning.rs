@@ -541,8 +541,8 @@ pub(super) fn target_capability(
             if captured.contains(capture) {
                 continue;
             }
-            // The capture copies raw source bytes; a sibling tt node or
-            // another capture inside them is lowered or relocated elsewhere.
+            // The capture copies raw source bytes; a sibling tt node inside
+            // them is lowered or relocated elsewhere.
             // An enclosing tt root is different: its structured lowering
             // owns this schedule and composes the captured source into it.
             if tt_spans.iter().any(|span| {
@@ -551,8 +551,12 @@ pub(super) fn target_capability(
                     && !(span.end <= source.start
                         && capture.start <= span.start
                         && span.end <= capture.end)
-            }) || captured.iter().any(|span| overlaps(*capture, *span))
-            {
+            }) || captured.iter().any(|span| {
+                // An earlier capture inside this one is its dependency: the
+                // capture reads that slot instead of the source again.
+                overlaps(*capture, *span)
+                    && !(capture.start <= span.start && span.end <= capture.end)
+            }) {
                 return TargetCapability::ExpressionBoundary(Reason::CaptureOverlapsValue);
             }
             captured.push(*capture);

@@ -321,3 +321,112 @@ fn a_try_in_a_template_in_a_pipeline_operand_keeps_its_callee_before_it() {
         assert!(callee < region, "{source}\n{out}");
     }
 }
+
+#[test]
+fn a_statement_match_that_ends_the_file_closes_the_block_it_hoists_into() {
+    let prelude = "declare const x: { kind: \"A\" };\n";
+    for (statement, head) in [
+        ("match (x) { A => 1 }", "{"),
+        ("if (x) match (x) { _ => 1 }", "if (x) {"),
+        ("lbl: match (x) { _ => 1 }", "lbl: {"),
+        ("while (x) match (x) { _ => 1 }", "while (x) {"),
+        ("if (x) 0;\nelse match (x) { _ => 1 }", "else {"),
+        ("match (x) { _ => 1 }\nmatch (x) { _ => 2 }", "{"),
+    ] {
+        for end in ["", "\n"] {
+            let source = format!("{prelude}{statement}{end}");
+            let out = ok(&source);
+            let block = &out[out.rfind(head).expect("the owner opens its block")..];
+            assert!(block.trim_end().ends_with("}\n  }\n}"), "{source:?}\n{out}");
+        }
+    }
+}
+
+#[test]
+fn an_assignment_captures_its_target_before_a_hoisted_right_operand() {
+    let prelude = "type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+         declare function read(): R;\n\
+         declare function target(): { v: number };\n\
+         declare function key(): \"v\";\n\
+         declare let state: { v: number };\n";
+    let out = ok(&format!(
+        "{prelude}export function f(): R {{\n  target()[key()] -= try read();\n  return {{ kind: \"Ok\", value: 0 }};\n}}\n"
+    ));
+    let object = out.find("= (target());").expect("the object is captured");
+    let key = out.find("= (key());").expect("the key is captured");
+    let current = out.find("= ($tt_v1[$tt_v2]);").expect("the target is read");
+    let region = out.find("= read();").expect("the right operand follows");
+    assert!(object < key && key < current && current < region, "{out}");
+    assert!(out.contains(" -= $tt_v0;"), "{out}");
+
+    let out = ok(&format!(
+        "{prelude}export function g(): R {{\n  state.v *= try read();\n  this.v = try read();\n  return {{ kind: \"Ok\", value: 0 }};\n}}\n"
+    ));
+    assert!(out.contains("let $tt_v1 = (state.v);"), "{out}");
+    assert!(out.contains("state.v = $tt_v1 *= $tt_v0;"), "{out}");
+    assert!(out.contains("this.v = $tt_v2;"), "{out}");
+}
+
+#[test]
+fn val_sees_a_mutation_through_every_typescript_wrapper() {
+    let prelude = "val const cfg: { a?: number } = { a: 1 };\n";
+    for mutation in [
+        "cfg!.a = 1;",
+        "(cfg as { a?: number }).a = 1;",
+        "(cfg satisfies { a?: number }).a = 1;",
+        "(<{ a?: number }>cfg).a = 1;",
+        "((cfg as any)).a = 1;",
+        "(cfg as any as { a: number }).a = 1;",
+        "(cfg as any).a++;",
+        "--(cfg as any).a;",
+        "delete (cfg as any).a;",
+        "[(cfg as any).a] = [1];",
+        "({ k: (cfg as any).a } = { k: 1 });",
+        "for ((cfg as any).a of [1]);",
+    ] {
+        let source = format!("{prelude}{mutation}\n");
+        let root = prelude.len() + mutation.find("cfg").expect("the root is written");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        let mutations: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::ValMutation)
+            .collect();
+        assert_eq!(mutations.len(), 1, "{source}\n{diagnostics:#?}");
+        let probes = ttc::val_probes(&source);
+        assert!(
+            probes.mutations.iter().any(|m| m.root == root && m.method.is_none()),
+            "{source}\n{probes:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_write_to_a_call_result_is_not_a_write_to_its_argument() {
+    let diagnostics = ttc::analyze(
+        "declare function f(val v: unknown): { y: number };\n\
+         val const cfg = { a: 1 };\n\
+         f(cfg).y = 1;\n",
+        &Options::default(),
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+    let probes = ttc::val_probes(
+        "declare function f(val v: unknown): { y: number };\nval const cfg = { a: 1 };\nf(cfg).y = 1;\n",
+    );
+    assert!(probes.mutations.is_empty(), "{probes:#?}");
+}
+
+#[test]
+fn a_case_named_like_the_prototype_setter_is_an_own_constructor_property() {
+    let out = ok("variant V { __proto__(x: number), B }\nvariant U { __proto__, C }\n");
+    assert!(
+        out.contains("  [\"__proto__\"]: (x: number): V => ({ kind: \"__proto__\", x }),"),
+        "{out}"
+    );
+    assert!(
+        out.contains("  [\"__proto__\"]: { kind: \"__proto__\" } as const,"),
+        "{out}"
+    );
+    assert!(!out.contains("\n  __proto__:"), "{out}");
+    let ambient = ok("declare variant V { __proto__(x: number), B }\n");
+    assert!(ambient.contains("readonly __proto__: (x: number) => V;"), "{ambient}");
+}

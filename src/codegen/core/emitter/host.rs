@@ -722,10 +722,7 @@ impl<'a> Emitter<'a> {
                     .iter()
                     .any(|slot| self.value_slot_name(*slot) == replacement.slot)
             {
-                parts.push((
-                    replacement.source,
-                    Part::Captured(replacement.slot.as_str()),
-                ));
+                parts.push((replacement.source, Part::Captured(replacement.written())));
             }
         }
         for input in self
@@ -895,6 +892,19 @@ impl<'a> Emitter<'a> {
         }));
         replacements.extend(steps.iter().flat_map(|step| {
             step.inputs.iter().filter_map(|input| match input {
+                PlannedEvaluationInput::Source {
+                    source,
+                    target,
+                    mode: EvaluationInputMode::CompoundAssignmentTarget { operator },
+                    ..
+                } => {
+                    let mut rendered = Rope::new();
+                    rendered.push_lit(format!("= {} {operator}", self.value_slot_name(*target)));
+                    Some((
+                        compound_assignment_operator(self.source, *source, operator),
+                        rendered,
+                    ))
+                }
                 PlannedEvaluationInput::Source { source, target, .. } => {
                     let mut rendered = Rope::new();
                     rendered.push_lit(self.value_slot_name(*target).to_owned());
@@ -1205,7 +1215,11 @@ impl<'a> Emitter<'a> {
                     prefix.push_break(0);
                 }
             } else {
-                prefix.push_value_capture(self.value_slot_name(*target));
+                if let EvaluationInputMode::CompoundAssignmentTarget { .. } = mode {
+                    prefix.push_lit(format!("let {} = (", self.value_slot_name(*target)));
+                } else {
+                    prefix.push_value_capture(self.value_slot_name(*target));
+                }
                 prefix.append(self.captured_source(*source, captured));
                 prefix.push_lit(");");
                 prefix.push_break(0);

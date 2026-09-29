@@ -29,11 +29,11 @@ use std::collections::{HashMap, HashSet};
 
 use swc_common::Spanned;
 use swc_ecma_ast::{
-    ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr, CondExpr,
-    Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild,
-    JSXExpr, JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall,
-    Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, TsType,
-    TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
+    ArrayLit, ArrowExpr, AssignExpr, AssignOp, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr,
+    CondExpr, Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement,
+    JSXElementChild, JSXExpr, JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr,
+    ObjectLit, OptCall, Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl,
+    Tpl, TsType, TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
 };
 use swc_ecma_visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithAstPath, fields};
 
@@ -262,6 +262,14 @@ pub(crate) enum EvaluationInputMode {
     JsxChildValue,
     DirectReference,
     MemberReference,
+    /// The value a compound assignment's target holds before its right
+    /// operand runs (ECMA-262 §13.15.2: `GetValue(lref)` precedes the right
+    /// operand). The source is the whole target; the capture is an
+    /// accumulator the assignment then applies its operator to, so
+    /// `t += v` becomes `t = accumulator += v`.
+    CompoundAssignmentTarget {
+        operator: &'static str,
+    },
 }
 
 /// What evaluating one host expression may observably do

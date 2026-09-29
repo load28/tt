@@ -1,0 +1,5 @@
+declare const x: { kind: "A" } | { kind: "B" };
+if (x) match (x) {
+  A => 1,
+  B => 2,
+}

@@ -38,6 +38,7 @@
 
 mod calls;
 mod checker;
+mod reference;
 mod targets;
 
 pub(crate) use calls::method_calls;
@@ -45,6 +46,7 @@ pub(crate) use calls::method_calls;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
+use crate::SourceKind;
 use crate::ast::{ValModifier, ValModifierKind};
 use crate::error::TtError;
 use crate::lexer::{Token, TokenKind, TplPart};
@@ -382,23 +384,33 @@ enum Sink<'a> {
 
 /// Runs the `val` analysis over a whole file's token stream and returns
 /// **every** violation, in walk order (statement order).
-pub(crate) fn check_all(src: &str, tokens: &[Token], modifiers: &Modifiers) -> Vec<TtError> {
+pub(crate) fn check_all(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+) -> Vec<TtError> {
     let sink = RefCell::new(Vec::new());
-    run(src, tokens, modifiers, Sink::Report(&sink));
+    run(src, source_kind, tokens, modifiers, Sink::Report(&sink));
     sink.into_inner()
 }
 
 /// Collects the file's `val` bindings and its mutations, unpaired — the
 /// input a checker pairs by symbol identity ([`ValProbes`]). Never reports.
-pub(crate) fn probes(src: &str, tokens: &[Token], modifiers: &Modifiers) -> ValProbes {
+pub(crate) fn probes(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+) -> ValProbes {
     let sink = RefCell::new(ValProbes::default());
-    run(src, tokens, modifiers, Sink::Probes(&sink));
+    run(src, source_kind, tokens, modifiers, Sink::Probes(&sink));
     sink.into_inner()
 }
 
 /// The one walk both halves share. With a probe sink the walk is in probe
 /// mode: it reports nothing and collects instead.
-fn run(src: &str, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
+fn run(src: &str, source_kind: SourceKind, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
     // Files that do not use the modifier — the overwhelming majority —
     // pay nothing.
     if modifiers.is_empty() {
@@ -431,6 +443,7 @@ fn run(src: &str, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
     }
     let checker = Checker {
         src,
+        source_kind,
         modifiers,
         signatures: &signatures,
         sink,

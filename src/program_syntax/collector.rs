@@ -205,6 +205,16 @@ pub(super) enum ProjectedProtocolFrame {
         /// ask this separately. Always true where the kind cannot spread.
         spread_free: bool,
     },
+    /// An assignment. Its target's reference is evaluated before the right
+    /// operand (ECMA-262 §13.15.2): a member target's object and computed
+    /// key, and — for any operator but `=` — the target's current value.
+    Assignment {
+        parent: ProjectedSpan,
+        operator: AssignOp,
+        target: ProjectedSpan,
+        reference: Vec<(ProjectedSpan, Effects)>,
+        right: ProjectedSpan,
+    },
     Binary {
         parent: ProjectedSpan,
         operator: BinaryOp,
@@ -273,6 +283,7 @@ impl ProjectedProtocolFrame {
     pub(super) fn parent(&self) -> ProjectedSpan {
         match self {
             ProjectedProtocolFrame::Ordered { parent, .. }
+            | ProjectedProtocolFrame::Assignment { parent, .. }
             | ProjectedProtocolFrame::Binary { parent, .. }
             | ProjectedProtocolFrame::Conditional { parent, .. }
             | ProjectedProtocolFrame::Call { parent, .. }
@@ -291,7 +302,6 @@ impl ProjectedProtocolFrame {
 pub(super) enum OrderedEvaluationKind {
     Array,
     Object,
-    Assignment,
     Sequence,
     Unary,
 }

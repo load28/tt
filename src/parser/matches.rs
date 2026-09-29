@@ -121,12 +121,24 @@ pub(super) fn match_body_open(tokens: &[Token], after_keyword: usize) -> Option<
     match tokens.get(after_keyword)?.kind {
         TokenKind::Punct(b'(') => {
             let open = find_close_at(tokens, after_keyword)? + 1;
-            matches!(tokens.get(open)?.kind, TokenKind::Punct(b'{')).then_some(open)
+            opens_match_body(tokens.get(open)?).then_some(open)
         }
         TokenKind::Ident => (after_keyword..tokens.len())
-            .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b'{'))),
+            .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b'{')))
+            .filter(|&index| opens_match_body(&tokens[index])),
         _ => None,
     }
+}
+
+/// Whether `token`, after a match head, opens the match's body.
+///
+/// Only a brace on the head's line does. A line terminator before the brace
+/// ends the head: `match(x)` is then a complete call, which no production
+/// continues with `{`, so TypeScript inserts a semicolon (ECMA-262
+/// §12.10.1) and the brace opens a block statement. The lexer's token facts
+/// read a match head the same way (TASK-491).
+pub(super) fn opens_match_body(token: &Token) -> bool {
+    matches!(token.kind, TokenKind::Punct(b'{')) && !token.facts.line_break_before()
 }
 
 fn has_instance_call_pattern(src: &str, tokens: &[Token], body_open: usize) -> bool {
@@ -328,7 +340,7 @@ fn parse_match_complete<'t>(
     }
     cur.idx = close + 1;
 
-    if !cur.at_punct(b'{') {
+    if !cur.peek().is_some_and(opens_match_body) {
         return None;
     }
     let body_open = cur.idx;

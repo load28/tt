@@ -16,5 +16,14 @@
     "line": 4,
     "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
     "suggestions": []
+  },
+  {
+    "code": "val-mutation",
+    "col": 11,
+    "endCol": 16,
+    "endLine": 5,
+    "line": 5,
+    "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
+    "suggestions": []
   }
 ]
