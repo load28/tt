@@ -1,9 +1,9 @@
 # TASK-567: Serve bundler compiles from one persistent ttc server
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-09-29
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-09-29
+- **Commit**: 2cbc099 and the follow-up `TASK-567` commit on the same branch
 
 ## Purpose
 
@@ -108,6 +108,10 @@ to `-p`.
 - 2026-09-29: Added `tests/cli/server_print.rs` and
   `integrations/unplugin/test/server.test.mjs`; updated the server protocol
   header, the unplugin README and `docs/ai/tt.md`.
+- 2026-09-29: Review follow-up: closing a session only ends the server's
+  input, so requests it was already asked are answered, or retried if the
+  process ends first, rather than left waiting; renamed the webpack/Rspack
+  hook parameter that shadowed `compiler`. Ran the full verification below.
 
 ### Measurements
 
@@ -151,12 +155,37 @@ paths.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `TTC_REQUIRE_TSGO=1 cargo test`
-- [ ] `TTC_BINARY=<worktree>/target/debug/ttc npm --prefix integrations/unplugin test`
-- [ ] `TTC_BINARY=<worktree>/target/debug/ttc npm --prefix packages/create-tt run test:e2e`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `TTC_REQUIRE_TSGO=1 cargo test`: 1626 passed, 0 failed, including
+  `server_print::server_print_answers_exactly_what_print_prints` (7 files ×
+  4 flag sets, stdout and stderr compared byte for byte, one session),
+  `server_print_rejects_what_print_rejects` and
+  `server_dependencies_answer_what_dependencies_prints`
+- [x] `TTC_BINARY=<worktree>/target/debug/ttc npm --prefix integrations/unplugin test`:
+  14 passed, including `test/server.test.mjs` (one session for every module,
+  output identical to `ttc -p` with and without maps, shutdown on
+  `closeBundle`/`closeWatcher`, restart once then report, a compiler that
+  cannot start)
+- [x] `TTC_BINARY=<worktree>/target/debug/ttc npm --prefix packages/create-tt run test:e2e`:
+  1 passed (a packed plugin building a scaffold with Vite)
+- [x] `node scripts/check-task-index`
 
 ## Result
 
-Pending.
+Changed files:
+
+- `src/main/build.rs`: `compile_jobs` split into `compile_outcomes` and
+  `write_outcomes`; `print_input` answers what `ttc -p` prints.
+- `src/server.rs`: `print` and `dependencies` methods, the per-project check
+  record, protocol header.
+- `tests/cli.rs`, `tests/cli/server_print.rs`: server/`-p` identity tests.
+- `integrations/unplugin/compiler-server.js` (new), `index.js`,
+  `package.json`, `README.md`, `test/server.test.mjs` (new),
+  `test/plugin.test.mjs`, `test/windows.test.mjs`.
+- `docs/ai/tt.md`, `docs/tasks/INDEX.md`, this record.
+
+The adapter compiles every module through one `ttc --server` session per
+build; its output is byte-identical to `ttc -p`, and `ttc -p` itself is
+unchanged for other consumers. Loading 20 modules of a 400-module TypeScript
+project went from 209 s to 10 s, and all 400 load in 39 s.

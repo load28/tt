@@ -26,6 +26,7 @@ class Session {
     this.stderr = "";
     this.ended = null;
     this.child = spawn(compiler, ["--server"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    // A write to a process that has ended is reported by its `close`.
     this.child.stdin.on("error", () => {});
     this.child.stderr.setEncoding("utf8");
     this.child.stderr.on("data", (chunk) => {
@@ -88,8 +89,8 @@ class Session {
     this.child.stderr.unref?.();
   }
 
+  // The server answers what it has already been asked, then exits.
   close() {
-    this.ended ??= "the compiler server was closed";
     this.child.stdin.end();
   }
 }

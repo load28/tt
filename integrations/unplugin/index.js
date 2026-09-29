@@ -296,11 +296,11 @@ export const unpluginFactory = (options = {}) => {
         return [...modules];
       },
     },
-    webpack(compilerHooks) {
-      compilerHooks.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
+    webpack(bundler) {
+      bundler.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
     },
-    rspack(compilerHooks) {
-      compilerHooks.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
+    rspack(bundler) {
+      bundler.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
     },
     esbuild: {
       setup(build) {
