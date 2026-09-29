@@ -860,8 +860,12 @@ pub(crate) struct Binding {
 /// A template literal split into raw text and recursively parsed
 /// interpolations. Raw chunks include the surrounding backticks and the
 /// literal text; codegen re-emits `${` and `}` around each interpolation.
+/// An unterminated template may end with an interpolation that never
+/// closed.
 #[derive(Debug)]
 pub(crate) struct Template {
+    /// The whole literal, from its opening backtick.
+    pub span: Span,
     pub chunks: Vec<TemplateChunk>,
 }
 

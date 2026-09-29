@@ -1,5 +1,9 @@
 # TASK-558: Read the member-completion context from the token stream
 
+> **Update (TASK-579).** Issue 1 no longer holds: an unterminated
+> interpolation is lexed as an expression, and a member access in it is
+> found.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

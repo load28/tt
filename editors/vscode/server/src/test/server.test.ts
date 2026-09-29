@@ -2167,6 +2167,7 @@ test("a member name after any receiver completes members only", { skip: skipType
     ["const t = xs[0].t", "trim"],
     ['const t = "abc".len', "length"],
     ["const t = k |> .t", "trim"],
+    ["const t = `said ${k.t", "trim"],
   ] as const) {
     const source = prefix + line;
     const { completion, stop } = await open(source);

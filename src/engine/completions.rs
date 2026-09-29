@@ -316,10 +316,7 @@ fn word_facts(
 /// `tokens` when it is in none.
 fn innermost_tokens(tokens: &[Token], offset: usize) -> &[Token] {
     for token in tokens {
-        if let TokenKind::Template(parts) = &token.kind
-            && token.span.start < offset
-            && offset < token.span.end
-        {
+        if let TokenKind::Template(parts) = &token.kind {
             for part in parts.iter() {
                 if let crate::lexer::TplPart::Interp { span, tokens } = part
                     && span.start <= offset
@@ -942,6 +939,9 @@ mod tests {
         // expression containers are.
         for (path, source, cursor, receiver) in [
             ("/p/a.tt", "const r = `${obj.na}`;", "obj.na", "obj"),
+            ("/p/a.tt", "const s = `returned ${at.", "at.", "at"),
+            ("/p/a.tt", "const s = `returned ${at.ge", "at.ge", "at"),
+            ("/p/a.tt", "const s = `a ${x} b ${y.", "y.", "y"),
             (
                 "/p/a.ttx",
                 "const r = <div>{obj.na}</div>;",

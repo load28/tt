@@ -571,19 +571,7 @@ impl Lower<'_> {
     }
 
     fn lower_template(&mut self, template: &ast::Template) -> ExprId {
-        // The template's own extent: from its first raw chunk to its last.
-        let (start, end) = template
-            .chunks
-            .iter()
-            .filter_map(|chunk| match chunk {
-                ast::TemplateChunk::Raw(span) => Some((span.start, span.end)),
-                ast::TemplateChunk::Interp(_) => None,
-            })
-            .fold(None, |acc: Option<(usize, usize)>, (s, e)| match acc {
-                Some((min, max)) => Some((min.min(s), max.max(e))),
-                None => Some((s, e)),
-            })
-            .unwrap_or((0, 0));
+        let (start, end) = (template.span.start, template.span.end);
         let node = self.node(Span::new(start, end), AstOrigin::Template);
         let chunks = template
             .chunks

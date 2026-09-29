@@ -343,3 +343,47 @@ fn a_variant_field_type_is_typescript_to_every_service_feature() {
         "{answers:?}"
     );
 }
+
+/// A member name typed in an interpolation whose `}` is not written yet is
+/// a member access, and TypeScript's members answer it, as in a `.ts` file.
+#[test]
+fn a_member_in_an_unterminated_interpolation_completes_members() {
+    require_tsgo!();
+    let dir = project(&[]);
+    let path = dir.join("src/at.tt");
+    let mut answers = Vec::new();
+    for source in [
+        "const at = new Date();\nconst s = `returned ${at.",
+        "const at = new Date();\nconst s = `returned ${at.ge",
+    ] {
+        write(&dir, "src/at.tt", source);
+        let end = source_position(source, source, source.len());
+        let end = serde_json::json!({ "line": end.line, "character": end.character });
+        answers.extend(server_answers(
+            &dir,
+            &[
+                serde_json::json!({ "id": 1, "method": "openDocument",
+                    "params": { "path": path, "text": source } }),
+                serde_json::json!({ "id": 2, "method": "ttCompletions",
+                    "params": { "path": path, "text": source, "position": end } }),
+                serde_json::json!({ "id": 3, "method": "completion",
+                    "params": { "path": path, "position": end, "member": true } }),
+            ],
+        ));
+    }
+    for answer in answers.chunks(3) {
+        assert_eq!(
+            answer[1]["result"]["member"],
+            serde_json::json!({ "receiver": "at" }),
+            "{answers:?}"
+        );
+        let labels: Vec<_> = answer[2]["result"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|item| item["label"].as_str().unwrap())
+            .collect();
+        assert!(labels.contains(&"getTime"), "{labels:?}");
+        assert!(!labels.contains(&"match"), "{labels:?}");
+    }
+}
