@@ -1440,6 +1440,41 @@ fn a_source_map_follows_the_banner_past_a_shebang() {
     );
 }
 
+/// A file that is only a shebang, with no line break after it, keeps the
+/// shebang on generated line 1: the banner goes on a line of its own after
+/// it, and the map's only segment stays on the first line.
+#[test]
+fn a_source_map_keeps_a_lone_shebang_on_the_first_line() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let source = dir.join("only.tt");
+    fs::write(&source, "#!/usr/bin/env node").unwrap();
+    let output = ttc(&[
+        "--source-map",
+        "file",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let code = fs::read_to_string(out_dir.join("only.ts")).unwrap();
+    assert!(
+        code.starts_with("#!/usr/bin/env node\n// @generated"),
+        "{code}"
+    );
+    let map = fs::read_to_string(out_dir.join("only.ts.map")).unwrap();
+    let mappings = map
+        .split("\"mappings\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("a mappings field");
+    assert_eq!(mappings, "AAAA", "{map}");
+}
+
 /// A reader that stops reading is the reader's decision, not a compiler
 /// failure: `ttc --help | head` must end quietly rather than reporting an
 /// internal compiler error and exiting 101 (TASK-337).

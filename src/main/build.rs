@@ -631,9 +631,9 @@ pub(super) fn write_banner(code: &mut String, banner: &str) -> BannerPlacement {
     let mut prefix_newline = false;
     if code[at..].starts_with("#!") {
         at = line_map.line_end(0).unwrap_or(code.len());
-        if line_map.len() > 1 {
-            at_line = 1;
-        } else {
+        // The banner starts the line after the shebang, which stays put.
+        at_line = 1;
+        if line_map.len() == 1 {
             // A shebang that runs to the end of the file: the banner
             // needs a line of its own to sit on.
             prefix_newline = true;
