@@ -237,7 +237,9 @@ pub(super) enum ProjectedProtocolFrame {
         callee_receiver: Option<(ProjectedSpan, Effects)>,
         arguments: Vec<(ProjectedSpan, bool, Effects)>,
         type_args: Option<ProjectedSpan>,
-        optional: bool,
+        /// For a call in an optional chain, the link that decides whether
+        /// it is evaluated.
+        optional: Option<OptionalCallTest>,
     },
     Member {
         parent: ProjectedSpan,

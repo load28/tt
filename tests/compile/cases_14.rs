@@ -476,3 +476,43 @@ fn a_value_inside_a_let_else_or_if_let_subject_is_lowered_once() {
         }
     }
 }
+
+/// An optional call is skipped at the first `?.` of its chain whose base is
+/// nullish (TASK-545): the call's own `?.(` tests the callee, the callee's
+/// `?.name` tests the receiver, and a `?.` further inside the callee cannot
+/// be tested from the call's captured inputs.
+#[test]
+fn an_optional_call_tests_the_link_its_chain_is_skipped_at() {
+    let prelude = "declare const o: { m(v: number): number } | null;\n\
+                   declare const a: { b: { m(v: number): number } } | null;\n\
+                   declare const f: (() => (v: number) => number) | null;\n";
+    for (call, test) in [
+        ("o?.m", "if ($tt_v2 != null) {"),
+        ("o?.[\"m\"]", "if ($tt_v2 != null) {"),
+        ("o?.m?.", "if ($tt_v1 != null) {"),
+        ("f?.()?.", "if ($tt_v1 != null) {"),
+    ] {
+        let out = ok(&format!(
+            "{prelude}export function g() {{ return {call}(match (1) {{ _ => 1 }}); }}\n"
+        ));
+        assert!(out.contains(test), "{call}\n{out}");
+    }
+    let out = ok(&format!(
+        "{prelude}export function g() {{ return o?.m(match (1) {{ _ => 1 }}); }}\n"
+    ));
+    assert!(
+        compact(&out).contains("if ($tt_v2 != null) { const $tt_v1 = ($tt_v2?.m);"),
+        "{out}"
+    );
+    for call in ["a?.b.m", "a?.b.m?.", "f?.()"] {
+        let diagnostics = ttc::analyze(
+            &format!("{prelude}export function g() {{ return {call}(match (1) {{ _ => 1 }}); }}\n"),
+            &Options::default(),
+        );
+        assert_eq!(
+            diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+            [DiagnosticCode::MatchPlacement],
+            "{call}: {diagnostics:#?}"
+        );
+    }
+}

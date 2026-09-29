@@ -1143,6 +1143,46 @@ console.log(JSON.stringify([inResult(2), inResult(1), inResult(-1)]));
 }
 
 #[test]
+fn runtime_an_optional_member_call_is_skipped_only_when_its_receiver_is_nullish() {
+    require_toolchain!();
+    // TASK-545: `o?.m(x)` short-circuits when `o` is nullish; a present
+    // receiver without `m` throws, as JavaScript's own call does.
+    let out = run(r#"
+type M = { base?: number; m(v: number): number };
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function arg(tag: string): number { trace.push(tag); return 1; }
+function read(tag: string): R { trace.push(tag); return { kind: "Ok", value: 2 }; }
+const live: M = { base: 7, m(v: number): number { trace.push("this:" + (this === live)); return (this.base ?? 0) + v; } };
+const missing = {} as M;
+function attempt(f: () => unknown): string {
+  try { return String(f()); } catch (e) { return (e as Error).constructor.name; }
+}
+function viaTry(o: M | null, tag: string): R {
+  const called = o?.m(try read(tag));
+  return { kind: "Ok", value: called ?? -1 };
+}
+function each(o: M | null, tag: string): string[] {
+  return [
+    attempt(() => o?.m(match (arg(tag + ":call")) { 1 => 1, _ => 0 })),
+    attempt(() => o?.m?.(match (arg(tag + ":both")) { 1 => 1, _ => 0 })),
+    attempt(() => JSON.stringify(viaTry(o, tag + ":try"))),
+    attempt(() => o |> ?.m(match (arg(tag + ":pipe")) { 1 => 1, _ => 0 })),
+  ];
+}
+console.log(JSON.stringify([each(live, "live"), each(null, "null"), each(missing, "missing")]));
+console.log(JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[["8","8","{\"kind\":\"Ok\",\"value\":9}","8"],["undefined","undefined","{\"kind\":\"Ok\",\"value\":-1}","undefined"],["TypeError","undefined","TypeError","TypeError"]]"#,
+            r#"["live:call","this:true","live:both","this:true","live:try","this:true","live:pipe","this:true","missing:call","missing:try","missing:pipe"]"#,
+        ]
+    );
+}
+
+#[test]
 fn runtime_a_prototype_setter_name_is_an_own_property() {
     require_toolchain!();
     let out = run(r#"

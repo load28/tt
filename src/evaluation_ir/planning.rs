@@ -340,6 +340,14 @@ pub(super) fn plan_one_operation(
             if member_callee && facts.type_args.is_some() {
                 return Ok(None);
             }
+            // The receiver test needs the receiver as its own input.
+            let test = match facts.optional_test {
+                Some(OptionalCallTest::Callee) => OptionalCallTest::Callee,
+                Some(OptionalCallTest::Receiver) if member_callee => OptionalCallTest::Receiver,
+                Some(OptionalCallTest::Receiver | OptionalCallTest::Inner) | None => {
+                    return Ok(None);
+                }
+            };
             let mut value_indices: HashMap<u32, ExprId> = HashMap::new();
             for member in members {
                 let value = &values[*member];
@@ -404,6 +412,7 @@ pub(super) fn plan_one_operation(
             PlannedConditionalKind::OptionalCall {
                 arguments,
                 type_args: facts.type_args,
+                test,
             }
         }
         _ => return Ok(None),
@@ -520,8 +529,12 @@ pub(super) fn target_capability(
                 Reason::ConditionalOperationNotStructurable,
             );
         };
+        // An optional call skipped at a link inside its callee's receiver
+        // cannot be tested before that link is evaluated.
         let structurable = step.conditional.as_ref().is_some_and(|facts| {
-            facts.branch.start <= source.start && source.end <= facts.branch.end
+            facts.branch.start <= source.start
+                && source.end <= facts.branch.end
+                && facts.optional_test != Some(OptionalCallTest::Inner)
         });
         if !structurable {
             return TargetCapability::ExpressionBoundary(

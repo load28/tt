@@ -23,8 +23,8 @@ use crate::ice::LoweringSubject;
 use crate::program_syntax::{
     ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,
     EvaluationInputMode, EvaluationOwner, GlobalStatement, HostContinuation,
-    HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner, OwnerReach,
-    ProgramSyntax, SourceSpan, TtNodeId,
+    HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner, OptionalCallTest,
+    OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
 };
 
 use builder::*;
@@ -268,11 +268,13 @@ pub(crate) enum PlannedConditionalKind {
         consequent: PlannedBranch,
         alternate: PlannedBranch,
     },
-    /// `callee?.(args)` — the arguments evaluate only past the nullish
-    /// check, and a member callee calls through its receiver.
+    /// `callee?.(args)` or `receiver?.name(args)` — the arguments evaluate
+    /// only past the nullish check of the input `test` names, and a member
+    /// callee calls through its receiver.
     OptionalCall {
         arguments: Vec<PlannedOperand>,
         type_args: Option<SourceSpan>,
+        test: OptionalCallTest,
     },
 }
 

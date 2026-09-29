@@ -624,7 +624,7 @@ impl VisitAstPath for ParentCollector {
                 .type_args
                 .as_ref()
                 .map(|args| projected_span(args.span(), self.source_start)),
-            optional: false,
+            optional: None,
         });
         <CallExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
@@ -859,6 +859,11 @@ impl VisitAstPath for ParentCollector {
 
     fn visit_opt_call<'ast: 'r, 'r>(&mut self, node: &'ast OptCall, path: &mut AstNodePath<'r>) {
         let (callee_mode, callee_receiver) = call_callee_mode(&node.callee);
+        let own_link = path.iter().rev().find_map(|parent| match parent {
+            swc_ecma_visit::AstParentNodeRef::OptChainExpr(chain, _) => Some(chain.optional),
+            _ => None,
+        });
+        let optional = optional_call_test(own_link == Some(true), &node.callee);
         self.protocol_frames.push(ProjectedProtocolFrame::Call {
             discarded: false,
             parent: projected_span(node.span, self.source_start),
@@ -883,7 +888,7 @@ impl VisitAstPath for ParentCollector {
                 .type_args
                 .as_ref()
                 .map(|args| projected_span(args.span(), self.source_start)),
-            optional: true,
+            optional: Some(optional),
         });
         <OptCall as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();

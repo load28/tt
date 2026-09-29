@@ -361,7 +361,25 @@ impl<'a> Emitter<'a> {
             .set(self.conditional_region_depth.get() + 1);
         let result = self.value_slot_name(operation.result);
         let mut out = Rope::new();
-        let condition = self.emit_condition_capture(&operation.condition, captured, &mut out);
+        // A call skipped at its callee's member link reads the callee only
+        // past the receiver's test, as the chain does.
+        let mut guarded_callee = Rope::new();
+        let condition = match (&operation.kind, &operation.condition) {
+            (
+                PlannedConditionalKind::OptionalCall {
+                    test: OptionalCallTest::Receiver,
+                    ..
+                },
+                PlannedEvaluationInput::Source {
+                    receiver: Some(receiver),
+                    ..
+                },
+            ) => {
+                self.capture_planned_receiver(receiver, captured, &mut out);
+                self.emit_condition_capture(&operation.condition, captured, &mut guarded_callee)
+            }
+            _ => self.emit_condition_capture(&operation.condition, captured, &mut out),
+        };
         let deliver_value = |expr: ExprId, target: &str| {
             self.emit_continued_expr(expr, &ValueContinuation::assign(target))
                 .unwrap_or_else(|| {
@@ -449,9 +467,8 @@ impl<'a> Emitter<'a> {
             PlannedConditionalKind::OptionalCall {
                 arguments,
                 type_args,
+                test,
             } => {
-                out.push_lit(format!("if ({condition} != null) {{"));
-                out.push_break(1);
                 let receiver = match &operation.condition {
                     PlannedEvaluationInput::Source {
                         mode: EvaluationInputMode::MemberReference,
@@ -463,6 +480,18 @@ impl<'a> Emitter<'a> {
                     ),
                     _ => None,
                 };
+                let tested = match test {
+                    OptionalCallTest::Callee => condition.clone(),
+                    OptionalCallTest::Receiver => self.planned_receiver_text(
+                        &receiver
+                            .unwrap_or_else(|| crate::ice::bug!("receiver test has no receiver")),
+                    ),
+                    OptionalCallTest::Inner => {
+                        crate::ice::bug!("an optional call skipped inside its callee was planned")
+                    }
+                };
+                out.push_lit(format!("if ({tested} != null) {{"));
+                out.push_break(1);
                 // A single whole-value argument with completable arms calls
                 // the captured callee from each dispatch arm, keeping the
                 // argument in the consumer's contextual position — the same
@@ -472,19 +501,10 @@ impl<'a> Emitter<'a> {
                     && completable_decision_arms(self.core, *expr, &self.exits_for_expr(*expr))
                 {
                     let prefix = match receiver {
-                        Some(receiver) => {
-                            let mut text = format!("{condition}.call(");
-                            match receiver {
-                                PlannedReceiver::Captured { slot, .. } => {
-                                    text.push_str(self.value_slot_name(slot));
-                                }
-                                PlannedReceiver::Stable { source } => {
-                                    text.push_str(&self.source[source.start..source.end]);
-                                }
-                            }
-                            text.push_str(", ");
-                            text
-                        }
+                        Some(receiver) => format!(
+                            "{condition}.call({}, ",
+                            self.planned_receiver_text(&receiver)
+                        ),
                         None => format!("{condition}("),
                     };
                     let _active = self.active_structured_exprs.enter(*expr);
@@ -496,7 +516,9 @@ impl<'a> Emitter<'a> {
                         .unwrap_or_else(|| {
                             crate::ice::bug!("optional completed call lost its value decision")
                         });
-                    out.append(Rope::indented(1, body));
+                    let mut branch = std::mem::take(&mut guarded_callee);
+                    branch.append(body);
+                    out.append(Rope::indented(1, branch));
                     out.push_break(0);
                     out.push_lit("} else {");
                     out.push_break(1);
@@ -516,7 +538,7 @@ impl<'a> Emitter<'a> {
                 // for those before a tt value, regions for the values —
                 // then the call, through the receiver when the callee is a
                 // member reference.
-                let mut body = Rope::new();
+                let mut body = std::mem::take(&mut guarded_callee);
                 for argument in arguments {
                     match argument {
                         PlannedOperand::Value(expr) => {
@@ -583,6 +605,15 @@ impl<'a> Emitter<'a> {
         let mut anchored = Rope::new();
         anchored.anchored(kind, start, end, extent, Rope::scoped(out));
         anchored
+    }
+
+    /// The receiver a member callee is called through, as the expression
+    /// that reads it.
+    fn planned_receiver_text(&self, receiver: &PlannedReceiver) -> String {
+        match receiver {
+            PlannedReceiver::Captured { slot, .. } => self.value_slot_name(*slot).to_owned(),
+            PlannedReceiver::Stable { source } => self.source[source.start..source.end].to_owned(),
+        }
     }
 
     pub(super) fn emit_conditional_active_branch(
@@ -1147,8 +1178,21 @@ impl<'a> Emitter<'a> {
         action: Rope<'a>,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
+        let optional_reference = matches!(
+            step.operation,
+            HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_))
+        );
+        // A call skipped at its callee's member link reads the callee only
+        // past the receiver's test, as the chain does.
+        let receiver_test = optional_reference
+            && step
+                .conditional
+                .as_ref()
+                .and_then(|facts| facts.optional_test)
+                == Some(OptionalCallTest::Receiver);
         let mut prefix = Rope::new();
-        for input in &step.inputs {
+        let mut guarded = Rope::new();
+        for (index, input) in step.inputs.iter().enumerate() {
             let PlannedEvaluationInput::Source {
                 source,
                 mode,
@@ -1166,19 +1210,14 @@ impl<'a> Emitter<'a> {
                     .unwrap_or_else(|| crate::ice::bug!("member reference has no receiver"));
                 let receiver_source =
                     self.capture_planned_receiver(&receiver, captured, &mut prefix);
-                let optional_reference = matches!(
-                    step.operation,
-                    HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
-                        _
-                    ))
-                );
-                prefix.push_lit(format!(
+                let mut callee = Rope::new();
+                callee.push_lit(format!(
                     "{} {} = (",
                     if optional_reference { "let" } else { "const" },
                     self.value_slot_name(*target)
                 ));
                 if source.start < receiver_source.start {
-                    prefix.append(self.captured_source(
+                    callee.append(self.captured_source(
                         SourceSpan {
                             start: source.start,
                             end: receiver_source.start,
@@ -1186,9 +1225,9 @@ impl<'a> Emitter<'a> {
                         captured,
                     ));
                 }
-                self.push_planned_receiver(&receiver, true, &mut prefix);
+                self.push_planned_receiver(&receiver, true, &mut callee);
                 if receiver_source.end < source.end {
-                    prefix.append(self.captured_tail(
+                    callee.append(self.captured_tail(
                         SourceSpan {
                             start: receiver_source.end,
                             end: source.end,
@@ -1198,21 +1237,26 @@ impl<'a> Emitter<'a> {
                 }
                 if optional_reference {
                     let target_name = self.value_slot_name(*target);
-                    prefix.push_lit(");");
-                    prefix.push_break(0);
-                    prefix.push_lit(format!("if ({target_name} != null) {{"));
-                    prefix.push_break(1);
-                    prefix.push_lit(format!("{target_name} = {target_name}.bind("));
-                    self.push_planned_receiver(&receiver, false, &mut prefix);
-                    prefix.push_lit(");");
-                    prefix.push_break(0);
-                    prefix.push_lit("}");
-                    prefix.push_break(0);
+                    callee.push_lit(");");
+                    callee.push_break(0);
+                    callee.push_lit(format!("if ({target_name} != null) {{"));
+                    callee.push_break(1);
+                    callee.push_lit(format!("{target_name} = {target_name}.bind("));
+                    self.push_planned_receiver(&receiver, false, &mut callee);
+                    callee.push_lit(");");
+                    callee.push_break(0);
+                    callee.push_lit("}");
+                    callee.push_break(0);
                 } else {
-                    prefix.push_lit(").bind(");
-                    self.push_planned_receiver(&receiver, false, &mut prefix);
-                    prefix.push_lit(");");
-                    prefix.push_break(0);
+                    callee.push_lit(").bind(");
+                    self.push_planned_receiver(&receiver, false, &mut callee);
+                    callee.push_lit(");");
+                    callee.push_break(0);
+                }
+                if receiver_test && index == 0 {
+                    guarded.append(callee);
+                } else {
+                    prefix.append(callee);
                 }
             } else {
                 if let EvaluationInputMode::CompoundAssignmentTarget { .. } = mode {
@@ -1255,7 +1299,32 @@ impl<'a> Emitter<'a> {
                         prefix.push_lit(condition.to_owned());
                     }
                     ConditionalBranch::OptionalCallArgument(_) => {
-                        prefix.push_lit(format!("{condition} != null"));
+                        let test = step
+                            .conditional
+                            .as_ref()
+                            .and_then(|facts| facts.optional_test);
+                        let receiver = match input {
+                            PlannedEvaluationInput::Source {
+                                mode: EvaluationInputMode::MemberReference,
+                                receiver: Some(receiver),
+                                ..
+                            } => Some(*receiver),
+                            _ => None,
+                        };
+                        match (test, receiver) {
+                            (Some(OptionalCallTest::Callee), _) => {
+                                prefix.push_lit(format!("{condition} != null"));
+                            }
+                            (Some(OptionalCallTest::Receiver), Some(receiver)) => {
+                                prefix.push_lit(format!(
+                                    "{} != null",
+                                    self.planned_receiver_text(&receiver)
+                                ));
+                            }
+                            _ => crate::ice::bug!(
+                                "an optional call's schedule has no test for its short-circuit"
+                            ),
+                        }
                     }
                     ConditionalBranch::LogicalOrRight | ConditionalBranch::Alternate => {
                         prefix.push_lit(format!("!({condition})"));
@@ -1266,7 +1335,8 @@ impl<'a> Emitter<'a> {
                 }
                 prefix.push_lit(") {");
                 prefix.push_break(1);
-                prefix.append(Rope::indented(1, action));
+                guarded.append(action);
+                prefix.append(Rope::indented(1, guarded));
                 prefix.push_break(0);
                 prefix.push_lit("}");
                 prefix.push_break(0);

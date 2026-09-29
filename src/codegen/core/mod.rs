@@ -22,7 +22,7 @@ use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
 use crate::program_syntax::{
     ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
-    HostOwnerKind, LoopTestKind, SourceSpan,
+    HostOwnerKind, LoopTestKind, OptionalCallTest, SourceSpan,
 };
 use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 
