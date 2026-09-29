@@ -523,6 +523,7 @@
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 | TASK-521 | Close the hoisting block of a statement value that ends the file | Complete | 2026-09-29 | 2026-09-29 | [TASK-521](./TASK-521-statement-match-at-end-of-file.md) |
 | TASK-522 | Evaluate an assignment's target before a hoisted right operand | Complete | 2026-09-29 | 2026-09-29 | [TASK-522](./TASK-522-assignment-target-evaluation-order.md) |
+| TASK-523 | Read a line-broken brace after `match (…)` as a block statement | Complete | 2026-09-29 | 2026-09-29 | [TASK-523](./TASK-523-match-body-brace-after-a-line-break.md) |
 
 ## Next task number
 

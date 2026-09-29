@@ -629,6 +629,23 @@ fn call_named_match_followed_by_a_block() {
 }
 
 #[test]
+fn call_named_match_followed_by_a_block_of_any_content() {
+    // A line break before the `{` ends the call statement, whatever the
+    // block holds — arrows included, which read like arms.
+    let prelude = "declare function match(x: unknown): void;\ndeclare const x: unknown;\n";
+    for rest in [
+        "match(x)\n{ _ => 1 }\n",
+        "match(x)\n{ (_: unknown) => 1 }\n",
+        "match (x)\n{ A => 1, B => 2 }\n",
+        "match(x) /* a\n */ { _ => 1 }\n",
+        "const v = match(x)\n{ _ => 1 };\n",
+        "function f() {\n  return match(x)\n  { _ => 1 }\n}\n",
+    ] {
+        assert_passthrough(&format!("{prelude}{rest}"));
+    }
+}
+
+#[test]
 fn object_literal_with_numeric_and_string_keys() {
     assert_passthrough("const table = { 200: \"ok\", \"404\": \"missing\", true: 1 };\n");
 }
