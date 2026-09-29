@@ -68,7 +68,9 @@ pub(super) fn resolve_schedule_steps(
                                 // unobservable.
                                 if matches!(
                                     input.mode,
-                                    EvaluationInputMode::Value | EvaluationInputMode::JsxChildValue
+                                    EvaluationInputMode::Value
+                                        | EvaluationInputMode::JsxChildValue
+                                        | EvaluationInputMode::Discarded
                                 ) && input.effects.is_inert()
                                 {
                                     return Ok(PlannedEvaluationInput::Stable {

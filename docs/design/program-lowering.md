@@ -426,6 +426,21 @@ A logical assignment (`&&=`, `||=`, `??=`) captures its reference parts the
 same way; its right operand is evaluated only conditionally, which this
 section does not lower.
 
+### 7.7 Comma operands (TASK-572)
+
+The comma operator evaluates its left operand and discards the value
+(ECMA-262 §13.16.1). An operand of a comma expression written before a tt
+value is therefore an input of the value's step in the mode
+`EvaluationInputMode::Discarded`: the prelude evaluates it as an
+expression statement, `(tick());`, in its order, and the delivered
+expression drops the operand and the comma after it, keeping the trivia
+between them, so `(tick(), match ...)` delivers `( $slot)`. Capturing the
+operand into a `const` and reading it again would evaluate nothing new and
+leave a side-effect-free left operand, which TypeScript rejects (TS2695).
+An inert operand needs no statement and stays where it was written. A tt
+value that is itself a comma's left operand is still delivered where it
+was written.
+
 ## 8. 전체 tt 표면의 공통 배치
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |

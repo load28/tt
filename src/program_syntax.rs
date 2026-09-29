@@ -295,6 +295,12 @@ pub(crate) enum EvaluationInputMode {
     CompoundAssignmentTarget {
         operator: &'static str,
     },
+    /// An operand of a comma expression before the value's operand. The
+    /// comma operator evaluates it and discards its value (ECMA-262
+    /// §13.16.1: `GetValue` of the left operand, whose result is not used),
+    /// so the lowering evaluates it as an expression statement in order and
+    /// removes it, with its comma, where it was written.
+    Discarded,
 }
 
 /// What evaluating one host expression may observably do

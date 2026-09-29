@@ -821,6 +821,42 @@ pub(super) fn compound_assignment_operator(
     SourceSpan { start, end }
 }
 
+/// The comma after a discarded comma operand. Once the operand ran as a
+/// statement, the lowering removes it and this comma where they were
+/// written, keeping the trivia between them. Only trivia separates an
+/// operand from its comma.
+pub(super) fn discarded_operand_comma(source: &str, operand: SourceSpan) -> SourceSpan {
+    let bytes = source.as_bytes();
+    let (comma, _) = crate::scanner::skip_trivia(bytes, operand.end, bytes.len());
+    if bytes.get(comma) != Some(&b',') {
+        crate::ice::bug!("a discarded comma operand is not followed by its comma");
+    }
+    SourceSpan {
+        start: comma,
+        end: comma + 1,
+    }
+}
+
+/// The comma of every discarded comma operand a schedule evaluates as a
+/// statement. The operand is relocated and the comma is removed with it,
+/// so the plan claims the comma.
+fn discarded_operand_commas<'s>(
+    source: &str,
+    steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
+) -> Vec<SourceSpan> {
+    steps
+        .flat_map(|step| &step.inputs)
+        .filter_map(|input| match input {
+            PlannedEvaluationInput::Source {
+                source: operand,
+                mode: EvaluationInputMode::Discarded,
+                ..
+            } => Some(discarded_operand_comma(source, *operand)),
+            _ => None,
+        })
+        .collect()
+}
+
 /// The target and operator span of every compound assignment whose target a
 /// schedule reads before the right operand. The target is printed twice —
 /// read into its accumulator, then assigned — and the operator is rewritten,
@@ -1346,8 +1382,7 @@ impl TargetRewritePlan {
                     })
             })
         };
-        let compound_assignments = compound_assignment_frames(
-            source,
+        let planned_steps = || {
             all_values()
                 .flat_map(|value| &value.steps)
                 .chain(all_operations().flat_map(|operation| {
@@ -1368,12 +1403,16 @@ impl TargetRewritePlan {
                     lowering
                         .nested_value_schedules()
                         .flat_map(|(_, schedule)| schedule.steps()),
-                ),
-        );
+                )
+        };
+        let compound_assignments = compound_assignment_frames(source, planned_steps());
+        let discarded_commas = discarded_operand_commas(source, planned_steps());
         relocated_values.extend(compound_assignments.iter().copied());
+        relocated_values.extend(discarded_commas.iter().copied());
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
             .chain(compound_assignments)
+            .chain(discarded_commas)
             .chain(
                 lowering
                     .nested_operations()
@@ -1425,7 +1464,7 @@ impl TargetRewritePlan {
                     .chain(&operation.outer)
             }))
             .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
-            .filter_map(|(step, input)| match input {
+            .flat_map(|(step, input)| match input {
                 PlannedEvaluationInput::Source {
                     source: target_span,
                     target,
@@ -1433,15 +1472,31 @@ impl TargetRewritePlan {
                     ..
                 } => {
                     let slot = lowering.slot_name(*target);
-                    Some(SourceReplacement {
+                    vec![SourceReplacement {
                         source: compound_assignment_operator(source, *target_span, operator),
                         slot: slot.to_owned(),
                         jsx_child: false,
                         anchor: None,
                         claim: false,
                         rewrite: Some(format!("= {slot} {operator}")),
-                    })
+                    }]
                 }
+                PlannedEvaluationInput::Source {
+                    source: operand,
+                    target,
+                    mode: EvaluationInputMode::Discarded,
+                    ..
+                } => [*operand, discarded_operand_comma(source, *operand)]
+                    .into_iter()
+                    .map(|span| SourceReplacement {
+                        source: span,
+                        slot: lowering.slot_name(*target).to_owned(),
+                        jsx_child: false,
+                        anchor: None,
+                        claim: false,
+                        rewrite: Some(String::new()),
+                    })
+                    .collect(),
                 PlannedEvaluationInput::Source {
                     source: callee,
                     target,
@@ -1449,29 +1504,31 @@ impl TargetRewritePlan {
                     receiver: Some(receiver),
                 } if !optional_call_step(step) => {
                     let slot = lowering.slot_name(*target);
-                    Some(SourceReplacement {
+                    vec![SourceReplacement {
                         source: *callee,
                         slot: slot.to_owned(),
                         jsx_child: false,
                         anchor: None,
                         claim: false,
                         rewrite: Some(bound_callee(source, lowering, slot, *receiver)),
-                    })
+                    }]
                 }
                 PlannedEvaluationInput::Source {
                     source,
                     target,
                     mode,
                     ..
-                } => Some(SourceReplacement {
+                } => vec![SourceReplacement {
                     source: *source,
                     slot: lowering.slot_name(*target).to_owned(),
                     jsx_child: *mode == EvaluationInputMode::JsxChildValue,
                     anchor: None,
                     claim: false,
                     rewrite: None,
-                }),
-                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
+                }],
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => {
+                    Vec::new()
+                }
             })
             .chain(owner_slots.iter().map(|rewrite| SourceReplacement {
                 source: rewrite.source,

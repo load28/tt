@@ -411,3 +411,26 @@ fn sibling_tries_in_a_result_return_check_clean() {
     let out = check(&dir);
     assert!(!out.contains("error["), "{out}");
 }
+
+/// TASK-572: an operand of a comma expression before a tt value is
+/// evaluated as a statement, so the lowered comma expression holds no
+/// unused capture (TS2695).
+#[test]
+fn a_comma_operand_before_a_value_checks_clean() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/comma.tt",
+        "variant K { A, B }\n\
+         declare function tick(): void;\n\
+         declare function tock(): number;\n\
+         export function f(k: K) {\n\
+         \x20 return (tick(), match (k) { A => 1, B => 2 });\n\
+         }\n\
+         export function g(k: K) {\n\
+         \x20 const x = (tick(), tock(), match (k) { A => 1, B => 2 });\n\
+         \x20 return x;\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error["), "{out}");
+}

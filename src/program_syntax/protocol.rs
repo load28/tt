@@ -156,10 +156,15 @@ pub(super) fn protocol_step(
                 OrderedEvaluationKind::Sequence => EagerPosition::SequenceElement(index),
                 OrderedEvaluationKind::Unary => EagerPosition::UnaryOperand,
             });
+            let mode = if matches!(kind, OrderedEvaluationKind::Sequence) {
+                EvaluationInputMode::Discarded
+            } else {
+                EvaluationInputMode::Value
+            };
             let inputs = positions[..position]
                 .iter()
                 .copied()
-                .map(|(span, effects)| (span, EvaluationInputMode::Value, None, effects))
+                .map(|(span, effects)| (span, mode, None, effects))
                 .collect();
             (*parent, operation, inputs)
         }

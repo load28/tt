@@ -766,6 +766,7 @@ impl<'a> Emitter<'a> {
             if let PlannedEvaluationInput::Source {
                 source: dependency,
                 target,
+                mode,
                 ..
             } = input
                 && source.start <= dependency.start
@@ -773,7 +774,15 @@ impl<'a> Emitter<'a> {
                 && *dependency != source
                 && captured.contains(target)
             {
-                parts.push((*dependency, Part::Read(self.captured_reading(step, input))));
+                if *mode == EvaluationInputMode::Discarded {
+                    parts.push((*dependency, Part::Read(String::new())));
+                    let comma = discarded_operand_comma(self.source, *dependency);
+                    if comma.end <= source.end {
+                        parts.push((comma, Part::Read(String::new())));
+                    }
+                } else {
+                    parts.push((*dependency, Part::Read(self.captured_reading(step, input))));
+                }
             }
         }
         for expr in self.value_slots.keys() {
@@ -952,7 +961,7 @@ impl<'a> Emitter<'a> {
             })
         }));
         replacements.extend(steps.iter().flat_map(|step| {
-            step.inputs.iter().filter_map(|input| match input {
+            step.inputs.iter().flat_map(move |input| match input {
                 PlannedEvaluationInput::Source {
                     source,
                     target,
@@ -961,17 +970,27 @@ impl<'a> Emitter<'a> {
                 } => {
                     let mut rendered = Rope::new();
                     rendered.push_lit(format!("= {} {operator}", self.value_slot_name(*target)));
-                    Some((
+                    vec![(
                         compound_assignment_operator(self.source, *source, operator),
                         rendered,
-                    ))
+                    )]
                 }
+                PlannedEvaluationInput::Source {
+                    source,
+                    mode: EvaluationInputMode::Discarded,
+                    ..
+                } => vec![
+                    (*source, Rope::new()),
+                    (discarded_operand_comma(self.source, *source), Rope::new()),
+                ],
                 PlannedEvaluationInput::Source { source, .. } => {
                     let mut rendered = Rope::new();
                     rendered.push_lit(self.captured_reading(step, input));
-                    Some((*source, rendered))
+                    vec![(*source, rendered)]
                 }
-                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => {
+                    Vec::new()
+                }
             })
         }));
         replacements.extend(self.piped_value_at(span.start).map(|piped| {
@@ -1290,6 +1309,8 @@ impl<'a> Emitter<'a> {
             } else {
                 if let EvaluationInputMode::CompoundAssignmentTarget { .. } = mode {
                     prefix.push_lit(format!("let {} = (", self.value_slot_name(*target)));
+                } else if *mode == EvaluationInputMode::Discarded {
+                    prefix.push_lit("(");
                 } else {
                     prefix.push_value_capture(self.value_slot_name(*target));
                 }

@@ -1428,3 +1428,41 @@ console.log(JSON.stringify([matched(K.B, 3), piped(4, 5), chosen(2, 7), chosen(1
         ]
     );
 }
+
+#[test]
+fn runtime_a_comma_operand_before_a_value_runs_once_as_a_statement() {
+    require_toolchain!();
+    // TASK-572: the comma operator discards its left operand's value
+    // (ECMA-262 §13.16.1), so an operand before a tt value runs as a
+    // statement in order and is not read again; `tsc` would reject a
+    // re-read capture (TS2695).
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function tick(): void { trace.push("tick"); }
+function tock(): number { trace.push("tock"); return 7; }
+function r(n: number): R { trace.push("r"); return { kind: "Ok", value: n }; }
+variant K { A, B }
+function pick(k: K) { trace.push("pick"); return k; }
+function first(k: K) { return (tick(), match (pick(k)) { A => 1, B => 2 }); }
+function several(k: K) { const x = (tick(), tock(), match (pick(k)) { A => 1, B => 2 }); return x + tock(); }
+function guarded(c: boolean, k: K) { return c && (tick() /* effect */, match (pick(k)) { A => 1, B => 2 }); }
+function propagated(): R { return r((tick(), try r(3))); }
+console.log(first(K.B), JSON.stringify(trace));
+trace.length = 0;
+console.log(several(K.A), JSON.stringify(trace));
+trace.length = 0;
+console.log(guarded(false, K.A), guarded(true, K.B), JSON.stringify(trace));
+trace.length = 0;
+console.log(JSON.stringify(propagated()), JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"2 ["tick","pick"]"#,
+            r#"8 ["tick","tock","pick","tock"]"#,
+            r#"false 2 ["tick","pick"]"#,
+            r#"{"kind":"Ok","value":3} ["tick","r","r"]"#,
+        ]
+    );
+}
