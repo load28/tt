@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::backend::{ContextualSlotQuery, Failure, Module, Query, TypeScriptBackend};
+use super::backend::{ContextualSlotQuery, Failure, FailureKind, Module, Query, TypeScriptBackend};
 use super::mapper;
 use crate::MappedEmit;
 use crate::codegen::contextual::insert_annotations;
@@ -182,19 +182,27 @@ pub(crate) fn standalone(
         .or_else(|| file.as_ref().and_then(|path| path.parent()))
         .unwrap_or(&cwd)
         .to_path_buf();
-    // Availability is decided before reading project inputs. Once a backend
-    // exists, project and backend failures must reach the caller unchanged.
+    let inferred_config = root.join(format!(".tt-contextual-{}.json", std::process::id()));
+    let configuration = config.clone().unwrap_or_else(|| inferred_config.clone());
+    // Availability is decided before reading project inputs: a backend is
+    // available once its toolchain resolves and its host is running. From
+    // then on, project and backend failures must reach the caller unchanged.
     let available = BACKEND.with(|cell| {
         let mut state = cell.borrow_mut();
         if state.as_ref().is_none_or(|(previous, _)| previous != &root) {
             let Ok(backend) = super::native::NativeBackend::new(None, &cwd) else {
-                return false;
+                return Ok(false);
             };
             *state = Some((root.clone(), backend));
             REUSE.with(|reuse| *reuse.borrow_mut() = Reuse::default());
         }
-        true
-    });
+        let (_, backend) = state.as_ref().expect("backend initialized above");
+        match backend.open(Some(&configuration), &root) {
+            Ok(()) => Ok(true),
+            Err(failure) if failure.kind == FailureKind::Unavailable => Ok(false),
+            Err(failure) => Err(failure),
+        }
+    })?;
     if !available {
         return Ok(emit);
     }
@@ -275,7 +283,6 @@ pub(crate) fn standalone(
         let (_, backend) = state.as_ref().expect("backend initialized above");
         // An unnamed or unconfigured source must retain nullability when its
         // generated annotations are later checked in a strict project.
-        let inferred_config = root.join(format!(".tt-contextual-{}.json", std::process::id()));
         let mut support = std_support(&root);
         support.extend(if config.is_none() {
             vec![Module { path: inferred_config.clone(), text: serde_json::json!({
@@ -283,7 +290,7 @@ pub(crate) fn standalone(
                 "files": [requested]
             }).to_string() }]
         } else { Vec::new() });
-        let configuration = config.as_deref().unwrap_or(&inferred_config);
+        let configuration = configuration.as_path();
         let asked = Materialization {
             configuration: configuration.to_path_buf(),
             root: root.clone(),

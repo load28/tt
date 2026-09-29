@@ -328,10 +328,32 @@ impl Project {
         // blocked update above leaves the previous cache intact instead, so
         // the files that were fine keep their projections.
         self.cache = cache;
+        let blocked = |failure: crate::typescript::backend::Failure| {
+            Box::new(Blocked {
+                path: self.root.clone(),
+                error: CompileError {
+                    message: failure.message,
+                    filename: None,
+                    line: 0,
+                    col: 0,
+                    end_line: 0,
+                    end_col: 0,
+                },
+            })
+        };
+        // A backend that cannot start leaves the projections unrefined, as a
+        // missing toolchain does; `check` reports it as unavailable.
+        let available =
+            |backend: &NativeBackend| match backend.open(self.tsconfig.as_deref(), &self.root) {
+                Ok(()) => Ok(true),
+                Err(failure) if failure.kind == FailureKind::Unavailable => Ok(false),
+                Err(failure) => Err(blocked(failure)),
+            };
         if projected
             .iter()
             .any(|doc| !doc.emit.contextual_slots.is_empty())
             && let Ok(backend) = &self.backend
+            && available(backend)?
         {
             let (mut query, _) =
                 projection::assemble(&projected, &blocked_files, &self.root, &self.sources);
@@ -360,19 +382,7 @@ impl Project {
                 &query.sources,
                 &self.roots(&projected),
             )
-            .map_err(|failure| {
-                Box::new(Blocked {
-                    path: self.root.clone(),
-                    error: CompileError {
-                        message: failure.message,
-                        filename: None,
-                        line: 0,
-                        col: 0,
-                        end_line: 0,
-                        end_col: 0,
-                    },
-                })
-            })?;
+            .map_err(blocked)?;
             for (doc, (_, emit)) in projected.iter_mut().zip(modules) {
                 if doc.emit != emit {
                     Arc::make_mut(doc).emit = emit;

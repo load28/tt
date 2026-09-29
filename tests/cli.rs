@@ -1952,6 +1952,71 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     }
 }
 
+/// An installed TypeScript whose host cannot start is as unavailable as one
+/// that is not installed: a runtime missing from `PATH`, or one that exits
+/// before the compiler answers, removes the refinement and leaves the tt
+/// layer, the printed module and the build to succeed.
+#[cfg(unix)]
+#[test]
+fn a_backend_that_cannot_start_does_not_stop_a_check_print_or_build() {
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let dir = Workspace::in_repo_with_subdir("unstartable-backend", "src");
+    fs::write(
+        dir.join("src/a.tt"),
+        "variant T { A(x: number), B }\n\
+         export const f = (t: T) => match (t) { A(x) => x, B => 0 };\n",
+    )
+    .unwrap();
+    let empty = dir.join("no-runtime");
+    let dying = dir.join("dying-runtime");
+    fs::create_dir_all(&empty).unwrap();
+    fs::create_dir_all(&dying).unwrap();
+    fs::write(dying.join("node"), "#!/bin/sh\nexit 1\n").unwrap();
+    fs::set_permissions(dying.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+
+    for runtime in [&empty, &dying] {
+        for args in [
+            &["--check", "src/a.tt"][..],
+            &["-p", "src/a.tt"][..],
+            &["-o", "out", "src"][..],
+        ] {
+            let _ = fs::remove_dir_all(dir.join("out"));
+            let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+                .args(args)
+                .current_dir(&dir)
+                .env("PATH", runtime)
+                .output()
+                .expect("failed to run ttc");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                output.status.success(),
+                "{args:?} with {} failed: {stderr}",
+                runtime.display()
+            );
+            assert!(!stderr.contains("error"), "{args:?}: {stderr}");
+        }
+        assert!(dir.join("out/a.ts").is_file());
+
+        // The typed modes still report the tt layer and say the TypeScript
+        // layer did not run, exactly as with no toolchain installed.
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src/a.tt"])
+            .current_dir(&dir)
+            .env("PATH", runtime)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{stderr}");
+        assert!(
+            stderr.contains("the TypeScript layer did not run"),
+            "{stderr}"
+        );
+    }
+}
+
 /// Input read failures must not be mistaken for absent type information.
 #[test]
 fn an_unreadable_sibling_is_reported_as_a_project_input_failure() {
