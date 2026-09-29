@@ -387,3 +387,27 @@ fn a_member_in_an_unterminated_interpolation_completes_members() {
         assert!(!labels.contains(&"match"), "{labels:?}");
     }
 }
+
+/// TASK-571: sibling `try`s in the argument of a return that leaves a
+/// `result` block lower in the return's prelude, so the block's storage
+/// and the checked program see only TypeScript.
+#[test]
+fn sibling_tries_in_a_result_return_check_clean() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/sum.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
+         const a = (): TResult<number, string> => Result.Ok(1);\n\
+         declare function f(x: number, y: number): number;\n\
+         export function g() {\n\
+         \x20 return result { return (try a()) + (try a()); };\n\
+         }\n\
+         export function h(c: boolean) {\n\
+         \x20 return result { if (c) return f(try a(), try a()); return [try a(), try a()].length; };\n\
+         }\n\
+         export const n: number = g().kind === \"Ok\" ? 1 : 0;\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error["), "{out}");
+}

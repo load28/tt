@@ -583,7 +583,8 @@
 | TASK-581 | Report esbuild load errors with their watch files | Complete | 2026-09-29 | 2026-09-29 | [TASK-581](./TASK-581-esbuild-load-errors.md) |
 | TASK-582 | Keep a shebang first in a declaration sidecar | Complete | 2026-09-29 | 2026-09-29 | [TASK-582](./TASK-582-sidecar-shebang.md) |
 | TASK-583 | Answer `--dependencies` and the server's `dependencies` through one implementation | Complete | 2026-09-29 | 2026-09-29 | [TASK-583](./TASK-583-one-dependencies-implementation.md) |
+| TASK-571 | Lower every value a `result` return's argument consumes in the return's prelude | Complete | 2026-09-29 | 2026-09-29 | [TASK-571](./TASK-571-values-in-a-result-return-argument.md) |
 
 ## Next task number
 
-**TASK-584**
+**TASK-585**

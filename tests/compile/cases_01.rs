@@ -83,7 +83,9 @@ fn result_region_composes_embedded_try_and_pipeline_try() {
     let embedded = ok("variant R { Ok(value: number), Err(error: string) }\n\
          declare const g: () => R;\n\
          const f = (): R => result { return Math.round(try g() * 1.1); };\n");
-    assert!(embedded.contains("Math.round("), "{embedded}");
+    assert!(embedded.contains(".round"), "{embedded}");
+    assert!(embedded.contains("$tt_v1 = $tt_t0.value;"), "{embedded}");
+    assert!(embedded.contains("($tt_v1 * 1.1)"), "{embedded}");
     assert!(!embedded.contains("try g"), "{embedded}");
 
     let pipeline = ok("variant R { Ok(value: number), Err(error: string) }\n\

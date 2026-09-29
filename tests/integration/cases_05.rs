@@ -1384,3 +1384,47 @@ console.log(missing, n, o.add(match (m()) { 1 => 10, _ => 20 }), piped, JSON.str
 "#);
     assert_eq!(out, [r#"TypeError 10 15 6 ["m","m","m","m"]"#]);
 }
+
+#[test]
+fn runtime_several_values_in_a_result_return_argument_run_in_the_return_s_prelude() {
+    require_toolchain!();
+    // TASK-571: a `try` that an operator, an element, a call, or a
+    // conditional consumes inside a return leaving a `result` block is a
+    // value of the return statement, as a `match` there is (TASK-549), so
+    // sibling `try`s propagate left to right and the first `Err` completes
+    // the block.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function r(n: number): R {
+  trace.push("r" + n);
+  return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "bad" + n };
+}
+function pair(x: number, y: number): number { trace.push("pair"); return x * 10 + y; }
+function id(n: number): number { return n; }
+variant K { A, B }
+function sum(x: number, y: number) { return result { return (try r(x)) + (try r(y)); }; }
+function listed(x: number, y: number) { return result { return [try r(x), try r(y)]; }; }
+function keyed(x: number, y: number) { return result { return { x: try r(x), y: try r(y) }; }; }
+function called(x: number, y: number) { return result { return pair(try r(x), try r(y)); }; }
+function matched(k: K, y: number) { return result { return match (k) { A => 1, B => 2 } + (try r(y)); }; }
+function piped(x: number, y: number) { return result { return (x |> id) + (try r(y)); }; }
+function chosen(x: number, y: number) { return result { return (try r(x)) > 1 ? (try r(y)) : 0; }; }
+function guarded(c: boolean, x: number, y: number) {
+  return result { if (c) return (try r(x)) + (try r(y)); return 0; };
+}
+console.log(JSON.stringify([sum(1, 2), sum(0, 2), sum(1, -1)]), JSON.stringify(trace));
+trace.length = 0;
+console.log(JSON.stringify([listed(1, 2), keyed(3, 4), called(1, 2), called(-2, 1)]), JSON.stringify(trace));
+trace.length = 0;
+console.log(JSON.stringify([matched(K.B, 3), piped(4, 5), chosen(2, 7), chosen(1, 7), guarded(true, 1, 2), guarded(false, 1, 2)]), JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[{"kind":"Ok","value":3},{"kind":"Err","error":"bad0"},{"kind":"Err","error":"bad-1"}] ["r1","r2","r0","r1","r-1"]"#,
+            r#"[{"kind":"Ok","value":[1,2]},{"kind":"Ok","value":{"x":3,"y":4}},{"kind":"Ok","value":12},{"kind":"Err","error":"bad-2"}] ["r1","r2","r3","r4","r1","r2","pair","r-2"]"#,
+            r#"[{"kind":"Ok","value":5},{"kind":"Ok","value":9},{"kind":"Ok","value":7},{"kind":"Ok","value":0},{"kind":"Ok","value":3},{"kind":"Ok","value":0}] ["r3","r5","r2","r7","r1","r1","r2"]"#,
+        ]
+    );
+}
