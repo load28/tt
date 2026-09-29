@@ -60,7 +60,7 @@ pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{
     CompletionAnswer, CompletionDetail, CompletionItem, HoverInfo, Location, Position,
     RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated,
-    ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter,
+    ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter, TextEdit,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
 pub use project::{Blocked, CheckRequest, Project, collect_sources};

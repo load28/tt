@@ -96,3 +96,48 @@ export const wrong: number = \"x\";\n";
         "{diagnostics:?}"
     );
 }
+
+#[test]
+fn an_auto_import_completion_carries_its_import_edit_onto_the_source() {
+    require_tsgo!();
+    let source = "export const a = 1 |> String;\nconst b = 2;\nexport const c = b |> String;\nexport const d = help;\nexport const e = ttHel;\n";
+    let dir = project(&[
+        ("src/util.ts", "export function helperFn(n: number): number { return n; }\n"),
+        ("src/lib.tt", "export function ttHelper(n: number): number { return n; }\n"),
+        ("src/main.tt", source),
+    ]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    for (typed, label, import) in [
+        ("help", "helperFn", "import { helperFn } from \"./util\";\n"),
+        ("ttHel", "ttHelper", "import { ttHelper } from \"./lib.tt\";\n"),
+    ] {
+        let mut at = utf16_position(source, typed);
+        at.character += typed.len() as u32;
+        let answer = project.completion(&file, at, false).unwrap();
+        assert!(
+            answer.items.iter().any(|item| item.label == label),
+            "{label} not offered"
+        );
+        let detail = project
+            .completion_resolve(&file, at, label, answer.probe)
+            .unwrap()
+            .expect("resolved");
+        // The emitted file opens with the runtime import the pipelines
+        // need; the import lands before the first line the user wrote.
+        let start = ttc::engine::Position { line: 0, character: 0 };
+        assert_eq!(
+            detail.additional_edits,
+            vec![ttc::engine::TextEdit {
+                range: ttc::engine::Range { start, end: start },
+                new_text: import.to_string(),
+            }],
+            "{label}"
+        );
+    }
+}

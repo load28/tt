@@ -530,10 +530,17 @@ function connect(server = SERVER, options: ConnectOptions = {}): Client {
 const TRIGGER_CHARACTERS = [".", "(", "|", "{", ","];
 
 /** A server with `source` open as a tt-family document, ready to be asked. */
-async function open(source: string, languageId: "tt" | "ttx" = "tt") {
+async function open(
+  source: string,
+  languageId: "tt" | "ttx" = "tt",
+  siblings: Record<string, string> = {},
+) {
   const dir = repoTestDir("tt-server-test-");
   const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
+  for (const [name, text] of Object.entries(siblings)) {
+    fs.writeFileSync(path.join(dir, name), text);
+  }
   const uri = pathToFileURL(file).toString();
   const client = connect();
   await client.request("initialize", {
@@ -676,6 +683,37 @@ test(
         ["unused", 4, [1]],
         ["old", 4, [2]],
         ['"x"', 1, []],
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
+
+const AUTO_IMPORT_SOURCE = [
+  "export const piped = 1 |> String;",
+  "export const value = help",
+].join("\n");
+
+test(
+  "accepting an auto-import completion adds the import to the tt source",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { completion, stop } = await open(AUTO_IMPORT_SOURCE, "tt", {
+      "util.ts": "export function helperFn(n: number): number { return n; }\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    try {
+      const { resolve } = await completion("value = help");
+      const resolved = await resolve("helperFn");
+      assert.deepEqual(resolved.additionalTextEdits, [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          newText: 'import { helperFn } from "./util";\n\n',
+        },
       ]);
     } finally {
       stop();

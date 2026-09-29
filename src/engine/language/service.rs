@@ -384,9 +384,37 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
     Some(ProbeDoc {
         path: path.to_path_buf(),
         offset: mapper::to_utf16(&emit.code, out),
+        mappings: emit.mappings,
+        source: source.to_string(),
+        splice: at,
         code: emit.code,
         version,
         generated_names: emit.generated_names,
+    })
+}
+
+/// An edit the service computed over served text, as an edit of `source`:
+/// `mappings` maps `source` onto `code`, with a completion probe's
+/// placeholder spliced in at `splice` when there is one. `None` when either
+/// end of the range was not copied from the source, or falls inside the
+/// placeholder.
+pub(super) fn source_edit(
+    code: &str,
+    mappings: &[EmitMapping],
+    source: &str,
+    splice: Option<usize>,
+    edit: &serde_json::Value,
+) -> Option<TextEdit> {
+    let start = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["start"])));
+    let end = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["end"])));
+    let (start, end) = mapper::to_source_span(mappings, start, end)?;
+    let unsplice = |byte: usize| match splice {
+        Some(at) if byte > at => byte.checked_sub(PROBE_NAME.len()).filter(|&b| b >= at),
+        _ => Some(byte),
+    };
+    Some(TextEdit {
+        range: span_range(source, unsplice(start)?, unsplice(end)?),
+        new_text: edit["newText"].as_str()?.to_string(),
     })
 }
 

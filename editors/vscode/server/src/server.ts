@@ -1290,6 +1290,9 @@ connection.onCompletionResolve(
         value: detail.documentation,
       };
     }
+    if (detail.additionalEdits?.length) {
+      item.additionalTextEdits = detail.additionalEdits;
+    }
     return item;
   },
 );

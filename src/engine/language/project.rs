@@ -395,18 +395,21 @@ impl Project {
     ) -> Result<Option<CompletionDetail>, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
-        let (at, generated_names) = match probe {
-            Some(version) => {
-                let Some(installed) = session
-                    .last_probe
-                    .clone()
-                    .filter(|p| p.version == version && p.path == path)
-                else {
-                    return Ok(None);
-                };
-                open_served(session, &path, &installed.code);
-                (installed.offset, installed.generated_names)
-            }
+        let installed =
+            match probe {
+                Some(version) => {
+                    let Some(installed) = session.last_probe.clone().filter(|p| {
+                        p.version == version && p.path == path && p.source == doc.source
+                    }) else {
+                        return Ok(None);
+                    };
+                    open_served(session, &path, &installed.code);
+                    Some(installed)
+                }
+                None => None,
+            };
+        let (at, generated_names) = match &installed {
+            Some(installed) => (installed.offset, installed.generated_names.clone()),
             None => match to_service(&doc, position) {
                 Some(at) => (at, doc.generated_names.clone()),
                 None => return Ok(None),
@@ -431,9 +434,21 @@ impl Project {
         if resolved.is_null() {
             return Ok(None);
         }
+        let (mappings, splice) = match &installed {
+            Some(installed) => (&installed.mappings, Some(installed.splice)),
+            None => (&doc.mappings, None),
+        };
+        let additional_edits = resolved["additionalTextEdits"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|edit| source_edit(&code, mappings, &doc.source, splice, edit))
+            .collect::<Option<Vec<_>>>()
+            .unwrap_or_default();
         Ok(Some(CompletionDetail {
             signature: resolved["detail"].as_str().unwrap_or_default().to_string(),
             documentation: docs_text(&resolved["documentation"]),
+            additional_edits,
         }))
     }
 

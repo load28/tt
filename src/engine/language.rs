@@ -125,6 +125,20 @@ pub struct CompletionDetail {
     pub signature: String,
     /// The entry's JSDoc, empty when it has none.
     pub documentation: String,
+    /// Edits elsewhere in the file that accepting the entry makes — the
+    /// import an auto-import completion adds. Empty when there are none,
+    /// and when any of them lands where the source has no counterpart: an
+    /// entry is accepted whole or offers no edits at all.
+    pub additional_edits: Vec<TextEdit>,
+}
+
+/// A replacement of one range of a source file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEdit {
+    /// The range replaced, in the source.
+    pub range: Range,
+    /// What is written there.
+    pub new_text: String,
 }
 
 /// One edit of a rename, in the target file's own coordinates.
@@ -306,6 +320,12 @@ pub(crate) struct ServiceDoc {
 struct ProbeDoc {
     path: PathBuf,
     code: String,
+    /// How the spliced source maps onto `code`.
+    mappings: Vec<EmitMapping>,
+    /// The source the probe was built from, without the placeholder.
+    source: String,
+    /// The byte offset in `source` the placeholder was spliced in at.
+    splice: usize,
     /// UTF-16 offset of the placeholder in `code` — where the service is
     /// asked.
     offset: usize,

@@ -245,10 +245,25 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
             Ok(
                 match project.completion_resolve(path, position, label, probe)? {
                     None => serde_json::Value::Null,
-                    Some(detail) => json!({
-                        "signature": detail.signature,
-                        "documentation": detail.documentation,
-                    }),
+                    Some(detail) => {
+                        let mut answer = json!({
+                            "signature": detail.signature,
+                            "documentation": detail.documentation,
+                        });
+                        if !detail.additional_edits.is_empty() {
+                            answer["additionalEdits"] = detail
+                                .additional_edits
+                                .into_iter()
+                                .map(|edit| {
+                                    json!({
+                                        "range": range_json(edit.range),
+                                        "newText": edit.new_text,
+                                    })
+                                })
+                                .collect();
+                        }
+                        answer
+                    }
                 },
             )
         }),

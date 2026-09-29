@@ -523,7 +523,8 @@
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 | TASK-514 | Run every test against the TypeScript that package.json pins | Complete | 2026-09-29 | 2026-09-29 | [TASK-514](./TASK-514-tests-pinned-typescript.md) |
 | TASK-515 | Serve TypeScript's unused and deprecated suggestions in the editor | Complete | 2026-09-29 | 2026-09-29 | [TASK-515](./TASK-515-editor-suggestion-diagnostics.md) |
+| TASK-526 | Carry auto-import edits from completion resolve onto the tt source | Complete | 2026-09-29 | 2026-09-29 | [TASK-526](./TASK-526-auto-import-completion-edits.md) |
 
 ## Next task number
 
-**TASK-516**
+**TASK-527**

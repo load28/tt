@@ -68,6 +68,9 @@ export interface EngineCompletionList {
 export interface EngineCompletionDetail {
   signature: string;
   documentation: string;
+  /** Edits accepting the entry also makes — an auto-import's import
+   * declaration. Absent when there are none. */
+  additionalEdits?: { range: EngineRange; newText: string }[];
 }
 
 export interface EngineRenameEdit extends EngineLocation {
